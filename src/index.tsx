@@ -7173,17 +7173,37 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   </script>
 
   <!-- Exit-Intent Modal (desktop only, once per session) -->
-  <div id="exitIntentModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)">
-    <div style="background:#111;border:1px solid rgba(0,255,136,0.25);border-radius:16px;padding:28px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,255,136,0.15);position:relative">
-      <button id="exitIntentClose" aria-label="Dismiss" style="position:absolute;top:10px;right:12px;background:none;border:none;color:#9ca3af;font-size:24px;cursor:pointer;line-height:1">&times;</button>
-      <div style="color:#00FF88;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px">Before you go</div>
-      <h3 style="color:#fff;font-size:22px;font-weight:800;margin:0 0 8px;line-height:1.2">Wait — try one free measurement</h3>
-      <p style="color:#9ca3af;font-size:14px;margin:0 0 16px">Drop your email and we'll set you up with a free trial report. Takes 60 seconds.</p>
+  <!-- Exit-intent modal v2 — registration-focused -->
+  <div id="exitIntentModal" role="dialog" aria-modal="true" aria-labelledby="exitIntentTitle" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px)">
+    <div style="background:#111111;border:1px solid rgba(0,255,136,0.3);border-radius:20px;padding:32px 28px;max-width:440px;width:100%;box-shadow:0 24px 80px rgba(0,255,136,0.12);position:relative">
+      <button id="exitIntentClose" aria-label="Dismiss" style="position:absolute;top:12px;right:14px;background:none;border:none;color:#6b7280;font-size:22px;cursor:pointer;line-height:1;padding:4px">&times;</button>
+      <!-- Social proof nudge -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <div style="display:flex">
+          ${['M','S','J','L','P'].map(i=>`<div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#00FF88,#22d3ee);border:2px solid #111;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#0A0A0A;margin-left:-6px;first:margin-left:0">${i}</div>`).join('')}
+        </div>
+        <span style="color:#9ca3af;font-size:12px">5,000+ contractors already saving time</span>
+      </div>
+      <div id="exitIntentTitle" style="color:#00FF88;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px">&#x1F381; Before you go</div>
+      <h3 style="color:#fff;font-size:22px;font-weight:900;margin:0 0 8px;line-height:1.2">Claim your 4 free reports</h3>
+      <p style="color:#9ca3af;font-size:14px;margin:0 0 18px;line-height:1.5">Most contractors quote 3&ndash;5 jobs with their free credits. No credit card, no commitment &mdash; cancel any time.</p>
+      <!-- Benefits list -->
+      <ul style="list-style:none;padding:0;margin:0 0 18px;display:flex;flex-direction:column;gap:7px">
+        ${[
+          'Satellite + pitch-corrected roof area in 60s',
+          'Material BOM — shingles, underlayment, flashing',
+          'Full CRM, invoicing &amp; job tracking free forever',
+        ].map(b=>`<li style="display:flex;align-items:center;gap:8px;font-size:13px;color:#d1d5db"><span style="color:#00FF88;font-size:16px">&#x2713;</span>${b}</li>`).join('')}
+      </ul>
       <form id="exitIntentForm" onsubmit="return window.submitExitIntent(event)">
-        <input required name="email" type="email" placeholder="you@company.com" style="width:100%;padding:12px 14px;background:#0A0A0A;color:#fff;border:1px solid rgba(255,255,255,0.12);border-radius:8px;font-size:14px;margin-bottom:12px;box-sizing:border-box">
-        <button type="submit" style="width:100%;padding:13px;background:#00FF88;color:#0A0A0A;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer"><i class="fas fa-rocket" style="margin-right:8px"></i>Get My Free Measurement</button>
+        <input required name="email" type="email" placeholder="you@company.com" autocomplete="email"
+          style="width:100%;padding:13px 15px;background:#0A0A0A;color:#fff;border:1.5px solid rgba(255,255,255,0.12);border-radius:10px;font-size:14px;margin-bottom:12px;box-sizing:border-box;outline:none"
+          onfocus="this.style.borderColor='#00FF88'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'">
+        <button type="submit" style="width:100%;padding:15px;background:#00FF88;color:#0A0A0A;border:none;border-radius:12px;font-size:16px;font-weight:900;cursor:pointer;box-shadow:0 8px 24px rgba(0,255,136,0.25)">
+          <i class="fas fa-gift" style="margin-right:8px"></i>Create Free Account &rarr;
+        </button>
       </form>
-      <p style="font-size:11px;color:#6b7280;text-align:center;margin:12px 0 0">No credit card. 3 free reports.</p>
+      <p style="font-size:11px;color:#4b5563;text-align:center;margin:12px 0 0">No credit card &bull; Cancel anytime &bull; 4 free reports</p>
     </div>
   </div>
   <script>
@@ -7218,7 +7238,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       document.getElementById('exitIntentClose').addEventListener('click', hide);
       modal.addEventListener('click', function(e){ if (e.target === modal) hide(); });
 
-      // Mobile engagement trigger: ≥45s on page + >50% scroll depth + no CTA clicked
+      // Mobile engagement trigger: ≥30s on page + >40% scroll depth + no CTA clicked
       var isTouch2 = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
       if (isTouch2 && window.innerWidth < 900) {
         var ctaClicked = false;
@@ -7227,13 +7247,13 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         });
         var engTimer = setTimeout(function(){
           var scrollPct = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight || 1);
-          if (!ctaClicked && scrollPct > 0.5) {
+          if (!ctaClicked && scrollPct > 0.4) {
             modal.style.display = 'flex';
             try { rrTrack('exit_intent_shown', { trigger: 'mobile_engagement' }); } catch(_){}
             shown = true;
             try { sessionStorage.setItem('rm_exit_intent_shown','1'); } catch(e){}
           }
-        }, 45000);
+        }, 30000);
         window.addEventListener('beforeunload', function(){ clearTimeout(engTimer); });
       }
 
