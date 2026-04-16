@@ -6,4 +6,4 @@
 -- ============================================================
 
 INSERT OR IGNORE INTO agent_configs (agent_type, enabled, config_json) VALUES
-  ('traffic', 0, '{"lookback_hours":24,"min_sessions":3,"max_events_analyzed":500,"insight_category":"traffic"}');
+  ('traffic', 0, '{"lookback_hours":24,"min_sessions":3,"max_events_analyzed":500}');

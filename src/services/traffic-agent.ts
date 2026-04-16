@@ -395,6 +395,20 @@ export function parseTrafficFindings(text: string): {
 // ── Main runner ───────────────────────────────────────────────
 
 export async function runTrafficAgent(env: Bindings): Promise<TrafficRunResult> {
+  // Guard: API key must be present before doing any work
+  if (!env.ANTHROPIC_API_KEY) {
+    return {
+      ok: false,
+      sessions_analyzed: 0,
+      insights_found: 0,
+      critical_count: 0,
+      top_exit_page: null,
+      bounce_rate_pct: 0,
+      insights: [],
+      error: 'ANTHROPIC_API_KEY not configured',
+    }
+  }
+
   const db = env.DB
 
   // Load config
@@ -404,25 +418,28 @@ export async function runTrafficAgent(env: Bindings): Promise<TrafficRunResult> 
 
   let lookbackHours = 24
   let maxEvents = 500
+  let minSessions = 3
   try {
     if (configRow?.config_json) {
       const cfg = JSON.parse(configRow.config_json)
       if (cfg.lookback_hours) lookbackHours = Number(cfg.lookback_hours)
       if (cfg.max_events_analyzed) maxEvents = Number(cfg.max_events_analyzed)
+      if (cfg.min_sessions) minSessions = Number(cfg.min_sessions)
     }
   } catch {}
 
   // Collect metrics from site_analytics
   const metrics = await collectTrafficMetrics(db, lookbackHours, maxEvents)
 
-  if (metrics.total_sessions === 0) {
+  // Respect min_sessions threshold — skip if not enough data for meaningful analysis
+  if (metrics.total_sessions < minSessions) {
     return {
       ok: true,
-      sessions_analyzed: 0,
+      sessions_analyzed: metrics.total_sessions,
       insights_found: 0,
       critical_count: 0,
       top_exit_page: null,
-      bounce_rate_pct: 0,
+      bounce_rate_pct: Math.round(metrics.bounce_rate * 100),
       insights: [],
     }
   }

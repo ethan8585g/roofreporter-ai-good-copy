@@ -9230,8 +9230,8 @@ function renderAgentHubView() {
     </div>
 
     <!-- Platform metrics -->
-    <div id="hub-metrics" class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-      ${[0,1,2,3,4].map(function() { return '<div class="metric-card bg-white rounded-2xl p-5 animate-pulse"><div class="h-3 bg-slate-200 rounded w-24 mb-3"></div><div class="h-7 bg-slate-100 rounded w-14"></div></div>'; }).join('')}
+    <div id="hub-metrics" class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+      ${[0,1,2,3,4,5].map(function() { return '<div class="metric-card bg-white rounded-2xl p-5 animate-pulse"><div class="h-3 bg-slate-200 rounded w-24 mb-3"></div><div class="h-7 bg-slate-100 rounded w-14"></div></div>'; }).join('')}
     </div>
 
     <!-- Agent cards grid -->
@@ -9354,11 +9354,12 @@ async function loadAgentHubDashboard() {
   var metricsEl = document.getElementById('hub-metrics');
   if (metricsEl) {
     metricsEl.innerHTML =
-      samc('Traced Today',     m.orders_traced_today       || 0,         'fa-drafting-compass',  'teal',   'roof orders') +
-      samc('Posts (7d)',        m.blog_posts_published_week || 0,         'fa-pen-nib',           'violet', 'SEO blog posts') +
-      samc('Leads Responded',  m.leads_responded_today     || 0,         'fa-bolt',              'amber',  'today') +
-      samc('Emails Sent (7d)', m.emails_sent_week          || 0,         'fa-envelope',          'blue',   'contacts reached') +
-      samc('Platform Health',  healthScore,                               'fa-shield-alt',        'rose',   'latest scan');
+      samc('Traced Today',       m.orders_traced_today       || 0,         'fa-drafting-compass',  'teal',   'roof orders') +
+      samc('Posts (7d)',          m.blog_posts_published_week || 0,         'fa-pen-nib',           'violet', 'SEO blog posts') +
+      samc('Leads Responded',    m.leads_responded_today     || 0,         'fa-bolt',              'amber',  'today') +
+      samc('Emails Sent (7d)',   m.emails_sent_week          || 0,         'fa-envelope',          'blue',   'contacts reached') +
+      samc('Platform Health',    healthScore,                               'fa-shield-alt',        'rose',   'latest scan') +
+      samc('UX Issues (today)',  m.traffic_insights_today    || 0,         'fa-chart-line',        'cyan',   'open traffic findings');
   }
 
   // Also kick off platform insights + traffic insights
@@ -9555,16 +9556,14 @@ async function hubResolveInsight(id, btn) {
 async function loadTrafficInsights(status) {
   var el = document.getElementById('hub-traffic-insights');
   if (!el) return;
-  // Traffic insights are stored in platform_insights with category='traffic'
-  // Reuse the same endpoint but filter by category client-side
-  var res = await saFetch('/api/agent-hub/monitor/insights?status=' + (status || 'open') + '&limit=100');
+  // Use server-side category filter — no client-side filtering needed
+  var res = await saFetch('/api/agent-hub/monitor/insights?status=' + (status || 'open') + '&category=traffic&limit=50');
   if (!res || !res.ok) {
     el.innerHTML = '<div class="text-sm text-slate-400 py-4 text-center">Could not load traffic insights.</div>';
     return;
   }
   var d = await res.json();
-  var all = d.insights || [];
-  var insights = all.filter(function(i) { return i.category === 'traffic'; });
+  var insights = d.insights || [];
   var countEl = document.getElementById('hub-traffic-count');
   if (countEl) {
     if (insights.length > 0 && status !== 'resolved') {

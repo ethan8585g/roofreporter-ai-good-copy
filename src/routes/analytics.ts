@@ -105,11 +105,11 @@ analyticsRoutes.post('/track', async (c) => {
     await c.env.DB.batch(batch)
 
     // ── Live traffic analysis trigger ─────────────────────────
-    // If this batch contains a page_exit event and the traffic agent is
-    // enabled, fire a background analysis (waitUntil — doesn't delay 204).
+    // Fires only when a page_exit event arrives (visitor left the site).
+    // Uses waitUntil so it never delays the 204 response to the client.
     // Rate-limited to once per LIVE_ANALYSIS_COOLDOWN_MS so we don't call
     // Claude on every single exit during a busy traffic period.
-    const hasExit = filteredEvents.some(e => e.event_type === 'page_exit' || e.event_type === 'pageview')
+    const hasExit = filteredEvents.some(e => e.event_type === 'page_exit')
     if (hasExit && c.env.ANTHROPIC_API_KEY) {
       c.executionCtx.waitUntil((async () => {
         try {

@@ -67,7 +67,7 @@ agentHubRoutes.get('/dashboard', async (c) => {
     }
 
     // Platform metrics
-    const [ordersToday, postsWeek, leadsToday, emailsWeek] = await Promise.all([
+    const [ordersToday, postsWeek, leadsToday, emailsWeek, trafficInsightsToday] = await Promise.all([
       db.prepare(
         `SELECT COUNT(*) as cnt FROM agent_jobs WHERE success=1 AND created_at >= ?`
       ).bind(today).first<{ cnt: number }>(),
@@ -80,6 +80,9 @@ agentHubRoutes.get('/dashboard', async (c) => {
       db.prepare(
         `SELECT COALESCE(SUM(sent_count),0) as cnt FROM email_campaigns WHERE completed_at >= ?`
       ).bind(weekAgo).first<{ cnt: number }>(),
+      db.prepare(
+        `SELECT COUNT(*) as cnt FROM platform_insights WHERE category='traffic' AND status='open' AND created_at >= ?`
+      ).bind(today).first<{ cnt: number }>().catch(() => ({ cnt: 0 })),
     ])
 
     // Recent combined activity
@@ -96,6 +99,7 @@ agentHubRoutes.get('/dashboard', async (c) => {
         blog_posts_published_week: postsWeek?.cnt   || 0,
         leads_responded_today:     leadsToday?.cnt  || 0,
         emails_sent_week:          emailsWeek?.cnt  || 0,
+        traffic_insights_today:    (trafficInsightsToday as any)?.cnt || 0,
       },
       recent_activity: recentRes.results || [],
     })
@@ -247,18 +251,31 @@ agentHubRoutes.get('/:agent/runs', async (c) => {
 })
 
 // ── GET /monitor/insights ─────────────────────────────────────
+// Optional ?category=traffic to scope to a specific agent's insights.
+// Without it, returns all non-traffic insights (platform monitor findings).
 
 agentHubRoutes.get('/monitor/insights', async (c) => {
-  const status = c.req.query('status') || 'open'
-  const limit  = Math.min(parseInt(c.req.query('limit') || '50'), 100)
+  const status   = c.req.query('status') || 'open'
+  const category = c.req.query('category') || null   // e.g. 'traffic'
+  const limit    = Math.min(parseInt(c.req.query('limit') || '50'), 100)
   try {
-    const res = await c.env.DB.prepare(
-      `SELECT id, category, severity, title, description, suggested_fix, status, created_at
-       FROM platform_insights WHERE status = ? ORDER BY
-         CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
-         created_at DESC LIMIT ?`
-    ).bind(status, limit).all<any>()
-    return c.json({ success: true, insights: res.results || [], status })
+    let res
+    if (category) {
+      res = await c.env.DB.prepare(
+        `SELECT id, category, severity, title, description, suggested_fix, status, created_at
+         FROM platform_insights WHERE status = ? AND category = ? ORDER BY
+           CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
+           created_at DESC LIMIT ?`
+      ).bind(status, category, limit).all<any>()
+    } else {
+      res = await c.env.DB.prepare(
+        `SELECT id, category, severity, title, description, suggested_fix, status, created_at
+         FROM platform_insights WHERE status = ? AND category != 'traffic' ORDER BY
+           CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
+           created_at DESC LIMIT ?`
+      ).bind(status, limit).all<any>()
+    }
+    return c.json({ success: true, insights: res.results || [], status, category })
   } catch (err: any) {
     return c.json({ error: err.message }, 500)
   }
@@ -318,6 +335,7 @@ function buildSummary(agent: string, result: any): string {
     case 'traffic':
       if (!result.ok) return `Traffic scan failed: ${result.error || 'unknown error'}`
       if (result.sessions_analyzed === 0) return 'No visitor sessions to analyze yet'
+      if (result.insights_found === 0 && result.sessions_analyzed > 0) return `Skipped — only ${result.sessions_analyzed} session(s), below min threshold`
       return `Analyzed ${result.sessions_analyzed} sessions — ${result.insights_found} UX finding(s), ${result.bounce_rate_pct}% bounce rate${result.top_exit_page ? `, top exit: ${result.top_exit_page}` : ''}`
     default:
       return `${agent} completed`

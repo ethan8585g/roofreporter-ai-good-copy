@@ -11,6 +11,7 @@ import { runContentAgent } from './services/content-agent'
 import { runLeadAgent } from './services/lead-agent'
 import { runEmailAgent } from './services/email-agent'
 import { runMonitorAgent } from './services/monitor-agent'
+import { runTrafficAgent } from './services/traffic-agent'
 
 export default {
   // No-op fetch handler — this worker only exists for cron
@@ -125,6 +126,39 @@ export default {
         } catch (err: any) {
           console.error('[CRON:monitor] Error:', err.message)
           await logRun('monitor', 'error', err.message, {}, Date.now() - t0)
+        }
+      })())
+    }
+
+    // ── Traffic Analyst Agent — hourly fallback (on :00 tick) ─
+    // Primary trigger is event-driven (fires via /api/analytics/track
+    // whenever a page_exit arrives, rate-limited to 10-min cooldown).
+    // This hourly cron is a safety net for low-traffic periods.
+    // It also respects the same 10-min cooldown so it never double-fires
+    // right after an event-driven run.
+    if (minute === 0 && await isAgentEnabled('traffic')) {
+      ctx.waitUntil((async () => {
+        try {
+          // Cooldown check: skip if the live trigger already ran within the last 10 minutes
+          const config = await env.DB.prepare(
+            `SELECT last_run_at FROM agent_configs WHERE agent_type = 'traffic'`
+          ).first<{ last_run_at: string | null }>()
+          const lastRun = config?.last_run_at ? new Date(config.last_run_at).getTime() : 0
+          if (Date.now() - lastRun < 10 * 60 * 1000) {
+            console.log('[CRON:traffic] Skipped — live trigger ran recently')
+            return
+          }
+
+          const t0 = Date.now()
+          const result = await runTrafficAgent(env)
+          const summary = result.sessions_analyzed === 0
+            ? 'No visitor sessions to analyze yet'
+            : `Analyzed ${result.sessions_analyzed} sessions — ${result.insights_found} UX finding(s), ${result.bounce_rate_pct}% bounce rate${result.top_exit_page ? `, top exit: ${result.top_exit_page}` : ''}`
+          console.log(`[CRON:traffic] ${summary}`)
+          await logRun('traffic', result.ok ? 'success' : 'error', summary, { sessions: result.sessions_analyzed, insights: result.insights_found }, Date.now() - t0)
+        } catch (err: any) {
+          console.error('[CRON:traffic] Error:', err.message)
+          await logRun('traffic', 'error', err.message, {}, Date.now())
         }
       })())
     }
