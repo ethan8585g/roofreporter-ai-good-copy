@@ -5975,12 +5975,16 @@ window.saSendOnboardingInvoice = async function() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ customer_email: email, customer_name: name, business_name: business, items: items, notes: notes })
     });
-    var data = await res.json();
+    var data; try { data = await res.json(); } catch(e) { throw new Error('Invoice creation failed (server error)'); }
     if (!data.invoice_id && !data.success) throw new Error(data.error || 'Create failed');
 
     var invoiceId = data.invoice_id || data.id;
     resultEl.textContent = 'Sending...';
-    await saFetch('/api/admin/superadmin/service-invoices/' + invoiceId + '/send', { method: 'POST' });
+    var sendRes = await saFetch('/api/admin/superadmin/service-invoices/' + invoiceId + '/send', { method: 'POST' });
+    if (sendRes && !sendRes.ok) {
+      var sendData = await sendRes.json().catch(function() { return {}; });
+      window.rmToast('Invoice created but email failed: ' + (sendData.error || 'unknown error'), 'warning');
+    }
 
     var total = items.reduce(function(s, it) { return s + it.quantity * it.unit_price; }, 0);
     resultEl.className = 'mt-3 p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800';

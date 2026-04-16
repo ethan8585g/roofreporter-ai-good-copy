@@ -2479,43 +2479,48 @@ adminRoutes.post('/superadmin/service-invoices/create', async (c) => {
   const { customer_email, items, due_date, notes } = await c.req.json()
   if (!customer_email || !items || !items.length) return c.json({ error: 'customer_email and items required' }, 400)
 
-  // Find or create customer
-  let customer = await c.env.DB.prepare('SELECT id, name, email FROM customers WHERE email = ?').bind(customer_email.toLowerCase()).first<any>()
-  if (!customer) {
-    const result = await c.env.DB.prepare("INSERT INTO customers (email, name, is_active, email_verified, free_trial_total) VALUES (?, ?, 1, 0, 0)").bind(customer_email.toLowerCase(), customer_email.split('@')[0]).run()
-    customer = { id: result.meta.last_row_id, name: customer_email.split('@')[0], email: customer_email.toLowerCase() }
+  try {
+    // Find or create customer
+    let customer = await c.env.DB.prepare('SELECT id, name, email FROM customers WHERE email = ?').bind(customer_email.toLowerCase()).first<any>()
+    if (!customer) {
+      const result = await c.env.DB.prepare("INSERT INTO customers (email, name, is_active, email_verified, free_trial_total) VALUES (?, ?, 1, 0, 0)").bind(customer_email.toLowerCase(), customer_email.split('@')[0]).run()
+      customer = { id: result.meta.last_row_id, name: customer_email.split('@')[0], email: customer_email.toLowerCase() }
+    }
+
+    // Normalize line items (UI may send `price` instead of `unit_price`)
+    const normItems = items.map((it: any) => ({
+      description: it.description || 'Service',
+      quantity: it.quantity || 1,
+      unit_price: it.unit_price != null ? Number(it.unit_price) : Number(it.price || 0),
+    }))
+    let subtotal = 0
+    for (const it of normItems) { subtotal += it.quantity * it.unit_price }
+    const taxRate = 0
+    const total = subtotal
+
+    // Generate invoice number
+    const d = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0')
+    const invoiceNumber = `SVC-${d}-${rand}`
+    const shareToken = crypto.randomUUID().replace(/-/g, '').substring(0, 24)
+
+    const invResult = await c.env.DB.prepare(
+      `INSERT INTO invoices (invoice_number, master_company_id, customer_id, subtotal, tax_rate, tax_amount, total, currency, status, document_type, notes, share_token, issue_date, due_date, created_at, updated_at)
+       VALUES (?, 1, ?, ?, ?, 0, ?, 'USD', 'draft', 'invoice', ?, ?, datetime('now'), ?, datetime('now'), datetime('now'))`
+    ).bind(invoiceNumber, customer.id, subtotal, taxRate, total, notes || '', shareToken, due_date || null).run()
+    const invoiceId = invResult.meta.last_row_id as number
+
+    for (let i = 0; i < normItems.length; i++) {
+      const it = normItems[i]
+      await c.env.DB.prepare('INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order) VALUES (?, ?, ?, ?, ?, ?)').bind(invoiceId, it.description, it.quantity, it.unit_price, it.quantity * it.unit_price, i).run()
+    }
+
+    const sq = await createSquarePaymentLink(c.env, invoiceId, invoiceNumber, total)
+    return c.json({ success: true, invoice_id: invoiceId, invoice_number: invoiceNumber, share_token: shareToken, customer_id: customer.id, total, checkout_url: sq?.url || '' })
+  } catch (err: any) {
+    console.error('[ServiceInvoice] Create failed:', err.message)
+    return c.json({ error: err.message || 'Invoice creation failed' }, 500)
   }
-
-  // Normalize line items (UI may send `price` instead of `unit_price`)
-  const normItems = items.map((it: any) => ({
-    description: it.description || 'Service',
-    quantity: it.quantity || 1,
-    unit_price: it.unit_price != null ? Number(it.unit_price) : Number(it.price || 0),
-  }))
-  let subtotal = 0
-  for (const it of normItems) { subtotal += it.quantity * it.unit_price }
-  const taxRate = 0
-  const total = subtotal
-
-  // Generate invoice number
-  const d = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-  const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0')
-  const invoiceNumber = `SVC-${d}-${rand}`
-  const shareToken = crypto.randomUUID().replace(/-/g, '').substring(0, 24)
-
-  const invResult = await c.env.DB.prepare(
-    `INSERT INTO invoices (invoice_number, master_company_id, customer_id, subtotal, tax_rate, tax_amount, total, currency, status, document_type, notes, share_token, issue_date, due_date, created_at, updated_at)
-     VALUES (?, 1, ?, ?, ?, 0, ?, 'USD', 'draft', 'invoice', ?, ?, datetime('now'), ?, datetime('now'), datetime('now'))`
-  ).bind(invoiceNumber, customer.id, subtotal, taxRate, total, notes || '', shareToken, due_date || null).run()
-  const invoiceId = invResult.meta.last_row_id as number
-
-  for (let i = 0; i < normItems.length; i++) {
-    const it = normItems[i]
-    await c.env.DB.prepare('INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order) VALUES (?, ?, ?, ?, ?, ?)').bind(invoiceId, it.description, it.quantity, it.unit_price, it.quantity * it.unit_price, i).run()
-  }
-
-  const sq = await createSquarePaymentLink(c.env, invoiceId, invoiceNumber, total)
-  return c.json({ success: true, invoice_id: invoiceId, invoice_number: invoiceNumber, share_token: shareToken, customer_id: customer.id, total, checkout_url: sq?.url || '' })
 })
 
 // Service invoice — send via email

@@ -140,7 +140,7 @@ export async function sendGmailEmail(serviceAccountJson: string, to: string, sub
   const rawMessage = [
     `From: Roof Manager Reports <${fromEmail}>`,
     `To: ${to}`,
-    `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
+    `Subject: =?UTF-8?B?${(() => { const b = new TextEncoder().encode(subject); let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s) })()}?=`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     '',
@@ -335,7 +335,7 @@ export async function sendGmailOAuth2(
   const rawMessage = [
     `From: Roof Manager Reports <${fromAddr}>`,
     `To: ${to}`,
-    `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
+    `Subject: =?UTF-8?B?${(() => { const b = new TextEncoder().encode(subject); let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s) })()}?=`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     '',
