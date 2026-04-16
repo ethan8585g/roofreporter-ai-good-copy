@@ -647,7 +647,7 @@ app.get('/auth/magic', async (c) => {
   await db.prepare('INSERT INTO customer_sessions (customer_id, session_token, expires_at) VALUES (?, ?, ?)')
     .bind(customer.id, sessionToken, expiresAt).run()
 
-  const redirectUrl = isNew ? '/customer/dashboard?welcome=1' : '/customer/dashboard'
+  const redirectUrl = isNew ? '/onboarding' : '/customer/dashboard'
   // Return a page that stores the token in localStorage and redirects
   return c.html(`<!DOCTYPE html><html><head><title>Signing in...</title></head>
 <body>
@@ -687,6 +687,12 @@ app.get('/forgot-password', (c) => {
     }
     </script>
   </body></html>`)
+})
+
+// /onboarding — activation wizard (post-signup)
+app.get('/onboarding', (c) => {
+  const token = c.req.query('token') || ''
+  return c.html(getOnboardingPageHTML(token))
 })
 
 // /signup redirect — keep backward compat, now points to /register
@@ -5604,6 +5610,173 @@ function getSampleReportHTML() {
     </div>
   </div>
   <script src="/static/tracker.js" defer></script>
+</body>
+</html>`
+}
+
+function getOnboardingPageHTML(sessionToken = ''): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Welcome to Roof Manager — Get Started</title>
+  <link rel="icon" href="/static/favicon.ico">
+  <link rel="stylesheet" href="/static/tailwind.css">
+  <style>
+    body { background:#0A0A0A; color:#fff; font-family:'Inter',sans-serif; }
+    .step { display:none; }
+    .step.active { display:block; }
+    .progress-dot { width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,0.2); transition:background 0.3s; }
+    .progress-dot.done { background:#00FF88; }
+    .progress-dot.active { background:#00FF88; box-shadow:0 0 0 4px rgba(0,255,136,0.2); }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+  <!-- Header -->
+  <header class="flex items-center justify-between px-6 py-4 border-b border-white/10">
+    <a href="/" class="flex items-center gap-2 text-white font-black text-xl">
+      <img src="/static/logo.svg" alt="Roof Manager" class="h-8 w-8" onerror="this.style.display='none'">
+      Roof Manager
+    </a>
+    <a href="/customer/dashboard" class="text-sm text-gray-400 hover:text-white">Skip setup &rarr;</a>
+  </header>
+
+  <main class="flex-1 flex flex-col items-center justify-center px-4 py-12">
+    <!-- Progress dots -->
+    <div class="flex items-center gap-3 mb-10" id="progress-dots">
+      <div class="progress-dot active" id="dot-1"></div>
+      <div class="w-8 h-px bg-white/20"></div>
+      <div class="progress-dot" id="dot-2"></div>
+      <div class="w-8 h-px bg-white/20"></div>
+      <div class="progress-dot" id="dot-3"></div>
+      <div class="w-8 h-px bg-white/20"></div>
+      <div class="progress-dot" id="dot-4"></div>
+    </div>
+
+    <div class="w-full max-w-lg">
+
+      <!-- Step 1: Welcome -->
+      <div class="step active" id="step-1">
+        <div class="text-center mb-8">
+          <div style="font-size:56px;margin-bottom:12px">&#x1F3E0;</div>
+          <h1 class="text-3xl font-black mb-3">Welcome to Roof Manager!</h1>
+          <p class="text-gray-400 text-lg">Let's get your account set up in under 2 minutes.<br>You have <span class="text-[#00FF88] font-bold">4 free reports</span> ready to use.</p>
+        </div>
+        <div style="background:#111111;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:24px;margin-bottom:24px">
+          <h3 class="font-bold text-white mb-3 text-sm uppercase tracking-wider">What you can do right now:</h3>
+          <ul class="space-y-3">
+            <li class="flex items-start gap-3 text-sm text-gray-300"><span style="color:#00FF88;font-size:18px">&#x2713;</span>Generate a precise roof measurement report in 60 seconds</li>
+            <li class="flex items-start gap-3 text-sm text-gray-300"><span style="color:#00FF88;font-size:18px">&#x2713;</span>Manage customers, jobs, and invoices from one dashboard</li>
+            <li class="flex items-start gap-3 text-sm text-gray-300"><span style="color:#00FF88;font-size:18px">&#x2713;</span>Send professional proposals and track deal status</li>
+          </ul>
+        </div>
+        <button onclick="nextStep(1)" style="width:100%;padding:16px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:12px;font-size:17px;cursor:pointer">
+          Let's go &#x2192;
+        </button>
+      </div>
+
+      <!-- Step 2: Company name -->
+      <div class="step" id="step-2">
+        <div class="text-center mb-8">
+          <div style="font-size:48px;margin-bottom:12px">&#x1F3D7;&#xFE0F;</div>
+          <h2 class="text-2xl font-black mb-2">What's your company name?</h2>
+          <p class="text-gray-400">This will appear on your reports and proposals.</p>
+        </div>
+        <input type="text" id="company-name" placeholder="e.g. Smith Roofing Ltd."
+          style="width:100%;padding:16px 18px;background:#111111;border:1.5px solid rgba(255,255,255,0.15);border-radius:12px;color:#fff;font-size:16px;margin-bottom:16px;box-sizing:border-box;outline:none"
+          onfocus="this.style.borderColor='#00FF88'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
+        <input type="tel" id="company-phone" placeholder="Phone number (optional)"
+          style="width:100%;padding:16px 18px;background:#111111;border:1.5px solid rgba(255,255,255,0.15);border-radius:12px;color:#fff;font-size:16px;margin-bottom:20px;box-sizing:border-box;outline:none"
+          onfocus="this.style.borderColor='#00FF88'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
+        <button onclick="saveCompany()" style="width:100%;padding:16px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:12px;font-size:17px;cursor:pointer">
+          Continue &#x2192;
+        </button>
+        <button onclick="nextStep(2)" style="width:100%;padding:12px;background:transparent;color:#6b7280;border:none;font-size:14px;cursor:pointer;margin-top:8px">
+          Skip for now
+        </button>
+      </div>
+
+      <!-- Step 3: First report -->
+      <div class="step" id="step-3">
+        <div class="text-center mb-8">
+          <div style="font-size:48px;margin-bottom:12px">&#x1F4CB;</div>
+          <h2 class="text-2xl font-black mb-2">Try your first report</h2>
+          <p class="text-gray-400">Enter any roofing job address and we'll pull satellite data, calculate area, pitch, and material estimates instantly.</p>
+        </div>
+        <input type="text" id="first-address" placeholder="123 Main St, Toronto, ON"
+          style="width:100%;padding:16px 18px;background:#111111;border:1.5px solid rgba(255,255,255,0.15);border-radius:12px;color:#fff;font-size:16px;margin-bottom:20px;box-sizing:border-box;outline:none"
+          onfocus="this.style.borderColor='#00FF88'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'"
+          onkeydown="if(event.key==='Enter')runFirstReport()">
+        <button onclick="runFirstReport()" style="width:100%;padding:16px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:12px;font-size:17px;cursor:pointer">
+          Generate My First Report &#x26A1;
+        </button>
+        <button onclick="nextStep(3)" style="width:100%;padding:12px;background:transparent;color:#6b7280;border:none;font-size:14px;cursor:pointer;margin-top:8px">
+          I'll do this later
+        </button>
+      </div>
+
+      <!-- Step 4: Done -->
+      <div class="step" id="step-4">
+        <div class="text-center">
+          <div style="font-size:72px;margin-bottom:16px">&#x1F389;</div>
+          <h2 class="text-3xl font-black mb-3">You're all set!</h2>
+          <p class="text-gray-400 text-lg mb-8">Your account is ready. Head to your dashboard to start managing jobs and generating reports.</p>
+          <a href="/customer/dashboard" style="display:inline-block;padding:16px 40px;background:#00FF88;color:#0A0A0A;font-weight:800;border-radius:12px;font-size:17px;text-decoration:none">
+            Go to Dashboard &#x2192;
+          </a>
+          <div style="margin-top:24px">
+            <a href="/customer/new-order" style="color:#00CC6A;font-size:14px;text-decoration:none">Or create a report now &#x2192;</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+  var currentStep = 1;
+  var sessionToken = '${sessionToken}';
+
+  // Restore token from localStorage if not passed in URL
+  if (!sessionToken) {
+    sessionToken = localStorage.getItem('rc_customer_token') || '';
+  }
+
+  function nextStep(from) {
+    var el = document.getElementById('step-' + from);
+    if (el) el.classList.remove('active');
+    var dot = document.getElementById('dot-' + from);
+    if (dot) { dot.classList.remove('active'); dot.classList.add('done'); }
+    currentStep = from + 1;
+    var next = document.getElementById('step-' + currentStep);
+    if (next) next.classList.add('active');
+    var nextDot = document.getElementById('dot-' + currentStep);
+    if (nextDot) nextDot.classList.add('active');
+  }
+
+  async function saveCompany() {
+    var name = (document.getElementById('company-name').value || '').trim();
+    var phone = (document.getElementById('company-phone').value || '').trim();
+    if (name && sessionToken) {
+      try {
+        await fetch('/api/customer/profile', {
+          method: 'PATCH',
+          headers: { 'Authorization': 'Bearer ' + sessionToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_name: name, phone: phone })
+        });
+      } catch(e) {}
+    }
+    nextStep(2);
+  }
+
+  async function runFirstReport() {
+    var address = (document.getElementById('first-address').value || '').trim();
+    if (!address) return;
+    // Redirect to new order page with address pre-filled
+    window.location.href = '/customer/new-order?address=' + encodeURIComponent(address);
+  }
+  </script>
 </body>
 </html>`
 }
