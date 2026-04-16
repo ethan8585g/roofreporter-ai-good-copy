@@ -26,8 +26,4 @@ CREATE INDEX IF NOT EXISTS idx_agent_jobs_action ON agent_jobs(action);
 CREATE INDEX IF NOT EXISTS idx_agent_jobs_created_at ON agent_jobs(created_at);
 CREATE INDEX IF NOT EXISTS idx_agent_jobs_success ON agent_jobs(success);
 
--- Agent configuration defaults in settings table
-INSERT OR IGNORE INTO settings (key, value) VALUES ('agent_auto_process_enabled', '0');
-INSERT OR IGNORE INTO settings (key, value) VALUES ('agent_confidence_threshold', '60');
-INSERT OR IGNORE INTO settings (key, value) VALUES ('agent_max_daily_auto', '50');
-INSERT OR IGNORE INTO settings (key, value) VALUES ('agent_notify_on_complete', '1');
+-- Agent configuration is stored per-company via the settings table (setting_key/setting_value)
