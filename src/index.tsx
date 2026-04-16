@@ -57,6 +57,10 @@ import { publicApiRoutes } from './routes/public-api'
 import { developerPortalRoutes } from './routes/developer-portal'
 import { aiAutopilotRoutes } from './routes/ai-autopilot'
 import { agentHubRoutes } from './routes/agent-hub'
+import usStatesRoutes from './routes/us-states'
+import usVerticalsRoutes from './routes/us-verticals'
+import usComparisonsRoutes from './routes/us-comparisons'
+import { ALL_STATE_SLUGS as US_ALL_STATE_SLUGS, US_CITIES as US_CITIES_DATA } from './data/us-states'
 import { processOrderQueue } from './services/ai-agent'
 import { runContentAgent } from './services/content-agent'
 import { runLeadAgent } from './services/lead-agent'
@@ -256,6 +260,12 @@ window.trackAdsConversion = function(kind, params) {
     // If body read fails, pass through original response
   }
 })
+
+// ── US SEO/GEO expansion routes ──
+app.route('/us', usStatesRoutes)
+app.route('/us', usVerticalsRoutes)
+// US comparison pages (specific slugs, must come before catch-alls)
+app.route('/', usComparisonsRoutes)
 
 // ── Public API service (third-party integrations) ──
 app.route('/v1', publicApiRoutes)
@@ -712,12 +722,17 @@ app.get('/sitemap.xml', async (c) => {
 // SEO: Sitemap index (master file pointing to segmented sub-sitemaps)
 app.get('/sitemap-index.xml', (c) => {
   const base = 'https://www.roofmanager.ca'
+  const today = new Date().toISOString().substring(0, 10)
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <sitemap><loc>${base}/sitemap-core.xml</loc></sitemap>
-  <sitemap><loc>${base}/sitemap-locations.xml</loc></sitemap>
-  <sitemap><loc>${base}/sitemap-blog.xml</loc></sitemap>
-  <sitemap><loc>${base}/image-sitemap.xml</loc></sitemap>
+  <sitemap><loc>${base}/sitemap-core.xml</loc><lastmod>${today}</lastmod></sitemap>
+  <sitemap><loc>${base}/sitemap-locations.xml</loc><lastmod>${today}</lastmod></sitemap>
+  <sitemap><loc>${base}/sitemap-blog.xml</loc><lastmod>${today}</lastmod></sitemap>
+  <sitemap><loc>${base}/sitemap-us-states.xml</loc><lastmod>${today}</lastmod></sitemap>
+  <sitemap><loc>${base}/sitemap-us-cities.xml</loc><lastmod>${today}</lastmod></sitemap>
+  <sitemap><loc>${base}/sitemap-us-verticals.xml</loc><lastmod>${today}</lastmod></sitemap>
+  <sitemap><loc>${base}/sitemap-comparisons.xml</loc><lastmod>${today}</lastmod></sitemap>
+  <sitemap><loc>${base}/image-sitemap.xml</loc><lastmod>${today}</lastmod></sitemap>
 </sitemapindex>`
   return c.text(xml, 200, { 'Content-Type': 'application/xml' })
 })
@@ -829,7 +844,7 @@ app.get('/feed.xml', async (c) => {
 <title>Roof Manager Blog</title>
 <link>${base}/blog</link>
 <description>Roofing industry insights, AI measurement technology, contractor business tips from Roof Manager.</description>
-<language>en-ca</language>
+<language>en-us</language>
 <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
 <atom:link href="${base}/feed.xml" rel="self" type="application/rss+xml"/>
 <image><url>${base}/static/logo.png</url><title>Roof Manager</title><link>${base}</link></image>
@@ -857,6 +872,62 @@ app.get('/image-sitemap.xml', async (c) => {
   return c.text(xml, 200, { 'Content-Type': 'application/xml' })
 })
 
+// SEO: US States sitemap
+app.get('/sitemap-us-states.xml', (c) => {
+  const base = 'https://www.roofmanager.ca'
+  const today = new Date().toISOString().substring(0, 10)
+  let urls = `<url><loc>${base}/us</loc><changefreq>monthly</changefreq><priority>0.9</priority><lastmod>${today}</lastmod></url>\n`
+  for (const slug of US_ALL_STATE_SLUGS) {
+    urls += `<url><loc>${base}/us/${slug}</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>${today}</lastmod></url>\n`
+  }
+  return c.text(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>`, 200, { 'Content-Type': 'application/xml' })
+})
+
+// SEO: US Cities sitemap
+app.get('/sitemap-us-cities.xml', (c) => {
+  const base = 'https://www.roofmanager.ca'
+  const today = new Date().toISOString().substring(0, 10)
+  let urls = ''
+  for (const city of US_CITIES_DATA) {
+    urls += `<url><loc>${base}/us/${city.stateSlug}/${city.slug}</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>\n`
+  }
+  return c.text(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>`, 200, { 'Content-Type': 'application/xml' })
+})
+
+// SEO: US Verticals sitemap (insurance-claims, storm-damage, hail-damage, hurricane-damage, roof-replacement-cost, roofing-contractors × 50 states)
+app.get('/sitemap-us-verticals.xml', (c) => {
+  const base = 'https://www.roofmanager.ca'
+  const today = new Date().toISOString().substring(0, 10)
+  const verticals = ['insurance-claims', 'storm-damage', 'hail-damage', 'hurricane-damage', 'roof-replacement-cost', 'roofing-contractors']
+  let urls = ''
+  for (const v of verticals) {
+    urls += `<url><loc>${base}/us/${v}</loc><changefreq>monthly</changefreq><priority>0.9</priority><lastmod>${today}</lastmod></url>\n`
+    for (const slug of US_ALL_STATE_SLUGS) {
+      urls += `<url><loc>${base}/us/${v}/${slug}</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>\n`
+    }
+  }
+  return c.text(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>`, 200, { 'Content-Type': 'application/xml' })
+})
+
+// SEO: Comparisons sitemap
+app.get('/sitemap-comparisons.xml', (c) => {
+  const base = 'https://www.roofmanager.ca'
+  const today = new Date().toISOString().substring(0, 10)
+  const comparisons = [
+    '/cheaper-alternative-to-eagleview',
+    '/eagleview-vs-roofmanager-us',
+    '/hover-alternative-us',
+    '/roofr-alternative',
+    '/roofr-vs-roofmanager-us',
+    '/roofsnap-vs-roofmanager',
+    '/roofsnap-vs-roofmanager-us',
+    '/pitchgauge-vs-roofmanager',
+    '/roofr-pricing-complaints',
+  ]
+  const urls = comparisons.map(p => `<url><loc>${base}${p}</loc><changefreq>monthly</changefreq><priority>0.9</priority><lastmod>${today}</lastmod></url>`).join('\n')
+  return c.text(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>`, 200, { 'Content-Type': 'application/xml' })
+})
+
 // SEO: robots.txt (expanded with AI search & training bot directives)
 app.get('/robots.txt', (c) => {
   return c.text(`User-agent: *
@@ -868,6 +939,10 @@ Disallow: /superadmin/
 
 Sitemap: https://www.roofmanager.ca/sitemap-index.xml
 Sitemap: https://www.roofmanager.ca/sitemap.xml
+Sitemap: https://www.roofmanager.ca/sitemap-us-states.xml
+Sitemap: https://www.roofmanager.ca/sitemap-us-cities.xml
+Sitemap: https://www.roofmanager.ca/sitemap-us-verticals.xml
+Sitemap: https://www.roofmanager.ca/sitemap-comparisons.xml
 Sitemap: https://www.roofmanager.ca/image-sitemap.xml
 
 # AI Search Retrieval Bots (real-time citation)
@@ -877,13 +952,25 @@ Allow: /
 User-agent: PerplexityBot
 Allow: /
 
+User-agent: Perplexity-User
+Allow: /
+
 User-agent: ClaudeBot
+Allow: /
+
+User-agent: Anthropic-Web
 Allow: /
 
 User-agent: Google-Extended
 Allow: /
 
+User-agent: Gemini-Ground
+Allow: /
+
 User-agent: Applebot-Extended
+Allow: /
+
+User-agent: Cohere-AI
 Allow: /
 
 # AI Training Bots
@@ -905,86 +992,106 @@ Allow: /
 app.get('/llms.txt', (c) => {
   return c.text(`# Roof Manager
 
-> Roof Manager is an AI-powered SaaS platform for roofing contractors, solar installers, insurance adjusters, and property managers. It generates professional satellite-powered roof measurement reports from Google's Solar API with LiDAR-calibrated 3D building models, delivering 99% accuracy in under 60 seconds. The platform includes a full CRM with invoicing, proposals, job tracking, an AI phone secretary, door-to-door sales manager, and team management. Available in 40+ countries. Headquartered in Alberta, Canada.
+> Roof Manager is an AI-powered SaaS platform for roofing contractors, solar installers, insurance adjusters, and property managers. Satellite-powered roof measurement reports using Google Solar API with LiDAR-calibrated 3D building models — 99% accuracy in under 60 seconds. Covers all 50 US states and all 10 Canadian provinces. $8 CAD/report; 3 free reports, no credit card. Headquartered in Alberta, Canada.
 
-## Feature Hub Pages (Dedicated Landing Pages)
-- [AI Measurement Reports](https://www.roofmanager.ca/features/measurements): Dedicated hub page for satellite-powered roof measurement reports — 3D area, pitch, edges, material BOM in under 60 seconds
-- [Roofing CRM](https://www.roofmanager.ca/features/crm): Dedicated hub page for CRM — pipeline, automated follow-ups, invoicing, proposals, job scheduling
-- [AI Roofer Secretary](https://www.roofmanager.ca/features/ai-secretary): Dedicated hub page for 24/7 AI phone receptionist — answers calls, books appointments, qualifies leads
-- [Virtual Roof Try-On](https://www.roofmanager.ca/features/virtual-try-on): Dedicated hub page for AI visualization tool — overlay shingle colors on home photos
+## Core Pages
+- [Home](https://www.roofmanager.ca/): AI roof measurement + full CRM — satellite-powered, 60-second delivery
+- [Pricing](https://www.roofmanager.ca/pricing): 3 free reports; $8/report; 10-pack $75, 25-pack $175, 100-pack $595; CRM always free
+- [Services](https://www.roofmanager.ca/services): Measurement reports, solar analysis, CRM, invoicing, proposals, AI secretary, website builder, D2D manager, virtual try-on
+- [Coverage Map](https://www.roofmanager.ca/coverage): 40+ countries; 95%+ of North American buildings
+- [Free Roof Estimate](https://www.roofmanager.ca/free-roof-estimate): Instant satellite measurement for homeowners — free, no sign-up
+- [Register](https://www.roofmanager.ca/register): Create contractor account — 3 free reports included
+- [Demo](https://www.roofmanager.ca/demo): Book a live product walkthrough
 
-## Services & Products
-- [All Services](https://www.roofmanager.ca/services): Complete directory of all 12 Roof Manager services — measurement reports, solar analysis, CRM, invoicing, AI secretary, website builder, D2D manager, virtual try-on, email outreach, team management, job scheduling, material calculator
+## Feature Hubs
+- [AI Measurement Reports](https://www.roofmanager.ca/features/measurements): 3D area, pitch, ridge/hip/valley/eave/rake edges, material BOM — 60 seconds
+- [Roofing CRM](https://www.roofmanager.ca/features/crm): Pipeline, follow-ups, invoicing, proposals, job scheduling — always free
+- [AI Roofer Secretary](https://www.roofmanager.ca/features/ai-secretary): 24/7 AI phone receptionist — answers calls, books appointments, qualifies leads — $149/month
+- [Virtual Roof Try-On](https://www.roofmanager.ca/features/virtual-try-on): AI shingle color visualizer — overlay materials on home photos
+- [Storm Scout](https://www.roofmanager.ca/features/storm-scout): Real-time hail/storm tracking with automated contractor alerts
 
-## Core CRM Features
-- [Roofing CRM Platform](https://www.roofmanager.ca/features/crm): Pipeline management, automated follow-ups, customer history, team assignment, Google Calendar sync
-- [Invoicing & Proposals](https://www.roofmanager.ca/services#invoicing): Professional invoicing, proposal generation, payment tracking via Square
-- [Job Tracking](https://www.roofmanager.ca/services#calendar): Job scheduling, crew management, Google Calendar sync
-- [Team Management](https://www.roofmanager.ca/services#team): Multi-user accounts, role-based access, D2D sales tracking
+## Roof Replacement Cost — Canada 2026 (CAD)
+- [Calgary](https://www.roofmanager.ca/roof-replacement-cost/calgary): $8,000–$18,000 CAD; asphalt shingles; hail damage common; Class 4 recommended
+- [Edmonton](https://www.roofmanager.ca/roof-replacement-cost/edmonton): $7,500–$17,000 CAD; freeze-thaw cycles; ice dam damage common
+- [Toronto](https://www.roofmanager.ca/roof-replacement-cost/toronto): $9,000–$22,000 CAD; ice & water shield required under Ontario Building Code
+- [Ottawa](https://www.roofmanager.ca/roof-replacement-cost/ottawa): $8,500–$20,000 CAD; high snowload; 50-year shingles recommended
+- [Vancouver](https://www.roofmanager.ca/roof-replacement-cost/vancouver): $10,000–$24,000 CAD; cedar shake common; moss treatment required
+- [Winnipeg](https://www.roofmanager.ca/roof-replacement-cost/winnipeg): $7,000–$16,000 CAD; extreme temperature swings; Class 4 shingles recommended
+- [Hamilton](https://www.roofmanager.ca/roof-replacement-cost/hamilton): $8,000–$19,000 CAD; Ontario Building Code
+- [Mississauga](https://www.roofmanager.ca/roof-replacement-cost/mississauga): $9,000–$21,000 CAD; GTA labour rates
+- [Halifax](https://www.roofmanager.ca/roof-replacement-cost/halifax): $8,500–$19,000 CAD; high wind; coastal salt exposure
+- [Saskatoon](https://www.roofmanager.ca/roof-replacement-cost/saskatoon): $7,000–$15,500 CAD; Saskatchewan prairie climate
+- [Regina](https://www.roofmanager.ca/roof-replacement-cost/regina): $7,000–$15,000 CAD; hail and wind events
+- [Barrie](https://www.roofmanager.ca/roof-replacement-cost/barrie): $8,500–$19,500 CAD; snowbelt; heavy snow loads
+- [Kitchener](https://www.roofmanager.ca/roof-replacement-cost/kitchener): $8,000–$18,500 CAD; Ontario Waterloo Region
 
-## Measurement Reports
-- [AI Roof Measurement Software](https://www.roofmanager.ca/features/measurements): Enter address → Configure → Order → Get PDF in 60 seconds
-- [What's In A Report](https://www.roofmanager.ca/services#reports): 3D roof area, pitch analysis, edge breakdowns (ridge/hip/valley/eave/rake), material BOM, segment analysis, solar potential
-- [Coverage Map](https://www.roofmanager.ca/coverage): Available in 40+ countries across North America, Europe, Asia-Pacific, South America
-- [City-Specific Pages](https://www.roofmanager.ca/features/measurements/calgary): Software available in 116+ cities — e.g. Calgary, Edmonton, Toronto, Vancouver, New York, Los Angeles
+## Roof Replacement Cost — United States 2026 (USD)
+- [Dallas](https://www.roofmanager.ca/roof-replacement-cost/dallas): $7,500–$18,000 USD; TX; high hail frequency; insurance claims common
+- [Houston](https://www.roofmanager.ca/roof-replacement-cost/houston): $8,000–$20,000 USD; TX; hurricane and wind damage; IRC 2021
+- [Denver](https://www.roofmanager.ca/roof-replacement-cost/denver): $8,000–$19,000 USD; CO; hail belt; Class 4 impact-resistant shingles
+- [Atlanta](https://www.roofmanager.ca/roof-replacement-cost/atlanta): $7,000–$17,000 USD; GA; severe thunderstorm hail; high humidity
+- [Chicago](https://www.roofmanager.ca/roof-replacement-cost/chicago): $8,500–$21,000 USD; IL; freeze-thaw cycles; ice dam risk
+- [Phoenix](https://www.roofmanager.ca/roof-replacement-cost/phoenix): $7,000–$16,000 USD; AZ; monsoon hail; UV degradation; flat roofs common
+- [Miami](https://www.roofmanager.ca/roof-replacement-cost/miami): $9,000–$22,000 USD; FL; Florida Building Code (FBC) wind requirements
+- [Tampa](https://www.roofmanager.ca/roof-replacement-cost/tampa): $8,000–$20,000 USD; FL; hurricane prep; FBC compliance
+- [Charlotte](https://www.roofmanager.ca/roof-replacement-cost/charlotte): $7,500–$18,000 USD; NC; frequent hail and wind events
+- [Minneapolis](https://www.roofmanager.ca/roof-replacement-cost/minneapolis): $8,500–$20,000 USD; MN; extreme cold; ice dams; snow load
+- [Nashville](https://www.roofmanager.ca/roof-replacement-cost/nashville): $7,500–$18,000 USD; TN; severe storm corridor
+- [Oklahoma City](https://www.roofmanager.ca/roof-replacement-cost/oklahoma-city): $7,000–$16,500 USD; OK; tornado alley; high hail frequency
+- [Kansas City](https://www.roofmanager.ca/roof-replacement-cost/kansas-city): $7,500–$17,500 USD; MO/KS; hail belt
+- [Denver](https://www.roofmanager.ca/roof-replacement-cost/colorado-springs): $7,500–$18,000 USD; CO Springs; Front Range hail
 
-## AI Secretary
-- [AI Phone Secretary](https://www.roofmanager.ca/features/ai-secretary): 24/7 AI-powered call answering, appointment booking, lead qualification, call summaries — $149/month
+## US State Hubs
+- [Texas](https://www.roofmanager.ca/us/texas): Dallas, Houston, San Antonio, Austin, Fort Worth — hail, wind, hurricane
+- [Florida](https://www.roofmanager.ca/us/florida): Miami, Tampa, Orlando, Jacksonville — FBC compliance, hurricane
+- [Colorado](https://www.roofmanager.ca/us/colorado): Denver, Colorado Springs, Boulder — hail belt, Class 4 shingles
+- [Arizona](https://www.roofmanager.ca/us/arizona): Phoenix, Tucson, Mesa — monsoon, UV, flat roofs
+- [Georgia](https://www.roofmanager.ca/us/georgia): Atlanta — severe thunderstorm hail
+- [North Carolina](https://www.roofmanager.ca/us/north-carolina): Charlotte, Raleigh — hurricane and hail
+- [Tennessee](https://www.roofmanager.ca/us/tennessee): Nashville, Memphis — tornado and hail
+- [Oklahoma](https://www.roofmanager.ca/us/oklahoma): Oklahoma City, Tulsa — tornado alley
+- [All 50 US States](https://www.roofmanager.ca/us): Storm profiles, building codes, city coverage for every state
 
-## AI Website Builder
-- [AI Website Builder](https://www.roofmanager.ca/customer/website-builder): AI generates a complete 5-page contractor website in 5 minutes — Home, Services, About, Service Areas, Contact. Custom copy, lead capture forms, CRM sync, SEO-optimized — $99/month
+## Blog Categories
+- [Blog Home](https://www.roofmanager.ca/blog): Industry guides, AI technology, storm damage, solar, business ops (April 2026)
+- [Storm Response](https://www.roofmanager.ca/blog?category=storm-response): Hail damage inspection, insurance claims, post-storm playbooks
+- [Technology](https://www.roofmanager.ca/blog?category=technology): Satellite vs drone vs manual, Google Solar API, AI vision
+- [Business](https://www.roofmanager.ca/blog?category=business): CRM guides, lead conversion, D2D sales, proposals
+- [Solar](https://www.roofmanager.ca/blog?category=solar): Solar suitability, panel placement, shade analysis
+- [Inspection](https://www.roofmanager.ca/blog?category=inspection): Condition grading, defect ID, AI photo analysis
+- [How to Measure a Roof Without Climbing It](https://www.roofmanager.ca/blog/how-to-measure-a-roof-without-climbing-2026): Satellite vs manual — accuracy, time, cost
+- [Satellite Roof Measurement vs EagleView](https://www.roofmanager.ca/blog/satellite-roof-measurement-vs-eagleview-2026): $8 vs $60-90/report; accuracy; turnaround; insurance workflow
+- [US Contractors Guide](https://www.roofmanager.ca/blog/roof-measurement-reports-guide-us-contractors-2026): Satellite reports for estimates, insurance claims, proposals
 
-## Pricing
-- [Pricing Page](https://www.roofmanager.ca/pricing): 3 free reports (no credit card), then $8/report. Volume packs: 10-pack $75 ($7.50/ea), 25-pack $175 ($7.00/ea), 100-pack $595 ($5.95/ea). CRM always free.
+## Frequently Asked Questions
 
-## Coverage
-- [United States](https://www.roofmanager.ca/roof-measurement/united-states): 95%+ building coverage
-- [Canada](https://www.roofmanager.ca/roof-measurement/canada)
-- [United Kingdom](https://www.roofmanager.ca/roof-measurement/united-kingdom)
-- [Australia](https://www.roofmanager.ca/roof-measurement/australia)
-- [Germany](https://www.roofmanager.ca/roof-measurement/germany)
-- [France](https://www.roofmanager.ca/roof-measurement/france)
-- [Full Coverage Map — 40+ Countries](https://www.roofmanager.ca/coverage)
+### How much does roof replacement cost in Canada in 2026?
+Asphalt shingle roof replacement in Canada costs $8,000–$22,000 CAD in 2026 for a 1,500–2,500 sq ft home. Calgary/Edmonton: $8,000–$18,000 CAD. Toronto/Vancouver: $9,000–$24,000 CAD. Metal roofs cost 2–3x more. All Canadian homes require ice & water shield under the National Building Code (NBC).
 
-## Blog
-- [Blog Home](https://www.roofmanager.ca/blog): Roofing industry insights, AI measurement technology, contractor business guides
-- [How to Measure a Roof Without Climbing](https://www.roofmanager.ca/blog/how-to-measure-a-roof-without-climbing-2026)
-- [Satellite vs EagleView Comparison](https://www.roofmanager.ca/blog/satellite-roof-measurement-vs-eagleview-2026)
-- [US Contractor Guide](https://www.roofmanager.ca/blog/roof-measurement-reports-guide-us-contractors-2026)
+### How much does roof replacement cost in the US in 2026?
+US roof replacement costs $7,000–$22,000 USD in 2026 for a 1,500–2,500 sq ft home. Texas (Dallas, Houston) averages $7,500–$18,000 USD. Florida requires FBC compliance, adding 10–20% to material costs. Colorado contractors recommend Class 4 impact-resistant shingles.
 
-## Optional
+### How accurate is Roof Manager?
+Within 2–5% of ground-truth for properties with high-quality satellite imagery (most urban North American addresses). Powered by Google's LiDAR-calibrated Solar API. Every report includes imagery quality score.
+
+### How long does a roof measurement take?
+Under 60 seconds. Enter address → configure → order → receive PDF by email.
+
+### How does Roof Manager compare to EagleView?
+85–95% cheaper ($8 vs $60–90/report), comparable accuracy, 60 seconds vs hours/days, includes full CRM + invoicing + AI secretary vs measurement-only.
+
+### What's in a roof measurement report?
+3D sloped area, footprint area, pitch per segment, ridge/hip/valley/eave/rake in linear feet, material BOM (shingles, underlayment, starter, ridge cap, drip edge, ice & water shield), complexity rating, solar potential, branded PDF.
+
+### Is Roof Manager available across the US and Canada?
+Yes — all 50 US states and all 10 Canadian provinces. 95%+ of North American buildings are covered via Google's Solar API.
+
+## Legal
 - [Privacy Policy](https://www.roofmanager.ca/privacy)
 - [Terms of Service](https://www.roofmanager.ca/terms)
 - [RSS Feed](https://www.roofmanager.ca/feed.xml)
 - [Sitemap Index](https://www.roofmanager.ca/sitemap-index.xml)
-- [Sitemap](https://www.roofmanager.ca/sitemap.xml)
-
-## Frequently Asked Questions
-
-### How accurate is Roof Manager?
-Roof Manager delivers measurements within 2-5% of manual/ground-truth measurements for properties with HIGH quality satellite imagery (most urban North American and European addresses). Reports use Google's LiDAR-calibrated 3D building models, and every report shows the imagery quality and confidence score.
-
-### How long does a roof measurement take?
-Most reports are generated in under 60 seconds. You enter an address, configure options, click order, and receive a full PDF report with 3D area, pitch, edges, and material BOM — all delivered via email and accessible from your dashboard.
-
-### How much does a roof measurement cost?
-After 3 free reports (no credit card required), reports are $8 CAD (~$5.95-$7.50 USD) each. Volume packs lower the cost: 10-pack $75 ($7.50/ea), 25-pack $175 ($7.00/ea), and 100-pack $595 ($5.95/ea). The CRM, proposals, and invoicing are always free.
-
-### Is Roof Manager available in my city?
-Roof Manager works in 40+ countries and 60+ Canadian cities, plus most of the US, UK, Australia, and Europe. As long as the address has Google satellite/Solar API coverage (95%+ of North American buildings), you can generate a report. See the Coverage page for the full list.
-
-### How do I measure a roof without going on it?
-Enter the property address in Roof Manager. The platform pulls satellite imagery and Google's LiDAR 3D building model, runs AI geometry extraction, and produces a full measurement report — no ladder, no drone, no site visit required. Most reports complete in under 60 seconds.
-
-### What's included in a roof measurement report?
-Every report includes total 3D (sloped) roof area, footprint area, pitch analysis per segment, edge breakdowns (ridge, hip, valley, eave, rake in linear feet), complete material BOM (shingles, underlayment, starter, ridge cap, drip edge, ice & water), segment-by-segment analysis, solar potential data, a complexity rating, and a branded PDF download.
-
-### How does Roof Manager compare to EagleView?
-Roof Manager is roughly 85-95% cheaper than EagleView ($8 vs $60-90+ per report) with comparable accuracy on most residential properties, faster turnaround (60 seconds vs hours/days), and includes a full CRM, proposals, invoicing, and an AI phone secretary — features EagleView does not offer. See the EagleView alternative page for a side-by-side.
-
-### Do I need a drone?
-No. Roof Manager is 100% satellite-based. You only need a web browser and the property address. Drones, ladders, and site visits are not required to generate a measurement report.
-`, 200, { 'Content-Type': 'text/markdown; charset=utf-8' })
+`, 200, { 'Content-Type': 'text/plain; charset=utf-8' })
 })
 
 // SEO: llms-full.txt (comprehensive documentation for LLMs)
@@ -998,12 +1105,17 @@ app.get('/llms-full.txt', (c) => {
 
 Roof Manager is a Software-as-a-Service (SaaS) platform that generates professional roof measurement reports from satellite imagery using Google's Solar API with LiDAR-calibrated 3D building models. The platform serves roofing contractors, solar installers, insurance adjusters, home inspectors, and property managers worldwide.
 
-**Key differentiators:**
-- Reports delivered in under 60 seconds (vs 24-48 hours from legacy providers)
-- $8 CAD per report (vs $50-100+ from EagleView)
+**Key facts (as of 2026):**
+- Reports delivered in under 60 seconds (vs 2–4 hours from EagleView/Hover)
+- $8 USD per report for US users (vs $49–$95 from EagleView, $33–$55 from Hover)
+- $8 CAD per report for Canadian users
+- 3 free reports on signup — no credit card required
 - 99% measurement accuracy verified against manual measurements
-- Full CRM, invoicing, AI secretary included — not just reports
-- Available in 40+ countries (not limited to North America)
+- Full CRM, invoicing, proposals, and AI phone secretary included at no extra cost
+- Available in all 50 US states and 10 Canadian provinces, plus 30+ additional countries
+- Market served: United States (primary growth market) and Canada (original market)
+- Reports are accepted by US insurance adjusters for storm, hail, and hurricane damage claims
+- Xactimate-compatible line items: pitch-corrected area and edge categories align with Xactimate F9 entries
 
 ## Platform Architecture
 
@@ -1364,6 +1476,27 @@ const seoCities: Record<string, { name: string; province: string; lat: string; l
   'prague': { name: 'Prague', province: 'Prague', lat: '50.0755', lng: '14.4378' },
 }
 
+// ── US geo helpers ──────────────────────────────────────────────────────────
+const US_STATE_NAMES = new Set(['Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming'])
+const CA_PROVINCE_NAMES = new Set(['Alberta','British Columbia','Ontario','Quebec','Manitoba','Saskatchewan','Nova Scotia','New Brunswick','Newfoundland','Prince Edward Island','Northwest Territories','Yukon','Nunavut'])
+const US_STATE_CODES: Record<string, string> = {
+  'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA',
+  'Colorado':'CO','Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA',
+  'Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA','Kansas':'KS',
+  'Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD','Massachusetts':'MA',
+  'Michigan':'MI','Minnesota':'MN','Mississippi':'MS','Missouri':'MO','Montana':'MT',
+  'Nebraska':'NE','Nevada':'NV','New Hampshire':'NH','New Jersey':'NJ','New Mexico':'NM',
+  'New York':'NY','North Carolina':'NC','North Dakota':'ND','Ohio':'OH','Oklahoma':'OK',
+  'Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI','South Carolina':'SC',
+  'South Dakota':'SD','Tennessee':'TN','Texas':'TX','Utah':'UT','Vermont':'VT',
+  'Virginia':'VA','Washington':'WA','West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY'
+}
+function getCityCountry(city: { province: string }): 'US' | 'CA' | 'OTHER' {
+  if (US_STATE_NAMES.has(city.province)) return 'US'
+  if (CA_PROVINCE_NAMES.has(city.province)) return 'CA'
+  return 'OTHER'
+}
+
 const seoCountries: Record<string, { name: string; region: string; iso: string }> = {
   'united-states': { name: 'United States', region: 'North America', iso: 'US' },
   'canada': { name: 'Canada', region: 'North America', iso: 'CA' },
@@ -1524,8 +1657,25 @@ app.get('/roof-measurement/:city', (c) => {
 </body>
 </html>`)
   }
+  const cityCountry = getCityCountry(city)
+  const isUS = cityCountry === 'US'
+  const isCa = cityCountry === 'CA'
+  const stateCode = isUS ? (US_STATE_CODES[city.province] || '') : ''
+  const geoRegion = isUS ? `US-${stateCode}` : isCa ? `CA` : ''
+  const htmlLang = isUS ? 'en-US' : isCa ? 'en-CA' : 'en'
+  const addrCountry = isUS ? 'US' : isCa ? 'CA' : city.province
+  const countryLabel = isUS ? 'United States' : isCa ? 'Canada' : ''
+  const priceText = isUS
+    ? 'Reports cost $8 per report after 3 free trial reports (billed in USD for US customers).'
+    : 'Reports cost $8 CAD per report after 3 free trial reports.'
+  const priceVisible = isUS ? '$8 per report (USD)' : '$8 CAD per report'
+  const breadcrumbItems = isUS
+    ? `[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Locations","item":"https://www.roofmanager.ca/coverage"},{"@type":"ListItem","position":3,"name":"United States","item":"https://www.roofmanager.ca/roof-measurement/united-states"},{"@type":"ListItem","position":4,"name":"${city.province}","item":"https://www.roofmanager.ca/us/${city.province.toLowerCase().replace(/ /g,'-')}"},{"@type":"ListItem","position":5,"name":"${city.name}","item":"https://www.roofmanager.ca/roof-measurement/${citySlug}"}]`
+    : `[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Locations","item":"https://www.roofmanager.ca/coverage"},{"@type":"ListItem","position":3,"name":"${city.name}, ${city.province}","item":"https://www.roofmanager.ca/roof-measurement/${citySlug}"}]`
+  const usFaqExtra = isUS ? `
+  {"@type":"Question","name":"Does Roof Manager work for US roofing contractors?","acceptedAnswer":{"@type":"Answer","text":"Yes. Roof Manager is fully operational for US roofing contractors across all 50 states. Reports are priced in USD and the platform integrates with US insurance workflows including Xactimate-compatible line items. Contractors in Texas, Florida, California, Arizona, and Colorado are among our most active US users."}},` : ''
   return c.html(`<!DOCTYPE html>
-<html lang="en">
+<html lang="${htmlLang}">
 <head>
   ${getHeadTags()}
   <title>Roof Measurement Reports in ${city.name}, ${city.province} | Roof Manager</title>
@@ -1538,12 +1688,17 @@ app.get('/roof-measurement/:city', (c) => {
   <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
   <meta property="og:image:alt" content="Roof measurement report for ${city.name}, ${city.province}">
   <meta property="og:site_name" content="Roof Manager">
+  <meta property="og:locale" content="${isUS ? 'en_US' : 'en_CA'}">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Measurements in ${city.name} — Roof Manager">
   <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
-  <meta name="geo.region" content="CA">
-  <meta name="geo.placename" content="${city.name}, ${city.province}, Canada">
+  ${geoRegion ? `<meta name="geo.region" content="${geoRegion}">` : ''}
+  <meta name="geo.placename" content="${city.name}, ${city.province}${countryLabel ? ', ' + countryLabel : ''}">
   <meta name="geo.position" content="${city.lat};${city.lng}">
+  <link rel="alternate" hreflang="en-US" href="https://www.roofmanager.ca/roof-measurement/${citySlug}">
+  <link rel="alternate" hreflang="en-CA" href="https://www.roofmanager.ca/">
+  <link rel="alternate" hreflang="en" href="https://www.roofmanager.ca/">
+  <link rel="alternate" hreflang="x-default" href="https://www.roofmanager.ca/">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -1552,23 +1707,19 @@ app.get('/roof-measurement/:city', (c) => {
     "description": "AI-powered roof measurement reports and CRM for roofing companies in ${city.name}, ${city.province}.",
     "url": "https://www.roofmanager.ca/roof-measurement/${citySlug}",
     "image": "https://www.roofmanager.ca/static/logo.png",
-    "address": {"@type": "PostalAddress", "addressLocality": "${city.name}", "addressRegion": "${city.province}", "addressCountry": "CA"},
+    "address": {"@type": "PostalAddress", "addressLocality": "${city.name}", "addressRegion": "${isUS ? stateCode : city.province}", "addressCountry": "${addrCountry}"},
     "geo": {"@type": "GeoCoordinates", "latitude": "${city.lat}", "longitude": "${city.lng}"},
-    "areaServed": {"@type": "City", "name": "${city.name}"},
-    "priceRange": "$5-$500 USD"
+    "areaServed": [{"@type": "City", "name": "${city.name}"},{"@type": "GeoCircle","geoMidpoint":{"@type":"GeoCoordinates","latitude":"${city.lat}","longitude":"${city.lng}"},"geoRadius":"80000"}],
+    "priceRange": "$5-$500"
   }
   </script>
   <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[
-  {"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},
-  {"@type":"ListItem","position":2,"name":"Locations","item":"https://www.roofmanager.ca/coverage"},
-  {"@type":"ListItem","position":3,"name":"${city.name}, ${city.province}","item":"https://www.roofmanager.ca/roof-measurement/${citySlug}"}
-]}
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":${breadcrumbItems}}
 </script>
   <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[${usFaqExtra}
   {"@type":"Question","name":"What is the best roof measurement software in ${city.name}?","acceptedAnswer":{"@type":"Answer","text":"Roof Manager is the leading AI-powered roof measurement platform used by ${city.name} roofing contractors. It generates professional satellite-powered reports with 3D area, pitch analysis, edge breakdowns, and material BOM in under 60 seconds."}},
-  {"@type":"Question","name":"How much does a roof report cost in ${city.name}?","acceptedAnswer":{"@type":"Answer","text":"Roof measurement reports for ${city.name} properties cost $8 CAD per report after your 3 free trial reports. Volume discounts are available."}},
+  {"@type":"Question","name":"How much does a roof report cost in ${city.name}?","acceptedAnswer":{"@type":"Answer","text":"${priceText} Volume discounts are available."}},
   {"@type":"Question","name":"Does Roof Manager work for ${city.name}, ${city.province} roofing contractors?","acceptedAnswer":{"@type":"Answer","text":"Yes! Roof Manager has excellent satellite coverage across ${city.name} and all of ${city.province}. Most urban and suburban addresses have high-quality imagery available."}},
   {"@type":"Question","name":"How accurate are satellite roof measurements in ${city.name}?","acceptedAnswer":{"@type":"Answer","text":"Roof Manager delivers 99% accuracy for ${city.name} properties using Google's LiDAR-calibrated 3D building models."}},
   {"@type":"Question","name":"What's included in a roof report for ${city.name} properties?","acceptedAnswer":{"@type":"Answer","text":"Every report includes total 3D area, edge breakdowns, complete material BOM, segment analysis, solar potential data, complexity rating, and a professional PDF."}}
@@ -1644,7 +1795,7 @@ app.get('/roof-measurement/:city', (c) => {
         </div>
         <div class="bg-[#111111] border border-white/10 rounded-xl p-6">
           <h3 class="text-white font-bold mb-2">How much does a roof report cost in ${city.name}?</h3>
-          <p class="text-gray-400 text-sm leading-relaxed">Roof measurement reports for ${city.name} properties cost $8 CAD per report after your 3 free trial reports. Volume discounts are available — 25-packs at $6/report and 100-packs at $5/report. Full CRM, invoicing, and proposal tools are included free.</p>
+          <p class="text-gray-400 text-sm leading-relaxed">Roof measurement reports for ${city.name} properties cost ${priceVisible} after your 3 free trial reports. Volume discounts are available — 25-packs at $7/report and 100-packs at $5.95/report. Full CRM, invoicing, and proposal tools are included free.</p>
         </div>
         <div class="bg-[#111111] border border-white/10 rounded-xl p-6">
           <h3 class="text-white font-bold mb-2">Does Roof Manager work for ${city.name}, ${city.province} roofing contractors?</h3>
@@ -1699,7 +1850,7 @@ app.get('/roof-measurement/:city', (c) => {
   </section>
 
   <footer class="bg-slate-900 text-gray-400 py-8 text-center text-sm border-t border-white/5">
-    <p>&copy; ${new Date().getFullYear()} Roof Manager. Serving roofing contractors in ${city.name}, ${city.province} and across Canada.</p>
+    <p>&copy; ${new Date().getFullYear()} Roof Manager. Serving roofing contractors in ${city.name}, ${city.province} — and across all 50 US states &amp; Canada.</p>
     <div class="mt-2"><a href="/privacy" class="hover:text-white">Privacy</a> · <a href="/terms" class="hover:text-white">Terms</a> · <a href="/blog" class="hover:text-white">Blog</a> · <a href="/features/measurements" class="hover:text-white">Software</a> · <a href="/pricing" class="hover:text-white">Pricing</a></div>
   </footer>
 </body>
@@ -3170,11 +3321,10 @@ function getHeadTags() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="google-site-verification" content="CvzH14V1vTrop4cCx2z90ZUFnt4GJJNr1KkgiywoO2g" />
   <meta name="theme-color" content="#00FF88">
+  <link rel="alternate" hreflang="en-US" href="https://www.roofmanager.ca/">
   <link rel="alternate" hreflang="en-CA" href="https://www.roofmanager.ca/">
   <link rel="alternate" hreflang="en" href="https://www.roofmanager.ca/">
   <link rel="alternate" hreflang="x-default" href="https://www.roofmanager.ca/">
-  <meta name="geo.region" content="CA-AB">
-  <meta name="geo.placename" content="Alberta, Canada">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://maps.googleapis.com">
   <link rel="preconnect" href="https://maps.gstatic.com" crossorigin>
@@ -5033,7 +5183,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 <head>
   ${getHeadTags()}
   <title>Roof Manager | CRM, Satellite Roof Reports &amp; Solar Design Software for Roofing &amp; Solar Companies</title>
-  <meta name="description" content="The all-in-one CRM built for roofing and solar companies — satellite roof measurement reports, solar design tools, workflow automations, invoicing, and pipeline management. Trusted by contractors big and small across Canada &amp; the US.">
+  <meta name="description" content="The all-in-one CRM built for roofing and solar companies — satellite roof measurement reports, solar design tools, workflow automations, invoicing, and pipeline management. Trusted by roofing and solar contractors across the US and Canada.">
   <meta property="og:title" content="Roof Manager — Precision Roof Measurement Reports">
   <meta property="og:description" content="Professional satellite-powered roof measurement reports in under 60 seconds. Full CRM, AI phone secretary, and team management for roofing businesses.">
   <meta property="og:type" content="website">
@@ -5042,7 +5192,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   <meta property="og:image:width" content="512">
   <meta property="og:image:height" content="512">
   <meta property="og:site_name" content="Roof Manager">
-  <meta property="og:locale" content="en_CA">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="en_CA">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Manager — Satellite Roof Measurements in 60 Seconds">
   <meta name="twitter:description" content="AI-powered roof measurement reports, full CRM & team management for roofing companies. 4 free reports, no credit card.">
@@ -5100,13 +5251,9 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       "@type": "Organization",
       "name": "Roof Manager",
       "url": "https://www.roofmanager.ca",
-      "address": {
-        "@type": "PostalAddress",
-        "addressRegion": "Alberta",
-        "addressCountry": "CA"
-      }
-    },
-    "sameAs": ["https://www.wikidata.org/wiki/Q152198"]
+      "address": {"@type": "PostalAddress", "addressRegion": "Alberta", "addressCountry": "CA"},
+      "areaServed": ["US", "CA"]
+    }
   }
   </script>
   <script type="application/ld+json">
@@ -5114,7 +5261,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     "@context": "https://schema.org",
     "@type": "FAQPage",
     "mainEntity": [
-      {"@type": "Question", "name": "What is Roof Manager?", "acceptedAnswer": {"@type": "Answer", "text": "Roof Manager is an AI-powered roof measurement platform that generates professional satellite roof reports in under 60 seconds. It includes a full roofing CRM, invoicing, proposals, material take-off, AI phone secretary, and team management tools for roofing contractors across Canada and the US."}},
+      {"@type": "Question", "name": "Does Roof Manager work for US roofing contractors?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Roof Manager is fully operational for roofing contractors across all 50 US states including Texas, Florida, California, Arizona, and Colorado. Reports are priced in USD for US users. The platform generates Xactimate-compatible line items and integrates with US insurance claim workflows, making it ideal for storm, hail, and hurricane damage documentation. As of 2026, US contractors represent the fastest-growing segment of the Roof Manager user base."}},
+      {"@type": "Question", "name": "What is Roof Manager?", "acceptedAnswer": {"@type": "Answer", "text": "Roof Manager is an AI-powered roof measurement platform that generates professional satellite roof reports in under 60 seconds. It includes a full roofing CRM, invoicing, proposals, material take-off, AI phone secretary, and team management tools for roofing contractors across the US and Canada."}},
       {"@type": "Question", "name": "How accurate are Roof Manager measurements?", "acceptedAnswer": {"@type": "Answer", "text": "Our measurements use satellite imagery combined with GPS coordinate tracing and Google Solar API data. Accuracy is typically within 2-5% of manual measurements, verified against pitch-corrected sloped area calculations."}},
       {"@type": "Question", "name": "Does Roof Manager work in Canada?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Roof Manager was built for Canadian roofing contractors and works in every province and territory where Google satellite imagery is available — including Alberta, British Columbia, Ontario, Quebec, and all Atlantic provinces."}},
       {"@type": "Question", "name": "How much does a roof measurement report cost?", "acceptedAnswer": {"@type": "Answer", "text": "Reports are $8 USD each after the 4 free trial reports. Credit packs offer volume savings — 10 for $75 ($7.50/each), 25 for $175 ($7.00/each), or 100 for $595 ($5.95/each)."}},
@@ -5128,7 +5276,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   }
   </script>
   <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://www.roofmanager.ca/static/logo.png","description":"AI-powered satellite roof measurement reports for roofing professionals worldwide","address":{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},"contactPoint":{"@type":"ContactPoint","email":"sales@roofmanager.ca","contactType":"sales"},"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager","https://www.crunchbase.com/organization/roof-manager","https://www.trustpilot.com/review/roofmanager.ca"]}
+{"@context":"https://schema.org","@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://www.roofmanager.ca/static/logo.png","description":"AI-powered satellite roof measurement reports for roofing professionals across the US and Canada","address":[{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},{"@type":"PostalAddress","addressCountry":"US","areaServed":"United States"}],"areaServed":["US","CA"],"contactPoint":{"@type":"ContactPoint","email":"sales@roofmanager.ca","contactType":"sales"},"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager","https://www.crunchbase.com/organization/roof-manager","https://www.trustpilot.com/review/roofmanager.ca"]}
   </script>
   <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebSite","name":"Roof Manager","url":"https://www.roofmanager.ca","potentialAction":{"@type":"SearchAction","target":"https://www.roofmanager.ca/blog?q={search_term_string}","query-input":"required name=search_term_string"}}
@@ -10742,6 +10890,10 @@ function getBlogPostHTML(post?: any, slug?: string) {
         ${post.category ? `<span class="bg-[#00FF88]/10 text-[#00FF88] px-2 py-0.5 rounded text-xs font-bold">${post.category}</span>` : ''}
       </div>
     </div>
+    ${post.excerpt ? `<div style="background:#111111;border-left:4px solid #00FF88;padding:1.25rem 1.5rem;margin-bottom:2rem;border-radius:0 8px 8px 0;">
+      <p style="font-weight:700;color:#00FF88;margin:0 0 0.5rem;font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;">TL;DR</p>
+      <p style="margin:0;color:#d1d5db;line-height:1.7;font-size:1rem;">${post.excerpt.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+    </div>` : ''}
     <div class="prose prose-lg prose-invert max-w-none blog-content">${post.content || ''}</div>
   ` : `
     <div class="text-center py-16 animate-pulse text-gray-500"><i class="fas fa-spinner fa-spin text-3xl mb-4"></i><p>Loading article...</p></div>
