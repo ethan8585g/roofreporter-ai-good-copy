@@ -2682,7 +2682,21 @@ app.get('/report/share/:token', async (c) => {
 app.get('/proposal/view/:token', async (c) => {
   try {
     const token = c.req.param('token')
-    const proposal = await c.env.DB.prepare(`
+
+    // Primary: check unified invoices table (all new proposals live here)
+    const invProposal = await c.env.DB.prepare(`
+      SELECT i.*,
+             COALESCE(NULLIF(i.crm_customer_name,''), c.name) as customer_name,
+             COALESCE(NULLIF(i.crm_customer_email,''), c.email) as customer_email,
+             COALESCE(NULLIF(i.crm_customer_phone,''), c.phone) as customer_phone,
+             c.company_name, c.address as customer_address, c.city as customer_city,
+             c.province as customer_province, c.postal_code as customer_postal
+      FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+      WHERE i.share_token = ?
+    `).bind(token).first<any>()
+
+    // Legacy fallback: check crm_proposals for tokens that pre-date migration
+    const proposal = invProposal ? null : await c.env.DB.prepare(`
       SELECT cp.*, cc.name as customer_name, cc.email as customer_email, cc.phone as customer_phone,
              cc.address as customer_address, cc.city as customer_city, cc.province as customer_province, cc.postal_code as customer_postal
       FROM crm_proposals cp
@@ -2690,40 +2704,7 @@ app.get('/proposal/view/:token', async (c) => {
       WHERE cp.share_token = ?
     `).bind(token).first<any>()
 
-    if (!proposal) {
-      // Fallback 1: check crm_invoices table
-      const crmInvoice = await c.env.DB.prepare(`
-        SELECT ci.*, ci.total as total_amount, ci.subtotal, ci.tax_rate, ci.tax_amount,
-               cc.name as customer_name, cc.email as customer_email, cc.phone as customer_phone,
-               cc.address as customer_address, cc.city as customer_city, cc.province as customer_province, cc.postal_code as customer_postal
-        FROM crm_invoices ci LEFT JOIN crm_customers cc ON cc.id = ci.crm_customer_id
-        WHERE ci.share_token = ?
-      `).bind(token).first<any>()
-      if (crmInvoice) {
-        // Treat CRM invoice like a proposal for rendering
-        crmInvoice.proposal_number = crmInvoice.invoice_number
-        crmInvoice.title = crmInvoice.title || ('Invoice ' + crmInvoice.invoice_number)
-        crmInvoice.total_amount = crmInvoice.total || crmInvoice.total_amount
-        // Re-assign to proposal so the rest of the handler renders it
-        const items = await c.env.DB.prepare('SELECT * FROM crm_invoice_items WHERE invoice_id = ? ORDER BY sort_order').bind(crmInvoice.id).all()
-        // Use the CRM proposal rendering path by assigning back
-        Object.assign(crmInvoice, { _is_crm_invoice: true })
-        // Fall through to invoice rendering below with invProposal
-      }
-
-      // Fallback 2: check invoices table (proposal builder creates proposals there)
-      const invProposal = crmInvoice || await c.env.DB.prepare(`
-        SELECT i.*,
-               COALESCE(NULLIF(i.crm_customer_name,''), c.name) as customer_name,
-               COALESCE(NULLIF(i.crm_customer_email,''), c.email) as customer_email,
-               COALESCE(NULLIF(i.crm_customer_phone,''), c.phone) as customer_phone,
-               c.company_name, c.address as customer_address, c.city as customer_city,
-               c.province as customer_province, c.postal_code as customer_postal
-        FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
-        WHERE i.share_token = ?
-      `).bind(token).first<any>()
-
-      if (invProposal) {
+    if (invProposal) {
         // Update view tracking
         await c.env.DB.prepare(`UPDATE invoices SET viewed_count = COALESCE(viewed_count, 0) + 1, viewed_at = datetime('now'), status = CASE WHEN status = 'sent' THEN 'viewed' ELSE status END, updated_at = datetime('now') WHERE id = ?`).bind(invProposal.id).run()
         
@@ -3005,12 +2986,8 @@ ${sigScript}
 if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function(){window.print()},600);
 </script>
 </body></html>`)
-      }
-
-      return c.html(`<!DOCTYPE html><html><head><title>Proposal Not Found</title><link rel="stylesheet" href="/static/tailwind.css"></head><body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A"><div class="text-center"><div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><svg class="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg></div><h1 class="text-2xl font-bold text-gray-800 mb-2">Proposal Not Found</h1><p class="text-gray-500">This proposal link is invalid or has expired.</p></div></body></html>`, 404)
-    }
-
-    // Increment view count & log the view
+    } else if (proposal) {
+    // Increment view count & log the view (legacy crm_proposals path)
     await c.env.DB.prepare(`
       UPDATE crm_proposals SET view_count = COALESCE(view_count, 0) + 1, last_viewed_at = datetime('now'), status = CASE WHEN status = 'sent' THEN 'viewed' ELSE status END WHERE id = ?
     `).bind(proposal.id).run()
@@ -3501,6 +3478,10 @@ if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function()
   </script>
 </body>
 </html>`)
+    } else {
+      // No proposal found in any table
+      return c.html(`<!DOCTYPE html><html><head><title>Proposal Not Found</title><link rel="stylesheet" href="/static/tailwind.css"></head><body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A"><div class="text-center"><div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><svg class="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg></div><h1 class="text-2xl font-bold text-gray-800 mb-2">Proposal Not Found</h1><p class="text-gray-500">This proposal link is invalid or has expired.</p></div></body></html>`, 404)
+    }
   } catch (err: any) {
     console.error('[Proposal View] Error:', err.message)
     return c.html(`<!DOCTYPE html><html><head><title>Error</title><link rel="stylesheet" href="/static/tailwind.css"></head><body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A"><div class="text-center"><h1 class="text-xl font-bold text-red-600">Error Loading Proposal</h1><p class="text-gray-500 mt-2">Please try refreshing the page.</p></div></body></html>`, 500)
