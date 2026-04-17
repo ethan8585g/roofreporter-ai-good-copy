@@ -62,6 +62,22 @@ async function verifyPassword(password: string, storedHash: string): Promise<boo
   return timingSafeEq(result.hash, hash)
 }
 
+// ── Ensure API user also has a customer-portal account ───────────────────────
+// When someone signs up or logs in via the Developer Portal, we ensure they also
+// exist in the `customers` table so they can log into /customer/login with the
+// same email + password and use their 3 free measurement report credits.
+
+async function ensureCustomerAccount(db: D1Database, email: string, companyName: string, passwordHash: string): Promise<void> {
+  const existing = await db.prepare('SELECT id FROM customers WHERE email = ?').bind(email).first()
+  if (existing) return  // already has a customer account
+
+  const refCode = 'REF-' + crypto.randomUUID().replace(/-/g, '').substring(0, 6).toUpperCase()
+  await db.prepare(`
+    INSERT INTO customers (email, name, company_name, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code)
+    VALUES (?, ?, ?, ?, 1, 1, 0, 0, 3, 0, ?)
+  `).bind(email, companyName, companyName, passwordHash, refCode).run()
+}
+
 // ── Session helpers ───────────────────────────────────────────────────────────
 
 async function createSession(db: D1Database, accountId: string): Promise<string> {
@@ -623,6 +639,9 @@ developerPortalRoutes.post('/signup', async (c) => {
     VALUES (?, ?, ?, 0, 'active', ?, ?)
   `).bind(accountId, company_name, email, passwordHash, now).run()
 
+  // Also create a customer-portal account so they can order reports via the UI
+  await ensureCustomerAccount(db, email, company_name, passwordHash)
+
   // Issue first API key
   const { raw, prefix, hash: keyHash } = await generateApiKey()
   await db.prepare(`
@@ -704,6 +723,9 @@ developerPortalRoutes.post('/login', async (c) => {
   const valid = await verifyPassword(password, account.password_hash)
   if (!valid) return c.redirect('/developer/login?error=invalid')
   if (account.status !== 'active') return c.redirect('/developer/login?error=suspended')
+
+  // Ensure API user also has a customer-portal account (backfill for existing users)
+  await ensureCustomerAccount(db, email, account.company_name || '', account.password_hash)
 
   const token = await createSession(db, account.id)
   return attachSessionCookie(c.redirect('/developer/dashboard'), token)
