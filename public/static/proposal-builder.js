@@ -59,6 +59,10 @@ document.addEventListener('DOMContentLoaded', () => {
       customAttachment: ''
     },
     gmailStatus: null,
+    autoSendCertificate: false,
+    certLicenseNumber: '',
+    certAccentColor: '#1a5c38',
+    certSettingsDirty: false,
     // Form state
     form: resetForm()
   };
@@ -319,17 +323,25 @@ document.addEventListener('DOMContentLoaded', () => {
     state.loading = true;
     render();
     try {
-      const [propRes, custRes, libRes, repRes, gmailRes] = await Promise.all([
+      const [propRes, custRes, libRes, repRes, gmailRes, certAutoRes, profileRes] = await Promise.all([
         fetch('/api/invoices?document_type=proposal', { headers: headers() }),
         fetch('/api/invoices/customers/list', { headers: headers() }),
         fetch('/api/customer/item-library', { headers: headers() }).catch(() => ({ ok: false })),
         fetch('/api/customer/reports-list', { headers: headers() }).catch(() => ({ ok: false })),
-        fetch('/api/auth/gmail/status', { headers: headers() }).catch(() => ({ ok: false }))
+        fetch('/api/auth/gmail/status', { headers: headers() }).catch(() => ({ ok: false })),
+        fetch('/api/crm/proposals/automation/settings', { headers: headers() }).catch(() => ({ ok: false })),
+        fetch('/api/customer/profile', { headers: headers() }).catch(() => ({ ok: false }))
       ]);
       if (propRes.ok) { const d = await propRes.json(); state.proposals = d.invoices || []; }
       if (custRes.ok) { const d = await custRes.json(); state.customers = d.customers || []; }
       if (libRes.ok) { const d = await libRes.json(); state.itemLibrary = d.items || []; }
       if (gmailRes.ok) { const d = await gmailRes.json(); state.gmailStatus = d.gmail_oauth2 || null; }
+      if (certAutoRes.ok) { const d = await certAutoRes.json(); state.autoSendCertificate = !!d.auto_send_certificate; }
+      if (profileRes.ok) {
+        const d = await profileRes.json();
+        state.certLicenseNumber = d.brand_license_number || '';
+        state.certAccentColor = d.brand_primary_color || '#1a5c38';
+      }
       if (repRes.ok) {
         const d = await repRes.json();
         state.reports = d.reports || [];
@@ -842,6 +854,67 @@ document.addEventListener('DOMContentLoaded', () => {
     <!-- Gmail Connect Banner -->
     ${renderGmailConnectBanner()}
 
+    <!-- Certificate Automation + Settings Panel -->
+    <div class="bg-white rounded-xl border border-gray-200 mb-5 overflow-hidden">
+
+      <!-- Auto-send toggle row -->
+      <div class="p-4 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div style="width:40px;height:40px;border-radius:10px;background:#f0fdf4;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="fas fa-certificate" style="color:#16a34a;font-size:18px"></i>
+          </div>
+          <div>
+            <p class="text-sm font-semibold text-gray-900">Auto-Send Certificate of Installation</p>
+            <p class="text-xs text-gray-500 mt-0.5">Automatically email a Certificate of New Roof Installation to the customer when they sign a proposal — so they can submit it to their insurance company</p>
+          </div>
+        </div>
+        <button onclick="window._pb.toggleAutoSendCertificate()" class="flex-shrink-0 relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none ${state.autoSendCertificate ? 'bg-green-500' : 'bg-gray-200'}" title="${state.autoSendCertificate ? 'Automation ON — click to disable' : 'Click to enable auto-send'}">
+          <span class="inline-block w-4 h-4 transform rounded-full bg-white shadow transition-transform ${state.autoSendCertificate ? 'translate-x-6' : 'translate-x-1'}"></span>
+        </button>
+      </div>
+
+      <!-- Certificate Settings (always visible) -->
+      <div style="border-top:1px solid #f1f5f9;background:#fafafa;padding:16px 20px">
+        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3"><i class="fas fa-sliders-h mr-1.5"></i>Certificate Customization</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+
+          <!-- License Number -->
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Contractor License / Registration #</label>
+            <input type="text" id="cert-license-input" value="${state.certLicenseNumber || ''}"
+              oninput="state.certLicenseNumber=this.value;state.certSettingsDirty=true"
+              placeholder="e.g. MB-12345 or ROC-789012"
+              class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none bg-white">
+            <p class="text-xs text-gray-400 mt-1">Appears on the certificate — required by most insurance companies</p>
+          </div>
+
+          <!-- Color -->
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Certificate Accent Color</label>
+            <div class="flex items-center gap-2 flex-wrap">
+              ${['#1a5c38','#1e40af','#7c3aed','#b91c1c','#92400e','#374151'].map(c => `
+                <button onclick="window._pb.setCertColor('${c}')" style="width:28px;height:28px;border-radius:50%;background:${c};border:${(state.certAccentColor||'#1a5c38')===c ? '3px solid #1a1a1a' : '2px solid transparent'};cursor:pointer;flex-shrink:0" title="${c}"></button>
+              `).join('')}
+              <input type="color" value="${state.certAccentColor || '#1a5c38'}"
+                onchange="window._pb.setCertColor(this.value)"
+                title="Custom color"
+                style="width:28px;height:28px;border-radius:50%;border:2px solid #e5e7eb;cursor:pointer;padding:1px;background:none">
+            </div>
+            <p class="text-xs text-gray-400 mt-1">Sets the border and heading color on the certificate</p>
+          </div>
+
+        </div>
+
+        <div class="flex items-center gap-3 flex-wrap">
+          <button onclick="window._pb.saveCertSettings()" class="px-4 py-2 text-xs font-semibold rounded-lg transition-all ${state.certSettingsDirty ? 'bg-gray-900 text-white hover:bg-gray-700' : 'bg-gray-100 text-gray-500 cursor-default'}">
+            <i class="fas fa-save mr-1.5"></i>Save Certificate Settings
+          </button>
+          ${(() => { const accepted = state.proposals.filter(p => p.status === 'accepted'); return accepted.length > 0 ? `<a href="/api/invoices/${accepted[0].id}/certificate" target="_blank" class="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-all"><i class="fas fa-eye mr-1.5"></i>Preview Certificate</a>` : '<span class="text-xs text-gray-400"><i class="fas fa-info-circle mr-1"></i>Accept a proposal to preview the certificate</span>'; })()}
+          <a href="/customer/profile" class="text-xs text-brand-600 hover:underline ml-auto"><i class="fas fa-building mr-1"></i>Update logo & company info →</a>
+        </div>
+      </div>
+    </div>
+
     <!-- Stats -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
       <div class="bg-white rounded-xl p-4 border border-gray-200"><p class="text-xs text-gray-500">Total Proposals</p><p class="text-2xl font-bold text-gray-900">${stats.total}</p></div>
@@ -898,6 +971,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${sc}">${p.status}</span>${p.viewed_count > 0 ? '<span class="text-[10px] text-gray-500 ml-2" title="Viewed ' + p.viewed_count + ' times"><i class="fas fa-eye text-gray-600"></i> ' + p.viewed_count + '</span>' : ''}</td>
                 <td class="px-4 py-3 text-right" style="white-space:nowrap">
                   ${p.share_token ? `<a href="/proposal/view/${p.share_token}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;margin-right:4px" title="Preview as customer"><i class="fas fa-eye"></i> Preview</a>` : ''}
+                  ${p.status === 'accepted' ? `
+                    <a href="/api/invoices/${p.id}/certificate" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#fefce8;color:#713f12;border:1px solid #fde68a;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;margin-right:4px" title="View Certificate of Installation"><i class="fas fa-certificate"></i> Certificate</a>
+                    <button onclick="window._pb.sendCertificate(${p.id})" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f0fdf4;color:#166534;border:1px solid #86efac;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-right:4px;border-width:1px" title="${p.certificate_sent_at ? 'Certificate sent ' + (p.certificate_sent_at || '').slice(0,10) + ' — click to resend' : 'Send certificate to customer'}"><i class="fas fa-paper-plane"></i>${p.certificate_sent_at ? ' Resend' : ' Send Cert'}</button>
+                    ${p.certificate_sent_at ? `<span style="font-size:10px;color:#16a34a;margin-right:4px" title="Certificate sent ${(p.certificate_sent_at||'').slice(0,10)}"><i class="fas fa-check-circle"></i> Sent</span>` : ''}
+                  ` : ''}
                   ${p.status === 'draft' ? `<button onclick="window._pb.edit(${p.id})" class="text-gray-500 hover:text-gray-700 text-xs mr-2" title="Edit"><i class="fas fa-edit"></i></button>` : ''}
                   <button onclick="window._pb.send(${p.id})" class="text-green-500 hover:text-green-700 text-xs mr-2" title="Send"><i class="fas fa-paper-plane"></i></button>
                   <button onclick="window._pb.shareLink(${p.id}, '${p.share_token || ''}')" class="text-purple-500 hover:text-purple-700 text-xs mr-2" title="Share Link"><i class="fas fa-link"></i></button>
@@ -2416,6 +2494,72 @@ document.addEventListener('DOMContentLoaded', () => {
     updatePerSquare() {
       // Recalculate per-square total
       render();
+    },
+    setCertColor(color) {
+      state.certAccentColor = color;
+      state.certSettingsDirty = true;
+      render();
+    },
+    async saveCertSettings() {
+      try {
+        var res = await fetch('/api/customer/branding', {
+          method: 'PUT',
+          headers: headers(),
+          body: JSON.stringify({
+            brand_license_number: state.certLicenseNumber || null,
+            brand_primary_color: state.certAccentColor || null,
+          })
+        });
+        if (res.ok) {
+          state.certSettingsDirty = false;
+          pbToast('Certificate settings saved!', 'success');
+          render();
+        } else {
+          pbToast('Failed to save settings', 'error');
+        }
+      } catch(e) {
+        pbToast('Error saving settings', 'error');
+      }
+    },
+    async toggleAutoSendCertificate() {
+      var newVal = !state.autoSendCertificate;
+      try {
+        var res = await fetch('/api/crm/proposals/automation/settings', {
+          method: 'PUT',
+          headers: headers(),
+          body: JSON.stringify({ auto_send_certificate: newVal })
+        });
+        if (res.ok) {
+          state.autoSendCertificate = newVal;
+          pbToast(newVal ? '✅ Certificate auto-send enabled — customers will receive a certificate when they sign' : 'Certificate auto-send disabled', newVal ? 'success' : 'info');
+          render();
+        } else {
+          pbToast('Failed to update setting', 'error');
+        }
+      } catch(e) {
+        pbToast('Error updating setting', 'error');
+      }
+    },
+    async sendCertificate(id) {
+      pbToast('Sending certificate...', 'info');
+      try {
+        var res = await fetch('/api/invoices/' + id + '/send-certificate', {
+          method: 'POST',
+          headers: headers()
+        });
+        var data = await res.json();
+        if (res.ok) {
+          pbToast('Certificate sent to ' + (data.sent_to || 'customer'), 'success');
+          // Update the local proposal record so the Sent badge appears immediately
+          var p = state.proposals.find(function(x) { return x.id === id; });
+          if (p) p.certificate_sent_at = new Date().toISOString();
+          render();
+        } else {
+          pbToast(data.error || 'Failed to send certificate', 'error');
+        }
+      } catch(e) {
+        pbToast('Error sending certificate', 'error');
+      }
     }
   };
 

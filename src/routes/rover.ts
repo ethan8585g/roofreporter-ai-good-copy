@@ -249,7 +249,8 @@ RESPONSE GUIDELINES
 7. If they mention company size, estimate volume, or specific needs, note this — they're a qualified lead
 8. End responses with a question or clear next step when natural
 9. If they seem ready to try, push them to sign up: "Want to give it a spin? Head to /customer/login — your 3 free reports are waiting!"
-10. Be honest — if a feature doesn't exist yet, say "we're working on that" rather than making promises`
+10. Be honest — if a feature doesn't exist yet, say "we're working on that" rather than making promises
+11. PHONE NUMBER REQUESTS: If someone asks for our phone number or a direct phone contact, do NOT give a phone number. Instead, warmly ask for THEIR phone number and contact info (name, email, phone, company) and let them know someone from our team will reach out ASAP. Example: "We'd love to get you in touch with our team! Could you share your name, phone number, and email? Someone will reach out to you ASAP! 📞"`
 
 // ============================================================
 // AI CALL — OpenAI API (api.openai.com) via OPENAI_API_KEY
@@ -634,6 +635,10 @@ function getFallbackResponse(message: string): string {
 
   if (msg.includes('crm') || msg.includes('customer management') || msg.includes('invoice') || msg.includes('proposal')) {
     return "We have a full built-in CRM suite! Manage customers, create proposals, generate invoices, track jobs, and manage your sales pipeline — all included with your account. No extra software needed. Check it out at /customer/login! 💼"
+  }
+
+  if (msg.includes('phone number') || msg.includes('your number') || msg.includes('call you') || msg.includes('contact number')) {
+    return "We'd love to get you connected with our team! Could you share your name, phone number, and email? Someone will reach out to you ASAP! 📞"
   }
 
   if (msg.includes('phone') || msg.includes('secretary') || msg.includes('call') || msg.includes('answer')) {

@@ -670,6 +670,29 @@ crmRoutes.post('/invoices/:id/send', async (c) => {
 
 function genProposalNum() { const d = new Date().toISOString().slice(0,10).replace(/-/g,''); return `PROP-${d}-${Math.floor(Math.random()*9999).toString().padStart(4,'0')}` }
 
+// ============================================================
+// PROPOSAL AUTOMATION SETTINGS — Certificate auto-send toggle
+// MUST be registered before /proposals/:id to avoid route conflict
+// ============================================================
+crmRoutes.get('/proposals/automation/settings', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const owner = await c.env.DB.prepare(
+    'SELECT auto_send_certificate FROM customers WHERE id = ?'
+  ).bind(ownerId).first<any>()
+  return c.json({ auto_send_certificate: owner?.auto_send_certificate === 1 })
+})
+
+crmRoutes.put('/proposals/automation/settings', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const { auto_send_certificate } = await c.req.json()
+  await c.env.DB.prepare(
+    'UPDATE customers SET auto_send_certificate = ? WHERE id = ?'
+  ).bind(auto_send_certificate ? 1 : 0, ownerId).run()
+  return c.json({ success: true, auto_send_certificate: !!auto_send_certificate })
+})
+
 // LIST proposals
 crmRoutes.get('/proposals', async (c) => {
   const ownerId = await getOwnerId(c)
@@ -708,6 +731,109 @@ crmRoutes.get('/proposals/:id', async (c) => {
   if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
   const items = await c.env.DB.prepare('SELECT * FROM crm_proposal_items WHERE proposal_id = ? ORDER BY sort_order').bind(id).all()
   return c.json({ proposal, items: items.results })
+})
+
+// VIEW certificate HTML (print-ready, opens in new tab)
+crmRoutes.get('/proposals/:id/certificate', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const id = c.req.param('id')
+  const proposal = await c.env.DB.prepare(`
+    SELECT cp.*, cc.name as customer_name, cc.email as customer_email
+    FROM crm_proposals cp LEFT JOIN crm_customers cc ON cc.id = cp.crm_customer_id
+    WHERE cp.id = ? AND cp.owner_id = ?
+  `).bind(id, ownerId).first<any>()
+  if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
+  const owner = await c.env.DB.prepare(
+    `SELECT name, email, phone, address, city, province, company_name, logo_url,
+            brand_business_name, brand_logo_url, brand_address, brand_phone, brand_email,
+            brand_license_number, brand_primary_color FROM customers WHERE id = ?`
+  ).bind(ownerId).first<any>()
+  const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
+  const companyName = owner?.brand_business_name || owner?.company_name || owner?.name || 'Your Roofing Company'
+  const companyAddress = owner?.brand_address || [owner?.address, owner?.city, owner?.province].filter(Boolean).join(', ')
+  const certHtml = generateRoofInstallationCertificateHTML({
+    companyName,
+    companyLogo: owner?.brand_logo_url || owner?.logo_url || undefined,
+    companyAddress: companyAddress || undefined,
+    companyPhone: owner?.brand_phone || owner?.phone || undefined,
+    companyEmail: owner?.brand_email || owner?.email || undefined,
+    licenseNumber: owner?.brand_license_number || undefined,
+    customerName: proposal.customer_name || proposal.printed_name || 'Valued Customer',
+    propertyAddress: proposal.property_address || '',
+    proposalNumber: proposal.proposal_number,
+    signedAt: proposal.signed_at || proposal.accepted_at || new Date().toISOString(),
+    scopeOfWork: proposal.scope_of_work || undefined,
+    materials: proposal.materials_detail || undefined,
+    totalAmount: proposal.total_amount ?? undefined,
+    accentColor: owner?.brand_primary_color || undefined,
+  })
+  return c.html(certHtml)
+})
+
+// SEND certificate to customer email (manual trigger)
+crmRoutes.post('/proposals/:id/send-certificate', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const id = c.req.param('id')
+  const proposal = await c.env.DB.prepare(`
+    SELECT cp.*, cc.name as customer_name, cc.email as customer_email
+    FROM crm_proposals cp LEFT JOIN crm_customers cc ON cc.id = cp.crm_customer_id
+    WHERE cp.id = ? AND cp.owner_id = ?
+  `).bind(id, ownerId).first<any>()
+  if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
+  if (!proposal.customer_email) return c.json({ error: 'No customer email on file for this proposal' }, 400)
+
+  const owner = await c.env.DB.prepare(
+    `SELECT name, email, phone, address, city, province, company_name, logo_url, gmail_refresh_token,
+            brand_business_name, brand_logo_url, brand_address, brand_phone, brand_email,
+            brand_license_number, brand_primary_color FROM customers WHERE id = ?`
+  ).bind(ownerId).first<any>()
+
+  const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
+  const companyName = owner?.brand_business_name || owner?.company_name || owner?.name || 'Your Roofing Company'
+  const companyAddress = owner?.brand_address || [owner?.address, owner?.city, owner?.province].filter(Boolean).join(', ')
+  const certHtml = generateRoofInstallationCertificateHTML({
+    companyName,
+    companyLogo: owner?.brand_logo_url || owner?.logo_url || undefined,
+    companyAddress: companyAddress || undefined,
+    companyPhone: owner?.brand_phone || owner?.phone || undefined,
+    companyEmail: owner?.brand_email || owner?.email || undefined,
+    licenseNumber: owner?.brand_license_number || undefined,
+    customerName: proposal.customer_name || proposal.printed_name || 'Valued Customer',
+    propertyAddress: proposal.property_address || '',
+    proposalNumber: proposal.proposal_number,
+    signedAt: proposal.signed_at || proposal.accepted_at || new Date().toISOString(),
+    scopeOfWork: proposal.scope_of_work || undefined,
+    materials: proposal.materials_detail || undefined,
+    totalAmount: proposal.total_amount ?? undefined,
+    accentColor: owner?.brand_primary_color || undefined,
+  })
+
+  const clientId = (c.env as any).GMAIL_CLIENT_ID
+  const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
+  const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || owner?.gmail_refresh_token || ''
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    return c.json({ error: 'Email not configured. Please connect Gmail in your account settings.' }, 400)
+  }
+
+  try {
+    const { sendGmailOAuth2 } = await import('../services/email')
+    await sendGmailOAuth2(
+      clientId, clientSecret, refreshToken,
+      proposal.customer_email,
+      `Certificate of New Roof Installation — ${proposal.property_address}`,
+      certHtml,
+      owner?.email
+    )
+    await c.env.DB.prepare(
+      `UPDATE crm_proposals SET certificate_sent_at = datetime('now') WHERE id = ?`
+    ).bind(proposal.id).run()
+    return c.json({ success: true, sent_to: proposal.customer_email })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to send certificate: ' + (err?.message || 'Unknown error') }, 500)
+  }
 })
 
 // C-4: Generate tiered pricing from a report (used by confirmation page)
@@ -2019,6 +2145,55 @@ crmRoutes.post('/proposals/respond/:token', async (c) => {
         `INSERT INTO crm_jobs (owner_id, crm_customer_id, proposal_id, job_number, title, property_address, job_type, scheduled_date, notes, status)
          VALUES (?, ?, ?, ?, ?, ?, 'install', date('now', '+7 days'), ?, 'scheduled')`
       ).bind(proposal.owner_id, proposal.crm_customer_id, proposal.id, jobNumber, proposal.title || 'Accepted Proposal Job', proposal.property_address, 'Auto-created from accepted proposal ' + proposal.proposal_number).run()
+    } catch {}
+  }
+
+  // Auto-send Certificate of New Roof Installation if owner has automation enabled
+  if (action === 'accept' && proposal.customer_email) {
+    try {
+      const ownerForCert = await c.env.DB.prepare(
+        `SELECT auto_send_certificate, name, email, phone, address, city, province, company_name, logo_url,
+                gmail_refresh_token, brand_business_name, brand_logo_url, brand_address,
+                brand_phone, brand_email, brand_license_number, brand_primary_color FROM customers WHERE id = ?`
+      ).bind(proposal.owner_id).first<any>()
+
+      if (ownerForCert?.auto_send_certificate === 1) {
+        const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
+        const companyName = ownerForCert.brand_business_name || ownerForCert.company_name || ownerForCert.name || 'Your Roofing Company'
+        const companyAddress = ownerForCert.brand_address || [ownerForCert.address, ownerForCert.city, ownerForCert.province].filter(Boolean).join(', ')
+        const certHtml = generateRoofInstallationCertificateHTML({
+          companyName,
+          companyLogo: ownerForCert.brand_logo_url || ownerForCert.logo_url || undefined,
+          companyAddress: companyAddress || undefined,
+          companyPhone: ownerForCert.brand_phone || ownerForCert.phone || undefined,
+          companyEmail: ownerForCert.brand_email || ownerForCert.email || undefined,
+          licenseNumber: ownerForCert.brand_license_number || undefined,
+          customerName: proposal.customer_name || printed_name || 'Valued Customer',
+          propertyAddress: proposal.property_address || '',
+          proposalNumber: proposal.proposal_number,
+          signedAt: new Date().toISOString(),
+          scopeOfWork: proposal.scope_of_work || undefined,
+          materials: proposal.materials_detail || undefined,
+          totalAmount: proposal.total_amount ?? undefined,
+          accentColor: ownerForCert.brand_primary_color || undefined,
+        })
+        const clientId = (c.env as any).GMAIL_CLIENT_ID
+        const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
+        const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ownerForCert.gmail_refresh_token || ''
+        if (clientId && clientSecret && refreshToken) {
+          const { sendGmailOAuth2 } = await import('../services/email')
+          sendGmailOAuth2(
+            clientId, clientSecret, refreshToken,
+            proposal.customer_email,
+            `Certificate of New Roof Installation — ${proposal.property_address}`,
+            certHtml,
+            ownerForCert.email
+          ).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+          await c.env.DB.prepare(
+            `UPDATE crm_proposals SET certificate_sent_at = datetime('now') WHERE id = ?`
+          ).bind(proposal.id).run()
+        }
+      }
     } catch {}
   }
 

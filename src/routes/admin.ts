@@ -2507,8 +2507,8 @@ adminRoutes.post('/superadmin/service-invoices/create', async (c) => {
     const shareToken = crypto.randomUUID().replace(/-/g, '').substring(0, 24)
 
     const invResult = await c.env.DB.prepare(
-      `INSERT INTO invoices (invoice_number, master_company_id, customer_id, subtotal, tax_rate, tax_amount, total, currency, status, document_type, notes, share_token, issue_date, due_date, created_at, updated_at)
-       VALUES (?, 1, ?, ?, ?, 0, ?, 'USD', 'draft', 'invoice', ?, ?, datetime('now'), ?, datetime('now'), datetime('now'))`
+      `INSERT INTO invoices (invoice_number, customer_id, subtotal, tax_rate, tax_amount, total, currency, status, document_type, notes, share_token, due_date, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 0, ?, 'USD', 'draft', 'invoice', ?, ?, ?, datetime('now'), datetime('now'))`
     ).bind(invoiceNumber, customer.id, subtotal, taxRate, total, notes || '', shareToken, due_date || null).run()
     const invoiceId = invResult.meta.last_row_id as number
 
