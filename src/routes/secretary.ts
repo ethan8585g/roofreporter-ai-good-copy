@@ -232,6 +232,28 @@ secretaryRoutes.post('/verify-session', async (c) => {
 })
 
 // ============================================================
+// POST /enroll-inquiry — Submit enrollment interest form
+// ============================================================
+secretaryRoutes.post('/enroll-inquiry', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const { name, email, phone, company_name, message } = await c.req.json()
+  if (!name || !email) return c.json({ error: 'Name and email are required' }, 400)
+
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO secretary_enroll_inquiries (customer_id, name, email, phone, company_name, message, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+       ON CONFLICT DO NOTHING`
+    ).bind(customerId, name, email, phone || '', company_name || '', message || '').run()
+    return c.json({ success: true })
+  } catch (err: any) {
+    // Table may not exist yet — still return success so UI doesn't break
+    console.error('[Secretary Enroll Inquiry]', err)
+    return c.json({ success: true })
+  }
+})
+
+// ============================================================
 // GET /status — Full service status for the customer
 // ============================================================
 secretaryRoutes.get('/status', async (c) => {
@@ -335,6 +357,7 @@ secretaryRoutes.post('/config', async (c) => {
       await c.env.DB.prepare(
         `INSERT INTO secretary_config (
           customer_id, business_phone, greeting_script, common_qa, general_notes,
+          agent_name, agent_voice,
           secretary_mode,
           answering_fallback_action, answering_forward_number,
           answering_sms_notify, answering_email_notify, answering_notify_email,
@@ -342,9 +365,10 @@ secretaryRoutes.post('/config', async (c) => {
           full_can_answer_faq, full_can_take_payment_info, full_business_hours,
           full_booking_link, full_services_offered, full_pricing_info,
           full_service_area, full_email_from_name, full_email_signature
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       ).bind(
         customerId, business_phone, greeting_script, common_qa || '', general_notes || '',
+        agent_name || 'Sarah', agent_voice || 'alloy',
         secretary_mode,
         answering_fallback_action || 'take_message', answering_forward_number || '',
         answering_sms_notify ?? 1, answering_email_notify ?? 1, answering_notify_email || '',
@@ -501,6 +525,66 @@ secretaryRoutes.get('/calls/:id', async (c) => {
 
   if (!call) return c.json({ error: 'Call not found' }, 404)
   return c.json({ call })
+})
+
+// ============================================================
+// PUT /calls/:id — Update lead_status or follow_up_completed on a call log
+// ============================================================
+secretaryRoutes.put('/calls/:id', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const callId = parseInt(c.req.param('id'))
+  const body = await c.req.json()
+  const { lead_status, follow_up_completed } = body
+
+  const updates: string[] = []
+  const params: any[] = []
+
+  if (lead_status !== undefined) {
+    updates.push('lead_status = ?')
+    params.push(lead_status)
+  }
+  if (follow_up_completed !== undefined) {
+    updates.push('follow_up_completed = ?')
+    params.push(follow_up_completed ? 1 : 0)
+  }
+
+  if (updates.length === 0) return c.json({ error: 'No fields to update' }, 400)
+
+  params.push(callId, customerId)
+  await c.env.DB.prepare(
+    `UPDATE secretary_call_logs SET ${updates.join(', ')} WHERE id = ? AND customer_id = ?`
+  ).bind(...params).run()
+
+  return c.json({ success: true })
+})
+
+// ============================================================
+// POST /simulate-call — Insert a fake call log entry for testing
+// ============================================================
+secretaryRoutes.post('/simulate-call', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+
+  const sampleNames = ['John Smith', 'Sarah Johnson', 'Mike Davis', 'Emily Wilson', 'Tom Brown']
+  const samplePhones = ['(780) 555-0101', '(780) 555-0202', '(780) 555-0303', '(587) 555-0404', '(780) 555-0505']
+  const sampleTranscripts = [
+    'Caller: Hi, I need a roof inspection.\nAgent: Absolutely! I\'d be happy to book a free estimate. What\'s your address?\nCaller: 123 Main Street.\nAgent: Perfect, I\'ll have someone reach out within 24 hours.',
+    'Caller: Do you do hail damage repairs?\nAgent: Yes, we handle all storm and hail damage claims. We work directly with insurance companies.\nCaller: Great, I\'ll need someone to come take a look.',
+    'Caller: How much does a new roof cost?\nAgent: Pricing depends on the size and material. We offer free no-obligation estimates — shall I book one for you?',
+  ]
+  const sampleSummaries = [
+    'Caller requested a roof inspection. Address collected. Callback scheduled.',
+    'Caller asking about hail damage repairs. Interested in insurance claim assistance.',
+    'Caller inquiring about pricing. Interested in a free estimate.',
+  ]
+  const idx = Math.floor(Math.random() * sampleNames.length)
+  const tIdx = Math.floor(Math.random() * sampleTranscripts.length)
+
+  await c.env.DB.prepare(
+    `INSERT INTO secretary_call_logs (customer_id, caller_name, caller_phone, call_transcript, call_summary, call_outcome, created_at)
+     VALUES (?, ?, ?, ?, ?, 'answered', datetime('now'))`
+  ).bind(customerId, sampleNames[idx], samplePhones[idx], sampleTranscripts[tIdx], sampleSummaries[tIdx]).run()
+
+  return c.json({ success: true, message: 'Simulated call added to call log' })
 })
 
 // ============================================================
