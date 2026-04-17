@@ -159,6 +159,7 @@ agentsRoutes.get('/agent-config/:customerId', async (c) => {
       general_notes: config.general_notes || '',
       agent_name: config.agent_name || 'Sarah',
       agent_voice: config.agent_voice || 'alloy',
+      agent_language: config.agent_language || 'en',
       directories: dirs.results || [],
       company_name: customer?.company_name || customer?.name || '',
       transfer_enabled: !!config.transfer_enabled,

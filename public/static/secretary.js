@@ -99,6 +99,7 @@
         if (data.config) {
           state.selectedAgentName = data.config.agent_name || 'Sarah';
           state.selectedAgentVoice = data.config.agent_voice || 'alloy';
+          state.selectedAgentLanguage = data.config.agent_language || 'en';
         }
       }
     } catch(e) { console.error('Failed to load status', e); }
@@ -392,6 +393,9 @@
       // AGENT PERSONA — Choose voice & name
       renderAgentPersonaSelector(c) +
 
+      // LANGUAGE SELECTOR
+      renderLanguageSelector(c) +
+
       // STEP 1: Phone & Greeting
       '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-6 mb-6">' +
         '<h3 class="font-bold text-gray-100 text-lg mb-1"><span class="inline-flex items-center justify-center w-7 h-7 bg-sky-500 text-white rounded-full text-sm font-bold mr-2">1</span>Phone & Greeting Setup</h3>' +
@@ -495,6 +499,27 @@
     var input = document.getElementById('agentNameInput');
     if (input) input.value = name;
     render();
+  };
+
+  // ── Language Selector — Choose AI receptionist language ──
+  function renderLanguageSelector(c) {
+    var currentLang = c.agent_language || state.selectedAgentLanguage || 'en';
+    return '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-6 mb-6">' +
+      '<div class="flex items-center gap-3 mb-3">' +
+        '<div class="w-10 h-10 bg-gradient-to-br from-sky-500 to-sky-600 rounded-xl flex items-center justify-center shadow"><i class="fas fa-language text-white"></i></div>' +
+        '<div><h3 class="font-bold text-gray-100 text-lg">Secretary Language</h3>' +
+        '<p class="text-gray-500 text-sm">Choose which language your AI receptionist speaks to callers</p></div>' +
+      '</div>' +
+      '<select id="agentLanguageSelect" onchange="secSelectLanguage(this.value)" class="w-full md:w-64 border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 bg-[#1a1a1a] text-gray-100">' +
+        '<option value="en"' + (currentLang === 'en' ? ' selected' : '') + '>English</option>' +
+        '<option value="fr"' + (currentLang === 'fr' ? ' selected' : '') + '>Fran\u00e7ais</option>' +
+        '<option value="es"' + (currentLang === 'es' ? ' selected' : '') + '>Espa\u00f1ol</option>' +
+      '</select>' +
+    '</div>';
+  }
+
+  window.secSelectLanguage = function(lang) {
+    state.selectedAgentLanguage = lang;
   };
 
   // ── Mode-specific config sections ──
@@ -1967,6 +1992,7 @@
           // Agent persona
           agent_name: document.getElementById('agentNameInput')?.value || state.selectedAgentName || 'Sarah',
           agent_voice: state.selectedAgentVoice || (state.phoneSetup && state.phoneSetup.agent_voice) || 'alloy',
+          agent_language: state.selectedAgentLanguage || 'en',
           // Answering mode
           answering_fallback_action: fallbackRadio ? fallbackRadio.value : 'take_message',
           answering_forward_number: document.getElementById('answeringFwdNum')?.value || '',

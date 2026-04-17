@@ -139,6 +139,7 @@ async def run_outbound_session(ctx: JobContext, vad):
 
     agent = OutboundSalesAgent(prospect_info, script, webhook_url)
 
+    # TODO: inherit customer language setting for outbound calls if needed
     session = AgentSession(
         stt=inference.STT(model="deepgram/nova-3", language="en"),
         llm=inference.LLM(model="openai/gpt-4.1-mini"),

@@ -30,6 +30,14 @@ load_dotenv()
 logger = logging.getLogger("roofer-secretary")
 logger.setLevel(logging.INFO)
 
+# ── Language config — easy to extend with more ISO codes ──
+LANG_NAMES = {"en": "English", "fr": "French", "es": "Spanish"}
+LANG_VOICES = {
+    "en": "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",  # Confident Sarah (default)
+    "fr": "a249eaff-1e96-4d2c-b789-51ee3d8f5641",  # French female (Cartesia sonic-3)
+    "es": "846d6cb0-2301-48b6-9571-d44fbb71a07c",  # Spanish female (Cartesia sonic-3)
+}
+
 # ============================================================
 # Default configuration — used as fallback if API config unavailable
 # Customers set their own greeting/Q&A via the Secretary dashboard
@@ -136,7 +144,8 @@ async def get_agent_config(ctx: JobContext) -> dict:
                         if data and not data.get("error"):
                             for key in ["greeting_script", "common_qa", "general_notes",
                                        "directories", "agent_name", "agent_voice",
-                                       "business_phone", "customer_id", "company_name"]:
+                                       "agent_language", "business_phone",
+                                       "customer_id", "company_name"]:
                                 if key in data and data[key]:
                                     config[key] = data[key]
                             logger.info(f"Loaded config from API for customer {customer_id}: greeting={len(config.get('greeting_script',''))} chars, company={config.get('company_name','')}")
@@ -176,7 +185,13 @@ def build_system_prompt(config: dict) -> str:
         dir_text = "\n".join(dir_lines)
 
     company_name = config.get("company_name", "the company")
-    prompt = f"""You are {agent_name}, a professional AI phone receptionist for {company_name}.
+    lang_code = config.get("agent_language", "en")
+    lang_name = LANG_NAMES.get(lang_code, "English")
+    lang_instruction = ""
+    if lang_code != "en":
+        lang_instruction = f"\nLANGUAGE: Always respond in {lang_name}. Even if the caller speaks another language, respond in {lang_name}.\n"
+
+    prompt = f"""You are {agent_name}, a professional AI phone receptionist for {company_name}.{lang_instruction}
 You are answering an inbound phone call. Be warm, friendly, professional, and helpful.
 Speak naturally like a real receptionist — use conversational language, not robotic responses.
 Keep responses concise since this is a phone call. Avoid long monologues.
@@ -422,21 +437,24 @@ async def entrypoint(ctx: JobContext):
     # Load customer configuration
     config = await get_agent_config(ctx)
 
+    agent_lang = config.get("agent_language", "en")
     logger.info(
         f"Starting secretary session: room={ctx.room.name}, "
         f"customer_id={config.get('customer_id')}, "
-        f"agent_name={config.get('agent_name')}"
+        f"agent_name={config.get('agent_name')}, language={agent_lang}"
     )
+
+    # Pick voice per language (defaults to English voice)
+    voice_id = LANG_VOICES.get(agent_lang, LANG_VOICES["en"])
 
     # Create the voice pipeline session using LiveKit Inference
     # Optimized for LOW LATENCY — fast response, fast speech
     session = AgentSession(
-        stt=inference.STT(model="deepgram/nova-3-general"),
+        stt=inference.STT(model="deepgram/nova-3-general", language=agent_lang),
         llm=inference.LLM(model="openai/gpt-4.1-mini"),
         tts=inference.TTS(
             model="cartesia/sonic-3",
-            # Professional female voice — "Confident Sarah" from Cartesia
-            voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
+            voice=voice_id,
         ),
         vad=ctx.proc.userdata["vad"],
         preemptive_generation=True,

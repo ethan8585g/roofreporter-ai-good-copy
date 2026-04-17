@@ -302,7 +302,7 @@ secretaryRoutes.post('/config', async (c) => {
   const {
     business_phone, greeting_script, common_qa, general_notes,
     // Agent persona
-    agent_name, agent_voice,
+    agent_name, agent_voice, agent_language,
     // Mode
     secretary_mode = 'directory',
     // Answering-mode fields
@@ -320,6 +320,8 @@ secretaryRoutes.post('/config', async (c) => {
   if (general_notes && general_notes.length > 3000) return c.json({ error: 'General notes must be 3000 characters or less' }, 400)
   const validModes = ['directory', 'answering', 'full']
   if (!validModes.includes(secretary_mode)) return c.json({ error: 'secretary_mode must be directory, answering, or full' }, 400)
+  const validLangs = ['en', 'fr', 'es']
+  const lang = validLangs.includes(agent_language) ? agent_language : 'en'
 
   try {
     const existing = await c.env.DB.prepare(
@@ -330,7 +332,7 @@ secretaryRoutes.post('/config', async (c) => {
       await c.env.DB.prepare(
         `UPDATE secretary_config SET
           business_phone = ?, greeting_script = ?, common_qa = ?, general_notes = ?,
-          agent_name = ?, agent_voice = ?,
+          agent_name = ?, agent_voice = ?, agent_language = ?,
           secretary_mode = ?,
           answering_fallback_action = ?, answering_forward_number = ?,
           answering_sms_notify = ?, answering_email_notify = ?, answering_notify_email = ?,
@@ -342,7 +344,7 @@ secretaryRoutes.post('/config', async (c) => {
         WHERE customer_id = ?`
       ).bind(
         business_phone, greeting_script, common_qa || '', general_notes || '',
-        agent_name || 'Sarah', agent_voice || 'alloy',
+        agent_name || 'Sarah', agent_voice || 'alloy', lang,
         secretary_mode,
         answering_fallback_action || 'take_message', answering_forward_number || '',
         answering_sms_notify ?? 1, answering_email_notify ?? 1, answering_notify_email || '',
@@ -357,7 +359,7 @@ secretaryRoutes.post('/config', async (c) => {
       await c.env.DB.prepare(
         `INSERT INTO secretary_config (
           customer_id, business_phone, greeting_script, common_qa, general_notes,
-          agent_name, agent_voice,
+          agent_name, agent_voice, agent_language,
           secretary_mode,
           answering_fallback_action, answering_forward_number,
           answering_sms_notify, answering_email_notify, answering_notify_email,
@@ -365,10 +367,10 @@ secretaryRoutes.post('/config', async (c) => {
           full_can_answer_faq, full_can_take_payment_info, full_business_hours,
           full_booking_link, full_services_offered, full_pricing_info,
           full_service_area, full_email_from_name, full_email_signature
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       ).bind(
         customerId, business_phone, greeting_script, common_qa || '', general_notes || '',
-        agent_name || 'Sarah', agent_voice || 'alloy',
+        agent_name || 'Sarah', agent_voice || 'alloy', lang,
         secretary_mode,
         answering_fallback_action || 'take_message', answering_forward_number || '',
         answering_sms_notify ?? 1, answering_email_notify ?? 1, answering_notify_email || '',

@@ -48,6 +48,14 @@ load_dotenv(".env.local")
 logger = logging.getLogger("roofer-secretary")
 logger.setLevel(logging.INFO)
 
+# ── Language config — easy to extend with more ISO codes ──
+LANG_NAMES = {"en": "English", "fr": "French", "es": "Spanish"}
+LANG_VOICES = {
+    "en": "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",  # Confident Sarah (default)
+    "fr": "a249eaff-1e96-4d2c-b789-51ee3d8f5641",  # French female (Cartesia sonic-3)
+    "es": "846d6cb0-2301-48b6-9571-d44fbb71a07c",  # Spanish female (Cartesia sonic-3)
+}
+
 # ============================================================
 # API client — communicates with the Roof Manager Cloudflare app
 # ============================================================
@@ -178,7 +186,7 @@ async def get_agent_config(ctx: JobContext) -> dict:
         if api_config:
             for key in [
                 "greeting_script", "common_qa", "general_notes", "directories",
-                "business_phone", "agent_name", "transfer_enabled",
+                "business_phone", "agent_name", "agent_language", "transfer_enabled",
                 "transfer_announcement", "post_transfer_disclosure",
                 "record_post_transfer", "employees",
             ]:
@@ -257,7 +265,13 @@ When transferring:
 - If the transfer fails (employee doesn't pick up), offer to take a message instead
 """
 
-    prompt = f"""You are {agent_name}, a professional AI phone receptionist for a roofing company.
+    lang_code = config.get("agent_language", "en")
+    lang_name = LANG_NAMES.get(lang_code, "English")
+    lang_instruction = ""
+    if lang_code != "en":
+        lang_instruction = f"\nLANGUAGE: Always respond in {lang_name}. Even if the caller speaks another language, respond in {lang_name}.\n"
+
+    prompt = f"""You are {agent_name}, a professional AI phone receptionist for a roofing company.{lang_instruction}
 You are answering an inbound phone call. Be warm, friendly, professional, and helpful.
 Speak naturally like a real receptionist — use conversational language, not robotic responses.
 Keep responses concise since this is a phone call. Avoid long monologues.
@@ -729,18 +743,23 @@ async def run_secretary_session(ctx: JobContext, vad):
     config = await get_agent_config(ctx)
     customer_id = config.get("customer_id")
 
+    agent_lang = config.get("agent_language", "en")
     logger.info(
         f"Starting secretary session: room={ctx.room.name}, "
-        f"customer_id={customer_id}, transfer_enabled={config.get('transfer_enabled')}"
+        f"customer_id={customer_id}, transfer_enabled={config.get('transfer_enabled')}, "
+        f"language={agent_lang}"
     )
+
+    # Pick voice per language (defaults to English voice)
+    voice_id = LANG_VOICES.get(agent_lang, LANG_VOICES["en"])
 
     # Build the voice pipeline — optimized for LOW LATENCY + FASTER SPEECH
     session = AgentSession(
-        stt=inference.STT(model="deepgram/nova-3", language="en"),
+        stt=inference.STT(model="deepgram/nova-3", language=agent_lang),
         llm=inference.LLM(model="openai/gpt-4.1-mini"),
         tts=inference.TTS(
             model="cartesia/sonic-3",
-            voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
+            voice=voice_id,
         ),
         turn_detection=MultilingualModel(),
         vad=vad,
