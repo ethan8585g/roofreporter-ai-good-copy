@@ -22,6 +22,7 @@
 // ============================================================
 
 import * as geotiff from 'geotiff'
+import { runEdgeClassifier, type EdgeClassifierResult } from './edge-classifier'
 
 // ============================================================
 // CONSTANTS
@@ -161,6 +162,8 @@ export interface DataLayersAnalysis {
   // Performance
   durationMs: number
   provider: string
+  /** RANSAC edge classification result — present when imagery_quality !== 'BASE' */
+  edge_classifier?: EdgeClassifierResult
 }
 
 // ============================================================
@@ -790,6 +793,21 @@ export async function executeRoofOrder(
   console.log(`[Pipeline] Step 5: Computing slope/pitch from DSM`)
   const slopeAnalysis = computeSlope(dsmAnalysis)
 
+  // Step 5b: RANSAC edge classification — extract plane segments and typed edges
+  // Gated on imagery quality: BASE imagery lacks the resolution for reliable RANSAC.
+  let edgeClassifierResult: EdgeClassifierResult | undefined
+  if (dataLayers.imageryQuality !== 'BASE') {
+    try {
+      console.log(`[Pipeline] Step 5b: Running RANSAC edge classifier (quality=${dataLayers.imageryQuality})`)
+      edgeClassifierResult = runEdgeClassifier(dsmAnalysis, slopeAnalysis)
+      console.log(`[Pipeline] Step 5b: Edge classifier complete — ${edgeClassifierResult.segments.length} planes, ${edgeClassifierResult.edges.length} edges in ${edgeClassifierResult.durationMs}ms`)
+    } catch (ecErr: any) {
+      console.warn(`[Pipeline] Step 5b: Edge classifier failed (non-critical): ${ecErr.message}`)
+    }
+  } else {
+    console.log(`[Pipeline] Step 5b: Skipping RANSAC — BASE imagery (1m/px) insufficient for plane fitting`)
+  }
+
   // Step 6: Calculate areas using HYBRID approach:
   //   - Footprint from buildingInsights (accurate building boundary)
   //   - Pitch from DSM gradient analysis (precise slope measurement)
@@ -927,7 +945,8 @@ export async function executeRoofOrder(
     satelliteContextUrl,
     satelliteMediumUrl,
     durationMs,
-    provider: 'google_solar_datalayers'
+    provider: 'google_solar_datalayers',
+    edge_classifier: edgeClassifierResult,
   }
 }
 
