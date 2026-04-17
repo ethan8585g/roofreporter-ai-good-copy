@@ -5,6 +5,7 @@ import { sendGmailOAuth2 } from '../services/email'
 import { logFromContext } from '../lib/team-activity'
 import { resolveTeamOwner } from './team'
 import { loadPermissionContext, can, redactFinancials, type PermissionContext } from '../lib/permissions'
+import { verifySquareSignature } from './square'
 
 export const invoiceRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -821,6 +822,19 @@ invoiceRoutes.post('/:id/payment-link', async (c) => {
 invoiceRoutes.post('/webhook/square', async (c) => {
   try {
     const body = await c.req.text()
+
+    // Verify Square HMAC signature if key is configured
+    const signatureKey = (c.env as any).SQUARE_WEBHOOK_SIGNATURE_KEY
+    if (signatureKey) {
+      const sigHeader = c.req.header('x-square-hmacsha256-signature') || ''
+      const notificationUrl = c.req.url
+      const isValid = await verifySquareSignature(body, sigHeader, signatureKey, notificationUrl)
+      if (!isValid) {
+        console.warn('[Invoice Square Webhook] Invalid signature — ignoring')
+        return c.json({ ok: true }) // return 200 so Square doesn't retry
+      }
+    }
+
     const payload = JSON.parse(body)
     const eventType = payload.type || ''
 
@@ -1022,8 +1036,17 @@ invoiceRoutes.post('/:id/send-gmail', async (c) => {
     // Get or create Square payment link
     let paymentUrl = invoice.square_payment_link_url || ''
     if (!paymentUrl) {
-      const accessToken = (c.env as any).SQUARE_ACCESS_TOKEN
-      const locationId = (c.env as any).SQUARE_LOCATION_ID
+      // Try per-user Square OAuth first, then fall back to global env tokens
+      let accessToken = (c.env as any).SQUARE_ACCESS_TOKEN
+      let locationId = (c.env as any).SQUARE_LOCATION_ID
+      const user = (c as any).get('admin')
+      if (user?.id) {
+        const owner = await c.env.DB.prepare(
+          'SELECT square_merchant_access_token, square_merchant_location_id FROM customers WHERE id = ?'
+        ).bind(user.id).first<any>()
+        if (owner?.square_merchant_access_token) accessToken = owner.square_merchant_access_token
+        if (owner?.square_merchant_location_id) locationId = owner.square_merchant_location_id
+      }
       if (accessToken && locationId && invoice.total > 0) {
         try {
           const sqResp = await fetch('https://connect.squareup.com/v2/online-checkout/payment-links', {
