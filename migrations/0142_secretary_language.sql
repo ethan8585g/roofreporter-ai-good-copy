@@ -1,2 +1,3 @@
--- Add language setting for AI secretary (en, fr, es)
-ALTER TABLE secretary_config ADD COLUMN agent_language TEXT NOT NULL DEFAULT 'en';
+-- No-op: agent_language column already exists on secretary_config
+-- (added by an earlier migration or init-db).
+SELECT 1;

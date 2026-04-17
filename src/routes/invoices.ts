@@ -979,7 +979,9 @@ invoiceRoutes.get('/customers/list', async (c) => {
         `).bind(scope.ownerId).all()
 
     // CRM contacts owned by the authenticated user (by team owner for team members)
-    const ownerIdForCrm = scope.isAdmin ? (c.get('admin' as any) as any)?.id : scope.ownerId
+    // Admin-created CRM contacts use owner_id = 1000000 + admin_id
+    const adminUser = (c.get('admin' as any) as any)
+    const ownerIdForCrm = scope.isAdmin ? (adminUser?.id ? 1000000 + adminUser.id : null) : scope.ownerId
     let crmCustomers: any[] = []
     if (ownerIdForCrm) {
       const res = await c.env.DB.prepare(
