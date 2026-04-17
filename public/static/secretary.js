@@ -53,6 +53,13 @@
     // Agent persona selection
     selectedAgentName: '',
     selectedAgentVoice: '',
+    // Transfer settings
+    transferEnabled: false,
+    transferSettings: null,
+    employees: [],
+    callFilter: 'all',
+    callSearch: '',
+    leadStatusFilter: 'all',
   };
 
   // ── On load: check for Square redirect, then fetch status ──
@@ -169,6 +176,7 @@
         (state.secretaryMode === 'answering' ? tabBtn('messages', 'fa-envelope', 'Messages' + (state.unreadCount > 0 ? ' (' + state.unreadCount + ')' : '')) : '') +
         (state.secretaryMode === 'full' ? tabBtn('appointments', 'fa-calendar-check', 'Appointments' + (state.pendingAppts > 0 ? ' (' + state.pendingAppts + ')' : '')) : '') +
         (state.secretaryMode === 'full' ? tabBtn('callbacks', 'fa-phone-volume', 'Callbacks' + (state.pendingCallbacks > 0 ? ' (' + state.pendingCallbacks + ')' : '')) : '') +
+        tabBtn('transfer', 'fa-exchange-alt', 'Call Transfer') +
       '</div>' +
       '<div id="secContent"></div>';
 
@@ -179,6 +187,7 @@
     else if (state.activeTab === 'callbacks') loadAndRenderCallbacks();
     else if (state.activeTab === 'calls') renderCallsTab();
     else if (state.activeTab === 'leads') renderLeadsTab();
+    else if (state.activeTab === 'transfer') loadAndRenderTransferTab();
   }
 
   function tabBtn(id, icon, label) {
@@ -193,7 +202,7 @@
       (needsAttention ? ' <span class="w-2 h-2 bg-blue-500/15/100 rounded-full"></span>' : '') +
       '</button>';
   }
-  window.secSetTab = function(t) { state.activeTab = t; render(); if (t === 'calls') loadCalls(); if (t === 'leads') loadLeads(); if (t === 'messages') loadAndRenderMessages(); if (t === 'appointments') loadAndRenderAppointments(); if (t === 'callbacks') loadAndRenderCallbacks(); };
+  window.secSetTab = function(t) { state.activeTab = t; render(); if (t === 'calls') loadCalls(); if (t === 'leads') loadLeads(); if (t === 'messages') loadAndRenderMessages(); if (t === 'appointments') loadAndRenderAppointments(); if (t === 'callbacks') loadAndRenderCallbacks(); if (t === 'transfer') loadAndRenderTransferTab(); };
 
   // ============================================================
   // SUBSCRIPTION PAGE — Contact Us for Enrolment
@@ -1385,6 +1394,7 @@
                     '<div class="flex items-center gap-2">' +
                       '<p class="font-semibold text-gray-100 text-sm">' + esc(call.caller_name || 'Unknown Caller') + '</p>' +
                       (isLead ? '<span class="px-1.5 py-0.5 bg-blue-500/15/15 text-blue-400 rounded text-[9px] font-bold">LEAD</span>' : '') +
+                      (call.transfer_happened ? '<span class="px-1.5 py-0.5 bg-purple-500/15 text-purple-400 rounded text-[9px] font-bold"><i class="fas fa-exchange-alt mr-0.5"></i>TRANSFERRED</span>' : '') +
                       (call.follow_up_required && !call.follow_up_completed ? '<span class="px-1.5 py-0.5 bg-red-500/100/15 text-red-400 rounded text-[9px] font-bold">FOLLOW UP</span>' : '') +
                     '</div>' +
                     '<p class="text-xs text-gray-500">' + esc(call.caller_phone || '') +
@@ -1525,8 +1535,12 @@
     var sentimentColor = call.sentiment === 'positive' ? 'text-emerald-400 bg-emerald-500/10' : (call.sentiment === 'negative' ? 'text-red-400 bg-red-500/10' : 'text-gray-400 bg-[#0A0A0A]');
 
     var transcript = call.call_transcript || 'No transcript available for this call.';
+    var hasTransfer = !!call.transfer_happened;
+    var preTranscript = call.pre_transfer_transcript || transcript;
+    var postTranscript = call.post_transfer_transcript || '';
     // Format transcript lines
-    var transcriptHtml = esc(transcript).replace(/\n/g, '<br>').replace(/(Sarah|Agent|AI):/gi, '<span class="font-bold text-blue-400">$1:</span>').replace(/(Caller|Customer|User):/gi, '<span class="font-bold text-blue-400">$1:</span>');
+    function fmtTranscript(t) { return esc(t).replace(/\n/g, '<br>').replace(/(Sarah|Agent|AI|Employee):/gi, '<span class="font-bold text-blue-400">$1:</span>').replace(/(Caller|Customer|User):/gi, '<span class="font-bold text-blue-400">$1:</span>'); }
+    var transcriptHtml = fmtTranscript(transcript);
 
     var modal = document.createElement('div');
     modal.id = 'callDetailModal';
@@ -1581,12 +1595,21 @@
             appointments.map(function(a) { return '<div class="text-sm text-green-700 mb-1">• ' + esc(a.appointment_type || 'Estimate') + (a.property_address ? ' at ' + esc(a.property_address) : '') + (a.notes ? ' — ' + esc(a.notes) : '') + '</div>'; }).join('') +
           '</div>' : '') +
 
-          // Full Transcript
+          // Transcript section — with tabs if transfer happened
           '<div class="bg-[#0A0A0A] border border-white/10 rounded-xl p-4">' +
-            '<h4 class="font-bold text-gray-100 text-sm mb-3"><i class="fas fa-file-alt mr-1"></i>Full Call Transcript</h4>' +
-            '<div class="text-sm text-gray-300 leading-relaxed font-mono bg-[#111111] rounded-lg p-4 border border-white/5 max-h-64 overflow-y-auto">' +
-              transcriptHtml +
+            (hasTransfer ?
+              '<div class="flex gap-2 mb-3">' +
+                '<button onclick="secSwitchTranscriptTab(\'ai\')" id="ttab-ai" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30"><i class="fas fa-robot mr-1"></i>AI Portion</button>' +
+                '<button onclick="secSwitchTranscriptTab(\'post\')" id="ttab-post" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#111111] text-gray-400 border border-white/10"><i class="fas fa-user-friends mr-1"></i>After Transfer</button>' +
+                '<button onclick="secSwitchTranscriptTab(\'full\')" id="ttab-full" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#111111] text-gray-400 border border-white/10"><i class="fas fa-file-alt mr-1"></i>Full Call</button>' +
+              '</div>'
+            :
+              '<h4 class="font-bold text-gray-100 text-sm mb-3"><i class="fas fa-file-alt mr-1"></i>Full Call Transcript</h4>'
+            ) +
+            '<div id="transcript-content" class="text-sm text-gray-300 leading-relaxed font-mono bg-[#111111] rounded-lg p-4 border border-white/5 max-h-64 overflow-y-auto">' +
+              (hasTransfer ? fmtTranscript(preTranscript) : transcriptHtml) +
             '</div>' +
+            '<div id="transcript-data" style="display:none" data-pre="' + esc(preTranscript).replace(/"/g, '&quot;') + '" data-post="' + esc(postTranscript).replace(/"/g, '&quot;') + '" data-full="' + esc(transcript).replace(/"/g, '&quot;') + '"></div>' +
           '</div>' +
         '</div>' +
         // Footer actions
@@ -1605,6 +1628,249 @@
       '</div>';
     document.body.appendChild(modal);
   }
+
+  // ── Transcript tab switcher (inside call detail modal) ──
+  window.secSwitchTranscriptTab = function(tab) {
+    var dataEl = document.getElementById('transcript-data');
+    var contentEl = document.getElementById('transcript-content');
+    if (!dataEl || !contentEl) return;
+    var raw = dataEl.getAttribute('data-' + tab) || '';
+    function fmtT(t) { return t.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/\n/g, '<br>').replace(/(Sarah|Agent|AI|Employee):/gi, '<span class="font-bold text-blue-400">$1:</span>').replace(/(Caller|Customer|User):/gi, '<span class="font-bold text-blue-400">$1:</span>'); }
+    contentEl.innerHTML = raw ? fmtT(raw) : '<span class="text-gray-500 italic">No transcript for this segment.</span>';
+    ['ai','post','full'].forEach(function(t) {
+      var btn = document.getElementById('ttab-' + t);
+      if (!btn) return;
+      if (t === tab) { btn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30'; }
+      else { btn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-[#111111] text-gray-400 border border-white/10'; }
+    });
+  };
+
+  // ============================================================
+  // CALL TRANSFER TAB — Employee manager + transfer settings
+  // ============================================================
+  async function loadAndRenderTransferTab() {
+    var content = document.getElementById('secContent');
+    if (!content) return;
+    content.innerHTML = '<div class="flex items-center justify-center py-12"><i class="fas fa-spinner fa-spin text-2xl text-sky-500"></i></div>';
+
+    // Load transfer settings + employees in parallel
+    try {
+      var [settingsRes, empRes] = await Promise.all([
+        fetch('/api/secretary/transfer-settings', { headers: authOnly() }),
+        fetch('/api/secretary/employees', { headers: authOnly() })
+      ]);
+      if (settingsRes.ok) { state.transferSettings = await settingsRes.json(); state.transferEnabled = !!state.transferSettings.transfer_enabled; }
+      if (empRes.ok) { var empData = await empRes.json(); state.employees = empData.employees || []; }
+    } catch(e) { console.error('Failed to load transfer data', e); }
+
+    renderTransferTab();
+  }
+
+  function renderTransferTab() {
+    var content = document.getElementById('secContent');
+    if (!content) return;
+    var ts = state.transferSettings || {};
+    var emps = state.employees || [];
+
+    content.innerHTML =
+      // Enable toggle
+      '<div class="bg-[#111111] rounded-2xl border border-white/10 p-6 mb-6">' +
+        '<div class="flex items-center justify-between mb-4">' +
+          '<div>' +
+            '<h3 class="text-lg font-bold text-gray-100"><i class="fas fa-exchange-alt mr-2 text-purple-400"></i>Call Transfer</h3>' +
+            '<p class="text-sm text-gray-400 mt-1">Let the AI secretary transfer calls to your team members in real time</p>' +
+          '</div>' +
+          '<label class="relative inline-flex items-center cursor-pointer">' +
+            '<input type="checkbox" id="transferEnabledToggle" ' + (state.transferEnabled ? 'checked' : '') + ' onchange="secToggleTransfer(this.checked)" class="sr-only peer">' +
+            '<div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>' +
+          '</label>' +
+        '</div>' +
+
+        // Transfer announcement template
+        '<div class="mb-4">' +
+          '<label class="block text-sm font-medium text-gray-300 mb-1">Handoff Announcement to Employee</label>' +
+          '<textarea id="transferAnnouncement" rows="2" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-4 py-2 text-sm text-gray-200 focus:border-purple-500 focus:ring-1 focus:ring-purple-500" placeholder="Hi, I have {caller_name} on the line. They said: {reason_summary}. Connecting you now.">' + esc(ts.transfer_announcement || 'Hi, I have {caller_name} on the line. They said: {reason_summary}. Connecting you now.') + '</textarea>' +
+          '<p class="text-xs text-gray-500 mt-1">Use {caller_name} and {reason_summary} as placeholders</p>' +
+        '</div>' +
+
+        // Post-transfer disclosure
+        '<div class="mb-4">' +
+          '<label class="block text-sm font-medium text-gray-300 mb-1">Recording Disclosure (said to caller before transfer)</label>' +
+          '<textarea id="postTransferDisclosure" rows="2" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-4 py-2 text-sm text-gray-200 focus:border-purple-500 focus:ring-1 focus:ring-purple-500">' + esc(ts.post_transfer_disclosure || 'Please note this call will continue to be recorded for quality and training purposes.') + '</textarea>' +
+        '</div>' +
+
+        '<div class="flex items-center gap-4 mb-4">' +
+          '<label class="flex items-center gap-2 cursor-pointer">' +
+            '<input type="checkbox" id="recordPostTransfer" ' + (ts.record_post_transfer !== false ? 'checked' : '') + ' class="rounded border-white/20 bg-[#0A0A0A] text-purple-600">' +
+            '<span class="text-sm text-gray-300">Record & transcribe after transfer</span>' +
+          '</label>' +
+        '</div>' +
+
+        '<button onclick="secSaveTransferSettings()" class="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-all"><i class="fas fa-save mr-1"></i>Save Settings</button>' +
+      '</div>' +
+
+      // Employee manager
+      '<div class="bg-[#111111] rounded-2xl border border-white/10 p-6">' +
+        '<div class="flex items-center justify-between mb-4">' +
+          '<h3 class="text-lg font-bold text-gray-100"><i class="fas fa-users mr-2 text-blue-400"></i>Team Members</h3>' +
+          '<button onclick="secShowAddEmployee()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all"><i class="fas fa-plus mr-1"></i>Add Employee</button>' +
+        '</div>' +
+        (emps.length === 0 ?
+          '<div class="text-center py-8 text-gray-500"><i class="fas fa-user-plus text-3xl mb-3 block text-gray-600"></i><p class="text-sm">No employees added yet. Add team members the AI can transfer calls to.</p></div>'
+        :
+          '<div class="divide-y divide-white/5">' +
+            emps.map(function(emp) {
+              return '<div class="py-3 flex items-center justify-between">' +
+                '<div class="flex items-center gap-3">' +
+                  '<div class="w-10 h-10 rounded-full bg-purple-500/15 flex items-center justify-center"><i class="fas fa-user text-purple-400"></i></div>' +
+                  '<div>' +
+                    '<p class="font-semibold text-gray-100 text-sm">' + esc(emp.name) + (emp.role ? ' <span class="text-gray-500 font-normal">— ' + esc(emp.role) + '</span>' : '') + '</p>' +
+                    '<p class="text-xs text-gray-500">' + esc(emp.phone_number) + '</p>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="flex items-center gap-2">' +
+                  '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + (emp.transfer_enabled ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400') + '">' + (emp.transfer_enabled ? 'Active' : 'Disabled') + '</span>' +
+                  '<button onclick="secEditEmployee(' + emp.id + ')" class="text-gray-400 hover:text-blue-400 p-1"><i class="fas fa-edit text-xs"></i></button>' +
+                  '<button onclick="secDeleteEmployee(' + emp.id + ', \'' + esc(emp.name).replace(/'/g, "\\'") + '\')" class="text-gray-400 hover:text-red-400 p-1"><i class="fas fa-trash text-xs"></i></button>' +
+                '</div>' +
+              '</div>';
+            }).join('') +
+          '</div>'
+        ) +
+      '</div>';
+  }
+
+  // ── Transfer tab handlers ──
+  window.secToggleTransfer = async function(enabled) {
+    state.transferEnabled = enabled;
+    await secSaveTransferSettings();
+  };
+
+  window.secSaveTransferSettings = async function() {
+    var announcement = (document.getElementById('transferAnnouncement') || {}).value || '';
+    var disclosure = (document.getElementById('postTransferDisclosure') || {}).value || '';
+    var recordPost = !!(document.getElementById('recordPostTransfer') || {}).checked;
+    try {
+      var res = await fetch('/api/secretary/transfer-settings', {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify({
+          transfer_enabled: state.transferEnabled,
+          transfer_announcement: announcement,
+          post_transfer_disclosure: disclosure,
+          record_post_transfer: recordPost,
+          transcript_retention_days: 365,
+        })
+      });
+      if (res.ok) { window.rmToast && window.rmToast('Transfer settings saved', 'success'); }
+      else { var err = await res.json().catch(function(){return {};}); window.rmToast && window.rmToast(err.error || 'Failed to save', 'error'); }
+    } catch(e) { window.rmToast && window.rmToast('Failed to save settings', 'error'); }
+  };
+
+  window.secShowAddEmployee = function() {
+    var existing = document.getElementById('addEmployeeModal');
+    if (existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = 'addEmployeeModal';
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+    modal.innerHTML =
+      '<div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="document.getElementById(\'addEmployeeModal\').remove()"></div>' +
+      '<div class="relative bg-[#111111] rounded-2xl shadow-2xl max-w-md w-full p-6">' +
+        '<h3 class="text-lg font-bold text-gray-100 mb-4"><i class="fas fa-user-plus mr-2 text-blue-400"></i>Add Team Member</h3>' +
+        '<div class="space-y-3">' +
+          '<div><label class="block text-sm font-medium text-gray-300 mb-1">Name *</label><input type="text" id="empName" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-4 py-2 text-sm text-gray-200" placeholder="John Smith"></div>' +
+          '<div><label class="block text-sm font-medium text-gray-300 mb-1">Role</label><input type="text" id="empRole" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-4 py-2 text-sm text-gray-200" placeholder="Sales Manager, Owner, etc."></div>' +
+          '<div><label class="block text-sm font-medium text-gray-300 mb-1">Phone Number *</label><input type="tel" id="empPhone" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-4 py-2 text-sm text-gray-200" placeholder="(555) 123-4567"></div>' +
+          '<div><label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="empConsent" class="rounded border-white/20 bg-[#0A0A0A] text-blue-600"><span class="text-sm text-gray-300">This employee has been informed their calls may be recorded</span></label></div>' +
+        '</div>' +
+        '<div class="flex gap-2 mt-4">' +
+          '<button onclick="secCreateEmployee()" class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">Add</button>' +
+          '<button onclick="document.getElementById(\'addEmployeeModal\').remove()" class="px-4 py-2 bg-[#0A0A0A] hover:bg-[#1a1a1a] text-gray-300 rounded-lg text-sm font-medium border border-white/10">Cancel</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+  };
+
+  window.secCreateEmployee = async function() {
+    var name = (document.getElementById('empName') || {}).value || '';
+    var role = (document.getElementById('empRole') || {}).value || '';
+    var phone = (document.getElementById('empPhone') || {}).value || '';
+    var consent = !!(document.getElementById('empConsent') || {}).checked;
+    if (!name || !phone) { window.rmToast && window.rmToast('Name and phone are required', 'error'); return; }
+    if (!consent) { window.rmToast && window.rmToast('You must confirm the employee has been informed about recording', 'error'); return; }
+    try {
+      var res = await fetch('/api/secretary/employees', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ name: name, role: role, phone_number: phone, recording_consent_confirmed: true })
+      });
+      if (res.ok) {
+        document.getElementById('addEmployeeModal').remove();
+        window.rmToast && window.rmToast('Employee added', 'success');
+        loadAndRenderTransferTab();
+      } else {
+        var err = await res.json().catch(function(){return {};});
+        window.rmToast && window.rmToast(err.error || 'Failed to add employee', 'error');
+      }
+    } catch(e) { window.rmToast && window.rmToast('Failed to add employee', 'error'); }
+  };
+
+  window.secEditEmployee = async function(id) {
+    var emp = state.employees.find(function(e) { return e.id === id; });
+    if (!emp) return;
+    var existing = document.getElementById('addEmployeeModal');
+    if (existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = 'addEmployeeModal';
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+    modal.innerHTML =
+      '<div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="document.getElementById(\'addEmployeeModal\').remove()"></div>' +
+      '<div class="relative bg-[#111111] rounded-2xl shadow-2xl max-w-md w-full p-6">' +
+        '<h3 class="text-lg font-bold text-gray-100 mb-4"><i class="fas fa-edit mr-2 text-blue-400"></i>Edit Team Member</h3>' +
+        '<div class="space-y-3">' +
+          '<div><label class="block text-sm font-medium text-gray-300 mb-1">Name *</label><input type="text" id="empName" value="' + esc(emp.name) + '" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-4 py-2 text-sm text-gray-200"></div>' +
+          '<div><label class="block text-sm font-medium text-gray-300 mb-1">Role</label><input type="text" id="empRole" value="' + esc(emp.role || '') + '" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-4 py-2 text-sm text-gray-200"></div>' +
+          '<div><label class="block text-sm font-medium text-gray-300 mb-1">Phone Number *</label><input type="tel" id="empPhone" value="' + esc(emp.phone_number || '') + '" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-4 py-2 text-sm text-gray-200"></div>' +
+          '<div><label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="empEnabled" ' + (emp.transfer_enabled ? 'checked' : '') + ' class="rounded border-white/20 bg-[#0A0A0A] text-blue-600"><span class="text-sm text-gray-300">Enabled for transfers</span></label></div>' +
+        '</div>' +
+        '<div class="flex gap-2 mt-4">' +
+          '<button onclick="secUpdateEmployee(' + id + ')" class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">Save</button>' +
+          '<button onclick="document.getElementById(\'addEmployeeModal\').remove()" class="px-4 py-2 bg-[#0A0A0A] hover:bg-[#1a1a1a] text-gray-300 rounded-lg text-sm font-medium border border-white/10">Cancel</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+  };
+
+  window.secUpdateEmployee = async function(id) {
+    var name = (document.getElementById('empName') || {}).value || '';
+    var role = (document.getElementById('empRole') || {}).value || '';
+    var phone = (document.getElementById('empPhone') || {}).value || '';
+    var enabled = !!(document.getElementById('empEnabled') || {}).checked;
+    if (!name || !phone) { window.rmToast && window.rmToast('Name and phone are required', 'error'); return; }
+    try {
+      var res = await fetch('/api/secretary/employees/' + id, {
+        method: 'PATCH', headers: authHeaders(),
+        body: JSON.stringify({ name: name, role: role, phone_number: phone, transfer_enabled: enabled ? 1 : 0 })
+      });
+      if (res.ok) {
+        document.getElementById('addEmployeeModal').remove();
+        window.rmToast && window.rmToast('Employee updated', 'success');
+        loadAndRenderTransferTab();
+      } else {
+        var err = await res.json().catch(function(){return {};});
+        window.rmToast && window.rmToast(err.error || 'Failed to update', 'error');
+      }
+    } catch(e) { window.rmToast && window.rmToast('Failed to update employee', 'error'); }
+  };
+
+  window.secDeleteEmployee = async function(id, name) {
+    if (!confirm('Remove ' + name + ' from the transfer list?')) return;
+    try {
+      var res = await fetch('/api/secretary/employees/' + id, { method: 'DELETE', headers: authHeaders() });
+      if (res.ok) {
+        window.rmToast && window.rmToast('Employee removed', 'success');
+        loadAndRenderTransferTab();
+      }
+    } catch(e) { window.rmToast && window.rmToast('Failed to remove employee', 'error'); }
+  };
 
   // ── Call action handlers ──
   window.secFilterCalls = function(filter) { state.callFilter = filter; loadCalls(filter); };

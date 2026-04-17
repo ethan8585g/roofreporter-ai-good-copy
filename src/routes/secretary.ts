@@ -923,24 +923,52 @@ secretaryRoutes.post('/webhook/call-complete', async (c) => {
     const {
       customer_id, caller_phone, caller_name,
       duration_seconds, directory_routed,
-      summary, transcript, outcome, room_id
+      summary, transcript, outcome, room_id,
+      call_log_id, pre_transfer_transcript, post_transfer_transcript, transfer_happened
     } = body
 
     if (!customer_id) return c.json({ error: 'customer_id required' }, 400)
 
-    await c.env.DB.prepare(
-      `INSERT INTO secretary_call_logs (customer_id, caller_phone, caller_name, call_duration_seconds, directory_routed, call_summary, call_transcript, call_outcome, livekit_room_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
-      customer_id,
-      caller_phone || 'Unknown',
-      caller_name || 'Unknown',
-      duration_seconds || 0,
-      directory_routed || '',
-      summary || '',
-      transcript || '',
-      outcome || 'answered',
-      room_id || ''
-    ).run()
+    let logId = call_log_id
+
+    if (call_log_id) {
+      // Update existing call log (created at call start, finalized now)
+      await c.env.DB.prepare(
+        `UPDATE secretary_call_logs SET caller_phone = ?, caller_name = ?, call_duration_seconds = ?, directory_routed = ?, call_summary = ?, call_transcript = ?, call_outcome = ?, pre_transfer_transcript = ?, post_transfer_transcript = ?, transfer_happened = ? WHERE id = ? AND customer_id = ?`
+      ).bind(
+        caller_phone || 'Unknown',
+        caller_name || 'Unknown',
+        duration_seconds || 0,
+        directory_routed || '',
+        summary || '',
+        transcript || '',
+        outcome || 'answered',
+        pre_transfer_transcript || '',
+        post_transfer_transcript || '',
+        transfer_happened ? 1 : 0,
+        call_log_id,
+        customer_id
+      ).run()
+    } else {
+      // Insert new call log (legacy path / no pre-created log)
+      const result = await c.env.DB.prepare(
+        `INSERT INTO secretary_call_logs (customer_id, caller_phone, caller_name, call_duration_seconds, directory_routed, call_summary, call_transcript, call_outcome, livekit_room_id, pre_transfer_transcript, post_transfer_transcript, transfer_happened) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        customer_id,
+        caller_phone || 'Unknown',
+        caller_name || 'Unknown',
+        duration_seconds || 0,
+        directory_routed || '',
+        summary || '',
+        transcript || '',
+        outcome || 'answered',
+        room_id || '',
+        pre_transfer_transcript || '',
+        post_transfer_transcript || '',
+        transfer_happened ? 1 : 0
+      ).run()
+      logId = result.meta?.last_row_id
+    }
 
     // ── Send SMS transcript summary to the business owner (non-blocking) ──
     const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
@@ -954,7 +982,7 @@ secretaryRoutes.post('/webhook/call-complete', async (c) => {
       ).catch(e => console.warn(`[Secretary SMS] Non-critical SMS error for customer ${customer_id}:`, e.message))
     }
 
-    return c.json({ success: true })
+    return c.json({ success: true, call_log_id: logId })
   } catch (err: any) {
     console.error('[Secretary Webhook]', err)
     return c.json({ error: err.message }, 500)
@@ -3049,4 +3077,239 @@ secretaryRoutes.get('/quick-connect/status', async (c) => {
     forwarding_code: aiDigits ? `*72${aiDigits}` : '',
     disable_forwarding_code: '*73',
   })
+})
+
+// ============================================================
+// CALL TRANSFER — Employee Management + Transfer Settings
+// ============================================================
+
+// GET /employees — List transfer-eligible employees
+secretaryRoutes.get('/employees', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const rows = await c.env.DB.prepare(
+    `SELECT * FROM secretary_employees WHERE customer_id = ? ORDER BY priority ASC, name ASC`
+  ).bind(customerId).all<any>()
+  return c.json({ employees: rows.results || [] })
+})
+
+// POST /employees — Create employee
+secretaryRoutes.post('/employees', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const { name, role, phone_number, available_hours, priority, recording_consent_confirmed } = await c.req.json()
+  if (!name || !phone_number) return c.json({ error: 'name and phone_number are required' }, 400)
+  const phoneClean = phone_number.replace(/\D/g, '')
+  if (phoneClean.length < 10) return c.json({ error: 'Invalid phone number' }, 400)
+  const e164 = phoneClean.length === 10 ? `+1${phoneClean}` : `+${phoneClean}`
+  if (!recording_consent_confirmed) return c.json({ error: 'You must confirm the employee has been informed their calls may be recorded' }, 400)
+
+  const result = await c.env.DB.prepare(
+    `INSERT INTO secretary_employees (customer_id, name, role, phone_number, available_hours, priority, recording_consent_confirmed) VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).bind(customerId, name, role || '', e164, available_hours ? JSON.stringify(available_hours) : null, priority || 100, 1).run()
+
+  return c.json({ success: true, id: result.meta?.last_row_id })
+})
+
+// PATCH /employees/:id — Update employee
+secretaryRoutes.patch('/employees/:id', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const id = parseInt(c.req.param('id'))
+  const body = await c.req.json()
+
+  const existing = await c.env.DB.prepare(
+    `SELECT id FROM secretary_employees WHERE id = ? AND customer_id = ?`
+  ).bind(id, customerId).first()
+  if (!existing) return c.json({ error: 'Employee not found' }, 404)
+
+  const fields: string[] = []
+  const values: any[] = []
+  for (const key of ['name', 'role', 'phone_number', 'transfer_enabled', 'priority', 'recording_consent_confirmed']) {
+    if (body[key] !== undefined) {
+      if (key === 'phone_number') {
+        const clean = body[key].replace(/\D/g, '')
+        fields.push(`${key} = ?`)
+        values.push(clean.length === 10 ? `+1${clean}` : `+${clean}`)
+      } else {
+        fields.push(`${key} = ?`)
+        values.push(body[key])
+      }
+    }
+  }
+  if (body.available_hours !== undefined) {
+    fields.push('available_hours = ?')
+    values.push(JSON.stringify(body.available_hours))
+  }
+  if (fields.length === 0) return c.json({ error: 'No fields to update' }, 400)
+
+  fields.push("updated_at = datetime('now')")
+  values.push(id, customerId)
+
+  await c.env.DB.prepare(
+    `UPDATE secretary_employees SET ${fields.join(', ')} WHERE id = ? AND customer_id = ?`
+  ).bind(...values).run()
+
+  return c.json({ success: true })
+})
+
+// DELETE /employees/:id — Remove employee
+secretaryRoutes.delete('/employees/:id', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const id = parseInt(c.req.param('id'))
+  await c.env.DB.prepare(
+    `DELETE FROM secretary_employees WHERE id = ? AND customer_id = ?`
+  ).bind(id, customerId).run()
+  return c.json({ success: true })
+})
+
+// PUT /transfer-settings — Toggle transfer feature + set announcement/disclosure
+secretaryRoutes.put('/transfer-settings', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const { transfer_enabled, transfer_announcement, record_post_transfer, post_transfer_disclosure, transcript_retention_days } = await c.req.json()
+
+  // Enforce minimum disclosure length when recording is enabled
+  if (record_post_transfer && (!post_transfer_disclosure || post_transfer_disclosure.trim().length < 20)) {
+    return c.json({ error: 'Post-transfer recording disclosure must be at least 20 characters when recording is enabled' }, 400)
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE secretary_config SET transfer_enabled = ?, transfer_announcement = ?, record_post_transfer = ?, post_transfer_disclosure = ?, transcript_retention_days = ?, updated_at = datetime('now') WHERE customer_id = ?`
+  ).bind(
+    transfer_enabled ? 1 : 0,
+    transfer_announcement || 'Hi, I have {caller_name} on the line. They said: {reason_summary}. Connecting you now.',
+    record_post_transfer ? 1 : 0,
+    post_transfer_disclosure || 'Please note this call will continue to be recorded for quality and training purposes.',
+    transcript_retention_days || 365,
+    customerId
+  ).run()
+
+  return c.json({ success: true })
+})
+
+// GET /transfer-settings — Get transfer config
+secretaryRoutes.get('/transfer-settings', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const config = await c.env.DB.prepare(
+    `SELECT transfer_enabled, transfer_announcement, record_post_transfer, post_transfer_disclosure, transcript_retention_days FROM secretary_config WHERE customer_id = ?`
+  ).bind(customerId).first<any>()
+  if (!config) return c.json({ error: 'No config found' }, 404)
+  return c.json(config)
+})
+
+// GET /calls/:id/transfer — Get transfer details + segmented transcripts for a call
+secretaryRoutes.get('/calls/:id/transfer', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const callId = parseInt(c.req.param('id'))
+
+  const call = await c.env.DB.prepare(
+    `SELECT id, call_transcript, pre_transfer_transcript, post_transfer_transcript, transfer_happened, transferred_to_employee_id FROM secretary_call_logs WHERE id = ? AND customer_id = ?`
+  ).bind(callId, customerId).first<any>()
+  if (!call) return c.json({ error: 'Call not found' }, 404)
+
+  let transfer = null
+  if (call.transfer_happened) {
+    transfer = await c.env.DB.prepare(
+      `SELECT * FROM secretary_call_transfers WHERE call_log_id = ? AND customer_id = ? ORDER BY initiated_at DESC LIMIT 1`
+    ).bind(callId, customerId).first<any>()
+  }
+
+  return c.json({
+    call_id: callId,
+    transfer_happened: !!call.transfer_happened,
+    pre_transfer_transcript: call.pre_transfer_transcript || call.call_transcript || '',
+    post_transfer_transcript: call.post_transfer_transcript || '',
+    full_transcript: call.call_transcript || '',
+    transfer,
+  })
+})
+
+// ============================================================
+// TRANSFER WEBHOOKS — Called by the LiveKit agent during calls
+// These are unauthenticated (called from the Python agent, not the browser)
+// ============================================================
+
+// POST /webhook/transfer-initiated — Agent started dialing an employee
+secretaryRoutes.post('/webhook/transfer-initiated', async (c) => {
+  try {
+    const { customer_id, call_log_id, employee_id, employee_name, employee_phone, reason_summary } = await c.req.json()
+    if (!customer_id || !call_log_id) return c.json({ error: 'customer_id and call_log_id required' }, 400)
+
+    await c.env.DB.prepare(
+      `INSERT INTO secretary_call_transfers (call_log_id, customer_id, employee_id, employee_name, employee_phone, status) VALUES (?, ?, ?, ?, ?, 'dialing')`
+    ).bind(call_log_id, customer_id, employee_id || null, employee_name || '', employee_phone || '').run()
+
+    // Mark the call log as having a transfer
+    await c.env.DB.prepare(
+      `UPDATE secretary_call_logs SET transfer_happened = 1, transferred_to_employee_id = ? WHERE id = ? AND customer_id = ?`
+    ).bind(employee_id || null, call_log_id, customer_id).run()
+
+    return c.json({ success: true })
+  } catch (err: any) {
+    console.error('[Transfer Initiated]', err.message)
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// POST /webhook/transfer-connected — Employee picked up
+secretaryRoutes.post('/webhook/transfer-connected', async (c) => {
+  try {
+    const { call_log_id, customer_id } = await c.req.json()
+    if (!call_log_id) return c.json({ error: 'call_log_id required' }, 400)
+
+    await c.env.DB.prepare(
+      `UPDATE secretary_call_transfers SET status = 'connected', connected_at = datetime('now') WHERE call_log_id = ? AND status = 'dialing'`
+    ).bind(call_log_id).run()
+
+    return c.json({ success: true })
+  } catch (err: any) {
+    console.error('[Transfer Connected]', err.message)
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// POST /webhook/transfer-failed — Employee didn't pick up or error
+secretaryRoutes.post('/webhook/transfer-failed', async (c) => {
+  try {
+    const { call_log_id, failure_reason } = await c.req.json()
+    if (!call_log_id) return c.json({ error: 'call_log_id required' }, 400)
+
+    await c.env.DB.prepare(
+      `UPDATE secretary_call_transfers SET status = 'failed', failure_reason = ?, ended_at = datetime('now') WHERE call_log_id = ? AND status = 'dialing'`
+    ).bind(failure_reason || 'unknown', call_log_id).run()
+
+    return c.json({ success: true })
+  } catch (err: any) {
+    console.error('[Transfer Failed]', err.message)
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// POST /webhook/transcript-chunk — Streaming transcript chunks from the agent
+secretaryRoutes.post('/webhook/transcript-chunk', async (c) => {
+  try {
+    const { call_log_id, text, speaker, is_post_transfer } = await c.req.json()
+    if (!call_log_id || !text) return c.json({ error: 'call_log_id and text required' }, 400)
+
+    const line = speaker ? `${speaker}: ${text}` : text
+    const column = is_post_transfer ? 'post_transfer_transcript' : 'pre_transfer_transcript'
+
+    // Append to the appropriate transcript column
+    await c.env.DB.prepare(
+      `UPDATE secretary_call_logs SET ${column} = COALESCE(${column}, '') || ? || char(10), call_transcript = COALESCE(call_transcript, '') || ? || char(10) WHERE id = ?`
+    ).bind(line, line, call_log_id).run()
+
+    return c.json({ success: true })
+  } catch (err: any) {
+    console.error('[Transcript Chunk]', err.message)
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// POST /webhook/transcript-heartbeat — STT liveness check during post-transfer
+secretaryRoutes.post('/webhook/transcript-heartbeat', async (c) => {
+  try {
+    const { call_log_id } = await c.req.json()
+    // Just acknowledge — could store last_heartbeat_at if needed for monitoring
+    return c.json({ success: true })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
 })

@@ -138,6 +138,19 @@ agentsRoutes.get('/agent-config/:customerId', async (c) => {
       'SELECT name, phone_or_action, special_notes FROM secretary_directories WHERE config_id=? ORDER BY sort_order'
     ).bind(config.id).all<any>()
     const customer = await c.env.DB.prepare('SELECT name, email, company_name FROM customers WHERE id=?').bind(customerId).first<any>()
+
+    // Fetch transfer-eligible employees if transfer is enabled
+    let employees: any[] = []
+    if (config.transfer_enabled) {
+      const empRows = await c.env.DB.prepare(
+        'SELECT id, name, role, phone_number, available_hours, priority FROM secretary_employees WHERE customer_id = ? AND transfer_enabled = 1 ORDER BY priority ASC'
+      ).bind(customerId).all<any>()
+      employees = (empRows.results || []).map((e: any) => ({
+        ...e,
+        available_hours: e.available_hours ? JSON.parse(e.available_hours) : null,
+      }))
+    }
+
     return c.json({
       customer_id: customerId,
       business_phone: config.business_phone || '',
@@ -148,6 +161,11 @@ agentsRoutes.get('/agent-config/:customerId', async (c) => {
       agent_voice: config.agent_voice || 'alloy',
       directories: dirs.results || [],
       company_name: customer?.company_name || customer?.name || '',
+      transfer_enabled: !!config.transfer_enabled,
+      transfer_announcement: config.transfer_announcement || '',
+      post_transfer_disclosure: config.post_transfer_disclosure || '',
+      record_post_transfer: !!config.record_post_transfer,
+      employees,
     })
   } catch (e: any) { console.error('[AgentConfig]', e.message); return c.json({ error: 'Config not available' }, 500) }
 })
