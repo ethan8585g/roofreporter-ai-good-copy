@@ -262,6 +262,20 @@ export interface RoofSegment {
 
   /** Bounding box of this segment [minLat, minLng, maxLat, maxLng] */
   bounding_box?: number[]
+
+  // ── Phase 0/1 provenance fields ──────────────────────────────
+
+  /** Unique segment ID for provenance tracking */
+  segment_id?: string
+
+  /** Geographic polygon of this segment [[lat, lng], ...] */
+  polygon_lat_lng?: [number, number][]
+
+  /** Which input produced this segment's pitch value */
+  pitch_source?: 'solar_api' | 'ransac_dsm' | 'user_default' | 'engine_default' | 'gemini'
+
+  /** Pitch confidence 0–1 (min of DSM inlier ratio, imagery quality factor, consistency score) */
+  pitch_confidence?: number
 }
 
 // ============================================================
@@ -291,6 +305,17 @@ export interface EdgeMeasurement {
 
   /** Pitch factor used to compute true 3D length */
   pitch_factor?: number
+
+  // ── Phase 0/1 provenance fields ──────────────────────────────
+
+  /** Unique edge ID for provenance tracking */
+  edge_id?: string
+
+  /** Which input produced this edge measurement */
+  source?: 'user_trace' | 'ransac_dsm' | 'auto_inferred'
+
+  /** Measurement confidence 0–1 */
+  confidence?: number
 }
 
 // ============================================================
@@ -885,6 +910,69 @@ export const WB_CERTIFICATIONS = [
   'HomeAdvisor Elite Service',
   'NRCA Member',
 ] as const
+
+// ============================================================
+// PHASE 0/1 — MEASUREMENT PROVENANCE TYPES
+// ============================================================
+
+/** Current engine version stamp — bumped with each phase */
+export const ENGINE_VERSION = '2026.04-phase1'
+
+/**
+ * Per-field measurement provenance.
+ * Keys are field paths (e.g. "total_true_area_sqft", "segments[0].pitch_degrees").
+ * Values describe how the value was produced.
+ */
+export type MeasurementMetadata = Record<string, {
+  source: string
+  confidence: number
+  computed_at: string
+  engine_version: string
+  notes?: string
+}>
+
+/** A facet polygon with per-facet metadata from the reconciler */
+export interface ReconciledFacet {
+  facet_id: string
+  /** Geographic polygon [[lat, lng], ...] */
+  lat_lng_ring: [number, number][]
+  /** Area in sq ft */
+  area_sqft: number
+  pitch_rise: number
+  pitch_source: 'ransac_dsm' | 'solar_api' | 'user_default' | 'engine_default'
+  pitch_confidence: number
+  azimuth_deg: number
+}
+
+/** An edge with DSM-derived classification */
+export interface ReconciledEdge {
+  edge_id: string
+  type: 'ridge' | 'hip' | 'valley' | 'eave' | 'rake' | 'transition'
+  /** Midpoint in pixel coords */
+  midpoint: { x: number; y: number }
+  length_ft: number
+  source: 'user_trace' | 'ransac_dsm' | 'auto_inferred'
+  confidence: number
+  /** Whether the DSM label matched the user's label */
+  classification_agreed: boolean
+}
+
+/** A conflict between user-supplied edge label and DSM-derived classification */
+export interface ReconciliationConflict {
+  edge_id: string
+  user_label: string
+  dsm_label: string
+  dsm_confidence: number
+  /** true if the engine auto-corrected to the DSM label */
+  auto_corrected: boolean
+}
+
+/** Output of the trace reconciler */
+export interface ReconciledGeometry {
+  facets: ReconciledFacet[]
+  edges: ReconciledEdge[]
+  conflicts: ReconciliationConflict[]
+}
 
 // ============================================================
 // Runtime utility functions — re-exported from utils/geo-math.ts
