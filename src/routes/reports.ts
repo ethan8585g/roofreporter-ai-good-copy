@@ -1866,6 +1866,144 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
 })
 
 // ============================================================
+// POST /:orderId/recompute — Re-run engine at current ENGINE_VERSION
+// Archives current report to report_versions, returns new report
+// and list of changed scalar fields.
+// ============================================================
+reportsRoutes.post('/:orderId/recompute', async (c) => {
+  const orderId = c.req.param('orderId')
+  const db = c.env.DB
+
+  // Require admin auth
+  const auth = await validateAdminSession(db, c.req.header('Authorization'))
+  if (!auth) return c.json({ error: 'Unauthorized' }, 401)
+
+  // Get the current report + order
+  const row = await repo.getReportForEnhancement(db, orderId)
+  if (!row) return c.json({ error: 'Order not found' }, 404)
+
+  const rawRow = await repo.getReportRawData(db, orderId)
+  if (!rawRow?.api_response_raw) return c.json({ error: 'No report data to recompute from' }, 404)
+
+  // Parse the stored RoofReport so we can compare fields after recompute
+  let prevReport: RoofReport
+  try {
+    prevReport = JSON.parse(rawRow.api_response_raw) as RoofReport
+  } catch {
+    return c.json({ error: 'Stored report JSON is malformed' }, 500)
+  }
+
+  // Retrieve the stored trace if available
+  const orderRow = await repo.getOrderById(db, orderId)
+  if (!orderRow) return c.json({ error: 'Order not found' }, 404)
+
+  const traceJson = (orderRow as any).roof_trace_json as string | null
+  if (!traceJson) {
+    return c.json({ error: 'No stored trace — cannot recompute without roof_trace_json on order' }, 400)
+  }
+
+  let tracePayload: any
+  try {
+    tracePayload = JSON.parse(traceJson)
+  } catch {
+    return c.json({ error: 'Stored trace JSON is malformed' }, 500)
+  }
+
+  // Re-run the measurement engine
+  const engine = new RoofMeasurementEngine(tracePayload)
+  const traceReport: TraceReport = engine.run()
+
+  // Build a minimal updated RoofReport merging trace results into the previous report
+  const updatedReport: RoofReport = {
+    ...prevReport,
+    total_footprint_sqft: traceReport.key_measurements.total_projected_footprint_ft2,
+    total_true_area_sqft: traceReport.key_measurements.total_roof_area_sloped_ft2,
+    generated_at: new Date().toISOString(),
+  }
+
+  // Diff scalar fields to report what changed
+  const scalarFields: (keyof RoofReport)[] = [
+    'total_footprint_sqft', 'total_footprint_sqm',
+    'total_true_area_sqft', 'total_true_area_sqm',
+    'area_multiplier', 'roof_pitch_degrees', 'roof_pitch_ratio',
+    'roof_azimuth_degrees',
+  ]
+  const changedFields: string[] = []
+  for (const field of scalarFields) {
+    const prev = prevReport[field]
+    const next = updatedReport[field]
+    if (prev !== next) changedFields.push(field)
+  }
+
+  // Persist (saveCompletedReport archives the old row automatically)
+  const html = prevReport ? (await repo.getReportHtml(db, orderId))?.professional_report_html || '' : ''
+  const { ENGINE_VERSION: ev } = await import('../types')
+  await repo.saveCompletedReport(db, orderId, updatedReport, html, ev)
+
+  return c.json({
+    success: true,
+    new_report: updatedReport,
+    changed_fields: changedFields,
+    engine_version: ev,
+  })
+})
+
+// ============================================================
+// GET /:orderId/versions — List report_versions rows with diffs
+// ============================================================
+reportsRoutes.get('/:orderId/versions', async (c) => {
+  const orderId = c.req.param('orderId')
+  const db = c.env.DB
+
+  const auth = await validateAdminSession(db, c.req.header('Authorization'))
+  if (!auth) return c.json({ error: 'Unauthorized' }, 401)
+
+  // Look up the report row to get its id
+  const row = await db.prepare(
+    'SELECT id, engine_version, api_response_raw FROM reports WHERE order_id = ?'
+  ).bind(orderId).first<{ id: number; engine_version: string | null; api_response_raw: string | null }>()
+  if (!row) return c.json({ error: 'Report not found' }, 404)
+
+  const { results: versions } = await repo.getReportVersions(db, row.id)
+
+  // For each version, compute a field-level diff vs. the current report
+  let currentReport: RoofReport | null = null
+  try { if (row.api_response_raw) currentReport = JSON.parse(row.api_response_raw) } catch { /* ignore */ }
+
+  const scalarFields: (keyof RoofReport)[] = [
+    'total_footprint_sqft', 'total_true_area_sqft',
+    'area_multiplier', 'roof_pitch_degrees', 'roof_pitch_ratio',
+  ]
+
+  const versionsWithDiff = versions.map(v => {
+    let diffFields: { field: string; then: unknown; now: unknown }[] = []
+    if (currentReport) {
+      try {
+        const snap = JSON.parse(v.snapshot_json as unknown as string) as RoofReport
+        for (const f of scalarFields) {
+          if (snap[f] !== currentReport[f]) {
+            diffFields.push({ field: f as string, then: snap[f], now: currentReport[f] })
+          }
+        }
+      } catch { /* skip diff if snapshot is malformed */ }
+    }
+    return {
+      id: v.id,
+      engine_version: v.engine_version,
+      created_at: v.created_at,
+      superseded_at: v.superseded_at,
+      changed_fields: diffFields,
+    }
+  })
+
+  return c.json({
+    report_id: row.id,
+    current_engine_version: row.engine_version,
+    versions: versionsWithDiff,
+  })
+})
+
+// ============================================================
 // GET /:orderId/pdf — Print-ready HTML wrapper
 // ============================================================
 reportsRoutes.get('/:orderId/pdf', async (c) => {
