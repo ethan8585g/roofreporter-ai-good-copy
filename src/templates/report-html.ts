@@ -233,31 +233,10 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         <span class="pt-value" style="font-size:12px">${netAreaSF.toLocaleString()} SF</span>
       </div>
 
-      <!-- Slope classifications (only show categories with area) -->
       <div class="pt-row">
-        <span class="pt-label">Predominant Pitch</span>
+        <span class="pt-label">Roof Pitch</span>
         <span class="pt-value">${predominantPitch}</span>
       </div>
-      ${slopeClasses.standard > 0 ? `<div class="pt-row">
-        <span class="pt-label">Standard Slope<span class="pt-sub">(4:12–9:12)</span></span>
-        <span class="pt-value">${slopeClasses.standard.toLocaleString()} SF</span>
-      </div>` : ''}
-      ${slopeClasses.flat > 0 ? `<div class="pt-row">
-        <span class="pt-label">Flat Slope<span class="pt-sub">(0:12–2:12)</span></span>
-        <span class="pt-value">${slopeClasses.flat.toLocaleString()} SF</span>
-      </div>` : ''}
-      ${slopeClasses.low > 0 ? `<div class="pt-row">
-        <span class="pt-label">Low Slope<span class="pt-sub">(2:12–4:12)</span></span>
-        <span class="pt-value">${slopeClasses.low.toLocaleString()} SF</span>
-      </div>` : ''}
-      ${slopeClasses.steep > 0 ? `<div class="pt-row">
-        <span class="pt-label">Steep Slope<span class="pt-sub">(9:12 or greater)</span></span>
-        <span class="pt-value">${slopeClasses.steep.toLocaleString()} SF</span>
-      </div>` : ''}
-      ${slopeClasses.high_roof > 0 ? `<div class="pt-row">
-        <span class="pt-label">High Roof<span class="pt-sub">(over 1 storey)</span></span>
-        <span class="pt-value">${slopeClasses.high_roof.toLocaleString()} SF</span>
-      </div>` : ''}
       <div class="pt-row">
         <span class="pt-label">IWB<span class="pt-sub">(Ice &amp; Water Barrier)</span></span>
         <span class="pt-value">${iwbSqFt} SF</span>
@@ -428,21 +407,18 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         </tbody>
       </table>
 
-      <!-- Area by Pitch Breakdown -->
-      <div style="margin-top:6px;font-size:8px;font-weight:800;color:#333;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Area by Pitch</div>
+      <!-- Roof Pitch -->
+      <div style="margin-top:6px;font-size:8px;font-weight:800;color:#333;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Roof Pitch</div>
       <table style="width:100%;border-collapse:collapse;font-size:7.5px">
         <thead>
           <tr style="background:#f1f5f9;border-bottom:1.5px solid #cbd5e1">
-            <th style="padding:3px 6px;text-align:left;font-weight:700;color:#475569">Pitch Range</th>
+            <th style="padding:3px 6px;text-align:left;font-weight:700;color:#475569">Pitch</th>
             <th style="padding:3px 6px;text-align:right;font-weight:700;color:#475569">Roof Area (SF)</th>
             <th style="padding:3px 6px;text-align:right;font-weight:700;color:#475569">% of Total</th>
           </tr>
         </thead>
         <tbody>
-          ${slopeClasses.flat > 0 ? `<tr style="border-bottom:1px solid #eee"><td style="padding:3px 6px">Flat (0:12\u20132:12)</td><td style="padding:3px 6px;text-align:right;font-weight:600">${slopeClasses.flat.toLocaleString()} SF</td><td style="padding:3px 6px;text-align:right;color:#555">${Math.round(slopeClasses.flat / netAreaSF * 1000) / 10}%</td></tr>` : ''}
-          ${slopeClasses.low > 0 ? `<tr style="border-bottom:1px solid #eee"><td style="padding:3px 6px">Low (2:12\u20134:12)</td><td style="padding:3px 6px;text-align:right;font-weight:600">${slopeClasses.low.toLocaleString()} SF</td><td style="padding:3px 6px;text-align:right;color:#555">${Math.round(slopeClasses.low / netAreaSF * 1000) / 10}%</td></tr>` : ''}
-          ${slopeClasses.standard > 0 ? `<tr style="border-bottom:1px solid #eee;background:#f0fdf4"><td style="padding:3px 6px;font-weight:600;color:#166534">Standard (4:12\u20139:12)</td><td style="padding:3px 6px;text-align:right;font-weight:700;color:#166534">${slopeClasses.standard.toLocaleString()} SF</td><td style="padding:3px 6px;text-align:right;color:#166534;font-weight:600">${Math.round(slopeClasses.standard / netAreaSF * 1000) / 10}%</td></tr>` : ''}
-          ${slopeClasses.steep > 0 ? `<tr style="border-bottom:1px solid #eee;background:#fef2f2"><td style="padding:3px 6px;font-weight:600;color:#991b1b">Steep (9:12+)</td><td style="padding:3px 6px;text-align:right;font-weight:700;color:#991b1b">${slopeClasses.steep.toLocaleString()} SF</td><td style="padding:3px 6px;text-align:right;color:#991b1b;font-weight:600">${Math.round(slopeClasses.steep / netAreaSF * 1000) / 10}%</td></tr>` : ''}
+          <tr style="background:#f0fdf4"><td style="padding:3px 6px;font-weight:600;color:#166534">${predominantPitch}</td><td style="padding:3px 6px;text-align:right;font-weight:700;color:#166534">${netAreaSF.toLocaleString()} SF</td><td style="padding:3px 6px;text-align:right;color:#166534;font-weight:600">100%</td></tr>
         </tbody>
       </table>
     </div>
@@ -561,59 +537,24 @@ ${report.segments.length >= 2 ? `
     <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">Roof plane wireframe with facet identification numbers. Pitch values mapped per plane below.</div>
   </div>
 
-  <!-- Area by Pitch Table (Full Width) -->
+  <!-- Roof Pitch Table (Full Width) -->
   <div style="padding:0 28px;margin-bottom:10px">
-    <div style="font-size:11px;font-weight:800;color:#333;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;border-bottom:2px solid #4338ca;padding-bottom:4px">Area by Pitch</div>
+    <div style="font-size:11px;font-weight:800;color:#333;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;border-bottom:2px solid #4338ca;padding-bottom:4px">Roof Pitch</div>
     <table style="width:100%;border-collapse:collapse;font-size:9px">
       <thead>
         <tr style="background:#1e1b4b;color:#fff">
-          <th style="padding:6px 10px;text-align:left;font-size:8px;font-weight:700">Pitch Range</th>
-          <th style="padding:6px 10px;text-align:left;font-size:8px;font-weight:700">Classification</th>
+          <th style="padding:6px 10px;text-align:left;font-size:8px;font-weight:700">Pitch</th>
           <th style="padding:6px 10px;text-align:right;font-size:8px;font-weight:700">Roof Area (SF)</th>
-          <th style="padding:6px 10px;text-align:right;font-size:8px;font-weight:700">Area (SF)</th>
           <th style="padding:6px 10px;text-align:right;font-size:8px;font-weight:700">% of Total</th>
           <th style="padding:6px 10px;text-align:center;font-size:8px;font-weight:700">Multiplier</th>
         </tr>
       </thead>
       <tbody>
-        ${slopeClasses.flat > 0 ? `<tr style="border-bottom:1px solid #eee">
-          <td style="padding:5px 10px;font-weight:600">0:12 \u2013 2:12</td>
-          <td style="padding:5px 10px"><span style="padding:2px 8px;border-radius:3px;font-size:7.5px;font-weight:700;background:#dbeafe;color:#1d4ed8">FLAT</span></td>
-          <td style="padding:5px 10px;text-align:right;font-weight:700">${slopeClasses.flat.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right">${slopeClasses.flat.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;font-weight:600">${Math.round(slopeClasses.flat / netAreaSF * 1000) / 10}%</td>
-          <td style="padding:5px 10px;text-align:center;color:#555">1.0000\u20131.0154</td>
-        </tr>` : ''}
-        ${slopeClasses.low > 0 ? `<tr style="border-bottom:1px solid #eee;background:#fafafa">
-          <td style="padding:5px 10px;font-weight:600">2:12 \u2013 4:12</td>
-          <td style="padding:5px 10px"><span style="padding:2px 8px;border-radius:3px;font-size:7.5px;font-weight:700;background:#fef3c7;color:#92400e">LOW</span></td>
-          <td style="padding:5px 10px;text-align:right;font-weight:700">${slopeClasses.low.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right">${slopeClasses.low.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;font-weight:600">${Math.round(slopeClasses.low / netAreaSF * 1000) / 10}%</td>
-          <td style="padding:5px 10px;text-align:center;color:#555">1.0154\u20131.0541</td>
-        </tr>` : ''}
-        ${slopeClasses.standard > 0 ? `<tr style="border-bottom:1px solid #eee;background:#f0fdf4">
-          <td style="padding:5px 10px;font-weight:700;color:#166534">4:12 \u2013 9:12</td>
-          <td style="padding:5px 10px"><span style="padding:2px 8px;border-radius:3px;font-size:7.5px;font-weight:700;background:#dcfce7;color:#166534">STANDARD</span></td>
-          <td style="padding:5px 10px;text-align:right;font-weight:800;color:#166534">${slopeClasses.standard.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;color:#166534">${slopeClasses.standard.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;font-weight:700;color:#166534">${Math.round(slopeClasses.standard / netAreaSF * 1000) / 10}%</td>
-          <td style="padding:5px 10px;text-align:center;color:#166534;font-weight:600">1.0541\u20131.2500</td>
-        </tr>` : ''}
-        ${slopeClasses.steep > 0 ? `<tr style="border-bottom:1px solid #eee;background:#fef2f2">
-          <td style="padding:5px 10px;font-weight:700;color:#991b1b">9:12+</td>
-          <td style="padding:5px 10px"><span style="padding:2px 8px;border-radius:3px;font-size:7.5px;font-weight:700;background:#fecaca;color:#991b1b">STEEP</span></td>
-          <td style="padding:5px 10px;text-align:right;font-weight:800;color:#991b1b">${slopeClasses.steep.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;color:#991b1b">${slopeClasses.steep.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;font-weight:700;color:#991b1b">${Math.round(slopeClasses.steep / netAreaSF * 1000) / 10}%</td>
-          <td style="padding:5px 10px;text-align:center;color:#991b1b;font-weight:600">1.2500+</td>
-        </tr>` : ''}
-        <tr style="background:#eef2ff;font-weight:800;border-top:2px solid #4338ca">
-          <td colspan="2" style="padding:5px 10px;font-size:9px;color:#312e81">TOTAL</td>
-          <td style="padding:5px 10px;text-align:right;font-size:10px;color:#312e81">${netAreaSF.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;color:#312e81">${report.total_true_area_sqft.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;color:#312e81">100%</td>
-          <td style="padding:5px 10px;text-align:center;color:#312e81">${report.area_multiplier.toFixed(4)}</td>
+        <tr style="background:#f0fdf4">
+          <td style="padding:5px 10px;font-weight:700;color:#166534">${predominantPitch}</td>
+          <td style="padding:5px 10px;text-align:right;font-weight:800;color:#166534">${netAreaSF.toLocaleString()} SF</td>
+          <td style="padding:5px 10px;text-align:right;font-weight:700;color:#166534">100%</td>
+          <td style="padding:5px 10px;text-align:center;color:#166534;font-weight:600">${report.area_multiplier.toFixed(4)}</td>
         </tr>
       </tbody>
     </table>
