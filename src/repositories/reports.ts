@@ -3,7 +3,8 @@
 // Typed query functions replacing raw SQL in route handlers.
 // ============================================================
 
-import type { RoofReport, MaterialEstimate } from '../types'
+import type { RoofReport, MaterialEstimate, MeasurementMetadata } from '../types'
+import { ENGINE_VERSION } from '../types'
 
 /** Minimal row types for SELECT results */
 export type ReportRow = {
@@ -143,8 +144,28 @@ export async function upsertGeneratingState(db: D1Database, orderId: number | st
 
 export async function saveCompletedReport(
   db: D1Database, orderId: number | string,
-  reportData: RoofReport, html: string, version: string
+  reportData: RoofReport, html: string, version: string,
+  measurementMetadata?: MeasurementMetadata | null,
+  facetPolygonsGeo?: unknown[] | null,
+  reviewStatus?: string | null
 ) {
+  // Archive the current row to report_versions before overwriting
+  const existing = await db.prepare(
+    'SELECT id, api_response_raw, engine_version FROM reports WHERE order_id = ?'
+  ).bind(orderId).first<{ id: number; api_response_raw: string | null; engine_version: string | null }>()
+
+  if (existing?.id && existing.api_response_raw) {
+    await db.prepare(`
+      INSERT INTO report_versions (report_id, engine_version, snapshot_json, created_at)
+      VALUES (?, ?, ?, ?)
+    `).bind(
+      existing.id,
+      existing.engine_version || 'legacy',
+      existing.api_response_raw,
+      Math.floor(Date.now() / 1000)
+    ).run()
+  }
+
   const es = reportData.edge_summary || {} as any
   const m = reportData.materials || {} as any
   const satUrl = reportData.imagery?.satellite_overhead_url || reportData.imagery?.satellite_url || null
@@ -175,6 +196,11 @@ export async function saveCompletedReport(
     satUrl,
     reportData.vision_findings ? JSON.stringify(reportData.vision_findings) : null,
     reportData.solar_panel_layout ? JSON.stringify(reportData.solar_panel_layout) : null,
+    // Phase 0 provenance columns
+    measurementMetadata ? JSON.stringify(measurementMetadata) : null,
+    facetPolygonsGeo ? JSON.stringify(facetPolygonsGeo) : null,
+    ENGINE_VERSION,
+    reviewStatus || null,
     orderId
   ]
 
@@ -210,6 +236,8 @@ export async function saveCompletedReport(
       satellite_image_url = ?,
       vision_findings_json = ?,
       solar_panel_layout = ?,
+      measurement_metadata = ?, facet_polygons_geo = ?,
+      engine_version = ?, review_status = ?,
       status = 'completed', generation_completed_at = datetime('now'), updated_at = datetime('now')
     WHERE order_id = ?
   `).bind(...bindValues).run()
@@ -304,6 +332,23 @@ export async function saveEnhancedReport(
   enhancedHtml: string, enhancedRawJson: string,
   version: string, processingTimeMs: number
 ) {
+  // Archive the current row to report_versions before overwriting
+  const existing = await db.prepare(
+    'SELECT id, api_response_raw, engine_version FROM reports WHERE order_id = ?'
+  ).bind(orderId).first<{ id: number; api_response_raw: string | null; engine_version: string | null }>()
+
+  if (existing?.id && existing.api_response_raw) {
+    await db.prepare(`
+      INSERT INTO report_versions (report_id, engine_version, snapshot_json, created_at)
+      VALUES (?, ?, ?, ?)
+    `).bind(
+      existing.id,
+      existing.engine_version || 'legacy',
+      existing.api_response_raw,
+      Math.floor(Date.now() / 1000)
+    ).run()
+  }
+
   // Save enhanced report and ALSO overwrite the primary report HTML
   // so the user sees the enhanced version immediately
   await db.prepare(`
@@ -317,11 +362,13 @@ export async function saveEnhancedReport(
       professional_report_html = ?,
       api_response_raw = ?,
       report_version = ?,
+      engine_version = ?,
       updated_at = datetime('now')
     WHERE order_id = ?
   `).bind(
     enhancedHtml, enhancedRawJson, version, processingTimeMs,
     enhancedHtml, enhancedRawJson, 'enhanced-' + version,
+    ENGINE_VERSION,
     orderId
   ).run()
 }
@@ -406,4 +453,38 @@ export async function getAIImageryStatus(db: D1Database, orderId: number | strin
     SELECT ai_imagery_status, ai_imagery_error, ai_generated_imagery_json
     FROM reports WHERE order_id = ?
   `).bind(orderId).first<{ ai_imagery_status: string | null; ai_imagery_error: string | null; ai_generated_imagery_json: string | null }>()
+}
+
+// ============================================================
+// PHASE 0 — VERSION HISTORY
+// ============================================================
+
+/** List all archived versions for a report */
+export async function getReportVersions(db: D1Database, reportId: number) {
+  return db.prepare(`
+    SELECT id, report_id, engine_version, created_at, superseded_at
+    FROM report_versions
+    WHERE report_id = ?
+    ORDER BY created_at DESC
+  `).bind(reportId).all<{
+    id: number; report_id: number; engine_version: string;
+    created_at: number; superseded_at: number | null
+  }>()
+}
+
+/** Get a single version snapshot */
+export async function getReportVersionSnapshot(db: D1Database, versionId: number) {
+  return db.prepare(
+    'SELECT * FROM report_versions WHERE id = ?'
+  ).bind(versionId).first<{
+    id: number; report_id: number; engine_version: string;
+    snapshot_json: string; created_at: number; superseded_at: number | null
+  }>()
+}
+
+/** Mark a version as superseded (used by recompute) */
+export async function markVersionSuperseded(db: D1Database, versionId: number) {
+  await db.prepare(`
+    UPDATE report_versions SET superseded_at = ? WHERE id = ?
+  `).bind(Math.floor(Date.now() / 1000), versionId).run()
 }
