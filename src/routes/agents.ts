@@ -145,6 +145,7 @@ agentsRoutes.get('/agent-config/:customerId', async (c) => {
       common_qa: config.common_qa || '',
       general_notes: config.general_notes || '',
       agent_name: config.agent_name || 'Sarah',
+      agent_voice: config.agent_voice || 'alloy',
       directories: dirs.results || [],
       company_name: customer?.company_name || customer?.name || '',
     })

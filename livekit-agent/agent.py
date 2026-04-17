@@ -128,7 +128,7 @@ async def get_agent_config(ctx: JobContext) -> dict:
         try:
             async with aiohttp.ClientSession() as session:
                 # Use the internal config endpoint (by customer_id)
-                url = f"{api_url}/api/secretary/agent-config/{customer_id}"
+                url = f"{api_url}/api/agents/agent-config/{customer_id}"
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                     if resp.status == 200:
                         data = await resp.json()

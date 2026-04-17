@@ -55,7 +55,7 @@ async def fetch_customer_config(customer_id: int) -> Optional[dict]:
     Returns dict with: greeting_script, common_qa, general_notes, directories, etc.
     Returns None on failure (agent will use fallback defaults).
     """
-    url = f"{API_BASE}/api/secretary/agent-config/{customer_id}"
+    url = f"{API_BASE}/api/agents/agent-config/{customer_id}"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
@@ -257,10 +257,24 @@ class RooferSecretaryAgent(Agent):
         self._directory_routed = ""
         self._messages_taken: list[dict] = []
         self._outcome = "answered"
+        self._transcript_lines: list[str] = []
 
         super().__init__(
             instructions=build_system_prompt(config)
         )
+
+    def on_user_message(self, message):
+        """Capture every caller utterance for transcript."""
+        if message and message.text:
+            self._transcript_lines.append(f"Caller: {message.text}")
+        return super().on_user_message(message)
+
+    def on_agent_message(self, message):
+        """Capture every agent response for transcript."""
+        if message and message.text:
+            agent_name = self._config.get("agent_name", "Sarah")
+            self._transcript_lines.append(f"{agent_name}: {message.text}")
+        return super().on_agent_message(message)
 
     async def on_enter(self):
         """Called when the agent enters the session — greet the caller."""
@@ -454,6 +468,7 @@ async def run_secretary_session(ctx: JobContext, vad):
             )
 
             if customer_id:
+                transcript = "\n".join(agent._transcript_lines) if agent._transcript_lines else ""
                 asyncio.create_task(
                     log_call_complete(
                         customer_id=customer_id,
@@ -462,7 +477,7 @@ async def run_secretary_session(ctx: JobContext, vad):
                         duration_seconds=duration,
                         directory_routed=agent._directory_routed,
                         summary=summary,
-                        transcript="",
+                        transcript=transcript,
                         outcome=agent._outcome,
                         room_id=ctx.room.name,
                     )
