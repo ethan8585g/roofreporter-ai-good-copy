@@ -20,6 +20,9 @@
 // OUTPUT: Full measurement report — areas, lengths, squares, materials
 // ============================================================
 
+import type { ReconciledGeometry, MeasurementMetadata } from '../types'
+import { ENGINE_VERSION } from '../types'
+
 // ═══════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════
@@ -111,6 +114,18 @@ export interface TracePayload {
   small_corner_threshold_ft?: number
   // Optional external footprint for engine vs source variance cross-check
   cross_check?: { source: string; footprint_ft2: number }
+  /**
+   * Phase 1: RANSAC + trace reconciliation output.
+   * When present, faceAreas() populates faces directly from reconciled_geometry.facets
+   * with per-facet pitch from RANSAC planes, bypassing the proportional splitter.
+   * When absent, current behavior is preserved (no regression).
+   */
+  reconciled_geometry?: ReconciledGeometry
+  /**
+   * Imagery quality — used to set per-facet confidence cap.
+   * HIGH=1.0, MEDIUM=0.75, BASE=0.4
+   */
+  imagery_quality?: 'HIGH' | 'MEDIUM' | 'BASE'
 }
 
 export interface EaveEdge {
@@ -152,13 +167,16 @@ export interface FaceDetail {
   sloped_area_ft2: number
   squares: number
   // Face polygon vertices in lat/lng — exposed for downstream
-  // consumers (e.g. solar panel layout). May be omitted when the
-  // engine used proportional splitting rather than geometric faces.
+  // consumers. May be omitted when the engine used proportional
+  // splitting rather than geometric faces.
   polygon?: { lat: number; lng: number }[]
   // Approximate azimuth (compass bearing of the downslope normal,
   // 0 = N, 90 = E, 180 = S). Derived from the face polygon's
   // principal axis; null when undetermined.
   azimuth_deg?: number | null
+  // Phase 1 provenance — populated when reconciled_geometry is used
+  pitch_source?: 'ransac_dsm' | 'solar_api' | 'user_default' | 'engine_default' | 'gemini'
+  pitch_confidence?: number  // 0–1
 }
 
 export interface TraceMaterialEstimate {
@@ -259,6 +277,10 @@ export interface TraceReport {
   }
   cross_check?: CrossCheck
   geometry_warnings?: string[]
+  // Phase 0/1 provenance
+  measurement_metadata?: MeasurementMetadata
+  reconciliation_conflicts?: import('../types').ReconciliationConflict[]
+  engine_version?: string
   linear_measurements: {
     eaves_total_ft: number
     ridges_total_ft: number
@@ -925,6 +947,10 @@ export class RoofMeasurementEngine {
   private rakesCart: { id: string; pts: CartesianPt[]; pitch: number | null; slope_ref: string }[]
   private facesCart: { face_id: string; poly: CartesianPt[]; pitch: number; label: string }[]
 
+  // Phase 1: reconciled geometry from trace-reconciler.ts
+  private reconciledGeometry: ReconciledGeometry | null = null
+  private imageryQuality: 'HIGH' | 'MEDIUM' | 'BASE' | null = null
+
   constructor(payload: TracePayload) {
     this.address    = payload.address || 'Unknown Address'
     this.homeowner  = payload.homeowner || 'Unknown'
@@ -943,6 +969,10 @@ export class RoofMeasurementEngine {
     this.crossCheckSource = payload.cross_check && payload.cross_check.footprint_ft2 > 0
       ? { source: payload.cross_check.source, footprint_ft2: payload.cross_check.footprint_ft2 }
       : null
+
+    // Phase 1: store reconciled geometry for use in faceAreas()
+    this.reconciledGeometry = payload.reconciled_geometry || null
+    this.imageryQuality = payload.imagery_quality || null
 
     // Normalise default slope (rise:12 → radians)
     this.defThetaRad = pitchAngleRad(this.defPitch)
@@ -1302,6 +1332,41 @@ export class RoofMeasurementEngine {
 
   faceAreas(): FaceDetail[] {
     const results: FaceDetail[] = []
+
+    // ── Phase 1: reconciled geometry fast-path ──────────
+    // When reconciled_geometry is present, populate faces directly from
+    // RANSAC facets with per-facet pitch. This bypasses the proportional
+    // splitter entirely (lines 1369-1374 never reached on this path).
+    if (this.reconciledGeometry && this.reconciledGeometry.facets.length > 0) {
+      const qualityFactor = this.imageryQuality === 'HIGH' ? 1.0
+        : this.imageryQuality === 'MEDIUM' ? 0.75 : 0.4
+
+      for (const facet of this.reconciledGeometry.facets) {
+        const rise = facet.pitch_rise
+        const projFt2 = facet.area_sqft
+        const sloped = projFt2 / Math.cos(Math.atan(rise / 12))
+        const pitchConsistency = 1 - Math.min(0.3, Math.abs(rise - this.defPitch) / 24)
+        const pitchConf = Math.min(facet.pitch_confidence, qualityFactor, pitchConsistency)
+
+        results.push({
+          face_id:            facet.facet_id,
+          pitch_rise:         round(rise, 1),
+          pitch_label:        `${round(rise, 1)}:12`,
+          pitch_angle_deg:    round(Math.atan(rise / 12) * 180 / Math.PI, 1),
+          slope_factor:       round(1 / Math.cos(Math.atan(rise / 12)), 4),
+          projected_area_ft2: round(projFt2, 1),
+          sloped_area_ft2:    round(sloped, 1),
+          squares:            round(sloped / SQFT_PER_SQUARE, 3),
+          polygon:            facet.lat_lng_ring.map(([lat, lng]) => ({ lat, lng })),
+          azimuth_deg:        facet.azimuth_deg,
+          // Phase 1 provenance fields surfaced via FaceDetail extension (see below)
+          pitch_source:       facet.pitch_source,
+          pitch_confidence:   round(pitchConf, 3),
+        } as FaceDetail & { pitch_source: string; pitch_confidence: number })
+      }
+
+      return results
+    }
 
     if (this.facesCart.length > 0) {
       for (const face of this.facesCart) {
@@ -1835,6 +1900,37 @@ export class RoofMeasurementEngine {
       }
     }
 
+    // ── Phase 0/1: measurement provenance metadata ─────────────
+    const computedAt = new Date().toISOString()
+    const usingReconciled = !!(this.reconciledGeometry && this.reconciledGeometry.facets.length > 0)
+    const measurementMetadata: MeasurementMetadata = {
+      'total_footprint_sqft': {
+        source: 'user_trace',
+        confidence: 0.95,
+        computed_at: computedAt,
+        engine_version: ENGINE_VERSION,
+      },
+      'total_true_area_sqft': {
+        source: usingReconciled ? 'ransac_dsm' : 'user_trace',
+        confidence: usingReconciled
+          ? (this.imageryQuality === 'HIGH' ? 0.95 : this.imageryQuality === 'MEDIUM' ? 0.80 : 0.60)
+          : 0.85,
+        computed_at: computedAt,
+        engine_version: ENGINE_VERSION,
+        notes: usingReconciled
+          ? 'Per-facet area from RANSAC plane segments; pitch from DSM plane fit'
+          : 'Single-pitch trace path; per-facet area from proportional or geometric split',
+      },
+      'roof_pitch_degrees': {
+        source: usingReconciled ? 'ransac_dsm' : 'user_trace',
+        confidence: usingReconciled
+          ? (this.imageryQuality === 'HIGH' ? 0.92 : 0.75)
+          : 0.70,
+        computed_at: computedAt,
+        engine_version: ENGINE_VERSION,
+      },
+    }
+
     // Pitch multiplier advisory
     const domMultiplier = slopeFactor(domPitch)
     const isLookup = Math.floor(domPitch) === domPitch && domPitch >= 0 && domPitch <= 24
@@ -1894,6 +1990,10 @@ export class RoofMeasurementEngine {
       advisory_notes:      notes,
       cross_check:         crossCheck,
       geometry_warnings:   geometryWarnings.length > 0 ? geometryWarnings : undefined,
+      // Phase 0/1 provenance
+      measurement_metadata: measurementMetadata,
+      reconciliation_conflicts: this.reconciledGeometry?.conflicts || [],
+      engine_version: ENGINE_VERSION,
     }
   }
 }
