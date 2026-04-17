@@ -813,6 +813,7 @@ async def run_secretary_session(ctx: JobContext, vad):
 
     # Track which SIP participants are in the room
     sip_participants = set()
+    _finalize_done = asyncio.Event()
     for p in ctx.room.remote_participants.values():
         if p.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
             sip_participants.add(p.identity)
@@ -841,52 +842,76 @@ async def run_secretary_session(ctx: JobContext, vad):
                 logger.info("Post-transfer call ended — all parties disconnected")
                 agent._stop_heartbeat()
                 agent._is_ghost_mode = False
-                _finalize_call(agent, customer_id, caller_phone, call_start, ctx)
+                asyncio.ensure_future(
+                    _finalize_call(agent, customer_id, caller_phone, call_start, ctx)
+                )
             return
 
         # Normal (non-transfer) call end — caller hung up
         if not agent._is_ghost_mode:
-            _finalize_call(agent, customer_id, caller_phone, call_start, ctx)
+            asyncio.ensure_future(
+                _finalize_call(agent, customer_id, caller_phone, call_start, ctx)
+            )
 
-    def _finalize_call(agent, customer_id, caller_phone, call_start, ctx):
-        duration = int(time.time() - call_start)
-        summary = "; ".join(agent._call_summary_parts) if agent._call_summary_parts else "General inquiry"
-        transcript = "\n".join(agent._transcript_lines) if agent._transcript_lines else ""
+    async def _finalize_call(agent, customer_id, caller_phone, call_start, ctx):
+        try:
+            duration = int(time.time() - call_start)
+            summary = "; ".join(agent._call_summary_parts) if agent._call_summary_parts else "General inquiry"
+            transcript = "\n".join(agent._transcript_lines) if agent._transcript_lines else ""
 
-        logger.info(
-            f"Call finalized: room={ctx.room.name}, duration={duration}s, "
-            f"caller={caller_phone}, outcome={agent._outcome}"
-        )
+            logger.info(
+                f"Call finalized: room={ctx.room.name}, duration={duration}s, "
+                f"caller={caller_phone}, outcome={agent._outcome}"
+            )
 
-        if customer_id and agent._call_log_id:
-            pre_transcript = "\n".join(agent._pre_transfer_lines) if agent._pre_transfer_lines else ""
-            post_transcript = "\n".join(agent._post_transfer_lines) if agent._post_transfer_lines else ""
+            if customer_id and agent._call_log_id:
+                pre_transcript = "\n".join(agent._pre_transfer_lines) if agent._pre_transfer_lines else ""
+                post_transcript = "\n".join(agent._post_transfer_lines) if agent._post_transfer_lines else ""
 
-            # Update the existing call log with final data
-            asyncio.create_task(_api_post("/api/secretary/webhook/call-complete", {
-                "customer_id": customer_id,
-                "caller_phone": caller_phone,
-                "caller_name": agent._caller_name or "Unknown",
-                "duration_seconds": duration,
-                "directory_routed": agent._directory_routed,
-                "summary": summary,
-                "transcript": transcript,
-                "outcome": agent._outcome,
-                "room_id": ctx.room.name,
-                "call_log_id": agent._call_log_id,
-                "pre_transfer_transcript": pre_transcript,
-                "post_transfer_transcript": post_transcript,
-                "transfer_happened": agent._is_post_transfer,
-            }))
-        elif customer_id:
-            asyncio.create_task(log_call_complete(
-                customer_id=customer_id,
-                caller_phone=caller_phone,
-                caller_name=agent._caller_name or "Unknown",
-                duration_seconds=duration,
-                directory_routed=agent._directory_routed,
-                summary=summary,
-                transcript=transcript,
-                outcome=agent._outcome,
-                room_id=ctx.room.name,
-            ))
+                # Update the existing call log with final data
+                result = await _api_post("/api/secretary/webhook/call-complete", {
+                    "customer_id": customer_id,
+                    "caller_phone": caller_phone,
+                    "caller_name": agent._caller_name or "Unknown",
+                    "duration_seconds": duration,
+                    "directory_routed": agent._directory_routed,
+                    "summary": summary,
+                    "transcript": transcript,
+                    "outcome": agent._outcome,
+                    "room_id": ctx.room.name,
+                    "call_log_id": agent._call_log_id,
+                    "pre_transfer_transcript": pre_transcript,
+                    "post_transfer_transcript": post_transcript,
+                    "transfer_happened": agent._is_post_transfer,
+                })
+                if result:
+                    logger.info(f"Call log updated: id={agent._call_log_id}")
+                else:
+                    logger.error(f"FAILED to update call log: id={agent._call_log_id}, room={ctx.room.name}")
+            elif customer_id:
+                result = await log_call_complete(
+                    customer_id=customer_id,
+                    caller_phone=caller_phone,
+                    caller_name=agent._caller_name or "Unknown",
+                    duration_seconds=duration,
+                    directory_routed=agent._directory_routed,
+                    summary=summary,
+                    transcript=transcript,
+                    outcome=agent._outcome,
+                    room_id=ctx.room.name,
+                )
+                if result:
+                    logger.info(f"Call log created at finalize: id={result}")
+                else:
+                    logger.error(f"FAILED to create call log at finalize: room={ctx.room.name}")
+        except Exception as e:
+            logger.error(f"Exception in _finalize_call: {e}")
+        finally:
+            _finalize_done.set()
+
+    # Keep session alive until the call is finalized and logged
+    # Without this, run_secretary_session returns immediately and the
+    # LiveKit framework may tear down the event loop before the
+    # finalize webhook completes, causing call logs to be lost.
+    await _finalize_done.wait()
+    logger.info(f"Secretary session complete: room={ctx.room.name}")
