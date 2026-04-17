@@ -455,10 +455,10 @@ async function executeAssistantTool(
     case 'get_crm_summary': {
       const [customers, invoices] = await Promise.all([
         db.prepare(
-          'SELECT COUNT(*) as total FROM crm_customers WHERE master_company_id = (SELECT id FROM master_companies WHERE owner_customer_id = ?)'
+          'SELECT COUNT(*) as total FROM crm_customers WHERE owner_id = ?'
         ).bind(customer.customer_id).first<any>().catch(() => null),
         db.prepare(
-          "SELECT COUNT(*) as total, COALESCE(SUM(CASE WHEN status IN ('sent','viewed','overdue') THEN total ELSE 0 END), 0) as owing FROM crm_invoices WHERE master_company_id = (SELECT id FROM master_companies WHERE owner_customer_id = ?)"
+          "SELECT COUNT(*) as total, COALESCE(SUM(CASE WHEN status IN ('sent','viewed','overdue') THEN total ELSE 0 END), 0) as owing FROM crm_invoices WHERE owner_id = ?"
         ).bind(customer.customer_id).first<any>().catch(() => null),
       ])
       return {
@@ -1018,8 +1018,8 @@ roverRoutes.post('/assistant/stream', async (c) => {
     // Gather context — same parallel queries as /assistant
     const [ordersResult, crmCustResult, crmInvResult, secResult, teamResult] = await Promise.all([
       c.env.DB.prepare("SELECT COUNT(*) as total, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed FROM orders WHERE customer_id = ?").bind(customer.customer_id).first().catch(() => null),
-      c.env.DB.prepare('SELECT COUNT(*) as total FROM crm_customers WHERE master_company_id = (SELECT id FROM master_companies WHERE owner_customer_id = ?)').bind(customer.customer_id).first().catch(() => null),
-      c.env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN status IN ('sent','viewed','overdue') THEN total ELSE 0 END), 0) as owing FROM crm_invoices WHERE master_company_id = (SELECT id FROM master_companies WHERE owner_customer_id = ?)").bind(customer.customer_id).first().catch(() => null),
+      c.env.DB.prepare('SELECT COUNT(*) as total FROM crm_customers WHERE owner_id = ?').bind(customer.customer_id).first().catch(() => null),
+      c.env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN status IN ('sent','viewed','overdue') THEN total ELSE 0 END), 0) as owing FROM crm_invoices WHERE owner_id = ?").bind(customer.customer_id).first().catch(() => null),
       c.env.DB.prepare("SELECT COUNT(*) as active FROM secretary_subscriptions WHERE customer_id = ? AND status = 'active'").bind(customer.customer_id).first().catch(() => null),
       c.env.DB.prepare("SELECT COUNT(*) as total FROM team_members WHERE owner_customer_id = ? AND status = 'active'").bind(customer.customer_id).first().catch(() => null),
     ])
@@ -1530,8 +1530,8 @@ roverRoutes.post('/assistant', async (c) => {
     // Gather customer context from DB (parallel queries)
     const [ordersResult, crmCustResult, crmInvResult, secResult, teamResult] = await Promise.all([
       c.env.DB.prepare('SELECT COUNT(*) as total, SUM(CASE WHEN status = \'completed\' THEN 1 ELSE 0 END) as completed FROM orders WHERE customer_id = ?').bind(customer.customer_id).first().catch(() => null),
-      c.env.DB.prepare('SELECT COUNT(*) as total FROM crm_customers WHERE master_company_id = (SELECT id FROM master_companies WHERE owner_customer_id = ?)').bind(customer.customer_id).first().catch(() => null),
-      c.env.DB.prepare(`SELECT COALESCE(SUM(CASE WHEN status IN ('sent','viewed','overdue') THEN total ELSE 0 END), 0) as owing FROM crm_invoices WHERE master_company_id = (SELECT id FROM master_companies WHERE owner_customer_id = ?)`).bind(customer.customer_id).first().catch(() => null),
+      c.env.DB.prepare('SELECT COUNT(*) as total FROM crm_customers WHERE owner_id = ?').bind(customer.customer_id).first().catch(() => null),
+      c.env.DB.prepare(`SELECT COALESCE(SUM(CASE WHEN status IN ('sent','viewed','overdue') THEN total ELSE 0 END), 0) as owing FROM crm_invoices WHERE owner_id = ?`).bind(customer.customer_id).first().catch(() => null),
       c.env.DB.prepare('SELECT COUNT(*) as active FROM secretary_subscriptions WHERE customer_id = ? AND status = \'active\'').bind(customer.customer_id).first().catch(() => null),
       c.env.DB.prepare('SELECT COUNT(*) as total FROM team_members WHERE owner_customer_id = ? AND status = \'active\'').bind(customer.customer_id).first().catch(() => null),
     ])

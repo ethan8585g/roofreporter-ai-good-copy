@@ -4307,6 +4307,7 @@ window.showCreateInvoiceModal = function() {
           '</div>' +
           '<div id="inv-cust-address" style="display:none" class="mt-2 text-xs text-gray-500"><i class="fas fa-map-marker-alt text-green-500 mr-1"></i><span id="inv-cust-address-text"></span></div>' +
           '<input type="hidden" id="inv-customer" value="">' +
+          '<input type="hidden" id="inv-customer-source" value="">' +
         '</div>' +
 
         '<div><label class="block text-xs font-medium text-gray-500 mb-1">Due (days)</label>' +
@@ -4406,6 +4407,8 @@ window.invSelectCustomer = function(id) {
   if (!c) return;
   var hiddenInput = document.getElementById('inv-customer');
   if (hiddenInput) hiddenInput.value = id;
+  var sourceInput = document.getElementById('inv-customer-source');
+  if (sourceInput) sourceInput.value = c.source === 'crm' ? 'crm' : 'portal';
   var search = document.getElementById('inv-customer-search');
   if (search) search.value = (c.name || c.email) + (c.company_name ? ' \xb7 ' + c.company_name : '');
   var drop = document.getElementById('inv-cust-drop');
@@ -4427,6 +4430,8 @@ window.invSelectCustomer = function(id) {
 window.invClearCustomer = function() {
   var hiddenInput = document.getElementById('inv-customer');
   if (hiddenInput) hiddenInput.value = '';
+  var sourceInput = document.getElementById('inv-customer-source');
+  if (sourceInput) sourceInput.value = '';
   var search = document.getElementById('inv-customer-search');
   if (search) search.value = '';
   var clearBtn = document.getElementById('inv-cust-clear');
@@ -4514,10 +4519,16 @@ window.createInvoice = async function() {
   var discountAmount = (discountType !== 'none') ? (parseFloat((document.getElementById('inv-discount-amount') || {}).value) || 0) : 0;
 
   try {
+    var isCrm = (document.getElementById('inv-customer-source') || {}).value === 'crm';
     var resp = await saFetch('/api/invoices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customer_id: parseInt(customerId), items: items, tax_rate: taxRate, due_days: dueDays, notes: notes, discount_amount: discountAmount, discount_type: discountType !== 'none' ? discountType : 'fixed' })
+      body: JSON.stringify({
+        customer_id: isCrm ? null : parseInt(customerId),
+        crm_customer_id: isCrm ? parseInt(customerId) : null,
+        items: items, tax_rate: taxRate, due_days: dueDays, notes: notes,
+        discount_amount: discountAmount, discount_type: discountType !== 'none' ? discountType : 'fixed'
+      })
     });
     var data = await resp.json();
     if (data.success) {

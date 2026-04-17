@@ -1591,8 +1591,8 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
           const shareToken = crypto.randomUUID().replace(/-/g, '').substring(0, 24)
 
           const invRes = await c.env.DB.prepare(`
-            INSERT INTO invoices (invoice_number, master_company_id, customer_id, subtotal, tax_rate, tax_amount, total, currency, status, document_type, notes, share_token, issue_date, due_date, created_at, updated_at)
-            VALUES (?, 1, ?, ?, 0, 0, ?, 'USD', 'sent', 'invoice', ?, ?, datetime('now'), datetime('now', '+30 days'), datetime('now'), datetime('now'))
+            INSERT INTO invoices (invoice_number, customer_id, subtotal, tax_rate, tax_amount, total, currency, status, document_type, notes, share_token, created_by, due_date, created_at, updated_at)
+            VALUES (?, ?, ?, 0, 0, ?, 'USD', 'sent', 'invoice', ?, ?, 'superadmin', datetime('now', '+30 days'), datetime('now'), datetime('now'))
           `).bind(invoiceNumber, customerId, pack.price, pack.price, `Onboarding — ${pack.desc}`, shareToken).run()
           const invoiceId = (invRes as any).meta?.last_row_id
 
@@ -2470,7 +2470,7 @@ adminRoutes.get('/superadmin/paywall-status', async (c) => {
 adminRoutes.get('/superadmin/service-invoices', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
-  const rows = await c.env.DB.prepare("SELECT i.*, c.name as customer_name, c.email as customer_email FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.master_company_id = 1 ORDER BY i.created_at DESC LIMIT 200").all<any>()
+  const rows = await c.env.DB.prepare("SELECT i.*, c.name as customer_name, c.email as customer_email FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.created_by = 'superadmin' ORDER BY i.created_at DESC LIMIT 200").all<any>()
   return c.json({ invoices: rows.results || [] })
 })
 
@@ -2478,15 +2478,16 @@ adminRoutes.get('/superadmin/service-invoices', async (c) => {
 adminRoutes.post('/superadmin/service-invoices/create', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
-  const { customer_email, items, due_date, notes } = await c.req.json()
+  const { customer_email, customer_name, items, due_date, notes } = await c.req.json()
   if (!customer_email || !items || !items.length) return c.json({ error: 'customer_email and items required' }, 400)
 
   try {
     // Find or create customer
     let customer = await c.env.DB.prepare('SELECT id, name, email FROM customers WHERE email = ?').bind(customer_email.toLowerCase()).first<any>()
     if (!customer) {
-      const result = await c.env.DB.prepare("INSERT INTO customers (email, name, is_active, email_verified, free_trial_total) VALUES (?, ?, 1, 0, 0)").bind(customer_email.toLowerCase(), customer_email.split('@')[0]).run()
-      customer = { id: result.meta.last_row_id, name: customer_email.split('@')[0], email: customer_email.toLowerCase() }
+      const resolvedName = (customer_name || '').trim() || customer_email.split('@')[0]
+      const result = await c.env.DB.prepare("INSERT INTO customers (email, name, is_active, email_verified, free_trial_total) VALUES (?, ?, 1, 0, 0)").bind(customer_email.toLowerCase(), resolvedName).run()
+      customer = { id: result.meta.last_row_id, name: resolvedName, email: customer_email.toLowerCase() }
     }
 
     // Normalize line items (UI may send `price` instead of `unit_price`)
@@ -2507,8 +2508,8 @@ adminRoutes.post('/superadmin/service-invoices/create', async (c) => {
     const shareToken = crypto.randomUUID().replace(/-/g, '').substring(0, 24)
 
     const invResult = await c.env.DB.prepare(
-      `INSERT INTO invoices (invoice_number, customer_id, subtotal, tax_rate, tax_amount, total, currency, status, document_type, notes, share_token, due_date, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 0, ?, 'USD', 'draft', 'invoice', ?, ?, ?, datetime('now'), datetime('now'))`
+      `INSERT INTO invoices (invoice_number, customer_id, subtotal, tax_rate, tax_amount, total, currency, status, document_type, notes, share_token, created_by, due_date, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 0, ?, 'USD', 'draft', 'invoice', ?, ?, 'superadmin', ?, datetime('now'), datetime('now'))`
     ).bind(invoiceNumber, customer.id, subtotal, taxRate, total, notes || '', shareToken, due_date || null).run()
     const invoiceId = invResult.meta.last_row_id as number
 
