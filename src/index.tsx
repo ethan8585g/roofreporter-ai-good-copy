@@ -4930,6 +4930,10 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
           <i class="fas fa-dollar-sign w-5 text-center"></i>
           <span class="label text-sm font-medium">Pricing & Billing</span>
         </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('invoices', this)">
+          <i class="fas fa-file-invoice-dollar w-5 text-center"></i>
+          <span class="label text-sm font-medium">Invoices</span>
+        </div>
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('api-users', this)">
           <i class="fas fa-key w-5 text-center"></i>
           <span class="label text-sm font-medium">API Users</span>

@@ -4158,8 +4158,7 @@ window.createInvoiceFromTier = function(tierName) {
   if (!proposal) return;
   // Switch to invoices view and pre-populate
   SA.data._pendingInvoiceItems = proposal.line_items;
-  loadView('invoices');
-  setTimeout(function() { showCreateInvoiceModal(); populateInvoiceFromProposal(); }, 500);
+  loadView('invoices').then(function() { showCreateInvoiceModal(); populateInvoiceFromProposal(); });
 };
 
 window.populateInvoiceFromProposal = function() {
