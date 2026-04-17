@@ -545,11 +545,14 @@ invoiceRoutes.patch('/:id/status', async (c) => {
     const scope = getScope(c)
     if (!scope.isAdmin && own.customer_id !== scope.ownerId) return c.json({ error: 'Invoice not found' }, 404)
 
-    const updates: string[] = [`status = '${status}'`, "updated_at = datetime('now')"]
-    if (status === 'sent') updates.push("sent_date = date('now')")
-    if (status === 'paid') updates.push("paid_date = date('now')")
-
-    await c.env.DB.prepare(`UPDATE invoices SET ${updates.join(', ')} WHERE id = ?`).bind(id).run()
+    await c.env.DB.prepare(`
+      UPDATE invoices SET
+        status = ?,
+        updated_at = datetime('now'),
+        sent_date = CASE WHEN ? = 'sent' THEN date('now') ELSE sent_date END,
+        paid_date = CASE WHEN ? = 'paid' THEN date('now') ELSE paid_date END
+      WHERE id = ?
+    `).bind(status, status, status, id).run()
     await c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'status_updated', ?)`).bind(`Document #${id} → ${status}`).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     return c.json({ success: true, status })
@@ -1089,8 +1092,9 @@ invoiceRoutes.post('/:id/send-gmail', async (c) => {
     ${itemsHtml}
     <div style="background:#f8fafc;border-radius:12px;padding:16px;margin:16px 0">
       <div style="display:flex;justify-content:space-between;font-size:13px;color:#64748b;margin-bottom:4px"><span>Subtotal</span><span>$${Number(invoice.subtotal || 0).toFixed(2)}</span></div>
+      ${invoice.discount_amount ? `<div style="display:flex;justify-content:space-between;font-size:13px;color:#16a34a;margin-bottom:4px"><span>Discount</span><span>-$${Number(invoice.discount_amount).toFixed(2)}</span></div>` : ''}
       ${invoice.tax_amount ? `<div style="display:flex;justify-content:space-between;font-size:13px;color:#64748b;margin-bottom:4px"><span>Tax</span><span>$${Number(invoice.tax_amount).toFixed(2)}</span></div>` : ''}
-      <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:800;color:#0f172a;border-top:2px solid #e2e8f0;padding-top:8px;margin-top:8px"><span>Total</span><span>$${Number(invoice.total || 0).toFixed(2)} USD</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:800;color:#0f172a;border-top:2px solid #e2e8f0;padding-top:8px;margin-top:8px"><span>Total</span><span>$${Number(invoice.total || 0).toFixed(2)} ${invoice.currency || 'CAD'}</span></div>
     </div>
     ${paymentUrl ? `<div style="text-align:center;margin:24px 0"><a href="${paymentUrl}" style="display:inline-block;background:#16a34a;color:white;padding:14px 32px;border-radius:12px;text-decoration:none;font-size:16px;font-weight:700">Pay Now — $${Number(invoice.total || 0).toFixed(2)}</a><p style="color:#94a3b8;font-size:11px;margin:8px 0 0">Secure payment powered by Square</p></div>` : ''}
     <div style="text-align:center;margin:16px 0"><a href="${viewUrl}" style="color:#0ea5e9;font-size:13px;text-decoration:underline">View ${docLabel} Online</a></div>
