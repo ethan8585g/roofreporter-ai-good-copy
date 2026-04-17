@@ -1,0 +1,87 @@
+{
+  "_comment": "Simple rectangular gable roof — two equal faces, one ridge along the centre.",
+  "_geometry": "50 ft × 30 ft footprint (1500 sq ft projected). Roof pitch 6:12 everywhere.",
+  "_truth": {
+    "total_projected_ft2": 1500,
+    "total_sloped_ft2": 1677.05,
+    "slope_factor": 1.11803,
+    "face_A_projected_ft2": 750,
+    "face_A_sloped_ft2": 838.52,
+    "face_B_projected_ft2": 750,
+    "face_B_sloped_ft2": 838.52,
+    "ridge_ft": 50,
+    "eave_ft_total": 100,
+    "rake_ft_each": 16.77,
+    "rake_ft_total": 33.54,
+    "pitch_rise": 6,
+    "pitch_deg": 26.565
+  },
+  "trace": {
+    "address": "Test Simple Gable",
+    "default_pitch": 6,
+    "eaves_outline": [
+      {"lat": 43.70000, "lng": -79.40000},
+      {"lat": 43.70000, "lng": -79.39955},
+      {"lat": 43.70027, "lng": -79.39955},
+      {"lat": 43.70027, "lng": -79.40000}
+    ],
+    "ridges": [
+      {
+        "id": "R1",
+        "pts": [
+          {"lat": 43.700135, "lng": -79.40000},
+          {"lat": 43.700135, "lng": -79.39955}
+        ]
+      }
+    ],
+    "hips": [],
+    "valleys": [],
+    "rakes": []
+  },
+  "reconciled_geometry": {
+    "facets": [
+      {
+        "facet_id": "F00",
+        "lat_lng_ring": [
+          [43.70000, -79.40000],
+          [43.70000, -79.39955],
+          [43.700135, -79.39955],
+          [43.700135, -79.40000],
+          [43.70000, -79.40000]
+        ],
+        "area_sqft": 750,
+        "pitch_rise": 6,
+        "pitch_source": "ransac_dsm",
+        "pitch_confidence": 0.92,
+        "azimuth_deg": 180
+      },
+      {
+        "facet_id": "F01",
+        "lat_lng_ring": [
+          [43.700135, -79.40000],
+          [43.700135, -79.39955],
+          [43.70027, -79.39955],
+          [43.70027, -79.40000],
+          [43.700135, -79.40000]
+        ],
+        "area_sqft": 750,
+        "pitch_rise": 6,
+        "pitch_source": "ransac_dsm",
+        "pitch_confidence": 0.92,
+        "azimuth_deg": 0
+      }
+    ],
+    "edges": [
+      {
+        "edge_id": "E000",
+        "type": "ridge",
+        "midpoint": {"x": 128, "y": 64},
+        "length_ft": 50,
+        "source": "ransac_dsm",
+        "confidence": 0.92,
+        "classification_agreed": true
+      }
+    ],
+    "conflicts": []
+  }
+}

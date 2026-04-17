@@ -1,0 +1,209 @@
+{
+  "_comment": "Hip-and-valley main roof with one dormer bump-out on the south face.",
+  "_geometry": "Main hip roof 40×30 ft at 6:12 (four faces). Dormer 8×6 ft at 6:12 on south face.",
+  "_truth": {
+    "main_roof_projected_ft2": 1200,
+    "dormer_projected_ft2": 48,
+    "total_projected_ft2": 1248,
+    "pitch_rise": 6,
+    "pitch_deg": 26.565,
+    "slope_factor": 1.11803,
+    "total_sloped_ft2": 1395.31,
+    "main_ridge_ft": 10,
+    "hip_ft_each": 19.53,
+    "hip_count": 4,
+    "valley_ft": 9.0,
+    "dormer_ridge_ft": 8
+  },
+  "trace": {
+    "address": "Test Hip Valley Dormer",
+    "default_pitch": 6,
+    "eaves_outline": [
+      {"lat": 43.70000, "lng": -79.40000},
+      {"lat": 43.70000, "lng": -79.39964},
+      {"lat": 43.70027, "lng": -79.39964},
+      {"lat": 43.70027, "lng": -79.40000}
+    ],
+    "ridges": [
+      {
+        "id": "R_main",
+        "pts": [
+          {"lat": 43.700135, "lng": -79.39982},
+          {"lat": 43.700135, "lng": -79.39977}
+        ]
+      },
+      {
+        "id": "R_dormer",
+        "pts": [
+          {"lat": 43.70005, "lng": -79.39986},
+          {"lat": 43.70005, "lng": -79.39979}
+        ]
+      }
+    ],
+    "hips": [
+      {
+        "id": "H_SW",
+        "pts": [
+          {"lat": 43.70000, "lng": -79.40000},
+          {"lat": 43.700135, "lng": -79.39982}
+        ]
+      },
+      {
+        "id": "H_SE",
+        "pts": [
+          {"lat": 43.70000, "lng": -79.39964},
+          {"lat": 43.700135, "lng": -79.39977}
+        ]
+      },
+      {
+        "id": "H_NW",
+        "pts": [
+          {"lat": 43.70027, "lng": -79.40000},
+          {"lat": 43.700135, "lng": -79.39982}
+        ]
+      },
+      {
+        "id": "H_NE",
+        "pts": [
+          {"lat": 43.70027, "lng": -79.39964},
+          {"lat": 43.700135, "lng": -79.39977}
+        ]
+      }
+    ],
+    "valleys": [
+      {
+        "id": "V_dormer_L",
+        "pts": [
+          {"lat": 43.70005, "lng": -79.39986},
+          {"lat": 43.70003, "lng": -79.39984}
+        ]
+      },
+      {
+        "id": "V_dormer_R",
+        "pts": [
+          {"lat": 43.70005, "lng": -79.39979},
+          {"lat": 43.70003, "lng": -79.39981}
+        ]
+      }
+    ],
+    "rakes": []
+  },
+  "reconciled_geometry": {
+    "facets": [
+      {
+        "facet_id": "F00",
+        "lat_lng_ring": [
+          [43.70000, -79.40000],
+          [43.70000, -79.39982],
+          [43.70003, -79.39985],
+          [43.70003, -79.39979],
+          [43.70000, -79.39964],
+          [43.700135, -79.39982],
+          [43.700135, -79.39977],
+          [43.70000, -79.40000]
+        ],
+        "area_sqft": 345,
+        "pitch_rise": 6,
+        "pitch_source": "ransac_dsm",
+        "pitch_confidence": 0.88,
+        "azimuth_deg": 180
+      },
+      {
+        "facet_id": "F01",
+        "lat_lng_ring": [
+          [43.70027, -79.40000],
+          [43.70027, -79.39964],
+          [43.700135, -79.39977],
+          [43.700135, -79.39982],
+          [43.70027, -79.40000]
+        ],
+        "area_sqft": 345,
+        "pitch_rise": 6,
+        "pitch_source": "ransac_dsm",
+        "pitch_confidence": 0.88,
+        "azimuth_deg": 0
+      },
+      {
+        "facet_id": "F02",
+        "lat_lng_ring": [
+          [43.70000, -79.40000],
+          [43.70027, -79.40000],
+          [43.700135, -79.39982],
+          [43.70000, -79.40000]
+        ],
+        "area_sqft": 255,
+        "pitch_rise": 6,
+        "pitch_source": "ransac_dsm",
+        "pitch_confidence": 0.88,
+        "azimuth_deg": 270
+      },
+      {
+        "facet_id": "F03",
+        "lat_lng_ring": [
+          [43.70000, -79.39964],
+          [43.70027, -79.39964],
+          [43.700135, -79.39977],
+          [43.70000, -79.39964]
+        ],
+        "area_sqft": 255,
+        "pitch_rise": 6,
+        "pitch_source": "ransac_dsm",
+        "pitch_confidence": 0.88,
+        "azimuth_deg": 90
+      },
+      {
+        "facet_id": "F04_auto",
+        "lat_lng_ring": [
+          [43.70003, -79.39986],
+          [43.70003, -79.39979],
+          [43.70008, -79.39979],
+          [43.70008, -79.39986],
+          [43.70003, -79.39986]
+        ],
+        "area_sqft": 48,
+        "pitch_rise": 6,
+        "pitch_source": "ransac_dsm",
+        "pitch_confidence": 0.82,
+        "azimuth_deg": 180
+      }
+    ],
+    "edges": [
+      {
+        "edge_id": "E000",
+        "type": "ridge",
+        "midpoint": {"x": 128, "y": 64},
+        "length_ft": 10,
+        "source": "ransac_dsm",
+        "confidence": 0.88,
+        "classification_agreed": true
+      },
+      {
+        "edge_id": "E001",
+        "type": "hip",
+        "midpoint": {"x": 90, "y": 110},
+        "length_ft": 19.53,
+        "source": "ransac_dsm",
+        "confidence": 0.85,
+        "classification_agreed": true
+      },
+      {
+        "edge_id": "E002",
+        "type": "valley",
+        "midpoint": {"x": 115, "y": 130},
+        "length_ft": 9.0,
+        "source": "ransac_dsm",
+        "confidence": 0.83,
+        "classification_agreed": true
+      }
+    ],
+    "conflicts": [
+      {
+        "edge_id": "E003",
+        "user_label": "eave",
+        "dsm_label": "hip",
+        "dsm_confidence": 91,
+        "auto_corrected": true
+      }
+    ]
+  }
+}

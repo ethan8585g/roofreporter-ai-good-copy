@@ -1,0 +1,140 @@
+{
+  "_comment": "Cross-gable roof — two intersecting gables forming an L-shape with a valley.",
+  "_geometry": "Main wing 40×30 ft, cross wing 20×20 ft, both at 6:12. Valley runs at 45° from the intersection.",
+  "_truth": {
+    "main_wing_projected_ft2": 1200,
+    "cross_wing_projected_ft2": 400,
+    "total_projected_ft2": 1600,
+    "pitch_rise": 6,
+    "pitch_deg": 26.565,
+    "slope_factor": 1.11803,
+    "total_sloped_ft2": 1788.85,
+    "main_ridge_ft": 40,
+    "cross_ridge_ft": 20,
+    "valley_ft": 14.14
+  },
+  "trace": {
+    "address": "Test Cross Gable",
+    "default_pitch": 6,
+    "eaves_outline": [
+      {"lat": 43.70000, "lng": -79.40000},
+      {"lat": 43.70000, "lng": -79.39982},
+      {"lat": 43.70018, "lng": -79.39982},
+      {"lat": 43.70018, "lng": -79.39964},
+      {"lat": 43.70036, "lng": -79.39964},
+      {"lat": 43.70036, "lng": -79.40000}
+    ],
+    "ridges": [
+      {
+        "id": "R_main",
+        "pts": [
+          {"lat": 43.700135, "lng": -79.40000},
+          {"lat": 43.700135, "lng": -79.39982}
+        ]
+      },
+      {
+        "id": "R_cross",
+        "pts": [
+          {"lat": 43.70018, "lng": -79.39982},
+          {"lat": 43.70018, "lng": -79.39964}
+        ]
+      }
+    ],
+    "hips": [],
+    "valleys": [
+      {
+        "id": "V1",
+        "pts": [
+          {"lat": 43.70018, "lng": -79.39982},
+          {"lat": 43.700135, "lng": -79.39982}
+        ]
+      }
+    ],
+    "rakes": []
+  },
+  "reconciled_geometry": {
+    "facets": [
+      {
+        "facet_id": "F00",
+        "lat_lng_ring": [
+          [43.70000, -79.40000],
+          [43.70000, -79.39982],
+          [43.700135, -79.39982],
+          [43.700135, -79.40000],
+          [43.70000, -79.40000]
+        ],
+        "area_sqft": 600,
+        "pitch_rise": 6,
+        "pitch_source": "ransac_dsm",
+        "pitch_confidence": 0.90,
+        "azimuth_deg": 180
+      },
+      {
+        "facet_id": "F01",
+        "lat_lng_ring": [
+          [43.700135, -79.40000],
+          [43.700135, -79.39982],
+          [43.70027, -79.39982],
+          [43.70027, -79.40000],
+          [43.700135, -79.40000]
+        ],
+        "area_sqft": 600,
+        "pitch_rise": 6,
+        "pitch_source": "ransac_dsm",
+        "pitch_confidence": 0.90,
+        "azimuth_deg": 0
+      },
+      {
+        "facet_id": "F02",
+        "lat_lng_ring": [
+          [43.70018, -79.39982],
+          [43.70018, -79.39964],
+          [43.70027, -79.39964],
+          [43.70027, -79.39982],
+          [43.70018, -79.39982]
+        ],
+        "area_sqft": 200,
+        "pitch_rise": 6,
+        "pitch_source": "ransac_dsm",
+        "pitch_confidence": 0.88,
+        "azimuth_deg": 90
+      },
+      {
+        "facet_id": "F03",
+        "lat_lng_ring": [
+          [43.70018, -79.39982],
+          [43.70018, -79.39964],
+          [43.70009, -79.39964],
+          [43.70009, -79.39982],
+          [43.70018, -79.39982]
+        ],
+        "area_sqft": 200,
+        "pitch_rise": 6,
+        "pitch_source": "ransac_dsm",
+        "pitch_confidence": 0.88,
+        "azimuth_deg": 270
+      }
+    ],
+    "edges": [
+      {
+        "edge_id": "E000",
+        "type": "ridge",
+        "midpoint": {"x": 100, "y": 64},
+        "length_ft": 40,
+        "source": "ransac_dsm",
+        "confidence": 0.90,
+        "classification_agreed": true
+      },
+      {
+        "edge_id": "E001",
+        "type": "valley",
+        "midpoint": {"x": 128, "y": 100},
+        "length_ft": 14.14,
+        "source": "ransac_dsm",
+        "confidence": 0.85,
+        "classification_agreed": true
+      }
+    ],
+    "conflicts": []
+  }
+}
