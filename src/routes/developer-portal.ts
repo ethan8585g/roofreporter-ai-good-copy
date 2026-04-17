@@ -8,7 +8,8 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { generateApiKey } from '../middleware/api-auth'
-import { addCredits, getLedgerPage } from '../services/api-billing'
+import { addCredits, getLedgerPage, holdCredit } from '../services/api-billing'
+import { notifyNewReportRequest } from '../services/email'
 
 export const developerPortalRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -237,10 +238,10 @@ function buildDashboardHtml(
   account: any,
   data: DashboardData,
   baseUrl: string,
-  opts: { newKey?: string; welcome?: boolean; bought?: boolean } = {}
+  opts: { newKey?: string; welcome?: boolean; bought?: boolean; submitted?: boolean; error?: string } = {}
 ): string {
   const { keys, jobs, balance, packages, completedReports } = data
-  const { newKey = '', welcome = false, bought = false } = opts
+  const { newKey = '', welcome = false, bought = false, submitted = false, error = '' } = opts
   const activeKeys = keys.filter(k => !k.revoked_at)
 
   function statusBadge(s: string) {
@@ -288,6 +289,16 @@ function buildDashboardHtml(
       <strong>Payment successful!</strong> Your credits have been added to your account.
     </div>` : ''}
 
+    ${submitted ? `<div class="alert-success" style="margin-bottom:24px;">
+      <strong>Report submitted!</strong> Your job is queued. Our team will trace the roof and you'll see it appear in Report History once complete.
+    </div>` : ''}
+
+    ${error === 'nocredits' ? `<div class="alert-error" style="margin-bottom:24px;">
+      <strong>Insufficient credits.</strong> Please purchase credits below to order a report.
+    </div>` : error === 'address' ? `<div class="alert-error" style="margin-bottom:24px;">
+      <strong>Invalid address.</strong> Please enter a full property address (at least 5 characters).
+    </div>` : ''}
+
     ${newKeyBanner}
 
     <!-- Stats row -->
@@ -304,6 +315,24 @@ function buildDashboardHtml(
         <div style="font-size:2rem;font-weight:800;">${completedReports.length}</div>
         <div style="color:var(--text-muted);font-size:.85rem;margin-top:4px;">Reports Delivered</div>
       </div>
+    </div>
+
+    <!-- Order New Report -->
+    <div class="card p-6 mb-8">
+      <h2 style="font-size:1.1rem;font-weight:700;margin-bottom:4px;">Order a Roof Report</h2>
+      <p style="color:var(--text-muted);font-size:.85rem;margin-bottom:16px;">Submit an address and 1 credit will be held. Our team traces the roof and delivers a PDF report.</p>
+      ${balance < 1
+        ? `<div style="background:#ef444418;border:1px solid #ef444444;border-radius:8px;color:#fca5a5;padding:12px 16px;font-size:.9rem;">
+             You have no credits remaining. <strong>Buy credits below</strong> to order a report.
+           </div>`
+        : `<form method="POST" action="/developer/reports/new" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+             <div style="flex:1;min-width:220px;">
+               <label class="label" style="margin-bottom:6px;">Property Address</label>
+               <input class="input" type="text" name="address" placeholder="123 Main St, Toronto, ON" required minlength="5" maxlength="500" autocomplete="off">
+             </div>
+             <button type="submit" class="btn btn-primary" style="white-space:nowrap;">Order Report (1 credit)</button>
+           </form>`
+      }
     </div>
 
     <div class="grid gap-8" style="grid-template-columns:1fr 1fr;">
@@ -703,10 +732,12 @@ developerPortalRoutes.get('/dashboard', async (c) => {
 
   const db = c.env.DB
   const bought = c.req.query('payment') === 'success'
+  const submitted = c.req.query('submitted') === '1'
+  const error = c.req.query('error') ?? ''
   const baseUrl = new URL(c.req.url).origin
   const data = await loadDashboardData(db, account.id)
 
-  return c.html(buildDashboardHtml(account, data, baseUrl, { bought }))
+  return c.html(buildDashboardHtml(account, data, baseUrl, { bought, submitted, error }))
 })
 
 // ── POST /developer/keys/new — Generate a new API key ─────────────────────────
@@ -868,6 +899,86 @@ developerPortalRoutes.get('/reports/:jobId/pdf', async (c) => {
       'Content-Disposition': `inline; filename="roof-report-${jobId.slice(0, 8)}.pdf"`,
     }
   })
+})
+
+// ── POST /developer/reports/new — Submit a report from the portal (uses credits) ──
+// Mirrors POST /v1/reports but authenticated via portal session instead of API key.
+
+developerPortalRoutes.post('/reports/new', async (c) => {
+  const account = await requireAuth(c)
+  if (!account) return c.redirect('/developer/login')
+
+  const db = c.env.DB
+
+  let body: any
+  try { body = await c.req.parseBody() } catch { return c.redirect('/developer/dashboard?error=invalid') }
+
+  const address = String(body.address ?? '').trim()
+  if (!address || address.length < 5 || address.length > 500) {
+    return c.redirect('/developer/dashboard?error=address')
+  }
+
+  // Hold 1 credit (atomic check-and-decrement)
+  const jobId = crypto.randomUUID()
+  const holdResult = await holdCredit(db, account.id, jobId)
+  if (!holdResult.success) {
+    return c.redirect('/developer/dashboard?error=nocredits')
+  }
+
+  // Geocode (non-fatal)
+  let lat: number | null = null
+  let lng: number | null = null
+  try {
+    const geoRes = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${c.env.GOOGLE_MAPS_API_KEY}`
+    )
+    if (geoRes.ok) {
+      const geoData: any = await geoRes.json()
+      const loc = geoData?.results?.[0]?.geometry?.location
+      if (loc?.lat && loc?.lng) { lat = loc.lat; lng = loc.lng }
+    }
+  } catch { /* non-fatal */ }
+
+  const now = Math.floor(Date.now() / 1000)
+
+  // Insert api_job (api_key_id is NULL for portal-submitted jobs)
+  await db.prepare(`
+    INSERT INTO api_jobs
+      (id, account_id, api_key_id, status, address, lat, lng, credits_held, source, created_at)
+    VALUES (?, ?, NULL, 'queued', ?, ?, ?, 1, 'portal', ?)
+  `).bind(jobId, account.id, address, lat, lng, now).run()
+
+  // Create the linked order so the admin trace queue picks it up
+  const orderNumber = `API-${Date.now().toString(36).toUpperCase()}`
+  const orderResult = await db.prepare(`
+    INSERT INTO orders (
+      order_number, master_company_id, property_address,
+      homeowner_name, requester_name, requester_company,
+      service_tier, price, status, payment_status,
+      estimated_delivery, needs_admin_trace,
+      source, api_job_id, latitude, longitude
+    ) VALUES (?, 1, ?, ?, ?, ?, 'standard', 0, 'processing', 'paid', datetime('now', '+4 hours'), 1, 'api', ?, ?, ?)
+  `).bind(
+    orderNumber, address,
+    account.company_name, account.company_name, 'Portal',
+    jobId, lat, lng
+  ).run()
+
+  await db.prepare('UPDATE api_jobs SET order_id = ? WHERE id = ?')
+    .bind(orderResult.meta.last_row_id, jobId).run()
+
+  // Notify sales team (fire-and-forget)
+  notifyNewReportRequest(c.env, {
+    order_number: orderNumber,
+    property_address: address,
+    requester_name: account.company_name || 'Developer Portal',
+    requester_email: account.contact_email || '',
+    service_tier: 'api',
+    price: 0,
+    is_trial: false
+  }).catch((e: any) => console.warn('[silent-catch]', e?.message || e))
+
+  return c.redirect('/developer/dashboard?submitted=1')
 })
 
 // ── GET /developer/usage ──────────────────────────────────────────────────────
