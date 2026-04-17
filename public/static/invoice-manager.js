@@ -670,14 +670,15 @@ document.addEventListener('DOMContentLoaded', () => {
   async function saveInvoice(andSend = false) {
     collectForm();
     const f = state.form;
-    if (!f.customer_id) { imToast('Please select a customer', 'error'); return; }
+    if (!f.customer_id && !f.crm_customer_id) { imToast('Please select a customer', 'error'); return; }
     if (!f.items.some(i => i.description)) { imToast('Add at least one line item', 'error'); return; }
     if (!f.items.some(i => i.description && (i.quantity || 0) * (i.unit_price || 0) > 0)) { imToast('At least one line item must have a non-zero amount', 'error'); return; }
     if (f.due_date && f.created_date && f.due_date < f.created_date) { imToast('Due date must be on or after the invoice date', 'error'); return; }
 
     try {
       const payload = {
-        customer_id: f.customer_id,
+        customer_id: f.customer_id || null,
+        crm_customer_id: f.crm_customer_id || null,
         order_id: f.order_id || null,
         document_type: 'invoice',
         items: f.items.filter(i => i.description).map(i => ({
@@ -804,7 +805,13 @@ document.addEventListener('DOMContentLoaded', () => {
     selectCustomer(id) {
       const c = state.customers.find(c => c.id == id);
       if (!c) return;
-      state.form.customer_id = id;
+      if (c.source === 'crm') {
+        state.form.crm_customer_id = id;
+        state.form.customer_id = '';
+      } else {
+        state.form.customer_id = id;
+        state.form.crm_customer_id = '';
+      }
       state.form.customer_address = c.address || '';
       const input = document.getElementById('im-customer-search');
       if (input) input.value = c.name || c.email || '';
@@ -830,6 +837,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     clearCustomer() {
       state.form.customer_id = '';
+      state.form.crm_customer_id = '';
       state.form.customer_address = '';
       const input = document.getElementById('im-customer-search');
       if (input) input.value = '';

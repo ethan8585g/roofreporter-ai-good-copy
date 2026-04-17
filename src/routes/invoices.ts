@@ -810,6 +810,13 @@ invoiceRoutes.post('/:id/payment-link', async (c) => {
       VALUES (?, ?, ?, ?, ?, ?, 'created')
     `).bind(id, linkId, linkUrl, orderId, amountCents, invoice.currency || 'CAD').run()
 
+    // Cache URL on the invoice row so send-gmail can find it without a JOIN
+    if (linkUrl) {
+      await c.env.DB.prepare(
+        "UPDATE invoices SET square_payment_link_url = ?, square_payment_link_id = ?, updated_at = datetime('now') WHERE id = ?"
+      ).bind(linkUrl, linkId, id).run()
+    }
+
     return c.json({
       success: true,
       payment_link: { id: linkId, url: linkUrl, amount: invoice.total, currency: invoice.currency || 'CAD' }
