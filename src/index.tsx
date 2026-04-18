@@ -4989,6 +4989,8 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
       if (typeof window.saDashboardSetView === 'function') window.saDashboardSetView(v);
     }
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <script src="/static/dashboard-utils.js?v=${Date.now()}"></script>
   <script src="/static/super-admin-dashboard.js?v=${Date.now()}"></script>
   <script src="/static/admin-agent-chat.js?v=${Date.now()}"></script>
   <script src="/static/call-center.js"></script>
@@ -13278,7 +13280,7 @@ function getD2DPageHTML(mapsApiKey: string) {
         if (typeof initD2DMap === 'function') initD2DMap();
       }
     </script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places,drawing,geometry&callback=onD2DMapsReady" async defer></script>`
+    <script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places,drawing,geometry,visualization&callback=onD2DMapsReady" async defer></script>`
     : '<!-- Google Maps: No API key configured. -->'
 
   return `<!DOCTYPE html>
@@ -13328,6 +13330,8 @@ function getD2DPageHTML(mapsApiKey: string) {
       window.location.href = '/customer/login';
     }
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <script src="/static/dashboard-utils.js?v=${Date.now()}"></script>
   <script src="/static/d2d-module.js?v=${Date.now()}"></script>
   ${getRoverAssistant()}
 </body>
@@ -13520,6 +13524,9 @@ function getCrmSubPageHTML(module: string, title: string, icon: string) {
       window.location.href = '/customer/login';
     }
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <script src="/static/dashboard-utils.js?v=${Date.now()}"></script>
   <script src="/static/crm-module.js?v=${Date.now()}"></script>
   <script src="/static/solar-calculator.js?v=${Date.now()}"></script>
   ${getRoverAssistant()}
@@ -16917,6 +16924,10 @@ function getSuperAdminBiHTML(): string {
     <!-- Sidebar -->
     <aside class="w-52 bg-slate-900 border-r border-slate-800 shrink-0 flex flex-col">
       <nav class="p-3 space-y-1 flex-1">
+        <div class="bi-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-view="executive" onclick="biSetView('executive')">
+          <i class="fas fa-tachometer-alt w-5 text-center text-cyan-400"></i>
+          <span class="text-sm font-medium">Executive</span>
+        </div>
         <div class="bi-nav-item active rounded-xl px-4 py-3 flex items-center gap-3" data-view="overview" onclick="biSetView('overview')">
           <i class="fas fa-crown w-5 text-center text-yellow-400"></i>
           <span class="text-sm font-medium">Overview</span>
@@ -16961,6 +16972,8 @@ function getSuperAdminBiHTML(): string {
     </main>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <script src="/static/dashboard-utils.js?v=${Date.now()}"></script>
   <script src="/static/super-admin-bi.js?v=1"></script>
 </body>
 </html>`

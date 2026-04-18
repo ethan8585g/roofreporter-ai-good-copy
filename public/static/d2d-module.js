@@ -176,13 +176,14 @@
     var el = document.getElementById('d2dStats');
     if (!el) return;
     el.innerHTML =
-      '<div class="d2d-stat"><div class="d2d-stat-val text-sky-600">' + (stats.total_turfs || 0) + '</div><div class="d2d-stat-label">Turfs</div></div>' +
-      '<div class="d2d-stat"><div class="d2d-stat-val text-emerald-400">' + (stats.total_yes || 0) + '</div><div class="d2d-stat-label">Yes</div></div>' +
-      '<div class="d2d-stat"><div class="d2d-stat-val text-red-400">' + (stats.total_no || 0) + '</div><div class="d2d-stat-label">No</div></div>' +
-      '<div class="d2d-stat"><div class="d2d-stat-val text-gray-400">' + (stats.total_no_answer || 0) + '</div><div class="d2d-stat-label">No Ans</div></div>' +
+      '<div class="d2d-stat"><div class="d2d-stat-val text-sky-600" data-counter="' + (stats.total_turfs || 0) + '" data-counter-duration="600">0</div><div class="d2d-stat-label">Turfs</div></div>' +
+      '<div class="d2d-stat"><div class="d2d-stat-val text-emerald-400" data-counter="' + (stats.total_yes || 0) + '" data-counter-duration="800">0</div><div class="d2d-stat-label">Yes</div></div>' +
+      '<div class="d2d-stat"><div class="d2d-stat-val text-red-400" data-counter="' + (stats.total_no || 0) + '" data-counter-duration="800">0</div><div class="d2d-stat-label">No</div></div>' +
+      '<div class="d2d-stat"><div class="d2d-stat-val text-gray-400" data-counter="' + (stats.total_no_answer || 0) + '" data-counter-duration="800">0</div><div class="d2d-stat-label">No Ans</div></div>' +
       (viewerRole === 'owner'
         ? '<button onclick="window.d2d.openDashboard()" style="margin-top:8px;width:100%;padding:8px 0;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="fas fa-chart-bar"></i>Team Dashboard</button>'
         : '');
+    if (typeof animateAllCounters === 'function') animateAllCounters(el);
   }
 
   // ============================================================
@@ -245,12 +246,30 @@
     var knocked = (s.total_yes||0) + (s.total_no||0) + (s.total_no_answer||0);
     var convRate = knocked > 0 ? ((s.total_yes||0) / knocked * 100).toFixed(1) : '0.0';
 
-    // KPI bar
+    var contactRate = knocked > 0 ? (((s.total_yes||0) + (s.total_no||0)) / knocked * 100).toFixed(1) : '0.0';
+    var interestRate = knocked > 0 ? ((s.total_yes||0) / knocked * 100).toFixed(1) : '0.0';
+
+    // KPI bar with glassmorphism
+    var glassStyle = 'backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)';
     var kpi = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px">' +
       kpiCard('Doors Knocked', knocked, '#0ea5e9', 'fa-hand-fist') +
       kpiCard('Interested', s.total_yes||0, '#22c55e', 'fa-thumbs-up') +
       kpiCard('Conversion Rate', convRate + '%', '#a78bfa', 'fa-percent') +
-      kpiCard('Team Members', s.total_members||0, '#f59e0b', 'fa-users') +
+      kpiCard('Contact Rate', contactRate + '%', '#f59e0b', 'fa-phone') +
+      kpiCard('Team Members', s.total_members||0, '#6366f1', 'fa-users') +
+    '</div>';
+
+    // KPI gauge charts row
+    kpi += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px">';
+    kpi += '<div style="' + glassStyle + ';border-radius:12px;padding:16px;text-align:center"><h4 style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 4px">Conversion Rate</h4><div id="d2d-gauge-conv"></div></div>';
+    kpi += '<div style="' + glassStyle + ';border-radius:12px;padding:16px;text-align:center"><h4 style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 4px">Contact Rate</h4><div id="d2d-gauge-contact"></div></div>';
+    kpi += '<div style="' + glassStyle + ';border-radius:12px;padding:16px;text-align:center"><h4 style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 4px">Interest Rate</h4><div id="d2d-gauge-interest"></div></div>';
+    kpi += '</div>';
+
+    // Trend chart placeholder
+    kpi += '<div style="' + glassStyle + ';border-radius:12px;padding:20px;margin-bottom:24px">' +
+      '<h3 style="color:#f1f5f9;font-size:14px;font-weight:700;margin:0 0 12px;display:flex;align-items:center;gap:8px"><i class="fas fa-chart-area" style="color:#6366f1"></i>Daily Knock Trends (30 days)</h3>' +
+      '<div id="d2d-trends-chart" style="height:220px"></div>' +
     '</div>';
 
     // Team leaderboard
@@ -366,15 +385,79 @@
     activity2 += '</div>';
 
     el.innerHTML = kpi + leaderboard + territories + activity2;
+
+    // Animate counters
+    if (typeof animateAllCounters === 'function') animateAllCounters(el);
+
+    // Render ApexCharts gauges
+    if (typeof ApexCharts !== 'undefined') {
+      var gaugeConfig = function(val, color) {
+        return {
+          chart: { type: 'radialBar', height: 140, sparkline: { enabled: true } },
+          series: [parseFloat(val) || 0],
+          plotOptions: { radialBar: { hollow: { size: '55%' }, track: { background: 'rgba(255,255,255,0.06)' }, dataLabels: { name: { show: false }, value: { fontSize: '20px', fontWeight: 700, color: '#fff', offsetY: 5, formatter: function(v) { return v.toFixed(1) + '%'; } } } } },
+          colors: [color]
+        };
+      };
+      var g1 = document.getElementById('d2d-gauge-conv');
+      if (g1) new ApexCharts(g1, gaugeConfig(convRate, '#a78bfa')).render();
+      var g2 = document.getElementById('d2d-gauge-contact');
+      if (g2) new ApexCharts(g2, gaugeConfig(contactRate, '#f59e0b')).render();
+      var g3 = document.getElementById('d2d-gauge-interest');
+      if (g3) new ApexCharts(g3, gaugeConfig(interestRate, '#22c55e')).render();
+
+      // Fetch daily trends and render area chart
+      api('GET', '/pins?sort=recent&limit=500').then(function(res) {
+        var allPins = res.pins || [];
+        // Group by day and status
+        var dailyData = {};
+        allPins.forEach(function(p) {
+          if (!p.knocked_at) return;
+          var day = p.knocked_at.substring(0, 10);
+          if (!dailyData[day]) dailyData[day] = { yes: 0, no: 0, no_answer: 0 };
+          if (p.status === 'yes') dailyData[day].yes++;
+          else if (p.status === 'no') dailyData[day].no++;
+          else if (p.status === 'no_answer') dailyData[day].no_answer++;
+        });
+        var days = Object.keys(dailyData).sort().slice(-30);
+        if (days.length > 0) {
+          var trendEl = document.getElementById('d2d-trends-chart');
+          if (trendEl) {
+            var baseCfg = typeof mergeApexConfig === 'function' ? mergeApexConfig(APEX_DARK, {}) : {};
+            new ApexCharts(trendEl, Object.assign({}, baseCfg, {
+              chart: { type: 'area', height: 200, toolbar: { show: false }, background: 'transparent', foreColor: '#9ca3af' },
+              series: [
+                { name: 'Yes', data: days.map(function(d) { return dailyData[d].yes; }) },
+                { name: 'No', data: days.map(function(d) { return dailyData[d].no; }) },
+                { name: 'No Answer', data: days.map(function(d) { return dailyData[d].no_answer; }) }
+              ],
+              xaxis: { categories: days.map(function(d) { return d.slice(5); }) },
+              colors: ['#22c55e', '#ef4444', '#f59e0b'],
+              fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.5, opacityTo: 0.05 } },
+              stroke: { curve: 'smooth', width: 2 },
+              grid: { borderColor: 'rgba(255,255,255,0.06)' },
+              tooltip: { theme: 'dark' },
+              legend: { position: 'top', labels: { colors: '#9ca3af' } },
+              dataLabels: { enabled: false }
+            })).render();
+          }
+        }
+      }).catch(function() {});
+    }
   }
 
   // Dashboard render helpers
   function kpiCard(label, value, color, icon) {
-    return '<div style="background:var(--bg-card,#1a1a1a);border:1px solid var(--border-color,#333);border-radius:12px;padding:16px;text-align:center">' +
+    var numVal = parseFloat(String(value).replace(/[^0-9.\-]/g, '')) || 0;
+    var hasPct = String(value).indexOf('%') !== -1;
+    var isAnimatable = numVal > 0;
+    return '<div style="backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;text-align:center">' +
       '<div style="width:40px;height:40px;border-radius:10px;background:' + color + '22;display:flex;align-items:center;justify-content:center;margin:0 auto 10px">' +
         '<i class="fas ' + icon + '" style="color:' + color + ';font-size:16px"></i>' +
       '</div>' +
-      '<div style="font-size:26px;font-weight:900;color:' + color + '">' + value + '</div>' +
+      '<div style="font-size:26px;font-weight:900;color:' + color + '"' +
+        (isAnimatable ? ' data-counter="' + numVal + '"' + (hasPct ? ' data-counter-suffix="%"' : '') + ' data-counter-duration="1000"' : '') +
+      '>' + (isAnimatable ? '0' + (hasPct ? '%' : '') : value) + '</div>' +
       '<div style="font-size:11px;color:var(--text-muted,#9ca3af);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">' + label + '</div>' +
     '</div>';
   }
@@ -677,12 +760,15 @@
     tb.innerHTML =
       '<div class="d2d-tool active" data-tool="pointer" title="Select / Navigate"><i class="fas fa-mouse-pointer"></i></div>' +
       (viewerRole === 'owner' ? '<div class="d2d-tool" data-tool="turf" title="Draw Turf Zone"><i class="fas fa-draw-polygon"></i></div>' : '') +
-      '<div class="d2d-tool" data-tool="pin" title="Place Door Pin"><i class="fas fa-map-pin"></i></div>';
+      '<div class="d2d-tool" data-tool="pin" title="Place Door Pin"><i class="fas fa-map-pin"></i></div>' +
+      '<div class="d2d-tool" data-tool="heatmap" title="Toggle Heat Map" id="d2d-heatmap-btn"><i class="fas fa-fire"></i></div>';
     // Re-attach tool click handlers
     tb.querySelectorAll('.d2d-tool').forEach(function(tool) {
       tool.addEventListener('click', function() {
         var t = tool.getAttribute('data-tool');
-        if (t === 'turf') {
+        if (t === 'heatmap') {
+          toggleHeatMap();
+        } else if (t === 'turf') {
           startDrawTurf();
         } else {
           if (isDrawing) cancelDrawing();
@@ -690,6 +776,45 @@
         }
       });
     });
+  }
+
+  // ── HEAT MAP ──────────────────────────────────────────────────
+  var heatmapLayer = null;
+  var heatmapActive = false;
+
+  function toggleHeatMap() {
+    if (!map) return;
+    var btn = document.getElementById('d2d-heatmap-btn');
+
+    if (heatmapActive && heatmapLayer) {
+      heatmapLayer.setMap(null);
+      heatmapLayer = null;
+      heatmapActive = false;
+      if (btn) btn.classList.remove('active');
+      return;
+    }
+
+    // Build heat map data from all pins
+    var heatData = [];
+    pins.forEach(function(p) {
+      if (!p.lat || !p.lng) return;
+      var weight = p.status === 'yes' ? 3 : p.status === 'no_answer' ? 1 : 0.5;
+      heatData.push({ location: new google.maps.LatLng(p.lat, p.lng), weight: weight });
+    });
+
+    if (heatData.length === 0) return;
+
+    if (typeof google !== 'undefined' && google.maps && google.maps.visualization) {
+      heatmapLayer = new google.maps.visualization.HeatmapLayer({
+        data: heatData,
+        radius: 30,
+        opacity: 0.6,
+        gradient: ['rgba(0,0,0,0)', 'rgba(99,102,241,0.4)', 'rgba(139,92,246,0.6)', 'rgba(245,158,11,0.7)', 'rgba(239,68,68,0.8)', 'rgba(220,38,38,1)']
+      });
+      heatmapLayer.setMap(map);
+      heatmapActive = true;
+      if (btn) btn.classList.add('active');
+    }
   }
 
   function renderAll() {

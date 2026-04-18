@@ -102,16 +102,22 @@
       </div>`).join('')
   }
 
-  // ── KPI card ─────────────────────────────────────────────────
+  // ── KPI card (glassmorphism + animated counter) ──────────────
   function kpiCard(label, value, sub, icon, color) {
-    return `<div class="bg-slate-800 rounded-xl p-5 border border-slate-700 hover:border-slate-600 transition-colors">
+    // Parse numeric value for animation
+    var numVal = parseFloat(String(value).replace(/[^0-9.\-]/g, '')) || 0
+    var prefix = String(value).match(/^[^0-9.\-]*/) ? String(value).match(/^[^0-9.\-]*/)[0] : ''
+    var suffix = String(value).match(/[^0-9.\-]*$/) ? String(value).match(/[^0-9.\-]*$/)[0] : ''
+    var isAnimatable = numVal > 0 && !isNaN(numVal)
+
+    return `<div class="rounded-xl p-5 hover:border-white/15 transition-colors" style="backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">
       <div class="flex items-start justify-between mb-3">
         <span class="text-xs text-gray-500 uppercase tracking-wider font-semibold">${label}</span>
         <div class="w-8 h-8 ${color} rounded-lg flex items-center justify-center shrink-0">
           <i class="${icon} text-white text-xs"></i>
         </div>
       </div>
-      <div class="text-2xl font-bold text-white mb-1">${value}</div>
+      <div class="text-2xl font-bold text-white mb-1"${isAnimatable ? ` data-counter="${numVal}" data-counter-prefix="${prefix}" data-counter-suffix="${suffix}" data-counter-duration="1200"` : ''}>${isAnimatable ? prefix + '0' + suffix : value}</div>
       ${sub ? `<div class="text-xs text-gray-500">${sub}</div>` : ''}
     </div>`
   }
@@ -140,6 +146,7 @@
 
   async function loadBiView(view) {
     switch (view) {
+      case 'executive': await loadExecutiveSummary(); break
       case 'overview': await loadOverview(); break
       case 'traffic': await loadTraffic(); break
       case 'revenue': await loadRevenue(); break
@@ -202,28 +209,58 @@
           ${kpiCard('Avg Quality', bi.avg_quality_score ? bi.avg_quality_score + '%' : 'N/A', 'AI confidence score', 'fas fa-star', 'bg-yellow-600')}
         </div>
 
-        <div class="bg-slate-800 rounded-xl p-5 border border-slate-700">
+        <div class="rounded-xl p-5" style="backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">
           <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
             <i class="fas fa-chart-bar text-indigo-400"></i> Revenue by Tier (last 30 days)
           </h3>
-          <div class="flex items-end gap-3 h-32">${chartBars}</div>
+          <div id="bi-revenue-tier-chart" class="h-48">${chartBars}</div>
         </div>
 
         ${bi.monthly_new_customers?.length ? `
-        <div class="bg-slate-800 rounded-xl p-5 border border-slate-700">
+        <div class="rounded-xl p-5" style="backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">
           <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
             <i class="fas fa-user-plus text-emerald-400"></i> New Customers (last 6 months)
           </h3>
-          <div class="flex items-end gap-2 h-14 mb-6">${monthlySparkline}</div>
-          <div class="grid grid-cols-3 md:grid-cols-6 gap-2 mt-2">
-            ${bi.monthly_new_customers.map(m => `
-              <div class="text-center">
-                <div class="text-lg font-bold text-white">${m.new_customers}</div>
-                <div class="text-xs text-gray-500">${m.month}</div>
-              </div>`).join('')}
-          </div>
+          <div id="bi-monthly-chart" class="h-48"></div>
         </div>` : ''}
       </div>`
+
+    // Animate counters
+    if (typeof animateAllCounters === 'function') animateAllCounters(main)
+
+    // Render monthly customers chart with ApexCharts if available
+    if (typeof ApexCharts !== 'undefined' && bi.monthly_new_customers?.length) {
+      const el = document.getElementById('bi-monthly-chart')
+      if (el) {
+        const cfg = typeof mergeApexConfig === 'function' ? mergeApexConfig(APEX_DARK, {
+          chart: { type: 'area', height: 180, toolbar: { show: false }, sparkline: { enabled: false } },
+          series: [{ name: 'New Customers', data: bi.monthly_new_customers.map(m => m.new_customers) }],
+          xaxis: { categories: bi.monthly_new_customers.map(m => m.month?.slice(5) || '') },
+          colors: ['#6366f1'],
+          fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.45, opacityTo: 0.05 } },
+          dataLabels: { enabled: true, style: { fontSize: '11px' } }
+        }) : {}
+        new ApexCharts(el, cfg).render()
+      }
+    }
+
+    // Render revenue-by-tier chart
+    if (typeof ApexCharts !== 'undefined' && waterfall?.tiers?.length) {
+      const tierEl = document.getElementById('bi-revenue-tier-chart')
+      if (tierEl) {
+        tierEl.innerHTML = ''
+        const tierCfg = typeof mergeApexConfig === 'function' ? mergeApexConfig(APEX_DARK, {
+          chart: { type: 'bar', height: 180, toolbar: { show: false } },
+          series: [{ name: 'Revenue', data: waterfall.tiers.map(t => t.paid_revenue || 0) }],
+          xaxis: { categories: waterfall.tiers.map(t => t.service_tier || 'N/A') },
+          colors: ['#6366f1'],
+          plotOptions: { bar: { borderRadius: 6, columnWidth: '50%' } },
+          fill: { type: 'gradient', gradient: { shade: 'dark', type: 'vertical', shadeIntensity: 0.3, gradientToColors: ['#4338ca'], stops: [0, 100] } },
+          dataLabels: { enabled: true, formatter: v => fmt$(v), style: { fontSize: '11px' } }
+        }) : {}
+        new ApexCharts(tierEl, tierCfg).render()
+      }
+    }
   }
 
   // ── SITE TRAFFIC ─────────────────────────────────────────────
@@ -542,10 +579,14 @@
           <p class="text-emerald-300 font-semibold">All ${d.total} customers have a healthy engagement score</p>
         </div>`}
 
-        <div class="grid grid-cols-3 gap-4">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
           ${kpiCard('Total Active', d.total || 0, '', 'fas fa-users', 'bg-blue-600')}
           ${kpiCard('At Risk', d.at_risk_count || 0, 'score < 30', 'fas fa-exclamation-triangle', d.at_risk_count > 0 ? 'bg-red-600' : 'bg-gray-600')}
           ${kpiCard('Healthy', (d.total || 0) - (d.at_risk_count || 0), 'score ≥ 30', 'fas fa-check-circle', 'bg-emerald-600')}
+          <div class="rounded-xl p-5" style="backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">
+            <span class="text-xs text-gray-500 uppercase tracking-wider font-semibold">Avg Health</span>
+            <div id="bi-health-gauge" class="mt-1"></div>
+          </div>
         </div>
 
         <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
@@ -570,6 +611,31 @@
           </div>
         </div>
       </div>`
+
+    // Animate counters
+    if (typeof animateAllCounters === 'function') animateAllCounters(main)
+
+    // Render average health gauge
+    if (typeof ApexCharts !== 'undefined' && customers.length > 0) {
+      const avgScore = Math.round(customers.reduce((s, c) => s + (c.score || 0), 0) / customers.length)
+      const gaugeColor = avgScore >= 70 ? '#22c55e' : avgScore >= 30 ? '#f59e0b' : '#ef4444'
+      const gaugeEl = document.getElementById('bi-health-gauge')
+      if (gaugeEl) {
+        new ApexCharts(gaugeEl, {
+          chart: { type: 'radialBar', height: 120, sparkline: { enabled: true } },
+          series: [avgScore],
+          plotOptions: {
+            radialBar: {
+              hollow: { size: '55%' },
+              track: { background: 'rgba(255,255,255,0.06)' },
+              dataLabels: { name: { show: false }, value: { fontSize: '18px', fontWeight: 700, color: '#fff', offsetY: 5 } }
+            }
+          },
+          colors: [gaugeColor],
+          labels: ['Health']
+        }).render()
+      }
+    }
   }
 
   // ── LIVE VISITORS ─────────────────────────────────────────────
@@ -666,6 +732,153 @@
     // Auto-refresh every 30s
     if (BI.liveInterval) clearInterval(BI.liveInterval)
     BI.liveInterval = setInterval(fetchLive, 30000)
+  }
+
+  // ── EXECUTIVE SUMMARY ─────────────────────────────────────────
+  async function loadExecutiveSummary() {
+    const main = document.getElementById('bi-main')
+    if (!main) return
+
+    // Fetch all data sources in parallel
+    const [biRes, anomalyRes, healthRes] = await Promise.all([
+      biFetch('/api/admin/bi/business-intel'),
+      biFetch('/api/admin/bi/anomalies'),
+      biFetch('/api/admin/bi/customer-health')
+    ])
+
+    let bi = {}, anomalies = [], health = {}
+    try { if (biRes) bi = await biRes.json() } catch {}
+    try { if (anomalyRes) { const a = await anomalyRes.json(); anomalies = a.anomalies || [] } } catch {}
+    try { if (healthRes) health = await healthRes.json() } catch {}
+
+    const avgHealth = (health.customers || []).length > 0
+      ? Math.round((health.customers || []).reduce((s, c) => s + (c.score || 0), 0) / health.customers.length) : 0
+    const healthColor = avgHealth >= 70 ? '#22c55e' : avgHealth >= 30 ? '#f59e0b' : '#ef4444'
+
+    main.innerHTML = `
+      <div class="space-y-6">
+        <h2 class="text-xl font-bold text-white flex items-center gap-3">
+          <i class="fas fa-tachometer-alt text-cyan-400"></i> Executive Summary
+          ${typeof pulseIndicator === 'function' ? '<span class="flex items-center gap-1.5 text-xs text-gray-500 font-normal">' + pulseIndicator('#22c55e') + ' Live</span>' : ''}
+        </h2>
+
+        ${anomaliesHTML(anomalies)}
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          ${kpiCard('MRR', fmt$cents(bi.mrr_cents), 'monthly recurring', 'fas fa-sync-alt', 'bg-indigo-600')}
+          ${kpiCard('ARR', fmt$cents(bi.arr_cents), 'annual recurring', 'fas fa-chart-line', 'bg-purple-600')}
+          ${kpiCard('30d Revenue', fmt$(bi.revenue_30d_cents / 100), 'transactional', 'fas fa-dollar-sign', 'bg-emerald-600')}
+          ${kpiCard('Trial Conv.', bi.trial_conversion_rate + '%', bi.trial_converted + '/' + bi.trial_orders + ' (90d)', 'fas fa-funnel-dollar', 'bg-amber-600')}
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          ${kpiCard('Active Customers', health.total || 0, '', 'fas fa-users', 'bg-blue-600')}
+          ${kpiCard('At Risk', health.at_risk_count || 0, 'health score < 30', 'fas fa-exclamation-triangle', (health.at_risk_count || 0) > 0 ? 'bg-red-600' : 'bg-gray-600')}
+          ${kpiCard('Churned', bi.churned_customers + '', 'inactive 60+ days', 'fas fa-user-times', bi.churned_customers > 5 ? 'bg-red-600' : 'bg-gray-600')}
+          <div class="rounded-xl p-5" style="backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">
+            <div class="flex items-start justify-between mb-1">
+              <span class="text-xs text-gray-500 uppercase tracking-wider font-semibold">Avg Health</span>
+              <div class="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center shrink-0">
+                <i class="fas fa-heartbeat text-white text-xs"></i>
+              </div>
+            </div>
+            <div id="exec-health-gauge"></div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="rounded-xl p-5" style="backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">
+            <h3 class="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+              <i class="fas fa-chart-pie text-indigo-400"></i> Revenue Mix
+            </h3>
+            <div id="exec-revenue-pie" class="h-52"></div>
+          </div>
+          <div class="rounded-xl p-5" style="backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">
+            <h3 class="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+              <i class="fas fa-user-plus text-emerald-400"></i> Customer Growth
+            </h3>
+            <div id="exec-growth-chart" class="h-52"></div>
+          </div>
+        </div>
+
+        <div class="rounded-xl p-5" style="backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">
+          <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+            <i class="fas fa-fire text-orange-400"></i> Key Metrics Snapshot
+          </h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div class="text-center">
+              <p class="text-3xl font-black text-white" data-counter="${bi.report_completion_rate || 0}" data-counter-suffix="%" data-counter-duration="1000">0%</p>
+              <p class="text-xs text-gray-500 mt-1">Report Completion</p>
+            </div>
+            <div class="text-center">
+              <p class="text-3xl font-black text-white" data-counter="${bi.avg_quality_score || 0}" data-counter-suffix="%" data-counter-duration="1000">0%</p>
+              <p class="text-xs text-gray-500 mt-1">Avg AI Quality</p>
+            </div>
+            <div class="text-center">
+              <p class="text-3xl font-black text-white" data-counter="${bi.arpc_cents ? (bi.arpc_cents / 100) : 0}" data-counter-prefix="$" data-counter-duration="1000">$0</p>
+              <p class="text-xs text-gray-500 mt-1">ARPC</p>
+            </div>
+            <div class="text-center">
+              <p class="text-3xl font-black text-white" data-counter="${bi.completed_reports_30d || 0}" data-counter-duration="800">0</p>
+              <p class="text-xs text-gray-500 mt-1">Reports (30d)</p>
+            </div>
+          </div>
+        </div>
+      </div>`
+
+    // Animate counters
+    if (typeof animateAllCounters === 'function') animateAllCounters(main)
+
+    // Health gauge
+    if (typeof ApexCharts !== 'undefined') {
+      const gaugeEl = document.getElementById('exec-health-gauge')
+      if (gaugeEl) {
+        new ApexCharts(gaugeEl, {
+          chart: { type: 'radialBar', height: 100, sparkline: { enabled: true } },
+          series: [avgHealth],
+          plotOptions: {
+            radialBar: { hollow: { size: '55%' }, track: { background: 'rgba(255,255,255,0.06)' },
+              dataLabels: { name: { show: false }, value: { fontSize: '18px', fontWeight: 700, color: '#fff', offsetY: 5 } }
+            }
+          },
+          colors: [healthColor]
+        }).render()
+      }
+
+      // Revenue mix donut
+      const mrrDollars = (bi.mrr_cents || 0) / 100
+      const transactional = (bi.revenue_30d_cents || 0) / 100
+      if (mrrDollars > 0 || transactional > 0) {
+        const pieEl = document.getElementById('exec-revenue-pie')
+        if (pieEl) {
+          new ApexCharts(pieEl, Object.assign({}, APEX_DARK, {
+            chart: { type: 'donut', height: 200 },
+            series: [mrrDollars, transactional],
+            labels: ['Recurring (MRR)', 'Transactional'],
+            colors: ['#6366f1', '#10b981'],
+            plotOptions: { pie: { donut: { size: '65%', labels: { show: true, total: { show: true, label: 'Total', fontSize: '13px', color: '#9ca3af', formatter: () => fmt$(mrrDollars + transactional) } } } } },
+            dataLabels: { enabled: false },
+            legend: { position: 'bottom', labels: { colors: '#9ca3af' } }
+          })).render()
+        }
+      }
+
+      // Growth sparkline
+      if (bi.monthly_new_customers?.length) {
+        const growthEl = document.getElementById('exec-growth-chart')
+        if (growthEl) {
+          const cfg = typeof mergeApexConfig === 'function' ? mergeApexConfig(APEX_DARK, {
+            chart: { type: 'area', height: 200, toolbar: { show: false } },
+            series: [{ name: 'New Customers', data: bi.monthly_new_customers.map(m => m.new_customers) }],
+            xaxis: { categories: bi.monthly_new_customers.map(m => m.month?.slice(5) || '') },
+            colors: ['#22c55e'],
+            fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.5, opacityTo: 0.05 } },
+            dataLabels: { enabled: true, style: { fontSize: '11px' } }
+          }) : {}
+          new ApexCharts(growthEl, cfg).render()
+        }
+      }
+    }
   }
 
   // ── Expose globals ────────────────────────────────────────────

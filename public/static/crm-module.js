@@ -2602,9 +2602,10 @@
       fetch('/api/crm/crew', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
       fetch('/api/crm/jobs?status=in_progress', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
       fetch('/api/crm/jobs?status=scheduled', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
-      fetch('/api/crm/jobs', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+      fetch('/api/crm/jobs', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/crm/crew/metrics', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }).catch(function() { return {}; })
     ]).then(function(results) {
-      renderCrewManager(results[0], results[1].jobs || [], results[2].jobs || [], results[3].jobs || []);
+      renderCrewManager(results[0], results[1].jobs || [], results[2].jobs || [], results[3].jobs || [], results[4]);
     }).catch(function() { root.innerHTML = '<p class="text-red-500 p-4">Failed to load crew data.</p>'; });
   }
 
@@ -3087,9 +3088,10 @@
 
   // ── OWNER DISPATCH DASHBOARD ─────────────────────────────
 
-  function renderCrewManager(crewData, activeJobs, scheduledJobs, allJobs) {
+  function renderCrewManager(crewData, activeJobs, scheduledJobs, allJobs, crewMetrics) {
     var crew = crewData.crew || [];
     var owner = crewData.owner || {};
+    var metrics = crewMetrics || {};
     var busyJobs = activeJobs.concat(scheduledJobs);
 
     // Determine unscheduled: no scheduled_date or no crew assigned
@@ -3105,13 +3107,27 @@
       '<a href="/customer/jobs" class="bg-blue-500/15 text-blue-400 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-500/25 transition-colors"><i class="fas fa-plus mr-1"></i>New Job</a></div>';
     html += '</div>';
 
-    // Stats row
-    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
-    html += '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-gray-100">' + crew.length + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Crew Members</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-blue-400">' + activeJobs.length + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">In Progress</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-cyan-400">' + scheduledJobs.length + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Scheduled</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-yellow-400">' + unscheduledJobs.length + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Unscheduled</p></div>';
+    // Enhanced stats row with glassmorphism
+    var glassStyle = 'backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)';
+    html += '<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-5">';
+    html += '<div class="rounded-xl p-4 text-center" style="' + glassStyle + '"><p class="text-2xl font-black text-gray-100" data-counter="' + crew.length + '" data-counter-duration="600">0</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Crew Members</p></div>';
+    html += '<div class="rounded-xl p-4 text-center" style="' + glassStyle + '"><p class="text-2xl font-black text-blue-400" data-counter="' + activeJobs.length + '" data-counter-duration="600">0</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">In Progress</p></div>';
+    html += '<div class="rounded-xl p-4 text-center" style="' + glassStyle + '"><p class="text-2xl font-black text-cyan-400" data-counter="' + scheduledJobs.length + '" data-counter-duration="600">0</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Scheduled</p></div>';
+    html += '<div class="rounded-xl p-4 text-center" style="' + glassStyle + '"><p class="text-2xl font-black text-yellow-400" data-counter="' + unscheduledJobs.length + '" data-counter-duration="600">0</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Unscheduled</p></div>';
+    // New metrics
+    var ftfrColor = (metrics.ftfr || 0) >= 80 ? 'text-emerald-400' : (metrics.ftfr || 0) >= 60 ? 'text-amber-400' : 'text-red-400';
+    html += '<div class="rounded-xl p-4 text-center" style="' + glassStyle + '"><p class="text-2xl font-black ' + ftfrColor + '" data-counter="' + (metrics.ftfr || 0) + '" data-counter-suffix="%" data-counter-duration="1000">0%</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">FTFR</p></div>';
+    html += '<div class="rounded-xl p-4 text-center" style="' + glassStyle + '"><p class="text-2xl font-black text-purple-400" data-counter="' + (metrics.avg_utilization || 0) + '" data-counter-suffix="%" data-counter-duration="1000">0%</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Utilization</p></div>';
+    html += '<div class="rounded-xl p-4 text-center" style="' + glassStyle + '"><p class="text-2xl font-black text-emerald-400" data-counter="' + (metrics.revenue_per_crew_avg || 0) + '" data-counter-prefix="$" data-counter-duration="1200">$0</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Rev/Tech</p></div>';
     html += '</div>';
+
+    // Crew leaderboard chart
+    if ((metrics.crew || []).length > 0) {
+      html += '<div class="rounded-2xl p-5 mb-5" style="' + glassStyle + '">';
+      html += '<h3 class="font-bold text-gray-100 text-sm mb-3"><i class="fas fa-trophy text-amber-400 mr-2"></i>Crew Leaderboard (30 day)</h3>';
+      html += '<div id="crew-leaderboard-chart" class="h-64"></div>';
+      html += '</div>';
+    }
 
     // ── DISPATCH BOARD: Split screen ──
     html += '<div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-5">';
@@ -3230,6 +3246,32 @@
     html += '</div>';
 
     root.innerHTML = html;
+
+    // Animate counters
+    if (typeof animateAllCounters === 'function') animateAllCounters(root);
+
+    // Render crew leaderboard chart
+    if (typeof ApexCharts !== 'undefined' && (metrics.crew || []).length > 0) {
+      var chartEl = document.getElementById('crew-leaderboard-chart');
+      if (chartEl) {
+        var crewNames = metrics.crew.map(function(c) { return c.name || 'Unknown'; });
+        var baseConfig = typeof mergeApexConfig === 'function' ? mergeApexConfig(APEX_DARK, {}) : {};
+        new ApexCharts(chartEl, Object.assign({}, baseConfig, {
+          chart: { type: 'bar', height: 250, toolbar: { show: false }, background: 'transparent', foreColor: '#9ca3af' },
+          series: [
+            { name: 'Hours Logged', data: metrics.crew.map(function(c) { return c.total_hours || 0; }) },
+            { name: 'Jobs Completed', data: metrics.crew.map(function(c) { return c.jobs_completed || 0; }) }
+          ],
+          xaxis: { categories: crewNames },
+          colors: ['#6366f1', '#22c55e'],
+          plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '60%' } },
+          grid: { borderColor: 'rgba(255,255,255,0.06)' },
+          tooltip: { theme: 'dark' },
+          legend: { position: 'top', labels: { colors: '#9ca3af' } },
+          dataLabels: { enabled: false }
+        })).render();
+      }
+    }
 
     // Attach drag events to unscheduled job cards
     setTimeout(function() {
@@ -3785,39 +3827,87 @@
   // ============================================================
   // MODULE: PIPELINE
   // ============================================================
+  // WIP limit defaults per column
+  var _pipeWipLimits = { leads: 20, active: 15, proposals: 10, won: null, lost: null };
+
+  // Pipeline grouping state
+  var _pipeGroupBy = 'none';
+
   function renderPipeCard(item, type) {
     var now = new Date();
     var lastContact = new Date(item.updated_at || item.created_at);
     var daysDiff = Math.floor((now - lastContact) / (1000 * 60 * 60 * 24));
-    var dotColor = daysDiff <= 2 ? '#22c55e' : daysDiff <= 7 ? '#f59e0b' : '#ef4444';
-    var dotTitle = daysDiff <= 2 ? 'Hot' : daysDiff <= 7 ? 'Warm' : 'Cold — ' + daysDiff + 'd ago';
+    var priorityLabel = daysDiff <= 2 ? 'HOT' : daysDiff <= 7 ? 'WARM' : 'COLD';
+    var priorityColor = daysDiff <= 2 ? '#22c55e' : daysDiff <= 7 ? '#f59e0b' : '#ef4444';
+    var priorityBg = daysDiff <= 2 ? 'rgba(34,197,94,0.15)' : daysDiff <= 7 ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)';
     var name = type === 'customer' ? (item.name || 'Unknown') : (item.customer_name || item.name || 'Unknown');
-    var value = type === 'proposal' && item.total_amount ? money(item.total_amount) : (parseFloat(item.lifetime_value) > 0 ? money(item.lifetime_value) : null);
+    var rawValue = type === 'proposal' && item.total_amount ? parseFloat(item.total_amount) : (parseFloat(item.lifetime_value) > 0 ? parseFloat(item.lifetime_value) : 0);
     var address = item.property_address || item.address || '';
     var phone = item.phone || item.customer_phone || '';
     var dealId = item.proposal_number || ('#' + item.id);
 
-    var html = '<div class="pipe-card rounded-xl border border-white/10 p-3 shadow-sm hover:shadow-md hover:border-white/20 transition-all cursor-grab active:cursor-grabbing"';
-    html += ' style="background:var(--bg-card)" data-id="' + item.id + '" data-type="' + type + '">';
+    // Time-in-stage calculation
+    var stageDate = item.stage_entered_at ? new Date(item.stage_entered_at) : new Date(item.created_at);
+    var stageDays = Math.floor((now - stageDate) / (1000 * 60 * 60 * 24));
+    var stageColor = stageDays <= 3 ? '#22c55e' : stageDays <= 7 ? '#f59e0b' : '#ef4444';
 
-    // Name + Value
-    html += '<div class="flex items-start justify-between gap-2 mb-1.5">';
-    html += '<p class="font-bold text-sm truncate flex-1" style="color:var(--text-primary)">' + name + '</p>';
-    if (value) html += '<span class="text-xs font-bold text-emerald-400 shrink-0">' + value + '</span>';
+    // Detect last contact method from notes/source
+    var notes = (item.notes || '').toLowerCase();
+    var contactIcon = 'fa-clock';
+    if (notes.indexOf('source: door knock') !== -1 || notes.indexOf('d2d') !== -1) contactIcon = 'fa-door-open';
+    else if (notes.indexOf('source: referral') !== -1) contactIcon = 'fa-user-friends';
+    else if (notes.indexOf('email') !== -1) contactIcon = 'fa-envelope';
+    else if (phone) contactIcon = 'fa-phone';
+
+    var html = '<div class="pipe-card rounded-xl border border-white/10 p-3 shadow-sm hover:shadow-md hover:border-white/20 transition-all cursor-grab active:cursor-grabbing"';
+    html += ' style="backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)" data-id="' + item.id + '" data-type="' + type + '"';
+    html += ' data-priority="' + priorityLabel.toLowerCase() + '"';
+    var jobType = '';
+    if (notes.indexOf('job:') !== -1) { jobType = notes.split('job:')[1].split('|')[0].trim(); }
+    html += ' data-jobtype="' + jobType + '"';
+    html += ' data-source="' + (notes.indexOf('source:') !== -1 ? notes.split('source:')[1].split('|')[0].trim() : '') + '">';
+
+    // Row 1: Avatar + Name + Priority pill
+    html += '<div class="flex items-center gap-2 mb-2">';
+    html += (typeof initialsAvatar === 'function' ? initialsAvatar(name, 28) : '');
+    html += '<div class="flex-1 min-w-0">';
+    html += '<p class="font-bold text-sm truncate" style="color:var(--text-primary)">' + name + '</p>';
+    html += '</div>';
+    html += '<span class="text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0" style="background:' + priorityBg + ';color:' + priorityColor + '">' + priorityLabel + '</span>';
     html += '</div>';
 
-    // Address
-    if (address) html += '<p class="text-[11px] truncate mb-1.5" style="color:var(--text-muted)"><i class="fas fa-map-marker-alt mr-1"></i>' + address + '</p>';
+    // Row 2: Deal value (prominent)
+    if (rawValue > 0) {
+      html += '<p class="text-lg font-black text-emerald-400 mb-1.5">' + money(rawValue) + '</p>';
+    }
 
-    // Phone + freshness dot
-    html += '<div class="flex items-center justify-between mb-2">';
-    html += '<span class="text-[11px]" style="color:var(--text-muted)">' + (phone ? '<i class="fas fa-phone mr-1"></i>' + phone : '') + '</span>';
-    html += '<span style="display:inline-flex;align-items:center;gap:3px">';
-    html += '<span style="width:7px;height:7px;border-radius:50%;background:' + dotColor + '" title="' + dotTitle + '"></span>';
-    html += '<span class="text-[10px]" style="color:var(--text-muted)">' + (daysDiff === 0 ? 'Today' : daysDiff + 'd ago') + '</span>';
-    html += '</span></div>';
+    // Row 3: Mini progress bar for proposals
+    if (type === 'proposal') {
+      var stages = ['draft', 'sent', 'viewed', 'accepted'];
+      var stageLabels = ['Draft', 'Sent', 'Viewed', 'Won'];
+      var currentIdx = stages.indexOf(item.status);
+      if (item.status === 'declined') currentIdx = -1;
+      html += '<div class="flex gap-0.5 mb-2">';
+      for (var si = 0; si < stages.length; si++) {
+        var filled = si <= currentIdx;
+        var barColor = filled ? (si === 3 ? '#22c55e' : '#3b82f6') : 'rgba(255,255,255,0.08)';
+        html += '<div class="flex-1 h-1 rounded-full" style="background:' + barColor + '" title="' + stageLabels[si] + '"></div>';
+      }
+      html += '</div>';
+    }
 
-    // Status badge + deposit + deal ID
+    // Row 4: Address
+    if (address) html += '<p class="text-[11px] truncate mb-1" style="color:var(--text-muted)"><i class="fas fa-map-marker-alt mr-1 text-[9px]"></i>' + address + '</p>';
+
+    // Row 5: Phone + time-in-stage + contact method
+    html += '<div class="flex items-center justify-between mb-2 gap-1">';
+    html += '<span class="text-[11px]" style="color:var(--text-muted)">' + (phone ? '<i class="fas fa-phone mr-1 text-[9px]"></i>' + phone : '') + '</span>';
+    html += '<div class="flex items-center gap-2">';
+    html += '<span class="text-[9px] px-1.5 py-0.5 rounded font-medium" style="background:rgba(255,255,255,0.06);color:' + stageColor + '"><i class="fas fa-hourglass-half mr-0.5 text-[8px]"></i>' + stageDays + 'd</span>';
+    html += '<i class="fas ' + contactIcon + ' text-[10px]" style="color:var(--text-muted)" title="Last contact method"></i>';
+    html += '</div></div>';
+
+    // Row 6: Status badge + deposit + deal ID
     html += '<div class="flex items-center gap-1 flex-wrap">';
     html += badge(item.status);
     if (type === 'proposal' && parseFloat(item.deposit_paid) > 0) {
@@ -3884,11 +3974,8 @@
 
     // Active Leads sub-sections
     var invoiceCustomerIds = new Set(invoices.map(function(i) { return String(i.crm_customer_id); }));
-    // Proposal leads: customers linked to any open proposal (shown in Proposal Sent but surfaced here too)
-    var proposalLeadRows = proposalItems.slice(0, 10); // show up to 10 most recent
-    // Invoice leads: open invoices (owing)
+    var proposalLeadRows = proposalItems.slice(0, 10);
     var invoiceLeadRows = invoices.slice(0, 10);
-    // New CRM leads: active customers with no proposal and no invoice
     var newCRMLeads = customers.filter(function(c) {
       return (c.status === 'active' || c.status === 'inactive') &&
              !customersWithProposals.has(String(c.id)) &&
@@ -3899,6 +3986,7 @@
     var pipelineValue = proposalItems.reduce(function(s, p) { return s + (parseFloat(p.total_amount) || 0); }, 0);
     var wonValue      = wonItems.reduce(function(s, p) { return s + (parseFloat(p.total_amount) || 0); }, 0);
     var closeRate     = (wonItems.length + lostItems.length) > 0 ? Math.round(wonItems.length / (wonItems.length + lostItems.length) * 100) : 0;
+    var avgDealSize   = wonItems.length > 0 ? Math.round(wonValue / wonItems.length) : 0;
 
     var cols = [
       { id: 'leads',     title: 'Lead Capture',  icon: 'fa-bullseye',       hdrBg: '#1e3a5f', ringClass: 'ring-blue-500',    items: leadItems,     type: 'customer', dropStatus: 'lead',     acceptType: 'customer' },
@@ -3908,19 +3996,28 @@
       { id: 'lost',      title: 'Lost',           icon: 'fa-times-circle',   hdrBg: '#450a0a', ringClass: 'ring-red-400',    items: lostItems,     type: 'mixed',    dropStatus: 'declined', acceptType: 'both' }
     ];
 
-    // Header
+    // Header with swimlane dropdown
     var html = '<div class="mb-4 flex items-center justify-between flex-wrap gap-3">' +
       '<div><h2 class="text-lg font-bold" style="color:var(--text-primary)"><i class="fas fa-funnel-dollar text-blue-400 mr-2"></i>Sales Pipeline</h2>' +
       '<p class="text-xs mt-0.5" style="color:var(--text-muted)">Drag cards between stages · ' + (leadItems.length + activeTotalCount + proposalItems.length) + ' active deals</p></div>' +
-      '<button onclick="window._crmAddLead()" style="background:#2563eb;color:white" class="px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"><i class="fas fa-user-plus mr-1.5"></i>Add Lead</button></div>';
+      '<div class="flex items-center gap-2">' +
+      '<select onchange="window._pipeSetGroupBy(this.value)" class="text-xs px-3 py-2 rounded-lg border border-white/15 font-medium" style="background:var(--bg-card);color:var(--text-secondary)">' +
+      '<option value="none"' + (_pipeGroupBy === 'none' ? ' selected' : '') + '>No Grouping</option>' +
+      '<option value="priority"' + (_pipeGroupBy === 'priority' ? ' selected' : '') + '>Group by Priority</option>' +
+      '<option value="jobtype"' + (_pipeGroupBy === 'jobtype' ? ' selected' : '') + '>Group by Job Type</option>' +
+      '<option value="source"' + (_pipeGroupBy === 'source' ? ' selected' : '') + '>Group by Source</option>' +
+      '</select>' +
+      '<button onclick="window._crmAddLead()" style="background:#2563eb;color:white" class="px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"><i class="fas fa-user-plus mr-1.5"></i>Add Lead</button>' +
+      '</div></div>';
 
-    // Summary bar
-    html += '<div class="rounded-xl border border-white/10 p-4 mb-5 grid grid-cols-2 md:grid-cols-4 gap-4" style="background:var(--bg-card)">' +
-      '<div><p class="text-[10px] uppercase font-semibold tracking-wider mb-1" style="color:var(--text-muted)">Total Pipeline</p><p class="text-xl font-black text-blue-400">' + money(pipelineValue) + '</p></div>' +
-      '<div><p class="text-[10px] uppercase font-semibold tracking-wider mb-1" style="color:var(--text-muted)">Forecast (Won)</p><p class="text-xl font-black text-emerald-400">' + money(wonValue) + '</p></div>' +
-      '<div><p class="text-[10px] uppercase font-semibold tracking-wider mb-1" style="color:var(--text-muted)">Close Rate</p><p class="text-xl font-black" style="color:var(--text-primary)">' + closeRate + '%</p></div>' +
-      '<div><p class="text-[10px] uppercase font-semibold tracking-wider mb-1" style="color:var(--text-muted)">Open Proposals</p><p class="text-xl font-black text-indigo-400">' + proposalItems.length + '</p></div>' +
-      '</div>';
+    // Summary bar with glassmorphism + animated counters
+    html += '<div class="rounded-2xl p-4 mb-5 grid grid-cols-2 md:grid-cols-5 gap-4" style="backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08)">';
+    html += '<div><p class="text-[10px] uppercase font-semibold tracking-wider mb-1" style="color:var(--text-muted)">Total Pipeline</p><p class="text-xl font-black text-blue-400" data-counter="' + pipelineValue + '" data-counter-prefix="$" data-counter-duration="1200">$0</p></div>';
+    html += '<div><p class="text-[10px] uppercase font-semibold tracking-wider mb-1" style="color:var(--text-muted)">Forecast (Won)</p><p class="text-xl font-black text-emerald-400" data-counter="' + wonValue + '" data-counter-prefix="$" data-counter-duration="1200">$0</p></div>';
+    html += '<div><p class="text-[10px] uppercase font-semibold tracking-wider mb-1" style="color:var(--text-muted)">Close Rate</p><p class="text-xl font-black" style="color:var(--text-primary)" data-counter="' + closeRate + '" data-counter-suffix="%" data-counter-duration="1000">0%</p></div>';
+    html += '<div><p class="text-[10px] uppercase font-semibold tracking-wider mb-1" style="color:var(--text-muted)">Open Proposals</p><p class="text-xl font-black text-indigo-400" data-counter="' + proposalItems.length + '" data-counter-duration="800">0</p></div>';
+    html += '<div><p class="text-[10px] uppercase font-semibold tracking-wider mb-1" style="color:var(--text-muted)">Avg Deal Size</p><p class="text-xl font-black text-amber-400" data-counter="' + avgDealSize + '" data-counter-prefix="$" data-counter-duration="1000">$0</p></div>';
+    html += '</div>';
 
     // Kanban board — horizontally scrollable on mobile
     html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px 8px">';
@@ -3929,10 +4026,28 @@
     cols.forEach(function(col) {
       var colValue = col.items.reduce(function(s, p) { return s + (parseFloat(p.total_amount) || 0); }, 0);
       var displayCount = col._totalCount !== undefined ? col._totalCount : col.items.length;
+
+      // WIP limit indicator
+      var wipLimit = _pipeWipLimits[col.id];
+      var wipPct = wipLimit ? (displayCount / wipLimit) : 0;
+      var wipHeaderBorder = '';
+      if (wipLimit) {
+        if (wipPct > 1) wipHeaderBorder = 'box-shadow:0 0 0 2px rgba(239,68,68,0.6) inset;';
+        else if (wipPct >= 0.7) wipHeaderBorder = 'box-shadow:0 0 0 2px rgba(245,158,11,0.5) inset;';
+      }
+
       html += '<div class="flex flex-col">';
-      html += '<div class="rounded-t-xl px-3 py-2.5 flex items-center justify-between" style="background:' + col.hdrBg + '">' +
+      html += '<div class="rounded-t-xl px-3 py-2.5 flex items-center justify-between" style="background:' + col.hdrBg + ';' + wipHeaderBorder + '">' +
         '<div class="flex items-center gap-1.5"><i class="fas ' + col.icon + ' text-xs opacity-80" style="color:#fff"></i><span class="font-semibold text-xs text-white">' + col.title + '</span></div>' +
-        '<span class="text-white text-[11px] font-bold px-2 py-0.5 rounded-full" style="background:rgba(0,0,0,0.35)">' + displayCount + '</span></div>';
+        '<div class="flex items-center gap-1">';
+      if (wipLimit) {
+        var wipColor = wipPct > 1 ? '#ef4444' : wipPct >= 0.7 ? '#f59e0b' : '#22c55e';
+        html += '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded" style="background:rgba(0,0,0,0.3);color:' + wipColor + '">' + displayCount + '/' + wipLimit + '</span>';
+      } else {
+        html += '<span class="text-white text-[11px] font-bold px-2 py-0.5 rounded-full" style="background:rgba(0,0,0,0.35)">' + displayCount + '</span>';
+      }
+      html += '</div></div>';
+
       if (colValue > 0) {
         html += '<div class="px-3 py-1 text-[11px] font-semibold text-emerald-400 border-x border-white/10" style="background:rgba(16,185,129,0.08)">' + money(colValue) + ' total</div>';
       }
@@ -3964,7 +4079,6 @@
         if (newCRMLeads.length === 0 && activeItems.length === 0) {
           html += '<div class="text-center py-4"><i class="fas fa-user text-2xl mb-2 block opacity-10" style="color:#fff"></i><p class="text-[11px]" style="color:var(--text-muted)">Drop here</p></div>';
         } else {
-          // Show draggable cards for existing activeItems + newCRMLeads not already shown
           var shownIds = new Set(activeItems.map(function(c) { return String(c.id); }));
           activeItems.forEach(function(item) { html += renderPipeCard(item, 'customer'); });
           newCRMLeads.forEach(function(item) {
@@ -3974,16 +4088,44 @@
       } else if (col.items.length === 0) {
         html += '<div class="text-center py-10"><i class="fas ' + col.icon + ' text-2xl mb-2 block opacity-10" style="color:#fff"></i><p class="text-[11px]" style="color:var(--text-muted)">Drop here</p></div>';
       } else {
-        col.items.forEach(function(item) {
-          var cardType = item._lostCust ? 'customer' : (col.type === 'mixed' ? 'proposal' : col.type);
-          html += renderPipeCard(item, cardType);
-        });
+        // Swimlane grouping
+        if (_pipeGroupBy !== 'none' && col.id !== 'active') {
+          var groups = {};
+          col.items.forEach(function(item) {
+            var cardType = item._lostCust ? 'customer' : (col.type === 'mixed' ? 'proposal' : col.type);
+            var groupKey = _pipeGetGroupKey(item, _pipeGroupBy);
+            if (!groups[groupKey]) groups[groupKey] = [];
+            groups[groupKey].push({ item: item, cardType: cardType });
+          });
+          var groupKeys = Object.keys(groups).sort();
+          groupKeys.forEach(function(gk) {
+            var groupLabel = gk || 'Uncategorized';
+            var groupColor = _pipeGroupColor(gk);
+            html += '<div class="mb-1">';
+            html += '<div class="flex items-center gap-1.5 py-1 cursor-pointer" onclick="var s=this.nextElementSibling;s.style.display=s.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.swim-arrow\').classList.toggle(\'rotate-90\')">';
+            html += '<i class="fas fa-chevron-right text-[8px] swim-arrow transition-transform" style="color:' + groupColor + '"></i>';
+            html += '<span class="text-[10px] font-bold uppercase tracking-wider" style="color:' + groupColor + '">' + groupLabel + '</span>';
+            html += '<span class="text-[10px] font-bold ml-auto" style="color:var(--text-muted)">' + groups[gk].length + '</span>';
+            html += '</div>';
+            html += '<div class="space-y-2">';
+            groups[gk].forEach(function(g) { html += renderPipeCard(g.item, g.cardType); });
+            html += '</div></div>';
+          });
+        } else {
+          col.items.forEach(function(item) {
+            var cardType = item._lostCust ? 'customer' : (col.type === 'mixed' ? 'proposal' : col.type);
+            html += renderPipeCard(item, cardType);
+          });
+        }
       }
       html += '</div></div>';
     });
     html += '</div></div>';
 
     root.innerHTML = html;
+
+    // Animate counters
+    if (typeof animateAllCounters === 'function') animateAllCounters(root);
 
     document.querySelectorAll('.pipe-card').forEach(function(card) {
       card.setAttribute('draggable', 'true');
@@ -3994,6 +4136,40 @@
       card.addEventListener('dragend', function() { card.classList.remove('opacity-50'); });
     });
   }
+
+  // Swimlane helpers
+  function _pipeGetGroupKey(item, groupBy) {
+    var notes = (item.notes || '').toLowerCase();
+    if (groupBy === 'priority') {
+      var now = new Date();
+      var last = new Date(item.updated_at || item.created_at);
+      var days = Math.floor((now - last) / 86400000);
+      return days <= 2 ? 'Hot' : days <= 7 ? 'Warm' : 'Cold';
+    }
+    if (groupBy === 'jobtype') {
+      if (notes.indexOf('job:') !== -1) return notes.split('job:')[1].split('|')[0].trim().replace(/^\w/, function(c) { return c.toUpperCase(); });
+      return 'Other';
+    }
+    if (groupBy === 'source') {
+      if (notes.indexOf('source:') !== -1) return notes.split('source:')[1].split('|')[0].trim().replace(/^\w/, function(c) { return c.toUpperCase(); });
+      return 'Unknown';
+    }
+    return 'All';
+  }
+  function _pipeGroupColor(key) {
+    var k = (key || '').toLowerCase();
+    if (k === 'hot') return '#22c55e';
+    if (k === 'warm') return '#f59e0b';
+    if (k === 'cold') return '#ef4444';
+    var colors = ['#60a5fa', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#38bdf8'];
+    var h = 0; for (var i = 0; i < k.length; i++) h = k.charCodeAt(i) + ((h << 5) - h);
+    return colors[((h % colors.length) + colors.length) % colors.length];
+  }
+
+  window._pipeSetGroupBy = function(val) {
+    _pipeGroupBy = val || 'none';
+    initPipeline();
+  };
 
   function initPipeline() {
     root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto mb-3"></div><p class="text-sm" style="color:var(--text-muted)">Loading pipeline...</p></div>';
@@ -4073,7 +4249,7 @@
       if (deposit > 0) { payload.deposit_amount = deposit; payload.deposit_paid = deposit; }
       fetch('/api/crm/proposals/' + proposalId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) })
         .then(function(r) { return r.json(); })
-        .then(function(res) { if (res.success) { closeModal(); toast('Deal marked as Won!'); initPipeline(); } else toast(res.error || 'Update failed', 'error'); })
+        .then(function(res) { if (res.success) { closeModal(); toast('Deal marked as Won!'); if (typeof celebrateWin === 'function') celebrateWin(); initPipeline(); } else toast(res.error || 'Update failed', 'error'); })
         .catch(function() { toast('Network error', 'error'); });
     }, 'Confirm Won');
   };

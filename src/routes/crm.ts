@@ -10,6 +10,35 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+// ── Deprecation helpers ─────────────────────────────────────
+// Phase 1: CRM proposal endpoints forward to the unified `invoices` table.
+// These warnings fire once per process so logs don't flood.
+const _deprecatedOnce = new Set<string>()
+/** @deprecated Log a one-time deprecation warning for a CRM proposal endpoint */
+function warnDeprecated(endpoint: string) {
+  if (_deprecatedOnce.has(endpoint)) return
+  _deprecatedOnce.add(endpoint)
+  console.warn(`[DEPRECATED] /api/crm${endpoint} — use /api/invoices with document_type='proposal' instead`)
+}
+
+/**
+ * Map an `invoices` row to the legacy crm_proposals response shape so existing
+ * frontend code keeps working while we migrate callers to the unified API.
+ */
+function mapInvoiceToLegacyProposal(row: any): any {
+  if (!row) return row
+  return {
+    ...row,
+    proposal_number: row.invoice_number ?? row.proposal_number,
+    total_amount: row.total ?? row.total_amount ?? 0,
+    view_count: row.viewed_count ?? row.view_count ?? 0,
+    last_viewed_at: row.viewed_at ?? row.last_viewed_at,
+    owner_id: row.customer_id ?? row.owner_id,
+    payment_terms: row.payment_terms_text ?? row.payment_terms,
+    tier_label: row.proposal_tier ?? row.tier_label ?? '',
+  }
+}
+
 export const crmRoutes = new Hono<{ Bindings: Bindings }>()
 
 // ============================================================
@@ -90,10 +119,10 @@ crmRoutes.get('/customers', async (c) => {
   const search = c.req.query('search') || ''
   const status = c.req.query('status') || ''
 
-  let q = `SELECT cc.*, 
+  let q = `SELECT cc.*,
     (SELECT COALESCE(SUM(ci.total),0) FROM crm_invoices ci WHERE ci.crm_customer_id = cc.id AND ci.status = 'paid') as lifetime_value,
     (SELECT COUNT(*) FROM crm_invoices ci WHERE ci.crm_customer_id = cc.id) as invoice_count,
-    (SELECT COUNT(*) FROM crm_proposals cp WHERE cp.crm_customer_id = cc.id) as proposal_count,
+    (SELECT COUNT(*) FROM invoices ip WHERE ip.crm_customer_id = cc.id AND ip.document_type = 'proposal') as proposal_count,
     (SELECT COUNT(*) FROM crm_jobs cj WHERE cj.crm_customer_id = cc.id) as job_count
     FROM crm_customers cc WHERE cc.owner_id = ?`
   const params: any[] = [ownerId]
@@ -126,9 +155,10 @@ crmRoutes.get('/customers/:id', async (c) => {
   const invoices = await c.env.DB.prepare(
     'SELECT * FROM crm_invoices WHERE crm_customer_id = ? AND owner_id = ? ORDER BY created_at DESC'
   ).bind(id, ownerId).all()
-  const proposals = await c.env.DB.prepare(
-    'SELECT * FROM crm_proposals WHERE crm_customer_id = ? AND owner_id = ? ORDER BY created_at DESC'
+  const proposalsRaw = await c.env.DB.prepare(
+    "SELECT * FROM invoices WHERE crm_customer_id = ? AND customer_id = ? AND document_type = 'proposal' ORDER BY created_at DESC"
   ).bind(id, ownerId).all()
+  const proposals = { results: (proposalsRaw.results || []).map(mapInvoiceToLegacyProposal) }
   const jobs = await c.env.DB.prepare(
     'SELECT * FROM crm_jobs WHERE crm_customer_id = ? AND owner_id = ? ORDER BY scheduled_date DESC'
   ).bind(id, ownerId).all()
@@ -177,13 +207,26 @@ crmRoutes.put('/customers/:id', async (c) => {
   try {
     const id = c.req.param('id')
     const body = await c.req.json()
+    const newStatus = body.status || 'active'
+
+    // Track status change for pipeline time-in-stage
+    const existing = await c.env.DB.prepare('SELECT status FROM crm_customers WHERE id = ? AND owner_id = ?').bind(id, ownerId).first<any>()
+    const statusChanged = existing && existing.status !== newStatus
+
     const result = await c.env.DB.prepare(`
-      UPDATE crm_customers SET name=?, email=?, phone=?, company=?, address=?, city=?, province=?, postal_code=?, notes=?, tags=?, status=?, updated_at=datetime('now')
+      UPDATE crm_customers SET name=?, email=?, phone=?, company=?, address=?, city=?, province=?, postal_code=?, notes=?, tags=?, status=?, updated_at=datetime('now')${statusChanged ? ", stage_entered_at=datetime('now')" : ''}
       WHERE id = ? AND owner_id = ?
-    `).bind(body.name, body.email || null, body.phone || null, body.company || null, body.address || null, body.city || null, body.province || null, body.postal_code || null, body.notes || null, body.tags || null, body.status || 'active', id, ownerId).run()
+    `).bind(body.name, body.email || null, body.phone || null, body.company || null, body.address || null, body.city || null, body.province || null, body.postal_code || null, body.notes || null, body.tags || null, newStatus, id, ownerId).run()
 
     if (!result.meta.changes || result.meta.changes === 0) {
       return c.json({ error: 'No customer found or no changes made.' }, 404)
+    }
+
+    // Record status history
+    if (statusChanged) {
+      await c.env.DB.prepare(
+        "INSERT INTO crm_status_history (entity_type, entity_id, old_status, new_status) VALUES ('customer', ?, ?, ?)"
+      ).bind(id, existing.status, newStatus).run().catch(() => {})
     }
 
     return c.json({ success: true, verified: true })
@@ -414,15 +457,18 @@ crmRoutes.post('/invoices/:id/payment-link', async (c) => {
 // ============================================================
 // PROPOSAL: Generate Square payment link
 // ============================================================
+/** @deprecated Use /api/invoices/:id payment-link instead */
 crmRoutes.post('/proposals/:id/payment-link', async (c) => {
+  warnDeprecated('/proposals/:id/payment-link')
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   const id = c.req.param('id')
 
+  // Read from unified invoices table
   const proposal = await c.env.DB.prepare(
-    `SELECT cp.*, cc.name as customer_name FROM crm_proposals cp
-     LEFT JOIN crm_customers cc ON cc.id = cp.crm_customer_id
-     WHERE cp.id = ? AND cp.owner_id = ?`
+    `SELECT i.*, COALESCE(NULLIF(i.crm_customer_name,''), cc.name, '') as customer_name
+     FROM invoices i LEFT JOIN crm_customers cc ON cc.id = i.crm_customer_id
+     WHERE i.id = ? AND i.customer_id = ? AND i.document_type = 'proposal'`
   ).bind(id, ownerId).first<any>()
   if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
 
@@ -437,11 +483,12 @@ crmRoutes.post('/proposals/:id/payment-link', async (c) => {
     return c.json({ error: 'Square is not connected. Go to Settings → Connect Square to enable payment links.' }, 503)
   }
 
-  const amountCents = Math.round((proposal.total_amount || 0) * 100)
+  const amountCents = Math.round((proposal.total || 0) * 100)
   if (amountCents <= 0) return c.json({ error: 'Proposal total must be greater than $0' }, 400)
 
-  const title = proposal.title || `Proposal ${proposal.proposal_number}`
-  const desc = proposal.customer_name ? `Proposal for ${proposal.customer_name}` : proposal.proposal_number
+  const propNum = proposal.invoice_number
+  const title = proposal.notes || `Proposal ${propNum}`
+  const desc = proposal.customer_name ? `Proposal for ${proposal.customer_name}` : propNum
 
   try {
     const resp = await fetch('https://connect.squareup.com/v2/online-checkout/payment-links', {
@@ -471,7 +518,7 @@ crmRoutes.post('/proposals/:id/payment-link', async (c) => {
     if (!checkoutUrl) return c.json({ error: 'Square did not return a checkout URL' }, 502)
 
     await c.env.DB.prepare(
-      "UPDATE crm_proposals SET payment_link = ?, updated_at = datetime('now') WHERE id = ? AND owner_id = ?"
+      "UPDATE invoices SET square_payment_link_url = ?, updated_at = datetime('now') WHERE id = ? AND customer_id = ?"
     ).bind(checkoutUrl, id, ownerId).run()
 
     return c.json({ success: true, checkout_url: checkoutUrl, payment_link_id: link.id })
@@ -693,56 +740,67 @@ crmRoutes.put('/proposals/automation/settings', async (c) => {
   return c.json({ success: true, auto_send_certificate: !!auto_send_certificate })
 })
 
-// LIST proposals
+/** @deprecated Use GET /api/invoices?document_type=proposal instead */
 crmRoutes.get('/proposals', async (c) => {
+  warnDeprecated('GET /proposals')
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   const status = c.req.query('status') || ''
-  let q = `SELECT cp.*, cc.name as customer_name, cc.email as customer_email, COALESCE(cp.view_count, 0) as view_count FROM crm_proposals cp LEFT JOIN crm_customers cc ON cc.id = cp.crm_customer_id WHERE cp.owner_id = ?`
+  let q = `SELECT i.*, COALESCE(NULLIF(i.crm_customer_name,''), cc.name, '') as customer_name,
+           COALESCE(NULLIF(i.crm_customer_email,''), cc.email, '') as customer_email,
+           COALESCE(i.viewed_count, 0) as view_count
+           FROM invoices i LEFT JOIN crm_customers cc ON cc.id = i.crm_customer_id
+           WHERE i.customer_id = ? AND i.document_type = 'proposal'`
   const params: any[] = [ownerId]
-  if (status === 'open') q += ` AND cp.status IN ('draft','sent','viewed')`
-  else if (status === 'sold') q += ` AND cp.status = 'accepted'`
-  else if (status) { q += ` AND cp.status = ?`; params.push(status) }
-  q += ` ORDER BY cp.created_at DESC`
-  const proposals = await c.env.DB.prepare(q).bind(...params).all()
+  if (status === 'open') q += ` AND i.status IN ('draft','sent','viewed')`
+  else if (status === 'sold') q += ` AND i.status = 'accepted'`
+  else if (status) { q += ` AND i.status = ?`; params.push(status) }
+  q += ` ORDER BY i.created_at DESC`
+  const proposalsRaw = await c.env.DB.prepare(q).bind(...params).all()
 
   const stats = await c.env.DB.prepare(`
     SELECT COUNT(*) as total,
-      SUM(CASE WHEN status IN ('draft','sent','viewed') THEN total_amount ELSE 0 END) as open_value,
-      SUM(CASE WHEN status = 'accepted' THEN total_amount ELSE 0 END) as sold_value,
+      SUM(CASE WHEN status IN ('draft','sent','viewed') THEN total ELSE 0 END) as open_value,
+      SUM(CASE WHEN status = 'accepted' THEN total ELSE 0 END) as sold_value,
       SUM(CASE WHEN status IN ('draft','sent','viewed') THEN 1 ELSE 0 END) as open_count,
       SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) as sold_count
-    FROM crm_proposals WHERE owner_id = ?
+    FROM invoices WHERE customer_id = ? AND document_type = 'proposal'
   `).bind(ownerId).first()
-  return c.json({ proposals: proposals.results, stats })
+  return c.json({ proposals: (proposalsRaw.results || []).map(mapInvoiceToLegacyProposal), stats })
 })
 
-// GET single proposal with line items
+/** @deprecated Use GET /api/invoices/:id instead */
 crmRoutes.get('/proposals/:id', async (c) => {
+  warnDeprecated('GET /proposals/:id')
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   const id = c.req.param('id')
-  const proposal = await c.env.DB.prepare(`
-    SELECT cp.*, cc.name as customer_name, cc.email as customer_email, cc.phone as customer_phone,
+  const row = await c.env.DB.prepare(`
+    SELECT i.*, COALESCE(NULLIF(i.crm_customer_name,''), cc.name, '') as customer_name,
+           COALESCE(NULLIF(i.crm_customer_email,''), cc.email, '') as customer_email,
+           COALESCE(cc.phone, '') as customer_phone,
            cc.address as customer_address, cc.city as customer_city, cc.province as customer_province
-    FROM crm_proposals cp LEFT JOIN crm_customers cc ON cc.id = cp.crm_customer_id
-    WHERE cp.id = ? AND cp.owner_id = ?
+    FROM invoices i LEFT JOIN crm_customers cc ON cc.id = i.crm_customer_id
+    WHERE i.id = ? AND i.customer_id = ? AND i.document_type = 'proposal'
   `).bind(id, ownerId).first<any>()
-  if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
-  const items = await c.env.DB.prepare('SELECT * FROM crm_proposal_items WHERE proposal_id = ? ORDER BY sort_order').bind(id).all()
-  return c.json({ proposal, items: items.results })
+  if (!row) return c.json({ error: 'Proposal not found' }, 404)
+  const items = await c.env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order').bind(id).all()
+  return c.json({ proposal: mapInvoiceToLegacyProposal(row), items: items.results })
 })
 
-// VIEW certificate HTML (print-ready, opens in new tab)
+/** @deprecated Use unified invoices certificate endpoint */
 crmRoutes.get('/proposals/:id/certificate', async (c) => {
+  warnDeprecated('GET /proposals/:id/certificate')
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   const id = c.req.param('id')
-  const proposal = await c.env.DB.prepare(`
-    SELECT cp.*, cc.name as customer_name, cc.email as customer_email
-    FROM crm_proposals cp LEFT JOIN crm_customers cc ON cc.id = cp.crm_customer_id
-    WHERE cp.id = ? AND cp.owner_id = ?
+  const raw = await c.env.DB.prepare(`
+    SELECT i.*, COALESCE(NULLIF(i.crm_customer_name,''), cc.name, '') as customer_name,
+           COALESCE(NULLIF(i.crm_customer_email,''), cc.email, '') as customer_email
+    FROM invoices i LEFT JOIN crm_customers cc ON cc.id = i.crm_customer_id
+    WHERE i.id = ? AND i.customer_id = ? AND i.document_type = 'proposal'
   `).bind(id, ownerId).first<any>()
+  const proposal = mapInvoiceToLegacyProposal(raw)
   if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
   const owner = await c.env.DB.prepare(
     `SELECT name, email, phone, address, city, province, company_name, logo_url,
@@ -771,16 +829,19 @@ crmRoutes.get('/proposals/:id/certificate', async (c) => {
   return c.html(certHtml)
 })
 
-// SEND certificate to customer email (manual trigger)
+/** @deprecated Use unified invoices send-certificate endpoint */
 crmRoutes.post('/proposals/:id/send-certificate', async (c) => {
+  warnDeprecated('POST /proposals/:id/send-certificate')
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   const id = c.req.param('id')
-  const proposal = await c.env.DB.prepare(`
-    SELECT cp.*, cc.name as customer_name, cc.email as customer_email
-    FROM crm_proposals cp LEFT JOIN crm_customers cc ON cc.id = cp.crm_customer_id
-    WHERE cp.id = ? AND cp.owner_id = ?
+  const raw = await c.env.DB.prepare(`
+    SELECT i.*, COALESCE(NULLIF(i.crm_customer_name,''), cc.name, '') as customer_name,
+           COALESCE(NULLIF(i.crm_customer_email,''), cc.email, '') as customer_email
+    FROM invoices i LEFT JOIN crm_customers cc ON cc.id = i.crm_customer_id
+    WHERE i.id = ? AND i.customer_id = ? AND i.document_type = 'proposal'
   `).bind(id, ownerId).first<any>()
+  const proposal = mapInvoiceToLegacyProposal(raw)
   if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
   if (!proposal.customer_email) return c.json({ error: 'No customer email on file for this proposal' }, 400)
 
@@ -828,7 +889,7 @@ crmRoutes.post('/proposals/:id/send-certificate', async (c) => {
       owner?.email
     )
     await c.env.DB.prepare(
-      `UPDATE crm_proposals SET certificate_sent_at = datetime('now') WHERE id = ?`
+      `UPDATE invoices SET certificate_sent_at = datetime('now') WHERE id = ?`
     ).bind(proposal.id).run()
     return c.json({ success: true, sent_to: proposal.customer_email })
   } catch (err: any) {
@@ -857,28 +918,33 @@ crmRoutes.post('/proposals/from-report', async (c) => {
   }
 })
 
-// C-4: Create one proposal per pricing tier (used by confirmation page)
+/** @deprecated Use POST /api/invoices with document_type='proposal' */
 crmRoutes.post('/proposals/create-tiered', async (c) => {
+  warnDeprecated('POST /proposals/create-tiered')
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   try {
     const { customer_id, property_address, scope_of_work, report_id, tiers } = await c.req.json()
     const created: { id: number; label: string; total: number }[] = []
+    const groupId = crypto.randomUUID()
     for (const tier of (tiers || [])) {
       const propNum = genProposalNum()
       const total = tier.total || 0
       const taxAmount = Math.round(total * 0.05 * 100) / 100
+      const shareToken = crypto.randomUUID().replace(/-/g, '').substring(0, 16)
       const result = await c.env.DB.prepare(`
-        INSERT INTO crm_proposals (owner_id, crm_customer_id, proposal_number, title, property_address,
-          scope_of_work, subtotal, tax_rate, tax_amount, total_amount, source_report_id, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 5, ?, ?, ?, 'draft')
+        INSERT INTO invoices (invoice_number, customer_id, crm_customer_id,
+          document_type, scope_of_work, subtotal, tax_rate, tax_amount, total,
+          attached_report_id, status, share_token, share_url,
+          proposal_tier, proposal_group_id, notes, created_at, updated_at)
+        VALUES (?, ?, ?, 'proposal', ?, ?, 5, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
       `).bind(
-        ownerId, customer_id || null, propNum,
-        tier.label + (property_address ? ' — ' + property_address : ''),
-        property_address || null,
+        propNum, ownerId, customer_id || null,
         tier.scope || scope_of_work || null,
         total, taxAmount, Math.round((total + taxAmount) * 100) / 100,
-        report_id || null
+        report_id || null, shareToken, `/proposal/view/${shareToken}`,
+        tier.label || '', groupId,
+        tier.label + (property_address ? ' — ' + property_address : '')
       ).run()
       created.push({ id: result.meta.last_row_id as number, label: tier.label, total })
     }
@@ -888,8 +954,9 @@ crmRoutes.post('/proposals/create-tiered', async (c) => {
   }
 })
 
-// CREATE proposal with line items
+/** @deprecated Use POST /api/invoices with document_type='proposal' */
 crmRoutes.post('/proposals', async (c) => {
+  warnDeprecated('POST /proposals')
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   try {
@@ -904,42 +971,49 @@ crmRoutes.post('/proposals', async (c) => {
     const taxRate = body.tax_rate ?? 5.0
     let subtotal = 0
 
-    // If line items provided, calculate from them
     if (body.items && body.items.length > 0) {
       for (const it of body.items) subtotal += (it.quantity || 1) * (it.unit_price || 0)
     } else {
-      // Legacy: simple labor/material/other
       subtotal = (body.labor_cost || 0) + (body.material_cost || 0) + (body.other_cost || 0)
     }
     const taxAmount = Math.round(subtotal * (taxRate / 100) * 100) / 100
     const total = Math.round((subtotal + taxAmount) * 100) / 100
     const propNum = genProposalNum()
+    const shareToken = crypto.randomUUID().replace(/-/g, '').substring(0, 16)
+
+    // Resolve CRM customer name/email for the invoices denormalized columns
+    let crmName = '', crmEmail = '', crmPhone = ''
+    if (customerId) {
+      const cc = await c.env.DB.prepare('SELECT name, email, phone FROM crm_customers WHERE id = ?').bind(customerId).first<any>()
+      if (cc) { crmName = cc.name || ''; crmEmail = cc.email || ''; crmPhone = cc.phone || '' }
+    }
 
     const result = await c.env.DB.prepare(`
-      INSERT INTO crm_proposals (owner_id, crm_customer_id, proposal_number, title, property_address, scope_of_work,
-        materials_detail, labor_cost, material_cost, other_cost, subtotal, tax_rate, tax_amount, total_amount,
-        valid_until, notes, warranty_terms, payment_terms, source_report_id, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
-    `).bind(ownerId, customerId, propNum, body.title, body.property_address || null,
-      body.scope_of_work || null, body.materials_detail || null,
-      body.labor_cost || 0, body.material_cost || 0, body.other_cost || 0,
+      INSERT INTO invoices (invoice_number, customer_id, crm_customer_id, crm_customer_name, crm_customer_email, crm_customer_phone,
+        document_type, scope_of_work, warranty_terms, payment_terms_text,
+        subtotal, tax_rate, tax_amount, total, valid_until, notes,
+        attached_report_id, status, share_token, share_url,
+        created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'proposal', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, datetime('now'), datetime('now'))
+    `).bind(propNum, ownerId, customerId, crmName, crmEmail, crmPhone,
+      body.scope_of_work || '', body.warranty_terms || '', body.payment_terms || '',
       subtotal, taxRate, taxAmount, total,
       body.valid_until || null, body.notes || null,
-      body.warranty_terms || null, body.payment_terms || null,
-      body.source_report_id || null).run()
+      body.source_report_id || null, shareToken, `/proposal/view/${shareToken}`
+    ).run()
 
     const proposalId = result.meta.last_row_id
     if (!proposalId) return c.json({ error: 'Failed to create proposal' }, 500)
 
     await logFromContext(c, { entity_type: 'proposal', entity_id: Number(proposalId), action: 'created', metadata: { proposal_number: propNum, title: body.title, total } })
 
-    // Insert line items
+    // Insert line items into invoice_items
     if (body.items && body.items.length > 0) {
       for (let i = 0; i < body.items.length; i++) {
         const it = body.items[i]
         const amt = Math.round((it.quantity || 1) * (it.unit_price || 0) * 100) / 100
         await c.env.DB.prepare(
-          'INSERT INTO crm_proposal_items (proposal_id, description, quantity, unit, unit_price, amount, sort_order) VALUES (?,?,?,?,?,?,?)'
+          'INSERT INTO invoice_items (invoice_id, description, quantity, unit, unit_price, amount, sort_order) VALUES (?,?,?,?,?,?,?)'
         ).bind(proposalId, it.description || '', it.quantity || 1, it.unit || 'ea', it.unit_price || 0, amt, i).run()
       }
     }
@@ -950,8 +1024,9 @@ crmRoutes.post('/proposals', async (c) => {
   }
 })
 
-// UPDATE proposal with line items
+/** @deprecated Use PUT /api/invoices/:id instead */
 crmRoutes.put('/proposals/:id', async (c) => {
+  warnDeprecated('PUT /proposals/:id')
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   try {
@@ -960,12 +1035,20 @@ crmRoutes.put('/proposals/:id', async (c) => {
 
     // Quick status-only update
     if (body.status && Object.keys(body).length <= 2) {
-      await c.env.DB.prepare("UPDATE crm_proposals SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_id = ?").bind(body.status, id, ownerId).run()
+      // Track status change for pipeline time-in-stage
+      const prev = await c.env.DB.prepare("SELECT status FROM invoices WHERE id = ? AND customer_id = ? AND document_type = 'proposal'").bind(id, ownerId).first<any>()
+      const statusChanged = prev && prev.status !== body.status
+      await c.env.DB.prepare(`UPDATE invoices SET status = ?, updated_at = datetime('now')${statusChanged ? ", stage_entered_at = datetime('now')" : ''} WHERE id = ? AND customer_id = ? AND document_type = 'proposal'`).bind(body.status, id, ownerId).run()
+      if (statusChanged) {
+        await c.env.DB.prepare(
+          "INSERT INTO crm_status_history (entity_type, entity_id, old_status, new_status) VALUES ('proposal', ?, ?, ?)"
+        ).bind(id, prev.status, body.status).run().catch(() => {})
+      }
       return c.json({ success: true })
     }
     // Quick source_report_id-only update
     if ('source_report_id' in body && Object.keys(body).length === 1) {
-      await c.env.DB.prepare("UPDATE crm_proposals SET source_report_id = ?, updated_at = datetime('now') WHERE id = ? AND owner_id = ?").bind(body.source_report_id ?? null, id, ownerId).run()
+      await c.env.DB.prepare("UPDATE invoices SET attached_report_id = ?, updated_at = datetime('now') WHERE id = ? AND customer_id = ? AND document_type = 'proposal'").bind(body.source_report_id ?? null, id, ownerId).run()
       return c.json({ success: true })
     }
 
@@ -973,6 +1056,18 @@ crmRoutes.put('/proposals/:id', async (c) => {
     const custResult = await resolveCustomerId(c, ownerId, body)
     if (!custResult.id) return c.json({ error: custResult.error || 'Customer is required' }, 400)
     const customerId = custResult.id
+
+    // Resolve CRM customer name/email
+    let crmName = '', crmEmail = '', crmPhone = ''
+    if (customerId) {
+      const cc = await c.env.DB.prepare('SELECT name, email, phone FROM crm_customers WHERE id = ?').bind(customerId).first<any>()
+      if (cc) { crmName = cc.name || ''; crmEmail = cc.email || ''; crmPhone = cc.phone || '' }
+    }
+
+    // Check for status change (for history tracking)
+    const prevProp = await c.env.DB.prepare("SELECT status FROM invoices WHERE id = ? AND customer_id = ? AND document_type = 'proposal'").bind(id, ownerId).first<any>()
+    const newPropStatus = body.status || 'draft'
+    const propStatusChanged = prevProp && prevProp.status !== newPropStatus
 
     const taxRate = body.tax_rate ?? 5.0
     let subtotal = 0
@@ -985,24 +1080,32 @@ crmRoutes.put('/proposals/:id', async (c) => {
     const total = Math.round((subtotal + taxAmount) * 100) / 100
 
     await c.env.DB.prepare(`
-      UPDATE crm_proposals SET crm_customer_id=?, title=?, property_address=?, scope_of_work=?, materials_detail=?,
-        labor_cost=?, material_cost=?, other_cost=?, subtotal=?, tax_rate=?, tax_amount=?, total_amount=?,
-        valid_until=?, notes=?, warranty_terms=?, payment_terms=?, status=?, source_report_id=?, updated_at=datetime('now')
-      WHERE id=? AND owner_id=?
-    `).bind(customerId, body.title, body.property_address || null, body.scope_of_work || null,
-      body.materials_detail || null, body.labor_cost || 0, body.material_cost || 0, body.other_cost || 0,
+      UPDATE invoices SET crm_customer_id=?, crm_customer_name=?, crm_customer_email=?, crm_customer_phone=?,
+        scope_of_work=?, subtotal=?, tax_rate=?, tax_amount=?, total=?,
+        valid_until=?, notes=?, warranty_terms=?, payment_terms_text=?,
+        status=?, attached_report_id=?, updated_at=datetime('now')${propStatusChanged ? ", stage_entered_at=datetime('now')" : ''}
+      WHERE id=? AND customer_id=? AND document_type='proposal'
+    `).bind(customerId, crmName, crmEmail, crmPhone,
+      body.scope_of_work || null,
       subtotal, taxRate, taxAmount, total, body.valid_until || null, body.notes || null,
       body.warranty_terms || null, body.payment_terms || null,
-      body.status || 'draft', body.source_report_id ?? null, id, ownerId).run()
+      newPropStatus, body.source_report_id ?? null, id, ownerId).run()
 
-    // Replace line items
+    // Record status history
+    if (propStatusChanged) {
+      await c.env.DB.prepare(
+        "INSERT INTO crm_status_history (entity_type, entity_id, old_status, new_status) VALUES ('proposal', ?, ?, ?)"
+      ).bind(id, prevProp.status, newPropStatus).run().catch(() => {})
+    }
+
+    // Replace line items in invoice_items
     if (body.items) {
-      await c.env.DB.prepare('DELETE FROM crm_proposal_items WHERE proposal_id = ?').bind(id).run()
+      await c.env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id = ?').bind(id).run()
       for (let i = 0; i < body.items.length; i++) {
         const it = body.items[i]
         const amt = Math.round((it.quantity || 1) * (it.unit_price || 0) * 100) / 100
         await c.env.DB.prepare(
-          'INSERT INTO crm_proposal_items (proposal_id, description, quantity, unit, unit_price, amount, sort_order) VALUES (?,?,?,?,?,?,?)'
+          'INSERT INTO invoice_items (invoice_id, description, quantity, unit, unit_price, amount, sort_order) VALUES (?,?,?,?,?,?,?)'
         ).bind(id, it.description || '', it.quantity || 1, it.unit || 'ea', it.unit_price || 0, amt, i).run()
       }
     }
@@ -1013,38 +1116,40 @@ crmRoutes.put('/proposals/:id', async (c) => {
   }
 })
 
-// DELETE proposal + its items
+/** @deprecated Use DELETE /api/invoices/:id instead */
 crmRoutes.delete('/proposals/:id', async (c) => {
+  warnDeprecated('DELETE /proposals/:id')
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   const id = c.req.param('id')
-  await c.env.DB.prepare('DELETE FROM crm_proposal_items WHERE proposal_id = ?').bind(id).run()
-  await c.env.DB.prepare('DELETE FROM proposal_view_log WHERE proposal_id = ?').bind(id).run()
-  await c.env.DB.prepare('DELETE FROM crm_proposals WHERE id = ? AND owner_id = ?').bind(id, ownerId).run()
+  await c.env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id = ?').bind(id).run()
+  await c.env.DB.prepare("DELETE FROM invoices WHERE id = ? AND customer_id = ? AND document_type = 'proposal'").bind(id, ownerId).run()
   return c.json({ success: true })
 })
 
-// Get proposal view stats + detailed log
+/** @deprecated Use GET /api/invoices/:id for view stats */
 crmRoutes.get('/proposals/:id/views', async (c) => {
+  warnDeprecated('GET /proposals/:id/views')
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   const id = c.req.param('id')
 
   const proposal = await c.env.DB.prepare(
-    'SELECT view_count, last_viewed_at, share_token, sent_at FROM crm_proposals WHERE id = ? AND owner_id = ?'
+    "SELECT viewed_count, viewed_at, share_token, sent_date FROM invoices WHERE id = ? AND customer_id = ? AND document_type = 'proposal'"
   ).bind(id, ownerId).first<any>()
   if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
 
-  // Get detailed view log
+  // Get detailed view log (proposal_view_log still references crm_proposals IDs —
+  // check both the invoice id and legacy_crm_proposal_id)
   const viewLog = await c.env.DB.prepare(`
     SELECT viewed_at, ip_address, user_agent, referrer FROM proposal_view_log
     WHERE proposal_id = ? ORDER BY viewed_at DESC LIMIT 50
   `).bind(id).all()
 
   return c.json({
-    view_count: proposal.view_count || 0,
-    last_viewed_at: proposal.last_viewed_at,
-    sent_at: proposal.sent_at,
+    view_count: proposal.viewed_count || 0,
+    last_viewed_at: proposal.viewed_at,
+    sent_at: proposal.sent_date,
     share_token: proposal.share_token,
     view_log: viewLog.results
   })
@@ -1313,6 +1418,91 @@ crmRoutes.get('/analytics', async (c) => {
     },
     financials_hidden: hideMoney,
   })
+})
+
+// ============================================================
+// CREW METRICS — Enhanced KPIs for Crew Manager dashboard
+// ============================================================
+crmRoutes.get('/crew/metrics', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+
+  try {
+    // FTFR: jobs completed without postpone (no status history showing 'postponed')
+    const completedJobs = await c.env.DB.prepare(`
+      SELECT COUNT(*) as total FROM crm_jobs WHERE owner_id = ? AND status = 'completed'
+    `).bind(ownerId).first<any>()
+
+    const postponedJobs = await c.env.DB.prepare(`
+      SELECT COUNT(DISTINCT entity_id) as total FROM crm_status_history
+      WHERE entity_type = 'job' AND new_status = 'postponed'
+      AND entity_id IN (SELECT id FROM crm_jobs WHERE owner_id = ? AND status = 'completed')
+    `).bind(ownerId).first<any>().catch(() => ({ total: 0 }))
+
+    const totalCompleted = completedJobs?.total || 0
+    const totalPostponed = postponedJobs?.total || 0
+    const ftfr = totalCompleted > 0 ? Math.round(((totalCompleted - totalPostponed) / totalCompleted) * 100) : 0
+
+    // Crew utilization (last 30 days)
+    const utilization = await c.env.DB.prepare(`
+      SELECT ctl.crew_member_id, c.name,
+        SUM(ctl.duration_minutes) as total_minutes,
+        COUNT(DISTINCT date(ctl.clock_in)) as days_worked,
+        COUNT(DISTINCT ctl.job_id) as jobs_completed
+      FROM crew_time_logs ctl
+      JOIN customers c ON c.id = ctl.crew_member_id
+      JOIN crm_jobs j ON j.id = ctl.job_id
+      WHERE j.owner_id = ? AND ctl.clock_in >= datetime('now', '-30 days') AND ctl.clock_out IS NOT NULL
+      GROUP BY ctl.crew_member_id ORDER BY total_minutes DESC
+    `).bind(ownerId).all<any>()
+
+    // Revenue per technician (completed jobs with proposals)
+    const revenuePerTech = await c.env.DB.prepare(`
+      SELECT ctl.crew_member_id, c.name,
+        SUM(DISTINCT i.total) as total_revenue,
+        COUNT(DISTINCT j.id) as jobs_count
+      FROM crew_time_logs ctl
+      JOIN customers c ON c.id = ctl.crew_member_id
+      JOIN crm_jobs j ON j.id = ctl.job_id
+      LEFT JOIN invoices i ON i.id = j.proposal_id AND i.document_type = 'proposal' AND i.status = 'accepted'
+      WHERE j.owner_id = ? AND j.status = 'completed' AND ctl.clock_out IS NOT NULL
+      GROUP BY ctl.crew_member_id ORDER BY total_revenue DESC
+    `).bind(ownerId).all<any>()
+
+    // Compute average utilization (8 hrs/day standard)
+    const crewMetrics = (utilization.results || []).map((u: any) => {
+      const availableMinutes = (u.days_worked || 1) * 480 // 8 hrs * 60
+      const utilizationPct = Math.min(Math.round((u.total_minutes / availableMinutes) * 100), 100)
+      const rev = (revenuePerTech.results || []).find((r: any) => r.crew_member_id === u.crew_member_id)
+      return {
+        id: u.crew_member_id,
+        name: u.name,
+        total_hours: Math.round((u.total_minutes || 0) / 60 * 10) / 10,
+        days_worked: u.days_worked,
+        jobs_completed: u.jobs_completed,
+        utilization_pct: utilizationPct,
+        revenue: rev?.total_revenue || 0
+      }
+    })
+
+    const avgUtilization = crewMetrics.length > 0
+      ? Math.round(crewMetrics.reduce((s: number, m: any) => s + m.utilization_pct, 0) / crewMetrics.length)
+      : 0
+
+    const totalRevenue = crewMetrics.reduce((s: number, m: any) => s + (m.revenue || 0), 0)
+    const revenuePerCrewAvg = crewMetrics.length > 0 ? Math.round(totalRevenue / crewMetrics.length) : 0
+
+    return c.json({
+      ftfr,
+      avg_utilization: avgUtilization,
+      revenue_per_crew_avg: revenuePerCrewAvg,
+      total_completed: totalCompleted,
+      crew: crewMetrics
+    })
+  } catch (err: any) {
+    console.error('[CRM] Crew metrics error:', err.message)
+    return c.json({ ftfr: 0, avg_utilization: 0, revenue_per_crew_avg: 0, total_completed: 0, crew: [] })
+  }
 })
 
 // ============================================================
@@ -1866,25 +2056,27 @@ crmRoutes.post('/gmail/disconnect', async (c) => {
   return c.json({ success: true })
 })
 
-// ============================================================
-// ENHANCED PROPOSAL SEND — Email via customer's connected Gmail
-// ============================================================
+/** @deprecated Use the invoices send endpoint instead */
 crmRoutes.post('/proposals/:id/send', async (c) => {
+  warnDeprecated('POST /proposals/:id/send')
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   const id = c.req.param('id')
 
-  const proposal = await c.env.DB.prepare(`
-    SELECT cp.*, cc.name as customer_name, cc.email as customer_email, cc.phone as customer_phone,
+  const rawProposal = await c.env.DB.prepare(`
+    SELECT i.*, COALESCE(NULLIF(i.crm_customer_name,''), cc.name, '') as customer_name,
+           COALESCE(NULLIF(i.crm_customer_email,''), cc.email, '') as customer_email,
+           COALESCE(cc.phone, '') as customer_phone,
            cc.address as customer_address, cc.city as customer_city, cc.province as customer_province
-    FROM crm_proposals cp LEFT JOIN crm_customers cc ON cc.id = cp.crm_customer_id
-    WHERE cp.id = ? AND cp.owner_id = ?
+    FROM invoices i LEFT JOIN crm_customers cc ON cc.id = i.crm_customer_id
+    WHERE i.id = ? AND i.customer_id = ? AND i.document_type = 'proposal'
   `).bind(id, ownerId).first<any>()
-  if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
+  if (!rawProposal) return c.json({ error: 'Proposal not found' }, 404)
+  const proposal = mapInvoiceToLegacyProposal(rawProposal)
 
   // Get line items for the email
   const itemsResult = await c.env.DB.prepare(
-    'SELECT * FROM crm_proposal_items WHERE proposal_id = ? ORDER BY sort_order'
+    'SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order'
   ).bind(id).all()
   const lineItems = itemsResult.results || []
 
@@ -1895,8 +2087,8 @@ crmRoutes.post('/proposals/:id/send', async (c) => {
   }
 
   await c.env.DB.prepare(`
-    UPDATE crm_proposals SET status = 'sent', share_token = ?, sent_at = datetime('now'), view_count = COALESCE(view_count, 0), updated_at = datetime('now')
-    WHERE id = ? AND owner_id = ?
+    UPDATE invoices SET status = 'sent', share_token = ?, sent_date = datetime('now'), viewed_count = COALESCE(viewed_count, 0), updated_at = datetime('now')
+    WHERE id = ? AND customer_id = ?
   `).bind(shareToken, id, ownerId).run()
 
   const baseUrl = new URL(c.req.url).origin
@@ -2061,10 +2253,9 @@ crmRoutes.post('/proposals/:id/send', async (c) => {
   })
 })
 
-// ============================================================
-// PROPOSAL ACCEPT/DECLINE — Public endpoint (no auth, uses share_token)
-// ============================================================
+/** @deprecated Use POST /api/invoices/respond/:token instead */
 crmRoutes.post('/proposals/respond/:token', async (c) => {
+  warnDeprecated('POST /proposals/respond/:token')
   const token = c.req.param('token')
   const { action, signature, printed_name, signed_date } = await c.req.json()
 
@@ -2072,11 +2263,14 @@ crmRoutes.post('/proposals/respond/:token', async (c) => {
     return c.json({ error: 'Invalid action' }, 400)
   }
 
-  const proposal = await c.env.DB.prepare(
-    `SELECT cp.*, cc.name as customer_name, cc.email as customer_email
-     FROM crm_proposals cp LEFT JOIN crm_customers cc ON cc.id = cp.crm_customer_id
-     WHERE cp.share_token = ?`
+  // Look up in the unified invoices table
+  const rawProposal = await c.env.DB.prepare(
+    `SELECT i.*, COALESCE(NULLIF(i.crm_customer_name,''), cc.name, '') as customer_name,
+            COALESCE(NULLIF(i.crm_customer_email,''), cc.email, '') as customer_email
+     FROM invoices i LEFT JOIN crm_customers cc ON cc.id = i.crm_customer_id
+     WHERE i.share_token = ? AND i.document_type = 'proposal'`
   ).bind(token).first<any>()
+  const proposal = mapInvoiceToLegacyProposal(rawProposal)
 
   if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
   if (proposal.status === 'accepted' || proposal.status === 'declined') {
@@ -2092,11 +2286,12 @@ crmRoutes.post('/proposals/respond/:token', async (c) => {
   }
 
   const newStatus = action === 'accept' ? 'accepted' : 'declined'
-  const dateCol = action === 'accept' ? 'accepted_at' : 'declined_at'
   const safeSignature = signature && typeof signature === 'string' && signature.startsWith('data:image/') ? signature : null
 
+  // Update the invoices row — use generic columns (no accepted_at/declined_at yet on invoices,
+  // use paid_date as a timestamp carrier for acceptance for now)
   await c.env.DB.prepare(`
-    UPDATE crm_proposals SET status = ?, ${dateCol} = datetime('now'), customer_signature = ?, printed_name = ?, signed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?
+    UPDATE invoices SET status = ?, customer_signature = ?, printed_name = ?, signed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?
   `).bind(newStatus, safeSignature, printed_name || null, proposal.id).run()
 
   // Email notification to business owner
@@ -2190,7 +2385,7 @@ crmRoutes.post('/proposals/respond/:token', async (c) => {
             ownerForCert.email
           ).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
           await c.env.DB.prepare(
-            `UPDATE crm_proposals SET certificate_sent_at = datetime('now') WHERE id = ?`
+            `UPDATE invoices SET certificate_sent_at = datetime('now') WHERE id = ?`
           ).bind(proposal.id).run()
         }
       }
@@ -2217,7 +2412,7 @@ crmRoutes.get('/stats', async (c) => {
     ).bind(ownerId).first<any>()
 
     const proposalsOpen = await c.env.DB.prepare(
-      "SELECT COUNT(*) as cnt FROM crm_proposals WHERE owner_id = ? AND status IN ('draft','sent','viewed')"
+      "SELECT COUNT(*) as cnt FROM invoices WHERE customer_id = ? AND document_type = 'proposal' AND status IN ('draft','sent','viewed')"
     ).bind(ownerId).first<any>()
 
     const jobsUpcoming = await c.env.DB.prepare(
