@@ -392,6 +392,7 @@ function renderPinStep(root, progressBar) {
   const b = orderState.billing || {};
   const freeTrialRemaining = b.free_trial_remaining || 0;
   const paidCredits = b.paid_credits_remaining || 0;
+  const apiCredits = b.api_credits_remaining || 0;
   const isTrialAvailable = freeTrialRemaining > 0;
   const credits = b.credits_remaining || 0;
 
@@ -423,6 +424,19 @@ function renderPinStep(root, progressBar) {
               </div>
             </div>
             <span class="bg-green-600 text-white px-3 py-1.5 rounded-full text-lg font-bold">${paidCredits}</span>
+          </div>
+        </div>
+      ` : apiCredits > 0 ? `
+        <div class="bg-purple-500/10 border border-purple-200 rounded-xl p-4 mb-6">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center"><i class="fas fa-code text-purple-400"></i></div>
+              <div>
+                <p class="font-semibold text-purple-800">You have ${apiCredits} API developer credit${apiCredits !== 1 ? 's' : ''} remaining</p>
+                <p class="text-sm text-purple-400">From your developer account</p>
+              </div>
+            </div>
+            <span class="bg-purple-600 text-white px-3 py-1.5 rounded-full text-lg font-bold">${apiCredits}</span>
           </div>
         </div>
       ` : `
@@ -686,6 +700,7 @@ function renderReviewStep(root, progressBar) {
   const b = orderState.billing || {};
   const freeTrialRemaining = b.free_trial_remaining || 0;
   const paidCredits = b.paid_credits_remaining || 0;
+  const apiCredits = b.api_credits_remaining || 0;
   const isTrialAvailable = freeTrialRemaining > 0;
   const credits = b.credits_remaining || 0;
   const hasTrace = orderState.roofTraceJson !== null;
@@ -848,6 +863,10 @@ function renderReviewStep(root, progressBar) {
             ` : (b.status === 'active') && paidCredits > 0 ? `
               <button onclick="useCredit()" id="creditBtn" class="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
                 <i class="fas fa-coins mr-2"></i>Use Credit (${paidCredits} left)
+              </button>
+            ` : apiCredits > 0 ? `
+              <button onclick="useCredit()" id="creditBtn" class="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
+                <i class="fas fa-code mr-2"></i>Use API Credit (${apiCredits} left)
               </button>
             ` : (b.status === 'active') ? `
               <button onclick="useCredit()" id="creditBtn" class="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">

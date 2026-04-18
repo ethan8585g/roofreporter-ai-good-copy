@@ -6,9 +6,19 @@ import { trackPaymentCompleted, trackCreditPurchase } from '../services/ga4-even
 import { resolveTeamOwner } from './team'
 import { validateAdminSession } from './auth'
 import { notifyNewReportRequest } from '../services/email'
-import { addCredits } from '../services/api-billing'
+import { addCredits, holdCredit } from '../services/api-billing'
 
 export const squareRoutes = new Hono<{ Bindings: Bindings }>()
+
+// ── Look up linked API developer account for a customer (by email) ──────────
+// Returns the api_accounts row if this customer also has a developer account,
+// so their API credits can be used for regular platform orders too.
+async function getLinkedApiAccount(db: D1Database, email: string): Promise<{ id: string; credit_balance: number } | null> {
+  if (!email) return null
+  return db.prepare(
+    'SELECT id, credit_balance FROM api_accounts WHERE contact_email = ? AND status = \'active\''
+  ).bind(email.toLowerCase()).first<{ id: string; credit_balance: number }>()
+}
 
 // ============================================================
 // GEOCODING HELPER — Convert address to lat/lng
@@ -211,6 +221,10 @@ squareRoutes.get('/billing', async (c) => {
   const freeTrialRemaining = Math.max(0, (customer.free_trial_total || 0) - (customer.free_trial_used || 0))
   const paidRemaining = Math.max(0, (customer.report_credits || 0) - (customer.credits_used || 0))
 
+  // Check for linked API developer account credits
+  const apiAccount = await getLinkedApiAccount(c.env.DB, customer.email)
+  const apiCreditsRemaining = apiAccount?.credit_balance ?? 0
+
   // DEV ACCOUNT: always show unlimited credits
   const isDev = isDevAccount(customer.email || '', c.env)
 
@@ -218,13 +232,15 @@ squareRoutes.get('/billing', async (c) => {
     billing: {
       plan: isDev ? 'dev_unlimited' : (customer.subscription_plan || 'free'),
       status: isDev ? 'active' : (customer.subscription_status || 'none'),
-      credits_remaining: isDev ? 999999 : (freeTrialRemaining + paidRemaining),
-      credits_total: isDev ? 999999 : (customer.report_credits || 0),
+      credits_remaining: isDev ? 999999 : (freeTrialRemaining + paidRemaining + apiCreditsRemaining),
+      credits_total: isDev ? 999999 : ((customer.report_credits || 0) + apiCreditsRemaining),
       credits_used: customer.credits_used || 0,
       free_trial_remaining: isDev ? 999999 : freeTrialRemaining,
       free_trial_total: isDev ? 999999 : (customer.free_trial_total || 0),
       free_trial_used: isDev ? 0 : (customer.free_trial_used || 0),
       paid_credits_remaining: isDev ? 999999 : paidRemaining,
+      api_credits_remaining: isDev ? 999999 : apiCreditsRemaining,
+      is_developer_account: !!apiAccount,
       subscription_start: customer.subscription_start,
       subscription_end: customer.subscription_end,
       square_customer_id: customer.square_customer_id || null,
@@ -494,14 +510,19 @@ squareRoutes.post('/use-credit', async (c) => {
     // DEV ACCOUNT: unlimited free reports, never charge
     const isDev = isDevAccount(customer.email || '', c.env)
 
-    // Check free trial first, then paid credits
+    // Check free trial first, then paid credits, then linked API developer credits
     const freeTrialRemaining = isDev ? 999999 : Math.max(0, (customer.free_trial_total || 0) - (customer.free_trial_used || 0))
     const paidRemaining = isDev ? 999999 : Math.max(0, (customer.report_credits || 0) - (customer.credits_used || 0))
-    const totalRemaining = freeTrialRemaining + paidRemaining
 
-    // After free trial is exhausted, require active subscription to continue
+    // Check for linked API developer account — their purchased API credits work here too
+    const apiAccount = isDev ? null : await getLinkedApiAccount(c.env.DB, customer.email)
+    const apiCreditsRemaining = apiAccount?.credit_balance ?? 0
+
+    const totalRemaining = freeTrialRemaining + paidRemaining + apiCreditsRemaining
+
+    // After free trial is exhausted, require subscription OR credits (including API credits)
     // Team members share the owner's credits — they never see the subscribe prompt
-    if (!isDev && freeTrialRemaining <= 0 && customer.subscription_status !== 'active') {
+    if (!isDev && freeTrialRemaining <= 0 && paidRemaining <= 0 && apiCreditsRemaining <= 0 && customer.subscription_status !== 'active') {
       if (customer.is_team_member) {
         return c.json({
           error: 'No report credits available. Ask your team admin to purchase credits or subscribe.',
@@ -514,7 +535,8 @@ squareRoutes.post('/use-credit', async (c) => {
         error: 'Your 3 free trial reports have been used. Subscribe to continue generating reports.',
         subscription_required: true,
         free_trial_remaining: 0,
-        paid_credits_remaining: paidRemaining
+        paid_credits_remaining: paidRemaining,
+        api_credits_remaining: apiCreditsRemaining
       }, 402)
     }
 
@@ -523,7 +545,8 @@ squareRoutes.post('/use-credit', async (c) => {
         error: 'No credits remaining. Please purchase a credit pack.',
         credits_remaining: 0,
         free_trial_remaining: 0,
-        paid_credits_remaining: 0
+        paid_credits_remaining: 0,
+        api_credits_remaining: 0
       }, 402)
     }
 
@@ -557,15 +580,17 @@ squareRoutes.post('/use-credit', async (c) => {
     const tier = service_tier || 'standard'
 
     // Determine if this is a free trial order or paid order
+    // Priority: free trial → paid credits → API developer credits
     // DEV ACCOUNT: always free, always marked as dev_test
     const isTrial = isDev ? true : (freeTrialRemaining > 0)
+    const useApiCredits = !isDev && !isTrial && paidRemaining <= 0 && apiCreditsRemaining > 0
     const price = (isDev || isTrial) ? 0 : 10  // Single report = $10 CAD flat
     const paymentStatus = isDev ? 'trial' : (isTrial ? 'trial' : 'paid')
     const notes = isDev
       ? `DEV TEST — free unlimited report (dev@reusecanada.ca)`
-      : (isTrial 
-        ? `Free trial report (${(customer.free_trial_used || 0) + 1} of ${customer.free_trial_total || 3})` 
-        : 'Paid via credit balance')
+      : (isTrial
+        ? `Free trial report (${(customer.free_trial_used || 0) + 1} of ${customer.free_trial_total || 3})`
+        : (useApiCredits ? 'Paid via API developer credit balance' : 'Paid via credit balance'))
 
     // Ensure master company exists
     await c.env.DB.prepare(
@@ -614,6 +639,7 @@ squareRoutes.post('/use-credit', async (c) => {
     }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     // Atomic deduct: WHERE clause prevents overselling even with concurrent requests
+    // Priority: free trial → paid customer credits → API developer credits
     if (!isDev) {
       if (isTrial) {
         const deductResult = await c.env.DB.prepare(
@@ -621,6 +647,12 @@ squareRoutes.post('/use-credit', async (c) => {
         ).bind(customer.customer_id).run()
         if (!deductResult.meta.changes) {
           return c.json({ error: 'No free trials remaining', credits_remaining: 0 }, 402)
+        }
+      } else if (useApiCredits && apiAccount) {
+        // Deduct from linked API developer account using the billing ledger
+        const holdResult = await holdCredit(c.env.DB, apiAccount.id, `portal-order-${orderNumber}`)
+        if (!holdResult.success) {
+          return c.json({ error: 'No API credits remaining. Purchase more credits from the developer portal.', credits_remaining: 0 }, 402)
         }
       } else {
         const deductResult = await c.env.DB.prepare(
@@ -712,7 +744,8 @@ squareRoutes.post('/use-credit', async (c) => {
     `).bind(actionType, `${customer.email} used 1 ${isTrial ? 'free trial' : 'paid credit'} for ${property_address} (${orderNumber})`).run()
 
     const newFreeTrialRemaining = isTrial ? freeTrialRemaining - 1 : freeTrialRemaining
-    const newPaidRemaining = isTrial ? paidRemaining : paidRemaining - 1
+    const newPaidRemaining = (!isTrial && !useApiCredits) ? paidRemaining - 1 : paidRemaining
+    const newApiCreditsRemaining = useApiCredits ? apiCreditsRemaining - 1 : apiCreditsRemaining
 
     return c.json({
       success: true,
@@ -728,9 +761,10 @@ squareRoutes.post('/use-credit', async (c) => {
         latitude: geocodedLat,
         longitude: geocodedLng
       },
-      credits_remaining: newFreeTrialRemaining + newPaidRemaining,
+      credits_remaining: newFreeTrialRemaining + newPaidRemaining + newApiCreditsRemaining,
       free_trial_remaining: newFreeTrialRemaining,
-      paid_credits_remaining: newPaidRemaining
+      paid_credits_remaining: newPaidRemaining,
+      api_credits_remaining: newApiCreditsRemaining
     })
   } catch (err: any) {
     return c.json({ error: 'Failed to use credit', details: err.message }, 500)

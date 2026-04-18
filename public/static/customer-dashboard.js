@@ -211,12 +211,15 @@ async function loadDashData() {
 // is ever replaced — charts, calendar, and toggles are never touched.
 function buildOrderBadgesHTML() {
   var c = custState.customer || {};
+  var b = custState.billing || {};
   var freeTrialRemaining = c.free_trial_remaining || 0;
   var paidCredits = c.paid_credits_remaining || 0;
+  var apiCredits = b.api_credits_remaining || 0;
   var completedReports = custState.orders.filter(function(o) { return o.status === 'completed'; }).length;
   var processingReports = custState.orders.filter(function(o) { return o.status === 'processing'; }).length;
   return (freeTrialRemaining > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-gift mr-1"></i>' + freeTrialRemaining + ' Free Trial</div>' : '') +
     (paidCredits > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-coins mr-1"></i>' + paidCredits + ' Credits</div>' : '') +
+    (apiCredits > 0 ? '<div class="px-3 py-1.5 bg-purple-500/10 border border-purple-200 rounded-full text-xs font-bold text-purple-700"><i class="fas fa-code mr-1"></i>' + apiCredits + ' API Credits</div>' : '') +
     '<div class="px-3 py-1.5 rounded-full text-xs font-bold" style="background:var(--bg-elevated);border:1px solid var(--border-color);color:var(--text-secondary)"><i class="fas fa-file-alt mr-1"></i>' + completedReports + ' Reports</div>' +
     (processingReports > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700 animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i>' + processingReports + ' Generating</div>' : '');
 }
@@ -242,10 +245,11 @@ function renderDashboard() {
   var s = custState.crmStats || {};
   var freeTrialRemaining = c.free_trial_remaining || 0;
   var paidCredits = c.paid_credits_remaining || 0;
+  var apiCredits = b.api_credits_remaining || 0;
   var completedReports = custState.orders.filter(function(o) { return o.status === 'completed'; }).length;
   var processingReports = custState.orders.filter(function(o) { return o.status === 'processing'; }).length;
   var enhancingReports = 0;
-  var trialsExhausted = freeTrialRemaining <= 0 && paidCredits <= 0;
+  var trialsExhausted = freeTrialRemaining <= 0 && paidCredits <= 0 && apiCredits <= 0;
 
   // Helper: nav link
   function navLink(href, icon, label, badge, badgeColor) {
@@ -260,7 +264,7 @@ function renderDashboard() {
   }
 
   // Sidebar nav sections
-  var creditBadge = freeTrialRemaining > 0 ? freeTrialRemaining + ' free' : (paidCredits > 0 ? paidCredits : '');
+  var creditBadge = freeTrialRemaining > 0 ? freeTrialRemaining + ' free' : (paidCredits > 0 ? paidCredits : (apiCredits > 0 ? apiCredits + ' API' : ''));
   var creditBadgeColor = 'bg-blue-600';
   var invBadge = s.invoices_owing > 0 ? '$' + Number(s.invoices_owing).toFixed(0) : '';
   var propBadge = s.proposals_open > 0 ? s.proposals_open + '' : '';
@@ -337,6 +341,9 @@ function renderDashboard() {
           : '') +
         (paidCredits > 0
           ? '<div class="flex items-center justify-between mb-2"><span class="text-xs" style="color:var(--text-muted)">Report credits</span><span class="text-xs font-bold text-blue-400">' + paidCredits + '</span></div>'
+          : '') +
+        (apiCredits > 0
+          ? '<div class="flex items-center justify-between mb-2"><span class="text-xs" style="color:var(--text-muted)">API credits</span><span class="text-xs font-bold text-purple-400">' + apiCredits + '</span></div>'
           : '') +
         (!custState.isTeamMember && trialsExhausted && c.subscription_status !== 'active'
           ? '<button onclick="subscribeToMembership()" class="block w-full text-center py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer border-0"><i class="fas fa-crown mr-1"></i>Subscribe — from $49.99/mo</button>'
@@ -453,7 +460,7 @@ function renderDashboard() {
           '<div class="p-4 space-y-2.5">' +
             '<a href="/customer/order" class="flex items-center gap-3 p-3 bg-blue-500/10 hover:bg-blue-100 rounded-xl transition-colors">' +
               '<div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-plus text-white text-sm"></i></div>' +
-              '<div><p class="font-semibold text-sm" style="color:var(--text-primary)">Order Roof Report</p><p class="text-xs" style="color:var(--text-muted)">' + (freeTrialRemaining > 0 ? freeTrialRemaining + ' free remaining' : (paidCredits > 0 ? paidCredits + ' credits' : 'Pay per report')) + '</p></div>' +
+              '<div><p class="font-semibold text-sm" style="color:var(--text-primary)">Order Roof Report</p><p class="text-xs" style="color:var(--text-muted)">' + (freeTrialRemaining > 0 ? freeTrialRemaining + ' free remaining' : (paidCredits > 0 ? paidCredits + ' credits' : (apiCredits > 0 ? apiCredits + ' API credits' : 'Pay per report'))) + '</p></div>' +
             '</a>' +
             (isSolar ? ('<a href="/customer/design-builder" class="flex items-center gap-3 p-3 bg-amber-500/10 hover:bg-amber-100 rounded-xl transition-colors">' +
               '<div class="w-9 h-9 bg-amber-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-drafting-compass text-white text-sm"></i></div>' +
