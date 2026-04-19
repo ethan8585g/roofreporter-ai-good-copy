@@ -6162,7 +6162,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <span class="relative flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00FF88]"></span></span>
               <span class="text-sm font-semibold text-[#00FF88] tracking-wide">Trusted by 5,000+ Roofers — US &amp; Canada</span>
             </div>
-            <h1 class="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] text-white mb-8 tracking-tight">Get 4 Free Roof Reports<br/><span class="neon-text">In Under 5 Minutes.</span></h1>
+            <h1 class="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] text-white mb-8 tracking-tight">Get 4 Free Roof Reports<br/><span class="neon-text">No Credit Card Required.</span></h1>
             <h2 class="text-lg lg:text-xl text-gray-400 mb-10 max-w-xl leading-relaxed font-normal">Property-grade measurements, slope, area, and material take-off. <span class="text-white font-semibold">No credit card. No call. Cancel any time.</span></h2>
             <!-- Address-first hero preview -->
             <div id="hero-preview-form" style="margin-bottom:16px">
