@@ -10017,30 +10017,41 @@ async function openLeadDetailPane(id) {
     var lead = await res.json();
 
     var card = overlay.querySelector('div');
-    var rows = [
-      { label: 'Name', value: lead.name || '—' },
-      { label: 'Email', value: lead.email || '—' },
-      { label: 'Company', value: lead.company || '—' },
-      { label: 'Address', value: lead.address || '—' },
-      { label: 'Building Count', value: lead.building_count || '—' },
-      { label: 'Source', value: lead.source || '—' },
-      { label: 'Tag', value: lead.tag || '—' },
-      { label: 'Submitted', value: lead.created_at ? new Date(lead.created_at).toLocaleString() : '—' }
+    var allRows = [
+      { label: 'Name', value: lead.name, icon: 'fa-user' },
+      { label: 'Email', value: lead.email, icon: 'fa-envelope' },
+      { label: 'Company', value: lead.company, icon: 'fa-building' },
+      { label: 'Address', value: lead.address, icon: 'fa-map-marker-alt' },
+      { label: 'Buildings / Sections', value: lead.building_count, icon: 'fa-layer-group' },
+      { label: 'Source', value: lead.source, icon: 'fa-globe' },
+      { label: 'Tag', value: lead.tag, icon: 'fa-tag' },
+      { label: 'Submitted', value: lead.created_at ? new Date(lead.created_at).toLocaleString() : null, icon: 'fa-calendar' }
     ];
+    // Only show rows that have data
+    var rows = allRows.filter(function(r) { return r.value !== null && r.value !== undefined && r.value !== ''; });
     var rowsHtml = rows.map(function(r) {
-      return '<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6">' +
-        '<span style="color:#6b7280;font-size:14px">' + r.label + '</span>' +
-        '<span style="color:#111;font-size:14px;font-weight:600;text-align:right;max-width:60%;word-break:break-word">' + (r.value === '—' ? '<span style="color:#d1d5db">—</span>' : r.value) + '</span>' +
+      return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #f3f4f6">' +
+        '<i class="fas ' + r.icon + '" style="color:#14b8a6;width:16px;text-align:center;font-size:13px"></i>' +
+        '<span style="color:#6b7280;font-size:13px;min-width:100px">' + r.label + '</span>' +
+        '<span style="color:#111;font-size:14px;font-weight:600;word-break:break-word">' + r.value + '</span>' +
       '</div>';
     }).join('');
 
+    // Source label
+    var sourceLabels = { homepage_cta: 'Homepage CTA', demo_portal: 'Demo Portal', condo_cheat_sheet: 'Condo Cheat Sheet', other: 'Other' };
+    var sourceBadge = lead.source ? '<span style="display:inline-block;background:#e0f2fe;color:#0369a1;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;margin-top:4px"><i class="fas fa-globe" style="margin-right:4px"></i>' + (sourceLabels[lead.source] || lead.source) + '</span>' : '';
+
     card.innerHTML =
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
         '<h2 style="margin:0;font-size:20px;font-weight:700;color:#111"><i class="fas fa-wpforms" style="color:#14b8a6;margin-right:8px"></i>Lead #' + id + '</h2>' +
         '<button onclick="document.getElementById(\'lead-detail-pane\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;padding:4px">&times;</button>' +
       '</div>' +
-      '<div>' + rowsHtml + '</div>' +
-      (lead.email && lead.email !== '—' ? '<div style="margin-top:20px;text-align:center"><a href="mailto:' + lead.email + '" style="display:inline-block;background:#00FF88;color:#0A0A0A;padding:10px 24px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px"><i class="fas fa-envelope" style="margin-right:6px"></i>Email Lead</a></div>' : '');
+      sourceBadge +
+      '<div style="margin-top:16px">' + rowsHtml + '</div>' +
+      (lead.email ? '<div style="margin-top:20px;display:flex;gap:10px;justify-content:center">' +
+        '<a href="mailto:' + lead.email + '" style="display:inline-flex;align-items:center;gap:6px;background:#00FF88;color:#0A0A0A;padding:10px 24px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px"><i class="fas fa-envelope"></i>Email Lead</a>' +
+        '<a href="mailto:' + lead.email + '?subject=Your%20Roof%20Report%20is%20Ready" style="display:inline-flex;align-items:center;gap:6px;background:#f3f4f6;color:#374151;padding:10px 20px;border-radius:10px;text-decoration:none;font-weight:600;font-size:13px"><i class="fas fa-file-alt"></i>Send Report</a>' +
+      '</div>' : '');
   } catch (e) {
     var card = overlay.querySelector('div');
     card.innerHTML = '<p style="text-align:center;color:#ef4444">Could not load lead details.</p>' +
