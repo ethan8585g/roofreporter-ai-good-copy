@@ -7,6 +7,7 @@
   var state = {
     loading: true,
     autoSendCertificate: false,
+    certTriggerOn: 'install_completed',
     certLicenseNumber: '',
     certAccentColor: '#1a5c38',
     certSettingsDirty: false,
@@ -37,7 +38,7 @@
         fetch('/api/customer/profile', { headers: headers() }).catch(function() { return { ok: false }; }),
         fetch('/api/auth/gmail/status', { headers: headers() }).catch(function() { return { ok: false }; })
       ]);
-      if (certAutoRes.ok) { var d = await certAutoRes.json(); state.autoSendCertificate = !!d.auto_send_certificate; }
+      if (certAutoRes.ok) { var d = await certAutoRes.json(); state.autoSendCertificate = !!d.auto_send_certificate; state.certTriggerOn = d.cert_trigger_on || 'install_completed'; }
       if (profileRes.ok) {
         var d2 = await profileRes.json();
         state.certLicenseNumber = d2.brand_license_number || '';
@@ -92,7 +93,7 @@
             '</div>' +
             '<div>' +
               '<p class="text-sm font-bold" style="color:var(--text-primary, #111)">Auto-Send Certificate of Installation</p>' +
-              '<p class="text-xs mt-0.5" style="color:var(--text-muted, #6b7280)">Automatically email a Certificate of New Roof Installation to the customer when you mark the installation as complete — so they can submit it to their insurance company.</p>' +
+              '<p class="text-xs mt-0.5" style="color:var(--text-muted, #6b7280)">Automatically email a Certificate of New Roof Installation to the customer — so they can submit it to their insurance company. Choose when to send below.</p>' +
             '</div>' +
           '</div>' +
           '<button onclick="window._automations.toggleAutoSend()" class="flex-shrink-0 relative inline-flex items-center h-7 rounded-full w-12 transition-colors focus:outline-none" style="background:' + (state.autoSendCertificate ? '#16a34a' : 'var(--bg-elevated, #d1d5db)') + '" title="' + (state.autoSendCertificate ? 'Automation ON — click to disable' : 'Click to enable auto-send') + '">' +
@@ -107,6 +108,31 @@
             (state.autoSendCertificate ? 'Active — certificates will be sent automatically' : 'Inactive — certificates must be sent manually from Proposals') +
           '</div>' +
         '</div>' +
+
+        // Trigger choice
+        (state.autoSendCertificate ?
+          '<div class="px-5 pb-4">' +
+            '<p class="text-xs font-bold uppercase tracking-wider mb-3" style="color:var(--text-muted, #6b7280)"><i class="fas fa-bolt mr-1.5"></i>When to Send Certificate</p>' +
+            '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
+              '<button onclick="window._automations.setTrigger(\'install_completed\')" class="p-3 rounded-xl text-left transition-all" style="border:2px solid ' + (state.certTriggerOn === 'install_completed' ? '#16a34a' : 'var(--border-color, #e5e7eb)') + ';background:' + (state.certTriggerOn === 'install_completed' ? '#f0fdf4' : 'var(--bg-elevated, #fafafa)') + '">' +
+                '<div class="flex items-center gap-2 mb-1">' +
+                  '<i class="fas fa-hard-hat" style="color:' + (state.certTriggerOn === 'install_completed' ? '#16a34a' : 'var(--text-muted, #9ca3af)') + '"></i>' +
+                  '<span class="text-xs font-bold" style="color:' + (state.certTriggerOn === 'install_completed' ? '#166534' : 'var(--text-primary, #111)') + '">After Install Completed</span>' +
+                  (state.certTriggerOn === 'install_completed' ? '<i class="fas fa-check-circle ml-auto" style="color:#16a34a"></i>' : '') +
+                '</div>' +
+                '<p class="text-[11px]" style="color:var(--text-muted, #6b7280)">Send when you press "Job Completed" in the Job Manager</p>' +
+              '</button>' +
+              '<button onclick="window._automations.setTrigger(\'proposal_signed\')" class="p-3 rounded-xl text-left transition-all" style="border:2px solid ' + (state.certTriggerOn === 'proposal_signed' ? '#16a34a' : 'var(--border-color, #e5e7eb)') + ';background:' + (state.certTriggerOn === 'proposal_signed' ? '#f0fdf4' : 'var(--bg-elevated, #fafafa)') + '">' +
+                '<div class="flex items-center gap-2 mb-1">' +
+                  '<i class="fas fa-file-signature" style="color:' + (state.certTriggerOn === 'proposal_signed' ? '#16a34a' : 'var(--text-muted, #9ca3af)') + '"></i>' +
+                  '<span class="text-xs font-bold" style="color:' + (state.certTriggerOn === 'proposal_signed' ? '#166534' : 'var(--text-primary, #111)') + '">After Proposal Signed</span>' +
+                  (state.certTriggerOn === 'proposal_signed' ? '<i class="fas fa-check-circle ml-auto" style="color:#16a34a"></i>' : '') +
+                '</div>' +
+                '<p class="text-[11px]" style="color:var(--text-muted, #6b7280)">Send immediately when the customer signs the proposal</p>' +
+              '</button>' +
+            '</div>' +
+          '</div>'
+        : '') +
 
         // Certificate Settings
         '<div style="border-top:1px solid var(--border-color, #f1f5f9);background:var(--bg-elevated, #fafafa);padding:20px">' +
@@ -169,17 +195,36 @@
         var res = await fetch('/api/crm/proposals/automation/settings', {
           method: 'PUT',
           headers: headers(),
-          body: JSON.stringify({ auto_send_certificate: newVal })
+          body: JSON.stringify({ auto_send_certificate: newVal, cert_trigger_on: state.certTriggerOn })
         });
         if (res.ok) {
           state.autoSendCertificate = newVal;
-          toast(newVal ? 'Certificate auto-send enabled — customers will receive a certificate when you mark the installation complete' : 'Certificate auto-send disabled', newVal ? 'success' : 'info');
+          toast(newVal ? 'Certificate auto-send enabled' : 'Certificate auto-send disabled', newVal ? 'success' : 'info');
           render();
         } else {
           toast('Failed to update setting', 'error');
         }
       } catch(e) {
         toast('Error updating setting', 'error');
+      }
+    },
+    setTrigger: async function(trigger) {
+      try {
+        var res = await fetch('/api/crm/proposals/automation/settings', {
+          method: 'PUT',
+          headers: headers(),
+          body: JSON.stringify({ auto_send_certificate: state.autoSendCertificate, cert_trigger_on: trigger })
+        });
+        if (res.ok) {
+          state.certTriggerOn = trigger;
+          var label = trigger === 'proposal_signed' ? 'after customer signs proposal' : 'after you mark install completed in Job Manager';
+          toast('Certificate will be sent ' + label, 'success');
+          render();
+        } else {
+          toast('Failed to update trigger', 'error');
+        }
+      } catch(e) {
+        toast('Error updating trigger', 'error');
       }
     },
     setLicense: function(val) {
