@@ -5,8 +5,8 @@
 // ============================================================
 
 const SA = {
-  view: 'users',
-  section: 'customers',
+  view: 'inbox',
+  section: 'inbox',
   loading: true,
   data: {},
   salesPeriod: 'monthly',
@@ -143,7 +143,7 @@ function renderSectionTabs() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadView('users');
+  loadView('inbox');
   // Poll inbox unread count every 60s
   loadInboxBadge();
   setInterval(loadInboxBadge, 60000);
@@ -9868,7 +9868,9 @@ function renderInboxView() {
     { id: 'voice', label: 'Calls', icon: 'fa-phone-alt', count: unread.voice || 0 },
     { id: 'sms', label: 'Messages', icon: 'fa-sms', count: unread.sms || 0 },
     { id: 'voicemail', label: 'Callbacks', icon: 'fa-voicemail', count: unread.voicemail || 0 },
-    { id: 'form', label: 'Leads', icon: 'fa-wpforms', count: unread.form || 0 }
+    { id: 'form', label: 'Leads', icon: 'fa-wpforms', count: unread.form || 0 },
+    { id: 'cold_call', label: 'Cold Calls', icon: 'fa-phone-volume', count: 0 },
+    { id: 'job_message', label: 'Job Messages', icon: 'fa-hard-hat', count: 0 }
   ];
 
   var filtersHtml = '<div class="flex items-center gap-2 flex-wrap">';
@@ -9899,8 +9901,8 @@ function renderInboxView() {
   } else {
     listHtml = '<div class="divide-y divide-gray-100">';
     conversations.forEach(function(conv) {
-      var channelIcon = { web_chat: 'fa-comments text-blue-500', voice: 'fa-phone-alt text-green-500', sms: 'fa-sms text-purple-500', voicemail: 'fa-voicemail text-orange-500', form: 'fa-wpforms text-teal-500' };
-      var channelLabel = { web_chat: 'Web Chat', voice: 'Phone Call', sms: 'Message', voicemail: 'Callback Request', form: 'Lead Form' };
+      var channelIcon = { web_chat: 'fa-comments text-blue-500', voice: 'fa-phone-alt text-green-500', sms: 'fa-sms text-purple-500', voicemail: 'fa-voicemail text-orange-500', form: 'fa-wpforms text-teal-500', cold_call: 'fa-phone-volume text-red-500', job_message: 'fa-hard-hat text-yellow-600' };
+      var channelLabel = { web_chat: 'Web Chat', voice: 'Phone Call', sms: 'Message', voicemail: 'Callback Request', form: 'Lead Form', cold_call: 'Cold Call', job_message: 'Job Message' };
       var icon = channelIcon[conv.channel] || 'fa-comment text-gray-400';
       var label = channelLabel[conv.channel] || conv.channel;
       var name = conv.contact_name || conv.contact_email || conv.contact_phone || 'Unknown';

@@ -4858,12 +4858,12 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
     <!-- Sidebar Navigation — 6 Sections -->
     <aside class="sa-sidebar w-56 bg-slate-800 border-r border-slate-700 flex-shrink-0">
       <div class="p-3 space-y-1" id="sa-nav">
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-section="inbox" onclick="saSetSection('inbox', this)">
+        <div class="sa-nav-item active rounded-xl px-4 py-3 flex items-center gap-3" data-section="inbox" onclick="saSetSection('inbox', this)">
           <i class="fas fa-inbox w-5 text-center"></i>
           <span class="label text-sm font-semibold">Inbox</span>
           <span id="sa-sidebar-inbox-badge" style="margin-left:auto;background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none">0</span>
         </div>
-        <div class="sa-nav-item active rounded-xl px-4 py-3 flex items-center gap-3" data-section="customers" onclick="saSetSection('customers', this)">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-section="customers" onclick="saSetSection('customers', this)">
           <i class="fas fa-users w-5 text-center"></i>
           <span class="label text-sm font-semibold">Customers</span>
         </div>
@@ -4919,19 +4919,8 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
       localStorage.removeItem('rc_token');
       window.location.href = '/login';
     }
-    function saSetView(v, el) {
-      // Update sidebar active state
-      document.querySelectorAll('.sa-nav-item').forEach(function(n) {
-        n.classList.remove('active');
-        n.classList.add('text-gray-400');
-      });
-      if (el) {
-        el.classList.add('active');
-        el.classList.remove('text-gray-400');
-      }
-      // Delegate to JS module
-      if (typeof window.saDashboardSetView === 'function') window.saDashboardSetView(v);
-    }
+    // saSetView is defined in super-admin-dashboard.js — handles sidebar highlight + view loading
+    // saSetSection is defined in super-admin-dashboard.js — handles section switching
   </script>
   <script src="/static/super-admin-dashboard.js?v=${Date.now()}"></script>
   <script src="/static/admin-agent-chat.js?v=${Date.now()}"></script>

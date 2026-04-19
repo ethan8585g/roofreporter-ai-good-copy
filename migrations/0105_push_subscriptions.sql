@@ -13,5 +13,6 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   disabled INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_pushsub_customer ON push_subscriptions(customer_id);
-CREATE INDEX IF NOT EXISTS idx_pushsub_active ON push_subscriptions(disabled);
+-- Skipped: push_subscriptions was already created by 0074 with different schema (user_id instead of customer_id)
+-- CREATE INDEX IF NOT EXISTS idx_pushsub_customer ON push_subscriptions(customer_id);
+-- CREATE INDEX IF NOT EXISTS idx_pushsub_active ON push_subscriptions(disabled);

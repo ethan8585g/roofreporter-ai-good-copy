@@ -1320,6 +1320,60 @@ adminRoutes.get('/superadmin/inbox', async (c) => {
       }
     }
 
+    // 6. Cold-call outbound call logs
+    if (!channel || channel === 'all' || channel === 'cold_call') {
+      try {
+        const ccQuery = search
+          ? `SELECT cl.id, cl.contact_name, '' as contact_email, cl.phone_dialed as contact_phone,
+               'cold_call' as channel, cl.call_outcome as status, '' as lead_status,
+               cl.call_summary as preview, cl.created_at as last_activity_at, cl.created_at,
+               1 as message_count, cl.call_duration_seconds, cl.company_name as customer_company
+             FROM cc_call_logs cl
+             WHERE cl.contact_name LIKE ? OR cl.phone_dialed LIKE ? OR cl.call_summary LIKE ?
+             ORDER BY cl.created_at DESC LIMIT 100`
+          : `SELECT cl.id, cl.contact_name, '' as contact_email, cl.phone_dialed as contact_phone,
+               'cold_call' as channel, cl.call_outcome as status, '' as lead_status,
+               cl.call_summary as preview, cl.created_at as last_activity_at, cl.created_at,
+               1 as message_count, cl.call_duration_seconds, cl.company_name as customer_company
+             FROM cc_call_logs cl
+             ORDER BY cl.created_at DESC LIMIT 100`
+        const ccRes = search
+          ? await c.env.DB.prepare(ccQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`).all()
+          : await c.env.DB.prepare(ccQuery).all()
+        for (const r of (ccRes.results || [])) {
+          conversations.push({ ...r, source_id: `cc_${r.id}` })
+        }
+      } catch (e) { /* cc_call_logs may not exist */ }
+    }
+
+    // 7. CRM job messages (crew messages)
+    if (!channel || channel === 'all' || channel === 'job_message') {
+      try {
+        const jmQuery = search
+          ? `SELECT cm.id, cm.author_name as contact_name, '' as contact_email, '' as contact_phone,
+               'job_message' as channel, 'open' as status, '' as lead_status,
+               cm.content as preview, cm.created_at as last_activity_at, cm.created_at,
+               1 as message_count, j.title as customer_company
+             FROM crew_messages cm
+             LEFT JOIN crm_jobs j ON j.id = cm.job_id
+             WHERE cm.author_name LIKE ? OR cm.content LIKE ?
+             ORDER BY cm.created_at DESC LIMIT 100`
+          : `SELECT cm.id, cm.author_name as contact_name, '' as contact_email, '' as contact_phone,
+               'job_message' as channel, 'open' as status, '' as lead_status,
+               cm.content as preview, cm.created_at as last_activity_at, cm.created_at,
+               1 as message_count, j.title as customer_company
+             FROM crew_messages cm
+             LEFT JOIN crm_jobs j ON j.id = cm.job_id
+             ORDER BY cm.created_at DESC LIMIT 100`
+        const jmRes = search
+          ? await c.env.DB.prepare(jmQuery).bind(`%${search}%`, `%${search}%`).all()
+          : await c.env.DB.prepare(jmQuery).all()
+        for (const r of (jmRes.results || [])) {
+          conversations.push({ ...r, source_id: `job_${r.id}` })
+        }
+      } catch (e) { /* crew_messages may not exist */ }
+    }
+
     // Sort all by last_activity_at descending, then paginate
     conversations.sort((a, b) => {
       const da = a.last_activity_at || a.created_at || ''

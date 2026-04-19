@@ -108,6 +108,9 @@ CREATE TABLE IF NOT EXISTS cc_cost_tracking (
 
 -- cc_campaigns columns already added in 0049 migration
 
+-- Add missing column to cc_transcript_flags (0049 created it without status)
+ALTER TABLE cc_transcript_flags ADD COLUMN status TEXT DEFAULT 'open';
+
 -- Indexes for CC tables
 CREATE INDEX IF NOT EXISTS idx_cc_campaigns_persona ON cc_campaigns(agent_persona_id);
 CREATE INDEX IF NOT EXISTS idx_cc_phone_config_persona ON cc_phone_config(agent_persona_id);
@@ -134,11 +137,19 @@ ALTER TABLE invoices ADD COLUMN customer_signature TEXT DEFAULT '';
 ALTER TABLE invoices ADD COLUMN signed_at TEXT DEFAULT '';
 ALTER TABLE invoices ADD COLUMN viewed_at TEXT DEFAULT '';
 ALTER TABLE invoices ADD COLUMN viewed_count INTEGER DEFAULT 0;
+ALTER TABLE invoices ADD COLUMN discount_type TEXT DEFAULT 'fixed';
+ALTER TABLE invoices ADD COLUMN company_id INTEGER DEFAULT NULL;
+ALTER TABLE invoices ADD COLUMN customer_address TEXT DEFAULT '';
+ALTER TABLE invoices ADD COLUMN customer_phone TEXT DEFAULT '';
+ALTER TABLE invoices ADD COLUMN square_payment_link_id TEXT DEFAULT '';
+ALTER TABLE invoices ADD COLUMN square_payment_link_url TEXT DEFAULT '';
+ALTER TABLE invoices ADD COLUMN square_payment_id TEXT DEFAULT '';
 
 -- Add unit column to invoice_items
 ALTER TABLE invoice_items ADD COLUMN unit TEXT DEFAULT 'each';
 ALTER TABLE invoice_items ADD COLUMN is_taxable INTEGER DEFAULT 1;
 ALTER TABLE invoice_items ADD COLUMN category TEXT DEFAULT '';
+ALTER TABLE invoice_items ADD COLUMN item_library_id INTEGER DEFAULT NULL;
 
 -- Square payment link tracking
 CREATE TABLE IF NOT EXISTS square_payment_links (
