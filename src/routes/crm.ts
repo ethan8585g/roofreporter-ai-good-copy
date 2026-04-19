@@ -782,41 +782,46 @@ crmRoutes.delete('/certificate-designs/:designId', async (c) => {
 
 // CERTIFICATE PREVIEW — renders a certificate with a given design config (no real data needed)
 crmRoutes.post('/certificate-preview', async (c) => {
-  const ownerId = await getOwnerId(c)
-  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
-  const body = await c.req.json()
-  // Fetch owner branding
-  const owner = await c.env.DB.prepare(
-    `SELECT name, company_name, logo_url, phone, email, address, city, province,
-            brand_business_name, brand_logo_url, brand_address, brand_phone, brand_email
-     FROM customers WHERE id = ?`
-  ).bind(ownerId).first<any>()
-  const companyName = owner?.brand_business_name || owner?.company_name || owner?.name || 'Your Roofing Company'
-  const companyAddress = owner?.brand_address || [owner?.address, owner?.city, owner?.province].filter(Boolean).join(', ')
-  const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
-  const html = generateRoofInstallationCertificateHTML({
-    companyName,
-    companyLogo: owner?.brand_logo_url || owner?.logo_url || undefined,
-    companyAddress,
-    companyPhone: owner?.brand_phone || owner?.phone || undefined,
-    companyEmail: owner?.brand_email || owner?.email || undefined,
-    licenseNumber: body.license_number || undefined,
-    customerName: body.customer_name || 'John Smith',
-    propertyAddress: body.property_address || '123 Maple Street, Winnipeg, MB R3T 2N2',
-    proposalNumber: body.proposal_number || '2026-0418-DEMO',
-    signedAt: body.signed_at || new Date().toISOString(),
-    scopeOfWork: 'Complete tear-off and re-roof — architectural shingles',
-    materials: 'IKO Cambridge Dual Grey architectural shingles, synthetic underlayment',
-    totalAmount: 12500,
-    accentColor: body.primary_color || '#1a5c38',
-    secondaryColor: body.secondary_color || '#f5b041',
-    fontFamily: body.font_family || 'EB Garamond',
-    templateStyle: body.template_style || 'classic',
-    customMessage: body.custom_message || undefined,
-    watermarkEnabled: !!body.watermark_enabled,
-    logoAlignment: body.logo_alignment || 'left',
-  })
-  return c.html(html)
+  try {
+    const ownerId = await getOwnerId(c)
+    if (!ownerId) return c.html('<html><body style="font-family:sans-serif;padding:40px;color:#666"><p>Please log in to preview certificates.</p></body></html>')
+    const body = await c.req.json()
+    // Fetch owner branding
+    const owner = await c.env.DB.prepare(
+      `SELECT name, company_name, logo_url, phone, email, address, city, province,
+              brand_business_name, brand_logo_url, brand_address, brand_phone, brand_email
+       FROM customers WHERE id = ?`
+    ).bind(ownerId).first<any>()
+    const companyName = owner?.brand_business_name || owner?.company_name || owner?.name || 'Your Roofing Company'
+    const companyAddress = owner?.brand_address || [owner?.address, owner?.city, owner?.province].filter(Boolean).join(', ')
+    const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
+    const html = generateRoofInstallationCertificateHTML({
+      companyName,
+      companyLogo: owner?.brand_logo_url || owner?.logo_url || undefined,
+      companyAddress,
+      companyPhone: owner?.brand_phone || owner?.phone || undefined,
+      companyEmail: owner?.brand_email || owner?.email || undefined,
+      licenseNumber: body.license_number || undefined,
+      customerName: body.customer_name || 'John Smith',
+      propertyAddress: body.property_address || '123 Maple Street, Winnipeg, MB R3T 2N2',
+      proposalNumber: body.proposal_number || '2026-0418-DEMO',
+      signedAt: body.signed_at || new Date().toISOString(),
+      scopeOfWork: 'Complete tear-off and re-roof — architectural shingles',
+      materials: 'IKO Cambridge Dual Grey architectural shingles, synthetic underlayment',
+      totalAmount: 12500,
+      accentColor: body.primary_color || '#1a5c38',
+      secondaryColor: body.secondary_color || '#f5b041',
+      fontFamily: body.font_family || 'EB Garamond',
+      templateStyle: body.template_style || 'classic',
+      customMessage: body.custom_message || undefined,
+      watermarkEnabled: !!body.watermark_enabled,
+      logoAlignment: body.logo_alignment || 'left',
+    })
+    return c.html(html)
+  } catch (err: any) {
+    console.error('Certificate preview error:', err)
+    return c.html(`<html><body style="font-family:sans-serif;padding:40px;color:#dc2626"><h3>Preview Error</h3><p>${err?.message || 'Unknown error'}</p></body></html>`, 500)
+  }
 })
 
 // CERTIFICATE SEND LOG — history of sent certificates
@@ -1267,6 +1272,7 @@ crmRoutes.get('/jobs/active-checkins', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
 
+  // Active check-ins from crew_time_logs + any unmirrored field_check_ins
   const checkins = await c.env.DB.prepare(`
     SELECT ctl.id, ctl.job_id, ctl.crew_member_id, ctl.clock_in, ctl.clock_in_lat, ctl.clock_in_lng,
            cj.title as job_title, cj.property_address, cj.job_number,
@@ -1275,10 +1281,29 @@ crmRoutes.get('/jobs/active-checkins', async (c) => {
     JOIN crm_jobs cj ON cj.id = ctl.job_id AND cj.owner_id = ?
     LEFT JOIN customers cu ON cu.id = ctl.crew_member_id
     WHERE ctl.clock_out IS NULL
-    ORDER BY ctl.clock_in DESC
-  `).bind(ownerId).all()
+    UNION
+    SELECT fci.id + 1000000, fci.job_id, fci.crew_member_id, fci.created_at as clock_in,
+           fci.lat as clock_in_lat, fci.lng as clock_in_lng,
+           cj2.title as job_title, cj2.property_address, cj2.job_number,
+           cu2.name as crew_name
+    FROM field_check_ins fci
+    JOIN crm_jobs cj2 ON cj2.id = fci.job_id AND cj2.owner_id = ?
+    LEFT JOIN customers cu2 ON cu2.id = fci.crew_member_id
+    WHERE fci.event_type = 'check_in'
+      AND NOT EXISTS (
+        SELECT 1 FROM field_check_ins co
+        WHERE co.job_id = fci.job_id AND co.crew_member_id = fci.crew_member_id
+          AND co.event_type = 'check_out' AND co.created_at > fci.created_at
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM crew_time_logs ctl2
+        WHERE ctl2.job_id = fci.job_id AND ctl2.crew_member_id = fci.crew_member_id
+          AND ctl2.clock_out IS NULL
+      )
+    ORDER BY clock_in DESC
+  `).bind(ownerId, ownerId).all()
 
-  // Recent completed check-ins (last 24h)
+  // Recent completed check-ins (last 24h) from crew_time_logs + field_check_ins
   const recent = await c.env.DB.prepare(`
     SELECT ctl.id, ctl.job_id, ctl.crew_member_id, ctl.clock_in, ctl.clock_out, ctl.duration_minutes,
            cj.title as job_title, cj.job_number,

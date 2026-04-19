@@ -146,12 +146,37 @@ fieldRoutes.post('/check-in', async (c) => {
      VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).bind(job_id, crew.crewId, event_type, lat ?? null, lng ?? null, accuracy_m ?? null, client_event_id ?? null).run()
 
-  // Flip job to in_progress on first check-in
+  // Sync to crew_time_logs so the admin dashboard sees field check-ins
   if (event_type === 'check_in') {
+    // Close any stale open log first, then create a new one
+    await c.env.DB.prepare(
+      `UPDATE crew_time_logs SET clock_out = datetime('now'), duration_minutes = 0
+       WHERE job_id = ? AND crew_member_id = ? AND clock_out IS NULL`
+    ).bind(job_id, crew.crewId).run()
+
+    await c.env.DB.prepare(
+      `INSERT INTO crew_time_logs (job_id, crew_member_id, clock_in, clock_in_lat, clock_in_lng)
+       VALUES (?, ?, datetime('now'), ?, ?)`
+    ).bind(job_id, crew.crewId, lat ?? null, lng ?? null).run()
+
+    // Flip job to in_progress on first check-in
     await c.env.DB.prepare(
       `UPDATE crm_jobs SET status = 'in_progress', updated_at = datetime('now')
         WHERE id = ? AND status = 'scheduled'`
     ).bind(job_id).run()
+  }
+
+  if (event_type === 'check_out') {
+    // Close the matching crew_time_logs row
+    const openLog = await c.env.DB.prepare(
+      `SELECT id, clock_in FROM crew_time_logs WHERE job_id = ? AND crew_member_id = ? AND clock_out IS NULL`
+    ).bind(job_id, crew.crewId).first<any>()
+    if (openLog) {
+      const durationMinutes = Math.round((Date.now() - new Date(openLog.clock_in + 'Z').getTime()) / 60000)
+      await c.env.DB.prepare(
+        `UPDATE crew_time_logs SET clock_out = datetime('now'), duration_minutes = ? WHERE id = ?`
+      ).bind(durationMinutes, openLog.id).run()
+    }
   }
 
   return c.json({ ok: true, id: res.meta.last_row_id })
