@@ -157,9 +157,7 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   const TEAL = '#00897B'
   const TEAL_DARK = '#00695C'
   const TEAL_LIGHT = '#E0F2F1'
-  // RED accent (from template Page 2)
-  const RED = '#B71C1C'
-  const RED_LIGHT = '#FFEBEE'
+  // (RED/AMBER removed — all pages now use TEAL theme)
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -387,7 +385,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         <span style="font-size:7px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px">Roof Penetrations:</span>
         ${ventCt > 0 ? `<span style="padding:2px 7px;background:${TEAL_LIGHT};color:${TEAL_DARK};border:1px solid ${TEAL};border-radius:3px;font-size:7px;font-weight:700">&#9679; Vents: ${ventCt}</span>` : ''}
         ${skylightCt > 0 ? `<span style="padding:2px 7px;background:${TEAL_LIGHT};color:${TEAL_DARK};border:1px solid ${TEAL};border-radius:3px;font-size:7px;font-weight:700">&#9830; Skylights: ${skylightCt}</span>` : ''}
-        ${chimneyCt > 0 ? `<span style="padding:2px 7px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:3px;font-size:7px;font-weight:700">&#9632; Chimneys: ${chimneyCt}</span>` : ''}
+        ${chimneyCt > 0 ? `<span style="padding:2px 7px;background:${TEAL_LIGHT};color:${TEAL_DARK};border:1px solid #b2dfdb;border-radius:3px;font-size:7px;font-weight:700">&#9632; Chimneys: ${chimneyCt}</span>` : ''}
       </div>
     </div>`
   })()}
@@ -407,8 +405,8 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
 <!-- ==================== PAGE 2: ROOF AREA ANALYSIS ==================== -->
 <div class="page">
-  <!-- Top red bar -->
-  <div style="height:4px;background:${RED}"></div>
+  <!-- Top teal bar -->
+  <div style="height:4px;background:linear-gradient(90deg,${TEAL},${TEAL_DARK})"></div>
 
   <!-- Title -->
   <div style="padding:10px 28px 6px">
@@ -477,9 +475,9 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   </div>
 
   <!-- Footer bar -->
-  <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:${RED};display:flex;align-items:center;justify-content:space-between;padding:0 28px">
+  <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,${TEAL},${TEAL_DARK});display:flex;align-items:center;justify-content:space-between;padding:0 28px">
     <span style="color:#fff;font-size:9px;font-weight:700">Roof Manager</span>
-    <span style="color:#ffcdd2;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; p.2</span>
+    <span style="color:#E0F2F1;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; p.2</span>
   </div>
 </div>
 
@@ -1112,7 +1110,7 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
     { cat: 'Drip Edge — Rake', desc: 'Metal drip edge, rake profile (10.5ft sticks)', qty: Math.ceil(m.drip_edge_rake_lf / 10.5), unit: 'sticks', note: `${m.drip_edge_rake_lf} LF`, icon: '&#9472;', color: '#7c3aed' },
     { cat: 'Valley Flashing', desc: 'Pre-bent W-valley metal or roll valley', qty: Math.ceil(m.valley_flashing_lf / 10), unit: 'pcs', note: `${m.valley_flashing_lf} LF total valley`, icon: '&#9660;', color: '#2563eb' },
     { cat: 'Roofing Nails', desc: '1.25″ galvanized coil nails', qty: m.roofing_nails_lbs, unit: 'lbs', note: 'Approx 2.5 lbs per square', icon: '&#9733;', color: '#64748b' },
-    { cat: 'Caulk / Sealant', desc: 'Roofing sealant tubes', qty: m.caulk_tubes, unit: 'tubes', note: 'Flashings, vents, and penetrations', icon: '&#9679;', color: '#f59e0b' }
+    { cat: 'Caulk / Sealant', desc: 'Roofing sealant tubes', qty: m.caulk_tubes, unit: 'tubes', note: 'Flashings, vents, and penetrations', icon: '&#9679;', color: '#0891b2' }
   ]
 
   return `
@@ -1172,7 +1170,7 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
 
   <!-- Notes -->
   <div style="padding:10px 28px 0">
-    <div style="padding:6px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:4px;font-size:7px;color:#92400e;line-height:1.5">
+    <div style="padding:6px 10px;background:${TEAL_LIGHT};border:1px solid #b2dfdb;border-radius:4px;font-size:7px;color:${TEAL_DARK};line-height:1.5">
       <strong>Material Notes:</strong> Quantities include standard waste factor. Verify quantities with your supplier before purchasing. Material availability and prices may vary by region. Bundle counts based on 3 bundles per roofing square for architectural shingles. Underlayment based on 15-square rolls. IWB (Ice &amp; Water Barrier) calculated at 3ft depth from eave edge per building code requirements.
     </div>
   </div>
@@ -1193,8 +1191,7 @@ function buildEdgeBreakdownPage(report: RoofReport, reportNum: string, reportDat
   const tm = (report as any).trace_measurement as any
   if (!tm) return '' // Only show for trace-measured reports
 
-  const AMBER = '#d97706'
-  const AMBER_DARK = '#92400e'
+  const TEAL = '#00897B', TEAL_DARK = '#00695C', TEAL_LIGHT = '#E0F2F1'
 
   // Edge type row builder
   const edgeTypeRows = (details: any[], type: string, label: string, color: string, totalFt: number) => {
@@ -1217,7 +1214,7 @@ function buildEdgeBreakdownPage(report: RoofReport, reportNum: string, reportDat
   return `
 <!-- ==================== EDGE BREAKDOWN PAGE ==================== -->
 <div class="page">
-  <div style="height:4px;background:linear-gradient(90deg,${AMBER},#f59e0b)"></div>
+  <div style="height:4px;background:linear-gradient(90deg,${TEAL},${TEAL_DARK})"></div>
   <div style="padding:12px 28px 8px">
     <div style="font-size:14px;font-weight:800;color:#222">Detailed Edge Breakdown</div>
   </div>
@@ -1277,21 +1274,21 @@ function buildEdgeBreakdownPage(report: RoofReport, reportNum: string, reportDat
   ${tm.face_details && tm.face_details.length > 0 ? `
   <!-- Face Details -->
   <div style="padding:10px 28px 0">
-    <div style="font-size:10px;font-weight:800;color:#333;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;border-bottom:2px solid ${AMBER};padding-bottom:3px">Roof Face Details</div>
+    <div style="font-size:10px;font-weight:800;color:#333;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;border-bottom:2px solid ${TEAL};padding-bottom:3px">Roof Face Details</div>
     <table style="width:100%;border-collapse:collapse;font-size:8px">
       <thead>
-        <tr style="background:#fef3c7">
-          <th style="padding:4px 8px;text-align:left;font-size:7px;font-weight:700;color:#92400e">Face</th>
-          <th style="padding:4px 8px;text-align:center;font-size:7px;font-weight:700;color:#92400e">Pitch</th>
-          <th style="padding:4px 8px;text-align:right;font-size:7px;font-weight:700;color:#92400e">Projected Area</th>
-          <th style="padding:4px 8px;text-align:right;font-size:7px;font-weight:700;color:#92400e">Sloped Area</th>
-          <th style="padding:4px 8px;text-align:right;font-size:7px;font-weight:700;color:#92400e">Squares</th>
-          <th style="padding:4px 8px;text-align:center;font-size:7px;font-weight:700;color:#92400e">Slope Factor</th>
+        <tr style="background:${TEAL_LIGHT}">
+          <th style="padding:4px 8px;text-align:left;font-size:7px;font-weight:700;color:${TEAL_DARK}">Face</th>
+          <th style="padding:4px 8px;text-align:center;font-size:7px;font-weight:700;color:${TEAL_DARK}">Pitch</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7px;font-weight:700;color:${TEAL_DARK}">Projected Area</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7px;font-weight:700;color:${TEAL_DARK}">Sloped Area</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7px;font-weight:700;color:${TEAL_DARK}">Squares</th>
+          <th style="padding:4px 8px;text-align:center;font-size:7px;font-weight:700;color:${TEAL_DARK}">Slope Factor</th>
         </tr>
       </thead>
       <tbody>
         ${tm.face_details.map((f: any, i: number) => `
-        <tr style="${i % 2 === 0 ? '' : 'background:#fffbeb'};border-bottom:1px solid #fde68a">
+        <tr style="${i % 2 === 0 ? '' : 'background:#f0fdfa'};border-bottom:1px solid #b2dfdb">
           <td style="padding:3px 8px;font-weight:700">${f.face_id}</td>
           <td style="padding:3px 8px;text-align:center;font-weight:600">${f.pitch_label}</td>
           <td style="padding:3px 8px;text-align:right">${Math.round(f.projected_area_ft2).toLocaleString()} SF</td>
@@ -1304,9 +1301,9 @@ function buildEdgeBreakdownPage(report: RoofReport, reportNum: string, reportDat
   </div>` : ''}
 
   <!-- Footer bar -->
-  <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,${AMBER},#f59e0b);display:flex;align-items:center;justify-content:space-between;padding:0 28px">
+  <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,${TEAL},${TEAL_DARK});display:flex;align-items:center;justify-content:space-between;padding:0 28px">
     <span style="color:#fff;font-size:9px;font-weight:700">Roof Manager</span>
-    <span style="color:#fef3c7;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Edge Breakdown</span>
+    <span style="color:#E0F2F1;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Edge Breakdown</span>
   </div>
 </div>`
 }
@@ -1544,8 +1541,8 @@ function buildMeasurementSummaryPage(report: RoofReport, reportNum: string, repo
             <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">~2.5 lbs/square</td>
           </tr>
           <tr style="background:#fafafa">
-            <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#f59e0b;margin-right:3px">&#9679;</span>Caulk / Sealant</td>
-            <td style="padding:4px 10px;text-align:center;font-weight:800;color:#f59e0b;border-bottom:1px solid #eee">${m.caulk_tubes}</td>
+            <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#0891b2;margin-right:3px">&#9679;</span>Caulk / Sealant</td>
+            <td style="padding:4px 10px;text-align:center;font-weight:800;color:#0891b2;border-bottom:1px solid #eee">${m.caulk_tubes}</td>
             <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">tubes</td>
             <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">Flashings &amp; penetrations</td>
           </tr>
@@ -1589,6 +1586,7 @@ function buildMeasurementSummaryPage(report: RoofReport, reportNum: string, repo
 // Shows cost estimate based on customer-provided price per bundle
 // ============================================================
 function buildCustomerPricingHTML(report: RoofReport): string {
+  const TEAL = '#00897B', TEAL_DARK = '#00695C', TEAL_LIGHT = '#E0F2F1'
   const pricePerBundle = report.customer_price_per_bundle || 0
   const grossSquares = report.customer_gross_squares || 0
   const totalCost = report.customer_total_cost_estimate || 0
@@ -1599,13 +1597,13 @@ function buildCustomerPricingHTML(report: RoofReport): string {
   return `
 <div style="page-break-before:always;max-width:1050px;margin:0 auto;padding:35px 40px;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#fff">
   <!-- Header -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #f59e0b">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid ${TEAL}">
     <div>
-      <div style="font-size:18px;font-weight:900;color:#92400e;letter-spacing:0.3px">
-        <span style="display:inline-block;width:28px;height:28px;background:#f59e0b;color:white;text-align:center;line-height:28px;border-radius:4px;font-size:14px;margin-right:8px">$</span>
+      <div style="font-size:18px;font-weight:900;color:${TEAL_DARK};letter-spacing:0.3px">
+        <span style="display:inline-block;width:28px;height:28px;background:${TEAL};color:white;text-align:center;line-height:28px;border-radius:4px;font-size:14px;margin-right:8px">$</span>
         CUSTOMER COST ESTIMATE
       </div>
-      <div style="font-size:10px;color:#92400e;margin-top:4px;font-weight:500">Roof Replacement Pricing — Based on Client-Provided Rate</div>
+      <div style="font-size:10px;color:${TEAL_DARK};margin-top:4px;font-weight:500">Roof Replacement Pricing — Based on Client-Provided Rate</div>
     </div>
     <div style="text-align:right">
       <div style="font-size:9px;color:#6b7a8d;text-transform:uppercase;letter-spacing:0.5px">Property</div>
@@ -1616,19 +1614,19 @@ function buildCustomerPricingHTML(report: RoofReport): string {
   <!-- Summary Cards -->
   <div style="display:flex;gap:16px;margin-bottom:24px">
     <!-- Net Roof Area -->
-    <div style="flex:1;background:linear-gradient(135deg,#fef3c7,#fde68a);border-radius:10px;padding:18px;text-align:center;border:1px solid #f59e0b30">
-      <div style="font-size:9px;color:#92400e;font-weight:700;text-transform:uppercase;letter-spacing:0.8px">Net Roof Area</div>
-      <div style="font-size:26px;font-weight:900;color:#92400e;margin:6px 0">${trueArea.toLocaleString()}</div>
-      <div style="font-size:10px;color:#b45309">sq ft</div>
+    <div style="flex:1;background:linear-gradient(135deg,${TEAL_LIGHT},#b2dfdb);border-radius:10px;padding:18px;text-align:center;border:1px solid ${TEAL}30">
+      <div style="font-size:9px;color:${TEAL_DARK};font-weight:700;text-transform:uppercase;letter-spacing:0.8px">Net Roof Area</div>
+      <div style="font-size:26px;font-weight:900;color:${TEAL_DARK};margin:6px 0">${trueArea.toLocaleString()}</div>
+      <div style="font-size:10px;color:${TEAL}">sq ft</div>
     </div>
     <!-- Waste Allowance -->
-    <div style="flex:1;background:linear-gradient(135deg,#fff7ed,#fed7aa);border-radius:10px;padding:18px;text-align:center;border:1px solid #f59e0b30">
-      <div style="font-size:9px;color:#92400e;font-weight:700;text-transform:uppercase;letter-spacing:0.8px">15% Waste Allowance</div>
-      <div style="font-size:26px;font-weight:900;color:#ea580c;margin:6px 0">+${wasteArea.toLocaleString()}</div>
-      <div style="font-size:10px;color:#b45309">sq ft</div>
+    <div style="flex:1;background:linear-gradient(135deg,#e0f7fa,#b2ebf2);border-radius:10px;padding:18px;text-align:center;border:1px solid ${TEAL}30">
+      <div style="font-size:9px;color:${TEAL_DARK};font-weight:700;text-transform:uppercase;letter-spacing:0.8px">15% Waste Allowance</div>
+      <div style="font-size:26px;font-weight:900;color:#00796b;margin:6px 0">+${wasteArea.toLocaleString()}</div>
+      <div style="font-size:10px;color:${TEAL}">sq ft</div>
     </div>
     <!-- Gross Squares -->
-    <div style="flex:1;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:10px;padding:18px;text-align:center;color:white">
+    <div style="flex:1;background:linear-gradient(135deg,${TEAL},${TEAL_DARK});border-radius:10px;padding:18px;text-align:center;color:white">
       <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;opacity:0.85">Total Squares</div>
       <div style="font-size:26px;font-weight:900;margin:6px 0">${grossSquares}</div>
       <div style="font-size:10px;opacity:0.85">(with 15% waste)</div>
@@ -1643,17 +1641,17 @@ function buildCustomerPricingHTML(report: RoofReport): string {
 
   <!-- Total Cost Estimate -->
   <div style="background:linear-gradient(135deg,#1e3a5f,#0f172a);border-radius:12px;padding:28px 32px;color:white;text-align:center;margin-bottom:24px;position:relative;overflow:hidden">
-    <div style="position:absolute;top:-20px;right:-20px;width:120px;height:120px;background:rgba(245,158,11,0.15);border-radius:50%"></div>
-    <div style="position:absolute;bottom:-30px;left:-10px;width:80px;height:80px;background:rgba(245,158,11,0.1);border-radius:50%"></div>
+    <div style="position:absolute;top:-20px;right:-20px;width:120px;height:120px;background:rgba(0,137,123,0.15);border-radius:50%"></div>
+    <div style="position:absolute;bottom:-30px;left:-10px;width:80px;height:80px;background:rgba(0,137,123,0.1);border-radius:50%"></div>
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;opacity:0.7;margin-bottom:8px">Estimated Roof Replacement Cost</div>
-    <div style="font-size:48px;font-weight:900;color:#fbbf24;text-shadow:0 2px 8px rgba(0,0,0,0.3)">$${totalCost.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+    <div style="font-size:48px;font-weight:900;color:#80cbc4;text-shadow:0 2px 8px rgba(0,0,0,0.3)">$${totalCost.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
     <div style="font-size:12px;margin-top:6px;opacity:0.6">Canadian Dollars (CAD)</div>
   </div>
 
   <!-- Calculation Breakdown -->
   <div style="background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;padding:20px;margin-bottom:20px">
     <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:12px">
-      <span style="display:inline-block;width:18px;height:18px;background:#f59e0b;color:white;text-align:center;line-height:18px;border-radius:3px;font-size:10px;margin-right:6px">&#8614;</span>
+      <span style="display:inline-block;width:18px;height:18px;background:${TEAL};color:white;text-align:center;line-height:18px;border-radius:3px;font-size:10px;margin-right:6px">&#8614;</span>
       Calculation Breakdown
     </div>
     <table style="width:100%;font-size:11px;border-collapse:collapse">
@@ -1679,13 +1677,13 @@ function buildCustomerPricingHTML(report: RoofReport): string {
       </tr>
       <tr style="background:#f1f5f9">
         <td style="padding:10px 0;font-weight:800;color:#0f172a;font-size:12px">TOTAL ESTIMATED COST</td>
-        <td style="padding:10px 0;text-align:right;font-weight:900;color:#d97706;font-size:14px">$${totalCost.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CAD</td>
+        <td style="padding:10px 0;text-align:right;font-weight:900;color:${TEAL_DARK};font-size:14px">$${totalCost.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CAD</td>
       </tr>
     </table>
   </div>
 
   <!-- Disclaimer -->
-  <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 16px;font-size:9px;color:#92400e;line-height:1.6">
+  <div style="background:${TEAL_LIGHT};border:1px solid #b2dfdb;border-radius:8px;padding:14px 16px;font-size:9px;color:${TEAL_DARK};line-height:1.6">
     <strong style="font-size:10px">ESTIMATE DISCLAIMER:</strong> This cost estimate is based on the client-provided rate of $${pricePerBundle}/square and AI-measured roof area with 15% waste factor. Actual costs may vary depending on: roof complexity, existing material removal, structural repairs, flashing details, code requirements, and regional pricing. This estimate does not include additional materials (underlayment, flashing, vents, etc.). A professional on-site assessment is recommended for a final quote.
   </div>
 </div>`
@@ -1696,6 +1694,7 @@ function buildCustomerPricingHTML(report: RoofReport): string {
 // over the satellite image, plus system size, annual production, savings.
 // ============================================================
 function buildSolarProposalPage(report: RoofReport, reportNum: string, reportDate: string, fullAddress: string): string {
+  const TEAL = '#00897B', TEAL_DARK = '#00695C', TEAL_LIGHT = '#E0F2F1'
   const layout = report.solar_panel_layout!
   const panels = (layout.user_panels && layout.user_panels.length ? layout.user_panels : layout.suggested_panels) || []
   const panelCount = panels.length
@@ -1739,20 +1738,20 @@ function buildSolarProposalPage(report: RoofReport, reportNum: string, reportDat
   return `
 <!-- ==================== SOLAR PROPOSAL PAGE ==================== -->
 <div class="page">
-  <div style="height:4px;background:linear-gradient(90deg,#f59e0b,#d97706)"></div>
+  <div style="height:4px;background:linear-gradient(90deg,${TEAL},${TEAL_DARK})"></div>
   <div style="padding:12px 28px 8px">
-    <div style="font-size:14px;font-weight:800;color:#222"><span style="color:#f59e0b">&#9728;</span> Solar Proposal</div>
+    <div style="font-size:14px;font-weight:800;color:#222"><span style="color:${TEAL}">&#9728;</span> Solar Proposal</div>
     <div style="font-size:10px;color:#555">${fullAddress}</div>
   </div>
 
   <div style="padding:0 28px 10px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
-    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px;text-align:center">
-      <div style="font-size:7px;font-weight:700;color:#92400e;text-transform:uppercase">Panels</div>
-      <div style="font-size:20px;font-weight:900;color:#b45309">${panelCount}</div>
+    <div style="background:${TEAL_LIGHT};border:1px solid #b2dfdb;border-radius:6px;padding:10px;text-align:center">
+      <div style="font-size:7px;font-weight:700;color:${TEAL_DARK};text-transform:uppercase">Panels</div>
+      <div style="font-size:20px;font-weight:900;color:${TEAL_DARK}">${panelCount}</div>
     </div>
-    <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:10px;text-align:center">
-      <div style="font-size:7px;font-weight:700;color:#92400e;text-transform:uppercase">System Size</div>
-      <div style="font-size:20px;font-weight:900;color:#b45309">${systemKw.toFixed(2)} kW</div>
+    <div style="background:#b2dfdb;border:1px solid ${TEAL};border-radius:6px;padding:10px;text-align:center">
+      <div style="font-size:7px;font-weight:700;color:${TEAL_DARK};text-transform:uppercase">System Size</div>
+      <div style="font-size:20px;font-weight:900;color:${TEAL_DARK}">${systemKw.toFixed(2)} kW</div>
     </div>
     <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:10px;text-align:center">
       <div style="font-size:7px;font-weight:700;color:#065f46;text-transform:uppercase">Annual Production</div>
@@ -1765,7 +1764,7 @@ function buildSolarProposalPage(report: RoofReport, reportNum: string, reportDat
   </div>
 
   <div style="padding:0 28px 10px">
-    <div style="font-size:11px;font-weight:800;color:${NAVY};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;border-bottom:2px solid #f59e0b;padding-bottom:3px">
+    <div style="font-size:11px;font-weight:800;color:${NAVY};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;border-bottom:2px solid ${TEAL};padding-bottom:3px">
       Panel Layout
     </div>
     <div style="position:relative;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;background:#000">
@@ -1779,8 +1778,9 @@ function buildSolarProposalPage(report: RoofReport, reportNum: string, reportDat
     </div>
   </div>
 
-  <div style="position:absolute;bottom:0;left:0;right:0;background:#1e3a5f;padding:6px 14px">
-    <span style="color:#fef3c7;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Solar Proposal</span>
+  <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,${TEAL},${TEAL_DARK});display:flex;align-items:center;justify-content:space-between;padding:0 28px">
+    <span style="color:#fff;font-size:9px;font-weight:700">Roof Manager</span>
+    <span style="color:#E0F2F1;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Solar Proposal</span>
   </div>
 </div>`
 }
