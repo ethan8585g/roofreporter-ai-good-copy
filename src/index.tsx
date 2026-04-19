@@ -2436,6 +2436,7 @@ app.get('/customer/proposals', (c) => {
   const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
   return c.html(getProposalBuilderPageHTML(mapsKey))
 })
+app.get('/customer/automations', (c) => c.html(getAutomationsPageHTML()))
 app.get('/customer/jobs', (c) => c.html(getCrmSubPageHTML('jobs', 'Job Management', 'fa-hard-hat')))
 app.get('/customer/pipeline', (c) => c.html(getCrmSubPageHTML('pipeline', 'Sales Pipeline', 'fa-funnel-dollar')))
 app.get('/customer/email-outreach', (c) => c.html(getCrmSubPageHTML('email-outreach', 'Email Outreach', 'fa-envelope-open-text')))
@@ -4887,6 +4888,10 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
           <i class="fas fa-headset w-5 text-center"></i>
           <span class="label text-sm font-medium">AI Call Center</span>
         </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('instagram', this)">
+          <i class="fab fa-instagram w-5 text-center"></i>
+          <span class="label text-sm font-medium">Instagram</span>
+        </div>
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('meta-connect', this)">
           <i class="fab fa-meta w-5 text-center"></i>
           <span class="label text-sm font-medium">Meta Connect</span>
@@ -4998,6 +5003,7 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
   <script src="/static/super-admin-dashboard.js?v=${Date.now()}"></script>
   <script src="/static/admin-agent-chat.js?v=${Date.now()}"></script>
   <script src="/static/call-center.js"></script>
+  <script src="/static/instagram-dashboard.js"></script>
   <script src="/static/meta-connect.js"></script>
   <script src="/static/heygen.js"></script>
   <script src="/static/email-outreach.js"></script>
@@ -14304,6 +14310,37 @@ function getProposalBuilderPageHTML(mapsApiKey: string) {
     </div>
   </main>
   <script src="/static/proposal-builder.js?v=${Date.now()}"></script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// AUTOMATIONS PAGE
+// ============================================================
+function getAutomationsPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Automations - Roof Manager</title>
+</head>
+<body class="min-h-screen" style="background:var(--bg-page)">
+  <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+      <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <div><h1 class="text-xl font-bold">Automations</h1><p class="text-brand-200 text-xs">Automated workflows for your business</p></div>
+      </a>
+      <a href="/customer/dashboard" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-arrow-left mr-1"></i>Back to Dashboard</a>
+    </div>
+  </header>
+  <main class="max-w-3xl mx-auto px-4 py-8">
+    <div id="automations-root">
+      <div class="flex items-center justify-center py-12"><div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-brand-500"></div></div>
+    </div>
+  </main>
+  <script src="/static/automations.js?v=${Date.now()}"></script>
   ${getRoverAssistant()}
 </body>
 </html>`

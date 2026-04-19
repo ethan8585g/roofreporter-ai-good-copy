@@ -172,6 +172,14 @@ async function loadView(view) {
           return;
         }
         break;
+      case 'instagram':
+        // Handled by instagram-dashboard.js module
+        if (typeof window.loadInstagram === 'function') {
+          SA.loading = false;
+          window.loadInstagram();
+          return;
+        }
+        break;
       case 'meta-connect':
         // Handled by meta-connect.js module
         if (typeof window.loadMetaConnect === 'function') {
@@ -412,6 +420,7 @@ function renderContent() {
     case 'pricing': root.innerHTML = renderPricingView(); break;
     case 'api-users': root.innerHTML = renderApiUsersView(); break;
     case 'call-center': break; // Handled by call-center.js
+    case 'instagram': break; // Handled by instagram-dashboard.js
     case 'meta-connect': break; // Handled by meta-connect.js
     case 'secretary-admin': root.innerHTML = renderSecretaryAdminView(); break;
     case 'secretary-manager': root.innerHTML = renderSecretaryManagerView(); break;
