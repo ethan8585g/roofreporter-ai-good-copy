@@ -208,7 +208,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         </svg>
       </div>
       <div>
-        <div style="font-size:16px;font-weight:900;color:${TEAL};letter-spacing:0.5px;line-height:1">ROOF REPORTER</div>
+        <div style="font-size:16px;font-weight:900;color:${TEAL};letter-spacing:0.5px;line-height:1">ROOF MANAGER</div>
         <div style="font-size:9px;font-weight:500;color:#888;letter-spacing:1px">AI</div>
       </div>
     </div>
@@ -391,7 +391,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   })()}
 
   <!-- Disclaimer -->
-  <div style="padding:4px 28px 0;font-size:7px;color:#888;line-height:1.5;text-align:center">
+  <div style="padding:4px 28px 36px;font-size:7px;color:#888;line-height:1.5;text-align:center">
     REPORT IS PROVIDED FOR ESTIMATION PURPOSES ONLY. ACTUAL MEASUREMENTS MAY VARY.
     &copy; ${new Date().getFullYear()} Roof Manager. All imagery &copy; Google.
   </div>
@@ -920,7 +920,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       <div style="width:16px;height:16px;background:#00838F;border-radius:3px;display:flex;align-items:center;justify-content:center">
         <div style="width:8px;height:8px;border:1.5px solid #fff;border-radius:1px"></div>
       </div>
-      <span style="font-size:9px;font-weight:800;color:#00838F">ROOF REPORTER AI</span>
+      <span style="font-size:9px;font-weight:800;color:#00838F">ROOF MANAGER</span>
     </div>
     <div style="font-size:6.5px;color:#999">&copy; Roof Manager &bull; ${reportDate} &bull; p.1/2</div>
   </div>
@@ -1038,7 +1038,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <div style="margin:8px 22px 0;background:#FFC107;border-radius:3px;padding:5px 12px">
     <div style="font-size:6.5px;font-weight:700;color:#333;text-align:center;text-transform:uppercase;line-height:1.5">
       THIS REPORT IS FOR ESTIMATION PURPOSES ONLY. VERIFY ALL DIMENSIONS AND TOTALS BEFORE PURCHASING MATERIALS.<br>
-      THIS REPORT IS THE PROPERTY OF ROOF REPORTER AI AND MAY NOT BE REPRODUCED WITHOUT WRITTEN CONSENT.
+      THIS REPORT IS THE PROPERTY OF ROOF MANAGER AND MAY NOT BE REPRODUCED WITHOUT WRITTEN CONSENT.
     </div>
   </div>
 
@@ -1377,7 +1377,7 @@ function buildMeasurementSummaryPage(report: RoofReport, reportNum: string, repo
       <div style="width:28px;height:28px;background:${TEAL};border-radius:5px;display:flex;align-items:center;justify-content:center">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 21V10L12 3L21 10V21H15V14H9V21H3Z" fill="white"/></svg>
       </div>
-      <div style="font-size:11px;font-weight:900;color:${TEAL}">ROOF REPORTER</div>
+      <div style="font-size:11px;font-weight:900;color:${TEAL}">ROOF MANAGER</div>
     </div>
   </div>
 
