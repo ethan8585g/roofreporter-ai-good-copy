@@ -168,9 +168,10 @@ analyticsRoutes.get('/dashboard', async (c) => {
   const period = c.req.query('period') || '7d'
 
   const daysBack = period === '30d' ? 30 : period === '90d' ? 90 : period === '24h' ? 1 : 7
-  const since = new Date(Date.now() - daysBack * 86400000).toISOString()
-  // Prior period window — same length, immediately before current period
-  const prevSince = new Date(Date.now() - daysBack * 2 * 86400000).toISOString()
+  // Use SQLite datetime() to match CURRENT_TIMESTAMP format (YYYY-MM-DD HH:MM:SS)
+  // JS .toISOString() uses 'T' separator which breaks SQLite string comparison
+  const since = `-${daysBack} days`
+  const prevSince = `-${daysBack * 2} days`
 
   const [
     overview, prevOverview,
@@ -193,7 +194,7 @@ analyticsRoutes.get('/dashboard', async (c) => {
         ROUND(AVG(CASE WHEN time_on_page > 0 THEN time_on_page END), 1) as avg_time_on_page,
         ROUND(AVG(CASE WHEN scroll_depth > 0 THEN scroll_depth END), 1) as avg_scroll_depth
       FROM site_analytics
-      WHERE created_at >= ?
+      WHERE created_at >= datetime('now', ?)
         AND page_url NOT LIKE '/super-admin%'
         AND page_url NOT LIKE '/admin%'
         AND page_url NOT LIKE '/login%'
@@ -209,7 +210,7 @@ analyticsRoutes.get('/dashboard', async (c) => {
         COUNT(DISTINCT session_id) as sessions,
         ROUND(AVG(CASE WHEN time_on_page > 0 THEN time_on_page END), 1) as avg_time_on_page
       FROM site_analytics
-      WHERE created_at >= ? AND created_at < ?
+      WHERE created_at >= datetime('now', ?) AND created_at < datetime('now', ?)
         AND page_url NOT LIKE '/super-admin%'
         AND page_url NOT LIKE '/admin%'
         AND page_url NOT LIKE '/login%'
@@ -235,7 +236,7 @@ analyticsRoutes.get('/dashboard', async (c) => {
                ROUND(AVG(CASE WHEN time_on_page > 0 THEN time_on_page END), 1) as avg_time,
                session_id
         FROM site_analytics
-        WHERE event_type = 'pageview' AND created_at >= ?
+        WHERE event_type = 'pageview' AND created_at >= datetime('now', ?)
           AND page_url NOT LIKE '/super-admin%'
           AND page_url NOT LIKE '/admin%'
           AND page_url NOT LIKE '/login%'
@@ -245,7 +246,7 @@ analyticsRoutes.get('/dashboard', async (c) => {
       JOIN (
         SELECT session_id, COUNT(DISTINCT page_url) as page_count
         FROM site_analytics
-        WHERE event_type = 'pageview' AND created_at >= ?
+        WHERE event_type = 'pageview' AND created_at >= datetime('now', ?)
           AND page_url NOT LIKE '/super-admin%'
           AND page_url NOT LIKE '/admin%'
           AND page_url NOT LIKE '/login%'
@@ -263,7 +264,7 @@ analyticsRoutes.get('/dashboard', async (c) => {
              COUNT(DISTINCT visitor_id) as visitors,
              COUNT(DISTINCT session_id) as sessions
       FROM site_analytics
-      WHERE event_type = 'pageview' AND created_at >= ?
+      WHERE event_type = 'pageview' AND created_at >= datetime('now', ?)
         AND page_url NOT LIKE '/super-admin%'
         AND page_url NOT LIKE '/admin%'
         AND page_url NOT LIKE '/login%'
@@ -275,7 +276,7 @@ analyticsRoutes.get('/dashboard', async (c) => {
     db.prepare(`
       SELECT referrer, COUNT(*) as hits, COUNT(DISTINCT visitor_id) as visitors
       FROM site_analytics
-      WHERE referrer IS NOT NULL AND referrer != '' AND event_type = 'pageview' AND created_at >= ?
+      WHERE referrer IS NOT NULL AND referrer != '' AND event_type = 'pageview' AND created_at >= datetime('now', ?)
         AND page_url NOT LIKE '/super-admin%'
         AND page_url NOT LIKE '/admin%'
         AND page_url NOT LIKE '/login%'
@@ -317,7 +318,7 @@ analyticsRoutes.get('/dashboard', async (c) => {
     db.prepare(`
       SELECT device_type, COUNT(*) as count, COUNT(DISTINCT visitor_id) as visitors
       FROM site_analytics
-      WHERE device_type IS NOT NULL AND created_at >= ?
+      WHERE device_type IS NOT NULL AND created_at >= datetime('now', ?)
         AND page_url NOT LIKE '/super-admin%'
         AND page_url NOT LIKE '/admin%'
         AND page_url NOT LIKE '/login%'
@@ -329,7 +330,7 @@ analyticsRoutes.get('/dashboard', async (c) => {
     db.prepare(`
       SELECT utm_source as value, COUNT(*) as hits, COUNT(DISTINCT visitor_id) as visitors
       FROM site_analytics
-      WHERE utm_source IS NOT NULL AND utm_source != '' AND created_at >= ?
+      WHERE utm_source IS NOT NULL AND utm_source != '' AND created_at >= datetime('now', ?)
         AND page_url NOT LIKE '/super-admin%'
         AND page_url NOT LIKE '/admin%'
         AND page_url NOT LIKE '/login%'
@@ -341,7 +342,7 @@ analyticsRoutes.get('/dashboard', async (c) => {
     db.prepare(`
       SELECT utm_medium as value, COUNT(*) as hits, COUNT(DISTINCT visitor_id) as visitors
       FROM site_analytics
-      WHERE utm_medium IS NOT NULL AND utm_medium != '' AND created_at >= ?
+      WHERE utm_medium IS NOT NULL AND utm_medium != '' AND created_at >= datetime('now', ?)
         AND page_url NOT LIKE '/super-admin%'
         AND page_url NOT LIKE '/admin%'
         AND page_url NOT LIKE '/login%'
@@ -353,7 +354,7 @@ analyticsRoutes.get('/dashboard', async (c) => {
     db.prepare(`
       SELECT utm_campaign as value, COUNT(*) as hits, COUNT(DISTINCT visitor_id) as visitors
       FROM site_analytics
-      WHERE utm_campaign IS NOT NULL AND utm_campaign != '' AND created_at >= ?
+      WHERE utm_campaign IS NOT NULL AND utm_campaign != '' AND created_at >= datetime('now', ?)
         AND page_url NOT LIKE '/super-admin%'
         AND page_url NOT LIKE '/admin%'
         AND page_url NOT LIKE '/login%'
@@ -363,7 +364,7 @@ analyticsRoutes.get('/dashboard', async (c) => {
 
     // New signups in current period (for conversion rate)
     db.prepare(`
-      SELECT COUNT(*) as count FROM customers WHERE created_at >= ?
+      SELECT COUNT(*) as count FROM customers WHERE created_at >= datetime('now', ?)
     `).bind(since).first(),
 
     // Geo data quality — % of pageviews with country data
@@ -372,7 +373,7 @@ analyticsRoutes.get('/dashboard', async (c) => {
         COUNT(CASE WHEN event_type = 'pageview' THEN 1 END) as total_pageviews,
         COUNT(CASE WHEN event_type = 'pageview' AND country IS NOT NULL THEN 1 END) as geo_pageviews
       FROM site_analytics
-      WHERE created_at >= ?
+      WHERE created_at >= datetime('now', ?)
         AND page_url NOT LIKE '/super-admin%'
         AND page_url NOT LIKE '/admin%'
         AND page_url NOT LIKE '/login%'
