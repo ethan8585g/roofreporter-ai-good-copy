@@ -8273,9 +8273,12 @@ function getCustomerLoginHTML(googleClientId = '') {
           if (r.ok) {
             window.location.href = '/customer/dashboard';
           } else {
-            localStorage.removeItem('rc_customer');
-            localStorage.removeItem('rc_customer_token');
-            localStorage.removeItem('rc_token');
+            // Only clear if the token hasn't changed (a new login may have set a fresh token while this check was in flight)
+            if (localStorage.getItem('rc_customer_token') === t) {
+              localStorage.removeItem('rc_customer');
+              localStorage.removeItem('rc_customer_token');
+              localStorage.removeItem('rc_token');
+            }
           }
         })
         .catch(function() {});
