@@ -12712,7 +12712,7 @@ function getTeamManagementPageHTML() {
           <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Team Management</h1>
-            <p class="text-brand-200 text-xs">Add sales team members - $50/user/month</p>
+            <p class="text-brand-200 text-xs">Manage your sales team</p>
           </div>
         </a>
       </div>

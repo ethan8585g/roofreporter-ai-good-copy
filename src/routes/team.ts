@@ -146,20 +146,26 @@ teamRoutes.get('/members', async (c) => {
     ORDER BY created_at DESC
   `).bind(ownerId).all()
 
-  // Billing summary
+  // Billing summary — team seats are free for subscribed users
   const activeSeatCount = members.results?.filter((m: any) => m.status === 'active').length || 0
-  const monthlyTotal = activeSeatCount * SEAT_PRICE_CENTS
+  const gating = await evaluateTeamGating(c.env.DB, ownerId)
+  const effectiveSeatPrice = gating.subscribed ? 0 : SEAT_PRICE_CENTS
+  const monthlyTotal = activeSeatCount * effectiveSeatPrice
 
   return c.json({
     members: members.results,
     invitations: invitations.results,
     billing: {
       active_seats: activeSeatCount,
-      price_per_seat_cents: SEAT_PRICE_CENTS,
-      price_per_seat_display: '$50.00',
+      price_per_seat_cents: effectiveSeatPrice,
+      price_per_seat_display: gating.subscribed ? 'Free' : '$50.00',
       monthly_total_cents: monthlyTotal,
-      monthly_total_display: `$${(monthlyTotal / 100).toFixed(2)}`
+      monthly_total_display: gating.subscribed ? 'Free' : `$${(monthlyTotal / 100).toFixed(2)}`
     },
+    subscribed: gating.subscribed,
+    tier: gating.tier,
+    team_limit: gating.team_limit,
+    remaining_seats: gating.remaining_seats,
     is_team_member: isTeamMember,
     can_manage: !isTeamMember || teamMemberRole === 'admin'
   })
