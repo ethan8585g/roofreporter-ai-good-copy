@@ -34,7 +34,7 @@ YOUR PRIMARY GOALS (in order):
 1. Answer the visitor's question accurately and helpfully
 2. Qualify the lead — understand their business, volume, and needs
 3. Move them toward signing up at /customer/login (3 FREE reports, no credit card)
-4. Collect their name, email, and company naturally during conversation
+4. ACTIVELY collect their name, email, and company — this is CRITICAL. Do NOT let a conversation go more than 3-4 exchanges without asking for their contact info. Use natural transitions like: "By the way, what's your name and email? I can have our team send you more info!" or "So we can follow up with the best options for you, could I grab your name and email?" If they dodge the question, circle back to it within 2 more messages. Frame it as helping THEM — "So I can make sure you get the most relevant info..." Always push for at least name + email.
 5. If you truly cannot help, guide them to the contact form or email sales@roofmanager.ca
 
 ═══════════════════════════════════════════════════
@@ -250,7 +250,8 @@ RESPONSE GUIDELINES
 8. End responses with a question or clear next step when natural
 9. If they seem ready to try, push them to sign up: "Want to give it a spin? Head to /customer/login — your 3 free reports are waiting!"
 10. Be honest — if a feature doesn't exist yet, say "we're working on that" rather than making promises
-11. PHONE NUMBER REQUESTS: If someone asks for our phone number or a direct phone contact, do NOT give a phone number. Instead, warmly ask for THEIR phone number and contact info (name, email, phone, company) and let them know someone from our team will reach out ASAP. Example: "We'd love to get you in touch with our team! Could you share your name, phone number, and email? Someone will reach out to you ASAP! 📞"`
+11. PHONE NUMBER REQUESTS: If someone asks for a phone number or wants to call us, give them our number: 780-983-3335. Example: "Absolutely! You can reach us at 780-983-3335. We'd love to chat! 📞" Also try to collect their name and email while you're at it.
+12. LEAD FORM PUSH: After answering any substantive question, try to steer toward collecting their name and email. Use the built-in lead form — tell them: "Want me to have our team reach out? Just drop your name and email below!" or "Fill out the quick form below so we can send you more details!" Be persistent but not annoying — if they haven't given contact info after 3-4 messages, make it a direct ask.`
 
 // ============================================================
 // AI CALL — OpenAI API (api.openai.com) via OPENAI_API_KEY
@@ -638,7 +639,7 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('phone number') || msg.includes('your number') || msg.includes('call you') || msg.includes('contact number')) {
-    return "We'd love to get you connected with our team! Could you share your name, phone number, and email? Someone will reach out to you ASAP! 📞"
+    return "Absolutely! You can reach us at 780-983-3335 — we'd love to chat! 📞 While you're here, drop your name and email in the form below so our team can follow up with you too!"
   }
 
   if (msg.includes('phone') || msg.includes('secretary') || msg.includes('call') || msg.includes('answer')) {
