@@ -9995,7 +9995,56 @@ function inboxOpenConversation(sourceId, channel) {
     alert('Callback #' + id + ' — full detail pane coming in Phase 2');
   } else if (channel === 'form') {
     var id = sourceId.replace('lead_', '');
-    alert('Lead #' + id + ' — full detail pane coming in Phase 2');
+    openLeadDetailPane(id);
+  }
+}
+
+async function openLeadDetailPane(id) {
+  // Remove existing pane if any
+  var existing = document.getElementById('lead-detail-pane');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'lead-detail-pane';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5)';
+  overlay.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:480px;width:90%;padding:32px;box-shadow:0 20px 60px rgba(0,0,0,0.3)"><p style="text-align:center;color:#6b7280">Loading lead details…</p></div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+  try {
+    var res = await saFetch('/api/admin/superadmin/inbox/lead/' + id);
+    if (!res || !res.ok) throw new Error('Not found');
+    var lead = await res.json();
+
+    var card = overlay.querySelector('div');
+    var rows = [
+      { label: 'Name', value: lead.name || '—' },
+      { label: 'Email', value: lead.email || '—' },
+      { label: 'Company', value: lead.company || '—' },
+      { label: 'Address', value: lead.address || '—' },
+      { label: 'Building Count', value: lead.building_count || '—' },
+      { label: 'Source', value: lead.source || '—' },
+      { label: 'Tag', value: lead.tag || '—' },
+      { label: 'Submitted', value: lead.created_at ? new Date(lead.created_at).toLocaleString() : '—' }
+    ];
+    var rowsHtml = rows.map(function(r) {
+      return '<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6">' +
+        '<span style="color:#6b7280;font-size:14px">' + r.label + '</span>' +
+        '<span style="color:#111;font-size:14px;font-weight:600;text-align:right;max-width:60%;word-break:break-word">' + (r.value === '—' ? '<span style="color:#d1d5db">—</span>' : r.value) + '</span>' +
+      '</div>';
+    }).join('');
+
+    card.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">' +
+        '<h2 style="margin:0;font-size:20px;font-weight:700;color:#111"><i class="fas fa-wpforms" style="color:#14b8a6;margin-right:8px"></i>Lead #' + id + '</h2>' +
+        '<button onclick="document.getElementById(\'lead-detail-pane\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;padding:4px">&times;</button>' +
+      '</div>' +
+      '<div>' + rowsHtml + '</div>' +
+      (lead.email && lead.email !== '—' ? '<div style="margin-top:20px;text-align:center"><a href="mailto:' + lead.email + '" style="display:inline-block;background:#00FF88;color:#0A0A0A;padding:10px 24px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px"><i class="fas fa-envelope" style="margin-right:6px"></i>Email Lead</a></div>' : '');
+  } catch (e) {
+    var card = overlay.querySelector('div');
+    card.innerHTML = '<p style="text-align:center;color:#ef4444">Could not load lead details.</p>' +
+      '<div style="text-align:center;margin-top:12px"><button onclick="document.getElementById(\'lead-detail-pane\').remove()" style="background:#f3f4f6;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-weight:600">Close</button></div>';
   }
 }
 

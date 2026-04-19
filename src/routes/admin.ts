@@ -1446,6 +1446,22 @@ adminRoutes.get('/superadmin/inbox/unread-count', async (c) => {
   }
 })
 
+// GET /superadmin/inbox/lead/:id — Single lead detail
+adminRoutes.get('/superadmin/inbox/lead/:id', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  const id = c.req.param('id')
+  try {
+    const lead = await c.env.DB.prepare(
+      `SELECT id, email, name, company, address, building_count, source, tag, created_at FROM asset_report_leads WHERE id = ?`
+    ).bind(id).first<any>()
+    if (!lead) return c.json({ error: 'Lead not found' }, 404)
+    return c.json(lead)
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
 // ============================================================
 // SUPERADMIN: ROOFER SECRETARY AI — Subscriber management, usage, revenue
 // ============================================================
