@@ -320,23 +320,6 @@ squareRoutes.post('/checkout/report', async (c) => {
     const customer = await getCustomerFromToken(c.env.DB, token)
     if (!customer) return c.json({ error: 'Not authenticated' }, 401)
 
-    // Require active subscription after free trial is exhausted
-    // Team members share the owner's credits — they never see the subscribe prompt
-    const isDev = isDevAccount(customer.email || '', c.env)
-    const freeTrialRemaining = isDev ? 999999 : Math.max(0, (customer.free_trial_total || 0) - (customer.free_trial_used || 0))
-    if (!isDev && freeTrialRemaining <= 0 && customer.subscription_status !== 'active') {
-      if (customer.is_team_member) {
-        return c.json({
-          error: 'No report credits available. Ask your team admin to purchase credits or subscribe.',
-          no_credits: true
-        }, 402)
-      }
-      return c.json({
-        error: 'Your 3 free trial reports have been used. Subscribe to continue generating reports.',
-        subscription_required: true
-      }, 402)
-    }
-
     const { property_address, property_city, property_province, property_postal_code,
             service_tier, latitude, longitude, success_url, cancel_url } = await c.req.json()
 
@@ -406,82 +389,6 @@ squareRoutes.post('/checkout/report', async (c) => {
 })
 
 // ============================================================
-// SUBSCRIBE — Tiered monthly membership checkout via Square
-// After 3 free trial reports, users must subscribe to continue.
-// Tiers: starter ($49.99/5 team), professional ($99.99/10 team),
-//        enterprise ($199.99/25 team)
-// ============================================================
-const SUBSCRIPTION_TIERS: Record<string, { name: string; priceCents: number; teamLimit: number }> = {
-  starter:      { name: 'Starter',      priceCents: 4999,  teamLimit: 5 },
-  professional: { name: 'Professional', priceCents: 9999,  teamLimit: 10 },
-  enterprise:   { name: 'Enterprise',   priceCents: 19999, teamLimit: 25 },
-}
-
-squareRoutes.post('/checkout/subscription', async (c) => {
-  try {
-    const accessToken = c.env.SQUARE_ACCESS_TOKEN
-    const locationId = c.env.SQUARE_LOCATION_ID
-    if (!accessToken || !locationId) return c.json({ error: 'Square is not configured. Contact admin.' }, 503)
-
-    const token = c.req.header('Authorization')?.replace('Bearer ', '')
-    const customer = await getCustomerFromToken(c.env.DB, token)
-    if (!customer) return c.json({ error: 'Not authenticated' }, 401)
-
-    // Already subscribed?
-    if (customer.subscription_status === 'active') {
-      return c.json({ error: 'You already have an active subscription.' }, 400)
-    }
-
-    const { tier } = await c.req.json().catch(() => ({ tier: 'starter' }))
-    const tierConfig = SUBSCRIPTION_TIERS[tier || 'starter']
-    if (!tierConfig) {
-      return c.json({ error: 'Invalid tier. Choose starter, professional, or enterprise.' }, 400)
-    }
-
-    const origin = new URL(c.req.url).origin
-    const successUrl = `${origin}/customer/dashboard?payment=success&type=subscription`
-
-    const idempotencyKey = `sub-${customer.customer_id}-${tier}-${Date.now()}`
-    const paymentLink = await squareRequest(accessToken, 'POST', '/online-checkout/payment-links', {
-      idempotency_key: idempotencyKey,
-      quick_pay: {
-        name: `Roof Manager ${tierConfig.name} — Monthly Membership`,
-        price_money: {
-          amount: tierConfig.priceCents,
-          currency: 'USD',
-        },
-        location_id: locationId,
-      },
-      checkout_options: {
-        redirect_url: successUrl,
-        ask_for_shipping_address: false,
-      },
-      payment_note: `${tierConfig.name} membership ($${(tierConfig.priceCents / 100).toFixed(2)}/mo) for ${customer.email}`,
-    })
-
-    const link = paymentLink.payment_link
-    const squareOrderId = link?.order_id || ''
-
-    // Record the pending subscription payment
-    await c.env.DB.prepare(`
-      INSERT INTO square_payments (customer_id, square_order_id, square_payment_link_id, amount, currency, status, payment_type, description, metadata_json)
-      VALUES (?, ?, ?, ?, 'usd', 'pending', 'subscription', ?, ?)
-    `).bind(
-      customer.customer_id, squareOrderId, link?.id || '', tierConfig.priceCents,
-      `${tierConfig.name} monthly membership — ${customer.email}`,
-      JSON.stringify({ type: 'subscription', tier, plan: tierConfig.name.toLowerCase(), team_limit: tierConfig.teamLimit, duration_days: 30 })
-    ).run()
-
-    return c.json({
-      checkout_url: link?.url || link?.long_url,
-      payment_link_id: link?.id,
-    })
-  } catch (err: any) {
-    return c.json({ error: 'Subscription checkout failed', details: err.message }, 500)
-  }
-})
-
-// ============================================================
 // USE CREDITS — Free trial first, then paid credits
 // New users get 3 free trial reports. After that, paid credits.
 // ============================================================
@@ -498,25 +405,6 @@ squareRoutes.post('/use-credit', async (c) => {
     const freeTrialRemaining = isDev ? 999999 : Math.max(0, (customer.free_trial_total || 0) - (customer.free_trial_used || 0))
     const paidRemaining = isDev ? 999999 : Math.max(0, (customer.report_credits || 0) - (customer.credits_used || 0))
     const totalRemaining = freeTrialRemaining + paidRemaining
-
-    // After free trial is exhausted, require active subscription to continue
-    // Team members share the owner's credits — they never see the subscribe prompt
-    if (!isDev && freeTrialRemaining <= 0 && customer.subscription_status !== 'active') {
-      if (customer.is_team_member) {
-        return c.json({
-          error: 'No report credits available. Ask your team admin to purchase credits or subscribe.',
-          no_credits: true,
-          free_trial_remaining: 0,
-          paid_credits_remaining: paidRemaining
-        }, 402)
-      }
-      return c.json({
-        error: 'Your 3 free trial reports have been used. Subscribe to continue generating reports.',
-        subscription_required: true,
-        free_trial_remaining: 0,
-        paid_credits_remaining: paidRemaining
-      }, 402)
-    }
 
     if (totalRemaining <= 0) {
       return c.json({

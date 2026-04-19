@@ -11365,61 +11365,23 @@ function getPricingPageHTML() {
           </a>
         </div>
       </div>
-      <!-- Team Membership Tiers -->
-      <h3 class="text-xl font-bold mb-6 text-center" style="color:var(--text-primary)">Monthly Membership Plans</h3>
-      <p class="text-center mb-8 text-sm" style="color:var(--text-muted)">After your 4 free reports, a membership is required to continue. Reports are billed separately ($8 each or via credit packs).</p>
-      <div class="grid md:grid-cols-3 gap-6">
-        <!-- Starter -->
-        <div class="rounded-2xl border p-6 text-center hover:shadow-lg transition-shadow" style="background:var(--bg-card);border-color:var(--border-color)">
-          <span class="px-3 py-1 bg-brand-100 text-brand-700 rounded-full text-xs font-bold"><i class="fas fa-user-friends mr-1"></i>STARTER</span>
-          <h4 class="text-4xl font-black mt-4 mb-1" style="color:var(--text-primary)">$49.99<span class="text-lg font-normal" style="color:var(--text-muted)">/mo</span></h4>
-          <p class="text-sm mb-6" style="color:var(--text-muted)">Up to 5 team/crew members</p>
-          <ul class="space-y-3 text-sm text-left mb-6">
-            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Full CRM &amp; invoicing</li>
-            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Up to 5 team members</li>
-            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Shared credit pool</li>
-            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Ad-free experience</li>
-            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Cancel anytime</li>
-          </ul>
-          <a href="/register" class="block w-full py-3 text-center font-bold rounded-xl bg-brand-600 hover:bg-brand-700 text-white transition-all hover:scale-[1.02] shadow-lg">
-            Get Started
-          </a>
+      <!-- Free Team Members -->
+      <div class="rounded-2xl border p-6 text-center" style="background:var(--bg-card);border-color:var(--border-color)">
+        <div class="flex items-center justify-center gap-3 mb-3">
+          <div class="w-12 h-12 bg-brand-100 rounded-xl flex items-center justify-center"><i class="fas fa-users text-brand-600 text-xl"></i></div>
         </div>
-        <!-- Professional -->
-        <div class="rounded-2xl border-2 border-brand-500 p-6 text-center hover:shadow-lg transition-shadow relative" style="background:var(--bg-card)">
-          <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white px-4 py-1 rounded-full text-xs font-bold">MOST POPULAR</div>
-          <span class="px-3 py-1 bg-brand-100 text-brand-700 rounded-full text-xs font-bold"><i class="fas fa-users mr-1"></i>PROFESSIONAL</span>
-          <h4 class="text-4xl font-black mt-4 mb-1" style="color:var(--text-primary)">$99.99<span class="text-lg font-normal" style="color:var(--text-muted)">/mo</span></h4>
-          <p class="text-sm mb-6" style="color:var(--text-muted)">Up to 10 team/crew members</p>
-          <ul class="space-y-3 text-sm text-left mb-6">
-            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Everything in Starter</li>
-            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Up to 10 team members</li>
-            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Crew management tools</li>
-            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Priority support</li>
-            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Cancel anytime</li>
-          </ul>
-          <a href="/register" class="block w-full py-3 text-center font-bold rounded-xl bg-brand-600 hover:bg-brand-700 text-white transition-all hover:scale-[1.02] shadow-lg">
-            Get Started
-          </a>
-        </div>
-        <!-- Enterprise -->
-        <div class="rounded-2xl border p-6 text-center hover:shadow-lg transition-shadow" style="background:var(--bg-card);border-color:var(--border-color)">
-          <span class="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold"><i class="fas fa-building mr-1"></i>ENTERPRISE</span>
-          <h4 class="text-4xl font-black mt-4 mb-1" style="color:var(--text-primary)">$199.99<span class="text-lg font-normal" style="color:var(--text-muted)">/mo</span></h4>
-          <p class="text-sm mb-6" style="color:var(--text-muted)">Up to 25 team/crew members</p>
-          <ul class="space-y-3 text-sm text-left mb-6">
-            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Everything in Professional</li>
-            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Up to 25 team members</li>
-            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Team analytics dashboard</li>
-            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Dedicated account manager</li>
-            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Cancel anytime</li>
-          </ul>
-          <a href="/register" class="block w-full py-3 text-center font-bold rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-all hover:scale-[1.02] shadow-lg">
-            Get Started
-          </a>
-        </div>
+        <h3 class="text-xl font-bold mb-2" style="color:var(--text-primary)">Unlimited Team Members &mdash; Free</h3>
+        <p class="text-sm mb-4 max-w-lg mx-auto" style="color:var(--text-muted)">Add as many sales reps and crew members as you want at no cost. Every account is an admin account &mdash; you manage your own team with full CRM, reports, and tools access.</p>
+        <ul class="space-y-2 text-sm max-w-md mx-auto text-left mb-6">
+          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Unlimited team members at no cost</li>
+          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Full CRM, invoicing &amp; proposals</li>
+          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Shared report credit pool</li>
+          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Role-based permissions (admin/member)</li>
+        </ul>
+        <a href="/register" class="inline-block py-3 px-8 font-bold rounded-xl bg-brand-600 hover:bg-brand-700 text-white transition-all hover:scale-[1.02] shadow-lg">
+          Get Started Free
+        </a>
       </div>
-      <p class="text-center text-sm mt-6" style="color:var(--text-muted)">Need more than 25 members? <a href="mailto:sales@roofmanager.ca" class="text-brand-600 hover:underline font-semibold">Contact us</a> for custom enterprise pricing.</p>
     </div>
 
     <!-- Every Report Includes -->

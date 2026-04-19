@@ -1,5 +1,5 @@
 // ============================================================
-// Team Management — Add/manage sales team members ($50/user/month)
+// Team Management — Add/manage sales & crew team members (free, unlimited)
 // Full CRUD: invite, view roster, change roles, suspend, remove
 // ============================================================
 
@@ -46,8 +46,6 @@ function renderTeam() {
   var activeMembers = teamState.members.filter(function(m) { return m.status === 'active'; });
   var suspendedMembers = teamState.members.filter(function(m) { return m.status === 'suspended'; });
   var pendingInvites = teamState.invitations || [];
-  var billing = teamState.billing;
-  var monthlyCost = activeMembers.length * 50;
 
   // If user is a team member (not owner), show a different view
   if (teamState.isTeamMember && !teamState.canManage) {
@@ -61,8 +59,7 @@ function renderTeam() {
   html += '<div class="flex items-center justify-between mb-6">';
   html += '  <div>';
   html += '    <h2 class="text-xl font-bold text-gray-100"><i class="fas fa-users-cog mr-2 text-emerald-400"></i>Sales Team</h2>';
-  var pricingLabel = teamState.subscribed ? 'Included with ' + (teamState.tier || 'your') + ' plan' : '$50/user/month';
-  html += '    <p class="text-sm text-gray-500 mt-0.5">' + activeMembers.length + ' active member' + (activeMembers.length !== 1 ? 's' : '') + (teamState.subscribed ? ' &nbsp;&middot;&nbsp; ' + teamState.remainingSeats + ' seats remaining' : ' &nbsp;&middot;&nbsp; $50/user/month') + '</p>';
+  html += '    <p class="text-sm text-gray-500 mt-0.5">' + activeMembers.length + ' active member' + (activeMembers.length !== 1 ? 's' : '') + ' &nbsp;&middot;&nbsp; Free &amp; unlimited</p>';
   html += '  </div>';
   html += '  <button onclick="showInviteModal()" class="bg-emerald-500/15 hover:bg-emerald-500/25 text-white font-semibold py-2.5 px-5 rounded-lg text-sm transition-all hover:scale-105">';
   html += '    <i class="fas fa-user-plus mr-2"></i>Invite Member';
@@ -160,72 +157,40 @@ function renderTeam() {
     html += '</div></div>';
   }
 
-  // ── Pricing / plan info (collapsed by default when team already has members) ──
-  var pricingOpen = activeMembers.length === 0;
-  html += '<details' + (pricingOpen ? ' open' : '') + '>';
-  if (teamState.subscribed) {
-    html += '  <summary class="cursor-pointer list-none flex items-center justify-between px-4 py-3 bg-[#0A0A0A] rounded-xl border text-sm font-semibold text-gray-400 hover:text-gray-200 select-none transition-colors">';
-    html += '    <span><i class="fas fa-check-circle mr-2 text-emerald-400"></i>Team Members &nbsp;&middot;&nbsp; Included with your ' + (teamState.tier || 'starter') + ' plan</span>';
-    html += '    <i class="fas fa-chevron-down text-xs"></i>';
-    html += '  </summary>';
-    html += '  <div class="mt-2 bg-[#0A0A0A] rounded-xl border p-6">';
-    html += '    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
-    html += '      <div class="bg-[#111111] rounded-lg p-4 border text-center">';
-    html += '        <div class="text-3xl font-black text-emerald-400">Free</div>';
-    html += '        <div class="text-gray-500 text-sm">included with membership</div>';
-    html += '      </div>';
-    html += '      <div class="bg-[#111111] rounded-lg p-4 border">';
-    html += '        <div class="font-semibold text-gray-300 mb-2">Each member gets:</div>';
-    html += '        <ul class="text-sm text-gray-400 space-y-1">';
-    html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>Order roof reports</li>';
-    html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>Full CRM access</li>';
-    html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>AI Roofer Secretary</li>';
-    html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>Virtual Try-On</li>';
-    html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>D2D Manager</li>';
-    html += '        </ul>';
-    html += '      </div>';
-    html += '      <div class="bg-[#111111] rounded-lg p-4 border">';
-    html += '        <div class="font-semibold text-gray-300 mb-2">Your plan:</div>';
-    html += '        <ul class="text-sm text-gray-400 space-y-1">';
-    html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Up to ' + teamState.teamLimit + ' team members</li>';
-    html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>' + teamState.remainingSeats + ' seats remaining</li>';
-    html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>No contracts, cancel anytime</li>';
-    html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Report credits shared with team</li>';
-    html += '        </ul>';
-    html += '      </div>';
-    html += '    </div>';
-    html += '  </div>';
-  } else {
-    html += '  <summary class="cursor-pointer list-none flex items-center justify-between px-4 py-3 bg-[#0A0A0A] rounded-xl border text-sm font-semibold text-gray-400 hover:text-gray-200 select-none transition-colors">';
-    html += '    <span><i class="fas fa-tag mr-2 text-emerald-400"></i>Team Pricing &nbsp;&middot;&nbsp; $50/user/month</span>';
-    html += '    <i class="fas fa-chevron-down text-xs"></i>';
-    html += '  </summary>';
-    html += '  <div class="mt-2 bg-[#0A0A0A] rounded-xl border p-6">';
-    html += '    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
-    html += '      <div class="bg-[#111111] rounded-lg p-4 border text-center">';
-    html += '        <div class="text-3xl font-black text-emerald-400">$50</div>';
-    html += '        <div class="text-gray-500 text-sm">per user / month</div>';
-    html += '      </div>';
-    html += '      <div class="bg-[#111111] rounded-lg p-4 border">';
-    html += '        <div class="font-semibold text-gray-300 mb-2">Each member gets:</div>';
-    html += '        <ul class="text-sm text-gray-400 space-y-1">';
-    html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>Order roof reports</li>';
-    html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>Full CRM access</li>';
-    html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>D2D Manager</li>';
-    html += '        </ul>';
-    html += '      </div>';
-    html += '      <div class="bg-[#111111] rounded-lg p-4 border">';
-    html += '        <div class="font-semibold text-gray-300 mb-2">Team billing:</div>';
-    html += '        <ul class="text-sm text-gray-400 space-y-1">';
-    html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Billed to account owner</li>';
-    html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Suspend anytime to pause billing</li>';
-    html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>No contracts, cancel anytime</li>';
-    html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Report credits shared with team</li>';
-    html += '        </ul>';
-    html += '      </div>';
-    html += '    </div>';
-    html += '  </div>';
-  }
+  // ── Team info (collapsed by default when team already has members) ──
+  var infoOpen = activeMembers.length === 0;
+  html += '<details' + (infoOpen ? ' open' : '') + '>';
+  html += '  <summary class="cursor-pointer list-none flex items-center justify-between px-4 py-3 bg-[#0A0A0A] rounded-xl border text-sm font-semibold text-gray-400 hover:text-gray-200 select-none transition-colors">';
+  html += '    <span><i class="fas fa-check-circle mr-2 text-emerald-400"></i>Team Members &nbsp;&middot;&nbsp; Free &amp; Unlimited</span>';
+  html += '    <i class="fas fa-chevron-down text-xs"></i>';
+  html += '  </summary>';
+  html += '  <div class="mt-2 bg-[#0A0A0A] rounded-xl border p-6">';
+  html += '    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
+  html += '      <div class="bg-[#111111] rounded-lg p-4 border text-center">';
+  html += '        <div class="text-3xl font-black text-emerald-400">Free</div>';
+  html += '        <div class="text-gray-500 text-sm">unlimited team members</div>';
+  html += '      </div>';
+  html += '      <div class="bg-[#111111] rounded-lg p-4 border">';
+  html += '        <div class="font-semibold text-gray-300 mb-2">Each member gets:</div>';
+  html += '        <ul class="text-sm text-gray-400 space-y-1">';
+  html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>Order roof reports</li>';
+  html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>Full CRM access</li>';
+  html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>AI Roofer Secretary</li>';
+  html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>Virtual Try-On</li>';
+  html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>D2D Manager</li>';
+  html += '        </ul>';
+  html += '      </div>';
+  html += '      <div class="bg-[#111111] rounded-lg p-4 border">';
+  html += '        <div class="font-semibold text-gray-300 mb-2">How it works:</div>';
+  html += '        <ul class="text-sm text-gray-400 space-y-1">';
+  html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Add unlimited sales &amp; crew</li>';
+  html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>You are admin to your team</li>';
+  html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Report credits shared with team</li>';
+  html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>No cost per member</li>';
+  html += '        </ul>';
+  html += '      </div>';
+  html += '    </div>';
+  html += '  </div>';
   html += '</details>';
 
   // ── Invite modal (hidden) ──
@@ -401,7 +366,7 @@ function renderInviteModal() {
     '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden max-h-screen overflow-y-auto">' +
       '<div class="bg-gradient-to-r from-emerald-500 to-emerald-600 px-6 py-4 text-white">' +
         '<h3 class="text-lg font-bold"><i class="fas fa-user-plus mr-2"></i>Invite Team Member</h3>' +
-        '<p class="text-emerald-400 text-sm">' + (teamState.subscribed ? 'Included with your membership — ' + teamState.remainingSeats + ' seats remaining' : '$50/month per user') + '</p>' +
+        '<p class="text-emerald-400 text-sm">Free — add unlimited sales &amp; crew members</p>' +
       '</div>' +
       '<form onsubmit="sendInvite(event)" class="p-6 space-y-4">' +
         '<div>' +
@@ -464,29 +429,6 @@ async function sendInvite(e) {
     if (res.ok && data.success) {
       msg.innerHTML = '<div class="bg-emerald-500/10 border border-green-200 rounded-lg p-3 text-green-700 text-sm"><i class="fas fa-check-circle mr-1"></i>' + data.message + '</div>';
       setTimeout(async function() { hideInviteModal(); await loadTeamData(); renderTeam(); }, 1500);
-    } else if (res.status === 402 && (data.subscription_required || data.upgrade_required)) {
-      var tier = data.subscription_required ? 'starter' : data.next_tier;
-      var label = data.subscription_required
-        ? 'Subscribe to Starter (' + data.price + '/month) to unlock 5 team members.'
-        : 'Upgrade to ' + data.next_tier + ' (' + data.next_price + '/month) for ' + data.next_team_limit + ' team members.';
-      msg.innerHTML =
-        '<div class="bg-amber-500/10 border border-amber-300/30 rounded-lg p-3 text-amber-200 text-sm mb-2">' + (data.error || label) + '</div>' +
-        '<button type="button" id="invSubBtn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2.5 rounded-lg text-sm">' +
-          (data.subscription_required ? 'Subscribe Now' : 'Upgrade Now') +
-        '</button>';
-      document.getElementById('invSubBtn').onclick = async function() {
-        this.disabled = true; this.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Loading...';
-        try {
-          var r = await fetch('/api/square/checkout/subscription', {
-            method: 'POST', headers: authHeaders(), body: JSON.stringify({ tier: tier })
-          });
-          var d = await r.json();
-          if (d.checkout_url) { window.location.href = d.checkout_url; }
-          else { msg.innerHTML = '<div class="bg-red-500/10 border border-red-200 rounded-lg p-3 text-red-700 text-sm">' + (d.error || 'Could not start checkout') + '</div>'; }
-        } catch(e) {
-          msg.innerHTML = '<div class="bg-red-500/10 border border-red-200 rounded-lg p-3 text-red-700 text-sm">Network error starting checkout</div>';
-        }
-      };
     } else {
       msg.innerHTML = '<div class="bg-red-500/10 border border-red-200 rounded-lg p-3 text-red-700 text-sm">' + (data.error || 'Failed to send invite') + '</div>';
     }
@@ -510,7 +452,7 @@ async function suspendMember(memberId) {
 }
 
 async function reactivateMember(memberId) {
-  if (!(await window.rmConfirm(teamState.subscribed ? 'Reactivate this member? They will regain access to the team account.' : 'Reactivate this member? Billing will resume at $50/month.'))) return
+  if (!(await window.rmConfirm('Reactivate this member? They will regain access to the team account.'))) return
   await fetch('/api/team/members/' + memberId + '/reactivate', { method: 'POST', headers: authHeaders() });
   await loadTeamData(); renderTeam();
 }
