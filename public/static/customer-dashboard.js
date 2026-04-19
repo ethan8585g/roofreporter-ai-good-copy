@@ -275,7 +275,7 @@ function renderDashboard() {
   var leadsBadge = '<span id="leads-unread-badge"></span>';
 
   var sidebar =
-    '<aside class="hidden lg:flex flex-col w-56 flex-shrink-0 min-h-full" style="background:var(--bg-card);border-right:1px solid var(--border-color)">' +
+    '<aside class="hidden lg:flex flex-col w-56 flex-shrink-0 min-h-full" style="position:relative;background:var(--bg-card);border-right:1px solid var(--border-color)">' +
       // Brand
       '<div class="px-4 py-5" style="border-bottom:1px solid var(--border-color)">' +
         '<div class="flex items-center gap-2">' +
@@ -326,13 +326,47 @@ function renderDashboard() {
         navLink('/customer/google-business', 'fa-map-marker-alt', 'Google Business', null, '') +
         navLink('/customer/storm-scout', 'fa-cloud-bolt', 'Storm Alerts', null, '') +
         navLink('/customer/referrals', 'fa-gift', 'Referrals', null, '') +
-        // Settings
-        '<p class="px-3 mt-4 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Settings</p>' +
-        navLink('/customer/profile', 'fa-user-cog', 'Profile & Billing', null, '') +
-        navLink('/customer/team', 'fa-users-cog', 'Team', teamBadge || null, 'bg-gray-800') +
-        navLink('/customer/secretary', 'fa-headset', 'Secretary', secBadge || null, secBadgeColor) +
-        navLink('/customer/d2d', 'fa-door-open', 'D2D Manager', null, '') +
       '</nav>' +
+      // Settings gear button
+      '<div class="px-4 py-3 flex items-center" style="border-top:1px solid var(--border-color)">' +
+        '<button onclick="window._toggleSettingsPopover(event)" id="settings-gear-btn" class="w-8 h-8 rounded-full flex items-center justify-center transition-colors" style="color:var(--text-muted);background:var(--bg-elevated)" title="Settings">' +
+          '<i class="fas fa-cog text-sm"></i>' +
+        '</button>' +
+      '</div>' +
+      // Settings popover (hidden by default)
+      '<div id="settings-popover" style="display:none;position:absolute;bottom:60px;left:12px;z-index:9999;width:240px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.4);overflow:hidden">' +
+        '<div style="padding:6px 0">' +
+          '<a href="/customer/profile" class="flex items-center gap-3 px-4 py-2.5 transition-colors" style="color:var(--text-secondary);text-decoration:none" onmouseover="this.style.background=\'var(--bg-elevated)\'" onmouseout="this.style.background=\'transparent\'">' +
+            '<i class="fas fa-user-cog w-4 text-center text-sm" style="color:var(--text-muted)"></i>' +
+            '<span class="text-sm">Profile & Billing</span>' +
+          '</a>' +
+          '<a href="/customer/team" class="flex items-center gap-3 px-4 py-2.5 transition-colors" style="color:var(--text-secondary);text-decoration:none" onmouseover="this.style.background=\'var(--bg-elevated)\'" onmouseout="this.style.background=\'transparent\'">' +
+            '<i class="fas fa-users-cog w-4 text-center text-sm" style="color:var(--text-muted)"></i>' +
+            '<span class="text-sm">Team</span>' +
+            (teamBadge ? '<span class="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-800 text-white">' + teamBadge + '</span>' : '') +
+          '</a>' +
+          '<a href="/customer/secretary" class="flex items-center gap-3 px-4 py-2.5 transition-colors" style="color:var(--text-secondary);text-decoration:none" onmouseover="this.style.background=\'var(--bg-elevated)\'" onmouseout="this.style.background=\'transparent\'">' +
+            '<i class="fas fa-headset w-4 text-center text-sm" style="color:var(--text-muted)"></i>' +
+            '<span class="text-sm">Secretary</span>' +
+            (secBadge ? '<span class="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full ' + secBadgeColor + ' text-white">' + secBadge + '</span>' : '') +
+          '</a>' +
+          '<a href="/customer/d2d" class="flex items-center gap-3 px-4 py-2.5 transition-colors" style="color:var(--text-secondary);text-decoration:none" onmouseover="this.style.background=\'var(--bg-elevated)\'" onmouseout="this.style.background=\'transparent\'">' +
+            '<i class="fas fa-door-open w-4 text-center text-sm" style="color:var(--text-muted)"></i>' +
+            '<span class="text-sm">D2D Manager</span>' +
+          '</a>' +
+          '<div style="height:1px;background:var(--border-color);margin:4px 0"></div>' +
+          '<button onclick="window._toggleTheme();window._toggleSettingsPopover(event)" class="flex items-center gap-3 px-4 py-2.5 w-full border-0 cursor-pointer transition-colors" style="color:var(--text-secondary);background:transparent" onmouseover="this.style.background=\'var(--bg-elevated)\'" onmouseout="this.style.background=\'transparent\'">' +
+            '<i class="fas ' + (localStorage.getItem('rc_dashboard_theme') === 'light' ? 'fa-moon' : 'fa-sun') + ' w-4 text-center text-sm" style="color:var(--text-muted)"></i>' +
+            '<span class="text-sm">Theme</span>' +
+            '<span class="ml-auto text-xs" style="color:var(--text-muted)">' + (localStorage.getItem('rc_dashboard_theme') === 'light' ? 'Light' : 'Dark') + '</span>' +
+          '</button>' +
+          '<div style="height:1px;background:var(--border-color);margin:4px 0"></div>' +
+          '<a href="/customer/logout" class="flex items-center gap-3 px-4 py-2.5 transition-colors" style="color:var(--text-secondary);text-decoration:none" onmouseover="this.style.background=\'var(--bg-elevated)\'" onmouseout="this.style.background=\'transparent\'">' +
+            '<i class="fas fa-sign-out-alt w-4 text-center text-sm" style="color:var(--text-muted)"></i>' +
+            '<span class="text-sm">Sign out</span>' +
+          '</a>' +
+        '</div>' +
+      '</div>' +
       // Credits footer
       '<div class="px-4 py-4" style="border-top:1px solid var(--border-color)">' +
         (freeTrialRemaining > 0
@@ -1301,6 +1335,22 @@ window._toggleTheme = function() {
     btn.title = 'Theme: ' + next.charAt(0).toUpperCase() + next.slice(1);
   }
 };
+
+// Settings popover toggle
+window._toggleSettingsPopover = function(e) {
+  e && e.stopPropagation();
+  var pop = document.getElementById('settings-popover');
+  if (!pop) return;
+  pop.style.display = pop.style.display === 'none' ? 'block' : 'none';
+};
+// Close popover on outside click
+document.addEventListener('click', function(e) {
+  var pop = document.getElementById('settings-popover');
+  var btn = document.getElementById('settings-gear-btn');
+  if (pop && pop.style.display !== 'none' && !pop.contains(e.target) && (!btn || !btn.contains(e.target))) {
+    pop.style.display = 'none';
+  }
+});
 
 // ============================================================
 // MATERIAL SETUP NUDGE — Shows banner if preferences not configured
