@@ -634,15 +634,15 @@ function renderTraceStep(root, progressBar) {
         </div>
 
         <!-- Right: Trace Map -->
-        <div class="lg:col-span-3 bg-[#111111] rounded-xl shadow-sm border border-white/10 overflow-hidden">
-          <div class="bg-gray-800 px-4 py-2 flex items-center justify-between">
+        <div class="lg:col-span-3 bg-[#111111] rounded-xl shadow-sm border border-white/10 overflow-hidden flex flex-col">
+          <div class="bg-gray-800 px-4 py-2 flex items-center justify-between flex-shrink-0">
             <div class="flex items-center gap-2">
               <div id="traceModeDot" class="w-3 h-3 rounded-full" style="background:${m.color}"></div>
               <span id="traceModeLabel" class="text-xs font-medium text-gray-300 uppercase">${m.label} Mode</span>
             </div>
             <span id="traceModeDesc" class="text-xs text-gray-400">${m.desc}</span>
           </div>
-          <div id="traceMap" style="height: 480px; cursor: crosshair; background: #1a1a2e;"></div>
+          <div id="traceMap" style="min-height: 500px; cursor: crosshair; flex: 1;"></div>
         </div>
       </div>
 
@@ -908,6 +908,10 @@ function initTraceMap() {
 
   restoreTraceOverlays();
   restoreAnnotationMarkers();
+
+  // Trigger resize so map fills the flex container properly
+  google.maps.event.trigger(orderState.traceMap, 'resize');
+  orderState.traceMap.setCenter(center);
 
   orderState.traceMap.addListener('click', (e) => {
     handleTraceClick({ lat: e.latLng.lat(), lng: e.latLng.lng() });
