@@ -271,7 +271,7 @@ export interface MaterialEstimationInput {
 }
 
 export function estimateMaterials(input: MaterialEstimationInput): DetailedMaterialBOM {
-  const wastePct = input.waste_factor_pct ?? 15
+  const wastePct = input.waste_factor_pct ?? 5
   const wasteFrac = wastePct / 100
   const netArea = input.net_area_sqft
   const grossArea = netArea * (1 + wasteFrac)

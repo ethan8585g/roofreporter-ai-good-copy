@@ -21,7 +21,7 @@ import {
 export function generateProfessionalReportHTML(report: RoofReport): string {
   // ── Safe defaults ──
   const prop = report.property || { address: 'Unknown' } as any
-  const mat = report.materials || { net_area_sqft: 0, gross_squares: 0, bundle_count: 0, line_items: [], waste_table: [], waste_pct: 15, gross_area_sqft: 0, total_material_cost_cad: 0, complexity_class: 'simple', complexity_factor: 1, shingle_type: 'architectural' } as any
+  const mat = report.materials || { net_area_sqft: 0, gross_squares: 0, bundle_count: 0, line_items: [], waste_table: [], waste_pct: 5, gross_area_sqft: 0, total_material_cost_cad: 0, complexity_class: 'simple', complexity_factor: 1, shingle_type: 'architectural' } as any
   const es = report.edge_summary || { total_ridge_ft: 0, total_hip_ft: 0, total_valley_ft: 0, total_eave_ft: 0, total_rake_ft: 0, total_linear_ft: 0, total_step_flashing_ft: 0, total_wall_flashing_ft: 0, total_transition_ft: 0, total_parapet_ft: 0 } as any
   if (!report.total_true_area_sqft) report.total_true_area_sqft = report.total_footprint_sqft || 1
   if (!report.total_footprint_sqft) report.total_footprint_sqft = report.total_true_area_sqft || 1
@@ -35,8 +35,8 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   const reportDate = new Date(report.generated_at).toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' })
   const fullAddress = [prop.address, prop.city, prop.province, prop.postal_code].filter(Boolean).join(', ')
   // All areas in square feet (no roofing squares)
-  const netAreaSF = Math.round(report.total_true_area_sqft)
-  const grossAreaSF = Math.round(report.total_true_area_sqft * (1 + (mat.waste_pct || 15) / 100))
+  const netAreaSF = Math.round(report.total_footprint_sqft || report.total_true_area_sqft)
+  const grossAreaSF = Math.round(netAreaSF * (1 + (mat.waste_pct || 5) / 100))
   const totalPerimeter = es.total_eave_ft + es.total_rake_ft
   const ridgeHipFt = es.total_ridge_ft + es.total_hip_ft
   const totalLinearFt = es.total_ridge_ft + es.total_hip_ft + es.total_valley_ft + es.total_eave_ft + es.total_rake_ft
@@ -115,7 +115,7 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   const wastePercentages = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
   const wasteTable = wastePercentages.map(pct => ({
     pct,
-    sf: Math.round(report.total_true_area_sqft * (1 + pct / 100)).toLocaleString()
+    sf: Math.round(netAreaSF * (1 + pct / 100)).toLocaleString()
   }))
 
   // ── Architectural Diagram SVG ──
@@ -238,7 +238,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         <span class="pt-value">${predominantPitch} <span class="pt-sub">(${predominantPitchDeg.toFixed(1)}°)</span></span>
       </div>
       <div class="pt-row">
-        <span class="pt-label">Gross Area<span class="pt-sub">(w/${mat.waste_pct || 15}% waste)</span></span>
+        <span class="pt-label">Gross Area<span class="pt-sub">(w/${mat.waste_pct || 5}% waste)</span></span>
         <span class="pt-value">${grossAreaSF.toLocaleString()} SF</span>
       </div>
       <div class="pt-row">
@@ -676,7 +676,7 @@ export function generatePerimeterSideData(
 // ============================================================
 export function generateSimpleTwoPageReport(report: RoofReport): string {
   const prop = report.property || { address: 'Unknown' } as any
-  const mat = report.materials || { net_area_sqft: 0, gross_squares: 0, bundle_count: 0, line_items: [], waste_table: [], waste_pct: 15, gross_area_sqft: 0, total_material_cost_cad: 0, complexity_class: 'simple', complexity_factor: 1, shingle_type: 'architectural' } as any
+  const mat = report.materials || { net_area_sqft: 0, gross_squares: 0, bundle_count: 0, line_items: [], waste_table: [], waste_pct: 5, gross_area_sqft: 0, total_material_cost_cad: 0, complexity_class: 'simple', complexity_factor: 1, shingle_type: 'architectural' } as any
   const es = report.edge_summary || { total_ridge_ft: 0, total_hip_ft: 0, total_valley_ft: 0, total_eave_ft: 0, total_rake_ft: 0, total_linear_ft: 0 } as any
 
   // Safe defaults
@@ -689,8 +689,8 @@ export function generateSimpleTwoPageReport(report: RoofReport): string {
 
   const fullAddress = [prop.address, prop.city, prop.province, prop.postal_code].filter(Boolean).join(', ')
   const reportDate = new Date(report.generated_at).toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' })
-  const netAreaSF = Math.round(report.total_true_area_sqft)
-  const grossAreaSF = Math.round(report.total_true_area_sqft * (1 + (mat.waste_pct || 15) / 100))
+  const netAreaSF = Math.round(report.total_footprint_sqft || report.total_true_area_sqft)
+  const grossAreaSF = Math.round(netAreaSF * (1 + (mat.waste_pct || 5) / 100))
 
   // Predominant pitch from largest segment
   const largestSeg = [...report.segments].sort((a, b) => b.true_area_sqft - a.true_area_sqft)[0]
@@ -871,7 +871,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
             <td style="padding:3px 6px;text-align:right;font-size:7px">100%</td>
           </tr>
           <tr style="border-top:2px solid #001a44;background:#e6edf5">
-            <td style="padding:4px 6px;font-weight:800;font-size:8px;color:#001a44">Total (w/${mat.waste_pct || 15}% waste)</td>
+            <td style="padding:4px 6px;font-weight:800;font-size:8px;color:#001a44">Total (w/${mat.waste_pct || 5}% waste)</td>
             <td colspan="3" style="padding:4px 6px;text-align:right;font-weight:900;font-size:9px;color:#001a44">${grossAreaSF.toLocaleString()} SF</td>
           </tr>
         </tbody>
@@ -1027,14 +1027,14 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       <tbody>
         <tr>
           ${wasteTableEntries.slice(0, 6).map(w => `
-          <td style="padding:4px 6px;border:1px solid #ddd;text-align:center;${w.pct === (mat.waste_pct || 15) ? 'background:#e0f7fa;font-weight:800' : ''}">
+          <td style="padding:4px 6px;border:1px solid #ddd;text-align:center;${w.pct === (mat.waste_pct || 5) ? 'background:#e0f7fa;font-weight:800' : ''}">
             <div style="font-weight:700;color:#555">${w.pct}%</div>
             <div style="font-weight:600;color:#1a1a1a;margin-top:1px">${w.sf.toLocaleString()} SF</div>
           </td>`).join('')}
         </tr>
         <tr>
           ${wasteTableEntries.slice(6).map(w => `
-          <td style="padding:4px 6px;border:1px solid #ddd;text-align:center;${w.pct === (mat.waste_pct || 15) ? 'background:#e0f7fa;font-weight:800' : ''}">
+          <td style="padding:4px 6px;border:1px solid #ddd;text-align:center;${w.pct === (mat.waste_pct || 5) ? 'background:#e0f7fa;font-weight:800' : ''}">
             <div style="font-weight:700;color:#555">${w.pct}%</div>
             <div style="font-weight:600;color:#1a1a1a;margin-top:1px">${w.sf.toLocaleString()} SF</div>
           </td>`).join('')}
@@ -1076,7 +1076,7 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
   const TEAL_DARK = '#00695C'
   const TEAL_LIGHT = '#E0F2F1'
   const netArea = Math.round(report.total_true_area_sqft || 0)
-  const wastePct = mat.waste_pct || 15
+  const wastePct = mat.waste_pct || 5
   const grossArea = Math.round(netArea * (1 + wastePct / 100))
 
   // Use trace materials if available, otherwise calculate from report.materials

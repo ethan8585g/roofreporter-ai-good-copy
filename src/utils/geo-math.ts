@@ -289,10 +289,8 @@ export function computeMaterialEstimate(
     segments.length, hipEdges.length, valleyEdges.length, pitchVariation
   )
 
-  // Base waste includes +5% safety margin per Reuse Canada standard
-  const baseWaste = complexityClass === 'simple' ? 15 :
-    complexityClass === 'moderate' ? 17 :
-    complexityClass === 'complex' ? 19 : 20
+  // Fixed 5% waste factor
+  const baseWaste = 5
 
   const netArea = trueAreaSqft
   const grossArea = netArea * (1 + baseWaste / 100)
