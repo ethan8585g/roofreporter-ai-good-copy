@@ -1617,6 +1617,7 @@
   var _recentCheckins = [];
   var _crewList = [];
   var _crewOwner = {};
+  var _todayJobs = [];
   var _jobHubTab = 'calendar'; // calendar | dispatch
 
   function initJobs() {
@@ -1697,6 +1698,12 @@
       _recentCheckins = results[3].recent || [];
       _crewList = results[4].crew || [];
       _crewOwner = results[4].owner || {};
+      // Filter today's active jobs from full job list
+      var todayStr = new Date().toISOString().slice(0, 10);
+      var allJobsFull = results[1].jobs || [];
+      _todayJobs = allJobsFull.filter(function(j) {
+        return j.scheduled_date === todayStr && (j.status === 'scheduled' || j.status === 'in_progress');
+      });
       renderJobsDashboard();
     }).catch(function() { root.innerHTML = '<p class="text-red-500 p-4">Failed to load jobs.</p>'; });
   }
@@ -1789,6 +1796,66 @@
     // ── DISPATCH BOARD TAB ──
     if (_jobHubTab === 'dispatch') {
       html += renderDispatchBoard();
+    }
+
+    // ── TODAY'S ACTIVE JOBS ──
+    if (_todayJobs.length > 0) {
+      html += '<div class="mt-6">';
+      html += '<div class="bg-gradient-to-br from-cyan-500/10 via-[#111111] to-emerald-500/10 rounded-2xl border border-cyan-500/20 overflow-hidden">';
+      html += '<div class="px-5 py-4 border-b border-cyan-500/10 flex items-center justify-between">';
+      html += '<div class="flex items-center gap-2"><h3 class="font-bold text-cyan-400 text-sm"><i class="fas fa-hammer mr-2"></i>Today\'s Active Jobs</h3>';
+      html += '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-400">' + _todayJobs.length + '</span></div>';
+      html += '<p class="text-[10px] text-gray-500">' + new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) + '</p>';
+      html += '</div>';
+      html += '<div class="divide-y divide-white/5">';
+      for (var ti = 0; ti < _todayJobs.length; ti++) {
+        var tj = _todayJobs[ti];
+        var isInProgress = tj.status === 'in_progress';
+        var statusDot = isInProgress
+          ? '<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span><span class="text-[10px] font-bold text-cyan-400 uppercase">In Progress</span></span>'
+          : '<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-blue-400"></span><span class="text-[10px] font-bold text-blue-400 uppercase">Scheduled</span></span>';
+        html += '<div class="px-5 py-4 hover:bg-white/5 transition-colors">';
+        html += '<div class="flex items-start gap-4">';
+        // Job icon
+        html += '<div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ' + (isInProgress ? 'bg-cyan-500/20 border border-cyan-500/30' : 'bg-blue-500/15 border border-blue-500/20') + '"><i class="fas ' + jobTypeIcon(tj.job_type) + ' ' + (isInProgress ? 'text-cyan-400' : 'text-blue-400') + '"></i></div>';
+        // Job info
+        html += '<div class="flex-1 min-w-0">';
+        html += '<div class="flex items-center gap-2 mb-1">' + statusDot + '<span class="font-mono text-[10px] text-gray-500">' + (tj.job_number || '') + '</span></div>';
+        html += '<p class="text-sm font-semibold text-gray-100 truncate cursor-pointer hover:text-cyan-400" onclick="window._crmViewJob(' + tj.id + ')">' + (tj.title || 'Untitled Job') + '</p>';
+        if (tj.customer_name) html += '<p class="text-xs text-gray-400 mt-0.5"><i class="fas fa-user mr-1"></i>' + tj.customer_name + '</p>';
+        if (tj.property_address) html += '<p class="text-xs text-gray-500 truncate mt-0.5"><i class="fas fa-map-marker-alt mr-1"></i>' + tj.property_address + '</p>';
+        if (tj.scheduled_time) html += '<p class="text-xs text-gray-500 mt-0.5"><i class="fas fa-clock mr-1"></i>' + tj.scheduled_time + (tj.estimated_duration ? ' — Est. ' + tj.estimated_duration : '') + '</p>';
+        // Photo counts row
+        html += '<div class="flex items-center gap-3 mt-2" id="todayJobPhotoCounts' + tj.id + '"><span class="text-[10px] text-gray-500"><i class="fas fa-camera mr-1"></i>' + (tj.photo_count || 0) + ' photos</span></div>';
+        html += '</div>';
+        // Action buttons column
+        html += '<div class="flex flex-col gap-1.5 flex-shrink-0">';
+        if (tj.status === 'scheduled') {
+          html += '<button onclick="window._crmMarkJob(' + tj.id + ',\'in_progress\')" class="px-3 py-1.5 bg-blue-500/15 text-blue-400 rounded-lg text-[11px] font-semibold hover:bg-blue-500/25 whitespace-nowrap"><i class="fas fa-play mr-1"></i>Start Job</button>';
+        }
+        if (isInProgress) {
+          html += '<button onclick="window._crmMarkInstallComplete(' + tj.id + ')" class="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[11px] font-bold hover:bg-emerald-700 shadow-lg whitespace-nowrap"><i class="fas fa-check-circle mr-1"></i>Job Completed</button>';
+        }
+        // Quick photo buttons
+        html += '<div class="flex gap-1">';
+        html += '<button onclick="window._crmQuickPhoto(' + tj.id + ',\'before\')" class="flex-1 px-2 py-1.5 bg-orange-500/15 text-orange-400 rounded-lg text-[10px] font-semibold hover:bg-orange-500/25 whitespace-nowrap" title="Before photo"><i class="fas fa-camera"></i> Before</button>';
+        html += '<button onclick="window._crmQuickPhoto(' + tj.id + ',\'during\')" class="flex-1 px-2 py-1.5 bg-purple-500/15 text-purple-400 rounded-lg text-[10px] font-semibold hover:bg-purple-500/25 whitespace-nowrap" title="In progress photo"><i class="fas fa-tools"></i> In Prog</button>';
+        html += '<button onclick="window._crmQuickPhoto(' + tj.id + ',\'after\')" class="flex-1 px-2 py-1.5 bg-emerald-500/15 text-emerald-400 rounded-lg text-[10px] font-semibold hover:bg-emerald-500/25 whitespace-nowrap" title="After photo"><i class="fas fa-flag-checkered"></i> After</button>';
+        html += '</div>';
+        html += '</div>';
+        html += '</div></div>';
+      }
+      html += '</div></div></div>';
+    } else {
+      // Show empty state for today
+      html += '<div class="mt-6">';
+      html += '<div class="bg-[#111111] rounded-2xl border border-white/10 overflow-hidden">';
+      html += '<div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">';
+      html += '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-hammer text-cyan-400 mr-2"></i>Today\'s Active Jobs</h3>';
+      html += '<p class="text-[10px] text-gray-500">' + new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) + '</p>';
+      html += '</div>';
+      html += '<div class="p-8 text-center"><i class="fas fa-sun text-3xl text-gray-600 mb-3 block opacity-30"></i><p class="text-sm text-gray-400">No jobs scheduled for today.</p><p class="text-xs text-gray-500 mt-1">Schedule jobs from the calendar above or the Ready to Schedule section below.</p></div>';
+      html += '</div></div>';
     }
 
     // ── READY TO SCHEDULE DASHBOARD ──
@@ -2625,14 +2692,14 @@
       .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
   };
 
-  // Mark Install Complete — prominent action
+  // Mark Install Complete — prominent action + certificate trigger
   window._crmMarkInstallComplete = async function(jobId) {
-    if (!(await window.rmConfirm('Mark this installation as complete? This will move the job to Completed status.'))) return;
+    if (!(await window.rmConfirm('Mark this installation as complete?\n\nThis will:\n• Move the job to Completed status\n• Send the Installation Certificate to the customer (if automation is enabled)'))) return;
     closeModal();
     fetch('/api/crm/jobs/' + jobId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status: 'completed' }) })
       .then(function(r) { return r.json(); })
       .then(function(res) {
-        if (res.success) { toast('Install marked complete!'); loadJobsForMonth(_calYear, _calMonth); }
+        if (res.success) { toast('Job completed! Installation certificate sent to customer.'); loadJobsForMonth(_calYear, _calMonth); }
         else toast(res.error || 'Failed', 'error');
       }).catch(function() { toast('Network error', 'error'); });
   };
@@ -2740,6 +2807,69 @@
       .then(function(res) {
         if (res.success) { toast('Photo deleted'); window._crmLoadJobPhotos(jobId, window._currentPhotoPhase || 'before'); }
       }).catch(function() { toast('Network error', 'error'); });
+  };
+
+  // Quick photo upload from Today's Active Jobs dashboard
+  window._crmQuickPhoto = function(jobId, phase) {
+    var phaseLabels = { before: 'Before', during: 'In Progress', after: 'After' };
+    var phaseLabel = phaseLabels[phase] || phase;
+
+    var body = '<div class="space-y-4">';
+    body += '<p class="text-sm text-gray-400">Upload a <strong class="text-white">' + phaseLabel + '</strong> photo for this job.</p>';
+    body += '<div class="border-2 border-dashed border-white/15 rounded-xl p-6 text-center" id="quickPhotoDropZone">';
+    body += '<i class="fas fa-camera text-3xl text-gray-500 mb-3 block"></i>';
+    body += '<input type="file" id="quickPhotoFile" accept="image/*" capture="environment" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm bg-[#0A0A0A]">';
+    body += '<p class="text-xs text-gray-500 mt-2">Take a photo or choose from gallery</p>';
+    body += '</div>';
+    body += '<input type="text" id="quickPhotoCaption" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm bg-[#0A0A0A]" placeholder="Caption (optional)">';
+    body += '<div id="quickPhotoPreview" class="hidden"><img id="quickPhotoImg" class="w-full max-h-48 object-cover rounded-lg border border-white/10" alt="Preview"></div>';
+    body += '<button onclick="window._crmQuickPhotoUpload(' + jobId + ',\'' + phase + '\')" class="w-full py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 shadow-lg"><i class="fas fa-upload mr-2"></i>Upload ' + phaseLabel + ' Photo</button>';
+    body += '</div>';
+
+    showModal(phaseLabel + ' Photo', body);
+
+    // Live preview
+    setTimeout(function() {
+      var fileInput = document.getElementById('quickPhotoFile');
+      if (fileInput) {
+        fileInput.addEventListener('change', function() {
+          if (fileInput.files && fileInput.files[0]) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+              var preview = document.getElementById('quickPhotoPreview');
+              var img = document.getElementById('quickPhotoImg');
+              if (preview && img) { img.src = e.target.result; preview.classList.remove('hidden'); }
+            };
+            reader.readAsDataURL(fileInput.files[0]);
+          }
+        });
+      }
+    }, 100);
+  };
+
+  window._crmQuickPhotoUpload = function(jobId, phase) {
+    var fileInput = document.getElementById('quickPhotoFile');
+    var caption = (document.getElementById('quickPhotoCaption')?.value || '').trim();
+    if (!fileInput || !fileInput.files[0]) { toast('Select a photo first', 'error'); return; }
+
+    var btn = document.querySelector('#modalBody button[onclick*="QuickPhotoUpload"]');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Uploading...'; }
+
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      fetch('/api/crm/jobs/' + jobId + '/photos', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ photo_data: e.target.result, phase: phase, caption: caption })
+      }).then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) {
+          toast('Photo uploaded!');
+          closeModal();
+          loadJobsForMonth(_calYear, _calMonth);
+        } else toast(res.error || 'Upload failed', 'error');
+      }).catch(function() { toast('Network error', 'error'); });
+    };
+    reader.readAsDataURL(fileInput.files[0]);
   };
 
   // ============================================================

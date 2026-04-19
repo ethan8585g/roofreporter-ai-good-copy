@@ -1413,10 +1413,72 @@ crmRoutes.put('/jobs/:id', async (c) => {
   const body = await c.req.json()
   const id = c.req.param('id')
 
-  if (body.status && Object.keys(body).length <= 2) {
+  if (body.status && Object.keys(body).length <= 3) {
     let extra = ''
     if (body.status === 'completed') extra = ", completed_date = date('now')"
     await c.env.DB.prepare(`UPDATE crm_jobs SET status = ?${extra}, updated_at = datetime('now') WHERE id = ? AND owner_id = ?`).bind(body.status, id, ownerId).run()
+
+    // Auto-send Certificate of New Roof Installation when job is marked completed
+    if (body.status === 'completed') {
+      try {
+        const job = await c.env.DB.prepare(
+          `SELECT cj.*, cc.name as customer_name, cc.email as customer_email, cc.phone as customer_phone, cc.address as customer_address,
+                  cp.proposal_number, cp.scope_of_work, cp.materials_detail, cp.total_amount
+           FROM crm_jobs cj
+           LEFT JOIN crm_customers cc ON cc.id = cj.crm_customer_id
+           LEFT JOIN crm_proposals cp ON cp.id = cj.proposal_id
+           WHERE cj.id = ? AND cj.owner_id = ?`
+        ).bind(id, ownerId).first<any>()
+
+        if (job?.customer_email) {
+          const ownerForCert = await c.env.DB.prepare(
+            `SELECT auto_send_certificate, cert_trigger_type, name, email, phone, address, city, province, company_name, logo_url,
+                    gmail_refresh_token, brand_business_name, brand_logo_url, brand_address,
+                    brand_phone, brand_email, brand_license_number, brand_primary_color FROM customers WHERE id = ?`
+          ).bind(ownerId).first<any>()
+
+          if (ownerForCert?.auto_send_certificate === 1) {
+            const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
+            const companyName = ownerForCert.brand_business_name || ownerForCert.company_name || ownerForCert.name || 'Your Roofing Company'
+            const companyAddress = ownerForCert.brand_address || [ownerForCert.address, ownerForCert.city, ownerForCert.province].filter(Boolean).join(', ')
+            const certHtml = generateRoofInstallationCertificateHTML({
+              companyName,
+              companyLogo: ownerForCert.brand_logo_url || ownerForCert.logo_url || undefined,
+              companyAddress: companyAddress || undefined,
+              companyPhone: ownerForCert.brand_phone || ownerForCert.phone || undefined,
+              companyEmail: ownerForCert.brand_email || ownerForCert.email || undefined,
+              licenseNumber: ownerForCert.brand_license_number || undefined,
+              customerName: job.customer_name || 'Valued Customer',
+              propertyAddress: job.property_address || '',
+              proposalNumber: job.proposal_number || job.job_number,
+              signedAt: new Date().toISOString(),
+              scopeOfWork: job.scope_of_work || undefined,
+              materials: job.materials_detail || undefined,
+              totalAmount: job.total_amount ?? undefined,
+              accentColor: ownerForCert.brand_primary_color || undefined,
+            })
+            const clientId = (c.env as any).GMAIL_CLIENT_ID
+            const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
+            const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ownerForCert.gmail_refresh_token || ''
+            if (clientId && clientSecret && refreshToken) {
+              const { sendGmailOAuth2 } = await import('../services/email')
+              sendGmailOAuth2(
+                clientId, clientSecret, refreshToken,
+                job.customer_email,
+                `Certificate of New Roof Installation — ${job.property_address || job.title}`,
+                certHtml,
+                ownerForCert.email
+              ).catch((e) => console.warn("[silent-catch] cert-on-job-complete", (e && e.message) || e))
+              // Log the certificate send
+              await c.env.DB.prepare(
+                `INSERT INTO certificate_send_log (owner_id, entity_type, entity_id, recipient_email, sent_at) VALUES (?, 'job', ?, ?, datetime('now'))`
+              ).bind(ownerId, id, job.customer_email).run().catch(() => {})
+            }
+          }
+        }
+      } catch (e) { console.warn("[silent-catch] cert-on-job-complete", e) }
+    }
+
     return c.json({ success: true })
   }
 
