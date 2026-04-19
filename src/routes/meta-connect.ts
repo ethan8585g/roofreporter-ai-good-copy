@@ -57,6 +57,68 @@ metaConnectRoutes.get('/config', async (c) => {
 })
 
 // ============================================================
+// AUTO-CONNECT — Use GRAPH_API_KEY from env instead of OAuth flow
+// ============================================================
+metaConnectRoutes.post('/auto-connect', async (c) => {
+  const accessToken = (c.env as any).GRAPH_API_KEY
+  if (!accessToken) return c.json({ error: 'GRAPH_API_KEY not set in Cloudflare secrets' }, 400)
+
+  try {
+    const me = await graphAPI(accessToken, '/me?fields=id,name,picture.width(200)')
+    if (me.error) return c.json({ error: me.error.message }, 400)
+
+    const userId = me.id || 'unknown'
+    const userName = me.name || ''
+    const pictureUrl = me.picture?.data?.url || ''
+
+    const permsRes = await graphAPI(accessToken, '/me/permissions')
+    const scopes = (permsRes.data || [])
+      .filter((p: any) => p.status === 'granted')
+      .map((p: any) => p.permission)
+      .join(',')
+
+    const existing = await c.env.DB.prepare(
+      'SELECT id FROM meta_accounts WHERE fb_user_id = ?'
+    ).bind(userId).first<any>()
+
+    if (existing) {
+      await c.env.DB.prepare(
+        `UPDATE meta_accounts SET access_token=?, fb_user_name=?, profile_picture_url=?, scopes=?, status='active', updated_at=datetime('now') WHERE id=?`
+      ).bind(accessToken, userName, pictureUrl, scopes, existing.id).run()
+    } else {
+      await c.env.DB.prepare(
+        `INSERT INTO meta_accounts (fb_user_id, fb_user_name, access_token, scopes, profile_picture_url) VALUES (?,?,?,?,?)`
+      ).bind(userId, userName, accessToken, scopes, pictureUrl).run()
+    }
+
+    // Also sync pages automatically
+    const pagesRes = await graphAPI(accessToken, '/me/accounts?fields=id,name,access_token,category,followers_count,is_published&limit=100')
+    const pages = pagesRes.data || []
+    const acct = await c.env.DB.prepare("SELECT id FROM meta_accounts WHERE fb_user_id = ?").bind(userId).first<any>()
+
+    for (const p of pages) {
+      const existingPage = await c.env.DB.prepare(
+        'SELECT id FROM meta_pages WHERE meta_account_id=? AND fb_page_id=?'
+      ).bind(acct?.id || existing?.id, p.id).first<any>()
+
+      if (existingPage) {
+        await c.env.DB.prepare(
+          `UPDATE meta_pages SET page_name=?, page_access_token=?, category=?, followers_count=?, is_published=?, last_synced_at=datetime('now') WHERE id=?`
+        ).bind(p.name, p.access_token || '', p.category || '', p.followers_count || 0, p.is_published ? 1 : 0, existingPage.id).run()
+      } else {
+        await c.env.DB.prepare(
+          `INSERT INTO meta_pages (meta_account_id, fb_page_id, page_name, page_access_token, category, followers_count, is_published, last_synced_at) VALUES (?,?,?,?,?,?,?,datetime('now'))`
+        ).bind(acct?.id || existing?.id, p.id, p.name, p.access_token || '', p.category || '', p.followers_count || 0, p.is_published ? 1 : 0).run()
+      }
+    }
+
+    return c.json({ success: true, user_id: userId, name: userName, scopes, picture: pictureUrl, pages_synced: pages.length })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// ============================================================
 // OAUTH — Save Facebook access token (client-side FB Login SDK)
 // The frontend uses FB.login() and sends us the token
 // ============================================================
@@ -127,7 +189,11 @@ metaConnectRoutes.get('/account', async (c) => {
   const acct = await c.env.DB.prepare(
     "SELECT * FROM meta_accounts WHERE status='active' ORDER BY updated_at DESC LIMIT 1"
   ).first<any>()
-  if (!acct) return c.json({ connected: false })
+  if (!acct) {
+    // Check if GRAPH_API_KEY is set — offer auto-connect
+    const hasEnvToken = !!(c.env as any).GRAPH_API_KEY
+    return c.json({ connected: false, has_env_token: hasEnvToken, hint: hasEnvToken ? 'Call POST /api/meta/auto-connect to connect using GRAPH_API_KEY' : undefined })
+  }
 
   // Quick validation — test if token still works
   let valid = true
