@@ -1294,8 +1294,9 @@ adminRoutes.get('/superadmin/inbox', async (c) => {
       }
     }
 
-    // 5. Lead capture form submissions
+    // 5. Lead capture form submissions (all lead tables)
     if (!channel || channel === 'all' || channel === 'form') {
+      // 5a. asset_report_leads (homepage CTA, exit intent, demo portal, condo)
       const leadQuery = search
         ? `SELECT id, name as contact_name, email as contact_email, '' as contact_phone,
              'form' as channel, 'new' as status, '' as lead_status,
@@ -1318,6 +1319,84 @@ adminRoutes.get('/superadmin/inbox', async (c) => {
       for (const r of (leadRes.results || [])) {
         conversations.push({ ...r, source_id: `lead_${r.id}` })
       }
+
+      // 5b. leads table (blog, pricing, feature page, comparison page forms)
+      try {
+        const siteLeadQuery = search
+          ? `SELECT id, name as contact_name, email as contact_email, phone as contact_phone,
+               'form' as channel, status, '' as lead_status,
+               COALESCE(message, 'Lead from ' || source_page) as preview,
+               created_at as last_activity_at, created_at,
+               1 as message_count, source_page as source, '' as tag, company_name as customer_company
+             FROM leads
+             WHERE name LIKE ? OR email LIKE ? OR message LIKE ? OR company_name LIKE ?
+             ORDER BY created_at DESC LIMIT 100`
+          : `SELECT id, name as contact_name, email as contact_email, phone as contact_phone,
+               'form' as channel, status, '' as lead_status,
+               COALESCE(message, 'Lead from ' || source_page) as preview,
+               created_at as last_activity_at, created_at,
+               1 as message_count, source_page as source, '' as tag, company_name as customer_company
+             FROM leads
+             ORDER BY created_at DESC LIMIT 100`
+        const siteLeadRes = search
+          ? await c.env.DB.prepare(siteLeadQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`).all()
+          : await c.env.DB.prepare(siteLeadQuery).all()
+        for (const r of (siteLeadRes.results || [])) {
+          conversations.push({ ...r, source_id: `sitelead_${r.id}` })
+        }
+      } catch (e) { /* leads table may not exist */ }
+
+      // 5c. contact_leads table (contact page form)
+      try {
+        const contactQuery = search
+          ? `SELECT id, name as contact_name, email as contact_email, phone as contact_phone,
+               'form' as channel, 'new' as status, '' as lead_status,
+               COALESCE(message, 'Contact form inquiry') as preview,
+               created_at as last_activity_at, created_at,
+               1 as message_count, 'contact_form' as source, interest as tag, company as customer_company
+             FROM contact_leads
+             WHERE name LIKE ? OR email LIKE ? OR message LIKE ? OR company LIKE ?
+             ORDER BY created_at DESC LIMIT 100`
+          : `SELECT id, name as contact_name, email as contact_email, phone as contact_phone,
+               'form' as channel, 'new' as status, '' as lead_status,
+               COALESCE(message, 'Contact form inquiry') as preview,
+               created_at as last_activity_at, created_at,
+               1 as message_count, 'contact_form' as source, interest as tag, company as customer_company
+             FROM contact_leads
+             ORDER BY created_at DESC LIMIT 100`
+        const contactRes = search
+          ? await c.env.DB.prepare(contactQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`).all()
+          : await c.env.DB.prepare(contactQuery).all()
+        for (const r of (contactRes.results || [])) {
+          conversations.push({ ...r, source_id: `contact_${r.id}` })
+        }
+      } catch (e) { /* contact_leads table may not exist */ }
+
+      // 5d. demo_leads table (demo scheduling form)
+      try {
+        const demoQuery = search
+          ? `SELECT id, name as contact_name, email as contact_email, phone as contact_phone,
+               'form' as channel, 'new' as status, '' as lead_status,
+               COALESCE(message, 'Demo request') as preview,
+               created_at as last_activity_at, created_at,
+               1 as message_count, 'demo_request' as source, '' as tag, company as customer_company
+             FROM demo_leads
+             WHERE name LIKE ? OR email LIKE ? OR message LIKE ? OR company LIKE ?
+             ORDER BY created_at DESC LIMIT 100`
+          : `SELECT id, name as contact_name, email as contact_email, phone as contact_phone,
+               'form' as channel, 'new' as status, '' as lead_status,
+               COALESCE(message, 'Demo request') as preview,
+               created_at as last_activity_at, created_at,
+               1 as message_count, 'demo_request' as source, '' as tag, company as customer_company
+             FROM demo_leads
+             ORDER BY created_at DESC LIMIT 100`
+        const demoRes = search
+          ? await c.env.DB.prepare(demoQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`).all()
+          : await c.env.DB.prepare(demoQuery).all()
+        for (const r of (demoRes.results || [])) {
+          conversations.push({ ...r, source_id: `demo_${r.id}` })
+        }
+      } catch (e) { /* demo_leads table may not exist */ }
     }
 
     // 6. Cold-call outbound call logs
@@ -1407,10 +1486,15 @@ adminRoutes.get('/superadmin/inbox', async (c) => {
       ).first<any>()
       unreadCounts.voice = todayCalls?.c || 0
 
+      let formCount = 0
       const recentLeads = await c.env.DB.prepare(
         `SELECT COUNT(*) as c FROM asset_report_leads WHERE created_at >= datetime('now', '-7 days')`
       ).first<any>()
-      unreadCounts.form = recentLeads?.c || 0
+      formCount += recentLeads?.c || 0
+      try { const r = await c.env.DB.prepare(`SELECT COUNT(*) as c FROM leads WHERE created_at >= datetime('now', '-7 days')`).first<any>(); formCount += r?.c || 0 } catch {}
+      try { const r = await c.env.DB.prepare(`SELECT COUNT(*) as c FROM contact_leads WHERE created_at >= datetime('now', '-7 days')`).first<any>(); formCount += r?.c || 0 } catch {}
+      try { const r = await c.env.DB.prepare(`SELECT COUNT(*) as c FROM demo_leads WHERE created_at >= datetime('now', '-7 days')`).first<any>(); formCount += r?.c || 0 } catch {}
+      unreadCounts.form = formCount
     } catch (e) { /* counts are best-effort */ }
 
     const totalUnread = (unreadCounts.web_chat || 0) + (unreadCounts.sms || 0) + (unreadCounts.voicemail || 0)
@@ -1446,15 +1530,31 @@ adminRoutes.get('/superadmin/inbox/unread-count', async (c) => {
   }
 })
 
-// GET /superadmin/inbox/lead/:id — Single lead detail
-adminRoutes.get('/superadmin/inbox/lead/:id', async (c) => {
+// GET /superadmin/inbox/lead/:type/:id — Single lead detail (type = lead|sitelead|contact|demo)
+adminRoutes.get('/superadmin/inbox/lead/:type/:id', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  const type = c.req.param('type')
   const id = c.req.param('id')
   try {
-    const lead = await c.env.DB.prepare(
-      `SELECT id, email, name, company, address, building_count, source, tag, created_at FROM asset_report_leads WHERE id = ?`
-    ).bind(id).first<any>()
+    let lead: any = null
+    if (type === 'lead') {
+      lead = await c.env.DB.prepare(
+        `SELECT id, email, name, company, address, building_count, source, tag, created_at, 'asset_report' as lead_type FROM asset_report_leads WHERE id = ?`
+      ).bind(id).first<any>()
+    } else if (type === 'sitelead') {
+      lead = await c.env.DB.prepare(
+        `SELECT id, email, name, company_name as company, phone, source_page as source, message, status, created_at, 'site_form' as lead_type FROM leads WHERE id = ?`
+      ).bind(id).first<any>()
+    } else if (type === 'contact') {
+      lead = await c.env.DB.prepare(
+        `SELECT id, email, name, company, phone, interest, employees, message, utm_source, utm_medium, utm_campaign, created_at, 'contact_form' as lead_type FROM contact_leads WHERE id = ?`
+      ).bind(id).first<any>()
+    } else if (type === 'demo') {
+      lead = await c.env.DB.prepare(
+        `SELECT id, email, name, company, phone, message, created_at, 'demo_request' as lead_type FROM demo_leads WHERE id = ?`
+      ).bind(id).first<any>()
+    }
     if (!lead) return c.json({ error: 'Lead not found' }, 404)
     return c.json(lead)
   } catch (err: any) {

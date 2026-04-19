@@ -9994,12 +9994,19 @@ function inboxOpenConversation(sourceId, channel) {
     var id = sourceId.replace('cb_', '');
     alert('Callback #' + id + ' — full detail pane coming in Phase 2');
   } else if (channel === 'form') {
-    var id = sourceId.replace('lead_', '');
-    openLeadDetailPane(id);
+    // source_id can be lead_X, sitelead_X, contact_X, or demo_X
+    var parts = sourceId.match(/^(lead|sitelead|contact|demo)_(\d+)$/);
+    if (parts) {
+      openLeadDetailPane(parts[1], parts[2]);
+    } else {
+      // fallback for old format
+      var id = sourceId.replace('lead_', '');
+      openLeadDetailPane('lead', id);
+    }
   }
 }
 
-async function openLeadDetailPane(id) {
+async function openLeadDetailPane(type, id) {
   // Remove existing pane if any
   var existing = document.getElementById('lead-detail-pane');
   if (existing) existing.remove();
@@ -10007,12 +10014,12 @@ async function openLeadDetailPane(id) {
   var overlay = document.createElement('div');
   overlay.id = 'lead-detail-pane';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5)';
-  overlay.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:480px;width:90%;padding:32px;box-shadow:0 20px 60px rgba(0,0,0,0.3)"><p style="text-align:center;color:#6b7280">Loading lead details…</p></div>';
+  overlay.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:520px;width:90%;padding:32px;box-shadow:0 20px 60px rgba(0,0,0,0.3);max-height:85vh;overflow-y:auto"><p style="text-align:center;color:#6b7280">Loading lead details…</p></div>';
   document.body.appendChild(overlay);
   overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
 
   try {
-    var res = await saFetch('/api/admin/superadmin/inbox/lead/' + id);
+    var res = await saFetch('/api/admin/superadmin/inbox/lead/' + type + '/' + id);
     if (!res || !res.ok) throw new Error('Not found');
     var lead = await res.json();
 
@@ -10020,37 +10027,52 @@ async function openLeadDetailPane(id) {
     var allRows = [
       { label: 'Name', value: lead.name, icon: 'fa-user' },
       { label: 'Email', value: lead.email, icon: 'fa-envelope' },
+      { label: 'Phone', value: lead.phone, icon: 'fa-phone' },
       { label: 'Company', value: lead.company, icon: 'fa-building' },
       { label: 'Address', value: lead.address, icon: 'fa-map-marker-alt' },
       { label: 'Buildings / Sections', value: lead.building_count, icon: 'fa-layer-group' },
+      { label: 'Interest', value: lead.interest, icon: 'fa-crosshairs' },
+      { label: 'Team Size', value: lead.employees, icon: 'fa-users' },
+      { label: 'Message', value: lead.message, icon: 'fa-comment-alt' },
       { label: 'Source', value: lead.source, icon: 'fa-globe' },
+      { label: 'Status', value: lead.status && lead.status !== 'new' ? lead.status : null, icon: 'fa-flag' },
       { label: 'Tag', value: lead.tag, icon: 'fa-tag' },
-      { label: 'Submitted', value: lead.created_at ? new Date(lead.created_at).toLocaleString() : null, icon: 'fa-calendar' }
+      { label: 'UTM Source', value: lead.utm_source, icon: 'fa-bullhorn' },
+      { label: 'UTM Medium', value: lead.utm_medium, icon: 'fa-bullhorn' },
+      { label: 'UTM Campaign', value: lead.utm_campaign, icon: 'fa-bullhorn' },
+      { label: 'Submitted', value: lead.created_at ? new Date(lead.created_at + 'Z').toLocaleString() : null, icon: 'fa-calendar' }
     ];
     // Only show rows that have data
     var rows = allRows.filter(function(r) { return r.value !== null && r.value !== undefined && r.value !== ''; });
     var rowsHtml = rows.map(function(r) {
-      return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #f3f4f6">' +
-        '<i class="fas ' + r.icon + '" style="color:#14b8a6;width:16px;text-align:center;font-size:13px"></i>' +
-        '<span style="color:#6b7280;font-size:13px;min-width:100px">' + r.label + '</span>' +
-        '<span style="color:#111;font-size:14px;font-weight:600;word-break:break-word">' + r.value + '</span>' +
+      var isMessage = r.label === 'Message';
+      return '<div style="display:flex;align-items:' + (isMessage ? 'flex-start' : 'center') + ';gap:12px;padding:12px 0;border-bottom:1px solid #f3f4f6">' +
+        '<i class="fas ' + r.icon + '" style="color:#14b8a6;width:16px;text-align:center;font-size:13px;margin-top:' + (isMessage ? '3px' : '0') + '"></i>' +
+        '<span style="color:#6b7280;font-size:13px;min-width:100px;flex-shrink:0">' + r.label + '</span>' +
+        '<span style="color:#111;font-size:14px;font-weight:' + (isMessage ? '400' : '600') + ';word-break:break-word;' + (isMessage ? 'line-height:1.5;white-space:pre-wrap' : '') + '">' + r.value + '</span>' +
       '</div>';
     }).join('');
 
     // Source label
-    var sourceLabels = { homepage_cta: 'Homepage CTA', demo_portal: 'Demo Portal', condo_cheat_sheet: 'Condo Cheat Sheet', other: 'Other' };
-    var sourceBadge = lead.source ? '<span style="display:inline-block;background:#e0f2fe;color:#0369a1;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;margin-top:4px"><i class="fas fa-globe" style="margin-right:4px"></i>' + (sourceLabels[lead.source] || lead.source) + '</span>' : '';
+    var sourceLabels = { homepage_cta: 'Homepage CTA', demo_portal: 'Demo Portal', condo_cheat_sheet: 'Condo Cheat Sheet', contact_form: 'Contact Form', demo_request: 'Demo Request', homepage: 'Homepage', pricing: 'Pricing Page', blog: 'Blog', 'blog-post': 'Blog Post', lander: 'Landing Page', other: 'Other' };
+    var sourceDisplay = lead.source ? (sourceLabels[lead.source] || lead.source) : '';
+    var typeLabels = { asset_report: 'Asset Report Lead', site_form: 'Website Form', contact_form: 'Contact Inquiry', demo_request: 'Demo Request' };
+    var typeLabel = typeLabels[lead.lead_type] || 'Lead';
+    var sourceBadge = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">' +
+      '<span style="display:inline-block;background:#f0fdf4;color:#15803d;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600"><i class="fas fa-tag" style="margin-right:4px"></i>' + typeLabel + '</span>' +
+      (sourceDisplay ? '<span style="display:inline-block;background:#e0f2fe;color:#0369a1;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600"><i class="fas fa-globe" style="margin-right:4px"></i>' + sourceDisplay + '</span>' : '') +
+    '</div>';
 
     card.innerHTML =
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-        '<h2 style="margin:0;font-size:20px;font-weight:700;color:#111"><i class="fas fa-wpforms" style="color:#14b8a6;margin-right:8px"></i>Lead #' + id + '</h2>' +
+        '<h2 style="margin:0;font-size:20px;font-weight:700;color:#111"><i class="fas fa-wpforms" style="color:#14b8a6;margin-right:8px"></i>' + (lead.name || lead.email || 'Lead #' + id) + '</h2>' +
         '<button onclick="document.getElementById(\'lead-detail-pane\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;padding:4px">&times;</button>' +
       '</div>' +
       sourceBadge +
       '<div style="margin-top:16px">' + rowsHtml + '</div>' +
-      (lead.email ? '<div style="margin-top:20px;display:flex;gap:10px;justify-content:center">' +
+      (lead.email ? '<div style="margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">' +
         '<a href="mailto:' + lead.email + '" style="display:inline-flex;align-items:center;gap:6px;background:#00FF88;color:#0A0A0A;padding:10px 24px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px"><i class="fas fa-envelope"></i>Email Lead</a>' +
-        '<a href="mailto:' + lead.email + '?subject=Your%20Roof%20Report%20is%20Ready" style="display:inline-flex;align-items:center;gap:6px;background:#f3f4f6;color:#374151;padding:10px 20px;border-radius:10px;text-decoration:none;font-weight:600;font-size:13px"><i class="fas fa-file-alt"></i>Send Report</a>' +
+        (lead.phone ? '<a href="tel:' + lead.phone + '" style="display:inline-flex;align-items:center;gap:6px;background:#f3f4f6;color:#374151;padding:10px 20px;border-radius:10px;text-decoration:none;font-weight:600;font-size:13px"><i class="fas fa-phone"></i>Call</a>' : '') +
       '</div>' : '');
   } catch (e) {
     var card = overlay.querySelector('div');
