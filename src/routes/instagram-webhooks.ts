@@ -27,7 +27,7 @@ instagramWebhookRoutes.get('/instagram', async (c) => {
 
 // ── Meta Webhook Events (DMs, comments) ──
 instagramWebhookRoutes.post('/instagram', async (c) => {
-  const appSecret = (c.env as any).INSTAGRAM_APP_SECRET || (c.env as any).META_KEY
+  const appSecret = (c.env as any).INSTAGRAM_APP_SECRET || (c.env as any).META_KEY || (c.env as any).meta_key
   if (!appSecret) return c.json({ error: 'Not configured' }, 500)
 
   // Validate HMAC signature

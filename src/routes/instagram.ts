@@ -37,7 +37,7 @@ instagramRoutes.use('/*', async (c, next) => {
 
 instagramRoutes.get('/status', async (c) => {
   const acct = await c.env.DB.prepare('SELECT * FROM instagram_account LIMIT 1').first<any>()
-  const hasToken = !!((c.env as any).INSTAGRAM_PAGE_ACCESS_TOKEN || (c.env as any).GRAPH_API_KEY)
+  const hasToken = !!((c.env as any).INSTAGRAM_PAGE_ACCESS_TOKEN || (c.env as any).GRAPH_API_KEY || (c.env as any).graph_api_key)
   const hasIgId = !!((c.env as any).INSTAGRAM_BUSINESS_ACCOUNT_ID) || !!acct
   const configured = hasToken
 
@@ -56,7 +56,7 @@ instagramRoutes.get('/status', async (c) => {
 
 // Auto-connect: discover IG Business Account ID from the access token
 instagramRoutes.post('/auto-connect', async (c) => {
-  const accessToken = (c.env as any).INSTAGRAM_PAGE_ACCESS_TOKEN || (c.env as any).GRAPH_API_KEY
+  const accessToken = (c.env as any).INSTAGRAM_PAGE_ACCESS_TOKEN || (c.env as any).GRAPH_API_KEY || (c.env as any).graph_api_key
   if (!accessToken) return c.json({ success: false, error: 'No access token configured (set GRAPH_API_KEY or INSTAGRAM_PAGE_ACCESS_TOKEN in Cloudflare secrets)' }, 400)
 
   const apiVersion = (c.env as any).INSTAGRAM_GRAPH_API_VERSION || 'v21.0'

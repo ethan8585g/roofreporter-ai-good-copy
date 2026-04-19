@@ -8,7 +8,7 @@ import { getAccount, getMediaList, getMediaInsights, getAccountInsights, decrypt
 
 export async function buildConfig(env: Bindings): Promise<GraphClientConfig> {
   // Check multiple secret names — user may have set token under different key
-  const encryptedToken = (env as any).INSTAGRAM_PAGE_ACCESS_TOKEN || (env as any).GRAPH_API_KEY || ''
+  const encryptedToken = (env as any).INSTAGRAM_PAGE_ACCESS_TOKEN || (env as any).GRAPH_API_KEY || (env as any).graph_api_key || ''
   const jwtSecret = (env as any).JWT_SECRET || ''
   let accessToken = encryptedToken
   // If the token looks encrypted (base64 with length > 100 and no EAA prefix), decrypt it
