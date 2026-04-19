@@ -5,6 +5,7 @@ import { loadPermissionContext, can, redactFinancials } from '../lib/permissions
 import { validateAdminSession } from './auth'
 import { logFromContext } from '../lib/team-activity'
 import { geocodeAddress, optimizeRoute, type LatLng } from '../services/geocoding'
+import { sendGmailOAuth2 } from '../services/email'
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -725,19 +726,23 @@ crmRoutes.get('/proposals/automation/settings', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   const owner = await c.env.DB.prepare(
-    'SELECT auto_send_certificate FROM customers WHERE id = ?'
+    'SELECT auto_send_certificate, cert_trigger_on FROM customers WHERE id = ?'
   ).bind(ownerId).first<any>()
-  return c.json({ auto_send_certificate: owner?.auto_send_certificate === 1 })
+  return c.json({
+    auto_send_certificate: owner?.auto_send_certificate === 1,
+    cert_trigger_on: owner?.cert_trigger_on || 'install_completed',
+  })
 })
 
 crmRoutes.put('/proposals/automation/settings', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
-  const { auto_send_certificate } = await c.req.json()
+  const { auto_send_certificate, cert_trigger_on } = await c.req.json()
+  const trigger = cert_trigger_on === 'proposal_signed' ? 'proposal_signed' : 'install_completed'
   await c.env.DB.prepare(
-    'UPDATE customers SET auto_send_certificate = ? WHERE id = ?'
-  ).bind(auto_send_certificate ? 1 : 0, ownerId).run()
-  return c.json({ success: true, auto_send_certificate: !!auto_send_certificate })
+    'UPDATE customers SET auto_send_certificate = ?, cert_trigger_on = ? WHERE id = ?'
+  ).bind(auto_send_certificate ? 1 : 0, trigger, ownerId).run()
+  return c.json({ success: true, auto_send_certificate: !!auto_send_certificate, cert_trigger_on: trigger })
 })
 
 /** @deprecated Use GET /api/invoices?document_type=proposal instead */
@@ -1184,12 +1189,29 @@ crmRoutes.get('/jobs', async (c) => {
 
   const stats = await c.env.DB.prepare(`
     SELECT COUNT(*) as total,
+      SUM(CASE WHEN status='pending_schedule' THEN 1 ELSE 0 END) as pending_schedule,
       SUM(CASE WHEN status='scheduled' THEN 1 ELSE 0 END) as scheduled,
       SUM(CASE WHEN status='in_progress' THEN 1 ELSE 0 END) as in_progress,
       SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) as completed
     FROM crm_jobs WHERE owner_id = ?
   `).bind(ownerId).first()
   return c.json({ jobs: jobs.results, stats })
+})
+
+// Jobs pending scheduling — auto-created from accepted proposals
+crmRoutes.get('/jobs/needs-scheduling', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const jobs = await c.env.DB.prepare(
+    `SELECT cj.*, cc.name as customer_name, cc.phone as customer_phone, cc.email as customer_email,
+            i.total as proposal_total, i.invoice_number as proposal_number, i.scope_of_work
+     FROM crm_jobs cj
+     LEFT JOIN crm_customers cc ON cc.id = cj.crm_customer_id
+     LEFT JOIN invoices i ON i.id = cj.proposal_id
+     WHERE cj.owner_id = ? AND cj.status = 'pending_schedule'
+     ORDER BY cj.created_at DESC`
+  ).bind(ownerId).all()
+  return c.json({ jobs: jobs.results })
 })
 
 // Schedule/assign a job to a crew member on a date (dispatch board drag-and-drop)
@@ -1205,7 +1227,7 @@ crmRoutes.post('/jobs/schedule', async (c) => {
 
   // Update job schedule — clear stale route_order since any reassignment invalidates it
   await c.env.DB.prepare(
-    `UPDATE crm_jobs SET scheduled_date = ?, scheduled_time = ?, route_order = NULL, status = CASE WHEN status IN ('', 'cancelled', 'postponed') THEN 'scheduled' ELSE status END, updated_at = datetime('now') WHERE id = ?`
+    `UPDATE crm_jobs SET scheduled_date = ?, scheduled_time = ?, route_order = NULL, status = CASE WHEN status IN ('', 'cancelled', 'postponed', 'pending_schedule') THEN 'scheduled' ELSE status END, updated_at = datetime('now') WHERE id = ?`
   ).bind(scheduledDate, scheduledTime || null, jobId).run()
 
   // Assign crew member if provided — UNIQUE index on (job_id, crew_member_id) prevents duplicates
@@ -1270,11 +1292,123 @@ crmRoutes.put('/jobs/:id', async (c) => {
     return c.json({ success: true })
   }
 
-  await c.env.DB.prepare(`
-    UPDATE crm_jobs SET crm_customer_id=?, title=?, property_address=?, job_type=?, scheduled_date=?, scheduled_time=?, estimated_duration=?, crew_size=?, notes=?, material_delivery_date=?, status=?, updated_at=datetime('now')
-    WHERE id=? AND owner_id=?
-  `).bind(body.crm_customer_id || null, body.title, body.property_address || null, body.job_type || 'install', body.scheduled_date, body.scheduled_time || null, body.estimated_duration || null, body.crew_size || null, body.notes || null, body.material_delivery_date || null, body.status || 'scheduled', id, ownerId).run()
+  // Build dynamic SET clause — only update fields that are explicitly provided
+  const fields: string[] = []
+  const vals: any[] = []
+  if ('crm_customer_id' in body) { fields.push('crm_customer_id=?'); vals.push(body.crm_customer_id || null) }
+  if ('title' in body) { fields.push('title=?'); vals.push(body.title) }
+  if ('property_address' in body) { fields.push('property_address=?'); vals.push(body.property_address || null) }
+  if ('job_type' in body) { fields.push('job_type=?'); vals.push(body.job_type || 'install') }
+  if ('scheduled_date' in body) { fields.push('scheduled_date=?'); vals.push(body.scheduled_date) }
+  if ('scheduled_time' in body) { fields.push('scheduled_time=?'); vals.push(body.scheduled_time || null) }
+  if ('estimated_duration' in body) { fields.push('estimated_duration=?'); vals.push(body.estimated_duration || null) }
+  if ('crew_size' in body) { fields.push('crew_size=?'); vals.push(body.crew_size || null) }
+  if ('notes' in body) { fields.push('notes=?'); vals.push(body.notes || null) }
+  if ('material_delivery_date' in body) { fields.push('material_delivery_date=?'); vals.push(body.material_delivery_date || null) }
+  if ('status' in body) { fields.push('status=?'); vals.push(body.status || 'scheduled') }
+  fields.push("updated_at=datetime('now')")
+  vals.push(id, ownerId)
+  await c.env.DB.prepare(`UPDATE crm_jobs SET ${fields.join(', ')} WHERE id=? AND owner_id=?`).bind(...vals).run()
   return c.json({ success: true })
+})
+
+// Mark job completed — sets status, records completion date, and triggers certificate automation
+crmRoutes.post('/jobs/:id/complete', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const id = c.req.param('id')
+
+  const job = await c.env.DB.prepare(
+    `SELECT j.*, cc.name as customer_name, cc.email as customer_email, cc.phone as customer_phone
+     FROM crm_jobs j LEFT JOIN crm_customers cc ON cc.id = j.crm_customer_id
+     WHERE j.id = ? AND j.owner_id = ?`
+  ).bind(id, ownerId).first<any>()
+  if (!job) return c.json({ error: 'Job not found' }, 404)
+
+  await c.env.DB.prepare(
+    `UPDATE crm_jobs SET status = 'completed', completed_date = date('now'), updated_at = datetime('now') WHERE id = ? AND owner_id = ?`
+  ).bind(id, ownerId).run()
+
+  if (job.proposal_id) {
+    await c.env.DB.prepare(
+      `UPDATE invoices SET installation_completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND customer_id = ?`
+    ).bind(job.proposal_id, ownerId).run()
+  }
+
+  let certificateSent = false
+  const owner = await c.env.DB.prepare(
+    `SELECT auto_send_certificate, cert_trigger_on, name, email, phone, address, city, province, company_name, logo_url,
+            gmail_refresh_token, brand_business_name, brand_logo_url, brand_address,
+            brand_phone, brand_email, brand_license_number, brand_primary_color
+     FROM customers WHERE id = ?`
+  ).bind(ownerId).first<any>()
+
+  if (owner?.auto_send_certificate === 1 && (owner.cert_trigger_on || 'install_completed') === 'install_completed') {
+    let customerEmail = job.customer_email
+    let customerName = job.customer_name || 'Valued Customer'
+    let propertyAddress = job.property_address || ''
+    let proposalNumber = job.job_number
+    let scopeOfWork: string | undefined
+    let totalAmount: number | undefined
+
+    if (job.proposal_id) {
+      const proposal = await c.env.DB.prepare(
+        `SELECT i.*, o.property_address as order_property_address
+         FROM invoices i LEFT JOIN orders o ON o.id = i.order_id WHERE i.id = ?`
+      ).bind(job.proposal_id).first<any>()
+      if (proposal) {
+        customerEmail = customerEmail || proposal.crm_customer_email
+        customerName = proposal.crm_customer_name || proposal.printed_name || customerName
+        propertyAddress = proposal.property_address || proposal.order_property_address || propertyAddress
+        proposalNumber = proposal.invoice_number || proposalNumber
+        scopeOfWork = proposal.scope_of_work
+        totalAmount = proposal.total ?? undefined
+      }
+    }
+
+    if (customerEmail) {
+      try {
+        const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
+        const companyName = owner.brand_business_name || owner.company_name || owner.name || 'Your Roofing Company'
+        const companyAddress = owner.brand_address || [owner.address, owner.city, owner.province].filter(Boolean).join(', ')
+        const certHtml = generateRoofInstallationCertificateHTML({
+          companyName,
+          companyLogo: owner.brand_logo_url || owner.logo_url || undefined,
+          companyAddress: companyAddress || undefined,
+          companyPhone: owner.brand_phone || owner.phone || undefined,
+          companyEmail: owner.brand_email || owner.email || undefined,
+          licenseNumber: owner.brand_license_number || undefined,
+          customerName,
+          propertyAddress,
+          proposalNumber,
+          signedAt: new Date().toISOString(),
+          scopeOfWork,
+          totalAmount,
+          accentColor: owner.brand_primary_color || undefined,
+        })
+        const clientId = (c.env as any).GMAIL_CLIENT_ID
+        const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
+        const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || owner.gmail_refresh_token || ''
+        if (clientId && clientSecret && refreshToken) {
+          sendGmailOAuth2(
+            clientId, clientSecret, refreshToken,
+            customerEmail,
+            `Certificate of New Roof Installation — ${propertyAddress || 'Your Property'}`,
+            certHtml,
+            owner.email
+          ).catch((e: any) => console.warn("[silent-catch]", (e && e.message) || e))
+          if (job.proposal_id) {
+            await c.env.DB.prepare(
+              `UPDATE invoices SET certificate_sent_at = datetime('now') WHERE id = ?`
+            ).bind(job.proposal_id).run()
+          }
+          certificateSent = true
+        }
+      } catch {}
+    }
+  }
+
+  return c.json({ success: true, certificate_sent: certificateSent })
 })
 
 // Toggle checklist item
@@ -2336,23 +2470,29 @@ crmRoutes.post('/proposals/respond/:token', async (c) => {
       const d = new Date().toISOString().slice(0, 10).replace(/-/g, '')
       const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0')
       const jobNumber = `JOB-${d}-${rand}`
-      await c.env.DB.prepare(
-        `INSERT INTO crm_jobs (owner_id, crm_customer_id, proposal_id, job_number, title, property_address, job_type, scheduled_date, notes, status)
-         VALUES (?, ?, ?, ?, ?, ?, 'install', date('now', '+7 days'), ?, 'scheduled')`
-      ).bind(proposal.owner_id, proposal.crm_customer_id, proposal.id, jobNumber, proposal.title || 'Accepted Proposal Job', proposal.property_address, 'Auto-created from accepted proposal ' + proposal.proposal_number).run()
+      const jobTitle = proposal.title ? `Install — ${proposal.proposal_number}` : 'New Install'
+      const result = await c.env.DB.prepare(
+        `INSERT INTO crm_jobs (owner_id, crm_customer_id, proposal_id, job_number, title, property_address, job_type, notes, status)
+         VALUES (?, ?, ?, ?, ?, ?, 'install', ?, 'pending_schedule')`
+      ).bind(proposal.owner_id, proposal.crm_customer_id, proposal.id, jobNumber, jobTitle, proposal.property_address, 'Auto-created from accepted proposal ' + proposal.proposal_number).run()
+      // Seed default checklist
+      const jobId = result.meta.last_row_id
+      for (const item of DEFAULT_CHECKLIST) {
+        await c.env.DB.prepare('INSERT INTO crm_job_checklist (job_id, item_type, label, sort_order) VALUES (?,?,?,?)').bind(jobId, item.item_type, item.label, item.sort_order).run()
+      }
     } catch {}
   }
 
-  // Auto-send Certificate of New Roof Installation if owner has automation enabled
+  // Auto-send Certificate of New Roof Installation if owner has automation enabled AND trigger is proposal_signed
   if (action === 'accept' && proposal.customer_email) {
     try {
       const ownerForCert = await c.env.DB.prepare(
-        `SELECT auto_send_certificate, name, email, phone, address, city, province, company_name, logo_url,
+        `SELECT auto_send_certificate, cert_trigger_on, name, email, phone, address, city, province, company_name, logo_url,
                 gmail_refresh_token, brand_business_name, brand_logo_url, brand_address,
                 brand_phone, brand_email, brand_license_number, brand_primary_color FROM customers WHERE id = ?`
       ).bind(proposal.owner_id).first<any>()
 
-      if (ownerForCert?.auto_send_certificate === 1) {
+      if (ownerForCert?.auto_send_certificate === 1 && (ownerForCert.cert_trigger_on || 'install_completed') === 'proposal_signed') {
         const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
         const companyName = ownerForCert.brand_business_name || ownerForCert.company_name || ownerForCert.name || 'Your Roofing Company'
         const companyAddress = ownerForCert.brand_address || [ownerForCert.address, ownerForCert.city, ownerForCert.province].filter(Boolean).join(', ')

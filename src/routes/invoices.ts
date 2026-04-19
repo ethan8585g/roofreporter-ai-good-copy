@@ -1415,11 +1415,54 @@ invoiceRoutes.post('/respond/:token', async (c) => {
     </table>
     ${signature && signature.startsWith('data:image/') ? `<div style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;text-align:center"><p style="font-size:11px;color:#94a3b8;margin:0 0 8px">Customer Signature</p><img src="${signature}" alt="Signature" style="max-height:60px"></div>` : ''}
   </div>
+  ${action === 'accept' ? `<div style="background:#f0fdf4;padding:16px;border-radius:0 0 12px 12px;border:1px solid #bbf7d0;border-top:none;text-align:center">
+    <p style="font-size:13px;color:#166534;font-weight:600;margin:0 0 8px">A job has been auto-created from this proposal</p>
+    <a href="https://www.roofmanager.ca/customer/dashboard?module=jobs" style="display:inline-block;background:#16a34a;color:white;padding:10px 24px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">Schedule Install Now</a>
+  </div>` : ''}
 </div>`
         sendGmailOAuth2(clientId, clientSecret, refreshToken, owner.email, `${emoji} ${docLabel} ${statusText}: ${proposal.invoice_number} — $${Number(proposal.total || 0).toFixed(2)}`, notifHtml, owner.email).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
       }
     }
   } catch {}
 
-  return c.json({ success: true, status: newStatus })
+  // Auto-create job from accepted proposal
+  let createdJobId: number | null = null
+  let createdJobNumber: string | null = null
+  if (action === 'accept') {
+    try {
+      // Resolve property address: invoice customer_address, or look up crm_customer address
+      let propertyAddress = proposal.customer_address || ''
+      let crmCustomerId = proposal.crm_customer_id || null
+      if (!propertyAddress && crmCustomerId) {
+        const crmCust = await c.env.DB.prepare('SELECT address FROM crm_customers WHERE id = ?').bind(crmCustomerId).first<any>()
+        if (crmCust?.address) propertyAddress = crmCust.address
+      }
+      const d = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0')
+      const jobNumber = `JOB-${d}-${rand}`
+      const jobTitle = proposal.invoice_number ? `Install — ${proposal.invoice_number}` : 'New Install'
+      const result = await c.env.DB.prepare(
+        `INSERT INTO crm_jobs (owner_id, crm_customer_id, proposal_id, job_number, title, property_address, job_type, status, notes)
+         VALUES (?, ?, ?, ?, ?, ?, 'install', 'pending_schedule', ?)`
+      ).bind(proposal.customer_id, crmCustomerId, proposal.id, jobNumber, jobTitle, propertyAddress, 'Auto-created from accepted proposal ' + (proposal.invoice_number || '')).run()
+      createdJobId = result.meta.last_row_id as number
+      createdJobNumber = jobNumber
+      // Seed default checklist
+      const DEFAULT_CHECKLIST = [
+        { item_type: 'permit', label: 'Building Permit', sort_order: 0 },
+        { item_type: 'material', label: 'Material Delivery', sort_order: 1 },
+        { item_type: 'dumpster', label: 'Dumpster Ordered', sort_order: 2 },
+        { item_type: 'inspection', label: 'Final Inspection', sort_order: 3 },
+      ]
+      for (const item of DEFAULT_CHECKLIST) {
+        await c.env.DB.prepare(
+          'INSERT INTO crm_job_checklist (job_id, item_type, label, sort_order) VALUES (?,?,?,?)'
+        ).bind(createdJobId, item.item_type, item.label, item.sort_order).run()
+      }
+    } catch (e: any) {
+      console.warn('[auto-job-create]', e?.message || e)
+    }
+  }
+
+  return c.json({ success: true, status: newStatus, job_id: createdJobId, job_number: createdJobNumber })
 })

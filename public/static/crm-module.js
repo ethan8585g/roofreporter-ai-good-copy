@@ -45,7 +45,7 @@
   // HELPER: Status badge
   // ============================================================
   function badge(status, map) {
-    var m = map || { active: 'bg-emerald-500/15 text-emerald-400', inactive: 'bg-white/5 text-gray-500', lead: 'bg-blue-500/15 text-blue-400', draft: 'bg-white/10 text-gray-400', sent: 'bg-blue-500/15 text-blue-400', viewed: 'bg-blue-500/15 text-blue-400', paid: 'bg-emerald-500/15 text-emerald-400', overdue: 'bg-red-500/15 text-red-400', cancelled: 'bg-white/5 text-gray-500', accepted: 'bg-emerald-500/15 text-emerald-400', declined: 'bg-red-500/15 text-red-400', expired: 'bg-white/10 text-gray-400', scheduled: 'bg-blue-500/15 text-blue-400', in_progress: 'bg-blue-500/15 text-blue-400', completed: 'bg-emerald-500/15 text-emerald-400', postponed: 'bg-white/5 text-gray-500' };
+    var m = map || { active: 'bg-emerald-500/15 text-emerald-400', inactive: 'bg-white/5 text-gray-500', lead: 'bg-blue-500/15 text-blue-400', draft: 'bg-white/10 text-gray-400', sent: 'bg-blue-500/15 text-blue-400', viewed: 'bg-blue-500/15 text-blue-400', paid: 'bg-emerald-500/15 text-emerald-400', overdue: 'bg-red-500/15 text-red-400', cancelled: 'bg-white/5 text-gray-500', accepted: 'bg-emerald-500/15 text-emerald-400', declined: 'bg-red-500/15 text-red-400', expired: 'bg-white/10 text-gray-400', pending_schedule: 'bg-amber-500/15 text-amber-400', scheduled: 'bg-blue-500/15 text-blue-400', in_progress: 'bg-blue-500/15 text-blue-400', completed: 'bg-emerald-500/15 text-emerald-400', postponed: 'bg-white/5 text-gray-500' };
     return '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ' + (m[status] || 'bg-white/5 text-gray-500') + '">' + (status || 'unknown').replace(/_/g, ' ') + '</span>';
   }
 
@@ -1592,11 +1592,20 @@
   var _allJobs = [];
   var _allJobStats = {};
   var _googleCalEvents = [];
+  var _pendingScheduleJobs = [];
 
   function initJobs() {
     root.innerHTML = '<div class="text-center py-12"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
     checkCalendarStatus();
+    loadPendingScheduleJobs();
     loadJobsForMonth(_calYear, _calMonth);
+  }
+
+  function loadPendingScheduleJobs() {
+    fetch('/api/crm/jobs/needs-scheduling', { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) { _pendingScheduleJobs = data.jobs || []; renderJobsDashboard(); })
+      .catch(function() { _pendingScheduleJobs = []; });
   }
 
   function checkCalendarStatus() {
@@ -1688,6 +1697,31 @@
       '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-400">' + (stats.in_progress || 0) + '</p><p class="text-[10px] text-gray-500">In Progress</p></div>' +
       '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">' + (stats.completed || 0) + '</p><p class="text-[10px] text-gray-500">Completed</p></div></div>';
 
+    // Pending Install Scheduling Banner
+    if (_pendingScheduleJobs.length > 0) {
+      html += '<div id="pendingInstallsBanner" class="mb-5 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl overflow-hidden">';
+      html += '<div class="px-5 py-3 border-b border-amber-500/20 flex items-center justify-between">';
+      html += '<div class="flex items-center gap-2"><i class="fas fa-exclamation-triangle text-amber-400"></i><span class="text-sm font-bold text-amber-300">Accepted Proposals — Schedule Install</span><span class="bg-amber-500/20 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full">' + _pendingScheduleJobs.length + ' pending</span></div>';
+      html += '</div>';
+      html += '<div class="divide-y divide-amber-500/10">';
+      for (var pi = 0; pi < _pendingScheduleJobs.length; pi++) {
+        var pj = _pendingScheduleJobs[pi];
+        html += '<div class="flex items-center gap-4 px-5 py-4 hover:bg-white/5">';
+        html += '<div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-amber-500/15 border border-amber-500/20"><i class="fas fa-file-signature text-amber-400 text-sm"></i></div>';
+        html += '<div class="flex-1 min-w-0">';
+        html += '<p class="text-sm font-semibold text-gray-100 truncate">' + (pj.title || 'New Install') + '</p>';
+        if (pj.customer_name) html += '<p class="text-xs text-gray-400 mt-0.5"><i class="fas fa-user mr-1"></i>' + pj.customer_name + '</p>';
+        if (pj.property_address) html += '<p class="text-xs text-gray-500 mt-0.5 truncate"><i class="fas fa-map-marker-alt mr-1"></i>' + pj.property_address + '</p>';
+        if (pj.proposal_total) html += '<p class="text-xs text-emerald-400 mt-0.5 font-semibold">$' + Number(pj.proposal_total).toFixed(2) + '</p>';
+        html += '</div>';
+        html += '<div class="flex-shrink-0">';
+        html += '<button onclick="window._crmScheduleInstall(' + pj.id + ')" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black font-bold text-xs rounded-lg transition-colors"><i class="fas fa-calendar-plus mr-1"></i>Schedule Install</button>';
+        html += '</div>';
+        html += '</div>';
+      }
+      html += '</div></div>';
+    }
+
     // C. Calendar toolbar
     html += '<div class="flex items-center justify-between mb-4 flex-wrap gap-2">';
     // Left: filter tabs
@@ -1725,7 +1759,7 @@
   }
 
   function renderFilteredJobsList(jobs, statusFilter) {
-    var statusLabels = { scheduled: 'Scheduled', in_progress: 'In Progress', completed: 'Completed' };
+    var statusLabels = { pending_schedule: 'Needs Scheduling', scheduled: 'Scheduled', in_progress: 'In Progress', completed: 'Completed' };
     var label = statusLabels[statusFilter] || statusFilter;
     var html = '<div class="bg-[#111111] rounded-xl border overflow-hidden">';
     html += '<div class="px-5 py-3 border-b border-white/10 flex items-center justify-between">';
@@ -2118,6 +2152,81 @@
   window._jobFilter = '';
   window._crmFilterJobs = function(s) { window._jobFilter = s; loadJobsForMonth(_calYear, _calMonth); };
 
+  // Schedule Install — modal for pending_schedule jobs from accepted proposals
+  window._crmScheduleInstall = function(jobId) {
+    // Find the job in _pendingScheduleJobs
+    var job = null;
+    for (var i = 0; i < _pendingScheduleJobs.length; i++) {
+      if (_pendingScheduleJobs[i].id === jobId) { job = _pendingScheduleJobs[i]; break; }
+    }
+    if (!job) { toast('Job not found', 'error'); return; }
+
+    var body = '<div class="space-y-4">';
+    // Job info summary
+    body += '<div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">';
+    body += '<div class="flex items-center gap-2 mb-2"><i class="fas fa-check-circle text-emerald-400"></i><span class="text-xs font-bold text-emerald-400 uppercase">Accepted Proposal</span></div>';
+    if (job.proposal_number) body += '<p class="text-xs text-gray-400"><i class="fas fa-file-signature mr-1"></i>' + job.proposal_number + '</p>';
+    if (job.customer_name) body += '<p class="text-sm font-semibold text-gray-100 mt-1"><i class="fas fa-user mr-2 text-gray-500"></i>' + job.customer_name + '</p>';
+    if (job.property_address) body += '<p class="text-xs text-gray-400 mt-1"><i class="fas fa-map-marker-alt mr-2 text-gray-500"></i>' + job.property_address + '</p>';
+    if (job.proposal_total) body += '<p class="text-sm font-bold text-emerald-400 mt-1">$' + Number(job.proposal_total).toFixed(2) + '</p>';
+    if (job.scope_of_work) body += '<p class="text-xs text-gray-500 mt-2 line-clamp-3">' + job.scope_of_work.substring(0, 200) + (job.scope_of_work.length > 200 ? '...' : '') + '</p>';
+    body += '</div>';
+
+    // Schedule fields
+    body += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">';
+    body += '<div><label class="block text-xs font-medium text-gray-400 mb-1">Install Date *</label><input type="date" id="schedInstallDate" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm bg-[#111111]"></div>';
+    body += '<div><label class="block text-xs font-medium text-gray-400 mb-1">Start Time</label><input type="time" id="schedInstallTime" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm bg-[#111111]"></div>';
+    body += '</div>';
+
+    body += '<div class="grid grid-cols-3 gap-3">';
+    body += '<div><label class="block text-xs font-medium text-gray-400 mb-1">Duration</label><input type="text" id="schedDuration" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm bg-[#111111]" placeholder="e.g. 2 days"></div>';
+    body += '<div><label class="block text-xs font-medium text-gray-400 mb-1">Crew Size</label><input type="number" id="schedCrewSize" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm bg-[#111111]" value="4"></div>';
+    body += '<div><label class="block text-xs font-medium text-gray-400 mb-1">Job Type</label><select id="schedJobType" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm bg-[#111111]"><option value="install" selected>Install</option><option value="repair">Repair</option><option value="inspection">Inspection</option><option value="maintenance">Maintenance</option></select></div>';
+    body += '</div>';
+
+    // Material delivery toggle
+    body += '<div class="bg-[#0A0A0A] rounded-xl p-3 border border-white/10">';
+    body += '<div class="flex items-center justify-between">';
+    body += '<div class="flex items-center gap-2"><i class="fas fa-truck text-orange-400"></i><span class="text-sm font-medium text-gray-200">Material Delivery Day</span></div>';
+    body += '<label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="schedMaterialToggle" class="sr-only peer" onchange="var s=document.getElementById(\'schedMaterialSection\');s.className=this.checked?\'mt-3\':\'mt-3 hidden\'"><div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div></label>';
+    body += '</div>';
+    body += '<div id="schedMaterialSection" class="mt-3 hidden"><label class="block text-xs font-medium text-gray-400 mb-1">Delivery Date</label><input type="date" id="schedMaterialDate" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm bg-[#111111]"></div>';
+    body += '</div>';
+
+    body += '<div><label class="block text-xs font-medium text-gray-400 mb-1">Notes</label><textarea id="schedNotes" rows="2" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm bg-[#111111]"></textarea></div>';
+    body += '</div>';
+
+    showModal('Schedule Customer Install', body, function() {
+      var date = document.getElementById('schedInstallDate').value;
+      if (!date) { toast('Install date is required', 'error'); return; }
+      var time = document.getElementById('schedInstallTime').value || null;
+      var materialDate = document.getElementById('schedMaterialToggle').checked ? (document.getElementById('schedMaterialDate').value || null) : null;
+      var payload = {
+        scheduled_date: date,
+        scheduled_time: time,
+        job_type: document.getElementById('schedJobType').value,
+        estimated_duration: document.getElementById('schedDuration').value.trim() || null,
+        crew_size: parseInt(document.getElementById('schedCrewSize').value) || null,
+        notes: document.getElementById('schedNotes').value.trim() || job.notes || null,
+        material_delivery_date: materialDate,
+        status: 'scheduled'
+      };
+      fetch('/api/crm/jobs/' + jobId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.success) {
+            closeModal();
+            toast('Install scheduled!');
+            loadPendingScheduleJobs();
+            loadJobsForMonth(_calYear, _calMonth);
+          } else {
+            toast(res.error || 'Failed to schedule', 'error');
+          }
+        })
+        .catch(function(e) { toast('Failed: ' + (e.message || 'Network error'), 'error'); });
+    }, 'Schedule Install');
+  };
+
   window._crmNewJob = function() {
     fetch('/api/crm/customers', { headers: authHeadersOnly() })
       .then(function(r) { return r.json(); })
@@ -2181,6 +2290,22 @@
       .catch(function(e) { toast('Failed to update job: ' + (e.message || 'Network error'), 'error'); });
   };
 
+  window._crmCompleteJob = function(id) {
+    fetch('/api/crm/jobs/' + id + '/complete', { method: 'POST', headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) {
+          if (res.certificate_sent) {
+            toast('Job completed! Certificate of Installation sent to customer.', 'success');
+          } else {
+            toast('Job marked as completed!', 'success');
+          }
+          loadJobsForMonth(_calYear, _calMonth);
+        }
+      })
+      .catch(function(e) { toast('Failed to complete job: ' + (e.message || 'Network error'), 'error'); });
+  };
+
   window._crmViewJob = function(id) {
     fetch('/api/crm/jobs/' + id, { headers: authHeadersOnly() })
       .then(function(r) { return r.json(); })
@@ -2202,8 +2327,9 @@
 
         // Action buttons
         body += '<div class="flex flex-wrap gap-2 pt-2">';
+        if (j.status === 'pending_schedule') body += '<button onclick="closeModal(); window._crmScheduleInstall(' + j.id + ');" class="px-3 py-1.5 bg-amber-500 text-black rounded-lg text-xs font-bold hover:bg-amber-600"><i class="fas fa-calendar-plus mr-1"></i>Schedule Install</button>';
         if (j.status === 'scheduled') body += '<button onclick="window._crmMarkJob(' + j.id + ',\'in_progress\'); closeModal();" class="px-3 py-1.5 bg-blue-500/15/15 text-blue-400 rounded-lg text-xs font-medium hover:bg-white/10"><i class="fas fa-play mr-1"></i>Start Job</button>';
-        if (j.status === 'in_progress') body += '<button onclick="window._crmMarkJob(' + j.id + ',\'completed\'); closeModal();" class="px-3 py-1.5 bg-emerald-500/15 text-emerald-400 rounded-lg text-xs font-medium hover:bg-green-200"><i class="fas fa-check mr-1"></i>Complete</button>';
+        if (j.status === 'in_progress') body += '<button onclick="window._crmCompleteJob(' + j.id + '); closeModal();" class="px-3 py-1.5 bg-emerald-500/15 text-emerald-400 rounded-lg text-xs font-medium hover:bg-green-200"><i class="fas fa-check-double mr-1"></i>Job Completed</button>';
         if (_calConnected) body += '<button onclick="window._crmSyncJobToCalendar(' + j.id + ')" class="px-3 py-1.5 bg-[#111111] border border-white/15 text-gray-300 rounded-lg text-xs font-medium hover:bg-[#111111]/5"><i class="fab fa-google mr-1 text-blue-500"></i>Sync to Calendar</button>';
         body += '<button onclick="window._crmDeleteJob(' + j.id + '); closeModal();" class="px-3 py-1.5 bg-[#111111] border border-red-200 text-red-600 rounded-lg text-xs font-medium hover:bg-red-50"><i class="fas fa-trash mr-1"></i>Delete</button>';
         body += '</div>';
