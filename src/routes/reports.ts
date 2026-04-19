@@ -103,15 +103,16 @@ function tryRegenHtml(jsonStr: string): string | null {
 }
 
 function resolveHtml(stored: string | null, raw: string | null): string | null {
-  if (stored) {
-    if (stored.trimStart().startsWith('<!DOCTYPE') || stored.trimStart().startsWith('<html')) return stored
-    const h = tryRegenHtml(stored)
-    if (h) return h
-    return stored
-  }
+  // Always prefer regenerating from JSON so the latest template is used
   if (raw) {
     const h = tryRegenHtml(raw)
-    if (h && (h.startsWith('<!DOCTYPE') || h.startsWith('<html'))) return h
+    if (h) return h
+  }
+  if (stored) {
+    const h = tryRegenHtml(stored)
+    if (h) return h
+    if (stored.trimStart().startsWith('<!DOCTYPE') || stored.trimStart().startsWith('<html')) return stored
+    return stored
   }
   return null
 }
