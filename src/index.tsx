@@ -8607,7 +8607,7 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
       { label: 'Invoices', url: '/customer/invoices', icon: 'fa-file-invoice-dollar' },
       { label: 'Proposals', url: '/customer/proposals', icon: 'fa-file-signature' },
       { label: 'Commissions', url: '/customer/commissions', icon: 'fa-dollar-sign' },
-      { label: 'Certificates', url: '/customer/certificate-automations', icon: 'fa-certificate' },
+      { label: 'Automations', url: '/customer/certificate-automations', icon: 'fa-robot' },
       { label: 'Reports', url: '/customer/reports', icon: 'fa-file-alt' },
       { label: 'Order Report', url: '/customer/order', icon: 'fa-plus-circle' },
       { label: 'Materials Calculator', url: '/customer/material-calculator', icon: 'fa-calculator' },
@@ -15936,7 +15936,7 @@ function getCertificateAutomationsPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Certificate Automations - Roof Manager</title>
+  <title>Automations - Roof Manager</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="min-h-screen" style="background:var(--bg-page)">

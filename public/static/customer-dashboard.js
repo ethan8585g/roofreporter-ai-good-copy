@@ -292,6 +292,8 @@ function renderDashboard() {
       '<nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">' +
         // Home
         navLink('/customer/dashboard', 'fa-th-large', 'Home', null, '') +
+        // Report History
+        navLink('/customer/reports', 'fa-file-alt', 'Report History', null, '') +
         // Leads (unified inbox)
         '<a href="/customer/leads" class="flex items-center justify-between px-3 py-2 rounded-lg transition-colors group" style="color:var(--text-secondary);background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.05))">' +
           '<span class="flex items-center gap-2.5">' +
@@ -308,7 +310,7 @@ function renderDashboard() {
         navLink('/customer/invoices', 'fa-file-invoice-dollar', 'Invoices', invBadge || null, 'bg-blue-600') +
         navLink('/customer/proposals', 'fa-file-signature', 'Proposals', propBadge || null, 'bg-blue-600') +
         navLink('/customer/commissions', 'fa-dollar-sign', 'Commissions', null, 'bg-emerald-600') +
-        navLink('/customer/certificate-automations', 'fa-certificate', 'Certificates', null, 'bg-emerald-600') +
+        navLink('/customer/certificate-automations', 'fa-robot', 'Automations', null, 'bg-emerald-600') +
         // Tools
         '<p class="px-3 mt-4 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Tools</p>' +
         navLink('/customer/order', 'fa-plus-circle', isSolar ? 'Order Solar Proposal' : 'Order Report', creditBadge || null, creditBadgeColor) +
