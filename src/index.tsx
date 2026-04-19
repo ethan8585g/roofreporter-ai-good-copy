@@ -62,6 +62,7 @@ import { developerPortalRoutes } from './routes/developer-portal'
 import { aiAutopilotRoutes } from './routes/ai-autopilot'
 import { agentHubRoutes } from './routes/agent-hub'
 import { commissionRoutes } from './routes/commissions'
+import { customerLeadsRoutes } from './routes/customer-leads'
 import usStatesRoutes from './routes/us-states'
 import usVerticalsRoutes from './routes/us-verticals'
 import usComparisonsRoutes from './routes/us-comparisons'
@@ -339,6 +340,7 @@ app.route('/api/ai-autopilot', aiAutopilotRoutes)
 app.route('/api/agent-hub', agentHubRoutes)
 app.route('/api/field', fieldRoutes)
 app.route('/api/commissions', commissionRoutes)
+app.route('/api/customer-leads', customerLeadsRoutes)
 app.route('/field', fieldUiRoutes)
 
 // Health check
@@ -2449,6 +2451,7 @@ app.get('/customer/suppliers', (c) => c.html(getCrmSubPageHTML('suppliers', 'Sup
 app.get('/customer/catalog', (c) => c.html(getCrmSubPageHTML('catalog', 'Material Catalog', 'fa-box-open')))
 app.get('/customer/referrals', (c) => c.html(getCrmSubPageHTML('referrals', 'Referral Program', 'fa-gift')))
 app.get('/customer/crew', (c) => c.redirect('/customer/jobs', 301))
+app.get('/customer/leads', (c) => c.html(getCustomerLeadsPageHTML()))
 app.get('/customer/website-builder', (c) => c.html(getWebsiteBuilderPageHTML()))
 app.get('/customer/google-ads', (c) => c.html(getGoogleAdsPageHTML()))
 app.get('/customer/google-business', (c) => c.html(getGoogleBusinessPageHTML()))
@@ -8555,6 +8558,8 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
       </div>
       <nav class="flex items-center space-x-4">
         <span id="custGreeting" class="text-gray-300 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/customer/leads" class="text-emerald-400 hover:text-emerald-300 text-sm font-semibold transition-colors"><i class="fas fa-inbox mr-1"></i>Leads<span id="header-leads-badge" class="ml-1"></span></a>
+        <button onclick="window._openCmdPalette && window._openCmdPalette()" class="text-gray-400 hover:text-white text-xs px-2 py-1 rounded border border-white/10 transition-colors hidden sm:inline-flex items-center gap-1"><i class="fas fa-search"></i><span class="text-[10px] opacity-60">\u2318K</span></button>
         <a href="/" class="text-gray-300 hover:text-[#00FF88] text-sm transition-colors"><i class="fas fa-home mr-1"></i>Home</a>
         <button onclick="custLogout()" class="text-gray-300 hover:text-[#00FF88] text-sm transition-colors"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
       </nav>
@@ -8590,6 +8595,88 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
   <script src="/static/js/ads.js?v=${Date.now()}"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
   <script src="/static/customer-dashboard.js?v=${Date.now()}"></script>
+  <script>
+  // ⌘K Command Palette
+  (function() {
+    var pages = [
+      { label: 'Home / Dashboard', url: '/customer/dashboard', icon: 'fa-th-large' },
+      { label: 'Leads Inbox', url: '/customer/leads', icon: 'fa-inbox' },
+      { label: 'Customers', url: '/customer/customers', icon: 'fa-users' },
+      { label: 'Pipeline', url: '/customer/pipeline', icon: 'fa-funnel-dollar' },
+      { label: 'Jobs & Crew', url: '/customer/jobs', icon: 'fa-hard-hat' },
+      { label: 'Invoices', url: '/customer/invoices', icon: 'fa-file-invoice-dollar' },
+      { label: 'Proposals', url: '/customer/proposals', icon: 'fa-file-signature' },
+      { label: 'Commissions', url: '/customer/commissions', icon: 'fa-dollar-sign' },
+      { label: 'Certificates', url: '/customer/certificate-automations', icon: 'fa-certificate' },
+      { label: 'Reports', url: '/customer/reports', icon: 'fa-file-alt' },
+      { label: 'Order Report', url: '/customer/order', icon: 'fa-plus-circle' },
+      { label: 'Materials Calculator', url: '/customer/material-calculator', icon: 'fa-calculator' },
+      { label: 'Suppliers', url: '/customer/suppliers', icon: 'fa-store' },
+      { label: 'Material Catalog', url: '/customer/catalog', icon: 'fa-box-open' },
+      { label: 'Email Outreach', url: '/customer/email-outreach', icon: 'fa-envelope-open-text' },
+      { label: 'Website Builder', url: '/customer/website-builder', icon: 'fa-globe' },
+      { label: 'Google Ads', url: '/customer/google-ads', icon: 'fa-ad' },
+      { label: 'Google Business', url: '/customer/google-business', icon: 'fa-map-marker-alt' },
+      { label: 'Storm Alerts', url: '/customer/storm-scout', icon: 'fa-cloud-bolt' },
+      { label: 'Referrals', url: '/customer/referrals', icon: 'fa-gift' },
+      { label: 'Profile & Billing', url: '/customer/profile', icon: 'fa-user-cog' },
+      { label: 'Team Management', url: '/customer/team', icon: 'fa-users-cog' },
+      { label: 'Secretary', url: '/customer/secretary', icon: 'fa-headset' },
+      { label: 'D2D Manager', url: '/customer/d2d', icon: 'fa-door-open' },
+    ];
+    function open() {
+      if (document.getElementById('cmdPalette')) return;
+      var ov = document.createElement('div');
+      ov.id = 'cmdPalette';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:flex-start;justify-content:center;padding-top:15vh;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px)';
+      ov.innerHTML = '<div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:16px;width:480px;max-width:95vw;max-height:60vh;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5)">' +
+        '<div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.05)"><input id="cmdInput" type="text" placeholder="Search pages\u2026" style="width:100%;background:transparent;border:none;outline:none;color:white;font-size:15px" autofocus></div>' +
+        '<div id="cmdResults" style="max-height:50vh;overflow-y:auto;padding:4px"></div>' +
+      '</div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', function(e) { if (e.target === ov) close(); });
+      var input = document.getElementById('cmdInput');
+      input.addEventListener('input', function() { renderResults(input.value); });
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') close();
+        if (e.key === 'Enter') {
+          var first = document.querySelector('#cmdResults a');
+          if (first) window.location.href = first.getAttribute('href');
+        }
+      });
+      renderResults('');
+    }
+    function close() { var el = document.getElementById('cmdPalette'); if (el) el.remove(); }
+    function renderResults(q) {
+      var el = document.getElementById('cmdResults');
+      if (!el) return;
+      var filtered = q ? pages.filter(function(p) { return p.label.toLowerCase().indexOf(q.toLowerCase()) >= 0; }) : pages;
+      el.innerHTML = filtered.map(function(p) {
+        return '<a href="' + p.url + '" style="display:flex;align-items:center;gap:10px;padding:10px 16px;color:#d1d5db;text-decoration:none;border-radius:8px;transition:background 0.15s" onmouseover="this.style.background=\\'rgba(255,255,255,0.05)\\'" onmouseout="this.style.background=\\'transparent\\'">' +
+          '<i class="fas ' + p.icon + '" style="width:16px;text-align:center;color:#6b7280;font-size:13px"></i>' +
+          '<span style="font-size:14px">' + p.label + '</span>' +
+        '</a>';
+      }).join('');
+      if (filtered.length === 0) el.innerHTML = '<p style="padding:16px;text-align:center;color:#6b7280;font-size:13px">No results</p>';
+    }
+    window._openCmdPalette = open;
+    document.addEventListener('keydown', function(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); open(); }
+    });
+  })();
+
+  // Header leads badge
+  (function() {
+    var token = localStorage.getItem('rc_customer_token');
+    if (!token) return;
+    fetch('/api/customer-leads/unread-count', { headers: { 'Authorization': 'Bearer ' + token } })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var el = document.getElementById('header-leads-badge');
+        if (el && d.unread_count > 0) el.innerHTML = '<span style="background:#10b981;color:white;padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700">' + d.unread_count + '</span>';
+      }).catch(function(){});
+  })();
+  </script>
   ${getRoverAssistant()}
 </body>
 </html>`
@@ -13420,6 +13507,59 @@ function getPropertyImageryPageHTML(mapsApiKey: string) {
 </html>`
 }
 
+function getCustomerLeadsPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Leads Inbox - Roof Manager</title>
+</head>
+<body class="min-h-screen" style="background:var(--bg-page);color:var(--text-primary)">
+  <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <div>
+            <h1 class="text-lg font-bold">Leads Inbox</h1>
+            <p class="text-brand-200 text-xs">All your leads in one place</p>
+          </div>
+        </a>
+      </div>
+      <nav class="flex items-center space-x-3">
+        <span id="custGreeting" class="text-brand-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/customer/dashboard" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    <div id="leads-root"></div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+      try {
+        var u = JSON.parse(c);
+        var g = document.getElementById('custGreeting');
+        var n = document.getElementById('custName');
+        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
+      } catch(e) {}
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer');
+      localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/leads-inbox.js?v=${Date.now()}"></script>
+</body>
+</html>`
+}
+
 function getCrmSubPageHTML(module: string, title: string, icon: string) {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -13441,9 +13581,22 @@ function getCrmSubPageHTML(module: string, title: string, icon: string) {
       </div>
       <nav class="flex items-center space-x-3">
         <span id="custGreeting" class="text-brand-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
-        <a href="/customer/dashboard" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <a href="/customer/dashboard" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Home</a>
+        <a href="/customer/leads" class="text-emerald-400 hover:text-emerald-300 text-sm font-semibold"><i class="fas fa-inbox mr-1"></i>Leads<span id="crm-leads-badge" class="ml-1"></span></a>
         <button onclick="custLogout()" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
       </nav>
+    </div>
+    <!-- Section quick-nav -->
+    <div style="background:#0a0a0a;border-top:1px solid rgba(255,255,255,0.05)" class="overflow-x-auto">
+      <div class="max-w-7xl mx-auto px-4 flex gap-1 py-1.5">
+        <a href="/customer/customers" class="px-3 py-1 rounded text-xs font-medium ${module === 'customers' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-users mr-1"></i>Customers</a>
+        <a href="/customer/pipeline" class="px-3 py-1 rounded text-xs font-medium ${module === 'pipeline' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-funnel-dollar mr-1"></i>Pipeline</a>
+        <a href="/customer/jobs" class="px-3 py-1 rounded text-xs font-medium ${module === 'jobs' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-hard-hat mr-1"></i>Jobs</a>
+        <a href="/customer/invoices" class="px-3 py-1 rounded text-xs font-medium ${module === 'invoices' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-file-invoice-dollar mr-1"></i>Invoices</a>
+        <a href="/customer/proposals" class="px-3 py-1 rounded text-xs font-medium ${module === 'proposals' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-file-signature mr-1"></i>Proposals</a>
+        <a href="/customer/commissions" class="px-3 py-1 rounded text-xs font-medium ${module === 'commissions' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-dollar-sign mr-1"></i>Commissions</a>
+        <a href="/customer/reports" class="px-3 py-1 rounded text-xs font-medium ${module === 'reports' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-file-alt mr-1"></i>Reports</a>
+      </div>
     </div>
   </header>
   <main class="max-w-7xl mx-auto px-4 py-6">
@@ -13470,6 +13623,19 @@ function getCrmSubPageHTML(module: string, title: string, icon: string) {
   </script>
   <script src="/static/crm-module.js?v=${Date.now()}"></script>
   <script src="/static/solar-calculator.js?v=${Date.now()}"></script>
+  <script>
+    // Leads badge on CRM pages
+    (function() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (!token) return;
+      fetch('/api/customer-leads/unread-count', { headers: { 'Authorization': 'Bearer ' + token } })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          var el = document.getElementById('crm-leads-badge');
+          if (el && d.unread_count > 0) el.innerHTML = '<span class="px-1.5 py-0.5 bg-emerald-500 text-white rounded-full text-[10px] font-bold">' + d.unread_count + '</span>';
+        }).catch(function(){});
+    })();
+  </script>
   ${getRoverAssistant()}
 </body>
 </html>`

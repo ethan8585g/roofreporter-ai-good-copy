@@ -271,6 +271,9 @@ function renderDashboard() {
   var secBadge = custState.secretaryActive ? (custState.secretaryCalls > 0 ? custState.secretaryCalls + '' : 'Active') : '';
   var secBadgeColor = custState.secretaryActive ? 'bg-blue-600' : '';
 
+  // --- NEW SIMPLIFIED SIDEBAR (6 sections) ---
+  var leadsBadge = '<span id="leads-unread-badge"></span>';
+
   var sidebar =
     '<aside class="hidden lg:flex flex-col w-56 flex-shrink-0 min-h-full" style="background:var(--bg-card);border-right:1px solid var(--border-color)">' +
       // Brand
@@ -285,53 +288,48 @@ function renderDashboard() {
           '</div>' +
         '</div>' +
       '</div>' +
-      // Nav
-      '<nav class="flex-1 px-3 py-4 space-y-5 overflow-y-auto">' +
-        // Reports
-        '<div>' +
-          '<p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Reports</p>' +
-          navLink('/customer/order', 'fa-plus-circle', isSolar ? 'Order New Solar Proposal' : 'Order New Report', creditBadge || null, creditBadgeColor) +
-          (isSolar ? navLink('/customer/design-builder', 'fa-drafting-compass', 'Design Builder', null, 'bg-amber-600') : '') +
-          navLink('/customer/reports', 'fa-file-alt', 'Report History', completedReports > 0 ? completedReports + '' : null, 'bg-gray-800') +
-        '</div>' +
-        // CRM
-        '<div>' +
-          '<p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">CRM</p>' +
-          navLink('/customer/customers', 'fa-users', 'Customers', s.customers > 0 ? s.customers + '' : null, 'bg-gray-800') +
-          navLink('/customer/invoices', 'fa-file-invoice-dollar', 'Invoices', invBadge || null, 'bg-blue-600') +
-          navLink('/customer/proposals', 'fa-file-signature', 'Proposals', propBadge || null, 'bg-blue-600') +
-          navLink('/customer/jobs', 'fa-hard-hat', 'Job & Crew Hub', jobBadge || null, 'bg-gray-800') +
-          navLink('/customer/certificate-automations', 'fa-certificate', 'Certificate Automations', null, 'bg-emerald-600') +
-          navLink('/customer/pipeline', 'fa-funnel-dollar', 'Pipeline', null, 'bg-gray-800') +
-          navLink('/customer/commissions', 'fa-dollar-sign', 'Commissions', null, 'bg-emerald-600') +
-          (isSolar ? navLink('/customer/solar-pipeline', 'fa-solar-panel', 'Solar Sales Pipeline', null, 'bg-amber-600') : '') +
-        '</div>' +
-        // Team
-        '<div>' +
-          '<p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Team</p>' +
-          navLink('/customer/team', 'fa-users-cog', 'Sales Team', teamBadge || null, 'bg-gray-800') +
-          navLink('/customer/d2d', 'fa-door-open', 'D2D Manager', null, '') +
-        '</div>' +
-        // Storm Scout
-        '<div>' +
-          '<p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Storm Scout</p>' +
-          navLink('/customer/storm-scout', 'fa-cloud-bolt', 'Storm Scout', 'New', 'bg-emerald-500') +
-        '</div>' +
-        // Services
-        '<div>' +
-          '<p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Services</p>' +
-          navLink('/customer/secretary', 'fa-headset', isSolar ? 'Solar Sales Secretary' : 'Roofer Secretary', secBadge || null, secBadgeColor) +
-        '</div>' +
+      // Nav — 6 sections
+      '<nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">' +
+        // Home
+        navLink('/customer/dashboard', 'fa-th-large', 'Home', null, '') +
+        // Leads (unified inbox)
+        '<a href="/customer/leads" class="flex items-center justify-between px-3 py-2 rounded-lg transition-colors group" style="color:var(--text-secondary);background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.05))">' +
+          '<span class="flex items-center gap-2.5">' +
+            '<i class="fas fa-inbox text-emerald-400 w-4 text-center text-sm"></i>' +
+            '<span class="text-sm font-semibold text-emerald-400">Leads</span>' +
+          '</span>' +
+          leadsBadge +
+        '</a>' +
+        // Jobs (CRM core)
+        '<p class="px-3 mt-4 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Jobs</p>' +
+        navLink('/customer/customers', 'fa-users', 'Customers', s.customers > 0 ? s.customers + '' : null, 'bg-gray-800') +
+        navLink('/customer/pipeline', 'fa-funnel-dollar', 'Pipeline', null, 'bg-gray-800') +
+        navLink('/customer/jobs', 'fa-hard-hat', 'Jobs & Crew', jobBadge || null, 'bg-gray-800') +
+        navLink('/customer/invoices', 'fa-file-invoice-dollar', 'Invoices', invBadge || null, 'bg-blue-600') +
+        navLink('/customer/proposals', 'fa-file-signature', 'Proposals', propBadge || null, 'bg-blue-600') +
+        navLink('/customer/commissions', 'fa-dollar-sign', 'Commissions', null, 'bg-emerald-600') +
+        navLink('/customer/certificate-automations', 'fa-certificate', 'Certificates', null, 'bg-emerald-600') +
         // Tools
-        '<div>' +
-          '<p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Tools</p>' +
-          navLink('/customer/material-calculator', 'fa-calculator', 'Material Calculator', null, '') +
-          navLink('/customer/suppliers', 'fa-store', 'Suppliers', null, '') +
-          navLink('/customer/catalog', 'fa-box-open', 'Catalog', null, '') +
-          navLink('/customer/referrals', 'fa-gift', 'Referrals', null, '') +
-          navLink('/customer/email-outreach', 'fa-envelope-open-text', 'Email Outreach', null, '') +
-          navLink('/customer/website-builder', 'fa-globe', 'AI Website Builder', 'New', 'bg-emerald-500') +
-        '</div>' +
+        '<p class="px-3 mt-4 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Tools</p>' +
+        navLink('/customer/order', 'fa-plus-circle', isSolar ? 'Order Solar Proposal' : 'Order Report', creditBadge || null, creditBadgeColor) +
+        navLink('/customer/material-calculator', 'fa-calculator', 'Materials', null, '') +
+        navLink('/customer/suppliers', 'fa-store', 'Suppliers', null, '') +
+        navLink('/customer/catalog', 'fa-box-open', 'Catalog', null, '') +
+        (isSolar ? navLink('/customer/design-builder', 'fa-drafting-compass', 'Design Builder', null, 'bg-amber-600') : '') +
+        // Marketing
+        '<p class="px-3 mt-4 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Marketing</p>' +
+        navLink('/customer/email-outreach', 'fa-envelope-open-text', 'Email Outreach', null, '') +
+        navLink('/customer/website-builder', 'fa-globe', 'Website Builder', null, '') +
+        navLink('/customer/google-ads', 'fa-ad', 'Google Ads', null, '') +
+        navLink('/customer/google-business', 'fa-map-marker-alt', 'Google Business', null, '') +
+        navLink('/customer/storm-scout', 'fa-cloud-bolt', 'Storm Alerts', null, '') +
+        navLink('/customer/referrals', 'fa-gift', 'Referrals', null, '') +
+        // Settings
+        '<p class="px-3 mt-4 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Settings</p>' +
+        navLink('/customer/profile', 'fa-user-cog', 'Profile & Billing', null, '') +
+        navLink('/customer/team', 'fa-users-cog', 'Team', teamBadge || null, 'bg-gray-800') +
+        navLink('/customer/secretary', 'fa-headset', 'Secretary', secBadge || null, secBadgeColor) +
+        navLink('/customer/d2d', 'fa-door-open', 'D2D Manager', null, '') +
       '</nav>' +
       // Credits footer
       '<div class="px-4 py-4" style="border-top:1px solid var(--border-color)">' +
@@ -344,28 +342,24 @@ function renderDashboard() {
         (!custState.isTeamMember && trialsExhausted && c.subscription_status !== 'active'
           ? '<button onclick="subscribeToMembership()" class="block w-full text-center py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer border-0"><i class="fas fa-crown mr-1"></i>Subscribe — from $49.99/mo</button>'
           : '<a href="/pricing" class="block w-full text-center py-2 bg-emerald-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg transition-colors">Buy Credits</a>') +
-        '<a href="/customer/profile" class="block w-full text-center py-1.5 mt-1.5 text-xs transition-colors" style="color:var(--text-muted)">Account Settings</a>' +
         // Sidebar ad unit — shown only to non-subscribers
         '<div class="rra-ad-container" data-ad-slot="" data-ad-format="auto" style="display:none; margin-top:12px; min-height:120px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; padding:4px;"></div>' +
       '</div>' +
     '</aside>';
 
-  // Mobile horizontal nav (shown below md)
+  // Mobile horizontal nav — simplified 6-section layout
   var mobileNav =
     '<div class="lg:hidden overflow-x-auto" style="background:var(--bg-card);border-bottom:1px solid var(--border-color)">' +
       '<div class="flex gap-1 px-3 py-2 whitespace-nowrap">' +
-        '<a href="/customer/order" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold flex-shrink-0"><i class="fas fa-plus-circle"></i>Order</a>' +
-        '<a href="/customer/reports" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-file-alt"></i>Reports</a>' +
+        '<a href="/customer/dashboard" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-th-large"></i>Home</a>' +
+        '<a href="/customer/leads" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold flex-shrink-0"><i class="fas fa-inbox"></i>Leads<span id="mobile-leads-badge" class="ml-1"></span></a>' +
+        '<a href="/customer/jobs" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-hard-hat"></i>Jobs</a>' +
+        '<a href="/customer/order" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-plus-circle"></i>Order</a>' +
         '<a href="/customer/customers" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-users"></i>Customers</a>' +
         '<a href="/customer/invoices" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-file-invoice-dollar"></i>Invoices</a>' +
         '<a href="/customer/proposals" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-file-signature"></i>Proposals</a>' +
-        '<a href="/customer/jobs" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-hard-hat"></i>Jobs</a>' +
-                '<a href="/customer/team" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-users-cog"></i>Team</a>' +
-        '<a href="/customer/d2d" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-door-open"></i>D2D</a>' +
-        '<a href="/customer/storm-scout" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-cloud-bolt"></i>Storm</a>' +
-        '<a href="/customer/secretary" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-headset"></i>Secretary</a>' +
-        '<a href="/customer/material-calculator" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-calculator"></i>Materials</a>' +
-        '<a href="/customer/virtual-tryon" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-magic"></i>Visualizer</a>' +
+        '<a href="/customer/pipeline" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-funnel-dollar"></i>Pipeline</a>' +
+        '<a href="/customer/profile" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-cog"></i>Settings</a>' +
       '</div>' +
     '</div>';
 
@@ -1354,3 +1348,31 @@ function dismissMaterialSetup() {
   var banner = document.getElementById('material-setup-banner');
   if (banner) banner.innerHTML = '';
 }
+
+// ============================================================
+// LEADS UNREAD BADGE — Fetch unread count and update sidebar + mobile nav
+// ============================================================
+function fetchLeadsUnreadBadge() {
+  var token = localStorage.getItem('rc_customer_token');
+  if (!token) return;
+  fetch('/api/customer-leads/unread-count', { headers: { 'Authorization': 'Bearer ' + token } })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var count = data.unread_count || 0;
+      var badgeEl = document.getElementById('leads-unread-badge');
+      var mobileBadgeEl = document.getElementById('mobile-leads-badge');
+      if (badgeEl) {
+        badgeEl.innerHTML = count > 0
+          ? '<span class="px-1.5 py-0.5 bg-emerald-500 text-white rounded-full text-[10px] font-bold leading-none animate-pulse">' + count + '</span>'
+          : '';
+      }
+      if (mobileBadgeEl) {
+        mobileBadgeEl.textContent = count > 0 ? count : '';
+      }
+    })
+    .catch(function() {});
+}
+
+// Fetch badge on load and every 60 seconds
+setTimeout(fetchLeadsUnreadBadge, 1000);
+setInterval(fetchLeadsUnreadBadge, 60000);
