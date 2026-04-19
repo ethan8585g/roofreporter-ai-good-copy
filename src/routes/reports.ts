@@ -965,7 +965,14 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
   const startTime = Date.now()
   try {
     const body = await c.req.json()
-    const { trace, address, default_pitch, house_sqft } = body
+    const { trace, address, default_pitch, house_sqft, shingle_type: reqShingleType } = body
+
+    // Load company material preferences for BOM generation
+    let calcMatPrefs: any = {}
+    try {
+      const mpRow = await c.env.DB.prepare('SELECT material_preferences FROM master_companies WHERE id = 1').first<any>()
+      if (mpRow?.material_preferences) calcMatPrefs = JSON.parse(mpRow.material_preferences)
+    } catch {}
 
     // Shared validator: structure, coords, self-intersection, degenerate polygons
     const validation = validateTraceUi(trace)
@@ -1099,7 +1106,7 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
           return estimateMaterials({
             address: address || '',
             net_area_sqft:    report.key_measurements.total_roof_area_sloped_ft2,
-            waste_factor_pct: report.key_measurements.waste_factor_pct,
+            waste_factor_pct: calcMatPrefs.waste_factor_pct || report.key_measurements.waste_factor_pct,
             total_eave_lf:    report.linear_measurements.eaves_total_ft,
             total_ridge_lf:   report.linear_measurements.ridges_total_ft,
             total_hip_lf:     report.linear_measurements.hips_total_ft,
@@ -1107,6 +1114,10 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
             total_rake_lf:    report.linear_measurements.rakes_total_ft,
             pitch_rise:       pitchRise,
             complexity:       'medium',
+            shingle_type:     reqShingleType || calcMatPrefs.shingle_type || 'architectural',
+            tax_rate:         calcMatPrefs.tax_rate,
+            include_ventilation: calcMatPrefs.include_ventilation,
+            include_pipe_boots:  calcMatPrefs.include_pipe_boots,
           })
         } catch (e: any) {
           console.warn(`[CalculateFromTrace] BOM generation failed: ${e.message}`)
@@ -1278,13 +1289,19 @@ async function buildBomForOrder(env: any, orderId: number): Promise<DetailedMate
   } catch {
     return null
   }
+  // Load company material preferences
+  let bomMatPrefs: any = {}
+  try {
+    const mpRow = await env.DB.prepare('SELECT material_preferences FROM master_companies WHERE id = 1').first<any>()
+    if (mpRow?.material_preferences) bomMatPrefs = JSON.parse(mpRow.material_preferences)
+  } catch {}
   const km = tm.key_measurements || {}
   const lm = tm.linear_measurements || {}
   if (!km.total_roof_area_sloped_ft2) return null
   return estimateMaterials({
     address:          order.property_address || '',
     net_area_sqft:    km.total_roof_area_sloped_ft2,
-    waste_factor_pct: km.waste_factor_pct ?? 15,
+    waste_factor_pct: bomMatPrefs.waste_factor_pct ?? km.waste_factor_pct ?? 15,
     total_eave_lf:    lm.eaves_total_ft || 0,
     total_ridge_lf:   lm.ridges_total_ft || 0,
     total_hip_lf:     lm.hips_total_ft || 0,
@@ -1292,6 +1309,10 @@ async function buildBomForOrder(env: any, orderId: number): Promise<DetailedMate
     total_rake_lf:    lm.rakes_total_ft || 0,
     pitch_rise:       Math.round((km.dominant_pitch_rise ?? 5) * 10) / 10 || 5,
     complexity:       'medium',
+    shingle_type:     bomMatPrefs.shingle_type || 'architectural',
+    tax_rate:         bomMatPrefs.tax_rate,
+    include_ventilation: bomMatPrefs.include_ventilation,
+    include_pipe_boots:  bomMatPrefs.include_pipe_boots,
   })
 }
 
@@ -2600,6 +2621,13 @@ async function _generateReportForOrderInner(
     const solarApiKey = env.GOOGLE_SOLAR_API_KEY
     const mapsApiKey = env.GOOGLE_MAPS_API_KEY || solarApiKey
 
+    // Load company material preferences for BOM generation
+    let matPrefs: any = {}
+    try {
+      const mpRow = await env.DB.prepare('SELECT material_preferences FROM master_companies WHERE id = 1').first<any>()
+      if (mpRow?.material_preferences) matPrefs = JSON.parse(mpRow.material_preferences)
+    } catch {}
+
     // ═══════════════════════════════════════════════════════════
     // STEP 1: PARSE TRACE DATA (required for measurements)
     // The user MUST have traced eaves/ridges/hips/valleys on the
@@ -2871,7 +2899,8 @@ async function _generateReportForOrderInner(
       reportData.materials = computeMaterialEstimate(
         reportData.total_true_area_sqft,
         reportData.edges,
-        reportData.segments
+        reportData.segments,
+        matPrefs.shingle_type || 'architectural'
       )
 
       // Store trace measurement for reference

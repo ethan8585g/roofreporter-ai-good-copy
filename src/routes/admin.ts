@@ -14,18 +14,22 @@ export const adminRoutes = new Hono<{ Bindings: Bindings }>()
 // context on what the Material Catalog section is for when they first open it.
 async function seedDefaultMaterials(db: any, ownerId: number) {
   const defaults = [
-    { category: 'shingles',      name: 'Architectural Shingles (Laminate)',    unit: 'bundles', unit_price: 42.00,  coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', is_default: 1, sort_order: 1 },
-    { category: 'shingles',      name: '3-Tab Standard Shingles',              unit: 'bundles', unit_price: 32.00,  coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', is_default: 0, sort_order: 2 },
-    { category: 'underlayment',  name: 'Synthetic Underlayment',               unit: 'rolls',   unit_price: 95.00,  coverage_per_unit: '400 sq ft per roll',                     is_default: 1, sort_order: 3 },
-    { category: 'ice_shield',    name: 'Ice & Water Shield Membrane',          unit: 'rolls',   unit_price: 165.00, coverage_per_unit: '200 sq ft per roll',                     is_default: 1, sort_order: 4 },
-    { category: 'starter',       name: 'Starter Strip Shingles',              unit: 'boxes',   unit_price: 45.00,  coverage_per_unit: '100 lin ft per box',                     is_default: 1, sort_order: 5 },
-    { category: 'ridge_cap',     name: 'Ridge/Hip Cap Shingles',              unit: 'bundles', unit_price: 65.00,  coverage_per_unit: '35 lin ft per bundle',                   is_default: 1, sort_order: 6 },
-    { category: 'drip_edge',     name: 'Aluminum Drip Edge (Type C/D)',       unit: 'pieces',  unit_price: 8.50,   coverage_per_unit: '10 ft per piece',                        is_default: 1, sort_order: 7 },
-    { category: 'valley_metal',  name: 'W-Valley Flashing (Aluminum)',        unit: 'pieces',  unit_price: 22.00,  coverage_per_unit: '10 ft per piece',                        is_default: 1, sort_order: 8 },
-    { category: 'nails',         name: 'Roofing Nails 1-1/4" Galvanized',    unit: 'boxes',   unit_price: 28.00,  coverage_per_unit: '5 lb box (~2 squares)',                  is_default: 1, sort_order: 9 },
-    { category: 'ventilation',   name: 'Ridge Vent',                          unit: 'pieces',  unit_price: 22.00,  coverage_per_unit: '4 ft per piece',                         is_default: 1, sort_order: 10 },
-    { category: 'custom',        name: 'Roofing Cement / Caulk',             unit: 'tubes',   unit_price: 8.50,   coverage_per_unit: '~1 tube per 5 squares',                  is_default: 1, sort_order: 11 },
-    { category: 'custom',        name: 'Pipe Boot / Collar',                 unit: 'pieces',  unit_price: 18.00,  coverage_per_unit: '~2 per 1000 sq ft',                      is_default: 0, sort_order: 12 },
+    { category: 'shingles',      name: '3-Tab Standard Shingles',              unit: 'bundles', unit_price: 32.00,  coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', is_default: 0, sort_order: 1 },
+    { category: 'shingles',      name: 'Architectural Shingles (Laminate)',    unit: 'bundles', unit_price: 42.00,  coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', is_default: 1, sort_order: 2 },
+    { category: 'shingles',      name: 'Premium Architectural Shingles',       unit: 'bundles', unit_price: 55.00,  coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', is_default: 0, sort_order: 3 },
+    { category: 'shingles',      name: 'Designer / Luxury Shingles',           unit: 'bundles', unit_price: 72.00,  coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', is_default: 0, sort_order: 4 },
+    { category: 'shingles',      name: 'Impact-Resistant Shingles (Class 4)',  unit: 'bundles', unit_price: 62.00,  coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', is_default: 0, sort_order: 5 },
+    { category: 'shingles',      name: 'Steel / Metal Shingles',               unit: 'bundles', unit_price: 95.00,  coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', is_default: 0, sort_order: 6 },
+    { category: 'underlayment',  name: 'Synthetic Underlayment',               unit: 'rolls',   unit_price: 95.00,  coverage_per_unit: '400 sq ft per roll',                     is_default: 1, sort_order: 7 },
+    { category: 'ice_shield',    name: 'Ice & Water Shield Membrane',          unit: 'rolls',   unit_price: 165.00, coverage_per_unit: '200 sq ft per roll',                     is_default: 1, sort_order: 8 },
+    { category: 'starter',       name: 'Starter Strip Shingles',              unit: 'boxes',   unit_price: 45.00,  coverage_per_unit: '100 lin ft per box',                     is_default: 1, sort_order: 9 },
+    { category: 'ridge_cap',     name: 'Ridge/Hip Cap Shingles',              unit: 'bundles', unit_price: 65.00,  coverage_per_unit: '35 lin ft per bundle',                   is_default: 1, sort_order: 10 },
+    { category: 'drip_edge',     name: 'Aluminum Drip Edge (Type C/D)',       unit: 'pieces',  unit_price: 8.50,   coverage_per_unit: '10 ft per piece',                        is_default: 1, sort_order: 11 },
+    { category: 'valley_metal',  name: 'W-Valley Flashing (Aluminum)',        unit: 'pieces',  unit_price: 22.00,  coverage_per_unit: '10 ft per piece',                        is_default: 1, sort_order: 12 },
+    { category: 'nails',         name: 'Roofing Nails 1-1/4" Galvanized',    unit: 'boxes',   unit_price: 28.00,  coverage_per_unit: '5 lb box (~2 squares)',                  is_default: 1, sort_order: 13 },
+    { category: 'ventilation',   name: 'Ridge Vent',                          unit: 'pieces',  unit_price: 22.00,  coverage_per_unit: '4 ft per piece',                         is_default: 1, sort_order: 14 },
+    { category: 'custom',        name: 'Roofing Cement / Caulk',             unit: 'tubes',   unit_price: 8.50,   coverage_per_unit: '~1 tube per 5 squares',                  is_default: 1, sort_order: 15 },
+    { category: 'custom',        name: 'Pipe Boot / Collar',                 unit: 'pieces',  unit_price: 18.00,  coverage_per_unit: '~2 per 1000 sq ft',                      is_default: 0, sort_order: 16 },
   ]
   for (const d of defaults) {
     await db.prepare(
@@ -167,6 +171,40 @@ adminRoutes.get('/dashboard', async (c) => {
   } catch (err: any) {
     return c.json({ error: 'Failed to load dashboard', details: err.message }, 500)
   }
+})
+
+// ============================================================
+// MATERIAL PREFERENCES — Company-level defaults for BOM engine
+// ============================================================
+adminRoutes.get('/material-preferences', async (c) => {
+  const row = await c.env.DB.prepare(
+    'SELECT material_preferences FROM master_companies WHERE id = 1'
+  ).first<any>()
+  const defaults = {
+    shingle_type: 'architectural',
+    waste_factor_pct: 15,
+    include_ventilation: true,
+    include_pipe_boots: true,
+    tax_rate: 0.05,
+  }
+  let prefs = defaults
+  if (row?.material_preferences) {
+    try { prefs = { ...defaults, ...JSON.parse(row.material_preferences) } } catch {}
+  }
+  return c.json({ preferences: prefs })
+})
+
+adminRoutes.put('/material-preferences', async (c) => {
+  const body = await c.req.json()
+  const allowed = ['shingle_type', 'waste_factor_pct', 'include_ventilation', 'include_pipe_boots', 'tax_rate']
+  const prefs: any = { _saved: true }
+  for (const key of allowed) {
+    if (body[key] !== undefined) prefs[key] = body[key]
+  }
+  await c.env.DB.prepare(
+    "UPDATE master_companies SET material_preferences = ?, updated_at = datetime('now') WHERE id = 1"
+  ).bind(JSON.stringify(prefs)).run()
+  return c.json({ success: true, preferences: prefs })
 })
 
 // ============================================================

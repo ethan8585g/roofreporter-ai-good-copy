@@ -83,6 +83,7 @@ function renderSettings() {
 
   const sections = [
     { id: 'company', label: 'Company Profile', icon: 'fa-building' },
+    { id: 'materials', label: 'Material Defaults', icon: 'fa-layer-group' },
     { id: 'apikeys', label: 'API Keys', icon: 'fa-key' },
     { id: 'pricing', label: 'Pricing & Billing', icon: 'fa-dollar-sign' },
     { id: 'sip', label: 'SIP Bridge / Telephony', icon: 'fa-phone-alt' },
@@ -107,6 +108,7 @@ function renderSettings() {
       <!-- Content -->
       <div class="md:col-span-3">
         ${settingsState.activeSection === 'company' ? renderCompanySection() : ''}
+        ${settingsState.activeSection === 'materials' ? renderMaterialsSection() : ''}
         ${settingsState.activeSection === 'apikeys' ? renderApiKeysSection() : ''}
         ${settingsState.activeSection === 'pricing' ? renderPricingSection() : ''}
         ${settingsState.activeSection === 'sip' ? renderSipSection() : ''}
@@ -117,6 +119,16 @@ function renderSettings() {
   // Load SIP data when SIP tab is selected
   if (settingsState.activeSection === 'sip') {
     loadSipTrunks();
+  }
+
+  // Load material preferences when materials tab is selected
+  if (settingsState.activeSection === 'materials') {
+    loadMaterialPreferences().then(() => {
+      const contentEl = document.querySelector('.md\\:col-span-3');
+      if (contentEl && settingsState.activeSection === 'materials') {
+        contentEl.innerHTML = renderMaterialsSection();
+      }
+    });
   }
 
   // ALWAYS reload pricing data when pricing tab is selected (never use stale cache)
@@ -982,6 +994,188 @@ function showSipMsg(type, msg) {
   el.className = type === 'error'
     ? 'mt-4 p-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200'
     : 'mt-4 p-3 rounded-lg text-sm bg-green-50 text-green-700 border border-green-200';
+  el.innerHTML = msg;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 8000);
+}
+
+// ============================================================
+// MATERIAL DEFAULTS — Shingle type, waste factor, tax rate
+// ============================================================
+
+const SHINGLE_CATALOG = {
+  '3tab':             { name: '3-Tab Standard',           price: '$32/bdl', warranty: '25-year', wind: '96 km/h',  weight: '210 lbs/sq', examples: 'IKO Marathon, GAF Royal Sovereign, CertainTeed XT 25', desc: 'Budget-friendly strip shingle. Flat, uniform look.' },
+  'architectural':    { name: 'Architectural (Laminate)',  price: '$42/bdl', warranty: '30-year', wind: '210 km/h', weight: '250 lbs/sq', examples: 'IKO Cambridge, GAF Timberline HDZ, CertainTeed Landmark', desc: 'Industry standard. Dimensional shadow lines, enhanced wind resistance.' },
+  'premium':          { name: 'Premium Architectural',     price: '$55/bdl', warranty: 'Ltd. Lifetime', wind: '210 km/h', weight: '280 lbs/sq', examples: 'IKO Dynasty, GAF Timberline AS II, CertainTeed Landmark PRO', desc: 'SBS-modified bitumen, algae resistant, superior flexibility.' },
+  'designer':         { name: 'Designer / Luxury',         price: '$72/bdl', warranty: 'Lifetime', wind: '210 km/h', weight: '350 lbs/sq', examples: 'GAF Camelot II, CertainTeed Grand Manor, Owens Corning Berkshire', desc: 'Multi-layered premium. Mimics slate or cedar shake.' },
+  'impact_resistant': { name: 'Impact-Resistant (Class 4)', price: '$62/bdl', warranty: 'Ltd. Lifetime', wind: '210 km/h', weight: '290 lbs/sq', examples: 'IKO Nordic IR, GAF Armor Shield II, CertainTeed Landmark IR', desc: 'UL 2218 Class 4 hail rated. May qualify for insurance discounts.' },
+  'metal':            { name: 'Steel / Metal Shingles',    price: '$95/bdl', warranty: '50-year', wind: '200 km/h', weight: '150 lbs/sq', examples: 'EDCO Infiniti, Decra Shingle XD', desc: 'Interlocking steel panels. Fireproof, lightweight, extremely durable.' },
+};
+
+let materialPrefs = null;
+
+async function loadMaterialPreferences() {
+  try {
+    const res = await fetch('/api/admin/material-preferences', { headers: settingsHeaders() });
+    if (res.ok) {
+      const data = await res.json();
+      materialPrefs = data.preferences;
+    }
+  } catch (e) {
+    console.error('Material preferences load error:', e);
+  }
+}
+
+function renderMaterialsSection() {
+  const p = materialPrefs || { shingle_type: 'architectural', waste_factor_pct: 15, tax_rate: 0.05, include_ventilation: true, include_pipe_boots: true };
+  const wastOptions = [10, 12, 15, 17, 20];
+
+  return `
+    <div class="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-1">
+        <i class="fas fa-layer-group mr-2 text-brand-500"></i>Material Defaults
+      </h3>
+      <p class="text-sm text-gray-500 mb-6">Set your preferred shingle type and material settings. These defaults apply automatically to every new report.</p>
+
+      <div id="materialMsg" class="hidden mb-4"></div>
+
+      <!-- Shingle Type -->
+      <label class="block text-sm font-semibold text-gray-700 mb-2">Shingle Type</label>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6" id="shingleGrid">
+        ${Object.entries(SHINGLE_CATALOG).map(([key, s]) => `
+          <div onclick="selectShingle('${key}')" id="shingle-${key}"
+            class="cursor-pointer rounded-xl border-2 p-4 transition-all hover:shadow-md
+            ${p.shingle_type === key ? 'border-brand-500 bg-brand-50 shadow-md ring-2 ring-brand-200' : 'border-gray-200 bg-white hover:border-gray-300'}">
+            <div class="flex items-start justify-between mb-2">
+              <span class="font-bold text-sm text-gray-800">${s.name}</span>
+              ${p.shingle_type === key ? '<span class="text-brand-600 text-xs font-bold"><i class="fas fa-check-circle"></i></span>' : ''}
+            </div>
+            <p class="text-xs text-gray-500 mb-3">${s.desc}</p>
+            <div class="grid grid-cols-2 gap-1 text-xs">
+              <div class="text-gray-600"><i class="fas fa-dollar-sign text-green-500 mr-1"></i>${s.price}</div>
+              <div class="text-gray-600"><i class="fas fa-shield-alt text-blue-500 mr-1"></i>${s.warranty}</div>
+              <div class="text-gray-600"><i class="fas fa-wind text-cyan-500 mr-1"></i>${s.wind}</div>
+              <div class="text-gray-600"><i class="fas fa-weight-hanging text-amber-500 mr-1"></i>${s.weight}</div>
+            </div>
+            <div class="mt-2 text-[10px] text-gray-400 italic truncate" title="${s.examples}">${s.examples}</div>
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- Waste Factor -->
+      <label class="block text-sm font-semibold text-gray-700 mb-2">Default Waste Factor</label>
+      <div class="flex gap-2 mb-6">
+        ${wastOptions.map(w => `
+          <button onclick="selectWaste(${w})" id="waste-${w}"
+            class="px-4 py-2 rounded-lg text-sm font-bold transition-all
+            ${p.waste_factor_pct === w ? 'bg-brand-500 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}">
+            ${w}%
+          </button>
+        `).join('')}
+      </div>
+
+      <!-- Tax Rate & Toggles -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1">Tax Rate (%)</label>
+          <input id="matTaxRate" type="number" step="0.5" min="0" max="20" value="${(p.tax_rate * 100).toFixed(1)}"
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-brand-400 focus:border-brand-400">
+          <p class="text-xs text-gray-400 mt-1">Alberta GST = 5%, Ontario HST = 13%</p>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1">Include Ridge Vent</label>
+          <button onclick="toggleMatPref('include_ventilation')" id="matVent"
+            class="px-4 py-2 rounded-lg text-sm font-bold transition-all
+            ${p.include_ventilation ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}">
+            ${p.include_ventilation ? 'Yes' : 'No'}
+          </button>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1">Include Pipe Boots</label>
+          <button onclick="toggleMatPref('include_pipe_boots')" id="matPipe"
+            class="px-4 py-2 rounded-lg text-sm font-bold transition-all
+            ${p.include_pipe_boots ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}">
+            ${p.include_pipe_boots ? 'Yes' : 'No'}
+          </button>
+        </div>
+      </div>
+
+      <!-- Save Button -->
+      <button onclick="saveMaterialPreferences()" id="matSaveBtn"
+        class="w-full sm:w-auto px-8 py-3 rounded-xl font-bold text-white bg-brand-500 hover:bg-brand-600 transition-all shadow-md">
+        <i class="fas fa-save mr-2"></i>Save Material Defaults
+      </button>
+    </div>
+  `;
+}
+
+function selectShingle(key) {
+  if (!materialPrefs) materialPrefs = {};
+  materialPrefs.shingle_type = key;
+  const contentEl = document.querySelector('.md\\:col-span-3');
+  if (contentEl) contentEl.innerHTML = renderMaterialsSection();
+}
+
+function selectWaste(pct) {
+  if (!materialPrefs) materialPrefs = {};
+  materialPrefs.waste_factor_pct = pct;
+  [10, 12, 15, 17, 20].forEach(w => {
+    const btn = document.getElementById('waste-' + w);
+    if (btn) {
+      btn.className = w === pct
+        ? 'px-4 py-2 rounded-lg text-sm font-bold transition-all bg-brand-500 text-white shadow-md'
+        : 'px-4 py-2 rounded-lg text-sm font-bold transition-all bg-gray-100 text-gray-600 hover:bg-gray-200';
+    }
+  });
+}
+
+function toggleMatPref(field) {
+  if (!materialPrefs) materialPrefs = {};
+  materialPrefs[field] = !materialPrefs[field];
+  const contentEl = document.querySelector('.md\\:col-span-3');
+  if (contentEl) contentEl.innerHTML = renderMaterialsSection();
+}
+
+async function saveMaterialPreferences() {
+  const btn = document.getElementById('matSaveBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...'; }
+
+  const taxInput = document.getElementById('matTaxRate');
+  const taxVal = taxInput ? parseFloat(taxInput.value) : 5;
+
+  const prefs = {
+    shingle_type: materialPrefs?.shingle_type || 'architectural',
+    waste_factor_pct: materialPrefs?.waste_factor_pct || 15,
+    tax_rate: Math.max(0, Math.min(20, taxVal)) / 100,
+    include_ventilation: materialPrefs?.include_ventilation !== false,
+    include_pipe_boots: materialPrefs?.include_pipe_boots !== false,
+  };
+
+  try {
+    const res = await fetch('/api/admin/material-preferences', {
+      method: 'PUT',
+      headers: settingsHeaders(),
+      body: JSON.stringify(prefs)
+    });
+    const data = await res.json();
+    if (data.success) {
+      materialPrefs = prefs;
+      showMatMsg('success', '<i class="fas fa-check-circle mr-1"></i>Material defaults saved. All future reports will use these settings automatically.');
+    } else {
+      showMatMsg('error', data.error || 'Save failed');
+    }
+  } catch (e) {
+    showMatMsg('error', 'Network error: ' + e.message);
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Material Defaults'; }
+}
+
+function showMatMsg(type, msg) {
+  const el = document.getElementById('materialMsg');
+  if (!el) return;
+  el.className = type === 'error'
+    ? 'mb-4 p-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200'
+    : 'mb-4 p-3 rounded-lg text-sm bg-green-50 text-green-700 border border-green-200';
   el.innerHTML = msg;
   el.classList.remove('hidden');
   setTimeout(() => el.classList.add('hidden'), 8000);

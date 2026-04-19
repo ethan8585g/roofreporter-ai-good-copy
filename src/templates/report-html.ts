@@ -233,31 +233,14 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         <span class="pt-value" style="font-size:12px">${netAreaSF.toLocaleString()} SF</span>
       </div>
 
-      <!-- Slope classifications (only show categories with area) -->
       <div class="pt-row">
         <span class="pt-label">Predominant Pitch</span>
-        <span class="pt-value">${predominantPitch}</span>
+        <span class="pt-value">${predominantPitch} <span class="pt-sub">(${predominantPitchDeg.toFixed(1)}°)</span></span>
       </div>
-      ${slopeClasses.standard > 0 ? `<div class="pt-row">
-        <span class="pt-label">Standard Slope<span class="pt-sub">(4:12–9:12)</span></span>
-        <span class="pt-value">${slopeClasses.standard.toLocaleString()} SF</span>
-      </div>` : ''}
-      ${slopeClasses.flat > 0 ? `<div class="pt-row">
-        <span class="pt-label">Flat Slope<span class="pt-sub">(0:12–2:12)</span></span>
-        <span class="pt-value">${slopeClasses.flat.toLocaleString()} SF</span>
-      </div>` : ''}
-      ${slopeClasses.low > 0 ? `<div class="pt-row">
-        <span class="pt-label">Low Slope<span class="pt-sub">(2:12–4:12)</span></span>
-        <span class="pt-value">${slopeClasses.low.toLocaleString()} SF</span>
-      </div>` : ''}
-      ${slopeClasses.steep > 0 ? `<div class="pt-row">
-        <span class="pt-label">Steep Slope<span class="pt-sub">(9:12 or greater)</span></span>
-        <span class="pt-value">${slopeClasses.steep.toLocaleString()} SF</span>
-      </div>` : ''}
-      ${slopeClasses.high_roof > 0 ? `<div class="pt-row">
-        <span class="pt-label">High Roof<span class="pt-sub">(over 1 storey)</span></span>
-        <span class="pt-value">${slopeClasses.high_roof.toLocaleString()} SF</span>
-      </div>` : ''}
+      <div class="pt-row">
+        <span class="pt-label">Gross Area<span class="pt-sub">(w/${mat.waste_pct || 15}% waste)</span></span>
+        <span class="pt-value">${grossAreaSF.toLocaleString()} SF</span>
+      </div>
       <div class="pt-row">
         <span class="pt-label">IWB<span class="pt-sub">(Ice &amp; Water Barrier)</span></span>
         <span class="pt-value">${iwbSqFt} SF</span>
@@ -330,8 +313,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
   <!-- Title -->
   <div style="padding:10px 28px 6px">
-    <div style="font-size:14px;font-weight:800;color:#222">Roof Area Analysis${structuresBreakdown.length >= 2 ? ` — All Structures (${structuresBreakdown.length})` : ' — Structure 1'}</div>
-    <div style="font-size:11px;color:#555">${fullAddress}</div>
+    <div style="font-size:14px;font-weight:800;color:#222">Roof Area Analysis${structuresBreakdown.length >= 2 ? ` — All Structures (${structuresBreakdown.length})` : ''}</div>
   </div>
 
   <!-- Main diagram area -->
@@ -385,14 +367,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         </tbody>
       </table>
 
-      <!-- Total Area Summary (compact) -->
-      <div style="margin-top:6px;border:1px solid #ddd;border-radius:4px;overflow:hidden">
-        <div style="background:${TEAL};color:#fff;padding:4px 8px;font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Total Area Summary</div>
-        <div style="display:flex;justify-content:space-between;padding:4px 8px;font-size:8px;border-bottom:1px solid #eee"><span>Total Roof Area</span><span style="font-weight:800">${netAreaSF.toLocaleString()} SF</span></div>
-        <div style="display:flex;justify-content:space-between;padding:4px 8px;font-size:8px;border-bottom:1px solid #eee"><span>Total Perimeter</span><span style="font-weight:700">${totalPerimeter} LF</span></div>
-        <div style="display:flex;justify-content:space-between;padding:4px 8px;font-size:8px;border-bottom:1px solid #eee"><span>Predominant Pitch</span><span style="font-weight:700">${predominantPitch}</span></div>
-        <div style="display:flex;justify-content:space-between;padding:4px 8px;font-size:8px;background:${TEAL_LIGHT}"><span style="font-weight:700;color:${TEAL_DARK}">Gross Area (w/${mat.waste_pct || 15}% waste)</span><span style="font-weight:900;color:${TEAL_DARK}">${grossAreaSF.toLocaleString()} SF</span></div>
-      </div>
+      <!-- Total Area Summary consolidated into Page 1 Project Totals -->
     </div>
 
     <!-- RIGHT TABLE: Area by Roof Plane + Area by Pitch -->
@@ -448,31 +423,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
     </div>
   </div>
 
-  <!-- Key Project Totals summary strip -->
-  <div style="padding:0 28px;margin-top:4px">
-    <div style="display:flex;gap:0;border:1px solid #ccc;border-radius:4px;overflow:hidden;font-size:8px">
-      <div style="flex:1;text-align:center;padding:5px 4px;background:#f5f5f5;border-right:1px solid #ddd">
-        <div style="font-size:6.5px;color:#888;font-weight:700;text-transform:uppercase">Total Ridge</div>
-        <div style="font-size:12px;font-weight:900;color:#DC2626">${es.total_ridge_ft} <span style="font-size:7px;font-weight:600">LF</span></div>
-      </div>
-      <div style="flex:1;text-align:center;padding:5px 4px;background:#f5f5f5;border-right:1px solid #ddd">
-        <div style="font-size:6.5px;color:#888;font-weight:700;text-transform:uppercase">Total Eave</div>
-        <div style="font-size:12px;font-weight:900;color:#16A34A">${es.total_eave_ft} <span style="font-size:7px;font-weight:600">LF</span></div>
-      </div>
-      <div style="flex:1;text-align:center;padding:5px 4px;background:#f5f5f5;border-right:1px solid #ddd">
-        <div style="font-size:6.5px;color:#888;font-weight:700;text-transform:uppercase">Total Valley</div>
-        <div style="font-size:12px;font-weight:900;color:#2563EB">${es.total_valley_ft} <span style="font-size:7px;font-weight:600">LF</span></div>
-      </div>
-      <div style="flex:1;text-align:center;padding:5px 4px;background:#f5f5f5;border-right:1px solid #ddd">
-        <div style="font-size:6.5px;color:#888;font-weight:700;text-transform:uppercase">Total Hip</div>
-        <div style="font-size:12px;font-weight:900;color:#EA580C">${es.total_hip_ft} <span style="font-size:7px;font-weight:600">LF</span></div>
-      </div>
-      <div style="flex:1;text-align:center;padding:5px 4px;background:${TEAL_LIGHT}">
-        <div style="font-size:6.5px;color:${TEAL_DARK};font-weight:700;text-transform:uppercase">Total Area (w/waste)</div>
-        <div style="font-size:12px;font-weight:900;color:${TEAL_DARK}">${grossAreaSF.toLocaleString()} <span style="font-size:7px;font-weight:600">SF</span></div>
-      </div>
-    </div>
-  </div>
+  <!-- Edge totals consolidated into Page 1 Project Totals -->
 
   <!-- Per-Structure Measurement Breakdown (house + detached garage, etc.) -->
   ${structuresBreakdown.length >= 2 ? `
@@ -541,139 +492,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
 
 
-<!-- ==================== PITCH DIAGRAM PAGE ==================== -->
-${report.segments.length >= 2 ? `
-<div class="page">
-  <!-- Top indigo accent bar -->
-  <div style="height:4px;background:linear-gradient(90deg,#4338ca,#6366f1)"></div>
-
-  <!-- Title -->
-  <div style="padding:12px 28px 6px">
-    <div style="font-size:14px;font-weight:800;color:#222">Pitch &amp; Slope Analysis<span style="font-weight:400;color:#555"> &mdash; ${structuresBreakdown.length >= 2 ? `All ${structuresBreakdown.length} Structures` : 'Structure 1'}</span></div>
-    <div style="font-size:11px;color:#555">${fullAddress}</div>
-  </div>
-
-  <!-- Pitch Diagram SVG — Top-down wireframe of roof planes with pitch labels -->
-  <div style="padding:0 22px;margin-bottom:8px">
-    <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center">
-      ${architecturalDiagramSVG}
-    </div>
-    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">Roof plane wireframe with facet identification numbers. Pitch values mapped per plane below.</div>
-  </div>
-
-  <!-- Area by Pitch Table (Full Width) -->
-  <div style="padding:0 28px;margin-bottom:10px">
-    <div style="font-size:11px;font-weight:800;color:#333;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;border-bottom:2px solid #4338ca;padding-bottom:4px">Area by Pitch</div>
-    <table style="width:100%;border-collapse:collapse;font-size:9px">
-      <thead>
-        <tr style="background:#1e1b4b;color:#fff">
-          <th style="padding:6px 10px;text-align:left;font-size:8px;font-weight:700">Pitch Range</th>
-          <th style="padding:6px 10px;text-align:left;font-size:8px;font-weight:700">Classification</th>
-          <th style="padding:6px 10px;text-align:right;font-size:8px;font-weight:700">Roof Area (SF)</th>
-          <th style="padding:6px 10px;text-align:right;font-size:8px;font-weight:700">Area (SF)</th>
-          <th style="padding:6px 10px;text-align:right;font-size:8px;font-weight:700">% of Total</th>
-          <th style="padding:6px 10px;text-align:center;font-size:8px;font-weight:700">Multiplier</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${slopeClasses.flat > 0 ? `<tr style="border-bottom:1px solid #eee">
-          <td style="padding:5px 10px;font-weight:600">0:12 \u2013 2:12</td>
-          <td style="padding:5px 10px"><span style="padding:2px 8px;border-radius:3px;font-size:7.5px;font-weight:700;background:#dbeafe;color:#1d4ed8">FLAT</span></td>
-          <td style="padding:5px 10px;text-align:right;font-weight:700">${slopeClasses.flat.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right">${slopeClasses.flat.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;font-weight:600">${Math.round(slopeClasses.flat / netAreaSF * 1000) / 10}%</td>
-          <td style="padding:5px 10px;text-align:center;color:#555">1.0000\u20131.0154</td>
-        </tr>` : ''}
-        ${slopeClasses.low > 0 ? `<tr style="border-bottom:1px solid #eee;background:#fafafa">
-          <td style="padding:5px 10px;font-weight:600">2:12 \u2013 4:12</td>
-          <td style="padding:5px 10px"><span style="padding:2px 8px;border-radius:3px;font-size:7.5px;font-weight:700;background:#fef3c7;color:#92400e">LOW</span></td>
-          <td style="padding:5px 10px;text-align:right;font-weight:700">${slopeClasses.low.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right">${slopeClasses.low.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;font-weight:600">${Math.round(slopeClasses.low / netAreaSF * 1000) / 10}%</td>
-          <td style="padding:5px 10px;text-align:center;color:#555">1.0154\u20131.0541</td>
-        </tr>` : ''}
-        ${slopeClasses.standard > 0 ? `<tr style="border-bottom:1px solid #eee;background:#f0fdf4">
-          <td style="padding:5px 10px;font-weight:700;color:#166534">4:12 \u2013 9:12</td>
-          <td style="padding:5px 10px"><span style="padding:2px 8px;border-radius:3px;font-size:7.5px;font-weight:700;background:#dcfce7;color:#166534">STANDARD</span></td>
-          <td style="padding:5px 10px;text-align:right;font-weight:800;color:#166534">${slopeClasses.standard.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;color:#166534">${slopeClasses.standard.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;font-weight:700;color:#166534">${Math.round(slopeClasses.standard / netAreaSF * 1000) / 10}%</td>
-          <td style="padding:5px 10px;text-align:center;color:#166534;font-weight:600">1.0541\u20131.2500</td>
-        </tr>` : ''}
-        ${slopeClasses.steep > 0 ? `<tr style="border-bottom:1px solid #eee;background:#fef2f2">
-          <td style="padding:5px 10px;font-weight:700;color:#991b1b">9:12+</td>
-          <td style="padding:5px 10px"><span style="padding:2px 8px;border-radius:3px;font-size:7.5px;font-weight:700;background:#fecaca;color:#991b1b">STEEP</span></td>
-          <td style="padding:5px 10px;text-align:right;font-weight:800;color:#991b1b">${slopeClasses.steep.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;color:#991b1b">${slopeClasses.steep.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;font-weight:700;color:#991b1b">${Math.round(slopeClasses.steep / netAreaSF * 1000) / 10}%</td>
-          <td style="padding:5px 10px;text-align:center;color:#991b1b;font-weight:600">1.2500+</td>
-        </tr>` : ''}
-        <tr style="background:#eef2ff;font-weight:800;border-top:2px solid #4338ca">
-          <td colspan="2" style="padding:5px 10px;font-size:9px;color:#312e81">TOTAL</td>
-          <td style="padding:5px 10px;text-align:right;font-size:10px;color:#312e81">${netAreaSF.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;color:#312e81">${report.total_true_area_sqft.toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;color:#312e81">100%</td>
-          <td style="padding:5px 10px;text-align:center;color:#312e81">${report.area_multiplier.toFixed(4)}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- Per-Facet Pitch Detail Table -->
-  <div style="padding:0 28px;margin-bottom:8px">
-    <div style="font-size:10px;font-weight:800;color:#333;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Facet-Level Pitch Detail</div>
-    <table style="width:100%;border-collapse:collapse;font-size:8px">
-      <thead>
-        <tr style="background:#f1f5f9;border-bottom:1.5px solid #94a3b8">
-          <th style="padding:4px 6px;text-align:left;font-weight:700;color:#475569">Facet</th>
-          <th style="padding:4px 6px;text-align:left;font-weight:700;color:#475569">Name</th>
-          <th style="padding:4px 6px;text-align:center;font-weight:700;color:#475569">Direction</th>
-          <th style="padding:4px 6px;text-align:center;font-weight:700;color:#475569">Pitch</th>
-          <th style="padding:4px 6px;text-align:center;font-weight:700;color:#475569">Degrees</th>
-          <th style="padding:4px 6px;text-align:right;font-weight:700;color:#475569">Area (SF)</th>
-          <th style="padding:4px 6px;text-align:right;font-weight:700;color:#475569">Area (SF)</th>
-          <th style="padding:4px 6px;text-align:center;font-weight:700;color:#475569">Classification</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${report.segments.slice(0, 16).map((seg, idx) => {
-          const pitchDeg = seg.pitch_degrees || 0
-          const rise = 12 * Math.tan(pitchDeg * Math.PI / 180)
-          const validRise = !isNaN(rise) && isFinite(rise) ? rise : 0
-          const classification = validRise <= 2 ? 'Flat' : validRise <= 4 ? 'Low' : validRise <= 9 ? 'Standard' : 'Steep'
-          const classColor = validRise <= 2 ? '#1d4ed8' : validRise <= 4 ? '#92400e' : validRise <= 9 ? '#166534' : '#991b1b'
-          const classBg = validRise <= 2 ? '#dbeafe' : validRise <= 4 ? '#fef3c7' : validRise <= 9 ? '#dcfce7' : '#fecaca'
-          const displayPitch = seg.pitch_ratio || (pitchDeg ? `${Math.round(rise * 10) / 10}:12` : '—')
-          return `<tr style="${idx % 2 === 0 ? '' : 'background:#fafafa'};border-bottom:1px solid #eee">
-            <td style="padding:3px 6px;font-weight:700;font-size:9px">${segFaceLetters[idx]}</td>
-            <td style="padding:3px 6px;font-size:7.5px;color:#555">${seg.name || 'Facet ' + (idx + 1)}</td>
-            <td style="padding:3px 6px;text-align:center;font-weight:600">${seg.azimuth_direction || '\u2014'}</td>
-            <td style="padding:3px 6px;text-align:center;font-weight:700">${displayPitch}</td>
-            <td style="padding:3px 6px;text-align:center;color:#555">${pitchDeg.toFixed(1)}\u00B0</td>
-            <td style="padding:3px 6px;text-align:right">${Math.round(seg.true_area_sqft).toLocaleString()}</td>
-            <td style="padding:3px 6px;text-align:right;font-weight:600">${(Math.round(seg.true_area_sqft)).toLocaleString()}</td>
-            <td style="padding:3px 6px;text-align:center"><span style="padding:1px 6px;border-radius:2px;font-size:6.5px;font-weight:700;background:${classBg};color:${classColor}">${classification}</span></td>
-          </tr>`
-        }).join('')}
-        ${report.segments.length > 16 ? `<tr><td colspan="8" style="padding:4px 6px;font-size:7px;color:#888;text-align:center">+ ${report.segments.length - 16} more facets</td></tr>` : ''}
-      </tbody>
-    </table>
-  </div>
-
-  <!-- Pitch Reference Note -->
-  <div style="padding:0 28px">
-    <div style="padding:5px 10px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:3px;font-size:6.5px;color:#4338ca;line-height:1.4">
-      <strong>Pitch Reference:</strong> Standard walkable slope = 4:12\u20139:12 (18.4\u00B0\u201336.9\u00B0). Multiplier = \u221A(rise\u00B2 + 12\u00B2) \u00F7 12. Steep slope (9:12+) may require additional safety equipment and labor. &mdash; GAF/CertainTeed/IKO guidelines.
-    </div>
-  </div>
-
-  <!-- Footer bar -->
-  <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,#4338ca,#6366f1);display:flex;align-items:center;justify-content:space-between;padding:0 28px">
-    <span style="color:#fff;font-size:9px;font-weight:700">Roof Manager</span>
-    <span style="color:#c7d2fe;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Pitch Analysis</span>
-  </div>
-</div>
-` : ''}
+<!-- Pitch Analysis data consolidated into Page 2 Area by Pitch table -->
 
 ${report.customer_price_per_bundle ? buildCustomerPricingHTML(report) : ''}
 
@@ -1279,8 +1098,19 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
     caulk_tubes: Math.max(2, Math.ceil(netArea / 1000))
   }
 
+  // Resolve shingle name from the materials line_items if available
+  const shingleLine = mat.line_items?.find((li: any) => li.category === 'shingles')
+  const shingleName = shingleLine?.description?.replace(' Shingles', '') || 'Architectural (Laminate)'
+  const shingleNote = shingleLine?.notes
+  // Extract warranty/wind from notes like "IKO Cambridge... | 30-year warranty | Wind: 210 km/h | Class A"
+  const warrantyMatch = shingleNote?.match(/(\d+[-\s]?year|Ltd\.\s*Lifetime|Lifetime|Limited Lifetime)/i)
+  const windMatch = shingleNote?.match(/Wind:\s*(\d+)\s*km\/h/i)
+  const shingleWarranty = warrantyMatch ? warrantyMatch[1] : ''
+  const shingleWind = windMatch ? windMatch[1] + ' km/h' : ''
+  const shingleSpec = [shingleWarranty ? shingleWarranty + ' warranty' : '', shingleWind ? 'Wind: ' + shingleWind : ''].filter(Boolean).join(' | ')
+
   const items = [
-    { cat: 'Field Shingles', desc: 'Architectural shingles (3-tab alternative)', qty: m.shingles_bundles, unit: 'bundles', note: `${m.shingles_squares_gross} squares gross (${m.shingles_squares_net} net + ${wastePct}% waste)`, icon: '&#9632;', color: '#0891b2' },
+    { cat: 'Field Shingles', desc: shingleName + ' shingles', qty: m.shingles_bundles, unit: 'bundles', note: `${m.shingles_squares_gross} sq gross (${m.shingles_squares_net} net + ${wastePct}% waste)${shingleSpec ? ' | ' + shingleSpec : ''}`, icon: '&#9632;', color: '#0891b2' },
     { cat: 'Underlayment', desc: 'Synthetic roof underlayment (15 sq/roll)', qty: m.underlayment_rolls, unit: 'rolls', note: `Covers ${netArea.toLocaleString()} SF net roof area`, icon: '&#9632;', color: '#6366f1' },
     { cat: 'Ice &amp; Water Shield', desc: 'Self-adhering membrane (eave line × 3ft)', qty: m.ice_water_shield_rolls_2sq, unit: 'rolls (2 sq)', note: `${m.ice_water_shield_sqft.toLocaleString()} SF total IWB area`, icon: '&#10052;', color: '#2563eb' },
     { cat: 'Ridge Cap', desc: 'Hip &amp; ridge cap shingles', qty: m.ridge_cap_bundles, unit: 'bundles', note: `${m.ridge_cap_lf} LF total ridge + hip`, icon: '&#9650;', color: '#dc2626' },
@@ -1346,24 +1176,7 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
     </table>
   </div>
 
-  <!-- Waste Factor Visualization -->
-  <div style="padding:12px 28px 0">
-    <div style="font-size:9px;font-weight:800;color:#333;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Waste Factor Visualization</div>
-    <div style="display:flex;align-items:center;gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 16px">
-      <div style="flex:1">
-        <div style="height:20px;border-radius:10px;background:#e2e8f0;overflow:hidden;position:relative">
-          <div style="height:100%;width:${Math.round(100 / (1 + wastePct / 100))}%;background:linear-gradient(90deg,${TEAL},#26a69a);border-radius:10px 0 0 10px;position:relative">
-            <span style="position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:7px;font-weight:800;color:#fff">NET ${netArea.toLocaleString()} SF</span>
-          </div>
-          <div style="position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:7px;font-weight:700;color:#64748b">+${wastePct}% WASTE</div>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:7px;color:#94a3b8">
-          <span>0 SF</span>
-          <span style="font-weight:700;color:${TEAL_DARK}">${grossArea.toLocaleString()} SF gross</span>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- Waste factor table on Page 1 — not duplicated here -->
 
   <!-- Notes -->
   <div style="padding:10px 28px 0">
@@ -1525,7 +1338,6 @@ function buildCrossCheckAndAdvisoryPage(report: RoofReport, reportNum: string, r
   <div style="height:4px;background:linear-gradient(90deg,${NAVY},#334155)"></div>
   <div style="padding:12px 28px 8px">
     <div style="font-size:14px;font-weight:800;color:#222">Cross-Checks &amp; Advisory Notes</div>
-    <div style="font-size:10px;color:#555">${fullAddress}</div>
   </div>
 
   ${crossChecks.length > 0 ? `
@@ -1542,53 +1354,7 @@ function buildCrossCheckAndAdvisoryPage(report: RoofReport, reportNum: string, r
     </div>
   </div>` : ''}
 
-  ${tm ? `
-  <!-- Engine Measurement Summary -->
-  <div style="padding:0 28px 10px">
-    <div style="font-size:11px;font-weight:800;color:${NAVY};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;border-bottom:2px solid #3b82f6;padding-bottom:3px">
-      <span style="margin-right:6px">&#9881;</span>Measurement Engine Summary
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
-      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px;text-align:center">
-        <div style="font-size:7px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:0.5px">Projected Footprint</div>
-        <div style="font-size:18px;font-weight:900;color:#1d4ed8">${Math.round(tm.key_measurements.total_projected_footprint_ft2).toLocaleString()}</div>
-        <div style="font-size:8px;color:#3b82f6">sq ft</div>
-      </div>
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px;text-align:center">
-        <div style="font-size:7px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:0.5px">True Sloped Area</div>
-        <div style="font-size:18px;font-weight:900;color:#16a34a">${Math.round(tm.key_measurements.total_roof_area_sloped_ft2).toLocaleString()}</div>
-        <div style="font-size:8px;color:#22c55e">sq ft</div>
-      </div>
-      <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:6px;padding:10px;text-align:center">
-        <div style="font-size:7px;font-weight:700;color:#5b21b6;text-transform:uppercase;letter-spacing:0.5px">Gross Squares (w/waste)</div>
-        <div style="font-size:18px;font-weight:900;color:#7c3aed">${tm.key_measurements.total_squares_gross_w_waste}</div>
-        <div style="font-size:8px;color:#8b5cf6">squares</div>
-      </div>
-    </div>
-
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">
-      <div style="text-align:center;padding:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px">
-        <div style="font-size:12px;font-weight:800;color:#334155">${tm.key_measurements.num_roof_faces}</div>
-        <div style="font-size:6.5px;color:#64748b;font-weight:600">Roof Faces</div>
-      </div>
-      <div style="text-align:center;padding:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px">
-        <div style="font-size:12px;font-weight:800;color:#334155">${tm.key_measurements.num_eave_points}</div>
-        <div style="font-size:6.5px;color:#64748b;font-weight:600">Eave Points</div>
-      </div>
-      <div style="text-align:center;padding:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px">
-        <div style="font-size:12px;font-weight:800;color:#334155">${tm.key_measurements.dominant_pitch_label}</div>
-        <div style="font-size:6.5px;color:#64748b;font-weight:600">Dominant Pitch</div>
-      </div>
-      <div style="text-align:center;padding:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px">
-        <div style="font-size:12px;font-weight:800;color:#334155">${tm.key_measurements.waste_factor_pct}%</div>
-        <div style="font-size:6.5px;color:#64748b;font-weight:600">Waste Factor</div>
-      </div>
-      <div style="text-align:center;padding:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px">
-        <div style="font-size:12px;font-weight:800;color:#334155">${Math.round(tm.key_measurements.dominant_pitch_angle_deg * 10) / 10}°</div>
-        <div style="font-size:6.5px;color:#64748b;font-weight:600">Pitch Angle</div>
-      </div>
-    </div>
-  </div>` : ''}
+  <!-- Measurement summary consolidated into Page 1 Project Totals -->
 
   ${(() => {
     const cc = tm?.cross_check

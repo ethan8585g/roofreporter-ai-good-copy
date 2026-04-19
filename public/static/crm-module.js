@@ -28,8 +28,8 @@
     customers: { init: initCustomers, title: 'My Customers' },
     invoices: { init: initInvoices, title: 'Invoices' },
     proposals: { init: initProposals, title: 'Proposals & Estimates' },
-    jobs: { init: initJobs, title: 'Job Management' },
-    crew: { init: initCrewManager, title: 'Crew Manager' },
+    jobs: { init: initJobs, title: 'Job & Crew Hub' },
+    crew: { init: initJobs, title: 'Job & Crew Hub' },
     pipeline: { init: initPipeline, title: 'Sales Pipeline' },
     d2d: { init: initD2D, title: 'D2D Manager' },
     'email-outreach': { init: initEmailOutreach, title: 'Email Outreach' },
@@ -1592,11 +1592,41 @@
   var _allJobs = [];
   var _allJobStats = {};
   var _googleCalEvents = [];
+  var _readyToSchedule = [];
+  var _activeCheckins = [];
+  var _recentCheckins = [];
+  var _crewList = [];
+  var _crewOwner = {};
+  var _jobHubTab = 'calendar'; // calendar | dispatch
 
   function initJobs() {
     root.innerHTML = '<div class="text-center py-12"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
-    checkCalendarStatus();
-    loadJobsForMonth(_calYear, _calMonth);
+
+    // Check if user is a crew member — show mobile crew view instead
+    fetch('/api/crm/my-jobs', { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(myData) {
+        if (myData.is_crew_member && myData.jobs) {
+          _crewMyId = myData.my_id || null;
+          try { localStorage.setItem('crew_cached_jobs', JSON.stringify({ jobs: myData.jobs, active_clock_in: myData.active_clock_in, my_id: myData.my_id, cached_at: new Date().toISOString() })); } catch(e) {}
+          renderMyJobs(myData.jobs, myData.active_clock_in, myData.my_id);
+        } else {
+          // Owner/admin — load full hub
+          checkCalendarStatus();
+          loadJobsForMonth(_calYear, _calMonth);
+        }
+      }).catch(function() {
+        try {
+          var cached = JSON.parse(localStorage.getItem('crew_cached_jobs') || 'null');
+          if (cached && cached.jobs) {
+            _crewMyId = cached.my_id || null;
+            renderMyJobs(cached.jobs, cached.active_clock_in, cached.my_id);
+            return;
+          }
+        } catch(e) {}
+        checkCalendarStatus();
+        loadJobsForMonth(_calYear, _calMonth);
+      });
   }
 
   function checkCalendarStatus() {
@@ -1630,17 +1660,23 @@
   function loadJobsForMonth(year, month) {
     var mm = String(month + 1).padStart(2, '0');
     var monthStr = year + '-' + mm;
-    // When a status filter is active, fetch ALL jobs with that status (no month restriction)
     var url = window._jobFilter
       ? '/api/crm/jobs?status=' + window._jobFilter
       : '/api/crm/jobs?month=' + monthStr;
-    // Also fetch all jobs for stats (no month filter)
     Promise.all([
       fetch(url, { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
-      fetch('/api/crm/jobs', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+      fetch('/api/crm/jobs', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/crm/jobs/ready-to-schedule', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }).catch(function() { return { items: [] }; }),
+      fetch('/api/crm/jobs/active-checkins', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }).catch(function() { return { active: [], recent: [] }; }),
+      fetch('/api/crm/crew', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }).catch(function() { return { crew: [], owner: {} }; })
     ]).then(function(results) {
       _allJobs = results[0].jobs || [];
       _allJobStats = results[1].stats || {};
+      _readyToSchedule = results[2].items || [];
+      _activeCheckins = results[3].active || [];
+      _recentCheckins = results[3].recent || [];
+      _crewList = results[4].crew || [];
+      _crewOwner = results[4].owner || {};
       renderJobsDashboard();
     }).catch(function() { root.innerHTML = '<p class="text-red-500 p-4">Failed to load jobs.</p>'; });
   }
@@ -1667,62 +1703,289 @@
     var stats = _allJobStats;
     var html = '';
 
-    // A. Header bar
+    // A. Header bar — unified Job & Crew Hub
     html += '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
-    html += '<div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-hard-hat text-emerald-400 mr-2"></i>Job Management</h2></div>';
+    html += '<div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-hard-hat text-emerald-400 mr-2"></i>Job & Crew Hub</h2>';
+    html += '<p class="text-xs text-gray-500 mt-0.5">Manage jobs, dispatch crew, and track progress</p></div>';
     html += '<div class="flex items-center gap-2 flex-wrap">';
-    // Google Calendar button
     if (_calConnected) {
       html += '<button onclick="window._crmCalendarSettings()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"><i class="fab fa-google text-emerald-400"></i>Calendar Connected</button>';
       html += '<button onclick="window._crmSyncAllJobs()" class="px-3 py-2 rounded-lg text-xs font-medium border border-blue-500/20 bg-blue-500/10 text-blue-400 hover:bg-blue-500/15"><i class="fas fa-sync-alt mr-1"></i>Sync All</button>';
     } else {
       html += '<button onclick="window._crmCalendarSettings()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-white/15 bg-[#111111] text-gray-400 hover:bg-[#111111]/5"><i class="fab fa-google text-gray-400"></i>Connect Calendar</button>';
     }
-    html += '<button onclick="window._crmNewJob()" class="bg-emerald-500/15 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-500/15"><i class="fas fa-plus mr-1"></i>New Job</button>';
+    html += '<button onclick="window._crmNewJob()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700"><i class="fas fa-plus mr-1"></i>New Job</button>';
     html += '</div></div>';
 
-    // B. Stats bar
-    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">' +
-      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + (stats.total || 0) + '</p><p class="text-[10px] text-gray-500">Total Jobs</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + (stats.scheduled || 0) + '</p><p class="text-[10px] text-gray-500">Scheduled</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-400">' + (stats.in_progress || 0) + '</p><p class="text-[10px] text-gray-500">In Progress</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">' + (stats.completed || 0) + '</p><p class="text-[10px] text-gray-500">Completed</p></div></div>';
+    // B. Stats bar — combined jobs + crew
+    html += '<div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-5">' +
+      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-gray-100">' + (stats.total || 0) + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Total Jobs</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-blue-400">' + (stats.scheduled || 0) + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Scheduled</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-cyan-400">' + (stats.in_progress || 0) + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">In Progress</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-emerald-400">' + (stats.completed || 0) + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Completed</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-purple-400">' + _crewList.length + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Crew Members</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-orange-400">' + _activeCheckins.length + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Checked In</p></div>' +
+      '</div>';
 
-    // C. Calendar toolbar
-    html += '<div class="flex items-center justify-between mb-4 flex-wrap gap-2">';
-    // Left: filter tabs
-    html += '<div class="flex gap-1 bg-[#111111] rounded-lg border p-1 overflow-x-auto">';
-    var filters = [['','All'],['scheduled','Scheduled'],['in_progress','In Progress'],['completed','Completed']];
-    for (var f = 0; f < filters.length; f++) {
-      html += '<button onclick="window._crmFilterJobs(\'' + filters[f][0] + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-[#111111]/10 ' + (((!window._jobFilter && !filters[f][0]) || window._jobFilter === filters[f][0]) ? 'bg-brand-600 text-white' : 'text-gray-400') + '">' + filters[f][1] + '</button>';
-    }
-    html += '</div>';
-    // Right: view toggle + nav (hidden when a status filter is active)
-    if (!window._jobFilter) {
-      html += '<div class="flex items-center gap-2">';
-      html += '<div class="flex bg-[#111111] rounded-lg border p-0.5">';
-      html += '<button onclick="window._crmSetView(\'month\')" class="px-3 py-1.5 rounded-md text-xs font-medium ' + (_calView === 'month' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:bg-[#111111]/10') + '">Month</button>';
-      html += '<button onclick="window._crmSetView(\'week\')" class="px-3 py-1.5 rounded-md text-xs font-medium ' + (_calView === 'week' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:bg-[#111111]/10') + '">Week</button>';
-      html += '</div>';
-      html += '<button onclick="window._crmPrevPeriod()" class="w-8 h-8 flex items-center justify-center rounded-lg border bg-[#111111] text-gray-400 hover:bg-[#111111]/5"><i class="fas fa-chevron-left text-xs"></i></button>';
-      html += '<span class="text-sm font-semibold text-gray-100 min-w-[140px] text-center">' + monthNames[_calMonth] + ' ' + _calYear + '</span>';
-      html += '<button onclick="window._crmNextPeriod()" class="w-8 h-8 flex items-center justify-center rounded-lg border bg-[#111111] text-gray-400 hover:bg-[#111111]/5"><i class="fas fa-chevron-right text-xs"></i></button>';
-      html += '<button onclick="window._crmCalToday()" class="px-3 py-1.5 rounded-lg border bg-[#111111] text-xs font-medium text-gray-400 hover:bg-[#111111]/5">Today</button>';
-      html += '</div>';
-    }
+    // B2. View toggle tabs — Calendar vs Dispatch Board
+    html += '<div class="flex gap-1 bg-[#111111] rounded-lg border border-white/10 p-1 mb-4 w-fit">';
+    html += '<button onclick="window._jobHubSetTab(\'calendar\')" class="px-4 py-2 rounded-lg text-xs font-semibold transition-colors ' + (_jobHubTab === 'calendar' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:bg-white/5') + '"><i class="fas fa-calendar-alt mr-1.5"></i>Calendar</button>';
+    html += '<button onclick="window._jobHubSetTab(\'dispatch\')" class="px-4 py-2 rounded-lg text-xs font-semibold transition-colors ' + (_jobHubTab === 'dispatch' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:bg-white/5') + '"><i class="fas fa-th mr-1.5"></i>Dispatch Board</button>';
     html += '</div>';
 
-    // D/E. Calendar grid or filtered list
-    if (window._jobFilter) {
-      html += renderFilteredJobsList(_allJobs, window._jobFilter);
-    } else if (_calView === 'month') {
-      html += renderMonthView(_calYear, _calMonth, _allJobs);
+    // ── CALENDAR TAB ──
+    if (_jobHubTab === 'calendar') {
+      // C. Calendar toolbar
+      html += '<div class="flex items-center justify-between mb-4 flex-wrap gap-2">';
+      html += '<div class="flex gap-1 bg-[#111111] rounded-lg border p-1 overflow-x-auto">';
+      var filters = [['','All'],['scheduled','Scheduled'],['in_progress','In Progress'],['completed','Completed']];
+      for (var f = 0; f < filters.length; f++) {
+        html += '<button onclick="window._crmFilterJobs(\'' + filters[f][0] + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-white/5 ' + (((!window._jobFilter && !filters[f][0]) || window._jobFilter === filters[f][0]) ? 'bg-brand-600 text-white' : 'text-gray-400') + '">' + filters[f][1] + '</button>';
+      }
+      html += '</div>';
+      if (!window._jobFilter) {
+        html += '<div class="flex items-center gap-2">';
+        html += '<div class="flex bg-[#111111] rounded-lg border p-0.5">';
+        html += '<button onclick="window._crmSetView(\'month\')" class="px-3 py-1.5 rounded-md text-xs font-medium ' + (_calView === 'month' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:bg-white/5') + '">Month</button>';
+        html += '<button onclick="window._crmSetView(\'week\')" class="px-3 py-1.5 rounded-md text-xs font-medium ' + (_calView === 'week' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:bg-white/5') + '">Week</button>';
+        html += '</div>';
+        html += '<button onclick="window._crmPrevPeriod()" class="w-8 h-8 flex items-center justify-center rounded-lg border bg-[#111111] text-gray-400 hover:bg-white/5"><i class="fas fa-chevron-left text-xs"></i></button>';
+        html += '<span class="text-sm font-semibold text-gray-100 min-w-[140px] text-center">' + monthNames[_calMonth] + ' ' + _calYear + '</span>';
+        html += '<button onclick="window._crmNextPeriod()" class="w-8 h-8 flex items-center justify-center rounded-lg border bg-[#111111] text-gray-400 hover:bg-white/5"><i class="fas fa-chevron-right text-xs"></i></button>';
+        html += '<button onclick="window._crmCalToday()" class="px-3 py-1.5 rounded-lg border bg-[#111111] text-xs font-medium text-gray-400 hover:bg-white/5">Today</button>';
+        html += '</div>';
+      }
+      html += '</div>';
+
+      if (window._jobFilter) {
+        html += renderFilteredJobsList(_allJobs, window._jobFilter);
+      } else if (_calView === 'month') {
+        html += renderMonthView(_calYear, _calMonth, _allJobs);
+      } else {
+        html += renderWeekView();
+      }
+    }
+
+    // ── DISPATCH BOARD TAB ──
+    if (_jobHubTab === 'dispatch') {
+      html += renderDispatchBoard();
+    }
+
+    // ── READY TO SCHEDULE DASHBOARD ──
+    if (_readyToSchedule.length > 0) {
+      html += '<div class="bg-gradient-to-r from-orange-500/10 to-yellow-500/10 rounded-2xl border border-orange-500/20 overflow-hidden mt-6">';
+      html += '<div class="px-5 py-4 border-b border-orange-500/10 flex items-center justify-between">';
+      html += '<h3 class="font-bold text-orange-400 text-sm"><i class="fas fa-bell mr-2"></i>Ready to Schedule (' + _readyToSchedule.length + ')</h3>';
+      html += '<p class="text-[10px] text-gray-500">Accepted proposals & paid invoices awaiting scheduling</p>';
+      html += '</div>';
+      html += '<div class="divide-y divide-white/5">';
+      for (var ri = 0; ri < _readyToSchedule.length; ri++) {
+        var rItem = _readyToSchedule[ri];
+        var srcIcon = rItem.source_type === 'proposal' ? 'fa-file-contract' : 'fa-file-invoice-dollar';
+        var srcColor = rItem.source_type === 'proposal' ? 'text-blue-400' : 'text-emerald-400';
+        html += '<div class="flex items-center gap-4 px-5 py-4 hover:bg-white/5">';
+        html += '<div class="w-10 h-10 rounded-lg bg-orange-500/15 flex items-center justify-center flex-shrink-0"><i class="fas ' + srcIcon + ' ' + srcColor + '"></i></div>';
+        html += '<div class="flex-1 min-w-0">';
+        html += '<p class="text-sm font-semibold text-gray-100 truncate">' + (rItem.title || 'Untitled') + '</p>';
+        html += '<p class="text-xs text-gray-400">' + (rItem.source_type === 'proposal' ? 'Proposal' : 'Invoice') + ' ' + (rItem.source_number || '') + (rItem.customer_name ? ' — ' + rItem.customer_name : '') + '</p>';
+        if (rItem.property_address) html += '<p class="text-xs text-gray-500 truncate"><i class="fas fa-map-marker-alt mr-1"></i>' + rItem.property_address + '</p>';
+        html += '</div>';
+        html += '<div class="text-right flex-shrink-0">';
+        if (rItem.total_amount) html += '<p class="text-sm font-bold text-emerald-400">$' + parseFloat(rItem.total_amount).toFixed(2) + '</p>';
+        html += '<button onclick="window._scheduleFromSource(\'' + rItem.source_type + '\',' + rItem.source_id + ',\'' + (rItem.title || '').replace(/'/g, "\\'") + '\',\'' + (rItem.property_address || '').replace(/'/g, "\\'") + '\',' + (rItem.crm_customer_id || 'null') + ')" class="mt-1 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-xs font-semibold hover:bg-orange-600"><i class="fas fa-calendar-plus mr-1"></i>Schedule Now</button>';
+        html += '</div></div>';
+      }
+      html += '</div></div>';
+    }
+
+    // ── CREW CHECK-IN DASHBOARD ──
+    html += '<div class="mt-6">';
+    html += '<div class="bg-[#111111] rounded-2xl border border-white/10 overflow-hidden">';
+    html += '<div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">';
+    html += '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-map-marker-alt text-emerald-400 mr-2"></i>Crew Check-Ins</h3>';
+    html += '<span class="text-[10px] px-2 py-0.5 rounded-full ' + (_activeCheckins.length > 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-gray-500') + ' font-bold">' + _activeCheckins.length + ' active</span>';
+    html += '</div>';
+    if (_activeCheckins.length === 0 && _recentCheckins.length === 0) {
+      html += '<div class="p-8 text-center"><i class="fas fa-clock text-3xl text-gray-600 mb-3 block"></i><p class="text-sm text-gray-400">No crew check-ins yet today.</p></div>';
     } else {
-      html += renderWeekView();
+      if (_activeCheckins.length > 0) {
+        html += '<div class="px-5 py-3"><p class="text-xs font-bold text-emerald-400 uppercase tracking-wide mb-2"><i class="fas fa-circle text-[8px] mr-1 animate-pulse"></i>Currently On Site</p>';
+        html += '<div class="space-y-2">';
+        for (var ai = 0; ai < _activeCheckins.length; ai++) {
+          var ac = _activeCheckins[ai];
+          var clockInTime = new Date(ac.clock_in + 'Z');
+          var elapsed = Math.round((Date.now() - clockInTime.getTime()) / 60000);
+          var hrs = Math.floor(elapsed / 60);
+          var mins = elapsed % 60;
+          html += '<div class="flex items-center gap-3 bg-emerald-500/10 rounded-xl p-3 border border-emerald-500/20">';
+          html += '<div class="w-9 h-9 bg-emerald-500/20 rounded-full flex items-center justify-center"><i class="fas fa-user-check text-emerald-400 text-sm"></i></div>';
+          html += '<div class="flex-1 min-w-0">';
+          html += '<p class="text-sm font-semibold text-gray-100">' + (ac.crew_name || 'Crew') + '</p>';
+          html += '<p class="text-xs text-gray-400 truncate"><i class="fas fa-hard-hat mr-1"></i>' + (ac.job_title || 'Job') + ' — ' + (ac.job_number || '') + '</p>';
+          html += '</div>';
+          html += '<div class="text-right"><p class="text-sm font-bold text-emerald-400">' + (hrs > 0 ? hrs + 'h ' : '') + mins + 'm</p>';
+          html += '<p class="text-[10px] text-gray-500">since ' + clockInTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '</p></div>';
+          html += '</div>';
+        }
+        html += '</div></div>';
+      }
+      if (_recentCheckins.length > 0) {
+        html += '<div class="px-5 py-3 border-t border-white/5"><p class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Recent (last 24h)</p>';
+        html += '<div class="space-y-1">';
+        for (var rci = 0; rci < Math.min(_recentCheckins.length, 5); rci++) {
+          var rc = _recentCheckins[rci];
+          var dur = rc.duration_minutes || 0;
+          var rHrs = Math.floor(dur / 60);
+          var rMins = dur % 60;
+          html += '<div class="flex items-center gap-3 py-2 text-sm">';
+          html += '<i class="fas fa-check-circle text-gray-500 text-xs"></i>';
+          html += '<span class="text-gray-300">' + (rc.crew_name || 'Crew') + '</span>';
+          html += '<span class="text-gray-500 text-xs truncate flex-1">' + (rc.job_title || '') + '</span>';
+          html += '<span class="text-gray-400 font-mono text-xs">' + (rHrs > 0 ? rHrs + 'h ' : '') + rMins + 'm</span>';
+          html += '</div>';
+        }
+        html += '</div></div>';
+      }
     }
+    html += '</div></div>';
+
+    // ── CREW ROSTER ──
+    html += '<div class="mt-6">';
+    html += '<div class="bg-[#111111] rounded-2xl border border-white/10 overflow-hidden">';
+    html += '<div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">';
+    html += '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-users text-purple-400 mr-2"></i>Crew Roster (' + _crewList.length + '/5 included)</h3>';
+    html += '<a href="/customer/team" class="text-emerald-400 hover:text-emerald-300 text-xs font-semibold"><i class="fas fa-user-plus mr-1"></i>Invite Crew</a>';
+    html += '</div>';
+    html += '<p class="px-5 py-2 text-[10px] text-gray-500 border-b border-white/5"><i class="fas fa-info-circle mr-1"></i>Your $49.99/mo plan includes 5 sales team + 5 crew members at no extra cost</p>';
+    if (_crewList.length === 0) {
+      html += '<div class="p-8 text-center"><i class="fas fa-hard-hat text-3xl text-gray-600 mb-3 block opacity-30"></i><p class="text-sm text-gray-400">No crew members yet.</p><a href="/customer/team" class="inline-block mt-3 text-sm text-emerald-400 hover:underline font-semibold"><i class="fas fa-user-plus mr-1"></i>Invite Your First Crew Member</a></div>';
+    } else {
+      html += '<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">';
+      for (var ci = 0; ci < _crewList.length; ci++) {
+        var cm = _crewList[ci];
+        var cmInitials = (cm.name || 'U').split(' ').map(function(w) { return w[0]; }).join('').substring(0, 2).toUpperCase();
+        html += '<div class="bg-[#0A0A0A] rounded-xl p-4 border border-white/10 hover:border-emerald-500/20 transition-colors">';
+        html += '<div class="flex items-center gap-3 mb-2"><div class="w-10 h-10 bg-emerald-500/15 rounded-full flex items-center justify-center text-emerald-400 font-bold text-sm">' + cmInitials + '</div>';
+        html += '<div class="min-w-0"><p class="font-semibold text-sm text-gray-100 truncate">' + (cm.name || 'Unknown') + '</p>';
+        html += '<p class="text-xs text-gray-500">' + (cm.role === 'admin' ? 'Admin' : 'Crew Member') + '</p></div></div>';
+        if (cm.phone) html += '<p class="text-xs text-gray-500 mb-1"><i class="fas fa-phone mr-1.5 text-gray-400"></i>' + cm.phone + '</p>';
+        html += '<div class="flex items-center gap-2 mt-2"><span class="px-2 py-0.5 bg-blue-500/15 text-blue-400 rounded-full text-[10px] font-bold">' + (cm.total_assignments || 0) + ' jobs</span>';
+        if (cm.active_jobs > 0) html += '<span class="px-2 py-0.5 bg-emerald-500/15 text-emerald-400 rounded-full text-[10px] font-bold">' + cm.active_jobs + ' active</span>';
+        html += '</div></div>';
+      }
+      html += '</div>';
+    }
+    html += '</div></div>';
 
     root.innerHTML = html;
+
+    // Attach drag events for dispatch board
+    if (_jobHubTab === 'dispatch') {
+      setTimeout(function() {
+        var cards = document.querySelectorAll('[draggable="true"][data-job-id]');
+        for (var k = 0; k < cards.length; k++) {
+          cards[k].addEventListener('dragstart', function(e) {
+            e.dataTransfer.setData('text/plain', this.getAttribute('data-job-id'));
+            e.dataTransfer.effectAllowed = 'move';
+            this.style.opacity = '0.5';
+          });
+          cards[k].addEventListener('dragend', function() { this.style.opacity = '1'; });
+        }
+      }, 50);
+    }
   }
+
+  // ── Dispatch Board Renderer ──
+  function renderDispatchBoard() {
+    var crew = _crewList;
+    var busyJobs = _allJobs.filter(function(j) { return j.status === 'scheduled' || j.status === 'in_progress'; });
+    var allJobsFull = _allJobs;
+    var unscheduledJobs = allJobsFull.filter(function(j) {
+      return !j.scheduled_date && j.status !== 'completed' && j.status !== 'cancelled';
+    });
+
+    var html = '<div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-5">';
+
+    // LEFT: Unscheduled jobs
+    html += '<div class="lg:col-span-1"><div class="bg-[#111111] rounded-2xl border border-white/10 overflow-hidden">';
+    html += '<div class="px-4 py-3 border-b border-white/5 bg-yellow-500/5"><h3 class="font-bold text-yellow-400 text-sm"><i class="fas fa-inbox mr-2"></i>Unscheduled (' + unscheduledJobs.length + ')</h3></div>';
+    html += '<div class="p-3 space-y-2 max-h-[500px] overflow-y-auto">';
+    if (unscheduledJobs.length === 0) {
+      html += '<p class="text-xs text-gray-500 text-center py-4">All jobs are scheduled!</p>';
+    }
+    for (var ui = 0; ui < unscheduledJobs.length; ui++) {
+      var uj = unscheduledJobs[ui];
+      html += '<div class="bg-[#0A0A0A] rounded-xl p-3 border border-white/10 cursor-grab hover:border-emerald-500/30 transition-colors" draggable="true" data-job-id="' + uj.id + '">';
+      html += '<div class="flex items-center justify-between mb-1"><span class="font-mono text-[10px] font-bold text-emerald-400">' + (uj.job_number || '') + '</span>' + badge(uj.status) + '</div>';
+      html += '<p class="text-sm font-semibold text-gray-100 truncate">' + (uj.title || 'Untitled') + '</p>';
+      if (uj.property_address) html += '<p class="text-[11px] text-gray-500 truncate"><i class="fas fa-map-marker-alt mr-1"></i>' + uj.property_address + '</p>';
+      if (uj.customer_name) html += '<p class="text-[11px] text-gray-500"><i class="fas fa-user mr-1"></i>' + uj.customer_name + '</p>';
+      html += '</div>';
+    }
+    html += '</div></div></div>';
+
+    // RIGHT: Weekly calendar grid
+    var weekDates = getWeekDates(_dispatchWeekOffset);
+    var weekLabel = fmtWeekDay(weekDates[0]) + ' — ' + fmtWeekDay(weekDates[6]);
+    var todayStr = new Date().toISOString().substring(0, 10);
+
+    html += '<div class="lg:col-span-3"><div class="bg-[#111111] rounded-2xl border border-white/10 overflow-hidden">';
+    html += '<div class="px-4 py-3 border-b border-white/5 flex items-center justify-between">';
+    html += '<button onclick="window._crewWeekNav(-1)" class="px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 text-sm"><i class="fas fa-chevron-left"></i></button>';
+    html += '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-calendar-week text-cyan-400 mr-2"></i>' + weekLabel + '</h3>';
+    html += '<div class="flex gap-1"><button onclick="window._crewWeekNav(0)" class="px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 text-xs font-medium">Today</button>';
+    html += '<button onclick="window._crewWeekNav(1)" class="px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 text-sm"><i class="fas fa-chevron-right"></i></button></div>';
+    html += '</div>';
+
+    html += '<div class="overflow-x-auto"><table class="w-full min-w-[700px]">';
+    html += '<thead><tr><th class="text-left px-3 py-2 text-xs text-gray-500 font-medium w-[120px] border-b border-white/5">Crew</th>';
+    for (var di = 0; di < 7; di++) {
+      var isToday = weekDates[di] === todayStr;
+      html += '<th class="px-2 py-2 text-xs font-medium border-b border-white/5 ' + (isToday ? 'text-emerald-400 bg-emerald-500/5' : 'text-gray-500') + '">' + fmtWeekDay(weekDates[di]) + '</th>';
+    }
+    html += '</tr></thead><tbody>';
+
+    var allCrew = [{ member_customer_id: _crewOwner.id, name: _crewOwner.name || 'Owner', isOwner: true }].concat(crew.map(function(m) { return { member_customer_id: m.member_customer_id, name: m.name || 'Unknown' }; }));
+    for (var ci2 = 0; ci2 < allCrew.length; ci2++) {
+      var cm2 = allCrew[ci2];
+      var initials2 = (cm2.name || 'U').split(' ').map(function(w) { return w[0]; }).join('').substring(0, 2).toUpperCase();
+      html += '<tr class="border-b border-white/5">';
+      html += '<td class="px-3 py-2"><div class="flex items-center gap-2"><div class="w-7 h-7 bg-emerald-500/15 rounded-full flex items-center justify-center text-emerald-400 font-bold text-[10px]">' + initials2 + '</div><span class="text-xs text-gray-300 truncate max-w-[80px]">' + cm2.name + '</span></div></td>';
+      for (var dj2 = 0; dj2 < 7; dj2++) {
+        var cellDate = weekDates[dj2];
+        var isToday2 = cellDate === todayStr;
+        html += '<td class="px-1 py-1 align-top min-w-[90px] border-l border-white/5 ' + (isToday2 ? 'bg-emerald-500/5' : '') + '" data-crew-id="' + cm2.member_customer_id + '" data-date="' + cellDate + '" ondragover="event.preventDefault();this.classList.add(\'bg-emerald-500/10\')" ondragleave="this.classList.remove(\'bg-emerald-500/10\')" ondrop="window._crewDropJob(event,this)">';
+        var matchingJobs = busyJobs.filter(function(bj) { return bj.scheduled_date === cellDate; });
+        for (var mji = 0; mji < matchingJobs.length; mji++) {
+          var mj = matchingJobs[mji];
+          var bgColor = mj.status === 'in_progress' ? 'bg-blue-500/20 border-blue-500/30' : 'bg-cyan-500/10 border-cyan-500/20';
+          html += '<div class="text-[10px] rounded-lg px-1.5 py-1 mb-1 border ' + bgColor + ' truncate cursor-pointer" onclick="window._crmViewJob(' + mj.id + ')">';
+          html += '<span class="font-bold">' + (mj.job_number || '') + '</span> ' + (mj.title || '').substring(0, 15);
+          html += '</div>';
+        }
+        html += '</td>';
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table></div></div></div></div>';
+    return html;
+  }
+
+  // Tab switching
+  window._jobHubSetTab = function(tab) {
+    _jobHubTab = tab;
+    renderJobsDashboard();
+  };
+
+  // Schedule a job from an accepted proposal or paid invoice
+  window._scheduleFromSource = function(sourceType, sourceId, title, address, customerId) {
+    window._prefillJobDate = new Date().toISOString().substring(0, 10);
+    window._prefillJobTitle = title || '';
+    window._prefillJobAddress = address || '';
+    window._prefillJobCustomerId = customerId || null;
+    window._prefillJobProposalId = sourceType === 'proposal' ? sourceId : null;
+    window._crmNewJob();
+  };
 
   function renderFilteredJobsList(jobs, statusFilter) {
     var statusLabels = { scheduled: 'Scheduled', in_progress: 'In Progress', completed: 'Completed' };
@@ -2163,14 +2426,26 @@
             .catch(function(e) { toast('Failed to create job: ' + (e.message || 'Network error'), 'error'); });
         }, 'Schedule Job');
 
-        // Pre-fill date if clicked from calendar
-        if (window._prefillJobDate) {
-          setTimeout(function() {
+        // Pre-fill fields if coming from calendar day click or "Schedule Now"
+        setTimeout(function() {
+          if (window._prefillJobDate) {
             var dateInput = document.getElementById('jobDate');
             if (dateInput) dateInput.value = window._prefillJobDate;
             window._prefillJobDate = null;
-          }, 50);
-        }
+          }
+          if (window._prefillJobTitle) {
+            var titleInput = document.getElementById('jobTitle');
+            if (titleInput) titleInput.value = window._prefillJobTitle;
+            window._prefillJobTitle = null;
+          }
+          if (window._prefillJobAddress) {
+            var addrInput = document.getElementById('jobAddress');
+            if (addrInput) addrInput.value = window._prefillJobAddress;
+            window._prefillJobAddress = null;
+          }
+          window._prefillJobCustomerId = null;
+          window._prefillJobProposalId = null;
+        }, 50);
       });
   };
 
@@ -2202,10 +2477,11 @@
 
         // Action buttons
         body += '<div class="flex flex-wrap gap-2 pt-2">';
-        if (j.status === 'scheduled') body += '<button onclick="window._crmMarkJob(' + j.id + ',\'in_progress\'); closeModal();" class="px-3 py-1.5 bg-blue-500/15/15 text-blue-400 rounded-lg text-xs font-medium hover:bg-white/10"><i class="fas fa-play mr-1"></i>Start Job</button>';
-        if (j.status === 'in_progress') body += '<button onclick="window._crmMarkJob(' + j.id + ',\'completed\'); closeModal();" class="px-3 py-1.5 bg-emerald-500/15 text-emerald-400 rounded-lg text-xs font-medium hover:bg-green-200"><i class="fas fa-check mr-1"></i>Complete</button>';
-        if (_calConnected) body += '<button onclick="window._crmSyncJobToCalendar(' + j.id + ')" class="px-3 py-1.5 bg-[#111111] border border-white/15 text-gray-300 rounded-lg text-xs font-medium hover:bg-[#111111]/5"><i class="fab fa-google mr-1 text-blue-500"></i>Sync to Calendar</button>';
-        body += '<button onclick="window._crmDeleteJob(' + j.id + '); closeModal();" class="px-3 py-1.5 bg-[#111111] border border-red-200 text-red-600 rounded-lg text-xs font-medium hover:bg-red-50"><i class="fas fa-trash mr-1"></i>Delete</button>';
+        if (j.status === 'scheduled') body += '<button onclick="window._crmMarkJob(' + j.id + ',\'in_progress\'); closeModal();" class="px-3 py-1.5 bg-blue-500/15 text-blue-400 rounded-lg text-xs font-medium hover:bg-blue-500/25"><i class="fas fa-play mr-1"></i>Start Job</button>';
+        if (j.status === 'in_progress') body += '<button onclick="window._crmMarkInstallComplete(' + j.id + ')" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-lg"><i class="fas fa-check-circle mr-1.5"></i>Mark Install Complete</button>';
+        if (j.status !== 'completed') body += '<button onclick="window._crmJobPhotos(' + j.id + ')" class="px-3 py-1.5 bg-purple-500/15 text-purple-400 rounded-lg text-xs font-medium hover:bg-purple-500/25"><i class="fas fa-camera mr-1"></i>Job Photos</button>';
+        if (_calConnected) body += '<button onclick="window._crmSyncJobToCalendar(' + j.id + ')" class="px-3 py-1.5 bg-[#111111] border border-white/15 text-gray-300 rounded-lg text-xs font-medium hover:bg-white/5"><i class="fab fa-google mr-1 text-blue-500"></i>Sync to Calendar</button>';
+        body += '<button onclick="window._crmDeleteJob(' + j.id + '); closeModal();" class="px-3 py-1.5 bg-[#111111] border border-red-500/30 text-red-400 rounded-lg text-xs font-medium hover:bg-red-500/10"><i class="fas fa-trash mr-1"></i>Delete</button>';
         body += '</div>';
 
         // Checklist section
@@ -2327,6 +2603,123 @@
     fetch('/api/crm/jobs/' + id, { method: 'DELETE', headers: authHeadersOnly() })
       .then(function() { toast('Job deleted'); loadJobsForMonth(_calYear, _calMonth); })
       .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
+  };
+
+  // Mark Install Complete — prominent action
+  window._crmMarkInstallComplete = async function(jobId) {
+    if (!(await window.rmConfirm('Mark this installation as complete? This will move the job to Completed status.'))) return;
+    closeModal();
+    fetch('/api/crm/jobs/' + jobId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status: 'completed' }) })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) { toast('Install marked complete!'); loadJobsForMonth(_calYear, _calMonth); }
+        else toast(res.error || 'Failed', 'error');
+      }).catch(function() { toast('Network error', 'error'); });
+  };
+
+  // Job Photos — pre-job, mid-job, post-install photo dashboard
+  window._crmJobPhotos = function(jobId) {
+    var body = '<div class="space-y-4">';
+    body += '<p class="text-xs text-gray-500">Upload and organize job site photos by phase.</p>';
+
+    // Phase tabs
+    body += '<div class="flex gap-1 bg-[#0A0A0A] rounded-lg p-1" id="photoPhaseNav">';
+    body += '<button onclick="window._crmLoadJobPhotos(' + jobId + ',\'before\')" class="flex-1 px-3 py-2 rounded-lg text-xs font-semibold bg-blue-600 text-white" data-phase="before"><i class="fas fa-camera mr-1"></i>Pre-Job</button>';
+    body += '<button onclick="window._crmLoadJobPhotos(' + jobId + ',\'during\')" class="flex-1 px-3 py-2 rounded-lg text-xs font-semibold text-gray-400 hover:bg-white/5" data-phase="during"><i class="fas fa-tools mr-1"></i>Mid-Job</button>';
+    body += '<button onclick="window._crmLoadJobPhotos(' + jobId + ',\'after\')" class="flex-1 px-3 py-2 rounded-lg text-xs font-semibold text-gray-400 hover:bg-white/5" data-phase="after"><i class="fas fa-check-circle mr-1"></i>Post-Install</button>';
+    body += '</div>';
+
+    // Photo grid area
+    body += '<div id="jobPhotoGrid" class="min-h-[120px]"><div class="text-center py-8"><div class="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-brand-500 mx-auto"></div></div></div>';
+
+    // Upload section
+    body += '<div class="border-t border-white/10 pt-3">';
+    body += '<label class="block text-xs font-medium text-gray-400 mb-1">Upload Photo</label>';
+    body += '<div class="flex gap-2">';
+    body += '<input type="file" id="jobPhotoFile" accept="image/*" capture="environment" class="flex-1 px-3 py-2 border border-white/15 rounded-lg text-sm bg-[#0A0A0A]">';
+    body += '<select id="jobPhotoPhase" class="px-3 py-2 border border-white/15 rounded-lg text-sm bg-[#0A0A0A]"><option value="before">Pre-Job</option><option value="during">Mid-Job</option><option value="after">Post-Install</option></select>';
+    body += '</div>';
+    body += '<input type="text" id="jobPhotoCaption" class="w-full mt-2 px-3 py-2 border border-white/15 rounded-lg text-sm bg-[#0A0A0A]" placeholder="Photo caption (optional)">';
+    body += '<button onclick="window._crmUploadJobPhoto(' + jobId + ')" class="mt-2 w-full py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700"><i class="fas fa-upload mr-1"></i>Upload Photo</button>';
+    body += '</div></div>';
+
+    showModal('Job Photos', body);
+    window._currentPhotoPhase = 'before';
+    window._crmLoadJobPhotos(jobId, 'before');
+  };
+
+  window._crmLoadJobPhotos = function(jobId, phase) {
+    window._currentPhotoPhase = phase;
+    // Update tab styles
+    var navBtns = document.querySelectorAll('#photoPhaseNav button');
+    navBtns.forEach(function(btn) {
+      if (btn.getAttribute('data-phase') === phase) {
+        btn.className = 'flex-1 px-3 py-2 rounded-lg text-xs font-semibold bg-blue-600 text-white';
+      } else {
+        btn.className = 'flex-1 px-3 py-2 rounded-lg text-xs font-semibold text-gray-400 hover:bg-white/5';
+      }
+    });
+
+    var grid = document.getElementById('jobPhotoGrid');
+    if (!grid) return;
+    grid.innerHTML = '<div class="text-center py-4"><div class="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-brand-500 mx-auto"></div></div>';
+
+    fetch('/api/crm/jobs/' + jobId + '/photos?phase=' + phase, { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var photos = data.photos || [];
+        if (photos.length === 0) {
+          var phaseLabel = phase === 'before' ? 'pre-job' : phase === 'during' ? 'mid-job' : 'post-install';
+          grid.innerHTML = '<div class="text-center py-6"><i class="fas fa-image text-2xl text-gray-600 mb-2 block"></i><p class="text-xs text-gray-500">No ' + phaseLabel + ' photos yet.</p></div>';
+          return;
+        }
+        var html = '<div class="grid grid-cols-2 sm:grid-cols-3 gap-2">';
+        for (var i = 0; i < photos.length; i++) {
+          var p = photos[i];
+          html += '<div class="relative group">';
+          html += '<img src="' + p.photo_data + '" class="w-full h-24 object-cover rounded-lg border border-white/10" alt="' + (p.caption || 'Job photo') + '">';
+          if (p.caption) html += '<p class="text-[9px] text-gray-400 mt-0.5 truncate">' + p.caption + '</p>';
+          html += '<button onclick="window._crmDeleteJobPhoto(' + jobId + ',' + p.id + ')" class="absolute top-1 right-1 w-5 h-5 bg-red-600/80 text-white rounded-full text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-times"></i></button>';
+          html += '</div>';
+        }
+        html += '</div>';
+        grid.innerHTML = html;
+      }).catch(function() {
+        grid.innerHTML = '<p class="text-xs text-red-500 text-center py-4">Failed to load photos.</p>';
+      });
+  };
+
+  window._crmUploadJobPhoto = function(jobId) {
+    var fileInput = document.getElementById('jobPhotoFile');
+    var phase = document.getElementById('jobPhotoPhase').value;
+    var caption = (document.getElementById('jobPhotoCaption')?.value || '').trim();
+    if (!fileInput || !fileInput.files[0]) { toast('Select a photo first', 'error'); return; }
+
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      fetch('/api/crm/jobs/' + jobId + '/photos', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ photo_data: e.target.result, phase: phase, caption: caption })
+      }).then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) {
+          toast('Photo uploaded!');
+          fileInput.value = '';
+          document.getElementById('jobPhotoCaption').value = '';
+          window._crmLoadJobPhotos(jobId, phase);
+        } else toast(res.error || 'Upload failed', 'error');
+      }).catch(function() { toast('Network error', 'error'); });
+    };
+    reader.readAsDataURL(fileInput.files[0]);
+  };
+
+  window._crmDeleteJobPhoto = async function(jobId, photoId) {
+    if (!(await window.rmConfirm('Delete this photo?'))) return;
+    fetch('/api/crm/photos/' + photoId, { method: 'DELETE', headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) { toast('Photo deleted'); window._crmLoadJobPhotos(jobId, window._currentPhotoPhase || 'before'); }
+      }).catch(function() { toast('Network error', 'error'); });
   };
 
   // ============================================================

@@ -33,6 +33,17 @@ export interface DetailedMaterialBOM {
   generated_at: string
   engine_version: string
 
+  // Selected shingle product
+  shingle_product?: {
+    type: ShingleType
+    name: string
+    warranty: string
+    wind_rating_kmh: number
+    weight_per_square_lbs: number
+    fire_rating: string
+    examples: string
+  }
+
   // Input measurements
   input: {
     net_roof_area_sqft: number
@@ -90,12 +101,106 @@ export interface DetailedMaterialBOM {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// SHINGLE PRODUCT CATALOG
+// ═══════════════════════════════════════════════════════════════
+
+export type ShingleType = '3tab' | 'architectural' | 'premium' | 'designer' | 'impact_resistant' | 'metal'
+
+export interface ShingleProduct {
+  key: ShingleType
+  name: string
+  description: string
+  examples: string
+  cost_per_bundle_cad: number
+  bundles_per_square: number
+  warranty: string
+  wind_rating_kmh: number
+  weight_per_square_lbs: number
+  fire_rating: string
+}
+
+export const SHINGLE_PRODUCTS: Record<ShingleType, ShingleProduct> = {
+  '3tab': {
+    key: '3tab',
+    name: '3-Tab Standard',
+    description: 'Budget-friendly strip shingle with flat, uniform appearance. 25-year manufacturer warranty.',
+    examples: 'IKO Marathon, GAF Royal Sovereign, CertainTeed XT 25',
+    cost_per_bundle_cad: 32.00,
+    bundles_per_square: 3,
+    warranty: '25-year',
+    wind_rating_kmh: 96,
+    weight_per_square_lbs: 210,
+    fire_rating: 'Class A',
+  },
+  architectural: {
+    key: 'architectural',
+    name: 'Architectural (Laminate)',
+    description: 'Dimensional laminated shingle with shadow lines and enhanced wind resistance. Industry standard for residential re-roofs.',
+    examples: 'IKO Cambridge, GAF Timberline HDZ, CertainTeed Landmark',
+    cost_per_bundle_cad: 42.00,
+    bundles_per_square: 3,
+    warranty: '30-year',
+    wind_rating_kmh: 210,
+    weight_per_square_lbs: 250,
+    fire_rating: 'Class A',
+  },
+  premium: {
+    key: 'premium',
+    name: 'Premium Architectural',
+    description: 'Thicker profile with enhanced granule adhesion, algae resistance, and SBS-modified bitumen for superior flexibility.',
+    examples: 'IKO Dynasty, GAF Timberline AS II, CertainTeed Landmark PRO',
+    cost_per_bundle_cad: 55.00,
+    bundles_per_square: 3,
+    warranty: 'Limited Lifetime',
+    wind_rating_kmh: 210,
+    weight_per_square_lbs: 280,
+    fire_rating: 'Class A',
+  },
+  designer: {
+    key: 'designer',
+    name: 'Designer / Luxury',
+    description: 'Multi-layered premium shingle mimicking natural slate or cedar shake. Maximum curb appeal and longest warranty.',
+    examples: 'GAF Camelot II, CertainTeed Grand Manor, Owens Corning Berkshire',
+    cost_per_bundle_cad: 72.00,
+    bundles_per_square: 3,
+    warranty: 'Lifetime',
+    wind_rating_kmh: 210,
+    weight_per_square_lbs: 350,
+    fire_rating: 'Class A',
+  },
+  impact_resistant: {
+    key: 'impact_resistant',
+    name: 'Impact-Resistant (Class 4)',
+    description: 'UL 2218 Class 4 rated for hail resistance. SBS-modified for flexibility. May qualify for insurance discounts in hail-prone areas.',
+    examples: 'IKO Nordic IR, GAF Armor Shield II, CertainTeed Landmark IR',
+    cost_per_bundle_cad: 62.00,
+    bundles_per_square: 3,
+    warranty: 'Limited Lifetime',
+    wind_rating_kmh: 210,
+    weight_per_square_lbs: 290,
+    fire_rating: 'Class A',
+  },
+  metal: {
+    key: 'metal',
+    name: 'Steel / Metal Shingles',
+    description: 'Interlocking steel shingle panels with stone-coated or painted finish. Lightweight, fireproof, and extremely durable.',
+    examples: 'EDCO Infiniti, Decra Shingle XD, Metal Roof Outlet',
+    cost_per_bundle_cad: 95.00,
+    bundles_per_square: 3,
+    warranty: '50-year',
+    wind_rating_kmh: 200,
+    weight_per_square_lbs: 150,
+    fire_rating: 'Class A',
+  },
+}
+
+export const DEFAULT_SHINGLE_TYPE: ShingleType = 'architectural'
+
+// ═══════════════════════════════════════════════════════════════
 // MATERIAL CONSTANTS — Canadian Market Pricing (2026)
 // ═══════════════════════════════════════════════════════════════
 
-// Shingles — Architectural (Laminate) standard
 const SHINGLE_BUNDLES_PER_SQ = 3             // 3 bundles = 1 square (100 sqft)
-const SHINGLE_COST_PER_BUNDLE_CAD = 42.00    // ~$126/sq for IKO Cambridge
 
 // Starter Strip
 const STARTER_STRIP_LF_PER_PC = 100          // 100 LF per starter strip roll/box
@@ -161,6 +266,8 @@ export interface MaterialEstimationInput {
   complexity?: 'simple' | 'medium' | 'complex'
   include_ventilation?: boolean  // default true
   include_pipe_boots?: boolean   // default true
+  shingle_type?: ShingleType     // default 'architectural'
+  tax_rate?: number              // default 0.05 (5% GST Alberta)
 }
 
 export function estimateMaterials(input: MaterialEstimationInput): DetailedMaterialBOM {
@@ -172,6 +279,9 @@ export function estimateMaterials(input: MaterialEstimationInput): DetailedMater
   const grossSquares = grossArea / 100
   const pitchRise = input.pitch_rise ?? 5
   const complexity = input.complexity || 'medium'
+  const shingleType = input.shingle_type || DEFAULT_SHINGLE_TYPE
+  const shingle = SHINGLE_PRODUCTS[shingleType] || SHINGLE_PRODUCTS.architectural
+  const taxRate = input.tax_rate ?? TAX_RATE
 
   const eaveLF = input.total_eave_lf
   const ridgeLF = input.total_ridge_lf
@@ -184,17 +294,17 @@ export function estimateMaterials(input: MaterialEstimationInput): DetailedMater
   const lineItems: MaterialLineItem[] = []
 
   // ── 1. SHINGLE BUNDLES ──
-  const shingleBundles = Math.ceil(grossSquares * SHINGLE_BUNDLES_PER_SQ)
+  const shingleBundles = Math.ceil(grossSquares * shingle.bundles_per_square)
   lineItems.push({
     category: 'shingles',
-    name: 'Architectural Shingles (Laminate)',
-    description: `${shingleBundles} bundles @ ${SHINGLE_BUNDLES_PER_SQ} bdl/sq for ${Math.ceil(grossSquares * 10) / 10} squares (incl. ${wastePct}% waste)`,
+    name: `${shingle.name} Shingles`,
+    description: `${shingleBundles} bundles @ ${shingle.bundles_per_square} bdl/sq for ${Math.ceil(grossSquares * 10) / 10} squares (incl. ${wastePct}% waste)`,
     quantity: shingleBundles,
     unit: 'bundles',
-    coverage_per_unit: '33.3 sqft / bundle (3 bundles = 1 square)',
-    unit_cost_cad: SHINGLE_COST_PER_BUNDLE_CAD,
-    total_cost_cad: round2(shingleBundles * SHINGLE_COST_PER_BUNDLE_CAD),
-    notes: 'IKO Cambridge / GAF Timberline HDZ / CertainTeed Landmark equivalent'
+    coverage_per_unit: `33.3 sqft / bundle (${shingle.bundles_per_square} bundles = 1 square)`,
+    unit_cost_cad: shingle.cost_per_bundle_cad,
+    total_cost_cad: round2(shingleBundles * shingle.cost_per_bundle_cad),
+    notes: `${shingle.examples} | ${shingle.warranty} warranty | Wind: ${shingle.wind_rating_kmh} km/h | ${shingle.fire_rating}`
   })
 
   // ── 2. STARTER STRIP ──
@@ -371,7 +481,7 @@ export function estimateMaterials(input: MaterialEstimationInput): DetailedMater
 
   // ── COST SUMMARY ──
   const materialsSubtotal = lineItems.reduce((s, item) => s + item.total_cost_cad, 0)
-  const taxEstimate = round2(materialsSubtotal * TAX_RATE)
+  const taxEstimate = round2(materialsSubtotal * taxRate)
   const materialsTotal = round2(materialsSubtotal + taxEstimate)
 
   // ── TOTALS ──
@@ -400,7 +510,16 @@ export function estimateMaterials(input: MaterialEstimationInput): DetailedMater
   const bom: DetailedMaterialBOM = {
     project_address: input.address || 'Unknown',
     generated_at: new Date().toISOString(),
-    engine_version: 'MaterialEstimationEngine v1.0',
+    engine_version: 'MaterialEstimationEngine v2.0',
+    shingle_product: {
+      type: shingle.key,
+      name: shingle.name,
+      warranty: shingle.warranty,
+      wind_rating_kmh: shingle.wind_rating_kmh,
+      weight_per_square_lbs: shingle.weight_per_square_lbs,
+      fire_rating: shingle.fire_rating,
+      examples: shingle.examples,
+    },
     input: {
       net_roof_area_sqft: Math.round(netArea),
       gross_roof_area_sqft: Math.round(grossArea),

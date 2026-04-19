@@ -300,9 +300,8 @@ function renderDashboard() {
           navLink('/customer/customers', 'fa-users', 'Customers', s.customers > 0 ? s.customers + '' : null, 'bg-gray-800') +
           navLink('/customer/invoices', 'fa-file-invoice-dollar', 'Invoices', invBadge || null, 'bg-blue-600') +
           navLink('/customer/proposals', 'fa-file-signature', 'Proposals', propBadge || null, 'bg-blue-600') +
-          navLink('/customer/jobs', 'fa-hard-hat', 'Jobs', jobBadge || null, 'bg-gray-800') +
+          navLink('/customer/jobs', 'fa-hard-hat', 'Job & Crew Hub', jobBadge || null, 'bg-gray-800') +
           navLink('/customer/certificate-automations', 'fa-certificate', 'Cert Automations', null, 'bg-emerald-600') +
-          navLink('/customer/crew', 'fa-users', 'Crew Manager', null, 'bg-gray-800') +
           navLink('/customer/pipeline', 'fa-funnel-dollar', 'Pipeline', null, 'bg-gray-800') +
           (isSolar ? navLink('/customer/solar-pipeline', 'fa-solar-panel', 'Solar Sales Pipeline', null, 'bg-amber-600') : '') +
         '</div>' +
@@ -360,8 +359,7 @@ function renderDashboard() {
         '<a href="/customer/invoices" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-file-invoice-dollar"></i>Invoices</a>' +
         '<a href="/customer/proposals" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-file-signature"></i>Proposals</a>' +
         '<a href="/customer/jobs" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-hard-hat"></i>Jobs</a>' +
-        '<a href="/customer/crew" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-users"></i>Crew</a>' +
-        '<a href="/customer/team" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-users-cog"></i>Team</a>' +
+                '<a href="/customer/team" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-users-cog"></i>Team</a>' +
         '<a href="/customer/d2d" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-door-open"></i>D2D</a>' +
         '<a href="/customer/storm-scout" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-cloud-bolt"></i>Storm</a>' +
         '<a href="/customer/secretary" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-headset"></i>Secretary</a>' +

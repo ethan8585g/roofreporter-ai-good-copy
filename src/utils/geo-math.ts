@@ -297,7 +297,17 @@ export function computeMaterialEstimate(
   const netArea = trueAreaSqft
   const grossArea = netArea * (1 + baseWaste / 100)
   const grossSquares = Math.ceil(grossArea / 100 * 10) / 10
-  const bundlesPerSquare = shingleType === '3-tab' ? 3 : 3
+  // Shingle product lookup — matches keys from material-estimation-engine SHINGLE_PRODUCTS
+  const SHINGLE_PRICING: Record<string, { name: string; price: number; bundles: number }> = {
+    '3tab':             { name: '3-Tab Standard', price: 32.00, bundles: 3 },
+    'architectural':    { name: 'Architectural (Laminate)', price: 42.00, bundles: 3 },
+    'premium':          { name: 'Premium Architectural', price: 55.00, bundles: 3 },
+    'designer':         { name: 'Designer / Luxury', price: 72.00, bundles: 3 },
+    'impact_resistant': { name: 'Impact-Resistant (Class 4)', price: 62.00, bundles: 3 },
+    'metal':            { name: 'Steel / Metal Shingles', price: 95.00, bundles: 3 },
+  }
+  const shingle = SHINGLE_PRICING[shingleType] || SHINGLE_PRICING.architectural
+  const bundlesPerSquare = shingle.bundles
   const bundleCount = Math.ceil(grossSquares * bundlesPerSquare)
 
   const totalRidgeFt = ridgeEdges.reduce((s, e) => s + e.true_length_ft, 0)
@@ -308,14 +318,13 @@ export function computeMaterialEstimate(
 
   const lineItems: MaterialLineItem[] = []
 
-  const shinglePricePerBundle = shingleType === 'architectural' ? 42.00 : 32.00
   lineItems.push({
     category: 'shingles',
-    description: `${shingleType === 'architectural' ? 'Architectural (Laminate)' : '3-Tab Standard'} Shingles`,
+    description: `${shingle.name} Shingles`,
     unit: 'squares', net_quantity: Math.round(netArea / 100 * 10) / 10, waste_pct: baseWaste,
     gross_quantity: grossSquares, order_quantity: bundleCount, order_unit: 'bundles',
-    unit_price_cad: shinglePricePerBundle,
-    line_total_cad: Math.round(bundleCount * shinglePricePerBundle * 100) / 100
+    unit_price_cad: shingle.price,
+    line_total_cad: Math.round(bundleCount * shingle.price * 100) / 100
   })
 
   const underlaymentRolls = Math.ceil(grossArea / 1000)
