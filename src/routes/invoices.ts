@@ -20,9 +20,9 @@ invoiceRoutes.use('/*', async (c, next) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
   if (admin) { c.set('admin' as any, admin); return next() }
 
-  // Fallback: try customer auth
+  // Fallback: try customer auth (header or ?token= query param for new-tab links)
   const authHeader = c.req.header('Authorization')
-  const token = authHeader?.replace('Bearer ', '')
+  const token = authHeader?.replace('Bearer ', '') || c.req.query('token')
   if (token) {
     const session = await c.env.DB.prepare(`
       SELECT cs.customer_id, c.email, c.name FROM customer_sessions cs
@@ -1134,8 +1134,117 @@ invoiceRoutes.post('/:id/send-gmail', async (c) => {
 })
 
 // ============================================================
+// MARK INSTALLATION COMPLETE + CERTIFICATE AUTO-SEND
+// ============================================================
+
+// Contractor confirms the roof installation is complete — triggers certificate auto-send if enabled
+invoiceRoutes.post('/:id/complete-installation', async (c) => {
+  const scope = getScope(c)
+  if (!scope.isAdmin && !scope.ownerId) return c.json({ error: 'Unauthorized' }, 401)
+  const id = c.req.param('id')
+  const proposal = await c.env.DB.prepare(`
+    SELECT i.*, o.property_address as order_property_address
+    FROM invoices i LEFT JOIN orders o ON o.id = i.order_id
+    WHERE i.id = ?${!scope.isAdmin ? ' AND i.customer_id = ?' : ''}
+  `).bind(...(scope.isAdmin ? [id] : [id, scope.ownerId])).first<any>()
+  if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
+  if (proposal.status !== 'accepted') return c.json({ error: 'Proposal must be accepted before marking installation complete' }, 400)
+
+  await c.env.DB.prepare(
+    `UPDATE invoices SET installation_completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`
+  ).bind(proposal.id).run()
+
+  let certificateSent = false
+  const homeownerEmail = proposal.crm_customer_email
+  if (homeownerEmail) {
+    try {
+      const ownerForCert = await c.env.DB.prepare(
+        `SELECT auto_send_certificate, name, email, phone, address, city, province, company_name, logo_url,
+                gmail_refresh_token, brand_business_name, brand_logo_url, brand_address,
+                brand_phone, brand_email, brand_license_number, brand_primary_color
+         FROM customers WHERE id = ?`
+      ).bind(proposal.customer_id).first<any>()
+
+      if (ownerForCert?.auto_send_certificate === 1) {
+        const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
+        const companyName = ownerForCert.brand_business_name || ownerForCert.company_name || ownerForCert.name || 'Your Roofing Company'
+        const companyAddress = ownerForCert.brand_address || [ownerForCert.address, ownerForCert.city, ownerForCert.province].filter(Boolean).join(', ')
+        const propAddress = proposal.property_address || proposal.order_property_address || ''
+        const certHtml = generateRoofInstallationCertificateHTML({
+          companyName,
+          companyLogo: ownerForCert.brand_logo_url || ownerForCert.logo_url || undefined,
+          companyAddress: companyAddress || undefined,
+          companyPhone: ownerForCert.brand_phone || ownerForCert.phone || undefined,
+          companyEmail: ownerForCert.brand_email || ownerForCert.email || undefined,
+          licenseNumber: ownerForCert.brand_license_number || undefined,
+          customerName: proposal.crm_customer_name || proposal.printed_name || 'Valued Customer',
+          propertyAddress: propAddress,
+          proposalNumber: proposal.invoice_number,
+          signedAt: proposal.signed_at || new Date().toISOString(),
+          scopeOfWork: proposal.scope_of_work || undefined,
+          totalAmount: proposal.total ?? undefined,
+          accentColor: ownerForCert.brand_primary_color || undefined,
+        })
+        const clientId = (c.env as any).GMAIL_CLIENT_ID
+        const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
+        const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ownerForCert.gmail_refresh_token || ''
+        if (clientId && clientSecret && refreshToken) {
+          await sendGmailOAuth2(
+            clientId, clientSecret, refreshToken,
+            homeownerEmail,
+            `Certificate of New Roof Installation — ${propAddress || 'Your Property'}`,
+            certHtml,
+            ownerForCert.email
+          )
+          await c.env.DB.prepare(
+            `UPDATE invoices SET certificate_sent_at = datetime('now') WHERE id = ?`
+          ).bind(proposal.id).run()
+          certificateSent = true
+        }
+      }
+    } catch {}
+  }
+
+  return c.json({ success: true, installation_completed_at: new Date().toISOString(), certificate_sent: certificateSent })
+})
+
+// ============================================================
 // CERTIFICATE OF NEW ROOF INSTALLATION
 // ============================================================
+
+// PREVIEW: render a sample certificate using the roofer's company branding
+invoiceRoutes.get('/certificate/preview', async (c) => {
+  const scope = getScope(c)
+  if (!scope.ownerId) return c.json({ error: 'Unauthorized' }, 401)
+  const owner = await c.env.DB.prepare(`
+    SELECT name, email, phone, address, city, province, company_name, logo_url,
+           brand_business_name, brand_logo_url, brand_address, brand_phone, brand_email,
+           brand_license_number, brand_primary_color
+    FROM customers WHERE id = ?
+  `).bind(scope.ownerId).first<any>()
+  if (!owner) return c.json({ error: 'Company profile not found' }, 404)
+  const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
+  const companyName = owner.brand_business_name || owner.company_name || owner.name || 'Your Roofing Company'
+  const companyAddress = owner.brand_address || [owner.address, owner.city, owner.province].filter(Boolean).join(', ')
+  const accentColor = c.req.query('color') || owner.brand_primary_color || '#1a5c38'
+  const licenseNumber = c.req.query('license') || owner.brand_license_number || ''
+  const certHtml = generateRoofInstallationCertificateHTML({
+    companyName,
+    companyLogo: owner.brand_logo_url || owner.logo_url || undefined,
+    companyAddress: companyAddress || undefined,
+    companyPhone: owner.brand_phone || owner.phone || undefined,
+    companyEmail: owner.brand_email || owner.email || undefined,
+    licenseNumber: licenseNumber || undefined,
+    customerName: 'Jane Smith',
+    propertyAddress: '123 Main Street, Anytown, MB R3T 2N2',
+    proposalNumber: 'PROP-20260101-0001',
+    signedAt: new Date().toISOString(),
+    scopeOfWork: 'Complete tear-off and re-roof with architectural shingles, including underlayment, ice & water shield, ridge vents, and cleanup',
+    totalAmount: 12500,
+    accentColor,
+  })
+  return c.html(certHtml)
+})
 
 // VIEW: return print-ready certificate HTML for an accepted proposal
 invoiceRoutes.get('/:id/certificate', async (c) => {
@@ -1311,67 +1420,6 @@ invoiceRoutes.post('/respond/:token', async (c) => {
       }
     }
   } catch {}
-
-  // Auto-send Certificate of New Roof Installation if owner has automation enabled
-  if (action === 'accept') {
-    // crm_customer_email is the homeowner's email stored on the invoice (i.*)
-    // Do NOT use the customer_email alias — that resolves to the owner's email via the JOIN
-    const homeownerEmail = proposal.crm_customer_email
-    if (homeownerEmail) {
-      try {
-        const ownerForCert = await c.env.DB.prepare(
-          `SELECT auto_send_certificate, name, email, phone, address, city, province, company_name, logo_url,
-                  gmail_refresh_token, brand_business_name, brand_logo_url, brand_address,
-                  brand_phone, brand_email, brand_license_number, brand_primary_color
-           FROM customers WHERE id = ?`
-        ).bind(proposal.customer_id).first<any>()
-
-        if (ownerForCert?.auto_send_certificate === 1) {
-          // Re-fetch the invoice with the orders join to get property_address
-          const fullProposal = await c.env.DB.prepare(`
-            SELECT i.*, o.property_address as order_property_address
-            FROM invoices i LEFT JOIN orders o ON o.id = i.order_id
-            WHERE i.id = ?
-          `).bind(proposal.id).first<any>()
-
-          const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
-          const companyName = ownerForCert.brand_business_name || ownerForCert.company_name || ownerForCert.name || 'Your Roofing Company'
-          const companyAddress = ownerForCert.brand_address || [ownerForCert.address, ownerForCert.city, ownerForCert.province].filter(Boolean).join(', ')
-          const propAddress = fullProposal?.property_address || fullProposal?.order_property_address || ''
-          const certHtml = generateRoofInstallationCertificateHTML({
-            companyName,
-            companyLogo: ownerForCert.brand_logo_url || ownerForCert.logo_url || undefined,
-            companyAddress: companyAddress || undefined,
-            companyPhone: ownerForCert.brand_phone || ownerForCert.phone || undefined,
-            companyEmail: ownerForCert.brand_email || ownerForCert.email || undefined,
-            licenseNumber: ownerForCert.brand_license_number || undefined,
-            customerName: fullProposal?.crm_customer_name || printed_name || 'Valued Customer',
-            propertyAddress: propAddress,
-            proposalNumber: proposal.invoice_number,
-            signedAt: new Date().toISOString(),
-            scopeOfWork: fullProposal?.scope_of_work || undefined,
-            totalAmount: fullProposal?.total ?? undefined,
-            accentColor: ownerForCert.brand_primary_color || undefined,
-          })
-          const clientId = (c.env as any).GMAIL_CLIENT_ID
-          const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
-          const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ownerForCert.gmail_refresh_token || ''
-          if (clientId && clientSecret && refreshToken) {
-            sendGmailOAuth2(
-              clientId, clientSecret, refreshToken,
-              homeownerEmail,
-              `Certificate of New Roof Installation — ${propAddress || 'Your Property'}`,
-              certHtml,
-              ownerForCert.email
-            ).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
-            await c.env.DB.prepare(
-              `UPDATE invoices SET certificate_sent_at = datetime('now') WHERE id = ?`
-            ).bind(proposal.id).run()
-          }
-        }
-      } catch {}
-    }
-  }
 
   return c.json({ success: true, status: newStatus })
 })

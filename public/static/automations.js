@@ -145,7 +145,7 @@
             '<button onclick="window._automations.saveSettings()" class="px-4 py-2.5 text-xs font-bold rounded-lg transition-all" style="background:' + (state.certSettingsDirty ? 'var(--text-primary, #111)' : 'var(--bg-card, #f3f4f6)') + ';color:' + (state.certSettingsDirty ? 'white' : 'var(--text-muted, #9ca3af)') + ';cursor:' + (state.certSettingsDirty ? 'pointer' : 'default') + '">' +
               '<i class="fas fa-save mr-1.5"></i>Save Certificate Settings' +
             '</button>' +
-            '<a href="/api/invoices/certificate/preview?color=' + encodeURIComponent(state.certAccentColor || '#1a5c38') + '&license=' + encodeURIComponent(state.certLicenseNumber || '') + '" target="_blank" class="px-4 py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer" style="background:#fffbeb;color:#92400e;border:1px solid #fde68a"><i class="fas fa-eye mr-1.5"></i>Preview Certificate</a>' +
+            '<a href="/api/invoices/certificate/preview?token=' + encodeURIComponent(getToken()) + '&color=' + encodeURIComponent(state.certAccentColor || '#1a5c38') + '&license=' + encodeURIComponent(state.certLicenseNumber || '') + '" target="_blank" class="px-4 py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer" style="background:#fffbeb;color:#92400e;border:1px solid #fde68a"><i class="fas fa-eye mr-1.5"></i>Preview Certificate</a>' +
             '<a href="/customer/profile" class="text-xs font-medium ml-auto" style="color:var(--brand-500, #10b981)"><i class="fas fa-building mr-1"></i>Update logo & company info</a>' +
           '</div>' +
         '</div>' +
