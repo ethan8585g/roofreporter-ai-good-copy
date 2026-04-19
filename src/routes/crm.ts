@@ -5,6 +5,7 @@ import { loadPermissionContext, can, redactFinancials } from '../lib/permissions
 import { validateAdminSession } from './auth'
 import { logFromContext } from '../lib/team-activity'
 import { geocodeAddress, optimizeRoute, type LatLng } from '../services/geocoding'
+import { autoCreateCommission } from './commissions'
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -302,6 +303,26 @@ crmRoutes.put('/invoices/:id', async (c) => {
     if (body.status === 'paid') extra = ", paid_date = date('now')"
     if (body.status === 'sent') extra = ", sent_date = date('now')"
     await c.env.DB.prepare(`UPDATE crm_invoices SET status = ?${extra}, updated_at = datetime('now') WHERE id = ? AND owner_id = ?`).bind(body.status, id, ownerId).run()
+
+    // Auto-create commission when invoice is marked paid
+    if (body.status === 'paid') {
+      try {
+        const inv = await c.env.DB.prepare(
+          `SELECT ci.*, cc.name as customer_name FROM crm_invoices ci
+           LEFT JOIN crm_customers cc ON cc.id = ci.crm_customer_id WHERE ci.id = ? AND ci.owner_id = ?`
+        ).bind(id, ownerId).first<any>()
+        // Check if the linked proposal has a sales rep
+        if (inv && inv.proposal_group_id) {
+          const prop = await c.env.DB.prepare(
+            'SELECT sales_rep_id FROM crm_proposals WHERE id = ? OR proposal_group_id = ? LIMIT 1'
+          ).bind(inv.proposal_group_id, inv.proposal_group_id).first<any>()
+          if (prop?.sales_rep_id && inv.total > 0) {
+            await autoCreateCommission(c.env.DB, ownerId, prop.sales_rep_id, 'invoice', Number(id), inv.invoice_number || `Invoice #${id}`, inv.customer_name || 'Customer', Number(inv.total))
+          }
+        }
+      } catch {}
+    }
+
     return c.json({ success: true })
   }
 
@@ -1059,15 +1080,15 @@ crmRoutes.post('/proposals', async (c) => {
     const result = await c.env.DB.prepare(`
       INSERT INTO crm_proposals (owner_id, crm_customer_id, proposal_number, title, property_address, scope_of_work,
         materials_detail, labor_cost, material_cost, other_cost, subtotal, tax_rate, tax_amount, total_amount,
-        valid_until, notes, warranty_terms, payment_terms, source_report_id, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
+        valid_until, notes, warranty_terms, payment_terms, source_report_id, sales_rep_id, sales_rep_name, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
     `).bind(ownerId, customerId, propNum, body.title, body.property_address || null,
       body.scope_of_work || null, body.materials_detail || null,
       body.labor_cost || 0, body.material_cost || 0, body.other_cost || 0,
       subtotal, taxRate, taxAmount, total,
       body.valid_until || null, body.notes || null,
       body.warranty_terms || null, body.payment_terms || null,
-      body.source_report_id || null).run()
+      body.source_report_id || null, body.sales_rep_id || null, body.sales_rep_name || null).run()
 
     const proposalId = result.meta.last_row_id
     if (!proposalId) return c.json({ error: 'Failed to create proposal' }, 500)
@@ -1128,13 +1149,15 @@ crmRoutes.put('/proposals/:id', async (c) => {
     await c.env.DB.prepare(`
       UPDATE crm_proposals SET crm_customer_id=?, title=?, property_address=?, scope_of_work=?, materials_detail=?,
         labor_cost=?, material_cost=?, other_cost=?, subtotal=?, tax_rate=?, tax_amount=?, total_amount=?,
-        valid_until=?, notes=?, warranty_terms=?, payment_terms=?, status=?, source_report_id=?, updated_at=datetime('now')
+        valid_until=?, notes=?, warranty_terms=?, payment_terms=?, status=?, source_report_id=?,
+        sales_rep_id=?, sales_rep_name=?, updated_at=datetime('now')
       WHERE id=? AND owner_id=?
     `).bind(customerId, body.title, body.property_address || null, body.scope_of_work || null,
       body.materials_detail || null, body.labor_cost || 0, body.material_cost || 0, body.other_cost || 0,
       subtotal, taxRate, taxAmount, total, body.valid_until || null, body.notes || null,
       body.warranty_terms || null, body.payment_terms || null,
-      body.status || 'draft', body.source_report_id ?? null, id, ownerId).run()
+      body.status || 'draft', body.source_report_id ?? null,
+      body.sales_rep_id ?? null, body.sales_rep_name ?? null, id, ownerId).run()
 
     // Replace line items
     if (body.items) {
@@ -1370,9 +1393,9 @@ crmRoutes.post('/jobs', async (c) => {
 
   const jobNum = genJobNum()
   const result = await c.env.DB.prepare(`
-    INSERT INTO crm_jobs (owner_id, crm_customer_id, proposal_id, job_number, title, property_address, job_type, scheduled_date, scheduled_time, estimated_duration, crew_size, notes, material_delivery_date, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled')
-  `).bind(ownerId, customerId, body.proposal_id || null, jobNum, body.title, body.property_address || null, body.job_type || 'install', body.scheduled_date, body.scheduled_time || null, body.estimated_duration || null, body.crew_size || null, body.notes || null, body.material_delivery_date || null).run()
+    INSERT INTO crm_jobs (owner_id, crm_customer_id, proposal_id, job_number, title, property_address, job_type, scheduled_date, scheduled_time, estimated_duration, crew_size, notes, material_delivery_date, sales_rep_id, sales_rep_name, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled')
+  `).bind(ownerId, customerId, body.proposal_id || null, jobNum, body.title, body.property_address || null, body.job_type || 'install', body.scheduled_date, body.scheduled_time || null, body.estimated_duration || null, body.crew_size || null, body.notes || null, body.material_delivery_date || null, body.sales_rep_id || null, body.sales_rep_name || null).run()
 
   const jobId = result.meta.last_row_id
   // Seed default checklist
@@ -2377,6 +2400,22 @@ crmRoutes.post('/proposals/respond/:token', async (c) => {
         `INSERT INTO crm_jobs (owner_id, crm_customer_id, proposal_id, job_number, title, property_address, job_type, scheduled_date, notes, status)
          VALUES (?, ?, ?, ?, ?, ?, 'install', date('now', '+7 days'), ?, 'scheduled')`
       ).bind(proposal.owner_id, proposal.crm_customer_id, proposal.id, jobNumber, proposal.title || 'Accepted Proposal Job', proposal.property_address, 'Auto-created from accepted proposal ' + proposal.proposal_number).run()
+    } catch {}
+  }
+
+  // Auto-create commission entry if sales rep is assigned
+  if (action === 'accept' && proposal.sales_rep_id && proposal.total_amount > 0) {
+    try {
+      await autoCreateCommission(
+        c.env.DB,
+        proposal.owner_id,
+        proposal.sales_rep_id,
+        'proposal',
+        proposal.id,
+        proposal.proposal_number || `Proposal #${proposal.id}`,
+        proposal.customer_name || 'Customer',
+        Number(proposal.total_amount)
+      )
     } catch {}
   }
 

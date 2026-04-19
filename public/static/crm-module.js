@@ -36,6 +36,7 @@
     'suppliers': { init: initSuppliers, title: 'Supplier Management' },
     'catalog': { init: initCatalog, title: 'Material Catalog' },
     'referrals': { init: initReferrals, title: 'Referral Program' },
+    'commissions': { init: initCommissions, title: 'Sales & Commissions' },
   };
 
   const mod = modules[MODULE];
@@ -1080,7 +1081,24 @@
             '<select id="propLinkedReport" style="width:100%;padding:9px 12px;border:1px solid #3b82f6;border-radius:8px;font-size:13px;background:#0f2744;color:#e2e8f0"><option value="">— Select a completed roof report —</option></select>' +
           '</div>' +
           '<div><label class="block text-xs font-medium text-gray-400 mb-1">Property Address</label><input type="text" id="propAddress" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div>' +
-          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Scope of Work</label><textarea id="propScope" rows="3" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="Remove existing shingles, inspect decking, install new underlayment and architectural shingles..."></textarea></div>';
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Scope of Work</label><textarea id="propScope" rows="3" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="Remove existing shingles, inspect decking, install new underlayment and architectural shingles..."></textarea></div>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Sales Rep (for commission)</label><select id="propSalesRep" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:var(--bg-page);color:var(--text-primary)"><option value="">— None —</option></select></div>';
+
+        // Populate sales rep dropdown
+        fetch('/api/commissions/team-members', { headers: authHeadersOnly() })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            var sel = document.getElementById('propSalesRep');
+            if (sel && d.members) {
+              d.members.forEach(function(m) {
+                var opt = document.createElement('option');
+                opt.value = m.id;
+                opt.setAttribute('data-name', m.name || '');
+                opt.textContent = (m.name || m.email) + ' (' + m.role + ')';
+                sel.appendChild(opt);
+              });
+            }
+          }).catch(function() {});
 
         // Populate the roof report dropdown
         fetch('/api/customer/orders', { headers: authHeadersOnly() })
@@ -1140,7 +1158,9 @@
             warranty_terms: document.getElementById('propWarranty').value.trim() || null,
             payment_terms: document.getElementById('propPayment').value.trim() || null,
             notes: document.getElementById('propNotes').value.trim(),
-            source_report_id: document.getElementById('propLinkedReport') && document.getElementById('propLinkedReport').value ? parseInt(document.getElementById('propLinkedReport').value) : null
+            source_report_id: document.getElementById('propLinkedReport') && document.getElementById('propLinkedReport').value ? parseInt(document.getElementById('propLinkedReport').value) : null,
+            sales_rep_id: document.getElementById('propSalesRep') && document.getElementById('propSalesRep').value ? parseInt(document.getElementById('propSalesRep').value) : null,
+            sales_rep_name: (function() { var s = document.getElementById('propSalesRep'); return s && s.value ? (s.options[s.selectedIndex].getAttribute('data-name') || '') : null; })()
           });
           fetch('/api/crm/proposals', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
             .then(function(r) { return r.json(); })
@@ -4641,6 +4661,395 @@
   function initD2D() {
     // Redirect to dedicated D2D page with Google Maps
     window.location.href = '/customer/d2d';
+  }
+
+  // ============================================================
+  // MODULE: Sales & Commissions
+  // ============================================================
+  function initCommissions() {
+    var commState = { tab: 'dashboard', rules: [], entries: [], dashboard: null, leaderboard: [], members: [], period: 'all' };
+
+    function money(v) { return '$' + Number(v || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+    function loadAll() {
+      root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500 mx-auto mb-3"></div><p class="text-sm" style="color:var(--text-muted)">Loading commissions...</p></div>';
+      Promise.all([
+        fetch('/api/commissions/dashboard', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+        fetch('/api/commissions/leaderboard?period=' + commState.period, { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+        fetch('/api/commissions/rules', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+        fetch('/api/commissions/entries', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+        fetch('/api/commissions/team-members', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+      ]).then(function(res) {
+        commState.dashboard = res[0].totals || {};
+        commState.leaderboard = res[1].leaderboard || [];
+        commState.rules = res[2].rules || [];
+        commState.entries = res[3].entries || [];
+        commState.members = res[4].members || [];
+        commState.monthly = res[0].monthly || [];
+        commState.byMember = res[0].by_member || [];
+        render();
+      }).catch(function() {
+        root.innerHTML = '<p class="text-red-500 text-center py-8">Failed to load commission data.</p>';
+      });
+    }
+
+    function render() {
+      var tabs = [
+        { id: 'dashboard', icon: 'fa-chart-line', label: 'Dashboard' },
+        { id: 'leaderboard', icon: 'fa-trophy', label: 'Leaderboard' },
+        { id: 'rules', icon: 'fa-cog', label: 'Commission Rules' },
+        { id: 'ledger', icon: 'fa-list', label: 'Commission Ledger' }
+      ];
+
+      var tabHtml = '<div class="flex gap-1 mb-6 p-1 rounded-xl" style="background:var(--bg-card);border:1px solid var(--border-color)">';
+      tabs.forEach(function(t) {
+        var active = commState.tab === t.id;
+        tabHtml += '<button onclick="window._commTab(\'' + t.id + '\')" class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ' +
+          (active ? 'text-white shadow-sm' : 'hover:bg-white/5') + '" style="' +
+          (active ? 'background:linear-gradient(135deg,#059669,#10b981);color:white' : 'color:var(--text-muted)') +
+          '"><i class="fas ' + t.icon + ' text-xs"></i>' + t.label + '</button>';
+      });
+      tabHtml += '</div>';
+
+      var content = '';
+      if (commState.tab === 'dashboard') content = renderDashboard();
+      else if (commState.tab === 'leaderboard') content = renderLeaderboard();
+      else if (commState.tab === 'rules') content = renderRules();
+      else if (commState.tab === 'ledger') content = renderLedger();
+
+      root.innerHTML = tabHtml + content;
+    }
+
+    window._commTab = function(tab) { commState.tab = tab; render(); };
+
+    // ── DASHBOARD ──
+    function renderDashboard() {
+      var d = commState.dashboard || {};
+      var cards =
+        '<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">' +
+          kpiCard('Total Sales', money(d.total_sales), 'fa-dollar-sign', '#10b981') +
+          kpiCard('Total Commission', money(d.total_commission), 'fa-coins', '#f59e0b') +
+          kpiCard('Pending', money(d.pending_commission), 'fa-clock', '#3b82f6', d.pending_count + ' entries') +
+          kpiCard('Paid Out', money(d.paid_commission), 'fa-check-circle', '#059669', d.paid_count + ' entries') +
+        '</div>';
+
+      // Per-member breakdown
+      var memberCards = '<h3 class="text-lg font-bold mb-3" style="color:var(--text-primary)">Team Breakdown</h3>';
+      if (commState.byMember && commState.byMember.length > 0) {
+        memberCards += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">';
+        commState.byMember.forEach(function(m) {
+          memberCards += '<div class="rounded-xl p-4" style="background:var(--bg-card);border:1px solid var(--border-color)">' +
+            '<div class="flex items-center gap-3 mb-3">' +
+              '<div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm" style="background:linear-gradient(135deg,#059669,#10b981)">' + (m.member_name || '?').charAt(0).toUpperCase() + '</div>' +
+              '<div><p class="font-semibold text-sm" style="color:var(--text-primary)">' + (m.member_name || 'Unknown') + '</p>' +
+              '<p class="text-xs" style="color:var(--text-muted)">' + m.deals + ' deals</p></div>' +
+            '</div>' +
+            '<div class="grid grid-cols-3 gap-2 text-center">' +
+              '<div><p class="text-[10px] uppercase font-bold" style="color:var(--text-muted)">Sales</p><p class="text-sm font-bold" style="color:var(--text-primary)">' + money(m.total_sales) + '</p></div>' +
+              '<div><p class="text-[10px] uppercase font-bold" style="color:var(--text-muted)">Earned</p><p class="text-sm font-bold text-amber-400">' + money(m.total_commission) + '</p></div>' +
+              '<div><p class="text-[10px] uppercase font-bold" style="color:var(--text-muted)">Outstanding</p><p class="text-sm font-bold text-blue-400">' + money(m.outstanding) + '</p></div>' +
+            '</div>' +
+          '</div>';
+        });
+        memberCards += '</div>';
+      } else {
+        memberCards += '<p class="text-sm py-4" style="color:var(--text-muted)">No commission data yet. Set up commission rules and assign sales reps to proposals to get started.</p>';
+      }
+
+      return cards + memberCards;
+    }
+
+    function kpiCard(label, value, icon, color, sub) {
+      return '<div class="rounded-xl p-4" style="background:var(--bg-card);border:1px solid var(--border-color)">' +
+        '<div class="flex items-center gap-2 mb-2"><i class="fas ' + icon + '" style="color:' + color + '"></i><span class="text-xs font-medium uppercase" style="color:var(--text-muted)">' + label + '</span></div>' +
+        '<p class="text-xl font-bold" style="color:var(--text-primary)">' + value + '</p>' +
+        (sub ? '<p class="text-xs mt-1" style="color:var(--text-muted)">' + sub + '</p>' : '') +
+      '</div>';
+    }
+
+    // ── LEADERBOARD ──
+    function renderLeaderboard() {
+      var periodBtns = '<div class="flex gap-2 mb-4">';
+      ['all', 'month', 'quarter', 'year'].forEach(function(p) {
+        var active = commState.period === p;
+        periodBtns += '<button onclick="window._commPeriod(\'' + p + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium ' +
+          (active ? 'text-white' : '') + '" style="' +
+          (active ? 'background:#059669;color:white' : 'background:var(--bg-card);color:var(--text-muted);border:1px solid var(--border-color)') +
+          '">' + (p === 'all' ? 'All Time' : p.charAt(0).toUpperCase() + p.slice(1)) + '</button>';
+      });
+      periodBtns += '</div>';
+
+      if (!commState.leaderboard || commState.leaderboard.length === 0) {
+        return periodBtns + '<div class="rounded-xl p-8 text-center" style="background:var(--bg-card);border:1px solid var(--border-color)"><i class="fas fa-trophy text-3xl mb-3" style="color:var(--text-muted)"></i><p class="text-sm" style="color:var(--text-muted)">No sales data yet</p></div>';
+      }
+
+      var html = periodBtns + '<div class="space-y-3">';
+      commState.leaderboard.forEach(function(m, i) {
+        var medal = i === 0 ? '<i class="fas fa-crown text-amber-400"></i>' : (i === 1 ? '<i class="fas fa-medal text-gray-400"></i>' : (i === 2 ? '<i class="fas fa-medal text-amber-700"></i>' : '<span class="text-xs font-bold" style="color:var(--text-muted)">#' + (i + 1) + '</span>'));
+        html += '<div class="flex items-center gap-4 rounded-xl p-4" style="background:var(--bg-card);border:1px solid var(--border-color)">' +
+          '<div class="w-8 text-center">' + medal + '</div>' +
+          '<div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm" style="background:linear-gradient(135deg,#059669,#10b981)">' + (m.member_name || '?').charAt(0).toUpperCase() + '</div>' +
+          '<div class="flex-1 min-w-0">' +
+            '<p class="font-semibold text-sm truncate" style="color:var(--text-primary)">' + (m.member_name || 'Unknown') + '</p>' +
+            '<p class="text-xs" style="color:var(--text-muted)">' + m.total_deals + ' deals &middot; Avg ' + money(m.avg_deal_size) + '</p>' +
+          '</div>' +
+          '<div class="text-right">' +
+            '<p class="text-sm font-bold" style="color:var(--text-primary)">' + money(m.total_sales) + '</p>' +
+            '<p class="text-xs text-emerald-400">Earned ' + money(m.total_earned) + '</p>' +
+          '</div>' +
+        '</div>';
+      });
+      html += '</div>';
+      return html;
+    }
+
+    window._commPeriod = function(p) {
+      commState.period = p;
+      fetch('/api/commissions/leaderboard?period=' + p, { headers: authHeadersOnly() })
+        .then(function(r) { return r.json(); })
+        .then(function(res) { commState.leaderboard = res.leaderboard || []; render(); });
+    };
+
+    // ── RULES ──
+    function renderRules() {
+      var html = '<div class="flex items-center justify-between mb-4">' +
+        '<h3 class="text-lg font-bold" style="color:var(--text-primary)">Commission Rules</h3>' +
+        '<button onclick="window._commAddRule()" class="px-4 py-2 rounded-lg text-sm font-medium text-white" style="background:linear-gradient(135deg,#059669,#10b981)"><i class="fas fa-plus mr-1"></i>Add Rule</button>' +
+      '</div>';
+
+      if (commState.rules.length === 0) {
+        html += '<div class="rounded-xl p-8 text-center" style="background:var(--bg-card);border:1px solid var(--border-color)">' +
+          '<i class="fas fa-cog text-3xl mb-3" style="color:var(--text-muted)"></i>' +
+          '<p class="font-medium mb-1" style="color:var(--text-primary)">No commission rules yet</p>' +
+          '<p class="text-sm" style="color:var(--text-muted)">Add rules to automatically calculate commissions when proposals are accepted.</p>' +
+        '</div>';
+        return html;
+      }
+
+      html += '<div class="rounded-xl overflow-hidden" style="background:var(--bg-card);border:1px solid var(--border-color)">' +
+        '<table class="w-full text-sm"><thead><tr style="border-bottom:1px solid var(--border-color)">' +
+        '<th class="text-left px-4 py-3 text-xs uppercase font-bold" style="color:var(--text-muted)">Team Member</th>' +
+        '<th class="text-left px-4 py-3 text-xs uppercase font-bold" style="color:var(--text-muted)">Role</th>' +
+        '<th class="text-left px-4 py-3 text-xs uppercase font-bold" style="color:var(--text-muted)">Type</th>' +
+        '<th class="text-left px-4 py-3 text-xs uppercase font-bold" style="color:var(--text-muted)">Rate</th>' +
+        '<th class="text-left px-4 py-3 text-xs uppercase font-bold" style="color:var(--text-muted)">Status</th>' +
+        '<th class="text-right px-4 py-3 text-xs uppercase font-bold" style="color:var(--text-muted)">Actions</th>' +
+        '</tr></thead><tbody>';
+
+      commState.rules.forEach(function(r) {
+        var rateDisplay = r.commission_type === 'percentage' ? (r.commission_rate + '%') : money(r.commission_rate);
+        var statusBadge = r.is_active
+          ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400">Active</span>'
+          : '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/5 text-gray-500">Inactive</span>';
+        html += '<tr style="border-bottom:1px solid var(--border-color)">' +
+          '<td class="px-4 py-3 font-medium" style="color:var(--text-primary)">' + (r.member_name || r.current_name || 'Unknown') + '</td>' +
+          '<td class="px-4 py-3 capitalize" style="color:var(--text-secondary)">' + (r.role || '').replace(/_/g, ' ') + '</td>' +
+          '<td class="px-4 py-3 capitalize" style="color:var(--text-secondary)">' + r.commission_type + '</td>' +
+          '<td class="px-4 py-3 font-semibold" style="color:var(--text-primary)">' + rateDisplay + '</td>' +
+          '<td class="px-4 py-3">' + statusBadge + '</td>' +
+          '<td class="px-4 py-3 text-right">' +
+            '<button onclick="window._commEditRule(' + r.id + ')" class="text-xs px-2 py-1 rounded hover:bg-white/10" style="color:var(--text-muted)"><i class="fas fa-edit"></i></button>' +
+            '<button onclick="window._commDeleteRule(' + r.id + ')" class="text-xs px-2 py-1 rounded hover:bg-red-500/20 text-red-400 ml-1"><i class="fas fa-trash"></i></button>' +
+          '</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table></div>';
+      return html;
+    }
+
+    window._commAddRule = function() {
+      var memberOpts = commState.members.map(function(m) { return '<option value="' + m.id + '" data-name="' + (m.name || '').replace(/"/g, '&quot;') + '">' + (m.name || m.email) + ' (' + m.role + ')</option>'; }).join('');
+      var body = '<div class="space-y-3">' +
+        '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Team Member</label>' +
+        '<select id="ruleMemb" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:var(--bg-page);color:var(--text-primary)">' + memberOpts + '</select></div>' +
+        '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Commission Role</label>' +
+        '<select id="ruleRole" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:var(--bg-page);color:var(--text-primary)">' +
+          '<option value="sales_rep">Sales Rep</option><option value="closer">Closer</option><option value="setter">Setter</option><option value="installer">Installer</option><option value="manager">Manager</option>' +
+        '</select></div>' +
+        '<div class="grid grid-cols-2 gap-3">' +
+          '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Type</label>' +
+          '<select id="ruleType" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:var(--bg-page);color:var(--text-primary)">' +
+            '<option value="percentage">Percentage (%)</option><option value="flat">Flat ($)</option>' +
+          '</select></div>' +
+          '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Rate</label>' +
+          '<input type="number" id="ruleRate" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:var(--bg-page);color:var(--text-primary)" placeholder="10" step="0.5" min="0"></div>' +
+        '</div>' +
+      '</div>';
+      showModal('Add Commission Rule', body, function() {
+        var sel = document.getElementById('ruleMemb');
+        var membId = sel.value;
+        var membName = sel.options[sel.selectedIndex].getAttribute('data-name') || '';
+        var payload = {
+          team_member_id: Number(membId),
+          member_name: membName,
+          role: document.getElementById('ruleRole').value,
+          commission_type: document.getElementById('ruleType').value,
+          commission_rate: parseFloat(document.getElementById('ruleRate').value) || 0
+        };
+        fetch('/api/commissions/rules', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
+          .then(function(r) { return r.json(); })
+          .then(function(res) {
+            if (res.success) { closeModal(); toast('Rule added'); loadAll(); }
+            else toast(res.error || 'Failed', 'error');
+          }).catch(function() { toast('Network error', 'error'); });
+      });
+    };
+
+    window._commEditRule = function(id) {
+      var rule = commState.rules.find(function(r) { return r.id === id; });
+      if (!rule) return;
+      var body = '<div class="space-y-3">' +
+        '<p class="text-sm font-medium" style="color:var(--text-primary)">Editing rule for: ' + (rule.member_name || 'Unknown') + '</p>' +
+        '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Commission Role</label>' +
+        '<select id="editRole" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:var(--bg-page);color:var(--text-primary)">' +
+          ['sales_rep', 'closer', 'setter', 'installer', 'manager'].map(function(r2) { return '<option value="' + r2 + '"' + (rule.role === r2 ? ' selected' : '') + '>' + r2.replace(/_/g, ' ') + '</option>'; }).join('') +
+        '</select></div>' +
+        '<div class="grid grid-cols-2 gap-3">' +
+          '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Type</label>' +
+          '<select id="editType" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:var(--bg-page);color:var(--text-primary)">' +
+            '<option value="percentage"' + (rule.commission_type === 'percentage' ? ' selected' : '') + '>Percentage (%)</option>' +
+            '<option value="flat"' + (rule.commission_type === 'flat' ? ' selected' : '') + '>Flat ($)</option>' +
+          '</select></div>' +
+          '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Rate</label>' +
+          '<input type="number" id="editRate" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:var(--bg-page);color:var(--text-primary)" value="' + rule.commission_rate + '" step="0.5" min="0"></div>' +
+        '</div>' +
+        '<div class="flex items-center gap-2"><input type="checkbox" id="editActive"' + (rule.is_active ? ' checked' : '') + '><label for="editActive" class="text-sm" style="color:var(--text-secondary)">Active</label></div>' +
+      '</div>';
+      showModal('Edit Commission Rule', body, function() {
+        var payload = {
+          role: document.getElementById('editRole').value,
+          commission_type: document.getElementById('editType').value,
+          commission_rate: parseFloat(document.getElementById('editRate').value) || 0,
+          is_active: document.getElementById('editActive').checked
+        };
+        fetch('/api/commissions/rules/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) })
+          .then(function(r) { return r.json(); })
+          .then(function(res) {
+            if (res.success) { closeModal(); toast('Rule updated'); loadAll(); }
+            else toast(res.error || 'Failed', 'error');
+          }).catch(function() { toast('Network error', 'error'); });
+      });
+    };
+
+    window._commDeleteRule = function(id) {
+      if (!confirm('Delete this commission rule?')) return;
+      fetch('/api/commissions/rules/' + id, { method: 'DELETE', headers: authHeaders() })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.success) { toast('Rule deleted'); loadAll(); }
+          else toast(res.error || 'Failed', 'error');
+        }).catch(function() { toast('Network error', 'error'); });
+    };
+
+    // ── LEDGER ──
+    function renderLedger() {
+      var html = '<div class="flex items-center justify-between mb-4">' +
+        '<h3 class="text-lg font-bold" style="color:var(--text-primary)">Commission Ledger</h3>' +
+        '<button onclick="window._commAddEntry()" class="px-4 py-2 rounded-lg text-sm font-medium text-white" style="background:linear-gradient(135deg,#059669,#10b981)"><i class="fas fa-plus mr-1"></i>Manual Entry</button>' +
+      '</div>';
+
+      if (commState.entries.length === 0) {
+        html += '<div class="rounded-xl p-8 text-center" style="background:var(--bg-card);border:1px solid var(--border-color)">' +
+          '<i class="fas fa-list text-3xl mb-3" style="color:var(--text-muted)"></i>' +
+          '<p class="font-medium mb-1" style="color:var(--text-primary)">No commission entries yet</p>' +
+          '<p class="text-sm" style="color:var(--text-muted)">Commission entries are auto-created when proposals with assigned sales reps are accepted.</p>' +
+        '</div>';
+        return html;
+      }
+
+      html += '<div class="rounded-xl overflow-hidden" style="background:var(--bg-card);border:1px solid var(--border-color)">' +
+        '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr style="border-bottom:1px solid var(--border-color)">' +
+        '<th class="text-left px-4 py-3 text-xs uppercase font-bold" style="color:var(--text-muted)">Date</th>' +
+        '<th class="text-left px-4 py-3 text-xs uppercase font-bold" style="color:var(--text-muted)">Team Member</th>' +
+        '<th class="text-left px-4 py-3 text-xs uppercase font-bold" style="color:var(--text-muted)">Source</th>' +
+        '<th class="text-left px-4 py-3 text-xs uppercase font-bold" style="color:var(--text-muted)">Customer</th>' +
+        '<th class="text-right px-4 py-3 text-xs uppercase font-bold" style="color:var(--text-muted)">Deal Value</th>' +
+        '<th class="text-right px-4 py-3 text-xs uppercase font-bold" style="color:var(--text-muted)">Commission</th>' +
+        '<th class="text-center px-4 py-3 text-xs uppercase font-bold" style="color:var(--text-muted)">Status</th>' +
+        '<th class="text-right px-4 py-3 text-xs uppercase font-bold" style="color:var(--text-muted)">Actions</th>' +
+        '</tr></thead><tbody>';
+
+      var statusColors = { pending: 'bg-blue-500/15 text-blue-400', approved: 'bg-amber-500/15 text-amber-400', paid: 'bg-emerald-500/15 text-emerald-400', voided: 'bg-red-500/15 text-red-400' };
+
+      commState.entries.forEach(function(e) {
+        var dateStr = e.created_at ? new Date(e.created_at).toLocaleDateString() : '';
+        var statusCls = statusColors[e.status] || 'bg-white/5 text-gray-500';
+        var actions = '';
+        if (e.status === 'pending') actions = '<button onclick="window._commUpdateEntry(' + e.id + ',\'approved\')" class="text-xs px-2 py-1 rounded bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 mr-1" title="Approve"><i class="fas fa-check"></i></button>';
+        if (e.status === 'approved') actions = '<button onclick="window._commUpdateEntry(' + e.id + ',\'paid\')" class="text-xs px-2 py-1 rounded bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 mr-1" title="Mark Paid"><i class="fas fa-dollar-sign"></i></button>';
+        if (e.status !== 'voided' && e.status !== 'paid') actions += '<button onclick="window._commUpdateEntry(' + e.id + ',\'voided\')" class="text-xs px-2 py-1 rounded bg-red-500/15 text-red-400 hover:bg-red-500/25" title="Void"><i class="fas fa-ban"></i></button>';
+
+        html += '<tr style="border-bottom:1px solid var(--border-color)">' +
+          '<td class="px-4 py-3" style="color:var(--text-muted)">' + dateStr + '</td>' +
+          '<td class="px-4 py-3 font-medium" style="color:var(--text-primary)">' + (e.member_name || 'Unknown') + '</td>' +
+          '<td class="px-4 py-3" style="color:var(--text-secondary)"><span class="capitalize">' + e.source_type + '</span> ' + (e.source_label || '') + '</td>' +
+          '<td class="px-4 py-3" style="color:var(--text-secondary)">' + (e.customer_name || '') + '</td>' +
+          '<td class="px-4 py-3 text-right font-medium" style="color:var(--text-primary)">' + money(e.deal_value) + '</td>' +
+          '<td class="px-4 py-3 text-right font-bold text-emerald-400">' + money(e.commission_amount) + '</td>' +
+          '<td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ' + statusCls + '">' + e.status + '</span></td>' +
+          '<td class="px-4 py-3 text-right">' + actions + '</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table></div></div>';
+      return html;
+    }
+
+    window._commUpdateEntry = function(id, status) {
+      var label = status === 'voided' ? 'Void this commission entry?' : 'Update status to ' + status + '?';
+      if (!confirm(label)) return;
+      fetch('/api/commissions/entries/' + id, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status: status }) })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.success) { toast('Status updated to ' + status); loadAll(); }
+          else toast(res.error || 'Failed', 'error');
+        }).catch(function() { toast('Network error', 'error'); });
+    };
+
+    window._commAddEntry = function() {
+      var memberOpts = commState.members.map(function(m) { return '<option value="' + m.id + '" data-name="' + (m.name || '').replace(/"/g, '&quot;') + '">' + (m.name || m.email) + '</option>'; }).join('');
+      var body = '<div class="space-y-3">' +
+        '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Team Member</label>' +
+        '<select id="entMemb" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:var(--bg-page);color:var(--text-primary)">' + memberOpts + '</select></div>' +
+        '<div class="grid grid-cols-2 gap-3">' +
+          '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Source Type</label>' +
+          '<select id="entType" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:var(--bg-page);color:var(--text-primary)"><option value="proposal">Proposal</option><option value="invoice">Invoice</option><option value="job">Job</option></select></div>' +
+          '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Source Label</label>' +
+          '<input type="text" id="entLabel" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:var(--bg-page);color:var(--text-primary)" placeholder="e.g. PROP-20260419"></div>' +
+        '</div>' +
+        '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Customer Name</label>' +
+        '<input type="text" id="entCust" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:var(--bg-page);color:var(--text-primary)" placeholder="Homeowner name"></div>' +
+        '<div class="grid grid-cols-2 gap-3">' +
+          '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Deal Value ($)</label>' +
+          '<input type="number" id="entDeal" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:var(--bg-page);color:var(--text-primary)" placeholder="15000" min="0"></div>' +
+          '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Commission ($)</label>' +
+          '<input type="number" id="entComm" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:var(--bg-page);color:var(--text-primary)" placeholder="1500" min="0"></div>' +
+        '</div>' +
+        '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Notes (optional)</label>' +
+        '<input type="text" id="entNotes" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:var(--bg-page);color:var(--text-primary)" placeholder="Bonus, override, etc."></div>' +
+      '</div>';
+      showModal('Add Commission Entry', body, function() {
+        var sel = document.getElementById('entMemb');
+        var membName = sel.options[sel.selectedIndex].getAttribute('data-name') || '';
+        var payload = {
+          team_member_id: Number(sel.value),
+          member_name: membName,
+          source_type: document.getElementById('entType').value,
+          source_label: document.getElementById('entLabel').value,
+          customer_name: document.getElementById('entCust').value,
+          deal_value: parseFloat(document.getElementById('entDeal').value) || 0,
+          commission_amount: parseFloat(document.getElementById('entComm').value) || 0,
+          notes: document.getElementById('entNotes').value || null
+        };
+        fetch('/api/commissions/entries', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
+          .then(function(r) { return r.json(); })
+          .then(function(res) {
+            if (res.success) { closeModal(); toast('Entry added'); loadAll(); }
+            else toast(res.error || 'Failed', 'error');
+          }).catch(function() { toast('Network error', 'error'); });
+      });
+    };
+
+    loadAll();
   }
 
 })();

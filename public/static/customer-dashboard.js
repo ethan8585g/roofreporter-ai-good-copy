@@ -301,8 +301,9 @@ function renderDashboard() {
           navLink('/customer/invoices', 'fa-file-invoice-dollar', 'Invoices', invBadge || null, 'bg-blue-600') +
           navLink('/customer/proposals', 'fa-file-signature', 'Proposals', propBadge || null, 'bg-blue-600') +
           navLink('/customer/jobs', 'fa-hard-hat', 'Job & Crew Hub', jobBadge || null, 'bg-gray-800') +
-          navLink('/customer/certificate-automations', 'fa-certificate', 'Cert Automations', null, 'bg-emerald-600') +
+          navLink('/customer/certificate-automations', 'fa-certificate', 'Certificate Automations', null, 'bg-emerald-600') +
           navLink('/customer/pipeline', 'fa-funnel-dollar', 'Pipeline', null, 'bg-gray-800') +
+          navLink('/customer/commissions', 'fa-dollar-sign', 'Commissions', null, 'bg-emerald-600') +
           (isSolar ? navLink('/customer/solar-pipeline', 'fa-solar-panel', 'Solar Sales Pipeline', null, 'bg-amber-600') : '') +
         '</div>' +
         // Team
