@@ -1,5 +1,5 @@
 // ============================================================
-// Team Management — Add/manage sales team members ($50/user/month)
+// Team Management — Add/manage sales team members (included with membership)
 // Full CRUD: invite, view roster, change roles, suspend, remove
 // ============================================================
 
@@ -43,7 +43,8 @@ function renderTeam() {
   var suspendedMembers = teamState.members.filter(function(m) { return m.status === 'suspended'; });
   var pendingInvites = teamState.invitations || [];
   var billing = teamState.billing;
-  var monthlyCost = activeMembers.length * 50;
+  var teamLimit = billing ? (billing.team_limit || 5) : 5;
+  var remainingSeats = billing ? (billing.remaining_seats != null ? billing.remaining_seats : teamLimit - activeMembers.length) : 5;
 
   // If user is a team member (not owner), show a different view
   if (teamState.isTeamMember && !teamState.canManage) {
@@ -57,7 +58,7 @@ function renderTeam() {
   html += '<div class="flex items-center justify-between mb-6">';
   html += '  <div>';
   html += '    <h2 class="text-xl font-bold text-gray-100"><i class="fas fa-users-cog mr-2 text-emerald-400"></i>Sales Team</h2>';
-  html += '    <p class="text-sm text-gray-500 mt-0.5">' + activeMembers.length + ' active member' + (activeMembers.length !== 1 ? 's' : '') + ' &nbsp;&middot;&nbsp; $50/user/month</p>';
+  html += '    <p class="text-sm text-gray-500 mt-0.5">' + activeMembers.length + ' active member' + (activeMembers.length !== 1 ? 's' : '') + (teamLimit < 999 ? ' &nbsp;&middot;&nbsp; ' + remainingSeats + ' seat' + (remainingSeats !== 1 ? 's' : '') + ' remaining' : ' &nbsp;&middot;&nbsp; Unlimited seats') + '</p>';
   html += '  </div>';
   html += '  <button onclick="showInviteModal()" class="bg-emerald-500/15 hover:bg-emerald-500/25 text-white font-semibold py-2.5 px-5 rounded-lg text-sm transition-all hover:scale-105">';
   html += '    <i class="fas fa-user-plus mr-2"></i>Invite Member';
@@ -159,14 +160,14 @@ function renderTeam() {
   var pricingOpen = activeMembers.length === 0;
   html += '<details' + (pricingOpen ? ' open' : '') + '>';
   html += '  <summary class="cursor-pointer list-none flex items-center justify-between px-4 py-3 bg-[#0A0A0A] rounded-xl border text-sm font-semibold text-gray-400 hover:text-gray-200 select-none transition-colors">';
-  html += '    <span><i class="fas fa-tag mr-2 text-emerald-400"></i>Team Pricing &nbsp;&middot;&nbsp; $50/user/month</span>';
+  html += '    <span><i class="fas fa-tag mr-2 text-emerald-400"></i>Team Info &nbsp;&middot;&nbsp; Included with Membership</span>';
   html += '    <i class="fas fa-chevron-down text-xs"></i>';
   html += '  </summary>';
   html += '  <div class="mt-2 bg-[#0A0A0A] rounded-xl border p-6">';
   html += '    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
   html += '      <div class="bg-[#111111] rounded-lg p-4 border text-center">';
-  html += '        <div class="text-3xl font-black text-emerald-400">$50</div>';
-  html += '        <div class="text-gray-500 text-sm">per user / month</div>';
+  html += '        <div class="text-3xl font-black text-emerald-400">' + (teamLimit < 999 ? teamLimit : '&infin;') + '</div>';
+  html += '        <div class="text-gray-500 text-sm">team members included</div>';
   html += '      </div>';
   html += '      <div class="bg-[#111111] rounded-lg p-4 border">';
   html += '        <div class="font-semibold text-gray-300 mb-2">Each member gets:</div>';
@@ -177,11 +178,11 @@ function renderTeam() {
   html += '        </ul>';
   html += '      </div>';
   html += '      <div class="bg-[#111111] rounded-lg p-4 border">';
-  html += '        <div class="font-semibold text-gray-300 mb-2">Team billing:</div>';
+  html += '        <div class="font-semibold text-gray-300 mb-2">How it works:</div>';
   html += '        <ul class="text-sm text-gray-400 space-y-1">';
-  html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Billed to account owner</li>';
-  html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Suspend anytime to pause billing</li>';
-  html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>No contracts, cancel anytime</li>';
+  html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Team members included with your membership</li>';
+  html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Suspend members anytime to free up seats</li>';
+  html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>No extra cost per team member</li>';
   html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Report credits shared with team</li>';
   html += '        </ul>';
   html += '      </div>';
@@ -362,7 +363,7 @@ function renderInviteModal() {
     '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden max-h-screen overflow-y-auto">' +
       '<div class="bg-gradient-to-r from-emerald-500 to-emerald-600 px-6 py-4 text-white">' +
         '<h3 class="text-lg font-bold"><i class="fas fa-user-plus mr-2"></i>Invite Team Member</h3>' +
-        '<p class="text-emerald-400 text-sm">$50/month per user</p>' +
+        '<p class="text-emerald-400 text-sm">Included with your membership</p>' +
       '</div>' +
       '<form onsubmit="sendInvite(event)" class="p-6 space-y-4">' +
         '<div>' +
@@ -471,7 +472,7 @@ async function suspendMember(memberId) {
 }
 
 async function reactivateMember(memberId) {
-  if (!(await window.rmConfirm('Reactivate this member? Billing will resume at $50/month.'))) return
+  if (!(await window.rmConfirm('Reactivate this member? They will regain access to your team account.'))) return
   await fetch('/api/team/members/' + memberId + '/reactivate', { method: 'POST', headers: authHeaders() });
   await loadTeamData(); renderTeam();
 }

@@ -16,7 +16,7 @@ export const teamRoutes = new Hono<{ Bindings: Bindings }>()
 // ============================================================
 // CONSTANTS
 // ============================================================
-const SEAT_PRICE_CENTS = 5000 // $50.00 / month per team member
+// No per-seat pricing — team members are included with the admin's membership
 const INVITE_EXPIRY_DAYS = 7
 
 // ============================================================
@@ -68,16 +68,19 @@ export async function evaluateTeamGating(db: D1Database, ownerId: number) {
   const nextTier: Record<string, string> = { starter: 'professional', professional: 'enterprise' }
 
   const owner = await db.prepare(
-    'SELECT subscription_tier, subscription_status, tier_features, free_trial_total, free_trial_used FROM customers WHERE id = ?'
+    'SELECT email, subscription_tier, subscription_status, tier_features, free_trial_total, free_trial_used FROM customers WHERE id = ?'
   ).bind(ownerId).first<any>()
+
+  // Test account gets unlimited team members
+  const isTestAccount = owner?.email === 'dev@reusecanada.ca'
 
   const ownerTier = owner?.subscription_tier || 'starter'
   const freeTrialsRemaining = Math.max(0, (owner?.free_trial_total || 0) - (owner?.free_trial_used || 0))
   // Allow team invites during free trial period — paywall only applies after all 3 free reports are used
   const isSubscribed = owner?.subscription_status === 'active' || freeTrialsRemaining > 0
 
-  let teamLimit = tierLimits[ownerTier] || 5
-  try { const tf = JSON.parse(owner?.tier_features || '{}'); if (tf.team_limit) teamLimit = tf.team_limit } catch {}
+  let teamLimit = isTestAccount ? 999 : (tierLimits[ownerTier] || 5)
+  try { const tf = JSON.parse(owner?.tier_features || '{}'); if (tf.team_limit && !isTestAccount) teamLimit = tf.team_limit } catch {}
 
   const activeRow = await db.prepare(
     "SELECT COUNT(*) as cnt FROM team_members WHERE owner_id = ? AND status = 'active'"
@@ -146,19 +149,18 @@ teamRoutes.get('/members', async (c) => {
     ORDER BY created_at DESC
   `).bind(ownerId).all()
 
-  // Billing summary
+  // Team summary (no per-seat billing — included with membership)
   const activeSeatCount = members.results?.filter((m: any) => m.status === 'active').length || 0
-  const monthlyTotal = activeSeatCount * SEAT_PRICE_CENTS
+  const gating = await evaluateTeamGating(c.env.DB, ownerId)
 
   return c.json({
     members: members.results,
     invitations: invitations.results,
     billing: {
       active_seats: activeSeatCount,
-      price_per_seat_cents: SEAT_PRICE_CENTS,
-      price_per_seat_display: '$50.00',
-      monthly_total_cents: monthlyTotal,
-      monthly_total_display: `$${(monthlyTotal / 100).toFixed(2)}`
+      team_limit: gating.team_limit,
+      remaining_seats: gating.remaining_seats,
+      included_with_membership: true
     },
     is_team_member: isTeamMember,
     can_manage: !isTeamMember || teamMemberRole === 'admin'
@@ -657,7 +659,7 @@ teamRoutes.get('/billing', async (c) => {
   `).bind(ownerId).all()
 
   const totalSeats = activeMembers.results?.length || 0
-  const monthlyTotal = totalSeats * SEAT_PRICE_CENTS
+  const gating = await evaluateTeamGating(c.env.DB, ownerId)
 
   // Recent billing events
   const recentBilling = await c.env.DB.prepare(`
@@ -671,9 +673,9 @@ teamRoutes.get('/billing', async (c) => {
   return c.json({
     billing: {
       active_seats: totalSeats,
-      price_per_seat: '$50.00/month',
-      monthly_total: `$${(monthlyTotal / 100).toFixed(2)}/month`,
-      monthly_total_cents: monthlyTotal,
+      team_limit: gating.team_limit,
+      remaining_seats: gating.remaining_seats,
+      included_with_membership: true,
       members: activeMembers.results,
       recent_charges: recentBilling.results
     }

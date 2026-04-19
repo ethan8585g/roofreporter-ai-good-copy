@@ -392,19 +392,20 @@ async function tdLoadMoreFeed() {
 
 // ── Billing tab ──
 function tdRenderBilling() {
-  var b = tdState.billing || { active_seats: 0, monthly_total_display: '$0.00', price_per_seat_display: '$50.00' };
+  var b = tdState.billing || { active_seats: 0, team_limit: 5, remaining_seats: 5 };
+  var tLimit = b.team_limit || 5;
   var html = '<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">';
   html += '  <div class="rounded-xl p-5" style="background:var(--bg-card);border:1px solid rgba(255,255,255,0.08)"><div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Active seats</div><div class="text-3xl font-black text-gray-100">' + b.active_seats + '</div></div>';
-  html += '  <div class="rounded-xl p-5" style="background:var(--bg-card);border:1px solid rgba(255,255,255,0.08)"><div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Per seat</div><div class="text-3xl font-black text-gray-100">' + b.price_per_seat_display + '</div><div class="text-xs text-gray-500 mt-1">/ month</div></div>';
-  html += '  <div class="rounded-xl p-5" style="background:var(--bg-card);border:1px solid rgba(255,255,255,0.08)"><div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Monthly total</div><div class="text-3xl font-black text-emerald-400">' + b.monthly_total_display + '</div></div>';
+  html += '  <div class="rounded-xl p-5" style="background:var(--bg-card);border:1px solid rgba(255,255,255,0.08)"><div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Team limit</div><div class="text-3xl font-black text-gray-100">' + (tLimit < 999 ? tLimit : '&infin;') + '</div><div class="text-xs text-gray-500 mt-1">members included</div></div>';
+  html += '  <div class="rounded-xl p-5" style="background:var(--bg-card);border:1px solid rgba(255,255,255,0.08)"><div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Seats remaining</div><div class="text-3xl font-black text-emerald-400">' + (tLimit < 999 ? (b.remaining_seats != null ? b.remaining_seats : tLimit - b.active_seats) : '&infin;') + '</div></div>';
   html += '</div>';
 
   html += '<div class="rounded-xl p-5" style="background:var(--bg-card);border:1px solid rgba(255,255,255,0.08)">';
-  html += '  <h3 class="text-sm font-bold text-gray-200 mb-3"><i class="fas fa-info-circle text-blue-400 mr-1"></i>Team billing notes</h3>';
+  html += '  <h3 class="text-sm font-bold text-gray-200 mb-3"><i class="fas fa-info-circle text-blue-400 mr-1"></i>Team info</h3>';
   html += '  <ul class="text-sm text-gray-400 space-y-2">';
-  html += '    <li><i class="fas fa-check text-emerald-400 mr-2"></i>Billed to the account owner every month</li>';
-  html += '    <li><i class="fas fa-check text-emerald-400 mr-2"></i>Suspend a member anytime to pause their seat billing</li>';
-  html += '    <li><i class="fas fa-check text-emerald-400 mr-2"></i>No contracts &mdash; cancel or downgrade anytime</li>';
+  html += '    <li><i class="fas fa-check text-emerald-400 mr-2"></i>Team members are included with your membership</li>';
+  html += '    <li><i class="fas fa-check text-emerald-400 mr-2"></i>Suspend a member anytime to free up a seat</li>';
+  html += '    <li><i class="fas fa-check text-emerald-400 mr-2"></i>No extra cost per team member</li>';
   html += '    <li><i class="fas fa-check text-emerald-400 mr-2"></i>Report credits are shared across the whole team</li>';
   html += '  </ul>';
   html += '</div>';
@@ -496,7 +497,7 @@ async function tdSuspend(id) {
   await tdLoadAll(); tdRender();
 }
 async function tdReactivate(id) {
-  if (!(await window.rmConfirm('Reactivate this member? Billing will resume at $50/month.'))) return;
+  if (!(await window.rmConfirm('Reactivate this member? They will regain access to your team account.'))) return;
   await fetch('/api/team/members/' + id + '/reactivate', { method: 'POST', headers: tdHeaders() });
   await tdLoadAll(); tdRender();
 }
