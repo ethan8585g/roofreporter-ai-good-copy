@@ -813,8 +813,9 @@ async function loadSipTrunks() {
   sipLoading = true;
   try {
     const res = await fetch('/api/secretary/sip/trunks', { headers: settingsHeaders() });
-    if (res.ok) sipTrunksData = await res.json();
-    else sipTrunksData = { error: 'Failed to load' };
+    const data = await res.json();
+    if (res.ok) sipTrunksData = data;
+    else sipTrunksData = { error: data.error || 'Failed to load SIP trunks' };
   } catch (e) {
     sipTrunksData = { error: e.message };
   }
