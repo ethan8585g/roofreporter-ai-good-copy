@@ -671,26 +671,162 @@ crmRoutes.post('/invoices/:id/send', async (c) => {
 function genProposalNum() { const d = new Date().toISOString().slice(0,10).replace(/-/g,''); return `PROP-${d}-${Math.floor(Math.random()*9999).toString().padStart(4,'0')}` }
 
 // ============================================================
-// PROPOSAL AUTOMATION SETTINGS — Certificate auto-send toggle
+// PROPOSAL AUTOMATION SETTINGS — Certificate auto-send + trigger config
 // MUST be registered before /proposals/:id to avoid route conflict
 // ============================================================
 crmRoutes.get('/proposals/automation/settings', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   const owner = await c.env.DB.prepare(
-    'SELECT auto_send_certificate FROM customers WHERE id = ?'
+    `SELECT auto_send_certificate, cert_trigger_type, cert_delay_days,
+            cert_require_approval, cert_default_design_id FROM customers WHERE id = ?`
   ).bind(ownerId).first<any>()
-  return c.json({ auto_send_certificate: owner?.auto_send_certificate === 1 })
+  return c.json({
+    auto_send_certificate: owner?.auto_send_certificate === 1,
+    cert_trigger_type: owner?.cert_trigger_type || 'proposal_signed',
+    cert_delay_days: owner?.cert_delay_days || 0,
+    cert_require_approval: owner?.cert_require_approval === 1,
+    cert_default_design_id: owner?.cert_default_design_id || null,
+  })
 })
 
 crmRoutes.put('/proposals/automation/settings', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
-  const { auto_send_certificate } = await c.req.json()
+  const body = await c.req.json()
+  const fields: string[] = []
+  const values: any[] = []
+  if (body.auto_send_certificate !== undefined) { fields.push('auto_send_certificate = ?'); values.push(body.auto_send_certificate ? 1 : 0) }
+  if (body.cert_trigger_type !== undefined) { fields.push('cert_trigger_type = ?'); values.push(body.cert_trigger_type) }
+  if (body.cert_delay_days !== undefined) { fields.push('cert_delay_days = ?'); values.push(body.cert_delay_days) }
+  if (body.cert_require_approval !== undefined) { fields.push('cert_require_approval = ?'); values.push(body.cert_require_approval ? 1 : 0) }
+  if (body.cert_default_design_id !== undefined) { fields.push('cert_default_design_id = ?'); values.push(body.cert_default_design_id) }
+  if (fields.length > 0) {
+    values.push(ownerId)
+    await c.env.DB.prepare(`UPDATE customers SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run()
+  }
+  return c.json({ success: true })
+})
+
+// ============================================================
+// CERTIFICATE DESIGNS — CRUD for saved certificate templates
+// ============================================================
+crmRoutes.get('/certificate-designs', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const designs = await c.env.DB.prepare(
+    'SELECT * FROM certificate_designs WHERE owner_id = ? ORDER BY is_default DESC, created_at DESC'
+  ).bind(ownerId).all()
+  return c.json({ designs: designs.results || [] })
+})
+
+crmRoutes.post('/certificate-designs', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const body = await c.req.json()
+  const result = await c.env.DB.prepare(
+    `INSERT INTO certificate_designs (owner_id, name, template_style, primary_color, secondary_color,
+     font_family, license_number, custom_message, watermark_enabled, logo_alignment, is_default)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    ownerId, body.name || 'Standard Certificate', body.template_style || 'classic',
+    body.primary_color || '#1a5c38', body.secondary_color || '#f5b041',
+    body.font_family || 'EB Garamond', body.license_number || null,
+    body.custom_message || null, body.watermark_enabled ? 1 : 0,
+    body.logo_alignment || 'left', body.is_default ? 1 : 0
+  ).run()
+  // If this is the default, unset others
+  if (body.is_default && result.meta?.last_row_id) {
+    await c.env.DB.prepare(
+      'UPDATE certificate_designs SET is_default = 0 WHERE owner_id = ? AND id != ?'
+    ).bind(ownerId, result.meta.last_row_id).run()
+  }
+  return c.json({ success: true, id: result.meta?.last_row_id })
+})
+
+crmRoutes.put('/certificate-designs/:designId', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const designId = c.req.param('designId')
+  const body = await c.req.json()
   await c.env.DB.prepare(
-    'UPDATE customers SET auto_send_certificate = ? WHERE id = ?'
-  ).bind(auto_send_certificate ? 1 : 0, ownerId).run()
-  return c.json({ success: true, auto_send_certificate: !!auto_send_certificate })
+    `UPDATE certificate_designs SET name = ?, template_style = ?, primary_color = ?,
+     secondary_color = ?, font_family = ?, license_number = ?, custom_message = ?,
+     watermark_enabled = ?, logo_alignment = ?, is_default = ?, updated_at = datetime('now')
+     WHERE id = ? AND owner_id = ?`
+  ).bind(
+    body.name || 'Standard Certificate', body.template_style || 'classic',
+    body.primary_color || '#1a5c38', body.secondary_color || '#f5b041',
+    body.font_family || 'EB Garamond', body.license_number || null,
+    body.custom_message || null, body.watermark_enabled ? 1 : 0,
+    body.logo_alignment || 'left', body.is_default ? 1 : 0,
+    designId, ownerId
+  ).run()
+  if (body.is_default) {
+    await c.env.DB.prepare(
+      'UPDATE certificate_designs SET is_default = 0 WHERE owner_id = ? AND id != ?'
+    ).bind(ownerId, designId).run()
+  }
+  return c.json({ success: true })
+})
+
+crmRoutes.delete('/certificate-designs/:designId', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const designId = c.req.param('designId')
+  await c.env.DB.prepare(
+    'DELETE FROM certificate_designs WHERE id = ? AND owner_id = ?'
+  ).bind(designId, ownerId).run()
+  return c.json({ success: true })
+})
+
+// CERTIFICATE PREVIEW — renders a certificate with a given design config (no real data needed)
+crmRoutes.post('/certificate-preview', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const body = await c.req.json()
+  // Fetch owner branding
+  const owner = await c.env.DB.prepare(
+    `SELECT name, company_name, logo_url, phone, email, address, city, province,
+            brand_business_name, brand_logo_url, brand_address, brand_phone, brand_email
+     FROM customers WHERE id = ?`
+  ).bind(ownerId).first<any>()
+  const companyName = owner?.brand_business_name || owner?.company_name || owner?.name || 'Your Roofing Company'
+  const companyAddress = owner?.brand_address || [owner?.address, owner?.city, owner?.province].filter(Boolean).join(', ')
+  const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
+  const html = generateRoofInstallationCertificateHTML({
+    companyName,
+    companyLogo: owner?.brand_logo_url || owner?.logo_url || undefined,
+    companyAddress,
+    companyPhone: owner?.brand_phone || owner?.phone || undefined,
+    companyEmail: owner?.brand_email || owner?.email || undefined,
+    licenseNumber: body.license_number || undefined,
+    customerName: body.customer_name || 'John Smith',
+    propertyAddress: body.property_address || '123 Maple Street, Winnipeg, MB R3T 2N2',
+    proposalNumber: body.proposal_number || '2026-0418-DEMO',
+    signedAt: body.signed_at || new Date().toISOString(),
+    scopeOfWork: 'Complete tear-off and re-roof — architectural shingles',
+    materials: 'IKO Cambridge Dual Grey architectural shingles, synthetic underlayment',
+    totalAmount: 12500,
+    accentColor: body.primary_color || '#1a5c38',
+    secondaryColor: body.secondary_color || '#f5b041',
+    fontFamily: body.font_family || 'EB Garamond',
+    templateStyle: body.template_style || 'classic',
+    customMessage: body.custom_message || undefined,
+    watermarkEnabled: !!body.watermark_enabled,
+    logoAlignment: body.logo_alignment || 'left',
+  })
+  return c.html(html)
+})
+
+// CERTIFICATE SEND LOG — history of sent certificates
+crmRoutes.get('/certificate-log', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const log = await c.env.DB.prepare(
+    `SELECT * FROM certificate_send_log WHERE owner_id = ? ORDER BY sent_at DESC LIMIT 50`
+  ).bind(ownerId).all()
+  return c.json({ log: log.results || [] })
 })
 
 // LIST proposals
@@ -1085,6 +1221,77 @@ crmRoutes.get('/jobs', async (c) => {
     FROM crm_jobs WHERE owner_id = ?
   `).bind(ownerId).first()
   return c.json({ jobs: jobs.results, stats })
+})
+
+// Ready-to-schedule: accepted proposals + paid invoices that don't have a scheduled job yet
+crmRoutes.get('/jobs/ready-to-schedule', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+
+  // Accepted proposals without a linked scheduled job
+  const fromProposals = await c.env.DB.prepare(`
+    SELECT cp.id as source_id, 'proposal' as source_type, cp.proposal_number as source_number,
+           cp.title, cp.property_address, cp.total_amount, cp.updated_at,
+           cc.name as customer_name, cc.phone as customer_phone,
+           cp.crm_customer_id
+    FROM crm_proposals cp
+    LEFT JOIN crm_customers cc ON cc.id = cp.crm_customer_id
+    WHERE cp.owner_id = ? AND cp.status = 'accepted'
+      AND NOT EXISTS (
+        SELECT 1 FROM crm_jobs cj WHERE cj.proposal_id = cp.id AND cj.status != 'cancelled'
+      )
+    ORDER BY cp.updated_at DESC
+  `).bind(ownerId).all()
+
+  // Paid invoices without a linked scheduled job
+  const fromInvoices = await c.env.DB.prepare(`
+    SELECT ci.id as source_id, 'invoice' as source_type, ci.invoice_number as source_number,
+           ci.description as title, '' as property_address, ci.total as total_amount, ci.paid_at as updated_at,
+           cc.name as customer_name, cc.phone as customer_phone,
+           ci.crm_customer_id
+    FROM crm_invoices ci
+    LEFT JOIN crm_customers cc ON cc.id = ci.crm_customer_id
+    WHERE ci.owner_id = ? AND ci.status = 'paid'
+      AND NOT EXISTS (
+        SELECT 1 FROM crm_jobs cj WHERE cj.proposal_id = ci.id AND cj.status != 'cancelled'
+      )
+    ORDER BY ci.paid_at DESC
+    LIMIT 20
+  `).bind(ownerId).all()
+
+  return c.json({ items: [...(fromProposals.results || []), ...(fromInvoices.results || [])] })
+})
+
+// Get active crew check-ins for owner's jobs (for crew dashboard)
+crmRoutes.get('/jobs/active-checkins', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+
+  const checkins = await c.env.DB.prepare(`
+    SELECT ctl.id, ctl.job_id, ctl.crew_member_id, ctl.clock_in, ctl.clock_in_lat, ctl.clock_in_lng,
+           cj.title as job_title, cj.property_address, cj.job_number,
+           cu.name as crew_name
+    FROM crew_time_logs ctl
+    JOIN crm_jobs cj ON cj.id = ctl.job_id AND cj.owner_id = ?
+    LEFT JOIN customers cu ON cu.id = ctl.crew_member_id
+    WHERE ctl.clock_out IS NULL
+    ORDER BY ctl.clock_in DESC
+  `).bind(ownerId).all()
+
+  // Recent completed check-ins (last 24h)
+  const recent = await c.env.DB.prepare(`
+    SELECT ctl.id, ctl.job_id, ctl.crew_member_id, ctl.clock_in, ctl.clock_out, ctl.duration_minutes,
+           cj.title as job_title, cj.job_number,
+           cu.name as crew_name
+    FROM crew_time_logs ctl
+    JOIN crm_jobs cj ON cj.id = ctl.job_id AND cj.owner_id = ?
+    LEFT JOIN customers cu ON cu.id = ctl.crew_member_id
+    WHERE ctl.clock_out IS NOT NULL AND ctl.clock_out > datetime('now', '-24 hours')
+    ORDER BY ctl.clock_out DESC
+    LIMIT 20
+  `).bind(ownerId).all()
+
+  return c.json({ active: checkins.results || [], recent: recent.results || [] })
 })
 
 // Schedule/assign a job to a crew member on a date (dispatch board drag-and-drop)
@@ -2298,18 +2505,22 @@ crmRoutes.post('/catalog/seed-defaults', async (c) => {
   if (existing && existing.cnt > 0) return c.json({ error: 'Catalog already has items. Delete existing items first or add products manually.', count: existing.cnt }, 400)
 
   const defaults = [
-    { category: 'shingles', name: 'Architectural Shingles (Laminate)', unit: 'bundles', unit_price: 42.00, coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', supplier: '', is_default: 1, sort_order: 1 },
-    { category: 'shingles', name: '3-Tab Standard Shingles', unit: 'bundles', unit_price: 32.00, coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', supplier: '', is_default: 0, sort_order: 2 },
-    { category: 'underlayment', name: 'Synthetic Underlayment', unit: 'rolls', unit_price: 95.00, coverage_per_unit: '400 sq ft per roll', supplier: '', is_default: 1, sort_order: 3 },
-    { category: 'ice_shield', name: 'Ice & Water Shield Membrane', unit: 'rolls', unit_price: 165.00, coverage_per_unit: '200 sq ft per roll', supplier: '', is_default: 1, sort_order: 4 },
-    { category: 'starter', name: 'Starter Strip Shingles', unit: 'boxes', unit_price: 45.00, coverage_per_unit: '100 lin ft per box', supplier: '', is_default: 1, sort_order: 5 },
-    { category: 'ridge_cap', name: 'Ridge/Hip Cap Shingles', unit: 'bundles', unit_price: 65.00, coverage_per_unit: '35 lin ft per bundle', supplier: '', is_default: 1, sort_order: 6 },
-    { category: 'drip_edge', name: 'Aluminum Drip Edge (Type C/D)', unit: 'pieces', unit_price: 8.50, coverage_per_unit: '10 ft per piece', supplier: '', is_default: 1, sort_order: 7 },
-    { category: 'valley_metal', name: 'W-Valley Flashing (Aluminum)', unit: 'pieces', unit_price: 22.00, coverage_per_unit: '10 ft per piece', supplier: '', is_default: 1, sort_order: 8 },
-    { category: 'nails', name: 'Roofing Nails 1-1/4" Galvanized', unit: 'boxes', unit_price: 28.00, coverage_per_unit: '5 lb box (~2 squares)', supplier: '', is_default: 1, sort_order: 9 },
-    { category: 'ventilation', name: 'Ridge Vent', unit: 'pieces', unit_price: 22.00, coverage_per_unit: '4 ft per piece', supplier: '', is_default: 1, sort_order: 10 },
-    { category: 'custom', name: 'Roofing Cement / Caulk', unit: 'tubes', unit_price: 8.50, coverage_per_unit: '~1 tube per 5 squares', supplier: '', is_default: 1, sort_order: 11 },
-    { category: 'custom', name: 'Pipe Boot / Collar', unit: 'pieces', unit_price: 18.00, coverage_per_unit: '~2 per 1000 sq ft', supplier: '', is_default: 0, sort_order: 12 },
+    { category: 'shingles', name: '3-Tab Standard Shingles', unit: 'bundles', unit_price: 32.00, coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', supplier: '', is_default: 0, sort_order: 1 },
+    { category: 'shingles', name: 'Architectural Shingles (Laminate)', unit: 'bundles', unit_price: 42.00, coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', supplier: '', is_default: 1, sort_order: 2 },
+    { category: 'shingles', name: 'Premium Architectural Shingles', unit: 'bundles', unit_price: 55.00, coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', supplier: '', is_default: 0, sort_order: 3 },
+    { category: 'shingles', name: 'Designer / Luxury Shingles', unit: 'bundles', unit_price: 72.00, coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', supplier: '', is_default: 0, sort_order: 4 },
+    { category: 'shingles', name: 'Impact-Resistant Shingles (Class 4)', unit: 'bundles', unit_price: 62.00, coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', supplier: '', is_default: 0, sort_order: 5 },
+    { category: 'shingles', name: 'Steel / Metal Shingles', unit: 'bundles', unit_price: 95.00, coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', supplier: '', is_default: 0, sort_order: 6 },
+    { category: 'underlayment', name: 'Synthetic Underlayment', unit: 'rolls', unit_price: 95.00, coverage_per_unit: '400 sq ft per roll', supplier: '', is_default: 1, sort_order: 7 },
+    { category: 'ice_shield', name: 'Ice & Water Shield Membrane', unit: 'rolls', unit_price: 165.00, coverage_per_unit: '200 sq ft per roll', supplier: '', is_default: 1, sort_order: 8 },
+    { category: 'starter', name: 'Starter Strip Shingles', unit: 'boxes', unit_price: 45.00, coverage_per_unit: '100 lin ft per box', supplier: '', is_default: 1, sort_order: 9 },
+    { category: 'ridge_cap', name: 'Ridge/Hip Cap Shingles', unit: 'bundles', unit_price: 65.00, coverage_per_unit: '35 lin ft per bundle', supplier: '', is_default: 1, sort_order: 10 },
+    { category: 'drip_edge', name: 'Aluminum Drip Edge (Type C/D)', unit: 'pieces', unit_price: 8.50, coverage_per_unit: '10 ft per piece', supplier: '', is_default: 1, sort_order: 11 },
+    { category: 'valley_metal', name: 'W-Valley Flashing (Aluminum)', unit: 'pieces', unit_price: 22.00, coverage_per_unit: '10 ft per piece', supplier: '', is_default: 1, sort_order: 12 },
+    { category: 'nails', name: 'Roofing Nails 1-1/4" Galvanized', unit: 'boxes', unit_price: 28.00, coverage_per_unit: '5 lb box (~2 squares)', supplier: '', is_default: 1, sort_order: 13 },
+    { category: 'ventilation', name: 'Ridge Vent', unit: 'pieces', unit_price: 22.00, coverage_per_unit: '4 ft per piece', supplier: '', is_default: 1, sort_order: 14 },
+    { category: 'custom', name: 'Roofing Cement / Caulk', unit: 'tubes', unit_price: 8.50, coverage_per_unit: '~1 tube per 5 squares', supplier: '', is_default: 1, sort_order: 15 },
+    { category: 'custom', name: 'Pipe Boot / Collar', unit: 'pieces', unit_price: 18.00, coverage_per_unit: '~2 per 1000 sq ft', supplier: '', is_default: 0, sort_order: 16 },
   ]
 
   for (const d of defaults) {

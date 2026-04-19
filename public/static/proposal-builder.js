@@ -854,10 +854,8 @@ document.addEventListener('DOMContentLoaded', () => {
     <!-- Gmail Connect Banner -->
     ${renderGmailConnectBanner()}
 
-    <!-- Certificate Automation + Settings Panel -->
+    <!-- Certificate Automation — Quick Toggle + Link to Full Page -->
     <div class="bg-white rounded-xl border border-gray-200 mb-5 overflow-hidden">
-
-      <!-- Auto-send toggle row -->
       <div class="p-4 flex items-center justify-between gap-4">
         <div class="flex items-center gap-3">
           <div style="width:40px;height:40px;border-radius:10px;background:#f0fdf4;display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -865,53 +863,20 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
           <div>
             <p class="text-sm font-semibold text-gray-900">Auto-Send Certificate of Installation</p>
-            <p class="text-xs text-gray-500 mt-0.5">Automatically email a Certificate of New Roof Installation to the customer when they sign a proposal — so they can submit it to their insurance company</p>
+            <p class="text-xs text-gray-500 mt-0.5">Automatically email a professional certificate when customers sign — for insurance documentation</p>
           </div>
         </div>
-        <button onclick="window._pb.toggleAutoSendCertificate()" class="flex-shrink-0 relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none ${state.autoSendCertificate ? 'bg-green-500' : 'bg-gray-200'}" title="${state.autoSendCertificate ? 'Automation ON — click to disable' : 'Click to enable auto-send'}">
-          <span class="inline-block w-4 h-4 transform rounded-full bg-white shadow transition-transform ${state.autoSendCertificate ? 'translate-x-6' : 'translate-x-1'}"></span>
-        </button>
-      </div>
-
-      <!-- Certificate Settings (always visible) -->
-      <div style="border-top:1px solid #f1f5f9;background:#fafafa;padding:16px 20px">
-        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3"><i class="fas fa-sliders-h mr-1.5"></i>Certificate Customization</p>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-
-          <!-- License Number -->
-          <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Contractor License / Registration #</label>
-            <input type="text" id="cert-license-input" value="${state.certLicenseNumber || ''}"
-              oninput="state.certLicenseNumber=this.value;state.certSettingsDirty=true"
-              placeholder="e.g. MB-12345 or ROC-789012"
-              class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none bg-white">
-            <p class="text-xs text-gray-400 mt-1">Appears on the certificate — required by most insurance companies</p>
-          </div>
-
-          <!-- Color -->
-          <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Certificate Accent Color</label>
-            <div class="flex items-center gap-2 flex-wrap">
-              ${['#1a5c38','#1e40af','#7c3aed','#b91c1c','#92400e','#374151'].map(c => `
-                <button onclick="window._pb.setCertColor('${c}')" style="width:28px;height:28px;border-radius:50%;background:${c};border:${(state.certAccentColor||'#1a5c38')===c ? '3px solid #1a1a1a' : '2px solid transparent'};cursor:pointer;flex-shrink:0" title="${c}"></button>
-              `).join('')}
-              <input type="color" value="${state.certAccentColor || '#1a5c38'}"
-                onchange="window._pb.setCertColor(this.value)"
-                title="Custom color"
-                style="width:28px;height:28px;border-radius:50%;border:2px solid #e5e7eb;cursor:pointer;padding:1px;background:none">
-            </div>
-            <p class="text-xs text-gray-400 mt-1">Sets the border and heading color on the certificate</p>
-          </div>
-
-        </div>
-
-        <div class="flex items-center gap-3 flex-wrap">
-          <button onclick="window._pb.saveCertSettings()" class="px-4 py-2 text-xs font-semibold rounded-lg transition-all ${state.certSettingsDirty ? 'bg-gray-900 text-white hover:bg-gray-700' : 'bg-gray-100 text-gray-500 cursor-default'}">
-            <i class="fas fa-save mr-1.5"></i>Save Certificate Settings
+        <div class="flex items-center gap-3">
+          <button onclick="window._pb.toggleAutoSendCertificate()" class="flex-shrink-0 relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none ${state.autoSendCertificate ? 'bg-green-500' : 'bg-gray-200'}" title="${state.autoSendCertificate ? 'Automation ON — click to disable' : 'Click to enable auto-send'}">
+            <span class="inline-block w-4 h-4 transform rounded-full bg-white shadow transition-transform ${state.autoSendCertificate ? 'translate-x-6' : 'translate-x-1'}"></span>
           </button>
-          ${(() => { const accepted = state.proposals.filter(p => p.status === 'accepted'); return accepted.length > 0 ? `<a href="/api/invoices/${accepted[0].id}/certificate" target="_blank" class="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-all"><i class="fas fa-eye mr-1.5"></i>Preview Certificate</a>` : '<span class="text-xs text-gray-400"><i class="fas fa-info-circle mr-1"></i>Accept a proposal to preview the certificate</span>'; })()}
-          <a href="/customer/profile" class="text-xs text-brand-600 hover:underline ml-auto"><i class="fas fa-building mr-1"></i>Update logo & company info →</a>
         </div>
+      </div>
+      <div style="border-top:1px solid #f1f5f9;background:#fafafa;padding:12px 20px;display:flex;align-items:center;justify-content:space-between">
+        <p class="text-xs text-gray-500"><i class="fas fa-palette mr-1"></i>Choose from 4 templates, customize colors, fonts & branding</p>
+        <a href="/customer/certificate-automations" class="px-4 py-2 text-xs font-semibold rounded-lg bg-gray-900 text-white hover:bg-gray-700 transition-all">
+          <i class="fas fa-arrow-right mr-1.5"></i>Open Certificate Designer
+        </a>
       </div>
     </div>
 

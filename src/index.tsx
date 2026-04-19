@@ -2444,6 +2444,7 @@ app.get('/customer/google-ads', (c) => c.html(getGoogleAdsPageHTML()))
 app.get('/customer/google-business', (c) => c.html(getGoogleBusinessPageHTML()))
 app.get('/customer/widget', (c) => c.html(getWidgetSettingsPageHTML()))
 app.get('/customer/widget-leads', (c) => c.html(getWidgetLeadsPageHTML()))
+app.get('/customer/certificate-automations', (c) => c.html(getCertificateAutomationsPageHTML()))
 
 // Widget view page (loaded inside iframe on contractor websites)
 app.get('/widget/view', (c) => {
@@ -15825,6 +15826,47 @@ function getWidgetLeadsPageHTML() {
     loadStats();
   <\/script>
   ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// CERTIFICATE AUTOMATIONS PAGE
+// ============================================================
+function getCertificateAutomationsPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Certificate Automations - Roof Manager</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="min-h-screen" style="background:var(--bg-page)">
+  <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+      <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <div>
+          <h1 class="text-xl font-bold">Automations</h1>
+          <p style="color:#9ca3af" class="text-xs">Certificate Design & Auto-Send</p>
+        </div>
+      </a>
+      <nav class="flex items-center space-x-4">
+        <a href="/customer/proposal-builder" style="color:#9ca3af" class="hover:text-white text-sm"><i class="fas fa-file-signature mr-1"></i>Proposals</a>
+        <a href="/customer/jobs" style="color:#9ca3af" class="hover:text-white text-sm"><i class="fas fa-hard-hat mr-1"></i>Jobs</a>
+        <a href="/customer/dashboard" style="color:#9ca3af" class="hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <div id="cert-auto-root">
+      <div style="display:flex;align-items:center;justify-content:center;padding:80px 0">
+        <div style="width:40px;height:40px;border:3px solid #e5e7eb;border-top-color:#16a34a;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+      </div>
+    </div>
+  </main>
+  <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+  <script src="/static/certificate-automations.js?v=${Date.now()}"></script>
 </body>
 </html>`
 }

@@ -142,6 +142,8 @@ document.addEventListener('DOMContentLoaded', async function() {
   renderDashboard();
   // Show onboarding wizard for new customers
   if (custState.customer && !custState.customer.onboarding_completed) showOnboardingModal();
+  // Check if material preferences have been configured
+  checkMaterialSetup();
   // Initialize ads for non-subscribers after data is loaded
   if (window.RRAds) window.RRAds.init(custState.showAds, window.__rraPublisherId);
   // Auto-refresh when reports are generating
@@ -299,6 +301,7 @@ function renderDashboard() {
           navLink('/customer/invoices', 'fa-file-invoice-dollar', 'Invoices', invBadge || null, 'bg-blue-600') +
           navLink('/customer/proposals', 'fa-file-signature', 'Proposals', propBadge || null, 'bg-blue-600') +
           navLink('/customer/jobs', 'fa-hard-hat', 'Jobs', jobBadge || null, 'bg-gray-800') +
+          navLink('/customer/certificate-automations', 'fa-certificate', 'Cert Automations', null, 'bg-emerald-600') +
           navLink('/customer/crew', 'fa-users', 'Crew Manager', null, 'bg-gray-800') +
           navLink('/customer/pipeline', 'fa-funnel-dollar', 'Pipeline', null, 'bg-gray-800') +
           (isSolar ? navLink('/customer/solar-pipeline', 'fa-solar-panel', 'Solar Sales Pipeline', null, 'bg-amber-600') : '') +
@@ -414,6 +417,9 @@ function renderDashboard() {
             '<a href="/customer/team" class="px-3 py-1.5 bg-[#111111]/10 hover:bg-[#111111]/20 text-white rounded-lg text-xs font-semibold border border-white/20 flex-shrink-0"><i class="fas fa-users-cog mr-1"></i>Team</a>' +
           '</div>' +
         '</div>' : '') +
+
+      // Material setup nudge (dismissed daily via localStorage)
+      '<div id="material-setup-banner"></div>' +
 
       // Calendar + Quick Actions
       '<div class="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-5">' +
@@ -1300,3 +1306,52 @@ window._toggleTheme = function() {
     btn.title = 'Theme: ' + next.charAt(0).toUpperCase() + next.slice(1);
   }
 };
+
+// ============================================================
+// MATERIAL SETUP NUDGE — Shows banner if preferences not configured
+// Dismissed for 24 hours when user clicks dismiss
+// ============================================================
+async function checkMaterialSetup() {
+  // Don't show for team members — only the account owner sets this up
+  if (custState.isTeamMember) return;
+
+  // Check if dismissed today
+  var dismissKey = 'material_setup_dismissed';
+  var dismissed = localStorage.getItem(dismissKey);
+  if (dismissed) {
+    var dismissedAt = parseInt(dismissed, 10);
+    if (Date.now() - dismissedAt < 24 * 60 * 60 * 1000) return;  // 24 hours
+  }
+
+  try {
+    var res = await fetch('/api/admin/material-preferences', { headers: authHeaders() });
+    if (!res.ok) return;
+    var data = await res.json();
+    // If preferences exist and have been saved (non-default), don't show
+    if (data.preferences && data.preferences._saved) return;
+  } catch (e) { return; }
+
+  // Show the banner
+  var banner = document.getElementById('material-setup-banner');
+  if (!banner) return;
+  banner.innerHTML =
+    '<div class="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 mb-5 shadow-lg border border-amber-400/30">' +
+      '<div class="flex flex-col sm:flex-row items-center gap-3">' +
+        '<div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0 backdrop-blur"><i class="fas fa-layer-group text-white text-lg"></i></div>' +
+        '<div class="flex-1 text-center sm:text-left">' +
+          '<h3 class="text-white font-bold text-sm">Set Up Your Material Preferences</h3>' +
+          '<p class="text-amber-100 text-xs mt-0.5">Choose your preferred shingle type, waste factor, and tax rate so every report automatically includes an accurate material take-off.</p>' +
+        '</div>' +
+        '<div class="flex gap-2 flex-shrink-0">' +
+          '<a href="/customer/settings" class="px-4 py-2 bg-white hover:bg-amber-50 text-amber-700 font-bold rounded-xl shadow text-sm transition-colors"><i class="fas fa-cog mr-1.5"></i>Set Up Now</a>' +
+          '<button onclick="dismissMaterialSetup()" class="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-medium transition-colors border border-white/20">Dismiss</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+}
+
+function dismissMaterialSetup() {
+  localStorage.setItem('material_setup_dismissed', Date.now().toString());
+  var banner = document.getElementById('material-setup-banner');
+  if (banner) banner.innerHTML = '';
+}
