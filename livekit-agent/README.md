@@ -236,4 +236,39 @@ You'd need the Growth plan ($0.05/agent-minute) for higher volume.
 
 ---
 
-*Last updated: 2026-03-16 | Version: 9.3 | LiveKit Agents SDK: 1.4.6*
+---
+
+## Deploying from Super Admin
+
+The Roof Manager super admin dashboard includes a one-click agent deployment feature at `/admin/super/secretary` → **Agent Deploy** tab.
+
+### How it works
+
+1. Super admin clicks **Deploy Agent to LiveKit Cloud** in the dashboard.
+2. The app POSTs to `POST /api/admin/superadmin/agent/deploy`, which fires a webhook to trigger deployment.
+3. The webhook triggers the GitHub Actions workflow (`.github/workflows/livekit-agent-deploy.yml`), which:
+   - Installs the `lk` CLI
+   - Reads the subdomain from `livekit-agent/livekit.toml`
+   - Runs `lk agent deploy --subdomain roofreporterai-btkwkiwh --yes .`
+4. The dashboard polls `GET /api/admin/superadmin/agent/status` every 5 seconds to show progress.
+
+### Required GitHub Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `LK_CLOUD_TOKEN` | LiveKit Cloud API token (from cloud.livekit.io → Settings → API Keys) |
+
+### Required Cloudflare Env Vars
+
+| Variable | Description |
+|----------|-------------|
+| `LIVEKIT_DEPLOY_WEBHOOK_URL` | GitHub repository_dispatch URL: `https://api.github.com/repos/{owner}/{repo}/dispatches` |
+| `LIVEKIT_DEPLOY_WEBHOOK_SECRET` | (Optional) HMAC secret for webhook signature verification |
+
+### Automatic Deployment
+
+The agent also auto-deploys on push to `main` when any file in `livekit-agent/` changes (via the same GitHub Actions workflow).
+
+---
+
+*Last updated: 2026-04-18 | Version: 9.4 | LiveKit Agents SDK: 1.4.6*

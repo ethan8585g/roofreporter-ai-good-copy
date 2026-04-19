@@ -82,7 +82,7 @@ function render() {
     { id:'neworder', label:'New Order', icon:'fa-plus-circle' },
     { id:'blog', label:'Blog', icon:'fa-blog' },
     { id:'activity', label:'Activity Log', icon:'fa-history' },
-    { id:'sip', label:'SIP Bridge', icon:'fa-phone-volume' },
+    { id:'sip', label:'AI Secretary', icon:'fa-robot' },
     { id:'search', label:'Report Search', icon:'fa-search' },
     { id:'claims', label:'Claims', icon:'fa-file-shield' },
     { id:'instagram', label:'Instagram', icon:'fa-instagram' }
@@ -2256,6 +2256,23 @@ async function loadSipData() {
 }
 
 function renderSipBridge() {
+  // Deep-link to the full AI Secretary provisioning dashboard for superadmins
+  try {
+    var u = JSON.parse(localStorage.getItem('rc_user') || '{}');
+    if (u.role === 'superadmin') {
+      return section('AI Secretary', 'fa-robot', `
+        <div class="text-center py-8">
+          <i class="fas fa-robot text-5xl text-indigo-400 mb-4" style="display:block"></i>
+          <p class="text-gray-600 mb-4">Manage AI Secretary provisioning, phone pool, and agent deployments from the dedicated dashboard.</p>
+          <a href="/admin/super/secretary" class="inline-block px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-all shadow-lg">
+            <i class="fas fa-external-link-alt mr-2"></i>Open AI Secretary Dashboard
+          </a>
+        </div>
+      `);
+    }
+  } catch(_) {}
+
+  // Fallback: original SIP Bridge view for non-superadmin
   // Auto-load on first visit
   if (!sipData && !sipLoading) { loadSipData(); }
 

@@ -1643,14 +1643,16 @@ async function deployLiveKitForCustomer(
   env: any,
   customerId: number,
   phoneNumber: string,
-  opts: { sip_username?: string; sip_password?: string; reuse_existing?: boolean } = {}
-): Promise<{ success: boolean; trunk_id: string; dispatch_rule_id: string; error?: string }> {
+  opts: { sip_username?: string; sip_password?: string; reuse_existing?: boolean; agent_name?: string; agent_voice?: string; agent_language?: string } = {}
+): Promise<{ success: boolean; trunk_id: string; dispatch_rule_id: string; sip_uri?: string; error?: string }> {
   const apiKey = env.LIVEKIT_API_KEY
   const apiSecret = env.LIVEKIT_API_SECRET
   const livekitUrl = env.LIVEKIT_URL
   const livekitSipUri = env.LIVEKIT_SIP_URI || ''
 
   if (!apiKey || !apiSecret || !livekitUrl) {
+    await env.DB.prepare('UPDATE secretary_config SET connection_status = ?, last_test_result = ?, last_test_details = ?, updated_at = datetime("now") WHERE customer_id = ?')
+      .bind('failed', 'failed', 'LiveKit env vars not configured (LIVEKIT_API_KEY/SECRET/URL)', customerId).run()
     return { success: false, trunk_id: '', dispatch_rule_id: '', error: 'LiveKit env vars not configured (LIVEKIT_API_KEY/SECRET/URL)' }
   }
 
@@ -1659,9 +1661,13 @@ async function deployLiveKitForCustomer(
       'SELECT livekit_inbound_trunk_id, livekit_dispatch_rule_id FROM secretary_config WHERE customer_id = ?'
     ).bind(customerId).first<any>()
     if (existing?.livekit_inbound_trunk_id && existing?.livekit_dispatch_rule_id) {
-      return { success: true, trunk_id: existing.livekit_inbound_trunk_id, dispatch_rule_id: existing.livekit_dispatch_rule_id }
+      return { success: true, trunk_id: existing.livekit_inbound_trunk_id, dispatch_rule_id: existing.livekit_dispatch_rule_id, sip_uri: livekitSipUri }
     }
   }
+
+  // Mark status as pending_forwarding
+  await env.DB.prepare('UPDATE secretary_config SET connection_status = ?, updated_at = datetime("now") WHERE customer_id = ?')
+    .bind('pending_forwarding', customerId).run()
 
   // Create JWT for LiveKit SIP API
   function b64url(data: Uint8Array | string): string {
@@ -1682,39 +1688,56 @@ async function deployLiveKitForCustomer(
     return resp.json() as Promise<any>
   }
 
-  // Step 1: Create inbound trunk (with optional BYO SIP auth)
-  const trunkBody: any = { name: `secretary-${customerId}`, numbers: [phoneNumber], krisp_enabled: true, metadata: JSON.stringify({ customer_id: customerId, service: 'roofer_secretary' }) }
+  async function lkDelete(path: string, body: any) {
+    try { await fetch(`${httpUrl}${path}`, { method: 'POST', headers: { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) } catch (e) { /* best-effort cleanup */ }
+  }
+
+  // Step 1: Create inbound trunk (with optional BYO SIP auth + agent metadata)
+  const trunkMetadata: any = { customer_id: customerId, service: 'roofer_secretary' }
+  if (opts.agent_name) trunkMetadata.agent_name = opts.agent_name
+  if (opts.agent_voice) trunkMetadata.agent_voice = opts.agent_voice
+  if (opts.agent_language) trunkMetadata.agent_language = opts.agent_language
+  const trunkBody: any = { name: `secretary-${customerId}`, numbers: [phoneNumber], krisp_enabled: true, metadata: JSON.stringify(trunkMetadata) }
   if (opts.sip_username) trunkBody.auth_username = opts.sip_username
   if (opts.sip_password) trunkBody.auth_password = opts.sip_password
   const trunkResult = await lkApi('/twirp/livekit.SIP/CreateSIPInboundTrunk', { trunk: trunkBody })
   const trunkId = trunkResult?.sip_trunk_id || trunkResult?.trunk?.sip_trunk_id || ''
   if (!trunkId) {
-    return { success: false, trunk_id: '', dispatch_rule_id: '', error: `LiveKit trunk creation failed: ${JSON.stringify(trunkResult).slice(0, 200)}` }
+    const errorMsg = `LiveKit trunk creation failed: ${JSON.stringify(trunkResult).slice(0, 200)}`
+    await env.DB.prepare('UPDATE secretary_config SET connection_status = ?, last_test_result = ?, last_test_details = ?, updated_at = datetime("now") WHERE customer_id = ?')
+      .bind('failed', 'failed', errorMsg, customerId).run()
+    return { success: false, trunk_id: '', dispatch_rule_id: '', error: errorMsg }
   }
 
-  // Step 2: Create dispatch rule
+  // Step 2: Create dispatch rule — with compensating rollback if it fails
   const dispatchResult = await lkApi('/twirp/livekit.SIP/CreateSIPDispatchRule', {
-    trunk_ids: trunkId ? [trunkId] : [],
+    trunk_ids: [trunkId],
     rule: { dispatchRuleIndividual: { roomPrefix: `secretary-${customerId}-`, pin: '' } },
     name: `secretary-dispatch-${customerId}`,
     metadata: JSON.stringify({ customer_id: customerId }),
   })
   const dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
-
-  // Save to secretary_config
-  await env.DB.prepare(
-    'UPDATE secretary_config SET livekit_inbound_trunk_id = ?, livekit_dispatch_rule_id = ?, livekit_sip_uri = ?, connection_status = ?, is_active = 1, updated_at = datetime("now") WHERE customer_id = ?'
-  ).bind(trunkId, dispatchId, livekitSipUri, trunkId ? 'connected' : 'pending_forwarding', customerId).run()
-
-  // Update phone pool
-  if (trunkId) {
-    await env.DB.prepare(
-      'UPDATE secretary_phone_pool SET sip_trunk_id = ?, dispatch_rule_id = ?, updated_at = datetime("now") WHERE assigned_to_customer_id = ?'
-    ).bind(trunkId, dispatchId, customerId).run()
+  if (!dispatchId) {
+    // Compensating rollback: delete the orphaned trunk
+    await lkDelete('/twirp/livekit.SIP/DeleteSIPTrunk', { sip_trunk_id: trunkId })
+    const errorMsg = `LiveKit dispatch rule creation failed (trunk ${trunkId} rolled back): ${JSON.stringify(dispatchResult).slice(0, 200)}`
+    await env.DB.prepare('UPDATE secretary_config SET connection_status = ?, last_test_result = ?, last_test_details = ?, updated_at = datetime("now") WHERE customer_id = ?')
+      .bind('failed', 'failed', errorMsg, customerId).run()
+    return { success: false, trunk_id: '', dispatch_rule_id: '', error: errorMsg }
   }
 
+  // Save to secretary_config — mark connected
+  await env.DB.prepare(
+    'UPDATE secretary_config SET livekit_inbound_trunk_id = ?, livekit_dispatch_rule_id = ?, livekit_sip_uri = ?, connection_status = ?, is_active = 1, last_test_result = ?, last_test_details = ?, updated_at = datetime("now") WHERE customer_id = ?'
+  ).bind(trunkId, dispatchId, livekitSipUri, 'connected', 'success', 'SIP trunk and dispatch rule created successfully', customerId).run()
+
+  // Update phone pool
+  await env.DB.prepare(
+    'UPDATE secretary_phone_pool SET sip_trunk_id = ?, dispatch_rule_id = ?, updated_at = datetime("now") WHERE assigned_to_customer_id = ?'
+  ).bind(trunkId, dispatchId, customerId).run()
+
   console.log(`[LiveKit Deploy] Customer ${customerId}: trunk=${trunkId}, dispatch=${dispatchId}`)
-  return { success: !!trunkId, trunk_id: trunkId, dispatch_rule_id: dispatchId }
+  return { success: true, trunk_id: trunkId, dispatch_rule_id: dispatchId, sip_uri: livekitSipUri }
 }
 
 // PBKDF2 password hashing — matches verifyPassword() in customer-auth.ts
@@ -2122,6 +2145,246 @@ adminRoutes.get('/superadmin/secretary/deployment-status', async (c) => {
       WHERE c.is_active = 1
       ORDER BY c.created_at DESC
     `).all<any>()
+    return c.json({ deployments: rows.results || [] })
+  } catch (err: any) {
+    return c.json({ error: err.message, deployments: [] }, 500)
+  }
+})
+
+// ============================================================
+// SUPERADMIN: PHONE POOL MANAGEMENT
+// ============================================================
+
+// GET /superadmin/phone-pool — List all phone pool numbers with assignment info
+adminRoutes.get('/superadmin/phone-pool', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const status = c.req.query('status') || 'all'
+  try {
+    let whereClause = ''
+    if (status === 'available') whereClause = "WHERE pp.status = 'available'"
+    else if (status === 'assigned') whereClause = "WHERE pp.status = 'assigned'"
+
+    const rows = await c.env.DB.prepare(`
+      SELECT pp.*, c.name as customer_name, c.email as customer_email
+      FROM secretary_phone_pool pp
+      LEFT JOIN customers c ON c.id = pp.assigned_to_customer_id
+      ${whereClause}
+      ORDER BY pp.created_at DESC
+    `).all<any>()
+    return c.json({ phone_pool: rows.results || [] })
+  } catch (err: any) {
+    return c.json({ error: err.message, phone_pool: [] }, 500)
+  }
+})
+
+// POST /superadmin/phone-pool/:id/release — Release an assigned phone number back to pool
+adminRoutes.post('/superadmin/phone-pool/:id/release', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const poolId = parseInt(c.req.param('id'))
+  try {
+    const poolRow = await c.env.DB.prepare('SELECT * FROM secretary_phone_pool WHERE id = ?').bind(poolId).first<any>()
+    if (!poolRow) return c.json({ error: 'Phone pool entry not found' }, 404)
+
+    // If there's a LiveKit trunk/dispatch, delete them
+    if (poolRow.sip_trunk_id || poolRow.dispatch_rule_id) {
+      const apiKey = c.env.LIVEKIT_API_KEY
+      const apiSecret = c.env.LIVEKIT_API_SECRET
+      const livekitUrl = c.env.LIVEKIT_URL
+      if (apiKey && apiSecret && livekitUrl) {
+        // Build JWT
+        function b64url(data: Uint8Array | string): string {
+          let str: string
+          if (typeof data === 'string') { str = btoa(data) } else { let b = ''; for (let i = 0; i < data.length; i++) b += String.fromCharCode(data[i]); str = btoa(b) }
+          return str.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+        }
+        const now = Math.floor(Date.now() / 1000)
+        const hdr = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+        const pld = b64url(JSON.stringify({ iss: apiKey, sub: 'server', iat: now, exp: now + 300, nbf: now, sip: { admin: true, call: true } }))
+        const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(apiSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+        const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${hdr}.${pld}`))
+        const jwt = `${hdr}.${pld}.${b64url(new Uint8Array(sig))}`
+        const httpUrl = (livekitUrl as string).replace('wss://', 'https://').replace(/\/$/, '')
+        const headers = { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json' }
+
+        if (poolRow.dispatch_rule_id) {
+          try { await fetch(`${httpUrl}/twirp/livekit.SIP/DeleteSIPDispatchRule`, { method: 'POST', headers, body: JSON.stringify({ sip_dispatch_rule_id: poolRow.dispatch_rule_id }) }) } catch (_) {}
+        }
+        if (poolRow.sip_trunk_id) {
+          try { await fetch(`${httpUrl}/twirp/livekit.SIP/DeleteSIPTrunk`, { method: 'POST', headers, body: JSON.stringify({ sip_trunk_id: poolRow.sip_trunk_id }) }) } catch (_) {}
+        }
+      }
+    }
+
+    // Clear the customer's secretary_config if assigned
+    if (poolRow.assigned_to_customer_id) {
+      await c.env.DB.prepare(
+        'UPDATE secretary_config SET livekit_inbound_trunk_id = NULL, livekit_dispatch_rule_id = NULL, assigned_phone_number = NULL, connection_status = ?, updated_at = datetime("now") WHERE customer_id = ?'
+      ).bind('not_connected', poolRow.assigned_to_customer_id).run()
+    }
+
+    // Reset pool entry
+    await c.env.DB.prepare(
+      "UPDATE secretary_phone_pool SET status = 'available', assigned_to_customer_id = NULL, assigned_at = NULL, sip_trunk_id = NULL, dispatch_rule_id = NULL, updated_at = datetime('now') WHERE id = ?"
+    ).bind(poolId).run()
+
+    return c.json({ success: true })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// POST /superadmin/secretary/:customerId/redeploy-trunk — Delete + recreate SIP trunk
+adminRoutes.post('/superadmin/secretary/:customerId/redeploy-trunk', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const customerId = parseInt(c.req.param('customerId'))
+  try {
+    const config = await c.env.DB.prepare('SELECT * FROM secretary_config WHERE customer_id = ?').bind(customerId).first<any>()
+    if (!config) return c.json({ error: 'Secretary config not found' }, 404)
+
+    const phoneNumber = config.assigned_phone_number
+    if (!phoneNumber) return c.json({ error: 'No phone number assigned to this customer' }, 400)
+
+    // Delete existing trunk + dispatch if present
+    const apiKey = c.env.LIVEKIT_API_KEY
+    const apiSecret = c.env.LIVEKIT_API_SECRET
+    const livekitUrl = c.env.LIVEKIT_URL
+    if (apiKey && apiSecret && livekitUrl && (config.livekit_inbound_trunk_id || config.livekit_dispatch_rule_id)) {
+      function b64url(data: Uint8Array | string): string {
+        let str: string
+        if (typeof data === 'string') { str = btoa(data) } else { let b = ''; for (let i = 0; i < data.length; i++) b += String.fromCharCode(data[i]); str = btoa(b) }
+        return str.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+      }
+      const now = Math.floor(Date.now() / 1000)
+      const hdr = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+      const pld = b64url(JSON.stringify({ iss: apiKey, sub: 'server', iat: now, exp: now + 300, nbf: now, sip: { admin: true, call: true } }))
+      const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(apiSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+      const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${hdr}.${pld}`))
+      const jwt = `${hdr}.${pld}.${b64url(new Uint8Array(sig))}`
+      const httpUrl = (livekitUrl as string).replace('wss://', 'https://').replace(/\/$/, '')
+      const headers = { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json' }
+
+      if (config.livekit_dispatch_rule_id) {
+        try { await fetch(`${httpUrl}/twirp/livekit.SIP/DeleteSIPDispatchRule`, { method: 'POST', headers, body: JSON.stringify({ sip_dispatch_rule_id: config.livekit_dispatch_rule_id }) }) } catch (_) {}
+      }
+      if (config.livekit_inbound_trunk_id) {
+        try { await fetch(`${httpUrl}/twirp/livekit.SIP/DeleteSIPTrunk`, { method: 'POST', headers, body: JSON.stringify({ sip_trunk_id: config.livekit_inbound_trunk_id }) }) } catch (_) {}
+      }
+
+      // Clear existing IDs so deployLiveKitForCustomer creates fresh ones
+      await c.env.DB.prepare(
+        'UPDATE secretary_config SET livekit_inbound_trunk_id = NULL, livekit_dispatch_rule_id = NULL, connection_status = ?, updated_at = datetime("now") WHERE customer_id = ?'
+      ).bind('pending_forwarding', customerId).run()
+    }
+
+    // Redeploy
+    const result = await deployLiveKitForCustomer(c.env, customerId, phoneNumber, {
+      sip_username: config.sip_username || undefined,
+      sip_password: config.sip_password || undefined,
+      reuse_existing: false,
+      agent_name: config.agent_name || undefined,
+      agent_voice: config.agent_voice || undefined,
+      agent_language: config.agent_language || undefined,
+    })
+
+    return c.json({ success: result.success, ...result })
+  } catch (err: any) {
+    await c.env.DB.prepare('UPDATE secretary_config SET connection_status = ?, last_test_result = ?, last_test_details = ?, updated_at = datetime("now") WHERE customer_id = ?')
+      .bind('failed', 'failed', err.message, customerId).run()
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// ============================================================
+// SUPERADMIN: AGENT DEPLOYMENT TO LIVEKIT CLOUD
+// ============================================================
+
+// POST /superadmin/agent/deploy — Trigger LiveKit Cloud agent deployment via webhook
+adminRoutes.post('/superadmin/agent/deploy', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const webhookUrl = (c.env as any).LIVEKIT_DEPLOY_WEBHOOK_URL
+  if (!webhookUrl) {
+    return c.json({
+      error: 'LIVEKIT_DEPLOY_WEBHOOK_URL not configured',
+      hint: 'Set LIVEKIT_DEPLOY_WEBHOOK_URL via wrangler secret put (e.g., a GitHub Actions repository_dispatch URL or Render deploy hook)'
+    }, 501)
+  }
+
+  try {
+    // Record the deployment attempt
+    const deployRow = await c.env.DB.prepare(
+      `INSERT INTO agent_deployments (requested_by_user_id, status, agent_id, livekit_project) VALUES (?, 'pending', 'CA_McGBLzwzRDve', 'roofreporterai-btkwkiwh') RETURNING id`
+    ).bind(admin.id).first<any>()
+    const deployId = deployRow?.id
+
+    // Build HMAC signature if secret is configured
+    const webhookSecret = (c.env as any).LIVEKIT_DEPLOY_WEBHOOK_SECRET
+    const payload = JSON.stringify({ requestedBy: admin.email || admin.name, requestedAt: new Date().toISOString(), deployId })
+    let signature = ''
+    if (webhookSecret) {
+      const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(webhookSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+      const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload))
+      signature = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('')
+    }
+
+    // POST to webhook
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (signature) headers['X-Signature-256'] = `sha256=${signature}`
+
+    // If it's a GitHub repository_dispatch URL, wrap payload accordingly
+    const isGitHub = webhookUrl.includes('api.github.com')
+    const body = isGitHub
+      ? JSON.stringify({ event_type: 'deploy-livekit-agent', client_payload: { deployId, requestedBy: admin.email || admin.name } })
+      : payload
+
+    const resp = await fetch(webhookUrl, { method: 'POST', headers, body })
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => 'Unknown error')
+      await c.env.DB.prepare('UPDATE agent_deployments SET status = ?, error = ?, finished_at = datetime("now") WHERE id = ?')
+        .bind('failed', `Webhook returned ${resp.status}: ${errText.slice(0, 500)}`, deployId).run()
+      return c.json({ error: `Webhook failed: ${resp.status}`, deploy_id: deployId }, 502)
+    }
+
+    // Mark as running
+    await c.env.DB.prepare("UPDATE agent_deployments SET status = 'running', started_at = datetime('now') WHERE id = ?").bind(deployId).run()
+
+    return c.json({ success: true, deploy_id: deployId, status: 'running', agent_id: 'CA_McGBLzwzRDve', livekit_project: 'roofreporterai-btkwkiwh' })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// GET /superadmin/agent/status — Latest deployment status
+adminRoutes.get('/superadmin/agent/status', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  try {
+    const latest = await c.env.DB.prepare(
+      'SELECT * FROM agent_deployments ORDER BY requested_at DESC LIMIT 1'
+    ).first<any>()
+    return c.json({ deployment: latest || null, agent_id: 'CA_McGBLzwzRDve', livekit_project: 'roofreporterai-btkwkiwh' })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// GET /superadmin/agent/deployments — List last 50 deployments
+adminRoutes.get('/superadmin/agent/deployments', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  try {
+    const rows = await c.env.DB.prepare(
+      'SELECT * FROM agent_deployments ORDER BY requested_at DESC LIMIT 50'
+    ).all<any>()
     return c.json({ deployments: rows.results || [] })
   } catch (err: any) {
     return c.json({ error: err.message, deployments: [] }, 500)

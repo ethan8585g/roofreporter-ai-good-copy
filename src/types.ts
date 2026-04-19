@@ -1142,3 +1142,71 @@ export interface Proposal {
   updated_at: string
   created_by: string | null
 }
+
+// ============================================================
+// AI SECRETARY PROVISIONING TYPES
+// ============================================================
+
+/** A phone number in the secretary phone pool */
+export interface SecretaryPhonePool {
+  id: number
+  phone_number: string
+  country_code: string
+  area_code: string
+  status: 'available' | 'assigned' | 'reserved' | 'retired'
+  assigned_to_customer_id: number | null
+  assigned_at: string | null
+  sip_trunk_id: string | null
+  dispatch_rule_id: string | null
+  provider: string | null
+  provider_sid: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+  // Joined fields
+  customer_name?: string
+}
+
+/** Request body for provisioning a new AI Secretary subscriber */
+export interface SecretaryProvisioningRequest {
+  // Customer fields
+  name: string
+  email: string
+  business_phone: string
+  carrier_name: string
+  personal_phone?: string
+  // Phone strategy
+  phone_strategy: 'pool' | 'purchase' | 'byo'
+  pool_number_id?: number
+  twilio_country?: string
+  twilio_area_code?: string
+  sip_username?: string
+  sip_password?: string
+  twilio_trunk_sid?: string
+  byo_number?: string
+  // Secretary config
+  agent_name?: string
+  agent_voice?: string
+  agent_language?: string
+  greeting_script?: string
+  common_qa?: string
+  general_notes?: string
+  // Directories
+  directories?: Array<{ name: string; phone_or_action: string; special_notes?: string }>
+}
+
+/** Agent deployment record */
+export interface AgentDeployment {
+  id: number
+  requested_by_user_id: number | null
+  requested_at: string
+  started_at: string | null
+  finished_at: string | null
+  status: 'pending' | 'running' | 'succeeded' | 'failed'
+  commit_sha: string | null
+  agent_id: string | null
+  livekit_project: string | null
+  logs: string | null
+  error: string | null
+  created_at: string
+}

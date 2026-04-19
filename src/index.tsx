@@ -750,6 +750,10 @@ app.get('/admin/super', (c) => {
   return c.html(getSuperAdminBiHTML())
 })
 
+app.get('/admin/super/secretary', (c) => {
+  return c.html(getSuperAdminSecretaryHTML())
+})
+
 // Admin Dashboard (legacy + operational)
 app.get('/admin', (c) => {
   return c.html(getAdminPageHTML())
@@ -16908,6 +16912,136 @@ function getMaterialEstimatorEmbedHTML(): string {
 // ─────────────────────────────────────────────────────────────────────────────
 // BI Analytics Hub — unified super admin analytics dashboard
 // ─────────────────────────────────────────────────────────────────────────────
+function getSuperAdminSecretaryHTML(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>AI Secretary — Super Admin — Roof Manager</title>
+  <style>
+    .sec-nav-item { transition: all 0.2s ease; cursor: pointer; }
+    .sec-nav-item:hover { background: rgba(255,255,255,0.08); }
+    .sec-nav-item.active { background: linear-gradient(135deg,#4f46e5,#6366f1); color:#fff; box-shadow: 0 4px 12px rgba(99,102,241,0.35); }
+    @keyframes sec-fadein { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
+    #sec-main > * { animation: sec-fadein 0.3s ease-out; }
+    @keyframes spin { to { transform: rotate(360deg) } }
+    .animate-spin { animation: spin 1s linear infinite; }
+    .bg-slate-750 { background: rgba(30,41,59,0.7); }
+    .stat-card { background: rgba(30,41,59,0.6); border: 1px solid rgba(51,65,85,0.5); border-radius: 1rem; padding: 1.25rem; }
+    .stat-card .stat-val { font-size: 1.5rem; font-weight: 700; color: #fff; }
+    .stat-card .stat-label { font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem; }
+    .btn-primary { background: linear-gradient(135deg,#4f46e5,#6366f1); color:#fff; border:none; padding:0.5rem 1rem; border-radius:0.75rem; font-size:0.875rem; font-weight:600; cursor:pointer; transition:all 0.2s; }
+    .btn-primary:hover { box-shadow: 0 4px 12px rgba(99,102,241,0.4); transform: translateY(-1px); }
+    .btn-primary:disabled { opacity:0.5; cursor:not-allowed; transform:none; box-shadow:none; }
+    .btn-danger { background:#dc2626; color:#fff; border:none; padding:0.375rem 0.75rem; border-radius:0.5rem; font-size:0.75rem; cursor:pointer; }
+    .btn-danger:hover { background:#b91c1c; }
+    .btn-sm { padding:0.375rem 0.75rem; font-size:0.75rem; border-radius:0.5rem; border:none; cursor:pointer; font-weight:600; transition:all 0.15s; }
+    .btn-green { background:#059669; color:#fff; } .btn-green:hover { background:#047857; }
+    .btn-blue { background:#2563eb; color:#fff; } .btn-blue:hover { background:#1d4ed8; }
+    .btn-amber { background:#d97706; color:#fff; } .btn-amber:hover { background:#b45309; }
+    .btn-gray { background:#374151; color:#d1d5db; } .btn-gray:hover { background:#4b5563; }
+    .form-input { background:rgba(15,23,42,0.8); border:1px solid rgba(51,65,85,0.6); border-radius:0.5rem; color:#e2e8f0; padding:0.5rem 0.75rem; font-size:0.875rem; width:100%; }
+    .form-input:focus { outline:none; border-color:#6366f1; box-shadow:0 0 0 2px rgba(99,102,241,0.2); }
+    .form-label { font-size:0.75rem; font-weight:600; color:#94a3b8; margin-bottom:0.25rem; display:block; }
+    .form-select { background:rgba(15,23,42,0.8); border:1px solid rgba(51,65,85,0.6); border-radius:0.5rem; color:#e2e8f0; padding:0.5rem 0.75rem; font-size:0.875rem; width:100%; }
+    .tbl { width:100%; border-collapse:separate; border-spacing:0; font-size:0.8rem; }
+    .tbl th { text-align:left; padding:0.5rem 0.75rem; color:#64748b; font-weight:600; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em; border-bottom:1px solid rgba(51,65,85,0.5); }
+    .tbl td { padding:0.5rem 0.75rem; border-bottom:1px solid rgba(51,65,85,0.3); color:#cbd5e1; }
+    .tbl tr:hover td { background:rgba(51,65,85,0.2); }
+    .badge { display:inline-block; padding:0.125rem 0.5rem; border-radius:9999px; font-size:0.65rem; font-weight:700; text-transform:uppercase; }
+    .badge-green { background:rgba(5,150,105,0.2); color:#34d399; }
+    .badge-red { background:rgba(220,38,38,0.2); color:#f87171; }
+    .badge-amber { background:rgba(217,119,6,0.2); color:#fbbf24; }
+    .badge-blue { background:rgba(37,99,235,0.2); color:#60a5fa; }
+    .badge-gray { background:rgba(75,85,99,0.2); color:#9ca3af; }
+    .card { background:rgba(30,41,59,0.6); border:1px solid rgba(51,65,85,0.5); border-radius:1rem; padding:1.5rem; }
+    .card-title { font-size:1rem; font-weight:700; color:#fff; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem; }
+    .result-block { background:rgba(5,150,105,0.1); border:1px solid rgba(5,150,105,0.3); border-radius:0.75rem; padding:1rem; margin-top:1rem; }
+    .error-block { background:rgba(220,38,38,0.1); border:1px solid rgba(220,38,38,0.3); border-radius:0.75rem; padding:1rem; margin-top:1rem; }
+    .tab-btn { padding:0.5rem 1rem; border-radius:0.5rem 0.5rem 0 0; font-size:0.8rem; font-weight:600; cursor:pointer; border:1px solid transparent; border-bottom:none; color:#94a3b8; background:transparent; transition:all 0.2s; }
+    .tab-btn.active { background:rgba(30,41,59,0.6); color:#fff; border-color:rgba(51,65,85,0.5); }
+    .tab-btn:hover:not(.active) { color:#e2e8f0; }
+  </style>
+  <script>
+    (function(){
+      var u=localStorage.getItem('rc_user');
+      if(!u){window.location.href='/login';return;}
+      try{
+        var p=JSON.parse(u);
+        if(p.role!=='superadmin'){localStorage.removeItem('rc_user');localStorage.removeItem('rc_token');window.location.href='/login';}
+      }catch(e){window.location.href='/login';}
+    })();
+  </script>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col">
+
+  <!-- Top Bar -->
+  <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50 shadow-xl">
+    <div class="max-w-full mx-auto px-5 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+          <i class="fas fa-robot text-white text-sm"></i>
+        </div>
+        <div class="leading-tight">
+          <span class="text-white font-bold text-sm">Roof Manager</span>
+          <span class="text-gray-500 text-[10px] block -mt-0.5">AI Secretary Provisioning</span>
+        </div>
+        <span class="ml-2 px-2 py-0.5 bg-indigo-600/30 text-indigo-300 rounded text-[10px] font-bold border border-indigo-700">SUPER ADMIN</span>
+      </div>
+      <div class="flex items-center gap-4">
+        <a href="/admin/super" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-chart-bar mr-1 text-indigo-400"></i>BI Hub</a>
+        <a href="/super-admin" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-crown mr-1 text-yellow-400"></i>Command Center</a>
+        <a href="/admin" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-tachometer-alt mr-1"></i>Ops Panel</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="flex flex-1 min-h-0">
+    <!-- Sidebar -->
+    <aside class="w-52 bg-slate-900 border-r border-slate-800 shrink-0 flex flex-col">
+      <nav class="p-3 space-y-1 flex-1">
+        <div class="sec-nav-item active rounded-xl px-4 py-3 flex items-center gap-3" data-view="provision" onclick="secSetView('provision')">
+          <i class="fas fa-user-plus w-5 text-center text-green-400"></i>
+          <span class="text-sm font-medium">Provision</span>
+        </div>
+        <div class="sec-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-view="subscribers" onclick="secSetView('subscribers')">
+          <i class="fas fa-users w-5 text-center text-blue-400"></i>
+          <span class="text-sm font-medium">Subscribers</span>
+        </div>
+        <div class="sec-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-view="phone-pool" onclick="secSetView('phone-pool')">
+          <i class="fas fa-phone-alt w-5 text-center text-amber-400"></i>
+          <span class="text-sm font-medium">Phone Pool</span>
+        </div>
+        <div class="sec-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-view="agent-deploy" onclick="secSetView('agent-deploy')">
+          <i class="fas fa-rocket w-5 text-center text-purple-400"></i>
+          <span class="text-sm font-medium">Agent Deploy</span>
+        </div>
+      </nav>
+      <div class="p-3 border-t border-slate-800">
+        <a href="/super-admin" class="sec-nav-item rounded-xl px-4 py-2.5 flex items-center gap-3 text-gray-500 no-underline text-xs">
+          <i class="fas fa-arrow-left w-5 text-center"></i>
+          <span>Back to Command Center</span>
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main id="sec-main" class="flex-1 p-6 overflow-y-auto min-h-0">
+      <div class="flex items-center justify-center h-64">
+        <div class="text-center">
+          <div class="inline-block w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+          <p class="text-gray-500 text-sm">Loading...</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/dashboard-utils.js?v=${Date.now()}"></script>
+  <script src="/static/admin-secretary.js?v=${Date.now()}"></script>
+</body>
+</html>`
+}
+
 function getSuperAdminBiHTML(): string {
   return `<!DOCTYPE html>
 <html lang="en">

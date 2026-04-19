@@ -1,0 +1,42 @@
+name: Deploy LiveKit Agent
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'livekit-agent/**'
+  workflow_dispatch:
+  repository_dispatch:
+    types: [deploy-livekit-agent]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install lk CLI
+        run: |
+          curl -sSL https://get.livekit.io/cli | bash
+          echo "$HOME/.livekit/bin" >> $GITHUB_PATH
+
+      - name: Extract subdomain from livekit.toml
+        id: config
+        run: |
+          SUBDOMAIN=$(grep 'subdomain' livekit-agent/livekit.toml | sed 's/.*= *"\(.*\)"/\1/')
+          echo "subdomain=$SUBDOMAIN" >> $GITHUB_OUTPUT
+          echo "Deploying to subdomain: $SUBDOMAIN"
+
+      - name: Deploy agent to LiveKit Cloud
+        working-directory: livekit-agent
+        env:
+          LK_CLOUD_TOKEN: ${{ secrets.LK_CLOUD_TOKEN }}
+        run: |
+          lk agent deploy --subdomain ${{ steps.config.outputs.subdomain }} --yes .
+
+      - name: Report deployment result
+        if: always()
+        run: |
+          echo "Deployment status: ${{ job.status }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Subdomain: ${{ steps.config.outputs.subdomain }}"
