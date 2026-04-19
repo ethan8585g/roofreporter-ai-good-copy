@@ -60,7 +60,8 @@ const SA_SECTIONS = {
       { id: 'growth-overview', label: 'Overview', icon: 'fa-tachometer-alt' },
       { id: 'growth-traffic', label: 'Traffic', icon: 'fa-chart-area' },
       { id: 'growth-marketing', label: 'Marketing', icon: 'fa-bullhorn' },
-      { id: 'growth-seo', label: 'SEO & Blog', icon: 'fa-pen-nib' }
+      { id: 'growth-seo', label: 'SEO & Blog', icon: 'fa-pen-nib' },
+      { id: 'meta-connect', label: 'Instagram', icon: 'fa-instagram' }
     ]
   },
   'ai-ops': {
