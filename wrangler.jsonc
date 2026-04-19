@@ -31,4 +31,14 @@
   //     "bucket_name": "storm-scout-snapshots"
   //   }
   // ]
+
+  // R2 bucket for Instagram module media (drafts, composites, thumbnails).
+  // Create bucket: Cloudflare Dashboard → R2 → Create → "roofmanager-instagram-media"
+  // "r2_buckets": [
+  //   {
+  //     "binding": "INSTAGRAM_R2",
+  //     "bucket_name": "roofmanager-instagram-media"
+  //   }
+  // ]
+  "r2_buckets": []
 }

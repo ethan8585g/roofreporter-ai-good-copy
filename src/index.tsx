@@ -61,6 +61,8 @@ import { publicPreviewRoutes } from './routes/public-preview'
 import { developerPortalRoutes } from './routes/developer-portal'
 import { aiAutopilotRoutes } from './routes/ai-autopilot'
 import { agentHubRoutes } from './routes/agent-hub'
+import { instagramRoutes } from './routes/instagram'
+import { instagramWebhookRoutes } from './routes/instagram-webhooks'
 import usStatesRoutes from './routes/us-states'
 import usVerticalsRoutes from './routes/us-verticals'
 import usComparisonsRoutes from './routes/us-comparisons'
@@ -336,6 +338,8 @@ app.route('/api/admin/platform', platformAdmin)
 app.route('/api/admin/bi', superAdminBi)
 app.route('/api/ai-autopilot', aiAutopilotRoutes)
 app.route('/api/agent-hub', agentHubRoutes)
+app.route('/api/admin/instagram', instagramRoutes)
+app.route('/webhooks', instagramWebhookRoutes)
 app.route('/api/field', fieldRoutes)
 app.route('/field', fieldUiRoutes)
 

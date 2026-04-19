@@ -12,6 +12,13 @@ import { runLeadAgent } from './services/lead-agent'
 import { runEmailAgent } from './services/email-agent'
 import { runMonitorAgent } from './services/monitor-agent'
 import { runTrafficAgent } from './services/traffic-agent'
+import { pullAccount as igPullAccount } from './services/instagram/ig-pull'
+import { pullAllCompetitors as igPullCompetitors } from './services/instagram/competitor-pull'
+import { runResearchEngine as igRunResearch } from './services/instagram/research-engine'
+import { runIdeationEngine as igRunIdeation } from './services/instagram/ideation-engine'
+import { publishDueSchedule as igPublishDue } from './services/instagram/publishing-engine'
+import { reallocateBoostBudgets as igReallocateBoosts } from './services/instagram/boost-engine'
+import { runLeadAttribution as igRunAttribution } from './services/instagram/lead-attribution'
 
 // ── Abandoned signup recovery ─────────────────────────────────────────────────
 async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number; skipped: number }> {
@@ -214,6 +221,63 @@ export default {
           console.error('[CRON:signup-recovery] Error:', err.message)
         }
       })())
+    }
+
+    // ── Instagram Module — multi-frequency cron jobs ──────────
+    if (await isAgentEnabled('instagram')) {
+      // Every 10 min: publish due scheduled posts
+      ctx.waitUntil((async () => {
+        try {
+          const result = await igPublishDue(env)
+          if (result.published > 0 || result.failed > 0) {
+            console.log(`[CRON:instagram:publish] Published ${result.published}, failed ${result.failed}`)
+            await logRun('instagram', result.ok ? 'success' : 'error', `Published ${result.published}`, result, 0)
+          }
+        } catch (err: any) { console.error('[CRON:instagram:publish]', err.message) }
+      })())
+
+      // Every hour: refresh insights
+      if (minute === 0) {
+        ctx.waitUntil((async () => {
+          try {
+            const result = await igPullAccount(env)
+            console.log(`[CRON:instagram:insights] Synced ${result.posts_synced} posts`)
+            await logRun('instagram', result.ok ? 'success' : 'error', `Insights: ${result.posts_synced} posts`, result, 0)
+          } catch (err: any) { console.error('[CRON:instagram:insights]', err.message) }
+        })())
+      }
+
+      // Every 6 hours: refresh competitors
+      if (hour % 6 === 0 && minute === 0) {
+        ctx.waitUntil((async () => {
+          try {
+            const result = await igPullCompetitors(env)
+            console.log(`[CRON:instagram:competitors] Pulled ${result.results.length} competitors`)
+          } catch (err: any) { console.error('[CRON:instagram:competitors]', err.message) }
+        })())
+      }
+
+      // Daily 03:00 UTC: research + attribution + reallocation
+      if (hour === 3 && minute === 0) {
+        ctx.waitUntil((async () => {
+          try {
+            await igRunResearch(env)
+            await igRunAttribution(env)
+            await igReallocateBoosts(env)
+            console.log('[CRON:instagram:daily] Research + attribution + reallocation complete')
+          } catch (err: any) { console.error('[CRON:instagram:daily]', err.message) }
+        })())
+      }
+
+      // Daily 13:00 UTC (9am ET): ideation engine
+      if (hour === 13 && minute === 0) {
+        ctx.waitUntil((async () => {
+          try {
+            const result = await igRunIdeation(env)
+            console.log(`[CRON:instagram:ideation] Generated ${result.ideas_generated} ideas`)
+          } catch (err: any) { console.error('[CRON:instagram:ideation]', err.message) }
+        })())
+      }
     }
 
     // ── Traffic Analyst Agent — hourly fallback (on :00 tick) ─

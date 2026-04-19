@@ -84,7 +84,8 @@ function render() {
     { id:'activity', label:'Activity Log', icon:'fa-history' },
     { id:'sip', label:'SIP Bridge', icon:'fa-phone-volume' },
     { id:'search', label:'Report Search', icon:'fa-search' },
-    { id:'claims', label:'Claims', icon:'fa-file-shield' }
+    { id:'claims', label:'Claims', icon:'fa-file-shield' },
+    { id:'instagram', label:'Instagram', icon:'fa-instagram' }
   ];
 
   root.innerHTML = `
@@ -112,6 +113,7 @@ function render() {
       ${A.tab === 'sip' ? renderSipBridge() : ''}
       ${A.tab === 'search' ? renderReportSearch() : ''}
       ${A.tab === 'claims' ? renderClaims() : ''}
+      ${A.tab === 'instagram' ? renderInstagram() : ''}
     </div>
   `;
 }
@@ -2869,4 +2871,633 @@ function renderSearchResults(data) {
       }).join('')}
     </div>`
   );
+}
+
+// ============================================================
+// INSTAGRAM MODULE — Super-Admin Social Media OS
+// ============================================================
+
+let igSubTab = 'performance';
+const IG = {
+  loading: false,
+  status: null,
+  summary: null,
+  posts: [],
+  postsTotal: 0,
+  dailyAnalytics: [],
+  competitors: [],
+  hashtags: [],
+  hooks: [],
+  gaps: [],
+  ideas: [],
+  drafts: [],
+  schedule: [],
+  leads: [],
+  leadSummary: null,
+  boosts: [],
+  dmKeywords: [],
+  trackingNumbers: [],
+};
+
+function setIgSubTab(tab) { igSubTab = tab; render(); }
+
+async function igFetch(url, opts) {
+  const res = await adminFetch('/api/admin/instagram' + url, opts);
+  if (!res) return null;
+  return res;
+}
+
+async function igAction(url, method, body) {
+  try {
+    const opts = { method: method || 'POST', headers: { ...adminHeaders(), 'Content-Type': 'application/json' } };
+    if (body) opts.body = JSON.stringify(body);
+    const r = await fetch('/api/admin/instagram' + url, opts);
+    const d = await r.json();
+    if (!r.ok || !d.success) { window.rmToast('Error: ' + (d.error || 'Failed'), 'error'); return null; }
+    return d;
+  } catch (e) { window.rmToast('Error: ' + e.message, 'error'); return null; }
+}
+
+async function loadIgDashboard() {
+  IG.loading = true; render();
+  try {
+    if (igSubTab === 'performance') {
+      const [statusRes, summaryRes, postsRes, dailyRes] = await Promise.all([
+        fetch('/api/admin/instagram/status', { headers: adminHeaders() }),
+        fetch('/api/admin/instagram/analytics/summary?window=30d', { headers: adminHeaders() }),
+        fetch('/api/admin/instagram/posts?limit=20&sort=engagement_rate', { headers: adminHeaders() }),
+        fetch('/api/admin/instagram/analytics/daily?from=' + new Date(Date.now()-30*86400000).toISOString().slice(0,10), { headers: adminHeaders() }),
+      ]);
+      if (statusRes?.ok) { const d = await statusRes.json(); IG.status = d.data; }
+      if (summaryRes?.ok) { const d = await summaryRes.json(); IG.summary = d.data; }
+      if (postsRes?.ok) { const d = await postsRes.json(); IG.posts = d.data?.posts || []; IG.postsTotal = d.data?.total || 0; }
+      if (dailyRes?.ok) { const d = await dailyRes.json(); IG.dailyAnalytics = d.data || []; }
+    } else if (igSubTab === 'research') {
+      const [compRes, hashRes, hookRes, gapRes] = await Promise.all([
+        fetch('/api/admin/instagram/competitors', { headers: adminHeaders() }),
+        fetch('/api/admin/instagram/research/hashtags', { headers: adminHeaders() }),
+        fetch('/api/admin/instagram/research/hooks', { headers: adminHeaders() }),
+        fetch('/api/admin/instagram/research/gaps', { headers: adminHeaders() }),
+      ]);
+      if (compRes?.ok) { const d = await compRes.json(); IG.competitors = d.data || []; }
+      if (hashRes?.ok) { const d = await hashRes.json(); IG.hashtags = d.data || []; }
+      if (hookRes?.ok) { const d = await hookRes.json(); IG.hooks = d.data || []; }
+      if (gapRes?.ok) { const d = await gapRes.json(); IG.gaps = d.data || []; }
+    } else if (igSubTab === 'studio') {
+      const [ideasRes, schedRes] = await Promise.all([
+        fetch('/api/admin/instagram/ideas', { headers: adminHeaders() }),
+        fetch('/api/admin/instagram/schedule', { headers: adminHeaders() }),
+      ]);
+      if (ideasRes?.ok) { const d = await ideasRes.json(); IG.ideas = d.data || []; }
+      if (schedRes?.ok) { const d = await schedRes.json(); IG.schedule = d.data || []; }
+    } else if (igSubTab === 'leads') {
+      const [leadsRes, summRes, boostsRes, kwRes, numRes] = await Promise.all([
+        fetch('/api/admin/instagram/leads?limit=100', { headers: adminHeaders() }),
+        fetch('/api/admin/instagram/leads/summary', { headers: adminHeaders() }),
+        fetch('/api/admin/instagram/boosts', { headers: adminHeaders() }),
+        fetch('/api/admin/instagram/dm-keywords', { headers: adminHeaders() }),
+        fetch('/api/admin/instagram/tracking-numbers', { headers: adminHeaders() }),
+      ]);
+      if (leadsRes?.ok) { const d = await leadsRes.json(); IG.leads = d.data || []; }
+      if (summRes?.ok) { const d = await summRes.json(); IG.leadSummary = d.data || null; }
+      if (boostsRes?.ok) { const d = await boostsRes.json(); IG.boosts = d.data || []; }
+      if (kwRes?.ok) { const d = await kwRes.json(); IG.dmKeywords = d.data || []; }
+      if (numRes?.ok) { const d = await numRes.json(); IG.trackingNumbers = d.data || []; }
+    }
+  } catch (e) { console.error('[IG] Load error:', e); }
+  IG.loading = false; render();
+}
+
+function renderInstagram() {
+  if (IG.loading && !IG.status) { loadIgDashboard(); }
+
+  const tabs = [
+    { id: 'performance', label: 'Performance', icon: 'fa-chart-line' },
+    { id: 'research', label: 'Research', icon: 'fa-microscope' },
+    { id: 'studio', label: 'Studio', icon: 'fa-film' },
+    { id: 'leads', label: 'Leads & Boost', icon: 'fa-bullseye' },
+  ];
+
+  return `
+    <div class="mb-6">
+      <div class="flex items-center gap-3 mb-4">
+        <i class="fab fa-instagram text-2xl" style="background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>
+        <h2 class="text-xl font-bold text-gray-900">Instagram Command Center</h2>
+        ${IG.status?.account ? `<span class="text-sm text-gray-500">@${IG.status.account.username}</span>` : ''}
+      </div>
+
+      <div class="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1 w-fit">
+        ${tabs.map(t => `
+          <button onclick="setIgSubTab('${t.id}');loadIgDashboard()" class="px-4 py-2 rounded-lg text-sm font-semibold transition-all ${igSubTab === t.id ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'}">
+            <i class="fas ${t.icon} mr-1.5"></i>${t.label}
+          </button>
+        `).join('')}
+      </div>
+
+      ${IG.loading ? '<div class="flex items-center justify-center py-12"><div class="w-8 h-8 border-4 border-pink-200 border-t-pink-600 rounded-full animate-spin"></div><span class="ml-3 text-gray-500">Loading Instagram data...</span></div>' : ''}
+      ${!IG.loading && igSubTab === 'performance' ? renderIgPerformance() : ''}
+      ${!IG.loading && igSubTab === 'research' ? renderIgResearch() : ''}
+      ${!IG.loading && igSubTab === 'studio' ? renderIgStudio() : ''}
+      ${!IG.loading && igSubTab === 'leads' ? renderIgLeads() : ''}
+    </div>
+  `;
+}
+
+// ── Dashboard 1: Performance ──
+function renderIgPerformance() {
+  const s = IG.summary || {};
+  const deltaColor = (s.followers_delta || 0) >= 0 ? 'text-green-600' : 'text-red-600';
+  const deltaSign = (s.followers_delta || 0) >= 0 ? '+' : '';
+
+  return `
+    <!-- KPI Row -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+      ${mc('Followers', (s.followers||0).toLocaleString(), 'fa-users', 'purple', `<span class="${deltaColor}">${deltaSign}${s.followers_delta||0}</span> vs 30d ago`)}
+      ${mc('Impressions 30d', (s.impressions||0).toLocaleString(), 'fa-eye', 'blue')}
+      ${mc('Engagement Rate', (s.engagement_rate||0).toFixed(1) + '%', 'fa-heart', 'pink')}
+      ${mc('Organic Leads', s.organic_leads||0, 'fa-user-plus', 'green')}
+      ${mc('Blended CPL', s.blended_cpl_cents ? '$' + (s.blended_cpl_cents/100).toFixed(2) : '$0.00', 'fa-dollar-sign', 'yellow')}
+    </div>
+
+    <!-- Actions -->
+    <div class="flex gap-2 mb-6">
+      <button onclick="igPullNow()" class="px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition-all">
+        <i class="fas fa-sync mr-1"></i>Pull Now
+      </button>
+    </div>
+
+    <!-- Follower Growth Chart (CSS bars) -->
+    ${IG.dailyAnalytics.length > 0 ? `
+    <div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm mb-6">
+      <h3 class="text-sm font-semibold text-gray-700 mb-3"><i class="fas fa-chart-bar mr-1.5 text-purple-500"></i>Follower Growth (30 Days)</h3>
+      <div class="space-y-1.5">
+        ${(() => {
+          const maxF = Math.max(...IG.dailyAnalytics.map(d => d.followers || 0), 1);
+          const minF = Math.min(...IG.dailyAnalytics.map(d => d.followers || 0));
+          const range = maxF - minF || 1;
+          return IG.dailyAnalytics.slice(-14).map(d => {
+            const pct = Math.max(5, Math.round(((d.followers||0) - minF) / range * 100));
+            return `<div class="flex items-center gap-2">
+              <span class="text-xs text-gray-400 w-16 shrink-0">${d.snapshot_date?.slice(5) || ''}</span>
+              <div class="flex-1 bg-gray-100 rounded-full h-2.5"><div class="bg-gradient-to-r from-purple-400 to-pink-500 h-2.5 rounded-full" style="width:${pct}%"></div></div>
+              <span class="text-xs font-mono text-gray-600 w-12 text-right">${(d.followers||0).toLocaleString()}</span>
+            </div>`;
+          }).join('');
+        })()}
+      </div>
+    </div>
+    ` : ''}
+
+    <!-- Posts Table -->
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div class="p-4 border-b border-gray-100 flex justify-between items-center">
+        <h3 class="text-sm font-semibold text-gray-700"><i class="fas fa-images mr-1.5 text-pink-500"></i>Top Posts (by engagement)</h3>
+        <span class="text-xs text-gray-400">${IG.postsTotal} total</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50"><tr>
+            <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500">Type</th>
+            <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500">Caption</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Reach</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Eng. Rate</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Leads</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">CPL</th>
+            <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500">Posted</th>
+          </tr></thead>
+          <tbody class="divide-y divide-gray-50">
+            ${IG.posts.map(p => `<tr class="hover:bg-pink-50/40 transition-colors">
+              <td class="px-3 py-2"><span class="px-2 py-0.5 rounded text-xs font-bold ${p.media_type==='REEL'?'bg-purple-100 text-purple-700':p.media_type==='VIDEO'?'bg-blue-100 text-blue-700':'bg-gray-100 text-gray-600'}">${p.media_type||'IMAGE'}</span></td>
+              <td class="px-3 py-2 text-gray-600 text-xs max-w-[200px] truncate">${(p.caption||'').slice(0,60)}</td>
+              <td class="px-3 py-2 text-right font-mono text-xs">${(p.reach||0).toLocaleString()}</td>
+              <td class="px-3 py-2 text-right font-bold text-xs ${(p.engagement_rate||0)>0.05?'text-green-600':'text-gray-600'}">${((p.engagement_rate||0)*100).toFixed(1)}%</td>
+              <td class="px-3 py-2 text-right text-xs">${(p.organic_leads||0)+(p.paid_leads||0)}</td>
+              <td class="px-3 py-2 text-right text-xs font-mono">${p.cpl_blended_cents ? '$'+(p.cpl_blended_cents/100).toFixed(2) : '-'}</td>
+              <td class="px-3 py-2 text-xs text-gray-400">${p.posted_at ? new Date(p.posted_at).toLocaleDateString() : ''}</td>
+            </tr>`).join('')}
+            ${IG.posts.length === 0 ? '<tr><td colspan="7" class="px-3 py-8 text-center text-gray-400">No posts synced yet. Click "Pull Now" to sync.</td></tr>' : ''}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+async function igPullNow() {
+  const btn = event.target.closest('button');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Pulling...'; }
+  const d = await igAction('/pull/account', 'POST');
+  if (d) window.rmToast('Synced ' + (d.data?.posts_synced||0) + ' posts', 'success');
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync mr-1"></i>Pull Now'; }
+  await loadIgDashboard();
+}
+
+// ── Dashboard 2: Research ──
+function renderIgResearch() {
+  return `
+    <!-- Competitor Roster -->
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 mb-6">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-sm font-semibold text-gray-700"><i class="fas fa-binoculars mr-1.5 text-blue-500"></i>Competitors</h3>
+        <div class="flex gap-2">
+          <button onclick="igAddCompetitor()" class="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-semibold"><i class="fas fa-plus mr-1"></i>Add</button>
+          <button onclick="igRunResearch()" class="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg text-xs font-semibold"><i class="fas fa-flask mr-1"></i>Run Research Now</button>
+        </div>
+      </div>
+      <div class="space-y-2">
+        ${IG.competitors.map(c => `
+          <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div class="flex items-center gap-3">
+              <span class="font-semibold text-sm text-gray-800">@${c.username}</span>
+              <span class="text-xs text-gray-400">${(c.follower_count||0).toLocaleString()} followers</span>
+              <span class="text-xs text-gray-400">${c.media_count||0} posts</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-400">${c.last_pulled_at ? 'Pulled ' + new Date(c.last_pulled_at).toLocaleDateString() : 'Never pulled'}</span>
+              <button onclick="igPullCompetitor(${c.id})" class="p-1.5 text-blue-500 hover:bg-blue-50 rounded"><i class="fas fa-sync text-xs"></i></button>
+              <button onclick="igDeleteCompetitor(${c.id})" class="p-1.5 text-red-400 hover:bg-red-50 rounded"><i class="fas fa-trash text-xs"></i></button>
+            </div>
+          </div>
+        `).join('')}
+        ${IG.competitors.length === 0 ? '<p class="text-sm text-gray-400 text-center py-4">No competitors added yet.</p>' : ''}
+      </div>
+    </div>
+
+    <!-- Hashtag Cloud -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3"><i class="fas fa-hashtag mr-1.5 text-green-500"></i>Top Hashtags (by score)</h3>
+        <div class="flex flex-wrap gap-1.5">
+          ${IG.hashtags.slice(0, 30).map(h => {
+            const size = h.score > 0.7 ? 'text-sm font-bold' : h.score > 0.4 ? 'text-xs font-semibold' : 'text-xs';
+            const color = h.score > 0.7 ? 'bg-green-100 text-green-700' : h.score > 0.4 ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500';
+            return `<span class="px-2 py-1 rounded-lg ${color} ${size}" title="Score: ${h.score}">${h.value}</span>`;
+          }).join('')}
+          ${IG.hashtags.length === 0 ? '<span class="text-sm text-gray-400">Run research to populate</span>' : ''}
+        </div>
+      </div>
+
+      <!-- Hooks -->
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3"><i class="fas fa-bolt mr-1.5 text-yellow-500"></i>Hooks That Win</h3>
+        <div class="space-y-2">
+          ${IG.hooks.slice(0, 10).map((h, i) => `
+            <div class="flex items-start gap-2">
+              <span class="text-xs font-bold text-gray-400 mt-0.5">${i+1}.</span>
+              <div class="flex-1">
+                <p class="text-xs text-gray-700">"${h.value}"</p>
+                <div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-yellow-400 h-1.5 rounded-full" style="width:${Math.round(h.score*100)}%"></div></div>
+              </div>
+            </div>
+          `).join('')}
+          ${IG.hooks.length === 0 ? '<p class="text-sm text-gray-400">No hooks extracted yet</p>' : ''}
+        </div>
+      </div>
+    </div>
+
+    <!-- Content Gaps -->
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+      <h3 class="text-sm font-semibold text-gray-700 mb-3"><i class="fas fa-puzzle-piece mr-1.5 text-red-500"></i>Content Gaps</h3>
+      <p class="text-xs text-gray-400 mb-3">Topics competitors cover that you haven't — click to send to ideation</p>
+      <div class="flex flex-wrap gap-2">
+        ${IG.gaps.map(g => `
+          <button onclick="igSendGapToIdeation('${g.value}')" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-semibold hover:bg-red-100 transition-colors">
+            ${g.value} <span class="text-red-400 ml-1">(${(g.score*100).toFixed(0)}%)</span>
+          </button>
+        `).join('')}
+        ${IG.gaps.length === 0 ? '<span class="text-sm text-gray-400">No gaps detected</span>' : ''}
+      </div>
+    </div>
+  `;
+}
+
+async function igAddCompetitor() {
+  const username = prompt('Enter competitor Instagram username (without @):');
+  if (!username) return;
+  const d = await igAction('/competitors', 'POST', { username });
+  if (d) { window.rmToast('Competitor added', 'success'); await loadIgDashboard(); }
+}
+
+async function igDeleteCompetitor(id) {
+  if (!confirm('Remove this competitor?')) return;
+  await igAction('/competitors/' + id, 'DELETE');
+  await loadIgDashboard();
+}
+
+async function igPullCompetitor(id) {
+  window.rmToast('Pulling competitor data...', 'info');
+  const d = await igAction('/competitors/' + id + '/pull', 'POST');
+  if (d) window.rmToast('Synced ' + (d.data?.posts_synced||0) + ' posts, ' + (d.data?.hooks_extracted||0) + ' hooks', 'success');
+  await loadIgDashboard();
+}
+
+async function igRunResearch() {
+  window.rmToast('Running research engine...', 'info');
+  const d = await igAction('/research/run', 'POST');
+  if (d) window.rmToast('Scored ' + (d.data?.hashtags_scored||0) + ' hashtags, found ' + (d.data?.gaps_found||0) + ' gaps', 'success');
+  await loadIgDashboard();
+}
+
+async function igSendGapToIdeation(topic) {
+  window.rmToast('Generating ideas for "' + topic + '"...', 'info');
+  await igAction('/ideas/generate?n=3', 'POST');
+  window.rmToast('Ideas generated!', 'success');
+  setIgSubTab('studio'); await loadIgDashboard();
+}
+
+// ── Dashboard 3: Studio ──
+function renderIgStudio() {
+  const pendingIdeas = IG.ideas.filter(i => i.status === 'idea' || i.status === 'approved');
+  const inProd = IG.ideas.filter(i => i.status === 'in_production' || i.status === 'scheduled');
+
+  return `
+    <!-- Actions -->
+    <div class="flex gap-2 mb-6">
+      <button onclick="igGenerateIdeas()" class="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition-all">
+        <i class="fas fa-lightbulb mr-1"></i>Generate Ideas
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Ideas Column -->
+      <div>
+        <h3 class="text-sm font-semibold text-gray-700 mb-3"><i class="fas fa-lightbulb mr-1.5 text-yellow-500"></i>Ideas (${pendingIdeas.length})</h3>
+        <div class="space-y-3">
+          ${pendingIdeas.map(idea => `
+            <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+              <div class="flex justify-between items-start mb-2">
+                <h4 class="text-sm font-bold text-gray-800">${idea.title}</h4>
+                <span class="px-2 py-0.5 rounded text-xs font-bold ${idea.status==='approved'?'bg-green-100 text-green-700':'bg-yellow-100 text-yellow-700'}">${idea.status}</span>
+              </div>
+              <p class="text-xs text-gray-500 mb-2">${idea.angle || ''}</p>
+              <div class="flex items-center gap-3 text-xs text-gray-400 mb-3">
+                <span><i class="fas fa-bullseye mr-1"></i>${idea.target_persona || ''}</span>
+                <span><i class="fas fa-bookmark mr-1"></i>${idea.pillar || ''}</span>
+              </div>
+              <div class="flex items-center gap-2 mb-3">
+                <span class="text-xs text-gray-500">Predicted Eng:</span>
+                <div class="flex-1 bg-gray-100 rounded-full h-2"><div class="bg-green-400 h-2 rounded-full" style="width:${Math.round((idea.predicted_engagement||0)*100)}%"></div></div>
+                <span class="text-xs font-bold text-gray-600">${((idea.predicted_engagement||0)*100).toFixed(0)}%</span>
+                <span class="text-xs text-gray-400 ml-2">CPL: $${((idea.predicted_cpl_cents||0)/100).toFixed(2)}</span>
+              </div>
+              <div class="flex gap-1.5">
+                ${idea.status === 'idea' ? `<button onclick="igApproveIdea(${idea.id})" class="px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-semibold"><i class="fas fa-check mr-1"></i>Approve</button>` : ''}
+                ${idea.status === 'approved' ? `<button onclick="igFilmToday(${idea.id})" class="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg text-xs font-semibold"><i class="fas fa-video mr-1"></i>Film Today</button>` : ''}
+                <button onclick="igArchiveIdea(${idea.id})" class="px-3 py-1.5 bg-gray-100 text-gray-500 rounded-lg text-xs font-semibold"><i class="fas fa-archive mr-1"></i>Archive</button>
+              </div>
+            </div>
+          `).join('')}
+          ${pendingIdeas.length === 0 ? '<div class="text-center py-8 text-gray-400 text-sm">No ideas yet. Click "Generate Ideas" above.</div>' : ''}
+        </div>
+      </div>
+
+      <!-- Schedule Column -->
+      <div>
+        <h3 class="text-sm font-semibold text-gray-700 mb-3"><i class="fas fa-calendar-alt mr-1.5 text-blue-500"></i>Scheduled & Drafts (${IG.schedule.length})</h3>
+        <div class="space-y-3">
+          ${IG.schedule.map(s => `
+            <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+              <div class="flex justify-between items-start mb-2">
+                <div>
+                  <span class="px-2 py-0.5 rounded text-xs font-bold ${s.status==='queued'?'bg-blue-100 text-blue-700':s.status==='published'?'bg-green-100 text-green-700':'bg-gray-100 text-gray-600'}">${s.status}</span>
+                  <span class="text-xs text-gray-400 ml-2">${s.media_type || 'IMAGE'}</span>
+                </div>
+                <span class="text-xs text-gray-400">${s.scheduled_at ? new Date(s.scheduled_at).toLocaleString() : ''}</span>
+              </div>
+              <p class="text-xs text-gray-600 mb-2">${(s.caption_primary||'').slice(0,80)}...</p>
+              <div class="flex gap-1.5">
+                ${s.status === 'queued' ? `
+                  <button onclick="igPublishNow(${s.id})" class="px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-semibold"><i class="fas fa-rocket mr-1"></i>Publish Now</button>
+                  <button onclick="igCancelSchedule(${s.id})" class="px-3 py-1.5 bg-gray-100 text-gray-500 rounded-lg text-xs font-semibold"><i class="fas fa-times mr-1"></i>Cancel</button>
+                ` : ''}
+              </div>
+            </div>
+          `).join('')}
+          ${IG.schedule.length === 0 ? '<div class="text-center py-8 text-gray-400 text-sm">No scheduled posts. Approve an idea and click "Film Today".</div>' : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function igGenerateIdeas() {
+  const btn = event.target.closest('button');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Generating...'; }
+  const d = await igAction('/ideas/generate?n=10', 'POST');
+  if (d) window.rmToast('Generated ' + (d.data?.ideas_generated||0) + ' ideas', 'success');
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lightbulb mr-1"></i>Generate Ideas'; }
+  await loadIgDashboard();
+}
+
+async function igApproveIdea(id) {
+  await igAction('/ideas/' + id + '/approve', 'POST');
+  window.rmToast('Idea approved', 'success');
+  await loadIgDashboard();
+}
+
+async function igArchiveIdea(id) {
+  await igAction('/ideas/' + id + '/reject', 'POST');
+  await loadIgDashboard();
+}
+
+async function igFilmToday(id) {
+  window.rmToast('Starting Film Today pipeline...', 'info');
+  const btn = event.target.closest('button');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Producing...'; }
+  const d = await igAction('/ideas/' + id + '/produce', 'POST');
+  if (d && d.data?.draft_id) {
+    window.rmToast('Draft created! ID: ' + d.data.draft_id + ' (cost: $' + ((d.data.production_cost_cents||0)/100).toFixed(2) + ')', 'success');
+    // Auto-schedule 2 minutes from now for quick test
+    const schedAt = new Date(Date.now() + 120000).toISOString();
+    const sched = await igAction('/schedule', 'POST', { draft_id: d.data.draft_id, scheduled_at: schedAt });
+    if (sched) window.rmToast('Scheduled for publish in 2 minutes', 'success');
+  } else {
+    window.rmToast('Production failed: ' + (d?.data?.error || 'Unknown error'), 'error');
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-video mr-1"></i>Film Today'; }
+  await loadIgDashboard();
+}
+
+async function igPublishNow(id) {
+  const d = await igAction('/schedule/' + id + '/publish-now', 'POST');
+  if (d) window.rmToast('Published!', 'success');
+  await loadIgDashboard();
+}
+
+async function igCancelSchedule(id) {
+  await igAction('/schedule/' + id + '/cancel', 'POST');
+  await loadIgDashboard();
+}
+
+// ── Dashboard 4: Leads & Boost ──
+function renderIgLeads() {
+  const t = IG.leadSummary?.totals || {};
+  const blendedCpl = t.total_leads > 0 ? Math.round((t.total_cost||0) / t.total_leads) : 0;
+
+  // Kill switch check
+  const killSwitch = blendedCpl > 6000 && (t.total_leads||0) > 0;
+
+  return `
+    ${killSwitch ? `
+      <div class="bg-red-50 border-2 border-red-300 rounded-xl p-4 mb-6 flex items-center gap-3">
+        <i class="fas fa-exclamation-triangle text-red-500 text-xl"></i>
+        <div>
+          <p class="font-bold text-red-700">CPL Kill Switch Triggered</p>
+          <p class="text-sm text-red-600">Blended CPL ($${(blendedCpl/100).toFixed(2)}) exceeds ceiling ($60.00). All boosts paused.</p>
+        </div>
+      </div>
+    ` : ''}
+
+    <!-- Unit Economics KPIs -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      ${mc('Total Leads (30d)', t.total_leads||0, 'fa-user-plus', 'green', (t.qualified||0) + ' qualified')}
+      ${mc('Organic CPL', '$' + (IG.leadSummary?.by_channel?.find(c => c.source_channel==='utm')?.cpl/100||0).toFixed(2), 'fa-seedling', 'green')}
+      ${mc('Paid CPL', '$' + (IG.leadSummary?.by_channel?.find(c => c.source_channel==='phone')?.cpl/100||0).toFixed(2), 'fa-ad', 'blue')}
+      ${mc('Blended CPL', '$' + (blendedCpl/100).toFixed(2), 'fa-balance-scale', blendedCpl > 5000 ? 'red' : 'green')}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <!-- Leads Table -->
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-gray-100">
+          <h3 class="text-sm font-semibold text-gray-700"><i class="fas fa-funnel-dollar mr-1.5 text-green-500"></i>Recent Leads</h3>
+        </div>
+        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+          <table class="w-full text-xs">
+            <thead class="bg-gray-50 sticky top-0"><tr>
+              <th class="px-2 py-1.5 text-left font-semibold text-gray-500">Source</th>
+              <th class="px-2 py-1.5 text-left font-semibold text-gray-500">Contact</th>
+              <th class="px-2 py-1.5 text-left font-semibold text-gray-500">Message</th>
+              <th class="px-2 py-1.5 text-center font-semibold text-gray-500">Status</th>
+              <th class="px-2 py-1.5 text-left font-semibold text-gray-500">Date</th>
+            </tr></thead>
+            <tbody class="divide-y divide-gray-50">
+              ${IG.leads.slice(0, 50).map(l => `<tr class="hover:bg-green-50/40">
+                <td class="px-2 py-1.5"><span class="px-1.5 py-0.5 rounded text-xs font-bold ${l.source_channel==='utm'?'bg-blue-100 text-blue-700':l.source_channel==='dm'?'bg-purple-100 text-purple-700':'bg-green-100 text-green-700'}">${l.source_channel}</span></td>
+                <td class="px-2 py-1.5 text-gray-600">${l.contact_name||l.contact_email||l.contact_phone||'-'}</td>
+                <td class="px-2 py-1.5 text-gray-500 max-w-[150px] truncate">${(l.message_or_query||'').slice(0,40)}</td>
+                <td class="px-2 py-1.5 text-center">
+                  <button onclick="igToggleLeadQualified(${l.id}, ${l.qualified === 1 ? 0 : 1})" class="px-2 py-0.5 rounded text-xs font-bold ${l.qualified===1?'bg-green-100 text-green-700':l.qualified===-1?'bg-red-100 text-red-600':'bg-gray-100 text-gray-500'}">${l.qualified===1?'Qualified':l.qualified===-1?'Spam':'Raw'}</button>
+                </td>
+                <td class="px-2 py-1.5 text-gray-400">${l.created_at ? new Date(l.created_at).toLocaleDateString() : ''}</td>
+              </tr>`).join('')}
+              ${IG.leads.length === 0 ? '<tr><td colspan="5" class="px-2 py-6 text-center text-gray-400">No leads yet</td></tr>' : ''}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Active Boosts -->
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-gray-100 flex justify-between items-center">
+          <h3 class="text-sm font-semibold text-gray-700"><i class="fas fa-rocket mr-1.5 text-orange-500"></i>Active Boosts</h3>
+          <button onclick="igReallocateBoosts()" class="px-3 py-1 bg-orange-100 text-orange-700 rounded-lg text-xs font-semibold"><i class="fas fa-random mr-1"></i>Reallocate</button>
+        </div>
+        <div class="divide-y divide-gray-50">
+          ${IG.boosts.map(b => `
+            <div class="p-3 flex items-center justify-between">
+              <div>
+                <span class="px-2 py-0.5 rounded text-xs font-bold ${b.status==='active'?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500'}">${b.status}</span>
+                <span class="text-xs text-gray-500 ml-2">Post #${b.post_id}</span>
+              </div>
+              <div class="text-right">
+                <span class="text-xs font-bold text-gray-700">$${(b.daily_budget_cents/100).toFixed(2)}/day</span>
+                <span class="text-xs text-gray-400 ml-2">Spent: $${((b.spent_cents||0)/100).toFixed(2)}</span>
+                <span class="text-xs text-gray-400 ml-2">CPL: ${b.cpl_cents ? '$'+(b.cpl_cents/100).toFixed(2) : '-'}</span>
+              </div>
+              <div class="flex gap-1">
+                ${b.status === 'active' ? `<button onclick="igPauseBoost(${b.id})" class="p-1 text-yellow-500 hover:bg-yellow-50 rounded"><i class="fas fa-pause text-xs"></i></button>` : ''}
+                ${b.status === 'paused' ? `<button onclick="igResumeBoost(${b.id})" class="p-1 text-green-500 hover:bg-green-50 rounded"><i class="fas fa-play text-xs"></i></button>` : ''}
+              </div>
+            </div>
+          `).join('')}
+          ${IG.boosts.length === 0 ? '<div class="p-4 text-center text-gray-400 text-sm">No active boosts</div>' : ''}
+        </div>
+      </div>
+    </div>
+
+    <!-- DM Keywords + Tracking Numbers -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- DM Keywords -->
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="text-sm font-semibold text-gray-700"><i class="fas fa-comment-dots mr-1.5 text-purple-500"></i>DM Keywords</h3>
+          <button onclick="igAddKeyword()" class="px-3 py-1 bg-purple-500 text-white rounded-lg text-xs font-semibold"><i class="fas fa-plus mr-1"></i>Add</button>
+        </div>
+        <div class="space-y-2">
+          ${IG.dmKeywords.map(k => `
+            <div class="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-bold">${k.keyword}</span>
+                <span class="text-xs text-gray-500 truncate max-w-[150px]">${k.reply_template.slice(0,40)}...</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-400">${k.hit_count||0} hits</span>
+                <span class="w-2 h-2 rounded-full ${k.is_active ? 'bg-green-400' : 'bg-gray-300'}"></span>
+              </div>
+            </div>
+          `).join('')}
+          ${IG.dmKeywords.length === 0 ? '<p class="text-sm text-gray-400 text-center py-2">No keywords set up</p>' : ''}
+        </div>
+      </div>
+
+      <!-- Tracking Numbers -->
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="text-sm font-semibold text-gray-700"><i class="fas fa-phone mr-1.5 text-green-500"></i>Tracking Numbers</h3>
+          <button onclick="igProvisionNumbers()" class="px-3 py-1 bg-green-500 text-white rounded-lg text-xs font-semibold"><i class="fas fa-plus mr-1"></i>Provision</button>
+        </div>
+        <div class="space-y-2">
+          ${IG.trackingNumbers.map(n => `
+            <div class="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+              <span class="text-sm font-mono text-gray-700">${n.phone_number}</span>
+              <div class="flex items-center gap-3">
+                <span class="text-xs text-gray-400">${n.total_calls||0} calls</span>
+                <span class="text-xs ${n.assigned_post_id ? 'text-blue-500' : 'text-gray-400'}">${n.assigned_post_id ? 'Post #'+n.assigned_post_id : 'Available'}</span>
+              </div>
+            </div>
+          `).join('')}
+          ${IG.trackingNumbers.length === 0 ? '<p class="text-sm text-gray-400 text-center py-2">No tracking numbers. Set TWILIO_TRACKING_NUMBER_POOL and click Provision.</p>' : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function igToggleLeadQualified(id, val) {
+  await igAction('/leads/' + id, 'PATCH', { qualified: val });
+  await loadIgDashboard();
+}
+
+async function igReallocateBoosts() {
+  const d = await igAction('/boosts/reallocate', 'POST');
+  if (d) window.rmToast('Reallocation complete: paused ' + (d.data?.paused||0) + ', boosted ' + (d.data?.boosted||0), 'success');
+  await loadIgDashboard();
+}
+
+async function igPauseBoost(id) {
+  await igAction('/boosts/' + id, 'PATCH', { status: 'paused' });
+  await loadIgDashboard();
+}
+
+async function igResumeBoost(id) {
+  await igAction('/boosts/' + id, 'PATCH', { status: 'active' });
+  await loadIgDashboard();
+}
+
+async function igAddKeyword() {
+  const keyword = prompt('Enter DM keyword (e.g. ROOF):');
+  if (!keyword) return;
+  const reply = prompt('Enter auto-reply message:');
+  if (!reply) return;
+  const url = prompt('Enter landing URL (include utm_source=instagram):');
+  if (!url) return;
+  const d = await igAction('/dm-keywords', 'POST', { keyword, reply_template: reply, landing_url: url });
+  if (d) { window.rmToast('Keyword added', 'success'); await loadIgDashboard(); }
+}
+
+async function igProvisionNumbers() {
+  const d = await igAction('/tracking-numbers/provision', 'POST');
+  if (d) window.rmToast('Provisioned ' + (d.data?.provisioned||0) + ' numbers', 'success');
+  await loadIgDashboard();
 }

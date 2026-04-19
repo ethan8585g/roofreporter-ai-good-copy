@@ -156,6 +156,22 @@ export type Bindings = {
   // Set via: wrangler secret put ANTHROPIC_API_KEY
   // Used by: Agent Hub (content, lead, email, admin agents)
   ANTHROPIC_API_KEY: string
+
+  // ── Instagram Super-Admin Module ──────────────────────────
+  // Meta Developer App credentials (Instagram Graph API)
+  INSTAGRAM_APP_ID: string
+  INSTAGRAM_APP_SECRET: string
+  INSTAGRAM_PAGE_ACCESS_TOKEN: string       // Long-lived Page Access Token
+  INSTAGRAM_BUSINESS_ACCOUNT_ID: string     // IG user id (numeric)
+  INSTAGRAM_WEBHOOK_VERIFY_TOKEN: string    // Random string for webhook handshake
+  INSTAGRAM_GRAPH_API_VERSION: string       // Default 'v21.0'
+  // Stock media + TTS
+  PEXELS_API_KEY: string                    // Free stock media API
+  ELEVENLABS_API_KEY: string                // Optional — override GCP TTS
+  // Twilio tracking number pool (comma-separated E.164)
+  TWILIO_TRACKING_NUMBER_POOL: string
+  // R2 bucket for Instagram media assets
+  INSTAGRAM_R2: R2Bucket
 }
 
 // ============================================================
@@ -1052,4 +1068,77 @@ export interface ApiJob {
 export interface ApiAuthContext {
   account: ApiAccount
   apiKey: ApiKey
+}
+
+// ============================================================
+// PROPOSAL / ESTIMATE — Unified on the `invoices` table
+// ============================================================
+
+/** Document types stored in the invoices table */
+export type DocumentType = 'invoice' | 'proposal' | 'estimate'
+
+/**
+ * A proposal stored in the canonical `invoices` table with document_type='proposal'.
+ * Extends the base invoice shape with proposal-specific fields.
+ *
+ * The legacy `crm_proposals` table is deprecated (migration 0143).
+ * All new code should use this type and read/write the `invoices` table.
+ */
+export interface Proposal {
+  id: number
+  invoice_number: string        // prefixed PROP-YYYYMMDD-NNNN
+  customer_id: number           // FK → customers.id (the business owner)
+  crm_customer_id: number | null // FK → crm_customers.id (the homeowner)
+  crm_customer_name: string
+  crm_customer_email: string
+  crm_customer_phone: string
+  order_id: number | null
+  document_type: 'proposal'
+  // Money
+  subtotal: number
+  tax_rate: number
+  tax_amount: number
+  discount_amount: number
+  discount_type: 'fixed' | 'percentage'
+  total: number
+  currency: string
+  my_cost: number | null
+  // Status
+  status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'cancelled'
+  // Content
+  scope_of_work: string
+  warranty_terms: string
+  payment_terms_text: string
+  notes: string | null
+  terms: string | null
+  // Tier grouping
+  proposal_tier: string         // 'Good', 'Better', 'Best'
+  proposal_group_id: string     // UUID linking tiered siblings
+  // Sharing
+  share_token: string
+  share_url: string
+  valid_until: string | null
+  viewed_count: number
+  viewed_at: string | null
+  // Signature
+  customer_signature: string | null
+  printed_name: string | null
+  signed_at: string | null
+  // Report attachment
+  attached_report_id: number | null
+  attached_report_url: string
+  show_report_sections: string | null
+  // Branding
+  accent_color: string | null
+  // Certificate
+  certificate_sent_at: string | null
+  // Legacy mapping
+  legacy_crm_proposal_id: number | null
+  // Timestamps
+  issue_date: string
+  due_date: string | null
+  sent_date: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
 }

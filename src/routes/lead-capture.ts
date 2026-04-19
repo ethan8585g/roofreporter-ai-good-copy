@@ -117,6 +117,19 @@ leadCaptureRoutes.post('/contact/lead', async (c) => {
       INSERT INTO contact_leads (name, email, phone, company, employees, interest, message, utm_source, utm_medium, utm_campaign, utm_content)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(name, email.toLowerCase(), phone, company, employees, interest, message, utm_source, utm_medium, utm_campaign, utm_content).run()
+
+    // Instagram lead attribution — if utm_source is instagram, create an instagram_leads row
+    if (utm_source === 'instagram' && utm_content) {
+      try {
+        const post = await c.env.DB.prepare(
+          'SELECT id FROM instagram_posts WHERE utm_content_slug = ?'
+        ).bind(utm_content).first<any>()
+        await c.env.DB.prepare(`
+          INSERT INTO instagram_leads (source_channel, post_id, utm_content_slug, contact_name, contact_email, contact_phone, message_or_query)
+          VALUES ('utm', ?, ?, ?, ?, ?, ?)
+        `).bind(post?.id || null, utm_content, name, email.toLowerCase(), phone, message.slice(0, 500)).run()
+      } catch { /* Instagram tables may not exist yet — skip silently */ }
+    }
   } catch (e: any) {
     console.error('[contact/lead insert]', e?.message)
     return c.json({ error: 'Failed to save lead' }, 500)
