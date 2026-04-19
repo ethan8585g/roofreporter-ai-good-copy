@@ -865,7 +865,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
           <div>
             <p class="text-sm font-semibold text-gray-900">Auto-Send Certificate of Installation</p>
-            <p class="text-xs text-gray-500 mt-0.5">Automatically email a Certificate of New Roof Installation to the customer when they sign a proposal — so they can submit it to their insurance company</p>
+            <p class="text-xs text-gray-500 mt-0.5">Automatically email a Certificate of New Roof Installation to the customer when you mark the installation as complete — so they can submit it to their insurance company</p>
           </div>
         </div>
         <button onclick="window._pb.toggleAutoSendCertificate()" class="flex-shrink-0 relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none ${state.autoSendCertificate ? 'bg-green-500' : 'bg-gray-200'}" title="${state.autoSendCertificate ? 'Automation ON — click to disable' : 'Click to enable auto-send'}">
@@ -909,7 +909,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <button onclick="window._pb.saveCertSettings()" class="px-4 py-2 text-xs font-semibold rounded-lg transition-all ${state.certSettingsDirty ? 'bg-gray-900 text-white hover:bg-gray-700' : 'bg-gray-100 text-gray-500 cursor-default'}">
             <i class="fas fa-save mr-1.5"></i>Save Certificate Settings
           </button>
-          ${(() => { const accepted = state.proposals.filter(p => p.status === 'accepted'); return accepted.length > 0 ? `<a href="/api/invoices/${accepted[0].id}/certificate" target="_blank" class="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-all"><i class="fas fa-eye mr-1.5"></i>Preview Certificate</a>` : '<span class="text-xs text-gray-400"><i class="fas fa-info-circle mr-1"></i>Accept a proposal to preview the certificate</span>'; })()}
+          <a href="/api/invoices/certificate/preview?color=${encodeURIComponent(state.certAccentColor || '#1a5c38')}&license=${encodeURIComponent(state.certLicenseNumber || '')}" target="_blank" class="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-all cursor-pointer"><i class="fas fa-eye mr-1.5"></i>Preview Certificate</a>
           <a href="/customer/profile" class="text-xs text-brand-600 hover:underline ml-auto"><i class="fas fa-building mr-1"></i>Update logo & company info →</a>
         </div>
       </div>
@@ -971,7 +971,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${sc}">${p.status}</span>${p.viewed_count > 0 ? '<span class="text-[10px] text-gray-500 ml-2" title="Viewed ' + p.viewed_count + ' times"><i class="fas fa-eye text-gray-600"></i> ' + p.viewed_count + '</span>' : ''}</td>
                 <td class="px-4 py-3 text-right" style="white-space:nowrap">
                   ${p.share_token ? `<a href="/proposal/view/${p.share_token}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;margin-right:4px" title="Preview as customer"><i class="fas fa-eye"></i> Preview</a>` : ''}
-                  ${p.status === 'accepted' ? `
+                  ${p.status === 'accepted' && !p.installation_completed_at ? `
+                    <button onclick="window._pb.completeInstallation(${p.id})" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-right:4px" title="Confirm the roof installation is complete — sends certificate if auto-send is enabled"><i class="fas fa-check-double"></i> Mark Install Complete</button>
+                  ` : ''}
+                  ${p.installation_completed_at ? `
+                    <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;border-radius:6px;font-size:11px;font-weight:600;margin-right:4px" title="Installation completed ${(p.installation_completed_at||'').slice(0,10)}"><i class="fas fa-check-circle"></i> Installed</span>
                     <a href="/api/invoices/${p.id}/certificate" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#fefce8;color:#713f12;border:1px solid #fde68a;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;margin-right:4px" title="View Certificate of Installation"><i class="fas fa-certificate"></i> Certificate</a>
                     <button onclick="window._pb.sendCertificate(${p.id})" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f0fdf4;color:#166534;border:1px solid #86efac;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;margin-right:4px;border-width:1px" title="${p.certificate_sent_at ? 'Certificate sent ' + (p.certificate_sent_at || '').slice(0,10) + ' — click to resend' : 'Send certificate to customer'}"><i class="fas fa-paper-plane"></i>${p.certificate_sent_at ? ' Resend' : ' Send Cert'}</button>
                     ${p.certificate_sent_at ? `<span style="font-size:10px;color:#16a34a;margin-right:4px" title="Certificate sent ${(p.certificate_sent_at||'').slice(0,10)}"><i class="fas fa-check-circle"></i> Sent</span>` : ''}
@@ -2531,13 +2535,39 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (res.ok) {
           state.autoSendCertificate = newVal;
-          pbToast(newVal ? '✅ Certificate auto-send enabled — customers will receive a certificate when they sign' : 'Certificate auto-send disabled', newVal ? 'success' : 'info');
+          pbToast(newVal ? '✅ Certificate auto-send enabled — customers will receive a certificate when you mark the installation complete' : 'Certificate auto-send disabled', newVal ? 'success' : 'info');
           render();
         } else {
           pbToast('Failed to update setting', 'error');
         }
       } catch(e) {
         pbToast('Error updating setting', 'error');
+      }
+    },
+    async completeInstallation(id) {
+      if (!confirm('Mark this roof installation as complete? This will record the completion date' + (state.autoSendCertificate ? ' and automatically send the Certificate of Installation to the customer.' : '.'))) return;
+      pbToast('Marking installation complete...', 'info');
+      try {
+        var res = await fetch('/api/invoices/' + id + '/complete-installation', {
+          method: 'POST',
+          headers: headers()
+        });
+        var data = await res.json();
+        if (res.ok) {
+          var p = state.proposals.find(function(x) { return x.id === id; });
+          if (p) p.installation_completed_at = data.installation_completed_at || new Date().toISOString();
+          if (data.certificate_sent) {
+            if (p) p.certificate_sent_at = new Date().toISOString();
+            pbToast('Installation marked complete — certificate sent to customer!', 'success');
+          } else {
+            pbToast('Installation marked complete!', 'success');
+          }
+          render();
+        } else {
+          pbToast(data.error || 'Failed to mark installation complete', 'error');
+        }
+      } catch(e) {
+        pbToast('Error marking installation complete', 'error');
       }
     },
     async sendCertificate(id) {
