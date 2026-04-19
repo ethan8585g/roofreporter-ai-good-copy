@@ -421,7 +421,12 @@ callCenterRoutes.post('/quick-dial', async (c) => {
   const apiKey = (c.env as any).LIVEKIT_API_KEY
   const apiSecret = (c.env as any).LIVEKIT_API_SECRET
   const livekitUrl = (c.env as any).LIVEKIT_URL
-  const outboundTrunkId = (c.env as any).SIP_OUTBOUND_TRUNK_ID
+
+  // Use active phone line's outbound trunk if available, otherwise fall back to env var
+  const activeLine = await c.env.DB.prepare(
+    `SELECT livekit_outbound_trunk_id, livekit_inbound_trunk_id FROM cc_phone_config WHERE is_active=1 AND outbound_enabled=1 AND (livekit_outbound_trunk_id IS NOT NULL AND livekit_outbound_trunk_id != '') ORDER BY id DESC LIMIT 1`
+  ).first<any>()
+  const outboundTrunkId = activeLine?.livekit_outbound_trunk_id || (c.env as any).SIP_OUTBOUND_TRUNK_ID
 
   let token = null
   let sipStatus = 'no_livekit'
@@ -543,7 +548,12 @@ callCenterRoutes.post('/dial', async (c) => {
   const apiKey = (c.env as any).LIVEKIT_API_KEY
   const apiSecret = (c.env as any).LIVEKIT_API_SECRET
   const livekitUrl = (c.env as any).LIVEKIT_URL
-  const outboundTrunkId = (c.env as any).SIP_OUTBOUND_TRUNK_ID
+
+  // Use active phone line's outbound trunk if available, otherwise fall back to env var
+  const activeDialLine = await c.env.DB.prepare(
+    `SELECT livekit_outbound_trunk_id, livekit_inbound_trunk_id FROM cc_phone_config WHERE is_active=1 AND outbound_enabled=1 AND (livekit_outbound_trunk_id IS NOT NULL AND livekit_outbound_trunk_id != '') ORDER BY id DESC LIMIT 1`
+  ).first<any>()
+  const outboundTrunkId = activeDialLine?.livekit_outbound_trunk_id || (c.env as any).SIP_OUTBOUND_TRUNK_ID
 
   let token = null
   let sipDialResult: any = null
@@ -632,14 +642,21 @@ callCenterRoutes.get('/sip-status', async (c) => {
 
   try {
     const outboundTrunks = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/ListSIPOutboundTrunk', {})
+    const inboundTrunks = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/ListSIPInboundTrunk', {})
     const dispatchRules = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/ListSIPDispatchRule', {})
     const rooms = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.RoomService/ListRooms', {})
+    let phoneNumbers: any = null
+    try { phoneNumbers = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.PhoneNumberService/ListPhoneNumbers', {}) } catch (_) {}
 
     return c.json({
       configured_trunk_id: outboundTrunkId || 'NOT SET',
       outbound_trunks: (outboundTrunks?.items || []).map((t: any) => ({
         id: t.sip_trunk_id, name: t.name, address: t.address, numbers: t.numbers,
       })),
+      inbound_trunks: (inboundTrunks?.items || []).map((t: any) => ({
+        id: t.sip_trunk_id, name: t.name, numbers: t.numbers, metadata: t.metadata,
+      })),
+      phone_numbers: phoneNumbers?.items || phoneNumbers?.phone_numbers || phoneNumbers,
       dispatch_rules: (dispatchRules?.items || []).map((d: any) => ({
         id: d.sip_dispatch_rule_id, name: d.name,
         room_prefix: d.rule?.dispatch_rule_individual?.room_prefix || '',
@@ -1681,6 +1698,103 @@ callCenterRoutes.post('/phone-lines/:id/set-forwarding', async (c) => {
     ).bind(newFwd, id).run()
     return c.json({ success: true, call_forwarding_active: newFwd })
   } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+
+// ============================================================
+// REGISTER LIVEKIT PHONE NUMBER — Add pre-purchased LiveKit number + create dispatch rule + outbound trunk
+// ============================================================
+callCenterRoutes.post('/phone-lines/register-livekit', async (c) => {
+  const apiKey = (c.env as any).LIVEKIT_API_KEY
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET
+  const livekitUrl = (c.env as any).LIVEKIT_URL
+
+  if (!apiKey || !apiSecret || !livekitUrl) {
+    return c.json({ error: 'LiveKit API credentials not configured' }, 500)
+  }
+
+  try {
+    const { trunk_id, label, owner_name, assigned_email, phone_number, room_prefix } = await c.req.json()
+    if (!trunk_id) return c.json({ error: 'trunk_id is required (LiveKit phone number ID)' }, 400)
+
+    // Step 1: Look up the phone number's E.164 if not provided
+    let e164 = phone_number || ''
+    if (!e164 && trunk_id.startsWith('PN_PPN_')) {
+      try {
+        const phoneList = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+          '/twirp/livekit.PhoneNumberService/ListPhoneNumbers', {})
+        const found = (phoneList?.items || []).find((p: any) => p.id === trunk_id)
+        if (found) e164 = found.e164_format
+      } catch (_) {}
+    }
+
+    // Step 2: Create dispatch rule via LiveKit API
+    const dispatchResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+      '/twirp/livekit.SIP/CreateSIPDispatchRule', {
+        rule: { dispatchRuleIndividual: {} },
+        trunk_ids: [trunk_id],
+        name: `cc-outbound-${trunk_id}`,
+        metadata: JSON.stringify({ service: 'call_center_outbound', trunk_id }),
+      })
+
+    const dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
+    if (!dispatchId && dispatchResult?.code) {
+      return c.json({
+        error: 'Failed to create dispatch rule',
+        livekit_error: dispatchResult.msg || dispatchResult.message || JSON.stringify(dispatchResult),
+      }, 502)
+    }
+
+    // Step 3: Create SIP outbound trunk via sip.livekit.cloud for native phone numbers
+    let outboundTrunkId = ''
+    if (trunk_id.startsWith('PN_PPN_') && e164) {
+      const trunkResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+        '/twirp/livekit.SIP/CreateSIPOutboundTrunk', {
+          trunk: {
+            name: `cc-outbound-${trunk_id}`,
+            address: 'sip.livekit.cloud',
+            numbers: [e164],
+            metadata: JSON.stringify({ service: 'call_center_outbound', phone_number_id: trunk_id }),
+          }
+        })
+      outboundTrunkId = trunkResult?.sip_trunk_id || ''
+    }
+
+    // Step 4: Insert phone line into database
+    const res = await c.env.DB.prepare(
+      `INSERT INTO cc_phone_config (
+        business_phone, assigned_phone_number, label,
+        dispatch_type, dispatch_description, owner_name, assigned_email,
+        livekit_inbound_trunk_id, livekit_outbound_trunk_id, livekit_dispatch_rule_id,
+        connection_status, phone_verified, is_active,
+        forwarding_method, inbound_enabled, outbound_enabled,
+        created_at, updated_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`
+    ).bind(
+      e164 || '', e164 || '',
+      label || 'LiveKit Outbound Line',
+      'outbound_prompt_leadlist',
+      'LiveKit native outbound dialer — triggered from admin call center dashboard',
+      owner_name || '', assigned_email || '',
+      trunk_id, outboundTrunkId, dispatchId,
+      'connected', 1, 1,
+      'livekit_direct', 0, 1
+    ).run()
+
+    return c.json({
+      success: true,
+      id: res.meta.last_row_id,
+      phone_number_id: trunk_id,
+      e164_number: e164,
+      outbound_trunk_id: outboundTrunkId,
+      dispatch_rule_id: dispatchId,
+      label: label || 'LiveKit Outbound Line',
+      message: `LiveKit phone number registered with outbound trunk ${outboundTrunkId} and dispatch rule ${dispatchId}`,
+    })
+  } catch (e: any) {
+    console.error('[CC RegisterLiveKit] Error:', e)
     return c.json({ error: e.message }, 500)
   }
 })

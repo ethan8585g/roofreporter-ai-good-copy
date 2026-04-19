@@ -69,10 +69,10 @@
 
       <!-- Tab Navigation -->
       <div class="flex gap-1 mb-6 bg-gray-100 rounded-xl p-1">
-        ${['overview','agents','contact-lists','campaigns','prospects','call-logs','phone-setup','deploy'].map(t => 
+        ${['overview','agents','outreach','call-logs','phone-setup','deploy'].map(t =>
           `<button onclick="window.ccSetTab('${t}')" id="cc-tab-${t}" class="cc-tab px-4 py-2 rounded-lg text-sm font-medium transition-all ${CC.tab===t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
-            <i class="fas fa-${t==='overview'?'chart-pie':t==='agents'?'robot':t==='contact-lists'?'address-book':t==='campaigns'?'bullhorn':t==='prospects'?'building':t==='call-logs'?'list-alt':t==='phone-setup'?'phone-alt':t==='deploy'?'rocket':'circle'} mr-1.5"></i>
-            ${t==='overview'?'Overview':t==='agents'?'AI Agents':t==='contact-lists'?'Contact Lists':t==='campaigns'?'Campaigns':t==='prospects'?'Prospects':t==='call-logs'?'Call Logs':t==='phone-setup'?'Phone Setup':t==='deploy'?'Deploy':''}  
+            <i class="fas fa-${t==='overview'?'chart-pie':t==='agents'?'robot':t==='outreach'?'address-book':t==='call-logs'?'list-alt':t==='phone-setup'?'phone-alt':t==='deploy'?'rocket':'circle'} mr-1.5"></i>
+            ${t==='overview'?'Overview':t==='agents'?'AI Agents':t==='outreach'?'Outreach':t==='call-logs'?'Call Logs':t==='phone-setup'?'Phone Setup':t==='deploy'?'Deploy':''}
           </button>`
         ).join('')}
       </div>
@@ -108,18 +108,20 @@
       case 'agents':
         CC.data.agents = await ccFetch('/api/call-center/agents');
         break;
-      case 'campaigns':
-        CC.data.campaigns = await ccFetch('/api/call-center/campaigns');
-        break;
-      case 'prospects':
-        CC.data.prospects = await ccFetch('/api/call-center/prospects?page=' + CC.prospectPage + '&limit=50');
+      case 'outreach':
+        const [oProspects, oCampaigns, oLists, oEOLists] = await Promise.all([
+          ccFetch('/api/call-center/prospects?page=' + CC.prospectPage + '&limit=50'),
+          ccFetch('/api/call-center/campaigns'),
+          ccFetch('/api/call-center/contact-lists'),
+          ccFetch('/api/call-center/email-outreach-lists'),
+        ]);
+        CC.data.prospects = oProspects;
+        CC.data.campaigns = oCampaigns;
+        CC.data.contactLists = oLists;
+        CC.data.emailOutreachLists = oEOLists;
         break;
       case 'call-logs':
         CC.data.callLogs = await ccFetch('/api/call-center/call-logs?page=' + CC.callLogPage + '&limit=50');
-        break;
-      case 'contact-lists':
-        CC.data.contactLists = await ccFetch('/api/call-center/contact-lists');
-        CC.data.emailOutreachLists = await ccFetch('/api/call-center/email-outreach-lists');
         break;
       case 'phone-setup':
         CC.data.phoneSetup = await ccFetch('/api/call-center/quick-connect/status');
@@ -146,10 +148,8 @@
     switch (tab) {
       case 'overview': content.innerHTML = renderOverview(); break;
       case 'agents': content.innerHTML = renderAgents(); break;
-      case 'campaigns': content.innerHTML = renderCampaigns(); break;
-      case 'prospects': content.innerHTML = renderProspects(); break;
+      case 'outreach': content.innerHTML = renderOutreach(); break;
       case 'call-logs': content.innerHTML = renderCallLogs(); break;
-      case 'contact-lists': content.innerHTML = renderContactLists(); break;
       case 'phone-setup':
         if (ccPhoneState.step === 2) {
           content.innerHTML = renderPhoneStep2();
@@ -405,7 +405,44 @@
   }
 
   // ============================================================
-  // CAMPAIGNS TAB
+  // OUTREACH TAB — Unified Prospects + Campaigns + Contact Lists
+  // ============================================================
+  function renderOutreach() {
+    return `<div class="space-y-4">
+      <!-- Section toggle -->
+      <div class="flex gap-2 bg-gray-50 rounded-lg p-1 w-fit">
+        <button onclick="window.ccOutreachSection('prospects')" id="cc-osec-prospects" class="cc-osec px-4 py-2 rounded-lg text-sm font-semibold bg-white text-gray-900 shadow-sm">
+          <i class="fas fa-building mr-1.5"></i>Prospects
+        </button>
+        <button onclick="window.ccOutreachSection('campaigns')" id="cc-osec-campaigns" class="cc-osec px-4 py-2 rounded-lg text-sm font-semibold text-gray-500">
+          <i class="fas fa-bullhorn mr-1.5"></i>Campaigns
+        </button>
+        <button onclick="window.ccOutreachSection('contact-lists')" id="cc-osec-contact-lists" class="cc-osec px-4 py-2 rounded-lg text-sm font-semibold text-gray-500">
+          <i class="fas fa-address-book mr-1.5"></i>Contact Lists
+        </button>
+      </div>
+      <div id="cc-outreach-content">${renderProspects()}</div>
+    </div>`;
+  }
+
+  window.ccOutreachSection = function(section) {
+    document.querySelectorAll('.cc-osec').forEach(el => {
+      el.classList.remove('bg-white', 'text-gray-900', 'shadow-sm');
+      el.classList.add('text-gray-500');
+    });
+    var active = document.getElementById('cc-osec-' + section);
+    if (active) { active.classList.add('bg-white', 'text-gray-900', 'shadow-sm'); active.classList.remove('text-gray-500'); }
+    var container = document.getElementById('cc-outreach-content');
+    if (!container) return;
+    switch (section) {
+      case 'prospects': container.innerHTML = renderProspects(); break;
+      case 'campaigns': container.innerHTML = renderCampaigns(); break;
+      case 'contact-lists': container.innerHTML = renderContactLists(); break;
+    }
+  };
+
+  // ============================================================
+  // CAMPAIGNS
   // ============================================================
   function renderCampaigns() {
     const campaigns = (CC.data.campaigns || {}).campaigns || [];
@@ -761,7 +798,7 @@
       });
       if (importRes && importRes.success !== false) {
         window.rmToast('Imported ' + prospects.length + ' prospects from Email Outreach list!', 'info');
-        ccLoadTab('prospects');
+        ccLoadTab('outreach');
       } else {
         window.rmToast('Import failed: ' + (importRes?.error || 'Unknown error', 'error'));
       }
@@ -1100,17 +1137,17 @@
       call_hours_end: document.getElementById('cc-camp-end').value,
       max_attempts: parseInt(document.getElementById('cc-camp-attempts').value) || 3,
     }) });
-    if (data?.success) { document.getElementById('cc-campaign-modal').classList.add('hidden'); ccLoadTab('campaigns'); }
+    if (data?.success) { document.getElementById('cc-campaign-modal').classList.add('hidden'); ccLoadTab('outreach'); }
     else window.rmToast(data?.error || 'Failed', 'info');
   };
   window.ccUpdateCampaign = async function(id, status) {
     await ccFetch('/api/call-center/campaigns/' + id, { method: 'PUT', body: JSON.stringify({ status }) });
-    ccLoadTab('campaigns');
+    ccLoadTab('outreach');
   };
   window.ccDeleteCampaign = async function(id) {
     if (!(await window.rmConfirm('Delete this campaign?'))) return
     await ccFetch('/api/call-center/campaigns/' + id, { method: 'DELETE' });
-    ccLoadTab('campaigns');
+    ccLoadTab('outreach');
   };
 
   // Prospects
@@ -1125,7 +1162,7 @@
       city: document.getElementById('cc-p-city').value, province_state: document.getElementById('cc-p-prov').value,
       country: document.getElementById('cc-p-country').value, notes: document.getElementById('cc-p-notes').value,
     }) });
-    if (data?.success) { document.getElementById('cc-prospect-modal').classList.add('hidden'); ccLoadTab('prospects'); }
+    if (data?.success) { document.getElementById('cc-prospect-modal').classList.add('hidden'); ccLoadTab('outreach'); }
     else window.rmToast(data?.error || 'Failed', 'info');
   };
   window.ccShowImportCSV = function() { document.getElementById('cc-csv-modal').classList.remove('hidden'); };
@@ -1140,7 +1177,7 @@
     if (data?.success) {
       resultEl.className = 'text-sm text-green-600 bg-green-50 p-3 rounded-lg';
       resultEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Imported ' + data.imported + ' prospects (' + data.skipped + ' skipped)';
-      setTimeout(function() { document.getElementById('cc-csv-modal').classList.add('hidden'); ccLoadTab('prospects'); }, 2000);
+      setTimeout(function() { document.getElementById('cc-csv-modal').classList.add('hidden'); ccLoadTab('outreach'); }, 2000);
     } else {
       resultEl.className = 'text-sm text-red-600 bg-red-50 p-3 rounded-lg';
       resultEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>' + (data?.error || 'Import failed');
@@ -1150,15 +1187,16 @@
     const q = document.getElementById('cc-prospect-search').value.trim();
     CC.prospectPage = 1;
     CC.data.prospects = await ccFetch('/api/call-center/prospects?page=1&limit=50' + (q ? '&search=' + encodeURIComponent(q) : ''));
-    renderTab('prospects');
+    var container = document.getElementById('cc-outreach-content');
+    if (container) container.innerHTML = renderProspects();
   };
-  window.ccNextPage = function() { CC.prospectPage++; ccLoadTab('prospects'); };
-  window.ccPrevPage = function() { if (CC.prospectPage > 1) CC.prospectPage--; ccLoadTab('prospects'); };
+  window.ccNextPage = function() { CC.prospectPage++; ccLoadTab('outreach'); };
+  window.ccPrevPage = function() { if (CC.prospectPage > 1) CC.prospectPage--; ccLoadTab('outreach'); };
 
   window.ccDeleteProspect = async function(id) {
     if (!(await window.rmConfirm('Delete this prospect?'))) return
     await ccFetch('/api/call-center/prospects/' + id, { method: 'DELETE' });
-    ccLoadTab('prospects');
+    ccLoadTab('outreach');
   };
   // Quick Dial — enter phone number and call immediately
   window.ccQuickDial = async function() {
@@ -1283,13 +1321,13 @@
       country: document.getElementById('cc-list-country').value || 'CA',
       tags: document.getElementById('cc-list-tags').value,
     }) });
-    if (data?.success) { document.getElementById('cc-list-modal').classList.add('hidden'); ccLoadTab('contact-lists'); }
+    if (data?.success) { document.getElementById('cc-list-modal').classList.add('hidden'); ccLoadTab('outreach'); }
     else window.rmToast(data?.error || 'Failed', 'info');
   };
   window.ccDeleteList = async function(id) {
     if (!(await window.rmConfirm('Archive this contact list?'))) return
     await ccFetch('/api/call-center/contact-lists/' + id, { method: 'DELETE' });
-    ccLoadTab('contact-lists');
+    ccLoadTab('outreach');
   };
   window.ccImportToList = function(listId) {
     document.getElementById('cc-list-import-id').value = listId;
@@ -1310,7 +1348,7 @@
     if (data?.success) {
       resultEl.className = 'text-sm text-green-600 bg-green-50 p-3 rounded-lg';
       resultEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Imported ' + data.imported + ' contacts (' + data.skipped + ' skipped)';
-      setTimeout(function() { document.getElementById('cc-list-import-modal').classList.add('hidden'); ccLoadTab('contact-lists'); }, 2000);
+      setTimeout(function() { document.getElementById('cc-list-import-modal').classList.add('hidden'); ccLoadTab('outreach'); }, 2000);
     } else {
       resultEl.className = 'text-sm text-red-600 bg-red-50 p-3 rounded-lg';
       resultEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>' + (data?.error || 'Import failed');
