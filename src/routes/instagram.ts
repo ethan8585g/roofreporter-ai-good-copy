@@ -37,17 +37,95 @@ instagramRoutes.use('/*', async (c, next) => {
 
 instagramRoutes.get('/status', async (c) => {
   const acct = await c.env.DB.prepare('SELECT * FROM instagram_account LIMIT 1').first<any>()
-  const configured = !!(c.env as any).INSTAGRAM_BUSINESS_ACCOUNT_ID
+  const hasToken = !!((c.env as any).INSTAGRAM_PAGE_ACCESS_TOKEN || (c.env as any).GRAPH_API_KEY)
+  const hasIgId = !!((c.env as any).INSTAGRAM_BUSINESS_ACCOUNT_ID) || !!acct
+  const configured = hasToken
 
   return c.json({
     success: true,
     data: {
       configured,
+      has_token: hasToken,
+      has_ig_id: hasIgId,
       account: acct || null,
-      token_health: acct ? (acct.access_token_encrypted ? 'encrypted' : 'missing') : 'not_connected',
+      token_health: hasToken ? 'configured' : 'missing',
       last_synced_at: acct?.last_synced_at || null,
     },
   })
+})
+
+// Auto-connect: discover IG Business Account ID from the access token
+instagramRoutes.post('/auto-connect', async (c) => {
+  const accessToken = (c.env as any).INSTAGRAM_PAGE_ACCESS_TOKEN || (c.env as any).GRAPH_API_KEY
+  if (!accessToken) return c.json({ success: false, error: 'No access token configured (set GRAPH_API_KEY or INSTAGRAM_PAGE_ACCESS_TOKEN in Cloudflare secrets)' }, 400)
+
+  const apiVersion = (c.env as any).INSTAGRAM_GRAPH_API_VERSION || 'v21.0'
+
+  try {
+    // Step 1: Get user's pages
+    const pagesRes = await fetch(`https://graph.facebook.com/${apiVersion}/me/accounts?fields=id,name,access_token,instagram_business_account&access_token=${accessToken}`)
+    const pagesData = await pagesRes.json() as any
+    if (pagesData.error) return c.json({ success: false, error: pagesData.error.message }, 400)
+
+    const pages = pagesData.data || []
+    if (pages.length === 0) return c.json({ success: false, error: 'No Facebook Pages found. Make sure your token has pages_show_list permission.' }, 400)
+
+    // Find the first page with an Instagram Business Account
+    let igUserId = ''
+    let igUsername = ''
+    let pageId = ''
+    let pageName = ''
+
+    for (const page of pages) {
+      if (page.instagram_business_account?.id) {
+        igUserId = page.instagram_business_account.id
+        pageId = page.id
+        pageName = page.name
+
+        // Get IG account details
+        const igRes = await fetch(`https://graph.facebook.com/${apiVersion}/${igUserId}?fields=id,username,name,profile_picture_url,followers_count,follows_count,media_count&access_token=${accessToken}`)
+        const igData = await igRes.json() as any
+        if (!igData.error) {
+          igUsername = igData.username || ''
+
+          // Upsert instagram_account
+          const existing = await c.env.DB.prepare('SELECT id FROM instagram_account WHERE ig_user_id = ?').bind(igUserId).first<any>()
+          if (existing) {
+            await c.env.DB.prepare(`
+              UPDATE instagram_account SET username=?, page_id=?, access_token_encrypted=?, follower_count=?, following_count=?, media_count=?, last_synced_at=datetime('now'), updated_at=datetime('now') WHERE id=?
+            `).bind(igUsername, pageId, '(stored in env)', igData.followers_count || 0, igData.follows_count || 0, igData.media_count || 0, existing.id).run()
+          } else {
+            await c.env.DB.prepare(`
+              INSERT INTO instagram_account (ig_user_id, username, page_id, access_token_encrypted, follower_count, following_count, media_count, last_synced_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            `).bind(igUserId, igUsername, pageId, '(stored in env)', igData.followers_count || 0, igData.follows_count || 0, igData.media_count || 0).run()
+          }
+
+          return c.json({
+            success: true,
+            data: {
+              ig_user_id: igUserId,
+              username: igUsername,
+              page_id: pageId,
+              page_name: pageName,
+              followers: igData.followers_count || 0,
+              media_count: igData.media_count || 0,
+              message: `Connected @${igUsername} (${igData.followers_count} followers). The IG Business Account ID is ${igUserId} — you can set INSTAGRAM_BUSINESS_ACCOUNT_ID to this value in Cloudflare secrets, or leave it and the system will auto-detect.`,
+            },
+          })
+        }
+      }
+    }
+
+    // No IG Business Account found
+    return c.json({
+      success: false,
+      error: `Found ${pages.length} Facebook Page(s) (${pages.map((p: any) => p.name).join(', ')}) but none have an Instagram Business Account linked. Link your IG account to a Facebook Page first.`,
+      pages: pages.map((p: any) => ({ id: p.id, name: p.name, has_ig: !!p.instagram_business_account })),
+    })
+  } catch (err: any) {
+    return c.json({ success: false, error: err.message }, 500)
+  }
 })
 
 // ============================================================

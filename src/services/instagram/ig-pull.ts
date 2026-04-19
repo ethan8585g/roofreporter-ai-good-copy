@@ -7,21 +7,31 @@ import type { Bindings } from '../../types'
 import { getAccount, getMediaList, getMediaInsights, getAccountInsights, decryptToken, type GraphClientConfig } from './graph-client'
 
 export async function buildConfig(env: Bindings): Promise<GraphClientConfig> {
-  const encryptedToken = (env as any).INSTAGRAM_PAGE_ACCESS_TOKEN || ''
+  // Check multiple secret names — user may have set token under different key
+  const encryptedToken = (env as any).INSTAGRAM_PAGE_ACCESS_TOKEN || (env as any).GRAPH_API_KEY || ''
   const jwtSecret = (env as any).JWT_SECRET || ''
   let accessToken = encryptedToken
-  // If the token looks encrypted (base64 with length > 100), decrypt it
+  // If the token looks encrypted (base64 with length > 100 and no EAA prefix), decrypt it
   try {
-    if (encryptedToken.length > 100 && !encryptedToken.includes('.')) {
+    if (encryptedToken.length > 100 && !encryptedToken.startsWith('EAA') && !encryptedToken.includes('.')) {
       accessToken = await decryptToken(encryptedToken, jwtSecret)
     }
   } catch {
     accessToken = encryptedToken
   }
+  // Try to get IG Business Account ID from env, or from DB if already auto-connected
+  let igUserId = (env as any).INSTAGRAM_BUSINESS_ACCOUNT_ID || ''
+  if (!igUserId && accessToken) {
+    try {
+      const acctRow = await env.DB.prepare('SELECT ig_user_id FROM instagram_account LIMIT 1').first<any>()
+      if (acctRow?.ig_user_id) igUserId = acctRow.ig_user_id
+    } catch { /* table may not exist yet */ }
+  }
+
   return {
     accessToken,
     apiVersion: (env as any).INSTAGRAM_GRAPH_API_VERSION || 'v21.0',
-    igUserId: (env as any).INSTAGRAM_BUSINESS_ACCOUNT_ID || '',
+    igUserId,
   }
 }
 

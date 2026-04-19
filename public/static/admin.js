@@ -3021,6 +3021,11 @@ function renderIgPerformance() {
 
     <!-- Actions -->
     <div class="flex gap-2 mb-6">
+      ${!IG.status?.account ? `
+        <button onclick="igAutoConnect()" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition-all">
+          <i class="fab fa-instagram mr-1"></i>Auto-Connect Instagram
+        </button>
+      ` : ''}
       <button onclick="igPullNow()" class="px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition-all">
         <i class="fas fa-sync mr-1"></i>Pull Now
       </button>
@@ -3081,6 +3086,17 @@ function renderIgPerformance() {
       </div>
     </div>
   `;
+}
+
+async function igAutoConnect() {
+  const btn = event.target.closest('button');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Connecting...'; }
+  const d = await igAction('/auto-connect', 'POST');
+  if (d && d.data) {
+    window.rmToast('Connected @' + d.data.username + ' (' + d.data.followers + ' followers)!', 'success');
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fab fa-instagram mr-1"></i>Auto-Connect Instagram'; }
+  await loadIgDashboard();
 }
 
 async function igPullNow() {
