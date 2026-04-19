@@ -41,6 +41,11 @@ const orderState = {
   traceSkylights: [],
   traceChimneys: [],
   traceAnnotationMarkers: [], // [{marker, type}] — separate from traceMarkers so clearTraceOverlays keeps them
+  // Optional customer details for invoicing automation
+  invoiceCustomerName: '',
+  invoiceCustomerPhone: '',
+  invoiceCustomerEmail: '',
+  invoicingAutoEnabled: false,
   // Pricing
   pricePerBundle: null,
   roofTraceJson: null,
@@ -88,6 +93,14 @@ async function loadOrderData() {
   } catch (e) {
     console.error('Failed to load order data:', e);
   }
+  // Check if invoicing automation is enabled for this user
+  try {
+    const invRes = await fetch('/api/crm/invoicing-automation/settings', { headers: authHeaders() });
+    if (invRes.ok) {
+      const invData = await invRes.json();
+      orderState.invoicingAutoEnabled = !!invData.auto_invoice_enabled;
+    }
+  } catch (e) { /* non-fatal */ }
   orderState.loading = false;
 }
 
@@ -501,6 +514,47 @@ function renderPinStep(root, progressBar) {
               </div>
             </div>
           </div>
+
+          <!-- Optional Customer Details for Invoicing Automation -->
+          ${orderState.invoicingAutoEnabled ? `
+          <div style="background:linear-gradient(135deg,#1e3a5f,#1e40af);border-radius:16px;border:1px solid rgba(59,130,246,0.3);padding:20px;overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <h4 style="font-size:14px;font-weight:700;color:#e0e7ff;margin:0;display:flex;align-items:center;gap:8px">
+                <i class="fas fa-file-invoice-dollar" style="color:#60a5fa"></i>Customer Details for Auto-Invoice
+              </h4>
+              <span style="font-size:10px;background:rgba(96,165,250,0.2);color:#93c5fd;padding:3px 10px;border-radius:6px;font-weight:600">OPTIONAL</span>
+            </div>
+            <p style="font-size:11px;color:#93c5fd;margin:0 0 14px;line-height:1.5">This form is completely optional. Fill it out to automatically generate and send an invoice to your customer when the report is ready.</p>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#93c5fd;display:block;margin-bottom:4px">Customer Full Name</label>
+                <input type="text" id="invoiceCustName" placeholder="e.g. John Smith"
+                  value="${orderState.invoiceCustomerName}"
+                  oninput="orderState.invoiceCustomerName=this.value"
+                  style="width:100%;padding:10px 14px;border:1px solid rgba(59,130,246,0.3);border-radius:10px;font-size:13px;background:rgba(255,255,255,0.08);color:white;outline:none"
+                  onfocus="this.style.borderColor='#60a5fa'" onblur="this.style.borderColor='rgba(59,130,246,0.3)'">
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div>
+                  <label style="font-size:11px;font-weight:600;color:#93c5fd;display:block;margin-bottom:4px">Phone Number</label>
+                  <input type="tel" id="invoiceCustPhone" placeholder="e.g. (555) 123-4567"
+                    value="${orderState.invoiceCustomerPhone}"
+                    oninput="orderState.invoiceCustomerPhone=this.value"
+                    style="width:100%;padding:10px 14px;border:1px solid rgba(59,130,246,0.3);border-radius:10px;font-size:13px;background:rgba(255,255,255,0.08);color:white;outline:none"
+                    onfocus="this.style.borderColor='#60a5fa'" onblur="this.style.borderColor='rgba(59,130,246,0.3)'">
+                </div>
+                <div>
+                  <label style="font-size:11px;font-weight:600;color:#93c5fd;display:block;margin-bottom:4px">Email Address</label>
+                  <input type="email" id="invoiceCustEmail" placeholder="e.g. john@email.com"
+                    value="${orderState.invoiceCustomerEmail}"
+                    oninput="orderState.invoiceCustomerEmail=this.value"
+                    style="width:100%;padding:10px 14px;border:1px solid rgba(59,130,246,0.3);border-radius:10px;font-size:13px;background:rgba(255,255,255,0.08);color:white;outline:none"
+                    onfocus="this.style.borderColor='#60a5fa'" onblur="this.style.borderColor='rgba(59,130,246,0.3)'">
+                </div>
+              </div>
+            </div>
+          </div>
+          ` : ''}
 
           <div id="orderMsg" class="hidden p-4 rounded-xl text-sm"></div>
 
@@ -1759,6 +1813,12 @@ function buildOrderPayload() {
   }
   if (orderState.needsAdminTrace) {
     payload.needs_admin_trace = 1;
+  }
+  // Invoicing automation customer details
+  if (orderState.invoiceCustomerName && orderState.invoiceCustomerEmail) {
+    payload.invoice_customer_name = orderState.invoiceCustomerName;
+    payload.invoice_customer_phone = orderState.invoiceCustomerPhone || '';
+    payload.invoice_customer_email = orderState.invoiceCustomerEmail;
   }
   return payload;
 }

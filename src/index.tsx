@@ -15946,7 +15946,7 @@ function getCertificateAutomationsPageHTML() {
         <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Automations</h1>
-          <p style="color:#9ca3af" class="text-xs">Certificate Design & Auto-Send</p>
+          <p style="color:#9ca3af" class="text-xs">Certificates & Invoicing</p>
         </div>
       </a>
       <nav class="flex items-center space-x-4">

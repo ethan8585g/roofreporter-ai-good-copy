@@ -730,6 +730,41 @@ crmRoutes.put('/proposals/automation/settings', async (c) => {
 })
 
 // ============================================================
+// INVOICING AUTOMATION — Settings for auto-invoice on report order
+// ============================================================
+crmRoutes.get('/invoicing-automation/settings', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const owner = await c.env.DB.prepare(
+    `SELECT auto_invoice_enabled, invoice_pricing_mode, invoice_price_per_square,
+            invoice_price_per_bundle FROM customers WHERE id = ?`
+  ).bind(ownerId).first<any>()
+  return c.json({
+    auto_invoice_enabled: owner?.auto_invoice_enabled === 1,
+    invoice_pricing_mode: owner?.invoice_pricing_mode || 'per_square',
+    invoice_price_per_square: owner?.invoice_price_per_square ?? 350,
+    invoice_price_per_bundle: owner?.invoice_price_per_bundle ?? 125,
+  })
+})
+
+crmRoutes.put('/invoicing-automation/settings', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const body = await c.req.json()
+  const fields: string[] = []
+  const values: any[] = []
+  if (body.auto_invoice_enabled !== undefined) { fields.push('auto_invoice_enabled = ?'); values.push(body.auto_invoice_enabled ? 1 : 0) }
+  if (body.invoice_pricing_mode !== undefined) { fields.push('invoice_pricing_mode = ?'); values.push(body.invoice_pricing_mode) }
+  if (body.invoice_price_per_square !== undefined) { fields.push('invoice_price_per_square = ?'); values.push(body.invoice_price_per_square) }
+  if (body.invoice_price_per_bundle !== undefined) { fields.push('invoice_price_per_bundle = ?'); values.push(body.invoice_price_per_bundle) }
+  if (fields.length > 0) {
+    values.push(ownerId)
+    await c.env.DB.prepare(`UPDATE customers SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run()
+  }
+  return c.json({ success: true })
+})
+
+// ============================================================
 // CERTIFICATE DESIGNS — CRUD for saved certificate templates
 // ============================================================
 crmRoutes.get('/certificate-designs', async (c) => {

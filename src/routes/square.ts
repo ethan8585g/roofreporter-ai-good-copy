@@ -541,7 +541,8 @@ squareRoutes.post('/use-credit', async (c) => {
 
     const { property_address, property_city, property_province, property_postal_code,
             service_tier, latitude, longitude, roof_trace_json, price_per_bundle, trace_measurement_json,
-            needs_admin_trace, crm_customer_id } = await c.req.json()
+            needs_admin_trace, crm_customer_id,
+            invoice_customer_name, invoice_customer_email, invoice_customer_phone } = await c.req.json()
 
     // If a CRM customer was selected, verify it belongs to this user
     let attachedCrmCustomerId: number | null = null
@@ -701,6 +702,122 @@ squareRoutes.post('/use-credit', async (c) => {
         }
       } catch (e: any) {
         console.warn(`[Use-Credit] Auto-generate dispatch error (non-fatal): ${e.message}`)
+      }
+    }
+
+    // ============================================================
+    // INVOICING AUTOMATION — Auto-create & send invoice if enabled
+    // ============================================================
+    if (invoice_customer_name && invoice_customer_email) {
+      const invoiceAutoPromise = (async () => {
+        try {
+          // Check if user has invoicing automation enabled
+          const custSettings = await c.env.DB.prepare(
+            `SELECT auto_invoice_enabled, invoice_pricing_mode, invoice_price_per_square,
+                    invoice_price_per_bundle FROM customers WHERE id = ?`
+          ).bind(customer.customer_id).first<any>()
+
+          if (!custSettings || !custSettings.auto_invoice_enabled) return
+
+          // Wait for report to be generated (poll for up to 90 seconds)
+          let report: any = null
+          for (let i = 0; i < 18; i++) {
+            await new Promise(r => setTimeout(r, 5000))
+            report = await c.env.DB.prepare(
+              "SELECT * FROM reports WHERE order_id = ? AND status = 'completed'"
+            ).bind(newOrderId).first<any>()
+            if (report) break
+          }
+          if (!report) {
+            console.warn(`[Auto-Invoice] Report not ready after 90s for order ${newOrderId} — skipping auto-invoice`)
+            return
+          }
+
+          // Extract measurement data for pricing
+          let reportData: any = {}
+          try { reportData = JSON.parse(report.report_data || '{}') } catch (e) { /* empty */ }
+          const grossSquares = reportData.gross_squares || reportData.true_area_squares || 0
+          const bundles = reportData.total_bundles || reportData.bom_total_bundles || 0
+
+          const pricingMode = custSettings.invoice_pricing_mode || 'per_square'
+          let lineDescription = ''
+          let quantity = 0
+          let unitPrice = 0
+
+          if (pricingMode === 'per_square') {
+            quantity = Math.round(grossSquares * 100) / 100
+            unitPrice = custSettings.invoice_price_per_square || 350
+            lineDescription = `Roofing — ${quantity} squares @ $${unitPrice}/sq — ${property_address}`
+          } else {
+            quantity = Math.round(bundles)
+            unitPrice = custSettings.invoice_price_per_bundle || 125
+            lineDescription = `Roofing — ${quantity} bundles @ $${unitPrice}/bundle — ${property_address}`
+          }
+
+          if (quantity <= 0) {
+            console.warn(`[Auto-Invoice] No measurable quantity for order ${newOrderId} — skipping`)
+            return
+          }
+
+          const subtotal = Math.round(quantity * unitPrice * 100) / 100
+          const taxRate = 5.0
+          const taxAmount = Math.round(subtotal * taxRate) / 100
+          const total = Math.round((subtotal + taxAmount) * 100) / 100
+
+          // Find or create a customer record for the invoice recipient
+          const recipientEmail = invoice_customer_email.toLowerCase().trim()
+          let recipientCustomerId: number
+          const existing = await c.env.DB.prepare('SELECT id FROM customers WHERE email = ?').bind(recipientEmail).first<any>()
+          if (existing) {
+            recipientCustomerId = existing.id
+          } else {
+            const ins = await c.env.DB.prepare(
+              'INSERT INTO customers (email, name, phone, is_active) VALUES (?, ?, ?, 1)'
+            ).bind(recipientEmail, invoice_customer_name, invoice_customer_phone || null).run()
+            recipientCustomerId = ins.meta.last_row_id as number
+          }
+
+          // Generate invoice number & share token
+          const invDate = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+          const invRand = Math.floor(Math.random() * 9999).toString().padStart(4, '0')
+          const invoiceNumber = `INV-${invDate}-${invRand}`
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+          let shareToken = ''
+          for (let i = 0; i < 32; i++) shareToken += chars[Math.floor(Math.random() * chars.length)]
+
+          const dueDate = new Date()
+          dueDate.setDate(dueDate.getDate() + 30)
+
+          const invResult = await c.env.DB.prepare(`
+            INSERT INTO invoices (invoice_number, customer_id, order_id, subtotal, tax_rate, tax_amount,
+                                  discount_amount, total, status, due_date, notes, terms, created_by,
+                                  document_type, share_token, share_url)
+            VALUES (?, ?, ?, ?, ?, ?, 0, ?, 'sent', ?, ?, 'Payment due within 30 days of invoice date.', 'auto-invoice', 'invoice', ?, ?)
+          `).bind(
+            invoiceNumber, recipientCustomerId, newOrderId,
+            subtotal, taxRate, taxAmount, total,
+            dueDate.toISOString().slice(0, 10),
+            `Auto-generated invoice for ${property_address}`,
+            shareToken, `/proposal/view/${shareToken}`
+          ).run()
+
+          const invoiceId = invResult.meta.last_row_id
+          await c.env.DB.prepare(`
+            INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order, unit, is_taxable, category)
+            VALUES (?, ?, ?, ?, ?, 0, ?, 1, 'roofing')
+          `).bind(
+            invoiceId, lineDescription, quantity, unitPrice, subtotal,
+            pricingMode === 'per_square' ? 'square' : 'bundle'
+          ).run()
+
+          console.log(`[Auto-Invoice] Created invoice ${invoiceNumber} for $${total} CAD — order ${newOrderId} — sent to ${invoice_customer_email}`)
+        } catch (e: any) {
+          console.warn(`[Auto-Invoice] Failed for order ${newOrderId}: ${e.message}`)
+        }
+      })()
+
+      if ((c as any).executionCtx?.waitUntil) {
+        ;(c as any).executionCtx.waitUntil(invoiceAutoPromise)
       }
     }
 

@@ -24,16 +24,23 @@ const certState = {
   },
   dirty: false,
   previewLoading: false,
+  // Invoicing automation
+  invoicingSettings: {
+    auto_invoice_enabled: false,
+    invoice_pricing_mode: 'per_square',
+    invoice_price_per_square: 350,
+    invoice_price_per_bundle: 125,
+  },
 };
 
 function authHeaders() {
-  const t = localStorage.getItem('rc_token');
+  const t = localStorage.getItem('rc_customer_token');
   return t ? { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
 }
 
 // ── Bootstrap ──────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  await Promise.all([loadDesigns(), loadAutomationSettings(), loadSendLog()]);
+  await Promise.all([loadDesigns(), loadAutomationSettings(), loadSendLog(), loadInvoicingSettings()]);
   certState.loading = false;
   render();
   // Auto-load preview after first render
@@ -182,6 +189,32 @@ async function saveAutomationSettings(updates) {
       body: JSON.stringify(updates),
     });
     showToast('Automation settings saved!');
+  } catch (e) { showToast('Failed to save', true); }
+}
+
+// ── Invoicing Automation ──────────────────────────────────
+async function loadInvoicingSettings() {
+  try {
+    const r = await fetch('/api/crm/invoicing-automation/settings', { headers: authHeaders() });
+    const d = await r.json();
+    certState.invoicingSettings = {
+      auto_invoice_enabled: !!d.auto_invoice_enabled,
+      invoice_pricing_mode: d.invoice_pricing_mode || 'per_square',
+      invoice_price_per_square: d.invoice_price_per_square ?? 350,
+      invoice_price_per_bundle: d.invoice_price_per_bundle ?? 125,
+    };
+  } catch (e) { console.warn('Failed to load invoicing settings', e); }
+}
+
+async function saveInvoicingSettings(updates) {
+  Object.assign(certState.invoicingSettings, updates);
+  render();
+  try {
+    await fetch('/api/crm/invoicing-automation/settings', {
+      method: 'PUT', headers: authHeaders(),
+      body: JSON.stringify(updates),
+    });
+    showToast('Invoicing automation settings saved!');
   } catch (e) { showToast('Failed to save', true); }
 }
 
@@ -536,6 +569,93 @@ function render() {
       </div>
     </div>
     ` : ''}
+
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- INVOICING AUTOMATION -->
+    <!-- ════════════════════════════════════════════════════════ -->
+    <div style="margin-top:48px;padding-top:40px;border-top:2px solid #e5e7eb">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="font-size:24px;font-weight:800;color:#111;margin:0"><i class="fas fa-file-invoice-dollar" style="margin-right:10px;color:#2563eb"></i>Invoicing Automation</h2>
+          <p style="font-size:14px;color:#6b7280;margin-top:4px">Automatically generate and send invoices when you order a measurement report</p>
+        </div>
+      </div>
+
+      <!-- How it works -->
+      <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border-radius:16px;border:1px solid #93c5fd;padding:20px 24px;margin-bottom:20px">
+        <p style="font-size:13px;font-weight:700;color:#1e40af;margin:0 0 10px"><i class="fas fa-info-circle" style="margin-right:6px"></i>How it works</p>
+        <ol style="font-size:13px;color:#1e3a5f;line-height:1.8;margin:0;padding-left:20px">
+          <li>Turn on the automation and set your pricing below</li>
+          <li>When ordering a report, fill out the optional customer details form</li>
+          <li>Once the report generates, an invoice is automatically created and emailed to your customer</li>
+        </ol>
+      </div>
+
+      <!-- Master Toggle -->
+      <div style="background:white;border-radius:16px;border:1px solid #e5e7eb;padding:24px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <p style="font-size:16px;font-weight:700;color:#111;margin:0"><i class="fas fa-bolt" style="margin-right:8px;color:#2563eb"></i>Auto-Invoice</p>
+            <p style="font-size:12px;color:#6b7280;margin-top:4px">When enabled, invoices are sent automatically after each report you order (if customer details are provided)</p>
+          </div>
+          <button onclick="saveInvoicingSettings({ auto_invoice_enabled: !certState.invoicingSettings.auto_invoice_enabled })"
+            style="position:relative;width:52px;height:28px;border-radius:14px;border:none;cursor:pointer;background:${certState.invoicingSettings.auto_invoice_enabled ? '#2563eb' : '#d1d5db'};transition:background 0.2s">
+            <span style="position:absolute;top:3px;left:${certState.invoicingSettings.auto_invoice_enabled ? '27px' : '3px'};width:22px;height:22px;border-radius:50%;background:white;box-shadow:0 1px 3px rgba(0,0,0,0.2);transition:left 0.2s"></span>
+          </button>
+        </div>
+
+        ${certState.invoicingSettings.auto_invoice_enabled ? `
+        <div style="margin-top:24px;padding-top:20px;border-top:1px solid #f1f5f9">
+          <!-- Pricing Mode Selector -->
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:10px">Pricing Mode</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+            <button onclick="saveInvoicingSettings({ invoice_pricing_mode: 'per_square' })"
+              style="padding:18px;border-radius:12px;border:2px solid ${certState.invoicingSettings.invoice_pricing_mode === 'per_square' ? '#2563eb' : '#e5e7eb'};background:${certState.invoicingSettings.invoice_pricing_mode === 'per_square' ? '#eff6ff' : 'white'};cursor:pointer;text-align:left;transition:all 0.2s">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                <div style="width:36px;height:36px;border-radius:8px;background:#dbeafe;display:flex;align-items:center;justify-content:center"><i class="fas fa-th-large" style="color:#2563eb;font-size:16px"></i></div>
+                <div style="font-size:14px;font-weight:700;color:#111">Price per Square</div>
+              </div>
+              <p style="font-size:12px;color:#6b7280;line-height:1.4;margin:0">Set a dollar amount per roofing square (100 sq ft). Invoice total = squares x price.</p>
+            </button>
+            <button onclick="saveInvoicingSettings({ invoice_pricing_mode: 'per_bundle' })"
+              style="padding:18px;border-radius:12px;border:2px solid ${certState.invoicingSettings.invoice_pricing_mode === 'per_bundle' ? '#2563eb' : '#e5e7eb'};background:${certState.invoicingSettings.invoice_pricing_mode === 'per_bundle' ? '#eff6ff' : 'white'};cursor:pointer;text-align:left;transition:all 0.2s">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                <div style="width:36px;height:36px;border-radius:8px;background:#fef3c7;display:flex;align-items:center;justify-content:center"><i class="fas fa-boxes" style="color:#d97706;font-size:16px"></i></div>
+                <div style="font-size:14px;font-weight:700;color:#111">Price per Bundle</div>
+              </div>
+              <p style="font-size:12px;color:#6b7280;line-height:1.4;margin:0">Set a dollar amount per shingle bundle. Invoice total = bundles x price.</p>
+            </button>
+          </div>
+
+          <!-- Price Input -->
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">
+              ${certState.invoicingSettings.invoice_pricing_mode === 'per_square' ? 'Your Price per Square ($)' : 'Your Price per Bundle ($)'}
+            </label>
+            <div style="position:relative;max-width:240px">
+              <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:16px;font-weight:700;color:#6b7280">$</span>
+              <input type="number" step="5" min="0"
+                value="${certState.invoicingSettings.invoice_pricing_mode === 'per_square' ? certState.invoicingSettings.invoice_price_per_square : certState.invoicingSettings.invoice_price_per_bundle}"
+                onchange="saveInvoicingSettings({ ${certState.invoicingSettings.invoice_pricing_mode === 'per_square' ? 'invoice_price_per_square' : 'invoice_price_per_bundle'}: parseFloat(this.value) || 0 })"
+                style="width:100%;padding:12px 14px 12px 32px;border:1px solid #e5e7eb;border-radius:10px;font-size:16px;font-weight:600;outline:none;transition:border 0.2s"
+                onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#e5e7eb'">
+            </div>
+            <p style="font-size:11px;color:#9ca3af;margin-top:6px">
+              ${certState.invoicingSettings.invoice_pricing_mode === 'per_square'
+                ? 'Example: 25 squares x $' + certState.invoicingSettings.invoice_price_per_square + ' = $' + (25 * certState.invoicingSettings.invoice_price_per_square).toLocaleString() + ' CAD'
+                : 'Example: 75 bundles x $' + certState.invoicingSettings.invoice_price_per_bundle + ' = $' + (75 * certState.invoicingSettings.invoice_price_per_bundle).toLocaleString() + ' CAD'}
+            </p>
+          </div>
+        </div>
+        ` : `
+        <div style="margin-top:20px;padding:24px;text-align:center;background:#f9fafb;border-radius:12px;border:1px dashed #d1d5db">
+          <i class="fas fa-toggle-off" style="font-size:32px;color:#d1d5db;margin-bottom:12px"></i>
+          <p style="font-size:14px;font-weight:600;color:#6b7280;margin:0">Invoicing automation is disabled</p>
+          <p style="font-size:12px;color:#9ca3af;margin-top:4px">Toggle on to auto-send invoices when you order reports with customer details</p>
+        </div>
+        `}
+      </div>
+    </div>
   `;
 }
 
