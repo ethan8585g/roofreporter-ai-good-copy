@@ -188,9 +188,15 @@ adminRoutes.get('/material-preferences', async (c) => {
     tax_rate: 0.05,
   }
   let prefs = defaults
+  let proposalPricing = null
   if (row?.material_preferences) {
-    try { prefs = { ...defaults, ...JSON.parse(row.material_preferences) } } catch {}
+    try {
+      const parsed = JSON.parse(row.material_preferences)
+      prefs = { ...defaults, ...parsed }
+      proposalPricing = parsed.proposal_pricing || null
+    } catch {}
   }
+  if (proposalPricing) prefs.proposal_pricing = proposalPricing
   return c.json({ preferences: prefs })
 })
 
@@ -205,6 +211,57 @@ adminRoutes.put('/material-preferences', async (c) => {
     "UPDATE master_companies SET material_preferences = ?, updated_at = datetime('now') WHERE id = 1"
   ).bind(JSON.stringify(prefs)).run()
   return c.json({ success: true, preferences: prefs })
+})
+
+// ============================================================
+// PROPOSAL PRICING PRESETS — Stored inside material_preferences JSON
+// ============================================================
+adminRoutes.get('/proposal-pricing', async (c) => {
+  const row = await c.env.DB.prepare(
+    'SELECT material_preferences FROM master_companies WHERE id = 1'
+  ).first<any>()
+  const defaults = {
+    pricing_mode: 'markup',
+    markup_percent: 30,
+    price_per_square: 350,
+    price_per_bundle: 125,
+    include_labor: true,
+    labor_per_square: 180,
+    include_tearoff: true,
+    tearoff_per_square: 45,
+  }
+  let presets = defaults
+  if (row?.material_preferences) {
+    try {
+      const parsed = JSON.parse(row.material_preferences)
+      presets = { ...defaults, ...(parsed.proposal_pricing || {}) }
+    } catch {}
+  }
+  return c.json({ presets })
+})
+
+adminRoutes.put('/proposal-pricing', async (c) => {
+  const body = await c.req.json()
+  const allowed = ['pricing_mode', 'markup_percent', 'price_per_square', 'price_per_bundle', 'include_labor', 'labor_per_square', 'include_tearoff', 'tearoff_per_square']
+  const presets: any = {}
+  for (const key of allowed) {
+    if (body[key] !== undefined) presets[key] = body[key]
+  }
+
+  // Read existing material_preferences and merge proposal_pricing into it
+  const row = await c.env.DB.prepare(
+    'SELECT material_preferences FROM master_companies WHERE id = 1'
+  ).first<any>()
+  let existing: any = {}
+  if (row?.material_preferences) {
+    try { existing = JSON.parse(row.material_preferences) } catch {}
+  }
+  existing.proposal_pricing = presets
+
+  await c.env.DB.prepare(
+    "UPDATE master_companies SET material_preferences = ?, updated_at = datetime('now') WHERE id = 1"
+  ).bind(JSON.stringify(existing)).run()
+  return c.json({ success: true, presets })
 })
 
 // ============================================================

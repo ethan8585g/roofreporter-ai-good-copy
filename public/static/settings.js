@@ -84,6 +84,7 @@ function renderSettings() {
   const sections = [
     { id: 'company', label: 'Company Profile', icon: 'fa-building' },
     { id: 'materials', label: 'Material Defaults', icon: 'fa-layer-group' },
+    { id: 'proposal_pricing', label: 'Proposal Pricing', icon: 'fa-file-invoice-dollar' },
     { id: 'apikeys', label: 'API Keys', icon: 'fa-key' },
     { id: 'pricing', label: 'Pricing & Billing', icon: 'fa-dollar-sign' },
     { id: 'sip', label: 'SIP Bridge / Telephony', icon: 'fa-phone-alt' },
@@ -109,6 +110,7 @@ function renderSettings() {
       <div class="md:col-span-3">
         ${settingsState.activeSection === 'company' ? renderCompanySection() : ''}
         ${settingsState.activeSection === 'materials' ? renderMaterialsSection() : ''}
+        ${settingsState.activeSection === 'proposal_pricing' ? renderProposalPricingSection() : ''}
         ${settingsState.activeSection === 'apikeys' ? renderApiKeysSection() : ''}
         ${settingsState.activeSection === 'pricing' ? renderPricingSection() : ''}
         ${settingsState.activeSection === 'sip' ? renderSipSection() : ''}
@@ -127,6 +129,16 @@ function renderSettings() {
       const contentEl = document.querySelector('.md\\:col-span-3');
       if (contentEl && settingsState.activeSection === 'materials') {
         contentEl.innerHTML = renderMaterialsSection();
+      }
+    });
+  }
+
+  // Load proposal pricing presets when that tab is selected
+  if (settingsState.activeSection === 'proposal_pricing') {
+    loadProposalPricingPresets().then(() => {
+      const contentEl = document.querySelector('.md\\:col-span-3');
+      if (contentEl && settingsState.activeSection === 'proposal_pricing') {
+        contentEl.innerHTML = renderProposalPricingSection();
       }
     });
   }
@@ -995,6 +1007,269 @@ function showSipMsg(type, msg) {
   el.className = type === 'error'
     ? 'mt-4 p-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200'
     : 'mt-4 p-3 rounded-lg text-sm bg-green-50 text-green-700 border border-green-200';
+  el.innerHTML = msg;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 8000);
+}
+
+// ============================================================
+// PROPOSAL PRICING PRESETS — Markup, Per Square, Per Bundle
+// ============================================================
+
+let proposalPricingPresets = null;
+
+async function loadProposalPricingPresets() {
+  try {
+    const res = await fetch('/api/admin/material-preferences', { headers: settingsHeaders() });
+    if (res.ok) {
+      const data = await res.json();
+      proposalPricingPresets = data.preferences?.proposal_pricing || {
+        pricing_mode: 'markup',
+        markup_percent: 30,
+        price_per_square: 350,
+        price_per_bundle: 125,
+        include_labor: true,
+        labor_per_square: 180,
+        include_tearoff: true,
+        tearoff_per_square: 45,
+        tax_rate_override: null,
+      };
+    }
+  } catch (e) {
+    console.error('Proposal pricing load error:', e);
+  }
+}
+
+function selectPricingMode(mode) {
+  if (!proposalPricingPresets) proposalPricingPresets = {};
+  proposalPricingPresets.pricing_mode = mode;
+  const contentEl = document.querySelector('.md\\:col-span-3');
+  if (contentEl) contentEl.innerHTML = renderProposalPricingSection();
+}
+
+function renderProposalPricingSection() {
+  const p = proposalPricingPresets || {
+    pricing_mode: 'markup',
+    markup_percent: 30,
+    price_per_square: 350,
+    price_per_bundle: 125,
+    include_labor: true,
+    labor_per_square: 180,
+    include_tearoff: true,
+    tearoff_per_square: 45,
+    tax_rate_override: null,
+  };
+
+  const modes = [
+    { id: 'markup', label: 'Markup %', icon: 'fa-percentage', desc: 'Set a markup percentage on top of your material costs' },
+    { id: 'per_square', label: 'Price per Square', icon: 'fa-th-large', desc: 'Set a flat rate per roofing square (100 sq ft)' },
+    { id: 'per_bundle', label: 'Price per Bundle', icon: 'fa-boxes', desc: 'Set a price per shingle bundle — auto-calculates from report bundle count' },
+  ];
+
+  return `
+    <div class="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-1">
+        <i class="fas fa-file-invoice-dollar mr-2 text-brand-500"></i>Proposal Pricing Presets
+      </h3>
+      <p class="text-sm text-gray-500 mb-6">Set your default pricing method. When you create a proposal from a roof measurement report, these presets auto-fill your pricing so the proposal is ready to send.</p>
+
+      <div id="ppMsg" class="hidden mb-4"></div>
+
+      <!-- Pricing Mode Selector -->
+      <label class="block text-sm font-semibold text-gray-700 mb-3">Pricing Method</label>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        ${modes.map(m => `
+          <div onclick="selectPricingMode('${m.id}')" id="pp-mode-${m.id}"
+            class="cursor-pointer rounded-xl border-2 p-4 transition-all hover:shadow-md text-center
+            ${p.pricing_mode === m.id ? 'border-brand-500 bg-brand-50 shadow-md ring-2 ring-brand-200' : 'border-gray-200 bg-white hover:border-gray-300'}">
+            <div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center ${p.pricing_mode === m.id ? 'bg-brand-100' : 'bg-gray-100'}">
+              <i class="fas ${m.icon} text-lg ${p.pricing_mode === m.id ? 'text-brand-600' : 'text-gray-400'}"></i>
+            </div>
+            <div class="font-bold text-sm ${p.pricing_mode === m.id ? 'text-brand-700' : 'text-gray-700'}">${m.label}</div>
+            <p class="text-xs text-gray-500 mt-1">${m.desc}</p>
+            ${p.pricing_mode === m.id ? '<div class="mt-2"><i class="fas fa-check-circle text-brand-500 text-sm"></i></div>' : ''}
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- Mode-specific settings -->
+      <div class="bg-gray-50 rounded-xl border border-gray-200 p-5 mb-6">
+        ${p.pricing_mode === 'markup' ? `
+          <h4 class="font-semibold text-gray-700 text-sm mb-4"><i class="fas fa-percentage mr-2 text-brand-500"></i>Markup Settings</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-600 mb-1">Markup Percentage (%)</label>
+              <input id="ppMarkupPct" type="number" step="1" min="0" max="500" value="${p.markup_percent || 30}"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm font-bold text-lg focus:ring-2 focus:ring-brand-400 focus:border-brand-400">
+              <p class="text-xs text-gray-400 mt-1">Customer price = your cost + markup %</p>
+            </div>
+            <div class="flex items-center justify-center">
+              <div class="text-center p-4 bg-white rounded-lg border border-gray-200">
+                <div class="text-xs text-gray-500 mb-1">Example: $10,000 cost</div>
+                <div class="text-2xl font-bold text-brand-600">$${((10000 * (1 + (p.markup_percent || 30) / 100))).toLocaleString()}</div>
+                <div class="text-xs text-gray-400">customer price</div>
+              </div>
+            </div>
+          </div>
+        ` : p.pricing_mode === 'per_square' ? `
+          <h4 class="font-semibold text-gray-700 text-sm mb-4"><i class="fas fa-th-large mr-2 text-brand-500"></i>Price Per Square Settings</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-600 mb-1">Customer Price per Square ($)</label>
+              <input id="ppPricePerSq" type="number" step="5" min="0" value="${p.price_per_square || 350}"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm font-bold text-lg focus:ring-2 focus:ring-brand-400 focus:border-brand-400">
+              <p class="text-xs text-gray-400 mt-1">1 square = 100 sq ft of roofing</p>
+            </div>
+            <div class="flex items-center justify-center">
+              <div class="text-center p-4 bg-white rounded-lg border border-gray-200">
+                <div class="text-xs text-gray-500 mb-1">Example: 25-square roof</div>
+                <div class="text-2xl font-bold text-brand-600">$${(25 * (p.price_per_square || 350)).toLocaleString()}</div>
+                <div class="text-xs text-gray-400">total customer price</div>
+              </div>
+            </div>
+          </div>
+        ` : `
+          <h4 class="font-semibold text-gray-700 text-sm mb-4"><i class="fas fa-boxes mr-2 text-brand-500"></i>Price Per Bundle Settings</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-600 mb-1">Price per Shingle Bundle ($)</label>
+              <input id="ppPricePerBundle" type="number" step="5" min="0" value="${p.price_per_bundle || 125}"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm font-bold text-lg focus:ring-2 focus:ring-brand-400 focus:border-brand-400">
+              <p class="text-xs text-gray-400 mt-1">Typically 3 bundles = 1 square (100 sq ft)</p>
+            </div>
+            <div class="flex items-center justify-center">
+              <div class="text-center p-4 bg-white rounded-lg border border-gray-200">
+                <div class="text-xs text-gray-500 mb-1">Example: 75 bundles</div>
+                <div class="text-2xl font-bold text-brand-600">$${(75 * (p.price_per_bundle || 125)).toLocaleString()}</div>
+                <div class="text-xs text-gray-400">shingle cost to customer</div>
+              </div>
+            </div>
+          </div>
+        `}
+      </div>
+
+      <!-- Additional cost options -->
+      <div class="bg-gray-50 rounded-xl border border-gray-200 p-5 mb-6">
+        <h4 class="font-semibold text-gray-700 text-sm mb-4"><i class="fas fa-tools mr-2 text-brand-500"></i>Additional Line Items (auto-added to proposals)</h4>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <div class="flex items-center gap-3 mb-2">
+              <button onclick="togglePPPref('include_labor')" id="ppLabor"
+                class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all
+                ${p.include_labor !== false ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}">
+                ${p.include_labor !== false ? 'Included' : 'Excluded'}
+              </button>
+              <label class="text-sm font-medium text-gray-600">Installation Labor</label>
+            </div>
+            ${p.include_labor !== false ? `
+              <input id="ppLaborPerSq" type="number" step="5" min="0" value="${p.labor_per_square || 180}"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-brand-400 focus:border-brand-400"
+                placeholder="$/square for labor">
+              <p class="text-xs text-gray-400 mt-1">Labor cost per square added as line item</p>
+            ` : ''}
+          </div>
+          <div>
+            <div class="flex items-center gap-3 mb-2">
+              <button onclick="togglePPPref('include_tearoff')" id="ppTearoff"
+                class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all
+                ${p.include_tearoff !== false ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}">
+                ${p.include_tearoff !== false ? 'Included' : 'Excluded'}
+              </button>
+              <label class="text-sm font-medium text-gray-600">Tear-off & Disposal</label>
+            </div>
+            ${p.include_tearoff !== false ? `
+              <input id="ppTearoffPerSq" type="number" step="5" min="0" value="${p.tearoff_per_square || 45}"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-brand-400 focus:border-brand-400"
+                placeholder="$/square for tear-off">
+              <p class="text-xs text-gray-400 mt-1">Tear-off & disposal cost per square</p>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+
+      <!-- How it works explanation -->
+      <div class="bg-blue-50 rounded-xl border border-blue-200 p-4 mb-6">
+        <h4 class="font-semibold text-blue-800 text-sm mb-2"><i class="fas fa-info-circle mr-2"></i>How it works</h4>
+        <ol class="text-xs text-blue-700 space-y-1 list-decimal list-inside">
+          <li>Order a roof measurement report for your customer's property</li>
+          <li>Go to Proposals and click <strong>Create Proposal</strong></li>
+          <li>Select the roof measurement report — pricing auto-fills from these presets</li>
+          <li>Add the customer and send — the proposal is ready in seconds</li>
+        </ol>
+      </div>
+
+      <!-- Save Button -->
+      <button onclick="saveProposalPricingPresets()" id="ppSaveBtn"
+        class="w-full sm:w-auto px-8 py-3 rounded-xl font-bold text-white bg-brand-500 hover:bg-brand-600 transition-all shadow-md">
+        <i class="fas fa-save mr-2"></i>Save Pricing Presets
+      </button>
+    </div>
+  `;
+}
+
+function togglePPPref(field) {
+  if (!proposalPricingPresets) proposalPricingPresets = {};
+  proposalPricingPresets[field] = !proposalPricingPresets[field];
+  const contentEl = document.querySelector('.md\\:col-span-3');
+  if (contentEl) contentEl.innerHTML = renderProposalPricingSection();
+}
+
+async function saveProposalPricingPresets() {
+  const btn = document.getElementById('ppSaveBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...'; }
+
+  const mode = proposalPricingPresets?.pricing_mode || 'markup';
+  const markupEl = document.getElementById('ppMarkupPct');
+  const perSqEl = document.getElementById('ppPricePerSq');
+  const perBundleEl = document.getElementById('ppPricePerBundle');
+  const laborEl = document.getElementById('ppLaborPerSq');
+  const tearoffEl = document.getElementById('ppTearoffPerSq');
+
+  const presets = {
+    pricing_mode: mode,
+    markup_percent: markupEl ? parseFloat(markupEl.value) : (proposalPricingPresets?.markup_percent || 30),
+    price_per_square: perSqEl ? parseFloat(perSqEl.value) : (proposalPricingPresets?.price_per_square || 350),
+    price_per_bundle: perBundleEl ? parseFloat(perBundleEl.value) : (proposalPricingPresets?.price_per_bundle || 125),
+    include_labor: proposalPricingPresets?.include_labor !== false,
+    labor_per_square: laborEl ? parseFloat(laborEl.value) : (proposalPricingPresets?.labor_per_square || 180),
+    include_tearoff: proposalPricingPresets?.include_tearoff !== false,
+    tearoff_per_square: tearoffEl ? parseFloat(tearoffEl.value) : (proposalPricingPresets?.tearoff_per_square || 45),
+  };
+
+  try {
+    // First load existing prefs, then merge proposal_pricing into them
+    const getRes = await fetch('/api/admin/material-preferences', { headers: settingsHeaders() });
+    let existingPrefs = {};
+    if (getRes.ok) {
+      const getData = await getRes.json();
+      existingPrefs = getData.preferences || {};
+    }
+    existingPrefs.proposal_pricing = presets;
+
+    const res = await fetch('/api/admin/proposal-pricing', {
+      method: 'PUT',
+      headers: settingsHeaders(),
+      body: JSON.stringify(presets)
+    });
+    const data = await res.json();
+    if (data.success) {
+      proposalPricingPresets = presets;
+      showPPMsg('success', '<i class="fas fa-check-circle mr-1"></i>Proposal pricing presets saved! These will auto-apply when creating proposals from reports.');
+    } else {
+      showPPMsg('error', data.error || 'Save failed');
+    }
+  } catch (e) {
+    showPPMsg('error', 'Network error: ' + e.message);
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Pricing Presets'; }
+}
+
+function showPPMsg(type, msg) {
+  const el = document.getElementById('ppMsg');
+  if (!el) return;
+  el.className = type === 'error'
+    ? 'mb-4 p-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200'
+    : 'mb-4 p-3 rounded-lg text-sm bg-green-50 text-green-700 border border-green-200';
   el.innerHTML = msg;
   el.classList.remove('hidden');
   setTimeout(() => el.classList.add('hidden'), 8000);

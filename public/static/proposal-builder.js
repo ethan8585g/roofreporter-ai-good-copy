@@ -63,6 +63,9 @@ document.addEventListener('DOMContentLoaded', () => {
     certLicenseNumber: '',
     certAccentColor: '#1a5c38',
     certSettingsDirty: false,
+    pricingPresets: null, // loaded from settings — auto-apply on report select
+    presetsApplied: false, // flag so presets only apply once per proposal
+    pricePerBundle: 0, // $/bundle for per-bundle pricing mode
     // Form state
     form: resetForm()
   };
@@ -354,6 +357,11 @@ document.addEventListener('DOMContentLoaded', () => {
           if (adminRepRes.ok) { const d = await adminRepRes.json(); state.reports = d.reports || []; }
         } catch(e) {}
       }
+      // Load proposal pricing presets
+      try {
+        const ppRes = await fetch('/api/admin/proposal-pricing', { headers: headers() });
+        if (ppRes.ok) { const ppData = await ppRes.json(); state.pricingPresets = ppData.presets || null; }
+      } catch(e) {}
     } catch (e) { console.warn('Load error', e); }
     state.loading = false;
     // If a draft was restored with an attached report but no full measurement data, fetch it now
@@ -685,11 +693,30 @@ document.addEventListener('DOMContentLoaded', () => {
               '<button onclick="window.__pbState.pricingEngineMode=\'markup\';window.__pbRender()" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingEngineMode === 'markup' ? 'var(--accent)' : 'var(--border-color)') + ';color:' + (state.pricingEngineMode === 'markup' ? 'var(--accent)' : 'var(--text-muted)') + ';background:transparent">Markup %</button>' +
               '<button onclick="window.__pbState.pricingEngineMode=\'margin\';window.__pbRender()" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingEngineMode === 'margin' ? 'var(--accent)' : 'var(--border-color)') + ';color:' + (state.pricingEngineMode === 'margin' ? 'var(--accent)' : 'var(--text-muted)') + ';background:transparent">Margin %</button>' +
               '<button onclick="window.__pbState.pricingEngineMode=\'per_square_customer\';window.__pbRender()" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingEngineMode === 'per_square_customer' ? 'var(--accent)' : 'var(--border-color)') + ';color:' + (state.pricingEngineMode === 'per_square_customer' ? 'var(--accent)' : 'var(--text-muted)') + ';background:transparent">$/Square</button>' +
+              '<button onclick="window.__pbState.pricingEngineMode=\'per_bundle\';window.__pbRender()" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingEngineMode === 'per_bundle' ? 'var(--accent)' : 'var(--border-color)') + ';color:' + (state.pricingEngineMode === 'per_bundle' ? 'var(--accent)' : 'var(--text-muted)') + ';background:transparent">$/Bundle</button>' +
             '</div>' +
             (state.pricingEngineMode === 'markup' ?
               '<div><label style="color:var(--text-muted);font-size:11px">Markup % <span style="opacity:0.6">(on cost)</span></label><input type="number" value="' + markup + '" onchange="window.__pbState.markupPercent=Number(this.value);window.__pbRender()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-weight:700;font-size:18px;margin-top:4px" min="0" max="1000" step="1"></div>'
             : state.pricingEngineMode === 'margin' ?
               '<div><label style="color:var(--text-muted);font-size:11px">Target Margin % <span style="opacity:0.6">(gross profit / revenue)</span></label><input type="number" value="' + marginPct + '" onchange="window.__pbState.marginPercent=Math.min(99,Math.max(0,Number(this.value)));window.__pbRender()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-weight:700;font-size:18px;margin-top:4px" min="0" max="99" step="1"></div>'
+            : state.pricingEngineMode === 'per_bundle' ?
+              (function() {
+                var bCount = 0;
+                var mats = state.selectedReportMaterials;
+                if (mats && mats.items && Array.isArray(mats.items)) {
+                  for (var bi = 0; bi < mats.items.length; bi++) {
+                    if (mats.items[bi].unit === 'bundles' && /shingle/i.test(mats.items[bi].description || '')) bCount += (parseFloat(mats.items[bi].quantity) || 0);
+                  }
+                }
+                if (bCount === 0 && squares > 0) bCount = squares * 3;
+                var ppb = state.pricePerBundle || (state.pricingPresets && state.pricingPresets.price_per_bundle) || 125;
+                var bundleTotal = bCount * ppb;
+                return '<div><label style="color:var(--text-muted);font-size:11px">Price per Bundle ($)</label><input type="number" value="' + ppb + '" onchange="window.__pbState.pricePerBundle=Number(this.value);window.__pbState.customerPriceOverride=' + bCount + '*Number(this.value);window.__pbRender()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-weight:700;font-size:18px;margin-top:4px"></div>' +
+                  '<div style="margin-top:8px;padding:8px;background:var(--bg-elevated);border-radius:8px;display:flex;justify-content:space-between;font-size:12px">' +
+                    '<span style="color:var(--text-muted)">' + bCount + ' bundles x $' + ppb + '</span>' +
+                    '<span style="color:var(--text-primary);font-weight:700">= $' + bundleTotal.toLocaleString() + '</span>' +
+                  '</div>';
+              })()
             :
               '<div><label style="color:var(--text-muted);font-size:11px">Customer $/Square</label><input type="number" value="' + (state.customerPricePerSquare || 0) + '" onchange="window.__pbState.customerPricePerSquare=Number(this.value);window.__pbRender()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-weight:700;font-size:18px;margin-top:4px"></div>'
             ) +
@@ -2000,6 +2027,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.showLineItemsToCustomer = false;
       state.customerPriceOverride = null;
       state.myCost = null;
+      state.presetsApplied = false;
       state.accentColor = '#0ea5e9';
       state.showMaterialsToCustomer = false;
       state.showEdgesToCustomer = false;
@@ -2345,6 +2373,66 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch(e) { /* silently fail — materials just won't show */ }
           }
         }
+      }
+
+      // Auto-apply pricing presets from settings when a report is selected
+      if (state.selectedReport && state.pricingPresets && !state.presetsApplied) {
+        var pp = state.pricingPresets;
+        var roofArea = state.selectedReport.total_true_area_sqft || state.selectedReport.roof_area_sqft || 0;
+        var squares = Math.ceil(roofArea / 100);
+        var materials = state.selectedReportMaterials;
+        var bundleCount = 0;
+        // Extract bundle count from materials if available
+        if (materials && materials.items && Array.isArray(materials.items)) {
+          for (var mi = 0; mi < materials.items.length; mi++) {
+            var mItem = materials.items[mi];
+            if (mItem.unit === 'bundles' && /shingle/i.test(mItem.description || '')) {
+              bundleCount += (parseFloat(mItem.quantity) || 0);
+            }
+          }
+        }
+        // Fallback: calculate bundles from squares (3 bundles per square)
+        if (bundleCount === 0 && squares > 0) {
+          bundleCount = squares * 3;
+        }
+
+        if (pp.pricing_mode === 'markup') {
+          state.pricingEngineMode = 'markup';
+          state.markupPercent = pp.markup_percent || 30;
+        } else if (pp.pricing_mode === 'per_square') {
+          state.pricingEngineMode = 'per_square_customer';
+          state.customerPricePerSquare = pp.price_per_square || 350;
+        } else if (pp.pricing_mode === 'per_bundle') {
+          // Per-bundle: calculate total material price from bundles, set as customer price override
+          state.pricingEngineMode = 'per_square_customer';
+          var bundleTotal = bundleCount * (pp.price_per_bundle || 125);
+          // Add labor and tearoff if included
+          var laborTotal = (pp.include_labor !== false && pp.labor_per_square) ? squares * pp.labor_per_square : 0;
+          var tearoffTotal = (pp.include_tearoff !== false && pp.tearoff_per_square) ? squares * pp.tearoff_per_square : 0;
+          var presetTotal = bundleTotal + laborTotal + tearoffTotal;
+          state.customerPriceOverride = Math.round(presetTotal * 100) / 100;
+          // Also set per-square equivalent for the UI
+          state.customerPricePerSquare = squares > 0 ? Math.round(presetTotal / squares) : 0;
+        }
+
+        // Auto-add labor and tearoff line items for markup/per_square modes
+        if (pp.pricing_mode !== 'per_bundle') {
+          if (pp.include_labor !== false && pp.labor_per_square && squares > 0) {
+            var hasLabor = state.form.items.some(function(it) { return /labor|installation/i.test(it.description); });
+            if (!hasLabor) {
+              state.form.items.push({ description: 'Installation Labor', quantity: squares, unit: 'squares', unit_price: pp.labor_per_square, is_taxable: true, category: 'labor' });
+            }
+          }
+          if (pp.include_tearoff !== false && pp.tearoff_per_square && squares > 0) {
+            var hasTearoff = state.form.items.some(function(it) { return /tear.?off|disposal/i.test(it.description); });
+            if (!hasTearoff) {
+              state.form.items.push({ description: 'Tear-off & Disposal', quantity: squares, unit: 'squares', unit_price: pp.tearoff_per_square, is_taxable: true, category: 'labor' });
+            }
+          }
+        }
+
+        state.presetsApplied = true;
+        state.createStep = 3; // Jump straight to the proposal dashboard
       }
 
       render();
