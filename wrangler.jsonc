@@ -16,6 +16,15 @@
   "ai": {
     "binding": "AI"
   },
+  // Non-secret env vars
+  "vars": {
+    // TODO(Ethan): Set your Google OAuth Client ID to enable "Continue with Google" on /register.
+    // Create one at https://console.cloud.google.com/apis/credentials — type "Web application",
+    // authorized origin https://www.roofmanager.ca, authorized redirect URI https://www.roofmanager.ca/register
+    "GOOGLE_OAUTH_CLIENT_ID": "",
+    // TODO(Ethan): Sign up at https://clarity.microsoft.com (free), create a project, paste the ID here.
+    "CLARITY_PROJECT_ID": ""
+  },
   // Secrets are set via: wrangler secret put ANTHROPIC_API_KEY
   // See CLAUDE.md for full list of required secrets.
 
