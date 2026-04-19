@@ -4841,7 +4841,12 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
           <i class="fas fa-crown mr-1 text-yellow-400"></i><span id="saUserName"></span>
           <span class="ml-1 px-1.5 py-0.5 bg-red-600/30 text-red-300 rounded text-[10px] font-bold">SUPER ADMIN</span>
         </span>
-        <a href="/admin" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-tachometer-alt mr-1"></i>Ops Panel</a>
+        <div id="sa-header-badges" class="flex items-center gap-2">
+          <button onclick="saSetView('inbox',document.querySelector('[data-section=inbox]'))" class="relative text-gray-400 hover:text-white text-xs transition-colors" title="Inbox">
+            <i class="fas fa-inbox text-sm"></i>
+            <span id="sa-inbox-badge" class="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center" style="display:none">0</span>
+          </button>
+        </div>
         <a href="/" target="_blank" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-external-link-alt mr-1"></i>View Site</a>
         <a href="/settings" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-cog mr-1"></i>Settings</a>
         <button onclick="saLogout()" class="text-gray-400 hover:text-red-400 text-xs transition-colors"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
@@ -4850,112 +4855,35 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
   </header>
 
   <div class="flex min-h-[calc(100vh-56px)]">
-    <!-- Sidebar Navigation -->
-    <aside class="sa-sidebar w-64 bg-slate-800 border-r border-slate-700 flex-shrink-0">
-      <div class="p-4 space-y-1" id="sa-nav">
-        <div class="sa-nav-item active rounded-xl px-4 py-3 flex items-center gap-3" onclick="saSetView('users', this)">
+    <!-- Sidebar Navigation — 6 Sections -->
+    <aside class="sa-sidebar w-56 bg-slate-800 border-r border-slate-700 flex-shrink-0">
+      <div class="p-3 space-y-1" id="sa-nav">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-section="inbox" onclick="saSetSection('inbox', this)">
+          <i class="fas fa-inbox w-5 text-center"></i>
+          <span class="label text-sm font-semibold">Inbox</span>
+          <span id="sa-sidebar-inbox-badge" style="margin-left:auto;background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none">0</span>
+        </div>
+        <div class="sa-nav-item active rounded-xl px-4 py-3 flex items-center gap-3" data-section="customers" onclick="saSetSection('customers', this)">
           <i class="fas fa-users w-5 text-center"></i>
-          <span class="label text-sm font-medium">All Active Users</span>
+          <span class="label text-sm font-semibold">Customers</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('sales', this)">
-          <i class="fas fa-credit-card w-5 text-center"></i>
-          <span class="label text-sm font-medium">Credit Pack Sales</span>
-        </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('report-requests', this)">
-          <i class="fas fa-satellite-dish w-5 text-center"></i>
-          <span class="label text-sm font-medium">Report Requests</span>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-section="revenue" onclick="saSetSection('revenue', this)">
+          <i class="fas fa-dollar-sign w-5 text-center"></i>
+          <span class="label text-sm font-semibold">Revenue</span>
           <span id="sa-report-req-badge" style="margin-left:auto;background:#f59e0b;color:#111;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none"></span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('orders', this)">
-          <i class="fas fa-clipboard-list w-5 text-center"></i>
-          <span class="label text-sm font-medium">Order History</span>
-        </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('signups', this)">
-          <i class="fas fa-user-plus w-5 text-center"></i>
-          <span class="label text-sm font-medium">New Sign-ups</span>
-        </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('marketing', this)">
-          <i class="fas fa-bullhorn w-5 text-center"></i>
-          <span class="label text-sm font-medium">Sales & Marketing</span>
-        </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('email-outreach', this)">
-          <i class="fas fa-envelope-open-text w-5 text-center"></i>
-          <span class="label text-sm font-medium">Email Outreach</span>
-        </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('email-setup', this)">
-          <i class="fas fa-cog w-5 text-center"></i>
-          <span class="label text-sm font-medium">Email Setup</span>
-        </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('analytics', this)">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-section="growth" onclick="saSetSection('growth', this)">
           <i class="fas fa-chart-line w-5 text-center"></i>
-          <span class="label text-sm font-medium">Site Analytics</span>
+          <span class="label text-sm font-semibold">Growth</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('blog-manager', this)">
-          <i class="fas fa-pen-nib w-5 text-center"></i>
-          <span class="label text-sm font-medium">Blog Manager</span>
-        </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('ga4', this)">
-          <i class="fab fa-google w-5 text-center"></i>
-          <span class="label text-sm font-medium">Google Analytics</span>
-        </div>
-        <div class="border-t border-gray-800 my-3"></div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('call-center', this)">
-          <i class="fas fa-headset w-5 text-center"></i>
-          <span class="label text-sm font-medium">AI Call Center</span>
-        </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('meta-connect', this)">
-          <i class="fab fa-meta w-5 text-center"></i>
-          <span class="label text-sm font-medium">Meta Connect</span>
-        </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('customer-onboarding', this)">
-          <i class="fas fa-user-cog w-5 text-center"></i>
-          <span class="label text-sm font-medium">Customer Onboarding</span>
-        </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('phone-marketplace', this)">
-          <i class="fas fa-phone-square-alt w-5 text-center"></i>
-          <span class="label text-sm font-medium">Phone Pool / Numbers</span>
-        </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('secretary-admin', this)">
-          <i class="fas fa-phone-volume w-5 text-center"></i>
-          <span class="label text-sm font-medium">Roofer Secretary AI</span>
-        </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('heygen', this)">
-          <i class="fas fa-video w-5 text-center"></i>
-          <span class="label text-sm font-medium">HeyGen Videos</span>
-        </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('gemini-command', this)">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-section="ai-ops" onclick="saSetSection('ai-ops', this)">
           <i class="fas fa-robot w-5 text-center"></i>
-          <span class="label text-sm font-medium">Gemini AI Command</span>
+          <span class="label text-sm font-semibold">AI Operations</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('pricing', this)">
-          <i class="fas fa-dollar-sign w-5 text-center"></i>
-          <span class="label text-sm font-medium">Pricing & Billing</span>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-section="platform" onclick="saSetSection('platform', this)">
+          <i class="fas fa-server w-5 text-center"></i>
+          <span class="label text-sm font-semibold">Platform</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('api-users', this)">
-          <i class="fas fa-key w-5 text-center"></i>
-          <span class="label text-sm font-medium">API Users</span>
-          <span id="sa-api-badge" style="margin-left:auto;background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none"></span>
-        </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('agent-hub', this)">
-          <i class="fas fa-brain w-5 text-center"></i>
-          <span class="label text-sm font-medium">Agent Hub</span>
-          <span id="sa-hub-badge" style="margin-left:auto;background:#10b981;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none">LIVE</span>
-        </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('ai-agent', this)">
-          <i class="fas fa-robot w-5 text-center"></i>
-          <span class="label text-sm font-medium">AI Agent</span>
-          <span id="sa-agent-badge" style="margin-left:auto;background:#10b981;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none">ON</span>
-        </div>
-        <div class="border-t border-gray-800 my-3"></div>
-        <a href="/admin/super" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400 no-underline">
-          <i class="fas fa-chart-bar w-5 text-center"></i>
-          <span class="label text-sm font-medium">BI Analytics Hub</span>
-          <span style="margin-left:auto;background:#6366f1;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px">NEW</span>
-        </a>
-        <a href="/admin" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400 no-underline">
-          <i class="fas fa-tachometer-alt w-5 text-center"></i>
-          <span class="label text-sm font-medium">Operations Panel</span>
-        </a>
       </div>
     </aside>
 

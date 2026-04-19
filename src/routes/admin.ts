@@ -1176,6 +1176,223 @@ adminRoutes.get('/superadmin/trial-expiry', async (c) => {
 })
 
 // ============================================================
+// SUPERADMIN: UNIFIED INBOX — Aggregates rover chat, secretary calls/messages/callbacks, lead captures
+// ============================================================
+
+// GET /superadmin/inbox — Unified conversations across all channels
+adminRoutes.get('/superadmin/inbox', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  try {
+    const channel = c.req.query('channel') || ''  // web_chat, voice, sms, voicemail, form, all
+    const limit = parseInt(c.req.query('limit') || '50')
+    const offset = parseInt(c.req.query('offset') || '0')
+    const search = c.req.query('search') || ''
+
+    const conversations: any[] = []
+
+    // 1. Rover web chat conversations
+    if (!channel || channel === 'all' || channel === 'web_chat') {
+      const roverQuery = search
+        ? `SELECT id, visitor_name as contact_name, visitor_email as contact_email, visitor_phone as contact_phone,
+             'web_chat' as channel, status, lead_status, summary as preview,
+             last_message_at as last_activity_at, first_message_at as created_at,
+             (SELECT COUNT(*) FROM rover_messages WHERE conversation_id = rc.id) as message_count
+           FROM rover_conversations rc
+           WHERE visitor_name LIKE ? OR visitor_email LIKE ? OR summary LIKE ?
+           ORDER BY last_message_at DESC LIMIT 100`
+        : `SELECT id, visitor_name as contact_name, visitor_email as contact_email, visitor_phone as contact_phone,
+             'web_chat' as channel, status, lead_status, summary as preview,
+             last_message_at as last_activity_at, first_message_at as created_at,
+             (SELECT COUNT(*) FROM rover_messages WHERE conversation_id = rc.id) as message_count
+           FROM rover_conversations rc
+           ORDER BY last_message_at DESC LIMIT 100`
+      const roverRes = search
+        ? await c.env.DB.prepare(roverQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`).all()
+        : await c.env.DB.prepare(roverQuery).all()
+      for (const r of (roverRes.results || [])) {
+        conversations.push({ ...r, source_id: `rover_${r.id}` })
+      }
+    }
+
+    // 2. Secretary call logs
+    if (!channel || channel === 'all' || channel === 'voice') {
+      const callQuery = search
+        ? `SELECT cl.id, cl.caller_name as contact_name, '' as contact_email, cl.caller_phone as contact_phone,
+             'voice' as channel, cl.call_outcome as status, '' as lead_status,
+             cl.call_summary as preview, cl.created_at as last_activity_at, cl.created_at,
+             1 as message_count, cl.call_duration_seconds, c.company_name as customer_company
+           FROM secretary_call_logs cl
+           LEFT JOIN customers c ON c.id = cl.customer_id
+           WHERE cl.caller_name LIKE ? OR cl.caller_phone LIKE ? OR cl.call_summary LIKE ?
+           ORDER BY cl.created_at DESC LIMIT 100`
+        : `SELECT cl.id, cl.caller_name as contact_name, '' as contact_email, cl.caller_phone as contact_phone,
+             'voice' as channel, cl.call_outcome as status, '' as lead_status,
+             cl.call_summary as preview, cl.created_at as last_activity_at, cl.created_at,
+             1 as message_count, cl.call_duration_seconds, c.company_name as customer_company
+           FROM secretary_call_logs cl
+           LEFT JOIN customers c ON c.id = cl.customer_id
+           ORDER BY cl.created_at DESC LIMIT 100`
+      const callRes = search
+        ? await c.env.DB.prepare(callQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`).all()
+        : await c.env.DB.prepare(callQuery).all()
+      for (const r of (callRes.results || [])) {
+        conversations.push({ ...r, source_id: `call_${r.id}` })
+      }
+    }
+
+    // 3. Secretary messages (answering mode)
+    if (!channel || channel === 'all' || channel === 'sms') {
+      const msgQuery = search
+        ? `SELECT sm.id, sm.caller_name as contact_name, '' as contact_email, sm.caller_phone as contact_phone,
+             'sms' as channel, CASE WHEN sm.is_read = 1 THEN 'read' ELSE 'new' END as status, '' as lead_status,
+             sm.message_text as preview, sm.created_at as last_activity_at, sm.created_at,
+             1 as message_count, sm.urgency, c.company_name as customer_company
+           FROM secretary_messages sm
+           LEFT JOIN customers c ON c.id = sm.customer_id
+           WHERE sm.caller_name LIKE ? OR sm.caller_phone LIKE ? OR sm.message_text LIKE ?
+           ORDER BY sm.created_at DESC LIMIT 100`
+        : `SELECT sm.id, sm.caller_name as contact_name, '' as contact_email, sm.caller_phone as contact_phone,
+             'sms' as channel, CASE WHEN sm.is_read = 1 THEN 'read' ELSE 'new' END as status, '' as lead_status,
+             sm.message_text as preview, sm.created_at as last_activity_at, sm.created_at,
+             1 as message_count, sm.urgency, c.company_name as customer_company
+           FROM secretary_messages sm
+           LEFT JOIN customers c ON c.id = sm.customer_id
+           ORDER BY sm.created_at DESC LIMIT 100`
+      const msgRes = search
+        ? await c.env.DB.prepare(msgQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`).all()
+        : await c.env.DB.prepare(msgQuery).all()
+      for (const r of (msgRes.results || [])) {
+        conversations.push({ ...r, source_id: `msg_${r.id}` })
+      }
+    }
+
+    // 4. Secretary callbacks
+    if (!channel || channel === 'all' || channel === 'voicemail') {
+      const cbQuery = search
+        ? `SELECT sc.id, sc.caller_name as contact_name, '' as contact_email, sc.caller_phone as contact_phone,
+             'voicemail' as channel, sc.status, '' as lead_status,
+             sc.reason as preview, sc.created_at as last_activity_at, sc.created_at,
+             1 as message_count, sc.preferred_time, c.company_name as customer_company
+           FROM secretary_callbacks sc
+           LEFT JOIN customers c ON c.id = sc.customer_id
+           WHERE sc.caller_name LIKE ? OR sc.caller_phone LIKE ? OR sc.reason LIKE ?
+           ORDER BY sc.created_at DESC LIMIT 50`
+        : `SELECT sc.id, sc.caller_name as contact_name, '' as contact_email, sc.caller_phone as contact_phone,
+             'voicemail' as channel, sc.status, '' as lead_status,
+             sc.reason as preview, sc.created_at as last_activity_at, sc.created_at,
+             1 as message_count, sc.preferred_time, c.company_name as customer_company
+           FROM secretary_callbacks sc
+           LEFT JOIN customers c ON c.id = sc.customer_id
+           ORDER BY sc.created_at DESC LIMIT 50`
+      const cbRes = search
+        ? await c.env.DB.prepare(cbQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`).all()
+        : await c.env.DB.prepare(cbQuery).all()
+      for (const r of (cbRes.results || [])) {
+        conversations.push({ ...r, source_id: `cb_${r.id}` })
+      }
+    }
+
+    // 5. Lead capture form submissions
+    if (!channel || channel === 'all' || channel === 'form') {
+      const leadQuery = search
+        ? `SELECT id, name as contact_name, email as contact_email, '' as contact_phone,
+             'form' as channel, 'new' as status, '' as lead_status,
+             COALESCE(address, 'Lead from ' || source) as preview,
+             created_at as last_activity_at, created_at,
+             1 as message_count, source, tag, company as customer_company
+           FROM asset_report_leads
+           WHERE name LIKE ? OR email LIKE ? OR address LIKE ?
+           ORDER BY created_at DESC LIMIT 100`
+        : `SELECT id, name as contact_name, email as contact_email, '' as contact_phone,
+             'form' as channel, 'new' as status, '' as lead_status,
+             COALESCE(address, 'Lead from ' || source) as preview,
+             created_at as last_activity_at, created_at,
+             1 as message_count, source, tag, company as customer_company
+           FROM asset_report_leads
+           ORDER BY created_at DESC LIMIT 100`
+      const leadRes = search
+        ? await c.env.DB.prepare(leadQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`).all()
+        : await c.env.DB.prepare(leadQuery).all()
+      for (const r of (leadRes.results || [])) {
+        conversations.push({ ...r, source_id: `lead_${r.id}` })
+      }
+    }
+
+    // Sort all by last_activity_at descending, then paginate
+    conversations.sort((a, b) => {
+      const da = a.last_activity_at || a.created_at || ''
+      const db = b.last_activity_at || b.created_at || ''
+      return db.localeCompare(da)
+    })
+
+    const total = conversations.length
+    const paginated = conversations.slice(offset, offset + limit)
+
+    // Unread counts per channel
+    const unreadCounts: Record<string, number> = {}
+    try {
+      const roverUnread = await c.env.DB.prepare(
+        `SELECT COUNT(*) as c FROM rover_conversations WHERE status = 'active'`
+      ).first<any>()
+      unreadCounts.web_chat = roverUnread?.c || 0
+
+      const msgUnread = await c.env.DB.prepare(
+        `SELECT COUNT(*) as c FROM secretary_messages WHERE is_read = 0`
+      ).first<any>()
+      unreadCounts.sms = msgUnread?.c || 0
+
+      const cbPending = await c.env.DB.prepare(
+        `SELECT COUNT(*) as c FROM secretary_callbacks WHERE status = 'pending'`
+      ).first<any>()
+      unreadCounts.voicemail = cbPending?.c || 0
+
+      const todayCalls = await c.env.DB.prepare(
+        `SELECT COUNT(*) as c FROM secretary_call_logs WHERE created_at >= datetime('now', '-24 hours')`
+      ).first<any>()
+      unreadCounts.voice = todayCalls?.c || 0
+
+      const recentLeads = await c.env.DB.prepare(
+        `SELECT COUNT(*) as c FROM asset_report_leads WHERE created_at >= datetime('now', '-7 days')`
+      ).first<any>()
+      unreadCounts.form = recentLeads?.c || 0
+    } catch (e) { /* counts are best-effort */ }
+
+    const totalUnread = (unreadCounts.web_chat || 0) + (unreadCounts.sms || 0) + (unreadCounts.voicemail || 0)
+
+    return c.json({
+      conversations: paginated,
+      total,
+      offset,
+      limit,
+      unread: unreadCounts,
+      total_unread: totalUnread
+    })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// GET /superadmin/inbox/unread-count — Lightweight badge count
+adminRoutes.get('/superadmin/inbox/unread-count', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  try {
+    const [roverR, msgR, cbR] = await Promise.all([
+      c.env.DB.prepare(`SELECT COUNT(*) as c FROM rover_conversations WHERE status = 'active'`).first<any>(),
+      c.env.DB.prepare(`SELECT COUNT(*) as c FROM secretary_messages WHERE is_read = 0`).first<any>(),
+      c.env.DB.prepare(`SELECT COUNT(*) as c FROM secretary_callbacks WHERE status = 'pending'`).first<any>(),
+    ])
+    const total = (roverR?.c || 0) + (msgR?.c || 0) + (cbR?.c || 0)
+    return c.json({ total, web_chat: roverR?.c || 0, sms: msgR?.c || 0, voicemail: cbR?.c || 0 })
+  } catch (err: any) {
+    return c.json({ total: 0 }, 200)
+  }
+})
+
+// ============================================================
 // SUPERADMIN: ROOFER SECRETARY AI — Subscriber management, usage, revenue
 // ============================================================
 

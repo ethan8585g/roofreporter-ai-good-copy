@@ -6,6 +6,7 @@
 
 const SA = {
   view: 'users',
+  section: 'customers',
   loading: true,
   data: {},
   salesPeriod: 'monthly',
@@ -16,11 +17,136 @@ const SA = {
   ga4Tab: 'overview',
   secRevPeriod: 'monthly',
   secCallsCustomerId: '',
-  lkTab: 'overview'
+  lkTab: 'overview',
+  inboxChannel: 'all',
+  inboxSearch: '',
+  inboxSelected: null,
+  reportReqFilter: ''
 };
+
+// Section → tabs mapping
+const SA_SECTIONS = {
+  inbox: {
+    label: 'Inbox', icon: 'fa-inbox',
+    tabs: [
+      { id: 'inbox', label: 'All Conversations', icon: 'fa-inbox' }
+    ]
+  },
+  customers: {
+    label: 'Customers', icon: 'fa-users',
+    tabs: [
+      { id: 'users', label: 'All Users', icon: 'fa-users' },
+      { id: 'signups', label: 'Sign-ups', icon: 'fa-user-plus' },
+      { id: 'customer-onboarding', label: 'Onboarding', icon: 'fa-user-cog' }
+    ]
+  },
+  revenue: {
+    label: 'Revenue', icon: 'fa-dollar-sign',
+    tabs: [
+      { id: 'orders', label: 'Orders', icon: 'fa-clipboard-list' },
+      { id: 'report-requests', label: 'Report Requests', icon: 'fa-satellite-dish' },
+      { id: 'sales', label: 'Credit Sales', icon: 'fa-credit-card' },
+      { id: 'pricing', label: 'Pricing & Tiers', icon: 'fa-tags' },
+      { id: 'invoices', label: 'Invoices', icon: 'fa-file-invoice-dollar' },
+      { id: 'service-invoices', label: 'Service Invoices', icon: 'fa-file-invoice' }
+    ]
+  },
+  growth: {
+    label: 'Growth', icon: 'fa-chart-line',
+    tabs: [
+      { id: 'analytics', label: 'Site Analytics', icon: 'fa-chart-bar' },
+      { id: 'ga4', label: 'Google Analytics', icon: 'fa-chart-area' },
+      { id: 'marketing', label: 'Marketing', icon: 'fa-bullhorn' },
+      { id: 'email-outreach', label: 'Email Outreach', icon: 'fa-envelope-open-text' },
+      { id: 'email-setup', label: 'Email Setup', icon: 'fa-cog' },
+      { id: 'blog-manager', label: 'Blog & SEO', icon: 'fa-pen-nib' },
+      { id: 'meta-connect', label: 'Meta Connect', icon: 'fa-share-alt' }
+    ]
+  },
+  'ai-ops': {
+    label: 'AI Operations', icon: 'fa-robot',
+    tabs: [
+      { id: 'secretary-admin', label: 'Secretary', icon: 'fa-phone-volume' },
+      { id: 'call-center', label: 'Call Center', icon: 'fa-headset' },
+      { id: 'agent-hub', label: 'Agent Hub', icon: 'fa-brain' },
+      { id: 'ai-agent', label: 'AI Agent', icon: 'fa-robot' },
+      { id: 'gemini-command', label: 'Gemini AI', icon: 'fa-terminal' },
+      { id: 'heygen', label: 'HeyGen Videos', icon: 'fa-video' }
+    ]
+  },
+  platform: {
+    label: 'Platform', icon: 'fa-server',
+    tabs: [
+      { id: 'phone-marketplace', label: 'Phone Numbers', icon: 'fa-phone-square-alt' },
+      { id: 'api-users', label: 'API & Developers', icon: 'fa-key' },
+      { id: 'livekit-agents', label: 'LiveKit Agents', icon: 'fa-satellite' },
+      { id: 'telephony', label: 'Telephony', icon: 'fa-broadcast-tower' }
+    ]
+  }
+};
+
+function saSetSection(section, el) {
+  SA.section = section;
+  // Highlight sidebar
+  document.querySelectorAll('#sa-nav .sa-nav-item').forEach(function(n) {
+    n.classList.remove('active');
+    n.classList.add('text-gray-400');
+  });
+  if (el) { el.classList.add('active'); el.classList.remove('text-gray-400'); }
+  // Load default tab for section
+  var tabs = SA_SECTIONS[section] && SA_SECTIONS[section].tabs;
+  if (tabs && tabs.length > 0) {
+    saSetView(tabs[0].id);
+  }
+}
+
+function saSetTab(viewId) {
+  saSetView(viewId);
+}
+
+// Core view setter — updates SA.view & loads data
+function saSetView(viewId, sidebarEl) {
+  SA.view = viewId;
+  if (viewId === 'secretary-manager') { SA.smView = 'list'; SA.smDetail = null; SA.smCustomerId = null; }
+  // Also figure out which section this view belongs to and highlight sidebar
+  for (var secKey in SA_SECTIONS) {
+    var tabs = SA_SECTIONS[secKey].tabs;
+    for (var i = 0; i < tabs.length; i++) {
+      if (tabs[i].id === viewId) {
+        SA.section = secKey;
+        // Highlight correct sidebar item
+        document.querySelectorAll('#sa-nav .sa-nav-item').forEach(function(n) {
+          n.classList.remove('active');
+          n.classList.add('text-gray-400');
+        });
+        var el = document.querySelector('[data-section="' + secKey + '"]');
+        if (el) { el.classList.add('active'); el.classList.remove('text-gray-400'); }
+        break;
+      }
+    }
+  }
+  loadView(viewId);
+}
+
+function renderSectionTabs() {
+  var sec = SA_SECTIONS[SA.section];
+  if (!sec || !sec.tabs || sec.tabs.length <= 1) return '';
+  var html = '<div class="flex items-center gap-1 mb-5 pb-3 border-b border-gray-200 flex-wrap">';
+  sec.tabs.forEach(function(t) {
+    var active = SA.view === t.id;
+    html += '<button onclick="saSetTab(\'' + t.id + '\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ' +
+      (active ? 'bg-slate-800 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200') + '">' +
+      '<i class="fas ' + t.icon + ' mr-1"></i>' + t.label + '</button>';
+  });
+  html += '</div>';
+  return html;
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   loadView('users');
+  // Poll inbox unread count every 60s
+  loadInboxBadge();
+  setInterval(loadInboxBadge, 60000);
 
   // Auto-prompt for push notifications after dashboard loads
   setTimeout(() => {
@@ -31,10 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.saDashboardSetView = function(v) {
-  SA.view = v;
-  // Reset secretary manager sub-views when navigating from sidebar
-  if (v === 'secretary-manager') { SA.smView = 'list'; SA.smDetail = null; SA.smCustomerId = null; }
-  loadView(v);
+  saSetView(v);
 };
 
 // Admin auth headers — send Bearer token with every admin API call
@@ -67,6 +190,10 @@ async function loadView(view) {
   renderContent();
   try {
     switch (view) {
+      case 'inbox':
+        const inboxRes = await saFetch('/api/admin/superadmin/inbox?channel=' + (SA.inboxChannel || 'all') + '&search=' + encodeURIComponent(SA.inboxSearch || '') + '&limit=50');
+        if (inboxRes && inboxRes.ok) SA.data.inbox = await inboxRes.json();
+        break;
       case 'users':
         const usersRes = await saFetch('/api/admin/superadmin/users');
         if (usersRes && usersRes.ok) SA.data.users = await usersRes.json();
@@ -397,54 +524,57 @@ function renderContent() {
     return;
   }
 
+  var tabBar = renderSectionTabs();
+
   switch (SA.view) {
-    case 'users': root.innerHTML = renderUsersView(); break;
-    case 'sales': root.innerHTML = renderSalesView(); break;
-    case 'report-requests': root.innerHTML = renderReportRequestsView(); break;
-    case 'orders': root.innerHTML = renderOrdersView(); break;
-    case 'signups': root.innerHTML = renderSignupsView(); break;
-    case 'marketing': root.innerHTML = renderMarketingView(); break;
-    case 'email-outreach': break; // Handled by email-outreach.js
-    case 'email-setup': root.innerHTML = renderEmailSetupView(); break;
-    case 'analytics': root.innerHTML = renderAnalyticsView(); break;
-    case 'blog-manager': root.innerHTML = renderBlogManagerView(); break;
-    case 'ga4': root.innerHTML = renderGA4View(); break;
-    case 'pricing': root.innerHTML = renderPricingView(); break;
-    case 'api-users': root.innerHTML = renderApiUsersView(); break;
-    case 'call-center': break; // Handled by call-center.js
-    case 'meta-connect': break; // Handled by meta-connect.js
-    case 'secretary-admin': root.innerHTML = renderSecretaryAdminView(); break;
-    case 'secretary-manager': root.innerHTML = renderSecretaryManagerView(); break;
-    case 'secretary-monitor': root.innerHTML = renderSecretaryMonitorView(); break;
-    case 'secretary-revenue': root.innerHTML = renderSecretaryRevenueView(); break;
-    case 'ai-chat': root.innerHTML = renderGeminiCommandView(); break; // Redirect to Gemini
-    case 'contact-forms': root.innerHTML = renderContactFormsView(); loadContactForms(); break;
-    case 'seo-manager': root.innerHTML = renderSEOManagerView(); break;
-    case 'onboarding-config': root.innerHTML = renderOnboardingConfigView(); loadOnboardingConfig(); break;
-    case 'phone-marketplace': root.innerHTML = renderPhoneMarketplaceView(); loadPhoneNumbers(); break;
-    case 'pricing-engine': root.innerHTML = renderPricingEngineView(); loadPricingPresets(); break;
-    case 'invoices': root.innerHTML = renderInvoicesView(); break;
-    case 'telephony': root.innerHTML = renderTelephonyView(); break;
-    case 'livekit-agents': root.innerHTML = renderLiveKitAgentsView(); break;
-    case 'revenue-pipeline': root.innerHTML = renderRevenuePipelineView(); loadRevenuePipeline(); break;
-    case 'notifications-admin': root.innerHTML = renderNotificationsAdminView(); loadNotifications(); break;
-    case 'webhooks': root.innerHTML = renderWebhooksView(); loadWebhooks(); break;
-    case 'paywall': root.innerHTML = renderPaywallView(); loadPaywallStatus(); break;
-    case 'customer-onboarding': root.innerHTML = renderCustomerOnboardingView(); obLoadDeployments(); obLoadPhonePool(); break;
-    case 'service-invoices': root.innerHTML = renderServiceInvoicesView(); break;
-    case 'call-center-manage': root.innerHTML = renderCallCenterManageView(); break;
-    case 'gemini-command': root.innerHTML = renderGeminiCommandView(); break;
-    case 'agent-hub': root.innerHTML = renderAgentHubView(); loadAgentHubDashboard(); break;
-    case 'ai-agent': root.innerHTML = renderAiAgentView(); loadAiAgentDashboard(); break;
+    case 'inbox': root.innerHTML = tabBar + renderInboxView(); break;
+    case 'users': root.innerHTML = tabBar + renderUsersView(); break;
+    case 'sales': root.innerHTML = tabBar + renderSalesView(); break;
+    case 'report-requests': root.innerHTML = tabBar + renderReportRequestsView(); break;
+    case 'orders': root.innerHTML = tabBar + renderOrdersView(); break;
+    case 'signups': root.innerHTML = tabBar + renderSignupsView(); break;
+    case 'marketing': root.innerHTML = tabBar + renderMarketingView(); break;
+    case 'email-outreach': root.innerHTML = tabBar; break; // Handled by email-outreach.js — appends after tabBar
+    case 'email-setup': root.innerHTML = tabBar + renderEmailSetupView(); break;
+    case 'analytics': root.innerHTML = tabBar + renderAnalyticsView(); break;
+    case 'blog-manager': root.innerHTML = tabBar + renderBlogManagerView(); break;
+    case 'ga4': root.innerHTML = tabBar + renderGA4View(); break;
+    case 'pricing': root.innerHTML = tabBar + renderPricingView(); break;
+    case 'api-users': root.innerHTML = tabBar + renderApiUsersView(); break;
+    case 'call-center': root.innerHTML = tabBar; break; // Handled by call-center.js
+    case 'meta-connect': root.innerHTML = tabBar; break; // Handled by meta-connect.js
+    case 'secretary-admin': root.innerHTML = tabBar + renderSecretaryAdminView(); break;
+    case 'secretary-manager': root.innerHTML = tabBar + renderSecretaryManagerView(); break;
+    case 'secretary-monitor': root.innerHTML = tabBar + renderSecretaryMonitorView(); break;
+    case 'secretary-revenue': root.innerHTML = tabBar + renderSecretaryRevenueView(); break;
+    case 'ai-chat': root.innerHTML = tabBar + renderGeminiCommandView(); break;
+    case 'contact-forms': root.innerHTML = tabBar + renderContactFormsView(); loadContactForms(); break;
+    case 'seo-manager': root.innerHTML = tabBar + renderSEOManagerView(); break;
+    case 'onboarding-config': root.innerHTML = tabBar + renderOnboardingConfigView(); loadOnboardingConfig(); break;
+    case 'phone-marketplace': root.innerHTML = tabBar + renderPhoneMarketplaceView(); loadPhoneNumbers(); break;
+    case 'pricing-engine': root.innerHTML = tabBar + renderPricingEngineView(); loadPricingPresets(); break;
+    case 'invoices': root.innerHTML = tabBar + renderInvoicesView(); break;
+    case 'telephony': root.innerHTML = tabBar + renderTelephonyView(); break;
+    case 'livekit-agents': root.innerHTML = tabBar + renderLiveKitAgentsView(); break;
+    case 'revenue-pipeline': root.innerHTML = tabBar + renderRevenuePipelineView(); loadRevenuePipeline(); break;
+    case 'notifications-admin': root.innerHTML = tabBar + renderNotificationsAdminView(); loadNotifications(); break;
+    case 'webhooks': root.innerHTML = tabBar + renderWebhooksView(); loadWebhooks(); break;
+    case 'paywall': root.innerHTML = tabBar + renderPaywallView(); loadPaywallStatus(); break;
+    case 'customer-onboarding': root.innerHTML = tabBar + renderCustomerOnboardingView(); obLoadDeployments(); obLoadPhonePool(); break;
+    case 'service-invoices': root.innerHTML = tabBar + renderServiceInvoicesView(); break;
+    case 'call-center-manage': root.innerHTML = tabBar + renderCallCenterManageView(); break;
+    case 'gemini-command': root.innerHTML = tabBar + renderGeminiCommandView(); break;
+    case 'agent-hub': root.innerHTML = tabBar + renderAgentHubView(); loadAgentHubDashboard(); break;
+    case 'ai-agent': root.innerHTML = tabBar + renderAiAgentView(); loadAiAgentDashboard(); break;
     // Platform Admin modules
-    case 'enhanced-onboarding': root.innerHTML = (typeof renderEnhancedOnboardingView === 'function') ? renderEnhancedOnboardingView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadTiers(); break;
-    case 'service-panel': root.innerHTML = (typeof renderServicePanelView === 'function') ? renderServicePanelView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadServicePanel(); break;
-    case 'membership-config': root.innerHTML = (typeof renderMembershipConfigView === 'function') ? renderMembershipConfigView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadMembershipConfig(); break;
-    case 'agent-personas': root.innerHTML = (typeof renderAgentPersonasView === 'function') ? renderAgentPersonasView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadPersonas(); break;
-    case 'cold-call-centre': root.innerHTML = (typeof renderColdCallCentreView === 'function') ? renderColdCallCentreView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paShowCCTab('agents'); break;
-    case 'live-dashboard': root.innerHTML = (typeof renderLiveDashboardView === 'function') ? renderLiveDashboardView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadLiveDashboard(); break;
-    case 'transcript-flagging': root.innerHTML = (typeof renderTranscriptFlaggingView === 'function') ? renderTranscriptFlaggingView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadFlags(); break;
-    default: root.innerHTML = renderUsersView();
+    case 'enhanced-onboarding': root.innerHTML = tabBar + ((typeof renderEnhancedOnboardingView === 'function') ? renderEnhancedOnboardingView() : '<div class="p-8 text-gray-500">Module loading...</div>'); paLoadTiers(); break;
+    case 'service-panel': root.innerHTML = tabBar + ((typeof renderServicePanelView === 'function') ? renderServicePanelView() : '<div class="p-8 text-gray-500">Module loading...</div>'); paLoadServicePanel(); break;
+    case 'membership-config': root.innerHTML = tabBar + ((typeof renderMembershipConfigView === 'function') ? renderMembershipConfigView() : '<div class="p-8 text-gray-500">Module loading...</div>'); paLoadMembershipConfig(); break;
+    case 'agent-personas': root.innerHTML = tabBar + ((typeof renderAgentPersonasView === 'function') ? renderAgentPersonasView() : '<div class="p-8 text-gray-500">Module loading...</div>'); paLoadPersonas(); break;
+    case 'cold-call-centre': root.innerHTML = tabBar + ((typeof renderColdCallCentreView === 'function') ? renderColdCallCentreView() : '<div class="p-8 text-gray-500">Module loading...</div>'); paShowCCTab('agents'); break;
+    case 'live-dashboard': root.innerHTML = tabBar + ((typeof renderLiveDashboardView === 'function') ? renderLiveDashboardView() : '<div class="p-8 text-gray-500">Module loading...</div>'); paLoadLiveDashboard(); break;
+    case 'transcript-flagging': root.innerHTML = tabBar + ((typeof renderTranscriptFlaggingView === 'function') ? renderTranscriptFlaggingView() : '<div class="p-8 text-gray-500">Module loading...</div>'); paLoadFlags(); break;
+    default: root.innerHTML = tabBar + renderUsersView();
   }
 }
 
@@ -9720,4 +9850,172 @@ function hubTimeAgo(dateStr) {
   if (diff < 3600) return Math.round(diff/60) + 'm ago';
   if (diff < 86400) return Math.round(diff/3600) + 'h ago';
   return Math.round(diff/86400) + 'd ago';
+}
+
+// ============================================================
+// UNIFIED INBOX — All conversations in one place
+// ============================================================
+
+function renderInboxView() {
+  var d = SA.data.inbox || {};
+  var conversations = d.conversations || [];
+  var unread = d.unread || {};
+  var totalUnread = d.total_unread || 0;
+
+  var channelFilters = [
+    { id: 'all', label: 'All', icon: 'fa-inbox', count: d.total || 0 },
+    { id: 'web_chat', label: 'Web Chat', icon: 'fa-comments', count: unread.web_chat || 0 },
+    { id: 'voice', label: 'Calls', icon: 'fa-phone-alt', count: unread.voice || 0 },
+    { id: 'sms', label: 'Messages', icon: 'fa-sms', count: unread.sms || 0 },
+    { id: 'voicemail', label: 'Callbacks', icon: 'fa-voicemail', count: unread.voicemail || 0 },
+    { id: 'form', label: 'Leads', icon: 'fa-wpforms', count: unread.form || 0 }
+  ];
+
+  var filtersHtml = '<div class="flex items-center gap-2 flex-wrap">';
+  channelFilters.forEach(function(f) {
+    var active = SA.inboxChannel === f.id;
+    filtersHtml += '<button onclick="inboxFilterChannel(\'' + f.id + '\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ' +
+      (active ? 'bg-slate-800 text-white shadow-sm' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200') + '">' +
+      '<i class="fas ' + f.icon + '"></i>' + f.label +
+      (f.count > 0 ? ' <span class="bg-' + (active ? 'white/20' : 'gray-100') + ' px-1.5 py-0.5 rounded text-[10px] font-bold">' + f.count + '</span>' : '') +
+      '</button>';
+  });
+  filtersHtml += '</div>';
+
+  var searchHtml = '<div class="relative">' +
+    '<input type="text" id="inbox-search" placeholder="Search conversations..." value="' + (SA.inboxSearch || '') + '" ' +
+    'onkeydown="if(event.key===\'Enter\')inboxDoSearch()" ' +
+    'class="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500">' +
+    '<i class="fas fa-search absolute left-3 top-2.5 text-gray-400 text-sm"></i>' +
+    '</div>';
+
+  var listHtml = '';
+  if (conversations.length === 0) {
+    listHtml = '<div class="text-center py-16 text-gray-400">' +
+      '<i class="fas fa-inbox text-4xl mb-3"></i>' +
+      '<p class="font-medium">No conversations found</p>' +
+      '<p class="text-xs mt-1">Try a different filter or search term</p>' +
+      '</div>';
+  } else {
+    listHtml = '<div class="divide-y divide-gray-100">';
+    conversations.forEach(function(conv) {
+      var channelIcon = { web_chat: 'fa-comments text-blue-500', voice: 'fa-phone-alt text-green-500', sms: 'fa-sms text-purple-500', voicemail: 'fa-voicemail text-orange-500', form: 'fa-wpforms text-teal-500' };
+      var channelLabel = { web_chat: 'Web Chat', voice: 'Phone Call', sms: 'Message', voicemail: 'Callback Request', form: 'Lead Form' };
+      var icon = channelIcon[conv.channel] || 'fa-comment text-gray-400';
+      var label = channelLabel[conv.channel] || conv.channel;
+      var name = conv.contact_name || conv.contact_email || conv.contact_phone || 'Unknown';
+      var preview = (conv.preview || '').substring(0, 120);
+      var time = hubTimeAgo(conv.last_activity_at || conv.created_at);
+      var isNew = conv.status === 'new' || conv.status === 'active';
+      var statusDot = isNew ? '<span class="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></span>' : '';
+      var urgencyBadge = conv.urgency === 'urgent' ? '<span class="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-bold">URGENT</span>' : '';
+      var durationStr = conv.call_duration_seconds ? '<span class="text-[10px] text-gray-400"><i class="fas fa-clock mr-0.5"></i>' + fmtSeconds(conv.call_duration_seconds) + '</span>' : '';
+      var companyStr = conv.customer_company ? '<span class="text-[10px] text-gray-400"><i class="fas fa-building mr-0.5"></i>' + conv.customer_company + '</span>' : '';
+
+      listHtml += '<div class="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors" onclick="inboxOpenConversation(\'' + conv.source_id + '\', \'' + conv.channel + '\')">' +
+        '<div class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5"><i class="fas ' + icon + ' text-sm"></i></div>' +
+        '<div class="flex-1 min-w-0">' +
+          '<div class="flex items-center gap-2">' +
+            statusDot +
+            '<span class="font-semibold text-sm text-gray-900 truncate">' + name + '</span>' +
+            '<span class="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded font-medium">' + label + '</span>' +
+            urgencyBadge + durationStr + companyStr +
+            '<span class="ml-auto text-[10px] text-gray-400 flex-shrink-0">' + time + '</span>' +
+          '</div>' +
+          '<p class="text-xs text-gray-500 mt-0.5 truncate">' + preview + '</p>' +
+          '<div class="flex items-center gap-2 mt-1">' +
+            (conv.contact_email ? '<span class="text-[10px] text-gray-400"><i class="fas fa-envelope mr-0.5"></i>' + conv.contact_email + '</span>' : '') +
+            (conv.contact_phone ? '<span class="text-[10px] text-gray-400"><i class="fas fa-phone mr-0.5"></i>' + conv.contact_phone + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    });
+    listHtml += '</div>';
+  }
+
+  return '<div class="mb-5">' +
+    '<div class="flex items-center justify-between mb-1">' +
+      '<h2 class="text-2xl font-black text-gray-900"><i class="fas fa-inbox mr-2 text-slate-600"></i>Inbox</h2>' +
+      '<button onclick="saSetView(\'inbox\')" class="px-3 py-1.5 text-xs font-medium bg-white border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>' +
+    '</div>' +
+    '<p class="text-sm text-gray-500">All conversations across web chat, calls, messages, callbacks, and leads</p>' +
+  '</div>' +
+  // Unread summary cards
+  '<div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">' +
+    samc('Active Chats', unread.web_chat || 0, 'fa-comments', 'blue') +
+    samc('Today\'s Calls', unread.voice || 0, 'fa-phone-alt', 'green') +
+    samc('Unread Messages', unread.sms || 0, 'fa-sms', 'purple') +
+    samc('Pending Callbacks', unread.voicemail || 0, 'fa-voicemail', 'orange') +
+    samc('Recent Leads (7d)', unread.form || 0, 'fa-wpforms', 'teal') +
+  '</div>' +
+  // Filters + Search
+  '<div class="bg-white rounded-xl border border-gray-200 shadow-sm">' +
+    '<div class="p-4 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">' +
+      filtersHtml +
+      '<div class="w-64">' + searchHtml + '</div>' +
+    '</div>' +
+    // Conversation list
+    listHtml +
+    // Pagination info
+    '<div class="p-3 border-t border-gray-100 text-xs text-gray-400 text-center">' +
+      'Showing ' + conversations.length + ' of ' + (d.total || 0) + ' conversations' +
+    '</div>' +
+  '</div>';
+}
+
+function inboxFilterChannel(channel) {
+  SA.inboxChannel = channel;
+  loadView('inbox');
+}
+
+function inboxDoSearch() {
+  var el = document.getElementById('inbox-search');
+  SA.inboxSearch = el ? el.value : '';
+  loadView('inbox');
+}
+
+function inboxOpenConversation(sourceId, channel) {
+  // Open the source detail depending on channel
+  if (channel === 'web_chat') {
+    // Navigate to the existing rover conversation detail
+    var id = sourceId.replace('rover_', '');
+    // For now, open in the rover admin tab on /admin
+    window.open('/admin?tab=rover&conv=' + id, '_blank');
+  } else if (channel === 'voice') {
+    // Show call details inline (future: detail pane)
+    var id = sourceId.replace('call_', '');
+    alert('Call #' + id + ' — full detail pane coming in Phase 2');
+  } else if (channel === 'sms') {
+    var id = sourceId.replace('msg_', '');
+    alert('Message #' + id + ' — full detail pane coming in Phase 2');
+  } else if (channel === 'voicemail') {
+    var id = sourceId.replace('cb_', '');
+    alert('Callback #' + id + ' — full detail pane coming in Phase 2');
+  } else if (channel === 'form') {
+    var id = sourceId.replace('lead_', '');
+    alert('Lead #' + id + ' — full detail pane coming in Phase 2');
+  }
+}
+
+// Inbox unread badge — polls every 60s
+async function loadInboxBadge() {
+  try {
+    var res = await saFetch('/api/admin/superadmin/inbox/unread-count');
+    if (res && res.ok) {
+      var data = await res.json();
+      var total = data.total || 0;
+      // Update header badge
+      var headerBadge = document.getElementById('sa-inbox-badge');
+      if (headerBadge) {
+        headerBadge.textContent = total;
+        headerBadge.style.display = total > 0 ? 'flex' : 'none';
+      }
+      // Update sidebar badge
+      var sidebarBadge = document.getElementById('sa-sidebar-inbox-badge');
+      if (sidebarBadge) {
+        sidebarBadge.textContent = total;
+        sidebarBadge.style.display = total > 0 ? '' : 'none';
+      }
+    }
+  } catch (e) { /* best effort */ }
 }
