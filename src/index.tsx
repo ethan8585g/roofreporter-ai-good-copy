@@ -740,15 +740,22 @@ app.get('/order/new', (c) => {
 app.get('/super-admin', (c) => {
   return c.html(getSuperAdminDashboardHTML(c.env.GOOGLE_MAPS_API_KEY || ''))
 })
+// Catch-all for /super-admin/<section>/<tab> deep links — serve same SPA shell
+app.get('/super-admin/:section', (c) => {
+  return c.html(getSuperAdminDashboardHTML(c.env.GOOGLE_MAPS_API_KEY || ''))
+})
+app.get('/super-admin/:section/:tab', (c) => {
+  return c.html(getSuperAdminDashboardHTML(c.env.GOOGLE_MAPS_API_KEY || ''))
+})
 
 // BI Analytics Hub (unified super admin analytics)
 app.get('/admin/super', (c) => {
-  return c.html(getSuperAdminBiHTML())
+  return c.redirect('/super-admin/growth', 302)
 })
 
-// Admin Dashboard (legacy + operational)
+// Admin Dashboard — redirect to super-admin
 app.get('/admin', (c) => {
-  return c.html(getAdminPageHTML())
+  return c.redirect('/super-admin/revenue', 302)
 })
 
 // Dispatch Board — crew scheduling + route optimization

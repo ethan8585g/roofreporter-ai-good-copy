@@ -800,6 +800,75 @@ adminRoutes.post('/init-db', async (c) => {
 // ============================================================
 
 // 1. All Active Users — full user list with account info
+// GET /superadmin/people — Unified people directory: platform users + CRM customers + prospects
+adminRoutes.get('/superadmin/people', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  try {
+    const search = c.req.query('search') || ''
+    const typeFilter = c.req.query('type') || '' // platform_user, crm_customer, prospect
+    const limit = parseInt(c.req.query('limit') || '50')
+    const people: any[] = []
+
+    // 1. Platform users (customers table)
+    if (!typeFilter || typeFilter === 'platform_user') {
+      const q = search
+        ? `SELECT id, name, email, phone, company_name, 'platform_user' as person_type, created_at, is_active, last_login
+           FROM customers WHERE name LIKE ? OR email LIKE ? OR phone LIKE ? OR company_name LIKE ?
+           ORDER BY created_at DESC LIMIT ?`
+        : `SELECT id, name, email, phone, company_name, 'platform_user' as person_type, created_at, is_active, last_login
+           FROM customers ORDER BY created_at DESC LIMIT ?`
+      const res = search
+        ? await c.env.DB.prepare(q).bind(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, limit).all()
+        : await c.env.DB.prepare(q).bind(limit).all()
+      for (const r of (res.results || [])) people.push(r)
+    }
+
+    // 2. CRM customers (homeowners owned by platform customers)
+    if (!typeFilter || typeFilter === 'crm_customer') {
+      try {
+        const q = search
+          ? `SELECT cc.id, cc.name, cc.email, cc.phone, cc.company, 'crm_customer' as person_type, cc.created_at, cc.status,
+               c.company_name as owner_company
+             FROM crm_customers cc LEFT JOIN customers c ON c.id = cc.owner_id
+             WHERE cc.name LIKE ? OR cc.email LIKE ? OR cc.phone LIKE ? OR cc.address LIKE ?
+             ORDER BY cc.created_at DESC LIMIT ?`
+          : `SELECT cc.id, cc.name, cc.email, cc.phone, cc.company, 'crm_customer' as person_type, cc.created_at, cc.status,
+               c.company_name as owner_company
+             FROM crm_customers cc LEFT JOIN customers c ON c.id = cc.owner_id
+             ORDER BY cc.created_at DESC LIMIT ?`
+        const res = search
+          ? await c.env.DB.prepare(q).bind(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, limit).all()
+          : await c.env.DB.prepare(q).bind(limit).all()
+        for (const r of (res.results || [])) people.push(r)
+      } catch (e) { /* crm_customers table may not exist */ }
+    }
+
+    // 3. Cold-call prospects
+    if (!typeFilter || typeFilter === 'prospect') {
+      try {
+        const q = search
+          ? `SELECT id, contact_name as name, email, phone, company_name as company, 'prospect' as person_type, created_at, status
+             FROM cc_prospects WHERE contact_name LIKE ? OR email LIKE ? OR phone LIKE ? OR company_name LIKE ?
+             ORDER BY created_at DESC LIMIT ?`
+          : `SELECT id, contact_name as name, email, phone, company_name as company, 'prospect' as person_type, created_at, status
+             FROM cc_prospects ORDER BY created_at DESC LIMIT ?`
+        const res = search
+          ? await c.env.DB.prepare(q).bind(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, limit).all()
+          : await c.env.DB.prepare(q).bind(limit).all()
+        for (const r of (res.results || [])) people.push(r)
+      } catch (e) { /* cc_prospects table may not exist */ }
+    }
+
+    // Sort by created_at descending
+    people.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+
+    return c.json({ people: people.slice(0, limit), total: people.length })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
 adminRoutes.get('/superadmin/users', async (c) => {
   const admin = c.get('admin' as any)
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
@@ -1557,6 +1626,62 @@ adminRoutes.get('/superadmin/inbox/lead/:type/:id', async (c) => {
     }
     if (!lead) return c.json({ error: 'Lead not found' }, 404)
     return c.json(lead)
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// POST /superadmin/inbox/mark-read — Mark a conversation as read for this admin
+adminRoutes.post('/superadmin/inbox/mark-read', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  try {
+    const { conversation_id, channel } = await c.req.json()
+    if (!conversation_id || !channel) return c.json({ error: 'conversation_id and channel required' }, 400)
+    await c.env.DB.prepare(
+      `INSERT INTO inbox_read_state (admin_user_id, conversation_id, channel, last_read_at)
+       VALUES (?, ?, ?, datetime('now'))
+       ON CONFLICT(admin_user_id, conversation_id) DO UPDATE SET last_read_at = datetime('now')`
+    ).bind((admin as any).id, conversation_id, channel).run()
+    // Also update source table read state where applicable
+    if (channel === 'sms') {
+      const msgId = conversation_id.replace('msg_', '')
+      await c.env.DB.prepare(`UPDATE secretary_messages SET is_read = 1 WHERE id = ?`).bind(msgId).run()
+    }
+    return c.json({ ok: true })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// POST /superadmin/inbox/reply — Reply to a conversation (writes to correct channel)
+adminRoutes.post('/superadmin/inbox/reply', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  try {
+    const { conversation_id, channel, message } = await c.req.json()
+    if (!conversation_id || !channel || !message) return c.json({ error: 'conversation_id, channel, and message required' }, 400)
+
+    if (channel === 'web_chat') {
+      const roverId = conversation_id.replace('rover_', '')
+      await c.env.DB.prepare(
+        `INSERT INTO rover_messages (conversation_id, role, content, created_at) VALUES (?, 'assistant', ?, datetime('now'))`
+      ).bind(roverId, message).run()
+      await c.env.DB.prepare(
+        `UPDATE rover_conversations SET last_message_at = datetime('now') WHERE id = ?`
+      ).bind(roverId).run()
+      return c.json({ ok: true, channel: 'web_chat' })
+    } else if (channel === 'job_message') {
+      const parts = conversation_id.replace('job_', '').split('_')
+      const jobId = parts[0]
+      await c.env.DB.prepare(
+        `INSERT INTO crew_messages (job_id, author_id, author_name, content, created_at) VALUES (?, ?, ?, ?, datetime('now'))`
+      ).bind(jobId, (admin as any).id, (admin as any).name || 'Admin', message).run()
+      return c.json({ ok: true, channel: 'job_message' })
+    } else {
+      // voice, sms, voicemail, form, cold_call — reply not directly supported, log as admin note
+      return c.json({ ok: false, error: 'Reply not supported for this channel. Use the original system to respond.' }, 400)
+    }
   } catch (err: any) {
     return c.json({ error: err.message }, 500)
   }

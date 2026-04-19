@@ -21,7 +21,9 @@ const SA = {
   inboxChannel: 'all',
   inboxSearch: '',
   inboxSelected: null,
-  reportReqFilter: ''
+  reportReqFilter: '',
+  peopleSearch: '',
+  peopleType: ''
 };
 
 // Section → tabs mapping
@@ -35,7 +37,8 @@ const SA_SECTIONS = {
   customers: {
     label: 'Customers', icon: 'fa-users',
     tabs: [
-      { id: 'users', label: 'All Users', icon: 'fa-users' },
+      { id: 'people-directory', label: 'Directory', icon: 'fa-address-book' },
+      { id: 'users', label: 'Platform Users', icon: 'fa-users' },
       { id: 'signups', label: 'Sign-ups', icon: 'fa-user-plus' },
       { id: 'customer-onboarding', label: 'Onboarding', icon: 'fa-user-cog' }
     ]
@@ -54,49 +57,104 @@ const SA_SECTIONS = {
   growth: {
     label: 'Growth', icon: 'fa-chart-line',
     tabs: [
-      { id: 'analytics', label: 'Site Analytics', icon: 'fa-chart-bar' },
-      { id: 'ga4', label: 'Google Analytics', icon: 'fa-chart-area' },
-      { id: 'marketing', label: 'Marketing', icon: 'fa-bullhorn' },
-      { id: 'email-outreach', label: 'Email Outreach', icon: 'fa-envelope-open-text' },
-      { id: 'email-setup', label: 'Email Setup', icon: 'fa-cog' },
-      { id: 'blog-manager', label: 'Blog & SEO', icon: 'fa-pen-nib' },
-      { id: 'meta-connect', label: 'Meta Connect', icon: 'fa-share-alt' }
+      { id: 'growth-overview', label: 'Overview', icon: 'fa-tachometer-alt' },
+      { id: 'growth-traffic', label: 'Traffic', icon: 'fa-chart-area' },
+      { id: 'growth-marketing', label: 'Marketing', icon: 'fa-bullhorn' },
+      { id: 'growth-seo', label: 'SEO & Blog', icon: 'fa-pen-nib' }
     ]
   },
   'ai-ops': {
     label: 'AI Operations', icon: 'fa-robot',
     tabs: [
+      { id: 'aiops-overview', label: 'Overview', icon: 'fa-tachometer-alt' },
       { id: 'secretary-admin', label: 'Secretary', icon: 'fa-phone-volume' },
       { id: 'call-center', label: 'Call Center', icon: 'fa-headset' },
-      { id: 'agent-hub', label: 'Agent Hub', icon: 'fa-brain' },
-      { id: 'ai-agent', label: 'AI Agent', icon: 'fa-robot' },
-      { id: 'gemini-command', label: 'Gemini AI', icon: 'fa-terminal' },
-      { id: 'heygen', label: 'HeyGen Videos', icon: 'fa-video' }
+      { id: 'aiops-agents', label: 'Agents', icon: 'fa-brain' },
+      { id: 'aiops-voice', label: 'Voice & Avatars', icon: 'fa-video' }
     ]
   },
   platform: {
     label: 'Platform', icon: 'fa-server',
     tabs: [
       { id: 'phone-marketplace', label: 'Phone Numbers', icon: 'fa-phone-square-alt' },
+      { id: 'platform-onboarding', label: 'Onboarding', icon: 'fa-user-cog' },
       { id: 'api-users', label: 'API & Developers', icon: 'fa-key' },
-      { id: 'livekit-agents', label: 'LiveKit Agents', icon: 'fa-satellite' },
-      { id: 'telephony', label: 'Telephony', icon: 'fa-broadcast-tower' }
+      { id: 'platform-health', label: 'System Health', icon: 'fa-heartbeat' },
+      { id: 'platform-settings', label: 'Settings', icon: 'fa-cog' }
     ]
   }
 };
 
-function saSetSection(section, el) {
-  SA.section = section;
-  // Highlight sidebar
+// ============================================================
+// URL ROUTING — /super-admin/<section>/<tab>
+// ============================================================
+
+function saUpdateUrl(push) {
+  var path = '/super-admin/' + SA.section;
+  // Only append tab if it's not the default tab for this section
+  var sec = SA_SECTIONS[SA.section];
+  if (sec && sec.tabs && sec.tabs.length > 0 && SA.view !== sec.tabs[0].id) {
+    path += '/' + SA.view;
+  }
+  if (push) {
+    window.history.pushState({ section: SA.section, view: SA.view }, '', path);
+  } else {
+    window.history.replaceState({ section: SA.section, view: SA.view }, '', path);
+  }
+}
+
+function saParseUrl() {
+  var path = window.location.pathname;
+  var match = path.match(/^\/super-admin(?:\/([^/]+))?(?:\/([^/]+))?/);
+  if (!match) return null;
+  var section = match[1] || 'inbox';
+  var tab = match[2] || null;
+  if (!SA_SECTIONS[section]) return null;
+  if (tab) {
+    // Verify tab belongs to section
+    var found = false;
+    SA_SECTIONS[section].tabs.forEach(function(t) { if (t.id === tab) found = true; });
+    if (!found) tab = null;
+  }
+  if (!tab) tab = SA_SECTIONS[section].tabs[0].id;
+  return { section: section, view: tab };
+}
+
+window.addEventListener('popstate', function(e) {
+  if (e.state && e.state.section && e.state.view) {
+    SA.section = e.state.section;
+    SA.view = e.state.view;
+    saHighlightSidebar(SA.section);
+    loadView(SA.view);
+  } else {
+    var parsed = saParseUrl();
+    if (parsed) {
+      SA.section = parsed.section;
+      SA.view = parsed.view;
+      saHighlightSidebar(SA.section);
+      loadView(SA.view);
+    }
+  }
+});
+
+function saHighlightSidebar(secKey) {
   document.querySelectorAll('#sa-nav .sa-nav-item').forEach(function(n) {
     n.classList.remove('active');
     n.classList.add('text-gray-400');
   });
+  var el = document.querySelector('[data-section="' + secKey + '"]');
   if (el) { el.classList.add('active'); el.classList.remove('text-gray-400'); }
+}
+
+function saSetSection(section, el) {
+  SA.section = section;
+  saHighlightSidebar(section);
   // Load default tab for section
   var tabs = SA_SECTIONS[section] && SA_SECTIONS[section].tabs;
   if (tabs && tabs.length > 0) {
-    saSetView(tabs[0].id);
+    SA.view = tabs[0].id;
+    saUpdateUrl(true);
+    loadView(SA.view);
   }
 }
 
@@ -108,23 +166,18 @@ function saSetTab(viewId) {
 function saSetView(viewId, sidebarEl) {
   SA.view = viewId;
   if (viewId === 'secretary-manager') { SA.smView = 'list'; SA.smDetail = null; SA.smCustomerId = null; }
-  // Also figure out which section this view belongs to and highlight sidebar
+  // Figure out which section this view belongs to and highlight sidebar
   for (var secKey in SA_SECTIONS) {
     var tabs = SA_SECTIONS[secKey].tabs;
     for (var i = 0; i < tabs.length; i++) {
       if (tabs[i].id === viewId) {
         SA.section = secKey;
-        // Highlight correct sidebar item
-        document.querySelectorAll('#sa-nav .sa-nav-item').forEach(function(n) {
-          n.classList.remove('active');
-          n.classList.add('text-gray-400');
-        });
-        var el = document.querySelector('[data-section="' + secKey + '"]');
-        if (el) { el.classList.add('active'); el.classList.remove('text-gray-400'); }
+        saHighlightSidebar(secKey);
         break;
       }
     }
   }
+  saUpdateUrl(true);
   loadView(viewId);
 }
 
@@ -142,8 +195,107 @@ function renderSectionTabs() {
   return html;
 }
 
+// ============================================================
+// COMMAND PALETTE (Cmd+K / Ctrl+K)
+// ============================================================
+
+var SA_CMD_ITEMS = [];
+// Build command list from sections + tabs
+(function() {
+  for (var secKey in SA_SECTIONS) {
+    var sec = SA_SECTIONS[secKey];
+    SA_CMD_ITEMS.push({ type: 'section', id: secKey, label: sec.label, icon: sec.icon, section: secKey, view: sec.tabs[0].id });
+    sec.tabs.forEach(function(t) {
+      SA_CMD_ITEMS.push({ type: 'tab', id: t.id, label: sec.label + ' > ' + t.label, icon: t.icon, section: secKey, view: t.id });
+    });
+  }
+})();
+
+document.addEventListener('keydown', function(e) {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    cmdPaletteToggle();
+  }
+  if (e.key === 'Escape') {
+    cmdPaletteClose();
+  }
+});
+
+function cmdPaletteToggle() {
+  var el = document.getElementById('cmd-palette');
+  if (el) { cmdPaletteClose(); return; }
+  // Create palette
+  var overlay = document.createElement('div');
+  overlay.id = 'cmd-palette';
+  overlay.className = 'fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]';
+  overlay.style.background = 'rgba(0,0,0,0.4)';
+  overlay.onclick = function(ev) { if (ev.target === overlay) cmdPaletteClose(); };
+
+  overlay.innerHTML = '<div class="w-[560px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden" onclick="event.stopPropagation()">' +
+    '<div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100">' +
+      '<i class="fas fa-search text-gray-400"></i>' +
+      '<input id="cmd-palette-input" type="text" placeholder="Search commands, sections, or people..." autofocus class="flex-1 text-sm outline-none bg-transparent" oninput="cmdPaletteFilter(this.value)">' +
+      '<kbd class="px-1.5 py-0.5 bg-gray-100 text-gray-400 rounded text-[10px] font-mono">ESC</kbd>' +
+    '</div>' +
+    '<div id="cmd-palette-results" class="max-h-[360px] overflow-y-auto"></div>' +
+  '</div>';
+
+  document.body.appendChild(overlay);
+  setTimeout(function() { var inp = document.getElementById('cmd-palette-input'); if (inp) inp.focus(); }, 50);
+  cmdPaletteFilter('');
+}
+
+function cmdPaletteClose() {
+  var el = document.getElementById('cmd-palette');
+  if (el) el.remove();
+}
+
+function cmdPaletteFilter(query) {
+  var results = document.getElementById('cmd-palette-results');
+  if (!results) return;
+  var q = query.toLowerCase().trim();
+  var items = SA_CMD_ITEMS.filter(function(item) {
+    if (!q) return item.type === 'section'; // Show sections when empty
+    return item.label.toLowerCase().indexOf(q) !== -1;
+  }).slice(0, 12);
+
+  if (items.length === 0) {
+    results.innerHTML = '<div class="p-6 text-center text-gray-400 text-sm">No results for "' + query + '"</div>';
+    return;
+  }
+
+  var html = '';
+  items.forEach(function(item, idx) {
+    html += '<div class="px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 cursor-pointer transition-colors' + (idx === 0 ? ' bg-gray-50' : '') + '" onclick="cmdPaletteSelect(\'' + item.section + '\',\'' + item.view + '\')">' +
+      '<i class="fas ' + item.icon + ' w-5 text-center text-gray-400"></i>' +
+      '<span class="text-sm text-gray-700">' + item.label + '</span>' +
+      '<span class="ml-auto text-[10px] text-gray-400 capitalize">' + item.type + '</span>' +
+    '</div>';
+  });
+  results.innerHTML = html;
+}
+
+function cmdPaletteSelect(section, view) {
+  cmdPaletteClose();
+  SA.section = section;
+  SA.view = view;
+  saHighlightSidebar(section);
+  saUpdateUrl(true);
+  loadView(view);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-  loadView('inbox');
+  // Parse URL for deep-link support
+  var parsed = saParseUrl();
+  if (parsed) {
+    SA.section = parsed.section;
+    SA.view = parsed.view;
+    saHighlightSidebar(parsed.section);
+    saUpdateUrl(false); // replaceState to normalize
+    loadView(parsed.view);
+  } else {
+    loadView('inbox');
+  }
   // Poll inbox unread count every 60s
   loadInboxBadge();
   setInterval(loadInboxBadge, 60000);
@@ -193,6 +345,95 @@ async function loadView(view) {
       case 'inbox':
         const inboxRes = await saFetch('/api/admin/superadmin/inbox?channel=' + (SA.inboxChannel || 'all') + '&search=' + encodeURIComponent(SA.inboxSearch || '') + '&limit=50');
         if (inboxRes && inboxRes.ok) SA.data.inbox = await inboxRes.json();
+        break;
+      // ── Growth consolidated views ──
+      case 'growth-overview':
+        try {
+          const [biRes, funnelRes, anomalyRes] = await Promise.all([
+            saFetch('/api/admin/bi/business-intel'),
+            saFetch('/api/admin/bi/funnel?period=30d'),
+            saFetch('/api/admin/bi/anomalies')
+          ]);
+          if (biRes && biRes.ok) SA.data.bi = await biRes.json();
+          if (funnelRes && funnelRes.ok) SA.data.funnel = await funnelRes.json();
+          if (anomalyRes && anomalyRes.ok) SA.data.anomalies = await anomalyRes.json();
+        } catch(e) { console.warn('Growth overview load error:', e); }
+        break;
+      case 'growth-traffic':
+        try {
+          const [siteRes, ga4SRes, ga4RRes, ga4RtRes] = await Promise.all([
+            saFetch('/api/analytics/dashboard?period=' + (SA.analyticsPeriod || '7d')),
+            saFetch('/api/analytics/ga4/status'),
+            saFetch('/api/analytics/ga4/report?period=' + (SA.ga4Period || '7d')),
+            saFetch('/api/analytics/ga4/realtime')
+          ]);
+          if (siteRes) SA.data.analytics = await siteRes.json();
+          if (ga4SRes) SA.data.ga4_status = await ga4SRes.json();
+          if (ga4RRes) { var r = await ga4RRes.json(); SA.data.ga4_report = r.success ? r : null; }
+          if (ga4RtRes) { var r2 = await ga4RtRes.json(); SA.data.ga4_realtime = r2.success ? r2 : null; }
+        } catch(e) { console.warn('Traffic load error:', e); }
+        break;
+      case 'growth-marketing':
+        try {
+          var mktRes2 = await saFetch('/api/admin/superadmin/marketing');
+          if (mktRes2 && mktRes2.ok) SA.data.marketing = await mktRes2.json();
+        } catch(e) {}
+        break;
+      case 'growth-seo':
+        try {
+          const [bmPostsRes2, bmCatsRes2] = await Promise.all([
+            saFetch('/api/blog/admin/posts?limit=200'),
+            saFetch('/api/blog/categories')
+          ]);
+          if (bmPostsRes2 && bmPostsRes2.ok) SA.data.blog_posts = await bmPostsRes2.json();
+          if (bmCatsRes2 && bmCatsRes2.ok) SA.data.blog_categories = await bmCatsRes2.json();
+        } catch(e) {}
+        break;
+      // ── AI Ops consolidated views ──
+      case 'aiops-overview':
+        try {
+          const [secOvRes, secMonRes] = await Promise.all([
+            saFetch('/api/admin/superadmin/secretary/overview'),
+            saFetch('/api/admin/superadmin/secretary/monitor')
+          ]);
+          if (secOvRes) SA.data.secretary_overview = await secOvRes.json();
+          if (secMonRes) SA.data.secretary_monitor = await secMonRes.json();
+        } catch(e) {}
+        break;
+      case 'aiops-agents':
+        SA.data.agentHub = null;
+        SA.data.aiAgent = null;
+        break;
+      case 'aiops-voice':
+        // HeyGen handled by external module
+        if (typeof window.loadHeyGen === 'function') {
+          SA.loading = false;
+          window.loadHeyGen();
+          return;
+        }
+        break;
+      // ── Platform consolidated views ──
+      case 'platform-onboarding':
+        SA.data.platformOnboarding = null;
+        break;
+      case 'platform-health':
+        try {
+          const [healthRes, paywallRes] = await Promise.all([
+            saFetch('/api/admin/superadmin/system-health'),
+            saFetch('/api/admin/superadmin/paywall-status')
+          ]);
+          if (healthRes && healthRes.ok) SA.data.system_health = await healthRes.json();
+          if (paywallRes && paywallRes.ok) SA.data.paywall_status = await paywallRes.json();
+        } catch(e) {}
+        break;
+      case 'platform-settings':
+        break;
+      case 'people-directory':
+        var pdSearch = SA.peopleSearch || '';
+        var pdType = SA.peopleType || '';
+        var pdUrl = '/api/admin/superadmin/people?limit=100' + (pdSearch ? '&search=' + encodeURIComponent(pdSearch) : '') + (pdType ? '&type=' + pdType : '');
+        var pdRes = await saFetch(pdUrl);
+        if (pdRes && pdRes.ok) SA.data.people = await pdRes.json();
         break;
       case 'users':
         const usersRes = await saFetch('/api/admin/superadmin/users');
@@ -528,6 +769,20 @@ function renderContent() {
 
   switch (SA.view) {
     case 'inbox': root.innerHTML = tabBar + renderInboxView(); break;
+    // ── Growth consolidated ──
+    case 'growth-overview': root.innerHTML = tabBar + renderGrowthOverviewView(); break;
+    case 'growth-traffic': root.innerHTML = tabBar + renderGrowthTrafficView(); break;
+    case 'growth-marketing': root.innerHTML = tabBar + renderGrowthMarketingView(); break;
+    case 'growth-seo': root.innerHTML = tabBar + renderGrowthSeoView(); break;
+    // ── AI Ops consolidated ──
+    case 'aiops-overview': root.innerHTML = tabBar + renderAiOpsOverviewView(); break;
+    case 'aiops-agents': root.innerHTML = tabBar + renderAiOpsAgentsView(); loadAgentHubDashboard(); loadAiAgentDashboard(); break;
+    case 'aiops-voice': root.innerHTML = tabBar; break; // HeyGen external module
+    // ── Platform consolidated ──
+    case 'platform-onboarding': root.innerHTML = tabBar + renderCustomerOnboardingView(); obLoadDeployments(); obLoadPhonePool(); break;
+    case 'platform-health': root.innerHTML = tabBar + renderPlatformHealthView(); break;
+    case 'platform-settings': root.innerHTML = tabBar + renderPlatformSettingsView(); break;
+    case 'people-directory': root.innerHTML = tabBar + renderPeopleDirectoryView(); break;
     case 'users': root.innerHTML = tabBar + renderUsersView(); break;
     case 'sales': root.innerHTML = tabBar + renderSalesView(); break;
     case 'report-requests': root.innerHTML = tabBar + renderReportRequestsView(); break;
@@ -9977,33 +10232,99 @@ function inboxDoSearch() {
 }
 
 function inboxOpenConversation(sourceId, channel) {
-  // Open the source detail depending on channel
-  if (channel === 'web_chat') {
-    // Navigate to the existing rover conversation detail
-    var id = sourceId.replace('rover_', '');
-    // For now, open in the rover admin tab on /admin
-    window.open('/admin?tab=rover&conv=' + id, '_blank');
-  } else if (channel === 'voice') {
-    // Show call details inline (future: detail pane)
-    var id = sourceId.replace('call_', '');
-    alert('Call #' + id + ' — full detail pane coming in Phase 2');
-  } else if (channel === 'sms') {
-    var id = sourceId.replace('msg_', '');
-    alert('Message #' + id + ' — full detail pane coming in Phase 2');
-  } else if (channel === 'voicemail') {
-    var id = sourceId.replace('cb_', '');
-    alert('Callback #' + id + ' — full detail pane coming in Phase 2');
-  } else if (channel === 'form') {
-    // source_id can be lead_X, sitelead_X, contact_X, or demo_X
+  SA.inboxSelected = { sourceId: sourceId, channel: channel };
+  // Mark as read
+  saFetch('/api/admin/superadmin/inbox/mark-read', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ conversation_id: sourceId, channel: channel })
+  }).catch(function() {});
+  // Handle form leads via the existing lead detail pane
+  if (channel === 'form') {
     var parts = sourceId.match(/^(lead|sitelead|contact|demo)_(\d+)$/);
-    if (parts) {
-      openLeadDetailPane(parts[1], parts[2]);
-    } else {
-      // fallback for old format
-      var id = sourceId.replace('lead_', '');
-      openLeadDetailPane('lead', id);
-    }
+    if (parts) { openLeadDetailPane(parts[1], parts[2]); return; }
+    openLeadDetailPane('lead', sourceId.replace('lead_', '')); return;
   }
+  // For all other channels, show inline detail pane
+  var conv = ((SA.data.inbox || {}).conversations || []).find(function(c) { return c.source_id === sourceId; });
+  if (!conv) return;
+  renderInboxDetail(conv);
+}
+
+function renderInboxDetail(conv) {
+  // Remove any existing detail pane
+  var existing = document.getElementById('inbox-detail-pane');
+  if (existing) existing.remove();
+
+  var channelLabel = { web_chat: 'Web Chat', voice: 'Phone Call', sms: 'Message', voicemail: 'Callback', form: 'Lead Form', cold_call: 'Cold Call', job_message: 'Job Message' };
+  var name = conv.contact_name || conv.contact_email || conv.contact_phone || 'Unknown';
+  var canReply = conv.channel === 'web_chat' || conv.channel === 'job_message';
+
+  var html = '<div class="p-4 border-b border-gray-100 flex items-center justify-between">' +
+    '<h3 class="font-bold text-sm text-gray-900 truncate">' + name + '</h3>' +
+    '<button onclick="inboxCloseDetail()" class="text-gray-400 hover:text-gray-600 flex-shrink-0"><i class="fas fa-times"></i></button>' +
+  '</div>' +
+  '<div class="p-4 space-y-3">' +
+    '<div class="text-xs text-gray-500"><i class="fas fa-tag mr-1"></i>' + (channelLabel[conv.channel] || conv.channel) + '</div>' +
+    (conv.contact_email ? '<div class="text-xs text-gray-500"><i class="fas fa-envelope mr-1"></i>' + conv.contact_email + '</div>' : '') +
+    (conv.contact_phone ? '<div class="text-xs text-gray-500"><i class="fas fa-phone mr-1"></i>' + conv.contact_phone + '</div>' : '') +
+    (conv.customer_company ? '<div class="text-xs text-gray-500"><i class="fas fa-building mr-1"></i>' + conv.customer_company + '</div>' : '') +
+    (conv.call_duration_seconds ? '<div class="text-xs text-gray-500"><i class="fas fa-clock mr-1"></i>' + fmtSeconds(conv.call_duration_seconds) + '</div>' : '') +
+    (conv.preferred_time ? '<div class="text-xs text-gray-500"><i class="fas fa-calendar mr-1"></i>Preferred: ' + conv.preferred_time + '</div>' : '') +
+    '<div class="text-xs text-gray-400"><i class="fas fa-clock mr-1"></i>' + hubTimeAgo(conv.last_activity_at || conv.created_at) + '</div>' +
+    '<div class="mt-4 p-3 bg-gray-50 rounded-lg"><p class="text-sm text-gray-700 whitespace-pre-wrap">' + (conv.preview || 'No preview available') + '</p></div>' +
+  '</div>';
+
+  if (canReply) {
+    html += '<div class="p-4 border-t border-gray-100">' +
+      '<textarea id="inbox-reply-text" rows="3" placeholder="Type a reply..." class="w-full text-sm border border-gray-200 rounded-lg p-2 focus:ring-2 focus:ring-slate-500 focus:border-slate-500 resize-none"></textarea>' +
+      '<button onclick="inboxSendReply(\'' + conv.source_id + '\',\'' + conv.channel + '\')" class="mt-2 w-full px-3 py-2 bg-slate-800 text-white rounded-lg text-xs font-semibold hover:bg-slate-700"><i class="fas fa-paper-plane mr-1"></i>Send Reply</button>' +
+    '</div>';
+  } else {
+    html += '<div class="p-4 border-t border-gray-100 text-center text-xs text-gray-400"><i class="fas fa-info-circle mr-1"></i>Direct reply not available for this channel</div>';
+  }
+
+  // Insert the detail pane next to the conversation list
+  var root = document.getElementById('sa-root');
+  if (!root) return;
+  var pane = document.createElement('div');
+  pane.id = 'inbox-detail-pane';
+  pane.className = 'fixed right-0 top-14 w-96 h-[calc(100vh-56px)] bg-white border-l border-gray-200 shadow-xl z-40 overflow-y-auto';
+  pane.innerHTML = html;
+  document.body.appendChild(pane);
+}
+
+function inboxCloseDetail() {
+  var pane = document.getElementById('inbox-detail-pane');
+  if (pane) pane.remove();
+  SA.inboxSelected = null;
+}
+
+async function inboxSendReply(sourceId, channel) {
+  var textarea = document.getElementById('inbox-reply-text');
+  if (!textarea || !textarea.value.trim()) return;
+  var message = textarea.value.trim();
+  textarea.disabled = true;
+  try {
+    var res = await saFetch('/api/admin/superadmin/inbox/reply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversation_id: sourceId, channel: channel, message: message })
+    });
+    if (res && res.ok) {
+      textarea.value = '';
+      textarea.disabled = false;
+      var fb = document.createElement('div');
+      fb.className = 'mx-4 mb-2 p-2 bg-green-50 text-green-700 rounded text-xs text-center';
+      fb.textContent = 'Reply sent!';
+      textarea.parentElement.prepend(fb);
+      setTimeout(function() { fb.remove(); }, 3000);
+    } else {
+      textarea.disabled = false;
+      var err = res ? await res.json() : {};
+      alert('Failed: ' + (err.error || 'Unknown error'));
+    }
+  } catch(e) { textarea.disabled = false; alert('Failed to send reply'); }
 }
 
 async function openLeadDetailPane(type, id) {
@@ -10102,4 +10423,270 @@ async function loadInboxBadge() {
       }
     }
   } catch (e) { /* best effort */ }
+}
+
+// ============================================================
+// GROWTH — CONSOLIDATED VIEWS
+// ============================================================
+
+function renderGrowthOverviewView() {
+  var bi = SA.data.bi || {};
+  var funnel = SA.data.funnel || {};
+  var anomalies = (SA.data.anomalies || {}).anomalies || [];
+  var funnelStages = (funnel.stages || []);
+  var mrr = ((bi.mrr_cents || 0) / 100).toFixed(2);
+  var arr = ((bi.arr_cents || 0) / 100).toFixed(2);
+  var arpc = ((bi.arpc_cents || 0) / 100).toFixed(2);
+
+  var anomalyHtml = '';
+  if (anomalies.length > 0) {
+    anomalyHtml = '<div class="mb-5">' + saSection('Anomaly Alerts', 'fa-exclamation-triangle', anomalies.map(function(a) {
+      var color = a.severity === 'critical' ? 'red' : a.severity === 'high' ? 'orange' : 'yellow';
+      return '<div class="flex items-center gap-3 p-3 bg-' + color + '-50 rounded-lg mb-2"><i class="fas fa-' + (a.severity === 'critical' ? 'fire' : 'exclamation-circle') + ' text-' + color + '-500"></i><div><span class="font-semibold text-sm">' + (a.title || a.type) + '</span><p class="text-xs text-gray-600">' + (a.description || '') + '</p></div></div>';
+    }).join('')) + '</div>';
+  }
+
+  var funnelHtml = '';
+  if (funnelStages.length > 0) {
+    funnelHtml = '<div class="grid grid-cols-5 gap-2">';
+    funnelStages.forEach(function(s, i) {
+      var pct = s.pct_of_top || 0;
+      funnelHtml += '<div class="text-center p-3 bg-white rounded-lg border border-gray-200">' +
+        '<div class="text-2xl font-black text-gray-900">' + (s.count || 0) + '</div>' +
+        '<div class="text-xs text-gray-500 mt-1">' + (s.label || 'Stage ' + (i+1)) + '</div>' +
+        '<div class="mt-2 h-1.5 bg-gray-100 rounded-full"><div class="h-1.5 bg-teal-500 rounded-full" style="width:' + pct + '%"></div></div>' +
+        '<div class="text-[10px] text-gray-400 mt-1">' + pct + '%</div>' +
+      '</div>';
+    });
+    funnelHtml += '</div>';
+  }
+
+  return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-tachometer-alt mr-2 text-teal-500"></i>Growth Overview</h2><p class="text-sm text-gray-500 mt-1">Key business metrics, funnel, and anomaly alerts</p></div>' +
+    anomalyHtml +
+    '<div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">' +
+      samc('MRR', '$' + mrr, 'fa-dollar-sign', 'green') +
+      samc('ARR', '$' + arr, 'fa-chart-line', 'blue') +
+      samc('ARPC', '$' + arpc, 'fa-user-tag', 'purple') +
+      samc('Trial Conversion', (bi.trial_conversion_rate || 0) + '%', 'fa-funnel-dollar', 'teal', bi.trial_orders + ' trials / ' + bi.trial_converted + ' converted') +
+      samc('Churn (60d idle)', bi.churned_customers || 0, 'fa-user-slash', 'red') +
+    '</div>' +
+    '<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">' +
+      samc('30d Revenue', '$' + ((bi.revenue_30d_cents || 0) / 100).toFixed(2), 'fa-money-bill-wave', 'green') +
+      samc('Paying Customers', bi.paying_customers || 0, 'fa-users', 'blue') +
+      samc('Reports (30d)', bi.total_reports_30d || 0, 'fa-file-alt', 'purple', (bi.report_completion_rate || 0) + '% completed') +
+      samc('Avg Quality', bi.avg_quality_score || 'N/A', 'fa-star', 'yellow') +
+    '</div>' +
+    (funnelHtml ? saSection('Conversion Funnel (30d)', 'fa-filter', funnelHtml) : '');
+}
+
+function renderGrowthTrafficView() {
+  // Reuse existing analytics + GA4 views combined
+  var siteHtml = (typeof renderAnalyticsView === 'function') ? renderAnalyticsView() : '';
+  var ga4Html = (typeof renderGA4View === 'function') ? renderGA4View() : '';
+  return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-chart-area mr-2 text-blue-500"></i>Traffic</h2><p class="text-sm text-gray-500 mt-1">Site analytics and Google Analytics combined</p></div>' +
+    '<div class="space-y-6">' +
+      '<div>' + saSection('Internal Analytics', 'fa-chart-bar', siteHtml) + '</div>' +
+      '<div>' + saSection('Google Analytics 4', 'fa-chart-area', ga4Html) + '</div>' +
+    '</div>';
+}
+
+function renderGrowthMarketingView() {
+  // Reuse existing marketing view + add email/meta links
+  var mktHtml = (typeof renderMarketingView === 'function') ? renderMarketingView() : '';
+  return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-bullhorn mr-2 text-orange-500"></i>Marketing</h2><p class="text-sm text-gray-500 mt-1">Sales, outreach, email, and social</p></div>' +
+    '<div class="flex gap-2 mb-5">' +
+      '<button onclick="saSetView(\'email-outreach\')" class="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50"><i class="fas fa-envelope-open-text mr-1"></i>Email Outreach</button>' +
+      '<button onclick="saSetView(\'email-setup\')" class="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50"><i class="fas fa-cog mr-1"></i>Email Setup</button>' +
+      '<button onclick="saSetView(\'meta-connect\')" class="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50"><i class="fas fa-share-alt mr-1"></i>Meta Connect</button>' +
+    '</div>' +
+    mktHtml;
+}
+
+function renderGrowthSeoView() {
+  var blogHtml = (typeof renderBlogManagerView === 'function') ? renderBlogManagerView() : '';
+  return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-pen-nib mr-2 text-indigo-500"></i>SEO & Blog</h2><p class="text-sm text-gray-500 mt-1">Blog management, SEO metadata, and content</p></div>' +
+    blogHtml;
+}
+
+// ============================================================
+// AI OPERATIONS — CONSOLIDATED VIEWS
+// ============================================================
+
+function renderAiOpsOverviewView() {
+  var ov = SA.data.secretary_overview || {};
+  var mon = SA.data.secretary_monitor || {};
+  var activeAgents = mon.active_agents || [];
+  var stats = ov.stats || {};
+
+  var agentListHtml = '';
+  if (activeAgents.length > 0) {
+    agentListHtml = '<div class="space-y-2">';
+    activeAgents.forEach(function(a) {
+      agentListHtml += '<div class="flex items-center gap-3 p-3 bg-green-50 rounded-lg">' +
+        '<span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>' +
+        '<span class="font-semibold text-sm">' + (a.customer_name || a.agent_id || 'Agent') + '</span>' +
+        '<span class="ml-auto text-xs text-gray-500">' + (a.status || 'active') + '</span>' +
+      '</div>';
+    });
+    agentListHtml += '</div>';
+  } else {
+    agentListHtml = '<div class="text-center py-8 text-gray-400"><i class="fas fa-satellite-dish text-3xl mb-2"></i><p class="text-sm">No active agents right now</p></div>';
+  }
+
+  return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-robot mr-2 text-purple-500"></i>AI Operations Overview</h2><p class="text-sm text-gray-500 mt-1">Live status of all AI agents and services</p></div>' +
+    '<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">' +
+      samc('Active Subscribers', stats.total_subscribers || ov.total_subscribers || 0, 'fa-users', 'blue') +
+      samc('Total Calls', stats.total_calls || ov.total_calls || 0, 'fa-phone-alt', 'green') +
+      samc('Active Agents', activeAgents.length, 'fa-robot', 'purple') +
+      samc('Messages', stats.total_messages || ov.total_messages || 0, 'fa-sms', 'teal') +
+    '</div>' +
+    saSection('Live Agents', 'fa-satellite-dish', agentListHtml);
+}
+
+function renderAiOpsAgentsView() {
+  // Combine Agent Hub + AI Agent + Gemini into one view
+  var hubHtml = (typeof renderAgentHubView === 'function') ? renderAgentHubView() : '';
+  var aiHtml = (typeof renderAiAgentView === 'function') ? renderAiAgentView() : '';
+  var geminiHtml = (typeof renderGeminiCommandView === 'function') ? renderGeminiCommandView() : '';
+
+  return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-brain mr-2 text-indigo-500"></i>Agents</h2><p class="text-sm text-gray-500 mt-1">Agent Hub, AI Agent, and Gemini Command combined</p></div>' +
+    '<div class="space-y-6">' +
+      '<div id="agent-hub-section">' + saSection('Agent Hub', 'fa-brain', hubHtml) + '</div>' +
+      '<div id="ai-agent-section">' + saSection('AI Agent', 'fa-robot', aiHtml) + '</div>' +
+      '<div id="gemini-section">' + saSection('Gemini AI Command', 'fa-terminal', geminiHtml) + '</div>' +
+    '</div>';
+}
+
+// ============================================================
+// PLATFORM — CONSOLIDATED VIEWS
+// ============================================================
+
+function renderPlatformHealthView() {
+  var health = SA.data.system_health || {};
+  var paywall = SA.data.paywall_status || {};
+
+  var healthItems = [];
+  if (health.database) healthItems.push({ name: 'Database', status: health.database.status || 'unknown', detail: health.database.detail || '' });
+  if (health.api) healthItems.push({ name: 'API', status: health.api.status || 'unknown', detail: health.api.detail || '' });
+  if (health.workers) healthItems.push({ name: 'Workers', status: health.workers.status || 'unknown', detail: health.workers.detail || '' });
+
+  var healthHtml = '<div class="space-y-2">';
+  if (healthItems.length === 0) {
+    healthHtml += '<div class="grid grid-cols-3 gap-4">' +
+      samc('API Status', 'OK', 'fa-server', 'green') +
+      samc('Database', 'Connected', 'fa-database', 'green') +
+      samc('Workers', 'Running', 'fa-cog', 'green') +
+    '</div>';
+  } else {
+    healthItems.forEach(function(h) {
+      var color = h.status === 'healthy' || h.status === 'ok' ? 'green' : h.status === 'degraded' ? 'yellow' : 'red';
+      healthHtml += '<div class="flex items-center gap-3 p-3 bg-' + color + '-50 rounded-lg"><i class="fas fa-circle text-' + color + '-500 text-xs"></i><span class="font-semibold text-sm">' + h.name + '</span><span class="ml-auto text-xs text-gray-500">' + h.detail + '</span></div>';
+    });
+  }
+  healthHtml += '</div>';
+
+  var paywallHtml = '<div class="grid grid-cols-2 gap-4">' +
+    samc('Paywall', paywall.enabled ? 'Active' : 'Disabled', 'fa-lock', paywall.enabled ? 'green' : 'gray') +
+    samc('Trial Days', paywall.trial_days || 7, 'fa-calendar', 'blue') +
+  '</div>';
+
+  return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-heartbeat mr-2 text-red-500"></i>System Health</h2><p class="text-sm text-gray-500 mt-1">Infrastructure status, paywall, and deployment</p></div>' +
+    '<div class="space-y-6">' +
+      saSection('System Status', 'fa-server', healthHtml) +
+      saSection('Paywall Configuration', 'fa-lock', paywallHtml) +
+    '</div>';
+}
+
+// ============================================================
+// UNIFIED CUSTOMERS DIRECTORY
+// ============================================================
+
+function renderPeopleDirectoryView() {
+  var d = SA.data.people || {};
+  var people = d.people || [];
+  var total = d.total || 0;
+
+  var typeFilters = [
+    { id: '', label: 'All', icon: 'fa-users' },
+    { id: 'platform_user', label: 'Platform Users', icon: 'fa-user-check' },
+    { id: 'crm_customer', label: 'CRM Customers', icon: 'fa-home' },
+    { id: 'prospect', label: 'Prospects', icon: 'fa-phone-volume' }
+  ];
+
+  var filtersHtml = '<div class="flex items-center gap-2">';
+  typeFilters.forEach(function(f) {
+    var active = (SA.peopleType || '') === f.id;
+    filtersHtml += '<button onclick="peopleFilterType(\'' + f.id + '\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ' +
+      (active ? 'bg-slate-800 text-white shadow-sm' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200') + '">' +
+      '<i class="fas ' + f.icon + ' mr-1"></i>' + f.label + '</button>';
+  });
+  filtersHtml += '</div>';
+
+  var searchHtml = '<div class="relative">' +
+    '<input type="text" id="people-search" placeholder="Search by name, email, phone, company..." value="' + (SA.peopleSearch || '') + '" ' +
+    'onkeydown="if(event.key===\'Enter\')peopleDoSearch()" ' +
+    'class="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500">' +
+    '<i class="fas fa-search absolute left-3 top-2.5 text-gray-400 text-sm"></i>' +
+    '</div>';
+
+  var typeBadge = { platform_user: 'bg-blue-100 text-blue-800', crm_customer: 'bg-green-100 text-green-800', prospect: 'bg-orange-100 text-orange-800' };
+  var typeLabel = { platform_user: 'Platform User', crm_customer: 'CRM Customer', prospect: 'Prospect' };
+
+  var listHtml = '';
+  if (people.length === 0) {
+    listHtml = '<div class="text-center py-16 text-gray-400"><i class="fas fa-users text-4xl mb-3"></i><p class="font-medium">No people found</p></div>';
+  } else {
+    listHtml = '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-gray-50 text-left"><th class="px-4 py-2 font-semibold text-gray-600">Name</th><th class="px-4 py-2 font-semibold text-gray-600">Email</th><th class="px-4 py-2 font-semibold text-gray-600">Phone</th><th class="px-4 py-2 font-semibold text-gray-600">Company</th><th class="px-4 py-2 font-semibold text-gray-600">Type</th><th class="px-4 py-2 font-semibold text-gray-600">Joined</th></tr></thead><tbody>';
+    people.forEach(function(p) {
+      var badge = typeBadge[p.person_type] || 'bg-gray-100 text-gray-600';
+      var label = typeLabel[p.person_type] || p.person_type;
+      listHtml += '<tr class="border-t border-gray-100 hover:bg-gray-50 cursor-pointer" onclick="peopleOpenProfile(\'' + p.person_type + '\',' + p.id + ')">' +
+        '<td class="px-4 py-3 font-medium text-gray-900">' + (p.name || '—') + '</td>' +
+        '<td class="px-4 py-3 text-gray-500">' + (p.email || '—') + '</td>' +
+        '<td class="px-4 py-3 text-gray-500">' + (p.phone || '—') + '</td>' +
+        '<td class="px-4 py-3 text-gray-500">' + (p.company_name || p.company || p.owner_company || '—') + '</td>' +
+        '<td class="px-4 py-3"><span class="px-2 py-0.5 ' + badge + ' rounded-full text-xs font-medium">' + label + '</span></td>' +
+        '<td class="px-4 py-3 text-gray-400 text-xs">' + fmtDate(p.created_at) + '</td>' +
+      '</tr>';
+    });
+    listHtml += '</tbody></table></div>';
+  }
+
+  return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-address-book mr-2 text-blue-500"></i>People Directory</h2><p class="text-sm text-gray-500 mt-1">Unified search across platform users, CRM customers, and prospects</p></div>' +
+    '<div class="bg-white rounded-xl border border-gray-200 shadow-sm">' +
+      '<div class="p-4 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">' +
+        filtersHtml +
+        '<div class="w-72">' + searchHtml + '</div>' +
+      '</div>' +
+      listHtml +
+      '<div class="p-3 border-t border-gray-100 text-xs text-gray-400 text-center">Showing ' + people.length + ' of ' + total + ' people</div>' +
+    '</div>';
+}
+
+function peopleFilterType(type) {
+  SA.peopleType = type;
+  loadView('people-directory');
+}
+
+function peopleDoSearch() {
+  var el = document.getElementById('people-search');
+  SA.peopleSearch = el ? el.value : '';
+  loadView('people-directory');
+}
+
+function peopleOpenProfile(type, id) {
+  if (type === 'platform_user') {
+    // Navigate to the existing user view — could be expanded with profile tabs later
+    saSetView('users');
+  }
+  // CRM customers and prospects — future: open inline profile with tabs
+}
+
+function renderPlatformSettingsView() {
+  return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-cog mr-2 text-gray-500"></i>Platform Settings</h2><p class="text-sm text-gray-500 mt-1">Material preferences, SIP mapping, feature toggles</p></div>' +
+    '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+      '<div onclick="saSetView(\'pricing\')" class="p-5 bg-white rounded-xl border border-gray-200 hover:shadow-md cursor-pointer transition-all"><i class="fas fa-tags text-2xl text-blue-500 mb-3"></i><h3 class="font-bold text-gray-900">Pricing & Tiers</h3><p class="text-xs text-gray-500 mt-1">Manage membership pricing and feature tiers</p></div>' +
+      '<div onclick="saSetView(\'livekit-agents\')" class="p-5 bg-white rounded-xl border border-gray-200 hover:shadow-md cursor-pointer transition-all"><i class="fas fa-satellite text-2xl text-purple-500 mb-3"></i><h3 class="font-bold text-gray-900">LiveKit Agents</h3><p class="text-xs text-gray-500 mt-1">Agent deployment, phone pool, SIP trunks</p></div>' +
+      '<div onclick="saSetView(\'telephony\')" class="p-5 bg-white rounded-xl border border-gray-200 hover:shadow-md cursor-pointer transition-all"><i class="fas fa-broadcast-tower text-2xl text-green-500 mb-3"></i><h3 class="font-bold text-gray-900">Telephony</h3><p class="text-xs text-gray-500 mt-1">SIP mapping, trunk status, voice config</p></div>' +
+    '</div>';
 }
