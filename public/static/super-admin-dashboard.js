@@ -2374,7 +2374,9 @@ function renderAnalyticsView() {
 }
 
 window.saRefreshAnalytics = function() {
-  loadView('analytics');
+  // Support both standalone analytics and consolidated growth-traffic view
+  var target = SA.view === 'growth-traffic' ? 'growth-traffic' : 'analytics';
+  loadView(target);
 };
 
 // Auto-refresh: 30-second interval for the live feed
@@ -2388,7 +2390,8 @@ window.saToggleAutoRefresh = function() {
       if (el) el.textContent = 'Refreshing in ' + SA._arCountdown + 's';
       if (SA._arCountdown <= 0) {
         SA._arCountdown = 30;
-        loadView('analytics');
+        var target = SA.view === 'growth-traffic' ? 'growth-traffic' : 'analytics';
+        loadView(target);
       }
     }, 1000);
   } else {
@@ -2415,7 +2418,8 @@ window.saSetGA4Tab = function(tab) {
 };
 
 window.saRefreshGA4 = function() {
-  loadView('ga4');
+  var target = SA.view === 'growth-traffic' ? 'growth-traffic' : 'ga4';
+  loadView(target);
 };
 
 window.saTestGA4Event = function() {
@@ -10481,13 +10485,58 @@ function renderGrowthOverviewView() {
 }
 
 function renderGrowthTrafficView() {
-  // Reuse existing analytics + GA4 views combined
+  // ── Live on Website banner (GA4 Realtime) ──
+  var realtime = SA.data.ga4_realtime || {};
+  var rtPages = (realtime.pages && realtime.pages.rows) ? realtime.pages.rows : [];
+  var rtGeo = (realtime.geography && realtime.geography.rows) ? realtime.geography.rows : [];
+  var totalActive = rtPages.reduce(function(s, r) { return s + (r[1] || 0); }, 0);
+
+  var liveBanner = '<div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-6 mb-6 flex items-center gap-6">' +
+    '<div class="w-20 h-20 bg-green-100 rounded-2xl flex items-center justify-center"><span class="relative flex h-4 w-4"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-4 w-4 bg-green-500"></span></span></div>' +
+    '<div>' +
+      '<p class="text-xs font-semibold text-green-600 uppercase tracking-wider">Live on Website</p>' +
+      '<p class="text-5xl font-black text-green-800">' + totalActive + '</p>' +
+      '<p class="text-sm text-green-600 mt-1">active visitor' + (totalActive !== 1 ? 's' : '') + ' right now</p>' +
+    '</div>' +
+    '<div class="flex-1">';
+
+  // Show top 5 active pages inline
+  if (rtPages.length > 0) {
+    liveBanner += '<div class="space-y-1">';
+    rtPages.slice(0, 5).forEach(function(r) {
+      liveBanner += '<div class="flex items-center justify-between py-0.5">' +
+        '<span class="text-xs font-mono text-green-700 truncate max-w-[250px]">' + (r[0] || '/') + '</span>' +
+        '<span class="text-xs font-bold text-green-800">' + (r[1] || 0) + '</span>' +
+      '</div>';
+    });
+    liveBanner += '</div>';
+  }
+
+  liveBanner += '</div>' +
+    '<div class="flex flex-col gap-2">' +
+      '<button onclick="loadView(\'growth-traffic\')" class="px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 shadow-sm"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>';
+
+  // Show top countries if available
+  if (rtGeo.length > 0) {
+    liveBanner += '<div class="text-[10px] text-green-600 text-center">';
+    rtGeo.slice(0, 3).forEach(function(r) {
+      liveBanner += '<span class="mr-1">' + (r[0] || '') + ' (' + (r[1] || 0) + ')</span>';
+    });
+    liveBanner += '</div>';
+  }
+
+  liveBanner += '</div></div>';
+
+  // Reuse existing analytics + GA4 views directly (no extra section nesting)
   var siteHtml = (typeof renderAnalyticsView === 'function') ? renderAnalyticsView() : '';
   var ga4Html = (typeof renderGA4View === 'function') ? renderGA4View() : '';
+
   return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-chart-area mr-2 text-blue-500"></i>Traffic</h2><p class="text-sm text-gray-500 mt-1">Site analytics and Google Analytics combined</p></div>' +
-    '<div class="space-y-6">' +
-      '<div>' + saSection('Internal Analytics', 'fa-chart-bar', siteHtml) + '</div>' +
-      '<div>' + saSection('Google Analytics 4', 'fa-chart-area', ga4Html) + '</div>' +
+    liveBanner +
+    '<div class="space-y-8">' +
+      '<div>' + siteHtml + '</div>' +
+      '<hr class="border-gray-200">' +
+      '<div>' + ga4Html + '</div>' +
     '</div>';
 }
 
