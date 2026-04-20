@@ -13,6 +13,9 @@
   var p = location.pathname;
   if (p.startsWith('/admin') || p.startsWith('/super-admin') || p.startsWith('/customer/dashboard')) return;
 
+  // Skip for logged-in users (admin or customer)
+  if (localStorage.getItem('rc_user') || localStorage.getItem('rc_customer')) return;
+
   // Persist UTM params in sessionStorage for cross-page use
   var params = new URLSearchParams(location.search);
   var utmSource = params.get('utm_source') || '';
