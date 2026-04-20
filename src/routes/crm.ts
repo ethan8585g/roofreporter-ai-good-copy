@@ -782,14 +782,18 @@ crmRoutes.post('/certificate-designs', async (c) => {
   const body = await c.req.json()
   const result = await c.env.DB.prepare(
     `INSERT INTO certificate_designs (owner_id, name, template_style, primary_color, secondary_color,
-     font_family, license_number, custom_message, watermark_enabled, logo_alignment, is_default)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     font_family, license_number, custom_message, watermark_enabled, logo_alignment, is_default,
+     cert_title, cert_subtitle, cert_body_text, footer_text, sig_left_label, sig_right_label)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     ownerId, body.name || 'Standard Certificate', body.template_style || 'classic',
     body.primary_color || '#1a5c38', body.secondary_color || '#f5b041',
     body.font_family || 'EB Garamond', body.license_number || null,
     body.custom_message || null, body.watermark_enabled ? 1 : 0,
-    body.logo_alignment || 'left', body.is_default ? 1 : 0
+    body.logo_alignment || 'left', body.is_default ? 1 : 0,
+    body.cert_title || null, body.cert_subtitle || null,
+    body.cert_body_text || null, body.footer_text || null,
+    body.sig_left_label || null, body.sig_right_label || null
   ).run()
   // If this is the default, unset others
   if (body.is_default && result.meta?.last_row_id) {
@@ -808,7 +812,9 @@ crmRoutes.put('/certificate-designs/:designId', async (c) => {
   await c.env.DB.prepare(
     `UPDATE certificate_designs SET name = ?, template_style = ?, primary_color = ?,
      secondary_color = ?, font_family = ?, license_number = ?, custom_message = ?,
-     watermark_enabled = ?, logo_alignment = ?, is_default = ?, updated_at = datetime('now')
+     watermark_enabled = ?, logo_alignment = ?, is_default = ?,
+     cert_title = ?, cert_subtitle = ?, cert_body_text = ?, footer_text = ?,
+     sig_left_label = ?, sig_right_label = ?, updated_at = datetime('now')
      WHERE id = ? AND owner_id = ?`
   ).bind(
     body.name || 'Standard Certificate', body.template_style || 'classic',
@@ -816,6 +822,9 @@ crmRoutes.put('/certificate-designs/:designId', async (c) => {
     body.font_family || 'EB Garamond', body.license_number || null,
     body.custom_message || null, body.watermark_enabled ? 1 : 0,
     body.logo_alignment || 'left', body.is_default ? 1 : 0,
+    body.cert_title || null, body.cert_subtitle || null,
+    body.cert_body_text || null, body.footer_text || null,
+    body.sig_left_label || null, body.sig_right_label || null,
     designId, ownerId
   ).run()
   if (body.is_default) {
@@ -872,6 +881,12 @@ crmRoutes.post('/certificate-preview', async (c) => {
       customMessage: body.custom_message || undefined,
       watermarkEnabled: !!body.watermark_enabled,
       logoAlignment: body.logo_alignment || 'left',
+      certTitle: body.cert_title || undefined,
+      certSubtitle: body.cert_subtitle || undefined,
+      certBodyText: body.cert_body_text || undefined,
+      footerText: body.footer_text || undefined,
+      sigLeftLabel: body.sig_left_label || undefined,
+      sigRightLabel: body.sig_right_label || undefined,
     })
     return c.html(html)
   } catch (err: any) {
@@ -949,13 +964,17 @@ crmRoutes.get('/proposals/:id/certificate', async (c) => {
   const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
   const companyName = owner?.brand_business_name || owner?.company_name || owner?.name || 'Your Roofing Company'
   const companyAddress = owner?.brand_address || [owner?.address, owner?.city, owner?.province].filter(Boolean).join(', ')
+  // Load default certificate design for custom text fields
+  const defaultDesign = await c.env.DB.prepare(
+    'SELECT * FROM certificate_designs WHERE owner_id = ? ORDER BY is_default DESC, created_at DESC LIMIT 1'
+  ).bind(ownerId).first<any>()
   const certHtml = generateRoofInstallationCertificateHTML({
     companyName,
     companyLogo: owner?.brand_logo_url || undefined,
     companyAddress: companyAddress || undefined,
     companyPhone: owner?.brand_phone || owner?.phone || undefined,
     companyEmail: owner?.brand_email || owner?.email || undefined,
-    licenseNumber: owner?.brand_license_number || undefined,
+    licenseNumber: defaultDesign?.license_number || owner?.brand_license_number || undefined,
     customerName: proposal.customer_name || proposal.printed_name || 'Valued Customer',
     propertyAddress: proposal.property_address || '',
     proposalNumber: proposal.proposal_number,
@@ -963,7 +982,19 @@ crmRoutes.get('/proposals/:id/certificate', async (c) => {
     scopeOfWork: proposal.scope_of_work || undefined,
     materials: proposal.materials_detail || undefined,
     totalAmount: proposal.total_amount ?? undefined,
-    accentColor: owner?.brand_primary_color || undefined,
+    accentColor: defaultDesign?.primary_color || owner?.brand_primary_color || undefined,
+    secondaryColor: defaultDesign?.secondary_color || undefined,
+    fontFamily: defaultDesign?.font_family || undefined,
+    templateStyle: defaultDesign?.template_style || undefined,
+    customMessage: defaultDesign?.custom_message || undefined,
+    watermarkEnabled: !!defaultDesign?.watermark_enabled,
+    logoAlignment: defaultDesign?.logo_alignment || undefined,
+    certTitle: defaultDesign?.cert_title || undefined,
+    certSubtitle: defaultDesign?.cert_subtitle || undefined,
+    certBodyText: defaultDesign?.cert_body_text || undefined,
+    footerText: defaultDesign?.footer_text || undefined,
+    sigLeftLabel: defaultDesign?.sig_left_label || undefined,
+    sigRightLabel: defaultDesign?.sig_right_label || undefined,
   })
   return c.html(certHtml)
 })
@@ -990,13 +1021,17 @@ crmRoutes.post('/proposals/:id/send-certificate', async (c) => {
   const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
   const companyName = owner?.brand_business_name || owner?.company_name || owner?.name || 'Your Roofing Company'
   const companyAddress = owner?.brand_address || [owner?.address, owner?.city, owner?.province].filter(Boolean).join(', ')
+  // Load default certificate design for custom text fields
+  const sendDesign = await c.env.DB.prepare(
+    'SELECT * FROM certificate_designs WHERE owner_id = ? ORDER BY is_default DESC, created_at DESC LIMIT 1'
+  ).bind(ownerId).first<any>()
   const certHtml = generateRoofInstallationCertificateHTML({
     companyName,
     companyLogo: owner?.brand_logo_url || undefined,
     companyAddress: companyAddress || undefined,
     companyPhone: owner?.brand_phone || owner?.phone || undefined,
     companyEmail: owner?.brand_email || owner?.email || undefined,
-    licenseNumber: owner?.brand_license_number || undefined,
+    licenseNumber: sendDesign?.license_number || owner?.brand_license_number || undefined,
     customerName: proposal.customer_name || proposal.printed_name || 'Valued Customer',
     propertyAddress: proposal.property_address || '',
     proposalNumber: proposal.proposal_number,
@@ -1004,7 +1039,19 @@ crmRoutes.post('/proposals/:id/send-certificate', async (c) => {
     scopeOfWork: proposal.scope_of_work || undefined,
     materials: proposal.materials_detail || undefined,
     totalAmount: proposal.total_amount ?? undefined,
-    accentColor: owner?.brand_primary_color || undefined,
+    accentColor: sendDesign?.primary_color || owner?.brand_primary_color || undefined,
+    secondaryColor: sendDesign?.secondary_color || undefined,
+    fontFamily: sendDesign?.font_family || undefined,
+    templateStyle: sendDesign?.template_style || undefined,
+    customMessage: sendDesign?.custom_message || undefined,
+    watermarkEnabled: !!sendDesign?.watermark_enabled,
+    logoAlignment: sendDesign?.logo_alignment || undefined,
+    certTitle: sendDesign?.cert_title || undefined,
+    certSubtitle: sendDesign?.cert_subtitle || undefined,
+    certBodyText: sendDesign?.cert_body_text || undefined,
+    footerText: sendDesign?.footer_text || undefined,
+    sigLeftLabel: sendDesign?.sig_left_label || undefined,
+    sigRightLabel: sendDesign?.sig_right_label || undefined,
   })
 
   const clientId = (c.env as any).GMAIL_CLIENT_ID
@@ -1020,7 +1067,7 @@ crmRoutes.post('/proposals/:id/send-certificate', async (c) => {
     await sendGmailOAuth2(
       clientId, clientSecret, refreshToken,
       proposal.customer_email,
-      `Certificate of New Roof Installation — ${proposal.property_address}`,
+      `${sendDesign?.cert_title || 'Certificate of New Roof Installation'} — ${proposal.property_address}`,
       certHtml,
       owner?.email
     )

@@ -23,6 +23,13 @@ export interface CertificateArgs {
   customMessage?: string
   watermarkEnabled?: boolean
   logoAlignment?: 'left' | 'center' | 'right'
+  // Customizable text fields
+  certTitle?: string       // defaults to 'Certificate of New Roof Installation'
+  certSubtitle?: string    // defaults to 'Official Documentation for Insurance Purposes'
+  certBodyText?: string    // defaults to standard certification paragraph
+  footerText?: string      // defaults to standard insurance notice
+  sigLeftLabel?: string    // defaults to 'Authorized by Roofing Contractor'
+  sigRightLabel?: string   // defaults to 'Acknowledged by Homeowner'
 }
 
 function formatDate(iso: string): string {
@@ -130,18 +137,31 @@ function generateClassicCertificate(args: CertificateArgs): string {
     scopeOfWork, materials, totalAmount,
     accentColor = '#1a5c38', fontFamily = 'EB Garamond', customMessage,
     watermarkEnabled = false, logoAlignment = 'left',
+    certTitle = 'Certificate of New Roof Installation',
+    certSubtitle = 'Official Documentation for Insurance Purposes',
+    certBodyText, footerText, sigLeftLabel = 'Authorized by Roofing Contractor',
+    sigRightLabel = 'Acknowledged by Homeowner',
   } = args
 
   const formattedDate = formatDate(signedAt)
   const certNumber = `CERT-${proposalNumber}`
   const sf = serifFont(fontFamily)
+  const bodyText = certBodyText || `This is to certify that <strong>${companyName}</strong> has contracted and
+      is scheduled to complete the installation of a new roofing system for
+      <strong>${customerName}</strong> at the property located at
+      <strong>${propertyAddress}</strong>.
+      This agreement was formally executed on <strong>${formattedDate}</strong>
+      and constitutes a binding contract for new roof installation services.`
+  const insuranceNotice = footerText || `<strong>Insurance Notice:</strong> This certificate serves as official documentation confirming
+    a new roof installation contract has been executed. Present this document to your insurance provider
+    as proof of new roof installation to qualify for applicable premium discounts or coverage updates.`
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Certificate of New Roof Installation — ${propertyAddress}</title>
+<title>${certTitle} — ${propertyAddress}</title>
 <style>
   ${fontImport(fontFamily)}
 
@@ -276,19 +296,12 @@ function generateClassicCertificate(args: CertificateArgs): string {
 
   <div class="title-section">
     <div class="seal-ring">🏅</div>
-    <div class="cert-title">Certificate of New Roof Installation</div>
-    <div class="cert-subtitle">Official Documentation for Insurance Purposes</div>
+    <div class="cert-title">${certTitle}</div>
+    <div class="cert-subtitle">${certSubtitle}</div>
   </div>
 
   <div class="certification-body">
-    <p class="certification-text">
-      This is to certify that <strong>${companyName}</strong> has contracted and
-      is scheduled to complete the installation of a new roofing system for
-      <strong>${customerName}</strong> at the property located at
-      <strong>${propertyAddress}</strong>.
-      This agreement was formally executed on <strong>${formattedDate}</strong>
-      and constitutes a binding contract for new roof installation services.
-    </p>
+    <p class="certification-text">${bodyText}</p>
   </div>
 
   ${customMessage ? `<div class="custom-msg">${customMessage}</div>` : ''}
@@ -302,14 +315,14 @@ function generateClassicCertificate(args: CertificateArgs): string {
 
   <div class="signature-section">
     <div class="sig-block">
-      <div class="sig-label">Authorized by Roofing Contractor</div>
+      <div class="sig-label">${sigLeftLabel}</div>
       <div class="sig-line">
         <div class="sig-name">${companyName}</div>
         <div class="sig-title">Licensed Roofing Contractor${licenseNumber ? ` · Lic. #${licenseNumber}` : ''}</div>
       </div>
     </div>
     <div class="sig-block">
-      <div class="sig-label">Acknowledged by Homeowner</div>
+      <div class="sig-label">${sigRightLabel}</div>
       <div class="sig-line">
         <div class="sig-name">${customerName}</div>
         <div class="sig-title">Property Owner — Signed ${formattedDate}</div>
@@ -317,11 +330,7 @@ function generateClassicCertificate(args: CertificateArgs): string {
     </div>
   </div>
 
-  <div class="footer-note">
-    <strong>Insurance Notice:</strong> This certificate serves as official documentation confirming
-    a new roof installation contract has been executed. Present this document to your insurance provider
-    as proof of new roof installation to qualify for applicable premium discounts or coverage updates.
-  </div>
+  <div class="footer-note">${insuranceNotice}</div>
 </div>
 </body>
 </html>`
@@ -338,17 +347,29 @@ function generateModernCertificate(args: CertificateArgs): string {
     accentColor = '#1e40af', secondaryColor = '#3b82f6',
     fontFamily = 'Montserrat', customMessage,
     watermarkEnabled = false, logoAlignment = 'left',
+    certTitle = 'Certificate of New Roof Installation',
+    certSubtitle = 'Official Documentation for Insurance Purposes',
+    certBodyText, footerText, sigLeftLabel = 'Authorized by Roofing Contractor',
+    sigRightLabel = 'Acknowledged by Homeowner',
   } = args
 
   const formattedDate = formatDate(signedAt)
   const certNumber = `CERT-${proposalNumber}`
+  const bodyText = certBodyText || `This is to certify that <strong>${companyName}</strong> has contracted and
+        is scheduled to complete the installation of a new roofing system for
+        <strong>${customerName}</strong> at the property located at
+        <strong>${propertyAddress}</strong>.
+        This agreement was formally executed on <strong>${formattedDate}</strong>
+        and constitutes a binding contract for new roof installation services.`
+  const insuranceNotice = footerText || `<strong>Insurance Notice:</strong> This certificate serves as official documentation confirming
+    a new roof installation contract has been executed. Present to your insurance provider for premium discounts.`
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Certificate of New Roof Installation — ${propertyAddress}</title>
+<title>${certTitle} — ${propertyAddress}</title>
 <style>
   ${fontImport(fontFamily)}
   @page { size: letter; margin: 0; }
@@ -483,20 +504,13 @@ function generateModernCertificate(args: CertificateArgs): string {
 
   <div class="content">
     <div class="title-section">
-      <div class="cert-title">Certificate of New Roof Installation</div>
-      <div class="cert-subtitle">Official Documentation for Insurance Purposes</div>
+      <div class="cert-title">${certTitle}</div>
+      <div class="cert-subtitle">${certSubtitle}</div>
       <div class="title-line"></div>
     </div>
 
     <div class="certification-body">
-      <p class="certification-text">
-        This is to certify that <strong>${companyName}</strong> has contracted and
-        is scheduled to complete the installation of a new roofing system for
-        <strong>${customerName}</strong> at the property located at
-        <strong>${propertyAddress}</strong>.
-        This agreement was formally executed on <strong>${formattedDate}</strong>
-        and constitutes a binding contract for new roof installation services.
-      </p>
+      <p class="certification-text">${bodyText}</p>
     </div>
 
     ${customMessage ? `<div class="custom-msg">${customMessage}</div>` : ''}
@@ -510,14 +524,14 @@ function generateModernCertificate(args: CertificateArgs): string {
 
     <div class="signature-section">
       <div class="sig-block">
-        <div class="sig-label">Authorized by Roofing Contractor</div>
+        <div class="sig-label">${sigLeftLabel}</div>
         <div class="sig-line">
           <div class="sig-name">${companyName}</div>
           <div class="sig-title">Licensed Roofing Contractor${licenseNumber ? ` · Lic. #${licenseNumber}` : ''}</div>
         </div>
       </div>
       <div class="sig-block">
-        <div class="sig-label">Acknowledged by Homeowner</div>
+        <div class="sig-label">${sigRightLabel}</div>
         <div class="sig-line">
           <div class="sig-name">${customerName}</div>
           <div class="sig-title">Property Owner — Signed ${formattedDate}</div>
@@ -526,10 +540,7 @@ function generateModernCertificate(args: CertificateArgs): string {
     </div>
   </div>
 
-  <div class="footer-bar">
-    <strong>Insurance Notice:</strong> This certificate serves as official documentation confirming
-    a new roof installation contract has been executed. Present to your insurance provider for premium discounts.
-  </div>
+  <div class="footer-bar">${insuranceNotice}</div>
 </div>
 </body>
 </html>`
@@ -546,18 +557,30 @@ function generateBoldCertificate(args: CertificateArgs): string {
     accentColor = '#b91c1c', secondaryColor = '#f59e0b',
     fontFamily = 'Playfair Display', customMessage,
     watermarkEnabled = false, logoAlignment = 'left',
+    certTitle = 'Certificate of New Roof Installation',
+    certSubtitle = 'Official Insurance Documentation',
+    certBodyText, footerText, sigLeftLabel = 'Authorized by Roofing Contractor',
+    sigRightLabel = 'Acknowledged by Homeowner',
   } = args
 
   const formattedDate = formatDate(signedAt)
   const certNumber = `CERT-${proposalNumber}`
   const sf = serifFont(fontFamily)
+  const bodyText = certBodyText || `This is to certify that <strong>${companyName}</strong> has contracted and
+        is scheduled to complete the installation of a new roofing system for
+        <strong>${customerName}</strong> at the property located at
+        <strong>${propertyAddress}</strong>.
+        This agreement was formally executed on <strong>${formattedDate}</strong>
+        and constitutes a binding contract for new roof installation services.`
+  const insuranceNotice = footerText || `<strong>Insurance Notice:</strong> This certificate serves as official documentation confirming
+    a new roof installation contract has been executed. Present to your insurance provider for premium discounts.`
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Certificate of New Roof Installation — ${propertyAddress}</title>
+<title>${certTitle} — ${propertyAddress}</title>
 <style>
   ${fontImport(fontFamily)}
   @page { size: letter; margin: 0; }
@@ -680,20 +703,13 @@ function generateBoldCertificate(args: CertificateArgs): string {
 
   <div class="content">
     <div class="title-section">
-      <div class="cert-title">Certificate of New Roof Installation</div>
-      <div class="cert-subtitle">Official Insurance Documentation</div>
+      <div class="cert-title">${certTitle}</div>
+      <div class="cert-subtitle">${certSubtitle}</div>
       <div class="cert-number-line">Certificate <strong>${certNumber}</strong> · Issued ${formattedDate}</div>
     </div>
 
     <div class="certification-body">
-      <p class="certification-text">
-        This is to certify that <strong>${companyName}</strong> has contracted and
-        is scheduled to complete the installation of a new roofing system for
-        <strong>${customerName}</strong> at the property located at
-        <strong>${propertyAddress}</strong>.
-        This agreement was formally executed on <strong>${formattedDate}</strong>
-        and constitutes a binding contract for new roof installation services.
-      </p>
+      <p class="certification-text">${bodyText}</p>
     </div>
 
     ${customMessage ? `<div class="custom-msg">${customMessage}</div>` : ''}
@@ -707,14 +723,14 @@ function generateBoldCertificate(args: CertificateArgs): string {
 
     <div class="signature-section">
       <div class="sig-block">
-        <div class="sig-label">Authorized by Roofing Contractor</div>
+        <div class="sig-label">${sigLeftLabel}</div>
         <div class="sig-line">
           <div class="sig-name">${companyName}</div>
           <div class="sig-title">Licensed Roofing Contractor${licenseNumber ? ` · Lic. #${licenseNumber}` : ''}</div>
         </div>
       </div>
       <div class="sig-block">
-        <div class="sig-label">Acknowledged by Homeowner</div>
+        <div class="sig-label">${sigRightLabel}</div>
         <div class="sig-line">
           <div class="sig-name">${customerName}</div>
           <div class="sig-title">Property Owner — Signed ${formattedDate}</div>
@@ -723,10 +739,7 @@ function generateBoldCertificate(args: CertificateArgs): string {
     </div>
   </div>
 
-  <div class="footer-note">
-    <strong>Insurance Notice:</strong> This certificate serves as official documentation confirming
-    a new roof installation contract has been executed. Present to your insurance provider for premium discounts.
-  </div>
+  <div class="footer-note">${insuranceNotice}</div>
 </div>
 </body>
 </html>`
@@ -743,18 +756,30 @@ function generateMinimalCertificate(args: CertificateArgs): string {
     accentColor = '#374151', secondaryColor = '#6b7280',
     fontFamily = 'Lora', customMessage,
     watermarkEnabled = false, logoAlignment = 'left',
+    certTitle = 'Certificate of New Roof Installation',
+    certSubtitle = 'Insurance Documentation',
+    certBodyText, footerText, sigLeftLabel = 'Authorized by Roofing Contractor',
+    sigRightLabel = 'Acknowledged by Homeowner',
   } = args
 
   const formattedDate = formatDate(signedAt)
   const certNumber = `CERT-${proposalNumber}`
   const sf = serifFont(fontFamily)
+  const bodyText = certBodyText || `This is to certify that <strong>${companyName}</strong> has contracted and
+      is scheduled to complete the installation of a new roofing system for
+      <strong>${customerName}</strong> at the property located at
+      <strong>${propertyAddress}</strong>.
+      This agreement was formally executed on <strong>${formattedDate}</strong>
+      and constitutes a binding contract for new roof installation services.`
+  const insuranceNotice = footerText || `This certificate serves as official documentation confirming a new roof installation
+    contract has been executed. Present to your insurance provider for applicable premium discounts.`
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Certificate of New Roof Installation — ${propertyAddress}</title>
+<title>${certTitle} — ${propertyAddress}</title>
 <style>
   ${fontImport(fontFamily)}
   @page { size: letter; margin: 0; }
@@ -859,20 +884,13 @@ function generateMinimalCertificate(args: CertificateArgs): string {
   </div>
 
   <div class="title-section">
-    <div class="cert-title">Certificate of New Roof Installation</div>
+    <div class="cert-title">${certTitle}</div>
     <div class="title-rule"></div>
-    <div class="cert-subtitle">Insurance Documentation</div>
+    <div class="cert-subtitle">${certSubtitle}</div>
   </div>
 
   <div class="certification-body">
-    <p class="certification-text">
-      This is to certify that <strong>${companyName}</strong> has contracted and
-      is scheduled to complete the installation of a new roofing system for
-      <strong>${customerName}</strong> at the property located at
-      <strong>${propertyAddress}</strong>.
-      This agreement was formally executed on <strong>${formattedDate}</strong>
-      and constitutes a binding contract for new roof installation services.
-    </p>
+    <p class="certification-text">${bodyText}</p>
   </div>
 
   ${customMessage ? `<div class="custom-msg">${customMessage}</div>` : ''}
@@ -884,14 +902,14 @@ function generateMinimalCertificate(args: CertificateArgs): string {
 
   <div class="signature-section">
     <div class="sig-block">
-      <div class="sig-label">Authorized by Roofing Contractor</div>
+      <div class="sig-label">${sigLeftLabel}</div>
       <div class="sig-line">
         <div class="sig-name">${companyName}</div>
         <div class="sig-title">Licensed Roofing Contractor${licenseNumber ? ` · Lic. #${licenseNumber}` : ''}</div>
       </div>
     </div>
     <div class="sig-block">
-      <div class="sig-label">Acknowledged by Homeowner</div>
+      <div class="sig-label">${sigRightLabel}</div>
       <div class="sig-line">
         <div class="sig-name">${customerName}</div>
         <div class="sig-title">Property Owner — Signed ${formattedDate}</div>
@@ -899,10 +917,7 @@ function generateMinimalCertificate(args: CertificateArgs): string {
     </div>
   </div>
 
-  <div class="footer-note">
-    This certificate serves as official documentation confirming a new roof installation
-    contract has been executed. Present to your insurance provider for applicable premium discounts.
-  </div>
+  <div class="footer-note">${insuranceNotice}</div>
 </div>
 </body>
 </html>`

@@ -21,7 +21,18 @@ const certState = {
     watermark_enabled: false,
     logo_alignment: 'left',
     is_default: true,
+    cert_title: '',
+    cert_subtitle: '',
+    cert_body_text: '',
+    footer_text: '',
+    sig_left_label: '',
+    sig_right_label: '',
   },
+  // Active tab for customize panel
+  activeTab: 'design',
+  // Logo upload state
+  logoPreview: null,
+  logoUploading: false,
   dirty: false,
   previewLoading: false,
   // Invoicing automation
@@ -87,6 +98,12 @@ function selectDesign(design, skipRender) {
     watermark_enabled: !!design.watermark_enabled,
     logo_alignment: design.logo_alignment || 'left',
     is_default: !!design.is_default,
+    cert_title: design.cert_title || '',
+    cert_subtitle: design.cert_subtitle || '',
+    cert_body_text: design.cert_body_text || '',
+    footer_text: design.footer_text || '',
+    sig_left_label: design.sig_left_label || '',
+    sig_right_label: design.sig_right_label || '',
   };
   certState.dirty = false;
   if (!skipRender) { render(); refreshPreview(); }
@@ -159,6 +176,12 @@ async function createNewDesign() {
     watermark_enabled: false,
     logo_alignment: 'left',
     is_default: false,
+    cert_title: '',
+    cert_subtitle: '',
+    cert_body_text: '',
+    footer_text: '',
+    sig_left_label: '',
+    sig_right_label: '',
   };
   certState.dirty = true;
   render();
@@ -255,6 +278,80 @@ const PALETTES = [
   { primary: '#0e7490', secondary: '#06b6d4', name: 'Teal Ocean' },
 ];
 
+// ── Tab switching ─────────────────────────────────────────
+function switchTab(tab) {
+  certState.activeTab = tab;
+  render();
+  if (tab === 'logo') loadCurrentLogo();
+}
+
+// ── Logo upload ───────────────────────────────────────────
+async function loadCurrentLogo() {
+  try {
+    const r = await fetch('/api/customer/me', { headers: authHeaders() });
+    const d = await r.json();
+    certState.logoPreview = d.brand_logo_url || null;
+    render();
+  } catch (e) { console.error('Load logo:', e); }
+}
+
+function handleLogoFileSelect(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) {
+    showToast('Logo must be under 2 MB', true);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    certState.logoPreview = e.target.result;
+    render();
+  };
+  reader.readAsDataURL(file);
+}
+
+async function uploadLogo() {
+  if (!certState.logoPreview) return;
+  certState.logoUploading = true;
+  render();
+  try {
+    const r = await fetch('/api/customer/branding/logo', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ logo_data: certState.logoPreview }),
+    });
+    const d = await r.json();
+    if (d.success) {
+      showToast('Logo saved! It will appear on all certificates.');
+      refreshPreview();
+    } else {
+      showToast('Failed to save logo', true);
+    }
+  } catch (e) {
+    showToast('Failed to upload logo', true);
+  }
+  certState.logoUploading = false;
+  render();
+}
+
+async function removeLogo() {
+  if (!confirm('Remove your company logo?')) return;
+  try {
+    const r = await fetch('/api/customer/branding/logo', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ logo_data: null }),
+    });
+    const d = await r.json();
+    if (d.success) {
+      certState.logoPreview = null;
+      showToast('Logo removed');
+      render();
+      refreshPreview();
+    }
+  } catch (e) { showToast('Failed to remove logo', true); }
+}
+
 // ── Render ──────────────────────────────────────────────────
 function render() {
   const root = document.getElementById('cert-auto-root');
@@ -304,10 +401,21 @@ function render() {
 
       <!-- LEFT: Customize Panel -->
       <div style="background:white;border-radius:16px;border:1px solid #e5e7eb;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
-        <div style="padding:20px 24px;border-bottom:1px solid #f1f5f9">
-          <p style="font-size:14px;font-weight:700;color:#111;margin:0"><i class="fas fa-sliders-h" style="margin-right:8px;color:#6b7280"></i>Customize Design</p>
+        <!-- Tab Bar -->
+        <div style="display:flex;border-bottom:1px solid #e5e7eb">
+          <button onclick="switchTab('design')" style="flex:1;padding:14px 12px;font-size:12px;font-weight:700;border:none;cursor:pointer;background:${certState.activeTab === 'design' ? 'white' : '#f9fafb'};color:${certState.activeTab === 'design' ? '#111' : '#9ca3af'};border-bottom:2px solid ${certState.activeTab === 'design' ? '#111' : 'transparent'};transition:all 0.2s">
+            <i class="fas fa-sliders-h" style="margin-right:5px"></i>Design
+          </button>
+          <button onclick="switchTab('content')" style="flex:1;padding:14px 12px;font-size:12px;font-weight:700;border:none;cursor:pointer;background:${certState.activeTab === 'content' ? 'white' : '#f9fafb'};color:${certState.activeTab === 'content' ? '#111' : '#9ca3af'};border-bottom:2px solid ${certState.activeTab === 'content' ? '#111' : 'transparent'};transition:all 0.2s">
+            <i class="fas fa-pen-fancy" style="margin-right:5px"></i>Content
+          </button>
+          <button onclick="switchTab('logo')" style="flex:1;padding:14px 12px;font-size:12px;font-weight:700;border:none;cursor:pointer;background:${certState.activeTab === 'logo' ? 'white' : '#f9fafb'};color:${certState.activeTab === 'logo' ? '#111' : '#9ca3af'};border-bottom:2px solid ${certState.activeTab === 'logo' ? '#111' : 'transparent'};transition:all 0.2s">
+            <i class="fas fa-image" style="margin-right:5px"></i>Logo
+          </button>
         </div>
 
+        ${certState.activeTab === 'design' ? `
+        <!-- ═══ DESIGN TAB ═══ -->
         <!-- Design Name -->
         <div style="padding:16px 24px;border-bottom:1px solid #f1f5f9">
           <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Design Name</label>
@@ -377,14 +485,6 @@ function render() {
           <p style="font-size:10px;color:#9ca3af;margin-top:4px">Required by most insurance companies</p>
         </div>
 
-        <!-- Custom Message -->
-        <div style="padding:16px 24px;border-bottom:1px solid #f1f5f9">
-          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Custom Message</label>
-          <textarea oninput="certState.design.custom_message=this.value;markDirty()"
-            placeholder="e.g. Thank you for trusting XYZ Roofing with your home..."
-            rows="3" style="width:100%;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;outline:none;resize:vertical">${s.custom_message || ''}</textarea>
-        </div>
-
         <!-- Watermark Toggle -->
         <div style="padding:16px 24px;border-bottom:1px solid #f1f5f9">
           <div style="display:flex;align-items:center;justify-content:space-between">
@@ -398,9 +498,127 @@ function render() {
             </button>
           </div>
         </div>
+        ` : certState.activeTab === 'content' ? `
+        <!-- ═══ CONTENT TAB ═══ -->
+        <!-- Certificate Title -->
+        <div style="padding:16px 24px;border-bottom:1px solid #f1f5f9">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Certificate Title</label>
+          <input type="text" value="${s.cert_title}" oninput="certState.design.cert_title=this.value;markDirty();debouncedPreview()"
+            style="width:100%;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;outline:none"
+            placeholder="Certificate of New Roof Installation">
+          <p style="font-size:10px;color:#9ca3af;margin-top:4px">The main heading on the certificate</p>
+        </div>
 
-        <!-- Actions -->
-        <div style="padding:16px 24px;display:flex;gap:8px;flex-wrap:wrap">
+        <!-- Subtitle -->
+        <div style="padding:16px 24px;border-bottom:1px solid #f1f5f9">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Subtitle</label>
+          <input type="text" value="${s.cert_subtitle}" oninput="certState.design.cert_subtitle=this.value;markDirty();debouncedPreview()"
+            style="width:100%;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;outline:none"
+            placeholder="Official Documentation for Insurance Purposes">
+          <p style="font-size:10px;color:#9ca3af;margin-top:4px">Appears below the title</p>
+        </div>
+
+        <!-- Body Text -->
+        <div style="padding:16px 24px;border-bottom:1px solid #f1f5f9">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Certification Body Text</label>
+          <textarea oninput="certState.design.cert_body_text=this.value;markDirty();debouncedPreview()"
+            placeholder="Leave blank for default. Use {company}, {customer}, {address}, {date} as placeholders."
+            rows="4" style="width:100%;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;outline:none;resize:vertical">${s.cert_body_text || ''}</textarea>
+          <p style="font-size:10px;color:#9ca3af;margin-top:4px">The main certification paragraph. Leave blank to use the default text.</p>
+        </div>
+
+        <!-- Custom Message -->
+        <div style="padding:16px 24px;border-bottom:1px solid #f1f5f9">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Custom Message</label>
+          <textarea oninput="certState.design.custom_message=this.value;markDirty()"
+            placeholder="e.g. Thank you for trusting XYZ Roofing with your home..."
+            rows="3" style="width:100%;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;outline:none;resize:vertical">${s.custom_message || ''}</textarea>
+          <p style="font-size:10px;color:#9ca3af;margin-top:4px">Optional extra message shown below the certification text</p>
+        </div>
+
+        <!-- Footer / Insurance Notice -->
+        <div style="padding:16px 24px;border-bottom:1px solid #f1f5f9">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Footer / Insurance Notice</label>
+          <textarea oninput="certState.design.footer_text=this.value;markDirty();debouncedPreview()"
+            placeholder="Leave blank for default insurance notice text."
+            rows="3" style="width:100%;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;outline:none;resize:vertical">${s.footer_text || ''}</textarea>
+          <p style="font-size:10px;color:#9ca3af;margin-top:4px">The notice at the bottom of the certificate</p>
+        </div>
+
+        <!-- Signature Labels -->
+        <div style="padding:16px 24px;border-bottom:1px solid #f1f5f9">
+          <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:10px">Signature Labels</label>
+          <div style="display:grid;gap:10px">
+            <div>
+              <label style="font-size:10px;color:#9ca3af;display:block;margin-bottom:3px">Left Signature (Contractor)</label>
+              <input type="text" value="${s.sig_left_label}" oninput="certState.design.sig_left_label=this.value;markDirty();debouncedPreview()"
+                style="width:100%;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;outline:none"
+                placeholder="Authorized by Roofing Contractor">
+            </div>
+            <div>
+              <label style="font-size:10px;color:#9ca3af;display:block;margin-bottom:3px">Right Signature (Client)</label>
+              <input type="text" value="${s.sig_right_label}" oninput="certState.design.sig_right_label=this.value;markDirty();debouncedPreview()"
+                style="width:100%;padding:8px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;outline:none"
+                placeholder="Acknowledged by Homeowner">
+            </div>
+          </div>
+        </div>
+        ` : `
+        <!-- ═══ LOGO TAB ═══ -->
+        <div style="padding:24px">
+          <div style="text-align:center;margin-bottom:20px">
+            <div style="font-size:14px;font-weight:700;color:#111;margin-bottom:4px">Company Logo</div>
+            <p style="font-size:12px;color:#6b7280;margin:0">Upload your company logo to display on all certificates</p>
+          </div>
+
+          <!-- Logo Preview -->
+          <div style="display:flex;align-items:center;justify-content:center;margin-bottom:20px">
+            ${certState.logoPreview
+              ? `<div style="position:relative">
+                  <img src="${certState.logoPreview}" alt="Company Logo" style="max-width:200px;max-height:120px;object-fit:contain;border-radius:12px;border:1px solid #e5e7eb;padding:12px;background:white">
+                  <button onclick="removeLogo()" style="position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:50%;background:#dc2626;color:white;border:none;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.2)"><i class="fas fa-times"></i></button>
+                </div>`
+              : `<div style="width:200px;height:120px;border:2px dashed #d1d5db;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#9ca3af">
+                  <i class="fas fa-image" style="font-size:32px;margin-bottom:8px"></i>
+                  <span style="font-size:12px">No logo uploaded</span>
+                </div>`
+            }
+          </div>
+
+          <!-- Upload Button -->
+          <div style="text-align:center">
+            <label style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:10px;background:#111;color:white;font-size:13px;font-weight:600;cursor:pointer;transition:background 0.2s">
+              <i class="fas fa-cloud-upload-alt"></i>
+              Choose Image
+              <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" onchange="handleLogoFileSelect(this)" style="display:none">
+            </label>
+          </div>
+
+          <!-- Save Logo Button -->
+          ${certState.logoPreview ? `
+          <div style="text-align:center;margin-top:16px">
+            <button onclick="uploadLogo()" style="padding:10px 24px;border-radius:10px;border:none;font-size:13px;font-weight:700;cursor:pointer;background:#16a34a;color:white;transition:all 0.2s" ${certState.logoUploading ? 'disabled' : ''}>
+              ${certState.logoUploading ? '<i class="fas fa-spinner fa-spin" style="margin-right:6px"></i>Saving...' : '<i class="fas fa-save" style="margin-right:6px"></i>Save Logo'}
+            </button>
+          </div>
+          ` : ''}
+
+          <!-- Tips -->
+          <div style="margin-top:24px;padding:16px;background:#f9fafb;border-radius:10px;border:1px solid #f1f5f9">
+            <p style="font-size:11px;font-weight:600;color:#6b7280;margin:0 0 8px"><i class="fas fa-lightbulb" style="margin-right:4px;color:#f59e0b"></i>Tips for best results</p>
+            <ul style="font-size:11px;color:#9ca3af;line-height:1.8;margin:0;padding-left:16px">
+              <li>Use a transparent PNG for cleanest look</li>
+              <li>Recommended size: 400px+ wide</li>
+              <li>Square or horizontal logos work best</li>
+              <li>Max file size: 2 MB</li>
+              <li>Formats: PNG, JPEG, SVG, WebP</li>
+            </ul>
+          </div>
+        </div>
+        `}
+
+        <!-- Actions (always visible) -->
+        <div style="padding:16px 24px;border-top:1px solid #f1f5f9;display:flex;gap:8px;flex-wrap:wrap">
           <button onclick="saveDesign()" style="flex:1;padding:10px 16px;border-radius:10px;border:none;font-size:13px;font-weight:700;cursor:pointer;background:${certState.dirty ? '#111' : '#f1f5f9'};color:${certState.dirty ? 'white' : '#9ca3af'};transition:all 0.2s">
             <i class="fas fa-save" style="margin-right:6px"></i>Save Design
           </button>
