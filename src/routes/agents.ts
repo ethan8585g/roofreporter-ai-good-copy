@@ -3,6 +3,7 @@ import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 import { trackLeadCapture } from '../services/ga4-events'
 import { sendGmailOAuth2, sendViaResend, sendGmailEmail } from '../services/email'
+import { sendMetaConversion } from './meta-connect'
 
 export const agentsRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -51,6 +52,16 @@ agentsRoutes.post('/leads', async (c) => {
       lead_company: company_name ? String(company_name).trim().substring(0, 50) : '',
       lead_email_domain: emailClean.split('@')[1] || 'unknown'
     }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+
+    // Fire server-side Meta Conversions API Lead event (non-blocking)
+    sendMetaConversion(c.env, {
+      eventName: 'Lead',
+      email: emailClean,
+      phone: phone ? String(phone).trim() : undefined,
+      sourcePage: source_page || 'unknown',
+      sourceUrl: `https://www.roofmanager.ca/${source_page || ''}`,
+      customData: { content_name: source_page || 'website', lead_type: 'contact_form' },
+    }).catch((e) => console.warn('[Meta CAPI lead]', (e && e.message) || e))
 
     // Email notification to sales@roofmanager.ca — 3-tier fallback
     const leadSubject = `🔔 New Lead: ${cleanName} — ${source_page || 'website'}`

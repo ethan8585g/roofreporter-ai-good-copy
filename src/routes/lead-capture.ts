@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { sendGmailEmail, notifySalesNewLead } from '../services/email'
+import { sendMetaConversion } from './meta-connect'
 
 export const leadCaptureRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -82,6 +83,15 @@ leadCaptureRoutes.post('/asset-report/lead', async (c) => {
     email: body.email,
     extra: { address, building_count: buildings }
   }).catch((e: any) => console.error('[asset-report/lead] email notification failed:', e?.message || e))
+
+  // Fire server-side Meta CAPI Lead event (non-blocking)
+  sendMetaConversion(c.env, {
+    eventName: 'Lead',
+    email: String(body.email).toLowerCase().trim(),
+    sourcePage: `asset_report:${source}`,
+    sourceUrl: 'https://www.roofmanager.ca',
+    customData: { content_name: 'asset_report', lead_type: 'sample_report' },
+  }).catch((e) => console.warn('[Meta CAPI asset-lead]', (e && e.message) || e))
 
   return c.json({ success: true })
 })

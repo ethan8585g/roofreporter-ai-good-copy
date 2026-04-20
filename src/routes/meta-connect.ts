@@ -12,6 +12,77 @@ export const metaConnectRoutes = new Hono<{ Bindings: Bindings }>()
 
 const META_GRAPH_API = 'https://graph.facebook.com/v21.0'
 
+// ── Server-Side Conversions API (CAPI) helper ──
+// Sends hashed lead data to Meta for ad optimization & attribution
+// Can be called from any route (not auth-guarded) — uses system token
+async function sendMetaConversion(env: any, opts: {
+  eventName: string
+  email?: string
+  phone?: string
+  sourcePage?: string
+  sourceUrl?: string
+  customData?: Record<string, any>
+}): Promise<{ success: boolean; error?: string }> {
+  const pixelId = env.META_PIXEL_ID || ''
+  const accessToken = env.META_CAPI_ACCESS_TOKEN || ''
+  if (!pixelId || !accessToken) return { success: false, error: 'CAPI not configured' }
+
+  // SHA-256 hash PII per Meta requirements
+  async function sha256(val: string): Promise<string> {
+    const data = new TextEncoder().encode(val.toLowerCase().trim())
+    const hash = await crypto.subtle.digest('SHA-256', data)
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('')
+  }
+
+  const eventId = `rm_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+  const userData: Record<string, any> = {}
+  if (opts.email) userData.em = [await sha256(opts.email)]
+  if (opts.phone) userData.ph = [await sha256(opts.phone.replace(/\D/g, ''))]
+
+  const payload = {
+    data: [{
+      event_name: opts.eventName,
+      event_time: Math.floor(Date.now() / 1000),
+      event_id: eventId,
+      event_source_url: opts.sourceUrl || 'https://www.roofmanager.ca',
+      action_source: 'website',
+      user_data: userData,
+      custom_data: opts.customData || {},
+    }],
+    access_token: accessToken,
+  }
+
+  try {
+    const res = await fetch(`${META_GRAPH_API}/${pixelId}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const result = await res.json() as any
+
+    // Log the conversion event
+    try {
+      await env.DB.prepare(
+        `INSERT INTO meta_conversion_events (event_name, event_id, pixel_id, user_email_hash, user_phone_hash, custom_data, source_page, status, meta_response) VALUES (?,?,?,?,?,?,?,?,?)`
+      ).bind(
+        opts.eventName, eventId, pixelId,
+        userData.em?.[0] || '', userData.ph?.[0] || '',
+        JSON.stringify(opts.customData || {}), opts.sourcePage || '',
+        result.events_received ? 'sent' : 'failed',
+        JSON.stringify(result).slice(0, 500)
+      ).run()
+    } catch {}
+
+    return { success: !!result.events_received }
+  } catch (e: any) {
+    console.error('[Meta CAPI]', e?.message || e)
+    return { success: false, error: e?.message || 'Network error' }
+  }
+}
+
+// Export for use in other route files (agents.ts, lead-capture.ts)
+export { sendMetaConversion }
+
 // ── Superadmin auth guard ──
 // Uses admin_sessions + admin_users.role (NOT customer_sessions)
 // The customers table does not have a 'role' column — admin_users does.
@@ -608,4 +679,57 @@ metaConnectRoutes.get('/dashboard', async (c) => {
     ads: { total: adCampaigns?.cnt || 0, impressions: adCampaigns?.impr || 0, clicks: adCampaigns?.clicks || 0, spend_cents: adCampaigns?.spend || 0, leads: adCampaigns?.leads || 0 },
     scheduled: { total: scheduled?.cnt || 0, pending: scheduled?.pending || 0 },
   })
+})
+
+// ============================================================
+// SYNC ALL ADS — Batch sync metrics for all active campaigns
+// ============================================================
+metaConnectRoutes.post('/ads/sync-all', async (c) => {
+  const acct = await c.env.DB.prepare("SELECT * FROM meta_accounts WHERE status='active' ORDER BY updated_at DESC LIMIT 1").first<any>()
+  if (!acct) return c.json({ error: 'No connected Meta account' }, 400)
+
+  const campaigns = await c.env.DB.prepare(
+    "SELECT id, fb_campaign_id FROM meta_ad_campaigns WHERE fb_campaign_id IS NOT NULL AND fb_campaign_id != ''"
+  ).all<any>()
+  if (!campaigns.results?.length) return c.json({ synced: 0, message: 'No published campaigns to sync' })
+
+  let synced = 0
+  for (const camp of campaigns.results) {
+    try {
+      const res = await graphAPI(acct.access_token, `/${camp.fb_campaign_id}/insights?fields=impressions,clicks,spend,actions&date_preset=maximum`)
+      const data = (res.data?.[0]) || {}
+      const leads = (data.actions || []).find((a: any) => a.action_type === 'lead')?.value || 0
+      const impressions = parseInt(data.impressions || '0')
+      const clicks = parseInt(data.clicks || '0')
+      const spendCents = Math.round(parseFloat(data.spend || '0') * 100)
+      const ctr = impressions > 0 ? ((clicks / impressions) * 100).toFixed(2) : '0'
+      const cplCents = leads > 0 ? Math.round(spendCents / parseInt(leads)) : 0
+
+      await c.env.DB.prepare(
+        `UPDATE meta_ad_campaigns SET impressions=?, clicks=?, spend_cents=?, leads=?, ctr=?, cpl_cents=?, last_synced_at=datetime('now'), updated_at=datetime('now') WHERE id=?`
+      ).bind(impressions, clicks, spendCents, parseInt(leads), parseFloat(ctr), cplCents, camp.id).run()
+      synced++
+    } catch (e: any) {
+      console.warn(`[Meta Ads Sync] Campaign ${camp.id}:`, e?.message || e)
+    }
+  }
+  return c.json({ synced, total: campaigns.results.length })
+})
+
+// ============================================================
+// CONVERSIONS API — Server-side event endpoint (public, no auth)
+// Called internally by lead form handlers
+// ============================================================
+metaConnectRoutes.post('/conversions', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any
+  if (!body.event_name) return c.json({ error: 'event_name required' }, 400)
+  const result = await sendMetaConversion(c.env, {
+    eventName: body.event_name,
+    email: body.email,
+    phone: body.phone,
+    sourcePage: body.source_page,
+    sourceUrl: body.source_url,
+    customData: body.custom_data,
+  })
+  return c.json(result)
 })

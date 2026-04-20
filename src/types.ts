@@ -157,8 +157,9 @@ export type Bindings = {
   // Used by: Agent Hub (content, lead, email, admin agents)
   ANTHROPIC_API_KEY: string
 
-  // ── Meta Pixel — Facebook/Instagram conversion tracking ──
+  // ── Meta Pixel & Conversions API — Facebook/Instagram tracking ──
   META_PIXEL_ID: string            // Facebook Pixel ID (numeric) from Meta Events Manager
+  META_CAPI_ACCESS_TOKEN: string   // System User Access Token for server-side Conversions API
 }
 
 // ============================================================

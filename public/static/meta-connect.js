@@ -10,7 +10,11 @@
   function loadFBSDK() {
     if (MC.fbSdkLoaded || typeof FB !== 'undefined') { MC.fbSdkLoaded = true; return; }
     mcF('/api/meta/config').then(function(cfg) {
-      if (!cfg || !cfg.app_id) return;
+      if (!cfg || !cfg.app_id) {
+        MC.missingCredentials = true;
+        console.warn('[Meta Connect] META_APP_ID not configured — Facebook login will be unavailable');
+        return;
+      }
       window.fbAsyncInit = function() {
         FB.init({ appId: cfg.app_id, cookie: true, xfbml: false, version: 'v21.0' });
         MC.fbSdkLoaded = true;
@@ -36,7 +40,19 @@
     return t ? { 'Authorization': 'Bearer ' + t, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
   }
   async function mcF(url, opts) {
-    try { const r = await fetch(url, Object.assign({ headers: mcH() }, opts || {})); return await r.json(); } catch (e) { console.error('MC:', e); return null; }
+    try {
+      const r = await fetch(url, Object.assign({ headers: mcH() }, opts || {}));
+      const data = await r.json();
+      if (!r.ok && data?.error) {
+        if (typeof window.rmToast === 'function') window.rmToast(data.error, 'error');
+        console.error('MC API Error:', url, data.error);
+      }
+      return data;
+    } catch (e) {
+      console.error('MC:', e);
+      if (typeof window.rmToast === 'function') window.rmToast('Network error connecting to Meta service', 'error');
+      return null;
+    }
   }
 
   function renderShell() {
@@ -176,7 +192,12 @@
   }
 
   function renderLoginPrompt() {
+    var credWarning = MC.missingCredentials ? `<div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-left">
+        <p class="text-sm font-bold text-red-700 mb-1"><i class="fas fa-exclamation-circle mr-1"></i>Meta App Not Configured</p>
+        <p class="text-xs text-red-600">Set <code>META_APP_ID</code>, <code>META_APP_SECRET</code>, and <code>META_AD_ACCOUNT_ID</code> in Cloudflare Pages secrets for full functionality. You can still use manual token entry below.</p>
+      </div>` : '';
     return `<div class="bg-white rounded-2xl border-2 border-dashed border-blue-200 p-12 text-center max-w-lg mx-auto">
+      ${credWarning}
       <div class="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
         <i class="fab fa-facebook-f text-white text-3xl"></i>
       </div>
@@ -348,10 +369,23 @@
   // ============================================================
   function renderAds() {
     const ads = (MC.data.ads||{}).campaigns || [];
+    // Auto-sync metrics every 60s while ads tab is active
+    clearInterval(MC._adsSyncInterval);
+    if (ads.length > 0) {
+      MC._adsSyncInterval = setInterval(function() {
+        if (MC.tab !== 'ads') { clearInterval(MC._adsSyncInterval); return; }
+        mcF('/api/meta/ads/sync-all', { method: 'POST' }).then(function(r) {
+          if (r && r.synced > 0) mcLoadTab('ads');
+        });
+      }, 60000);
+    }
     return `<div class="space-y-6">
       <div class="flex items-center justify-between">
         <p class="text-sm text-gray-500">${ads.length} ad campaign${ads.length!==1?'s':''}</p>
-        <button onclick="window.mcShowCreateAd()" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700"><i class="fas fa-plus mr-1"></i>New Ad Campaign</button>
+        <div class="flex gap-2">
+          ${ads.length > 0 ? `<button onclick="window.mcSyncAllAds()" class="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold hover:bg-blue-200"><i class="fas fa-sync-alt mr-1"></i>Sync All Metrics</button>` : ''}
+          <button onclick="window.mcShowCreateAd()" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700"><i class="fas fa-plus mr-1"></i>New Ad Campaign</button>
+        </div>
       </div>
       ${ads.length===0?`<div class="bg-white rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
         <i class="fas fa-ad text-5xl text-gray-300 mb-4"></i><p class="text-gray-500 font-medium">No ad campaigns yet</p>
@@ -610,7 +644,13 @@
   };
   window.mcSyncAd = async function(id) {
     const data = await mcF('/api/meta/ads/' + id + '/sync', { method: 'POST', body: '{}' });
-    window.rmToast(data?.success ? 'Metrics synced!' : (data?.error || 'Sync failed', 'info'));
+    if (typeof window.rmToast === 'function') window.rmToast(data?.success ? 'Metrics synced!' : (data?.error || 'Sync failed'), 'info');
+    mcLoadTab('ads');
+  };
+  window.mcSyncAllAds = async function() {
+    if (typeof window.rmToast === 'function') window.rmToast('Syncing all ad metrics...', 'info');
+    const data = await mcF('/api/meta/ads/sync-all', { method: 'POST', body: '{}' });
+    if (typeof window.rmToast === 'function') window.rmToast(data?.synced ? data.synced + ' campaigns synced' : 'No campaigns to sync', 'info');
     mcLoadTab('ads');
   };
   window.mcDeleteAd = async function(id) {
