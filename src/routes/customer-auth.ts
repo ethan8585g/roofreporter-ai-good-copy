@@ -840,7 +840,15 @@ customerAuthRoutes.get('/me', async (c) => {
   }
 
   const session = await c.env.DB.prepare(`
-    SELECT cs.*, c.* FROM customer_sessions cs
+    SELECT cs.customer_id,
+           c.email, c.name, c.phone, c.company_name, c.google_avatar,
+           c.address, c.city, c.province, c.postal_code,
+           c.report_credits, c.credits_used, c.free_trial_total, c.free_trial_used,
+           c.subscription_status, c.subscription_plan, c.subscription_end,
+           c.brand_logo_url, c.brand_business_name,
+           c.company_type, c.solar_panel_wattage_w,
+           c.onboarding_completed, c.onboarding_step
+    FROM customer_sessions cs
     JOIN customers c ON c.id = cs.customer_id
     WHERE cs.session_token = ? AND cs.expires_at > datetime('now') AND c.is_active = 1
   `).bind(token).first<any>()
