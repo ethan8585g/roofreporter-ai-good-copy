@@ -3,6 +3,7 @@ import type { Bindings } from '../types'
 import { trackUserSignup, trackUserLogin } from '../services/ga4-events'
 import { resolveTeamOwner } from './team'
 import { hashPassword, verifyPassword, isLegacyHash, dummyVerify } from '../lib/password'
+import { getCustomerSessionToken } from '../lib/session-tokens'
 
 // P1-11: sanitize values before splicing into MIME headers. Strips CR/LF and
 // control chars that could be used for header injection (inject Bcc, etc.).
@@ -783,7 +784,7 @@ customerAuthRoutes.post('/login', async (c) => {
 // CUSTOMER PROFILE (get current customer)
 // ============================================================
 customerAuthRoutes.get('/me', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) {
     return c.json({ error: 'Not authenticated' }, 401)
   }
@@ -893,7 +894,7 @@ customerAuthRoutes.get('/me', async (c) => {
 // PATCH /solar-settings — Save company_type and/or panel wattage
 // ============================================================
 customerAuthRoutes.patch('/solar-settings', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
 
   const session = await c.env.DB.prepare(`
@@ -926,7 +927,7 @@ customerAuthRoutes.patch('/solar-settings', async (c) => {
 // GET CUSTOMER PROFILE — Returns current user profile data
 // ============================================================
 customerAuthRoutes.get('/profile', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
 
   const session = await c.env.DB.prepare(`
@@ -958,7 +959,7 @@ customerAuthRoutes.get('/profile', async (c) => {
 // POST /onboarding/complete — Mark onboarding as finished
 // ============================================================
 customerAuthRoutes.post('/onboarding/complete', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
   const session = await c.env.DB.prepare(
     `SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')`
@@ -974,7 +975,7 @@ customerAuthRoutes.post('/onboarding/complete', async (c) => {
 // UPDATE CUSTOMER PROFILE
 // ============================================================
 customerAuthRoutes.put('/profile', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
 
   const session = await c.env.DB.prepare(`
@@ -1001,7 +1002,7 @@ customerAuthRoutes.put('/profile', async (c) => {
 // UPDATE BRANDING / REPORT CUSTOMIZATION
 // ============================================================
 customerAuthRoutes.put('/branding', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
 
   const session = await c.env.DB.prepare(`
@@ -1041,7 +1042,7 @@ customerAuthRoutes.put('/branding', async (c) => {
 // C-5: UPLOAD LOGO (stores base64 data URI in brand_logo_url)
 // ============================================================
 customerAuthRoutes.post('/branding/logo', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
 
   const session = await c.env.DB.prepare(`
@@ -1064,7 +1065,7 @@ customerAuthRoutes.post('/branding/logo', async (c) => {
 // C-5: SAVE AD SETTINGS (stores as JSON in brand_ads_json)
 // ============================================================
 customerAuthRoutes.put('/branding/ads', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
 
   const session = await c.env.DB.prepare(`
@@ -1086,7 +1087,7 @@ customerAuthRoutes.put('/branding/ads', async (c) => {
 // C-6: SET SUBSCRIPTION TIER (called from signup wizard)
 // ============================================================
 customerAuthRoutes.post('/set-tier', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
 
   const session = await c.env.DB.prepare(`
@@ -1111,7 +1112,7 @@ customerAuthRoutes.post('/set-tier', async (c) => {
 // CHANGE PASSWORD
 // ============================================================
 customerAuthRoutes.post('/change-password', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
 
   const session = await c.env.DB.prepare(`
@@ -1158,7 +1159,7 @@ customerAuthRoutes.post('/change-password', async (c) => {
 // CUSTOMER LOGOUT
 // ============================================================
 customerAuthRoutes.post('/logout', async (c) => {
-  let token = c.req.header('Authorization')?.replace('Bearer ', '') || null
+  let token = getCustomerSessionToken(c) || null
   if (!token) {
     const cookieHeader = c.req.header('Cookie') || ''
     for (const part of cookieHeader.split(/;\s*/)) {
@@ -1177,7 +1178,7 @@ customerAuthRoutes.post('/logout', async (c) => {
 // CUSTOMER ORDERS (orders belonging to this customer)
 // ============================================================
 customerAuthRoutes.get('/orders', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
 
   const session = await c.env.DB.prepare(`
@@ -1210,7 +1211,7 @@ customerAuthRoutes.get('/orders', async (c) => {
 // Body: { user_panels: [{lat,lng,orientation}, ...] }
 // ============================================================
 customerAuthRoutes.patch('/reports/:id/panel-layout', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
   const session = await c.env.DB.prepare(`
     SELECT customer_id FROM customer_sessions
@@ -1260,7 +1261,7 @@ customerAuthRoutes.patch('/reports/:id/panel-layout', async (c) => {
 // Returns a timeline of generation steps with current status
 // ============================================================
 customerAuthRoutes.get('/orders/:orderId/progress', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
 
   const session = await c.env.DB.prepare(`
@@ -1367,7 +1368,7 @@ customerAuthRoutes.get('/orders/:orderId/progress', async (c) => {
 // CUSTOMER INVOICES
 // ============================================================
 customerAuthRoutes.get('/invoices', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
 
   const session = await c.env.DB.prepare(`
@@ -1390,7 +1391,7 @@ customerAuthRoutes.get('/invoices', async (c) => {
 
 // Get single invoice with items
 customerAuthRoutes.get('/invoices/:id', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
 
   const session = await c.env.DB.prepare(`
@@ -1590,7 +1591,7 @@ customerAuthRoutes.post('/reset-password', async (c) => {
 // ============================================================
 customerAuthRoutes.get('/reports-list', async (c) => {
   try {
-    const token = c.req.header('Authorization')?.replace('Bearer ', '')
+    const token = getCustomerSessionToken(c)
     if (!token) return c.json({ error: 'Unauthorized' }, 401)
     const session = await c.env.DB.prepare(
       "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
@@ -1620,7 +1621,7 @@ customerAuthRoutes.get('/reports-list', async (c) => {
 // ============================================================
 customerAuthRoutes.get('/item-library', async (c) => {
   try {
-    const token = c.req.header('Authorization')?.replace('Bearer ', '')
+    const token = getCustomerSessionToken(c)
     if (!token) return c.json({ error: 'Unauthorized' }, 401)
     const session = await c.env.DB.prepare(
       "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
@@ -1640,7 +1641,7 @@ customerAuthRoutes.get('/item-library', async (c) => {
 
 customerAuthRoutes.post('/item-library', async (c) => {
   try {
-    const token = c.req.header('Authorization')?.replace('Bearer ', '')
+    const token = getCustomerSessionToken(c)
     if (!token) return c.json({ error: 'Unauthorized' }, 401)
     const session = await c.env.DB.prepare(
       "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
@@ -1669,7 +1670,7 @@ customerAuthRoutes.post('/item-library', async (c) => {
 // REFERRAL PROGRAM — View referral code, referred users, earnings
 // ============================================================
 customerAuthRoutes.get('/referrals', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Auth required' }, 401)
   const session = await c.env.DB.prepare(
     "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
@@ -1725,7 +1726,7 @@ customerAuthRoutes.get('/referrals', async (c) => {
 
 // GET /gcal/auth-url — Generate Google OAuth URL for calendar sync
 customerAuthRoutes.get('/gcal/auth-url', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
   const session = await c.env.DB.prepare(
     "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
@@ -1905,7 +1906,7 @@ customerAuthRoutes.get('/gcal/callback', async (c) => {
 
 // GET /gcal/status — Check calendar connection status
 customerAuthRoutes.get('/gcal/status', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
   const session = await c.env.DB.prepare(
     "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
@@ -1928,7 +1929,7 @@ customerAuthRoutes.get('/gcal/status', async (c) => {
 
 // POST /gcal/disconnect — Disconnect Google Calendar
 customerAuthRoutes.post('/gcal/disconnect', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
   const session = await c.env.DB.prepare(
     "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
@@ -1948,7 +1949,7 @@ customerAuthRoutes.post('/gcal/disconnect', async (c) => {
 // Body: { payout_method: 'credits' | 'etransfer', etransfer_email?: string }
 // ============================================================
 customerAuthRoutes.post('/referrals/redeem', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Auth required' }, 401)
 
   const session = await c.env.DB.prepare(
@@ -2052,7 +2053,7 @@ customerAuthRoutes.post('/referrals/redeem', async (c) => {
 // GET /api/customer/referrals/payouts
 // ============================================================
 customerAuthRoutes.get('/referrals/payouts', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Auth required' }, 401)
 
   const session = await c.env.DB.prepare(

@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { logAdminToolCall } from '../lib/audit-log'
 import { limitByKey, clientIp } from '../lib/rate-limit'
+import { getAdminSessionToken } from '../lib/session-tokens'
 
 type Bindings = {
   DB: D1Database
@@ -31,7 +32,7 @@ const CREDIT_GRANT_TOOLS = new Set<string>(['manage_customer'])
 
 // ── Auth middleware — superadmin only ──────────────────────────────
 aiAdminChatRoutes.use('/*', async (c, next) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getAdminSessionToken(c)
   if (!token) return c.json({ error: 'Unauthorized' }, 401)
   const session = await c.env.DB.prepare(
     `SELECT s.*, a.email, a.name, a.role FROM admin_sessions s JOIN admin_users a ON s.admin_id = a.id WHERE s.session_token = ? AND s.expires_at > datetime('now')`

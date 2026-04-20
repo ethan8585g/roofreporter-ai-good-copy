@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { getCustomerSessionToken } from '../lib/session-tokens'
 import type { Bindings } from '../types'
 import { isDevAccount } from './customer-auth'
 
@@ -23,7 +24,7 @@ async function getDevCustomer(db: D1Database, token: string | undefined, env?: a
 // POST /generate — Geocode address, fetch 4 satellite images, build PDF
 // ============================================================
 propertyImageryRoutes.post('/generate', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   const customer = await getDevCustomer(c.env.DB, token, c.env)
   if (!customer) {
     return c.json({ error: 'Unauthorized. This feature is only available for dev/test accounts.' }, 403)
@@ -104,7 +105,7 @@ propertyImageryRoutes.post('/generate', async (c) => {
 // GET /check — Verify dev account has access
 // ============================================================
 propertyImageryRoutes.get('/check', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   const customer = await getDevCustomer(c.env.DB, token, c.env)
   if (!customer) {
     return c.json({ access: false })

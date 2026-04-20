@@ -715,8 +715,9 @@ app.get('/auth/magic', async (c) => {
   return c.html(`<!DOCTYPE html><html><head><title>Signing in...</title></head>
 <body>
 <script>
-// RC#5: Guard localStorage for iOS Safari Private Browsing — QuotaExceededError would halt script
-try { localStorage.setItem('rc_customer_token', '${sessionToken}'); } catch(e) {}
+// P1-31: session is carried by the HttpOnly rm_customer_session cookie; we
+// no longer stash the token in localStorage (XSS exfiltration vector).
+// Cookie was already set in the Set-Cookie header for this response.
 window.location.href = '${redirectUrl}';
 </script>
 <p>Signing you in...</p>
@@ -5338,7 +5339,9 @@ function getLoginPageHTML() {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          try { localStorage.setItem('rc_user', JSON.stringify(data.user)); localStorage.setItem('rc_token', data.token); } catch(e) {}
+          // P1-31: session rides on the HttpOnly rm_admin_session cookie.
+          // Cache non-sensitive user info only; token is NOT stored.
+          try { localStorage.setItem('rc_user', JSON.stringify(data.user)); } catch(e) {}
           window.location.href = '/super-admin';
         } else {
           errDiv.textContent = data.error || 'Login failed.';
@@ -8167,7 +8170,7 @@ ${previewId ? `
           method: 'POST', headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({email: email, completed: true})
         }).catch(function(){});
-        if (data.token) localStorage.setItem('rc_customer_token', data.token);
+        // P1-31: rely on the HttpOnly rm_customer_session cookie.
         window.location.href = '/onboarding';
       } else {
         rrTrack('signup_submit_error', {reason: data.error});
@@ -8188,7 +8191,7 @@ ${previewId ? `
       const data = await res.json();
       if (data.success) {
         rrTrack('oauth_success', {provider: 'google'});
-        if (data.token) localStorage.setItem('rc_customer_token', data.token);
+        // P1-31: rely on the HttpOnly rm_customer_session cookie.
         window.location.href = data.is_new ? '/onboarding' : '/customer/dashboard';
       } else {
         rrTrack('oauth_error', {provider: 'google', reason: data.error});
@@ -8513,7 +8516,9 @@ function getCustomerLoginHTML(googleClientId = '') {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          try { localStorage.setItem('rc_customer', JSON.stringify(data.customer)); localStorage.setItem('rc_customer_token', data.token); } catch(e) {}
+          // P1-31: cache customer profile only (not the token). Session
+          // rides on the HttpOnly rm_customer_session cookie.
+          try { localStorage.setItem('rc_customer', JSON.stringify(data.customer)); } catch(e) {}
           if (btn) btn.innerHTML = '<i class="fas fa-check mr-2"></i>Success!';
           if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 1.0, currency: 'USD' });
           window.location.href = '/customer/dashboard';
@@ -8641,7 +8646,8 @@ function getCustomerLoginHTML(googleClientId = '') {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          try { localStorage.setItem('rc_customer', JSON.stringify(data.customer)); localStorage.setItem('rc_customer_token', data.token); } catch(e) {}
+          // P1-31: cache profile only; session rides on the HttpOnly cookie.
+          try { localStorage.setItem('rc_customer', JSON.stringify(data.customer)); } catch(e) {}
           if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 1.0, currency: 'USD' });
           // P2: stop any dirty-form beforeunload warning before redirecting.
           try { window.onbeforeunload = null; } catch(_) {}

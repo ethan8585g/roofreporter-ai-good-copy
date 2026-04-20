@@ -6,6 +6,7 @@
 import { Hono } from 'hono'
 import Anthropic from '@anthropic-ai/sdk'
 import { CLAUDE_MODEL } from '../services/anthropic-client'
+import { getAdminSessionToken } from '../lib/session-tokens'
 
 type Bindings = {
   DB: D1Database
@@ -16,7 +17,7 @@ type Bindings = {
 export const adminAgentRoutes = new Hono<{ Bindings: Bindings }>()
 
 adminAgentRoutes.use('/*', async (c, next) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getAdminSessionToken(c)
   if (!token) return c.json({ error: 'Unauthorized' }, 401)
   const session = await c.env.DB.prepare(
     `SELECT s.*, a.email, a.name, a.role FROM admin_sessions s

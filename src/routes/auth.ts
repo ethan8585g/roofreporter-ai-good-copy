@@ -44,12 +44,15 @@ export async function validateAdminSession(
   authHeader: string | undefined,
   cookieHeader?: string | undefined
 ): Promise<any | null> {
+  // Tolerate `Bearer ` (empty) — happens when a client does
+  // `'Bearer ' + localStorage.getItem(key)` and the key is missing. Fall
+  // back to the cookie in that case.
   let token: string | null = null
   if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.slice(7)
-  } else {
-    token = readCookieValue(cookieHeader, ADMIN_SESSION_COOKIE)
+    const t = authHeader.slice(7).trim()
+    if (t) token = t
   }
+  if (!token) token = readCookieValue(cookieHeader, ADMIN_SESSION_COOKIE)
   if (!token) return null
 
   const session = await db.prepare(`

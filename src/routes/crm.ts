@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { getCustomerSessionToken } from '../lib/session-tokens'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 import { loadPermissionContext, can, redactFinancials } from '../lib/permissions'
@@ -1729,7 +1730,7 @@ crmRoutes.get('/analytics', async (c) => {
 
 // My assigned jobs — for crew members (team members viewing their own work)
 crmRoutes.get('/my-jobs', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
   const session = await c.env.DB.prepare("SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')").bind(token).first<any>()
   if (!session) return c.json({ error: 'Session expired' }, 401)
@@ -1825,7 +1826,7 @@ crmRoutes.post('/jobs/:id/progress', async (c) => {
   const { update_type, content, photo_data, photo_caption, author_name } = await c.req.json()
   if (!content && !photo_data) return c.json({ error: 'Content or photo required' }, 400)
   // Get author info
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   const session = await c.env.DB.prepare("SELECT customer_id FROM customer_sessions WHERE session_token = ?").bind(token).first<any>()
   const authorId = session?.customer_id || ownerId
   let name = author_name || ''
@@ -1870,7 +1871,7 @@ crmRoutes.post('/jobs/:jobId/status', async (c) => {
 
 // Check in to a job with GPS (crew member)
 crmRoutes.post('/jobs/:jobId/check-in', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
   const session = await c.env.DB.prepare("SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')").bind(token).first<any>()
   if (!session) return c.json({ error: 'Session expired' }, 401)
@@ -1896,7 +1897,7 @@ crmRoutes.post('/jobs/:jobId/check-in', async (c) => {
 
 // Check out of a job (crew member)
 crmRoutes.post('/jobs/:jobId/check-out', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
   const session = await c.env.DB.prepare("SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')").bind(token).first<any>()
   if (!session) return c.json({ error: 'Session expired' }, 401)
@@ -1975,7 +1976,7 @@ crmRoutes.get('/jobs/:jobId/messages', async (c) => {
 
 // Process a voice walkaround recording: transcribe → organize → store
 crmRoutes.post('/jobs/:jobId/walkaround', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
   const session = await c.env.DB.prepare("SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')").bind(token).first<any>()
   if (!session) return c.json({ error: 'Session expired' }, 401)
@@ -3158,7 +3159,7 @@ crmRoutes.delete('/photos/:id', async (c) => {
 
 // Summary for crew mobile: today's jobs with photo count + latest note
 crmRoutes.get('/crew/today', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Unauthorized' }, 401)
   const session = await c.env.DB.prepare(
     "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"

@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { getCustomerSessionToken } from '../lib/session-tokens'
 import type { Bindings } from '../types'
 import { getActivityFeed, logFromContext } from '../lib/team-activity'
 import { sanitizePermissions } from '../lib/permissions'
@@ -87,7 +88,7 @@ export async function evaluateTeamGating(db: D1Database, ownerId: number) {
 // MIDDLEWARE — Require auth + extract customer
 // ============================================================
 async function requireAuth(c: any): Promise<{ customer: any; customerId: number } | null> {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   const customer = await getCustomer(c.env.DB, token)
   if (!customer) return null
   return { customer, customerId: customer.customer_id || customer.id }

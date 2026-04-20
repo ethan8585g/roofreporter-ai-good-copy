@@ -14,6 +14,7 @@
 // ============================================================
 
 import { Hono } from 'hono'
+import { getCustomerSessionToken } from '../lib/session-tokens'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 
@@ -42,7 +43,7 @@ const NEGATIVE_PROMPT = 'ugly, distorted, messy edges, low resolution, blurry, d
 // Team members resolve to their team owner's account for shared data
 
 async function getCustomerId(c: any): Promise<number | null> {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return null
   const session = await c.env.DB.prepare(`
     SELECT customer_id FROM customer_sessions

@@ -14,6 +14,7 @@
 // ============================================================
 
 import { Hono } from 'hono'
+import { getCustomerSessionToken } from '../lib/session-tokens'
 import type { Bindings } from '../types'
 import {
   segmentWithSAM3,
@@ -43,7 +44,7 @@ async function validateAdmin(c: any): Promise<boolean> {
 }
 
 async function validateCustomer(c: any): Promise<number | null> {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return null
   const session = await c.env.DB.prepare(
     "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"

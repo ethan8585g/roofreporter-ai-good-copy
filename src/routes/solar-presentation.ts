@@ -1,13 +1,14 @@
 // Solar Presentation — pre-set slide deck shown to homeowners.
 // Customer-scoped. Mirrors the auth pattern used by solar-pipeline.
 import { Hono } from 'hono'
+import { getCustomerSessionToken } from '../lib/session-tokens'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 
 export const solarPresentationRoutes = new Hono<{ Bindings: Bindings }>()
 
 async function requireCustomer(c: any) {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return null
   const s = await c.env.DB.prepare(
     `SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')`

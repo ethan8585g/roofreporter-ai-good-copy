@@ -14,6 +14,7 @@
 // ============================================================
 
 import { Hono } from 'hono'
+import { getCustomerSessionToken } from '../lib/session-tokens'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 import { isDevAccount } from './customer-auth'
@@ -2391,7 +2392,7 @@ secretaryRoutes.post('/sip/deploy-agent', async (c) => {
 // POST /api/secretary/test/transcribe — Transcribe uploaded audio
 secretaryRoutes.post('/test/transcribe', async (c) => {
   const { env } = c
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Auth required' }, 401)
 
   try {
@@ -2430,7 +2431,7 @@ secretaryRoutes.post('/test/transcribe', async (c) => {
 // POST /api/secretary/test/chat — Chat with AI using secretary config
 secretaryRoutes.post('/test/chat', async (c) => {
   const { env } = c
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Auth required' }, 401)
 
   try {

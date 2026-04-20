@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { getCustomerSessionToken } from '../lib/session-tokens'
 import type { Bindings } from '../types'
 import { generateReportForOrder, enhanceReportInline, generateAIImageryForReport } from './reports'
 import { isDevAccount } from './customer-auth'
@@ -233,7 +234,7 @@ squareRoutes.get('/packages', async (c) => {
 // GET CUSTOMER BILLING STATUS
 // ============================================================
 squareRoutes.get('/billing', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   const customer = await getCustomerFromToken(c.env.DB, token)
   if (!customer) return c.json({ error: 'Not authenticated' }, 401)
 
@@ -283,7 +284,7 @@ squareRoutes.post('/checkout', async (c) => {
     const locationId = c.env.SQUARE_LOCATION_ID
     if (!accessToken || !locationId) return c.json({ error: 'Square is not configured. Contact admin.' }, 503)
 
-    const token = c.req.header('Authorization')?.replace('Bearer ', '')
+    const token = getCustomerSessionToken(c)
     const customer = await getCustomerFromToken(c.env.DB, token)
     if (!customer) return c.json({ error: 'Not authenticated' }, 401)
 
@@ -354,7 +355,7 @@ squareRoutes.post('/checkout/report', async (c) => {
     const locationId = c.env.SQUARE_LOCATION_ID
     if (!accessToken || !locationId) return c.json({ error: 'Square is not configured. Contact admin.' }, 503)
 
-    const token = c.req.header('Authorization')?.replace('Bearer ', '')
+    const token = getCustomerSessionToken(c)
     const customer = await getCustomerFromToken(c.env.DB, token)
     if (!customer) return c.json({ error: 'Not authenticated' }, 401)
 
@@ -433,7 +434,7 @@ squareRoutes.post('/checkout/report', async (c) => {
 // ============================================================
 squareRoutes.post('/use-credit', async (c) => {
   try {
-    const token = c.req.header('Authorization')?.replace('Bearer ', '')
+    const token = getCustomerSessionToken(c)
     const customer = await getCustomerFromToken(c.env.DB, token)
     if (!customer) return c.json({ error: 'Not authenticated' }, 401)
 
@@ -1012,7 +1013,7 @@ squareRoutes.get('/verify-payment', async (c) => {
     const accessToken = c.env.SQUARE_ACCESS_TOKEN
     if (!accessToken) return c.json({ error: 'Square not configured' }, 503)
 
-    const token = c.req.header('Authorization')?.replace('Bearer ', '')
+    const token = getCustomerSessionToken(c)
     const customer = await getCustomerFromToken(c.env.DB, token)
     if (!customer) return c.json({ error: 'Not authenticated' }, 401)
 
@@ -1293,7 +1294,7 @@ const SQUARE_OAUTH_BASE = 'https://connect.squareup.com'
 
 // GET /oauth/start — Redirect customer to Square OAuth authorization
 squareRoutes.get('/oauth/start', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '') || c.req.query('token') || ''
+  const token = getCustomerSessionToken(c) || c.req.query('token') || ''
   const customer = await getCustomerFromToken(c.env.DB, token)
   if (!customer) return c.json({ error: 'Not authenticated' }, 401)
 
@@ -1403,7 +1404,7 @@ squareRoutes.get('/oauth/callback', async (c) => {
 
 // GET /oauth/status — Check if customer has connected Square merchant
 squareRoutes.get('/oauth/status', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   const customer = await getCustomerFromToken(c.env.DB, token)
   if (!customer) return c.json({ error: 'Not authenticated' }, 401)
 
@@ -1426,7 +1427,7 @@ squareRoutes.get('/oauth/status', async (c) => {
 
 // POST /oauth/disconnect — Remove customer's Square merchant connection
 squareRoutes.post('/oauth/disconnect', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   const customer = await getCustomerFromToken(c.env.DB, token)
   if (!customer) return c.json({ error: 'Not authenticated' }, 401)
 

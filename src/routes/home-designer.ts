@@ -23,6 +23,7 @@
 // ============================================================
 
 import { Hono } from 'hono'
+import { getCustomerSessionToken } from '../lib/session-tokens'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 
@@ -137,7 +138,7 @@ Output a valid SVG string that can be embedded directly in HTML.`
 // ── AUTH HELPER ──────────────────────────────────────────────
 
 async function getDesignerCustomerId(c: any): Promise<number | null> {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return null
   const session = await c.env.DB.prepare(`
     SELECT customer_id FROM customer_sessions

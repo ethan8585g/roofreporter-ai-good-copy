@@ -5,6 +5,7 @@
 // scoped to the owning customer_id resolved via the team helper.
 // ============================================================
 import { Hono } from 'hono'
+import { getCustomerSessionToken } from '../lib/session-tokens'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 
@@ -12,7 +13,7 @@ export const solarPipelineRoutes = new Hono<{ Bindings: Bindings }>()
 
 // Resolve customer from bearer token. Returns { ownerId } or null.
 async function requireCustomer(c: any) {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return null
   const session = await c.env.DB.prepare(
     `SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')`

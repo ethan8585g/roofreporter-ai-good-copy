@@ -13,6 +13,7 @@
 
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
+import { getAdminSessionToken } from '../lib/session-tokens'
 
 export const geminiRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -21,7 +22,7 @@ geminiRoutes.use('/*', async (c, next) => {
   // Allow status check without auth
   if (c.req.path.endsWith('/status')) return next()
   
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const token = getAdminSessionToken(c)
   if (!token) return c.json({ error: 'Unauthorized' }, 401)
   const session = await c.env.DB.prepare(
     `SELECT s.*, a.email, a.name, a.role FROM admin_sessions s JOIN admin_users a ON s.admin_user_id = a.id WHERE s.session_token = ? AND s.expires_at > datetime('now')`
