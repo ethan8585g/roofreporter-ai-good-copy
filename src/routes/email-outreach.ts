@@ -110,15 +110,34 @@ emailOutreachRoutes.get('/contacts', async (c) => {
 emailOutreachRoutes.get('/lists', async (c) => {
   await ensureTables(c.env.DB)
   try {
-    const lists = await c.env.DB.prepare(`
-      SELECT el.*,
-        (SELECT COUNT(*) FROM email_contacts ec WHERE ec.list_id = el.id) as total_contacts,
-        (SELECT COUNT(*) FROM email_contacts ec WHERE ec.list_id = el.id AND ec.status = 'active') as active_contacts,
-        (SELECT COUNT(*) FROM email_contacts ec WHERE ec.list_id = el.id AND ec.status = 'bounced') as bounced_contacts,
-        (SELECT COUNT(*) FROM email_contacts ec WHERE ec.list_id = el.id AND ec.status = 'unsubscribed') as unsubscribed_contacts
-      FROM email_lists el
-      ORDER BY el.created_at DESC
-    `).all()
+    // P1-29: single GROUP BY + LEFT JOIN instead of four per-list correlated
+    // subqueries. Cuts N scans to 1 over email_contacts.
+    const [listsResult, countsResult] = await Promise.all([
+      c.env.DB.prepare(`SELECT * FROM email_lists ORDER BY created_at DESC`).all<any>(),
+      c.env.DB.prepare(`
+        SELECT list_id,
+          COUNT(*) as total,
+          SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
+          SUM(CASE WHEN status = 'bounced' THEN 1 ELSE 0 END) as bounced,
+          SUM(CASE WHEN status = 'unsubscribed' THEN 1 ELSE 0 END) as unsubscribed
+        FROM email_contacts
+        GROUP BY list_id
+      `).all<any>(),
+    ])
+    const countsByListId = new Map<number, any>()
+    for (const row of (countsResult.results || []) as any[]) countsByListId.set(row.list_id, row)
+    const lists = {
+      results: ((listsResult.results || []) as any[]).map((el) => {
+        const c = countsByListId.get(el.id) || {}
+        return {
+          ...el,
+          total_contacts: Number(c.total || 0),
+          active_contacts: Number(c.active || 0),
+          bounced_contacts: Number(c.bounced || 0),
+          unsubscribed_contacts: Number(c.unsubscribed || 0),
+        }
+      })
+    }
 
     const globalStats = await c.env.DB.prepare(`
       SELECT
