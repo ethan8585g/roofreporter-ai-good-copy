@@ -156,6 +156,9 @@ export type Bindings = {
   // Set via: wrangler secret put ANTHROPIC_API_KEY
   // Used by: Agent Hub (content, lead, email, admin agents)
   ANTHROPIC_API_KEY: string
+
+  // ── Meta Pixel — Facebook/Instagram conversion tracking ──
+  META_PIXEL_ID: string            // Facebook Pixel ID (numeric) from Meta Events Manager
 }
 
 // ============================================================

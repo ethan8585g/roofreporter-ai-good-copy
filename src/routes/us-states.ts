@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Env } from '../types'
 import { US_STATES, US_CITIES, ALL_STATE_SLUGS } from '../data/us-states'
+import { inlineQuoteFormHTML } from '../lib/lead-forms'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -123,6 +124,8 @@ app.get('/', (c) => {
       </div>
     </div>
   </section>
+
+  <div class="max-w-5xl mx-auto px-4 py-8">${inlineQuoteFormHTML('us-hub')}</div>
 
   <section class="py-16" style="background:#0d0d0d">
     <div class="max-w-5xl mx-auto px-4">
@@ -253,6 +256,8 @@ app.get('/:state', (c) => {
       </div>
     </div>
   </section>
+
+  <div class="max-w-5xl mx-auto px-4 py-8">${inlineQuoteFormHTML('us-' + stateSlug)}</div>
 
   <!-- Building Code -->
   <section class="py-16" style="background:#0d0d0d">
@@ -413,6 +418,8 @@ app.get('/:state/:city', (c) => {
       </div>
     </div>
   </section>
+
+  <div class="max-w-5xl mx-auto px-4 py-8">${inlineQuoteFormHTML('us-' + stateSlug + '-' + citySlug)}</div>
 
   <!-- Insurance note -->
   <section class="py-16" style="background:#0d0d0d">

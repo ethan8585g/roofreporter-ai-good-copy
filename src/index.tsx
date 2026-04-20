@@ -4,6 +4,7 @@ import { getAccessToken, getProjectId, getServiceAccountEmail } from './services
 import { trackProposalViewed } from './services/ga4-events'
 import { buildClientAnalyticsScript } from './services/analytics-events'
 import { AB_SCRIPT } from './lib/ab'
+import { blogLeadMagnetHTML } from './lib/lead-forms'
 import { ordersRoutes } from './routes/orders'
 import { companiesRoutes } from './routes/companies'
 import { settingsRoutes } from './routes/settings'
@@ -250,9 +251,25 @@ window.trackAdsConversion = function(kind, params) {
 </script>`
       const clarityId = (c.env as any).CLARITY_PROJECT_ID || ''
       const claritySnippet = buildClientAnalyticsScript(clarityId)
-      const injected = body.replace('</body>', `${ga4Script}${googleAdsScript}${claritySnippet}${AB_SCRIPT}
+
+      // Meta Pixel (Facebook/Instagram conversion tracking)
+      const metaPixelId = (c.env as any).META_PIXEL_ID || ''
+      const metaPixelScript = metaPixelId ? `
+<!-- Meta Pixel -->
+<script>
+!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+fbq('init','${metaPixelId}');
+fbq('track','PageView');
+${url.pathname === '/pricing' ? "fbq('track','ViewContent',{content_name:'Pricing Page',content_category:'pricing'});" : ''}
+window.fireMetaLeadEvent=function(d){if(typeof fbq==='function')fbq('track','Lead',d||{});};
+</script>
+<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${metaPixelId}&ev=PageView&noscript=1"/></noscript>
+` : `<script>window.fireMetaLeadEvent=function(){};</script>`
+
+      const injected = body.replace('</body>', `${ga4Script}${googleAdsScript}${metaPixelScript}${claritySnippet}${AB_SCRIPT}
 <script src="/static/toast.js"></script>
 <script src="/static/tracker.js" defer></script>
+<script src="/static/exit-intent.js" defer></script>
 </body>`)
       c.res = new Response(injected, {
         status: c.res.status,
@@ -606,6 +623,11 @@ app.get('/', async (c) => {
     latestPosts = (result.results || []) as any[]
   } catch {}
   return c.html(getLandingPageHTML(latestPosts))
+})
+
+// /get-started — Social media landing page (Instagram/Facebook bio link)
+app.get('/get-started', (c) => {
+  return c.html(getSocialLandingHTML())
 })
 
 // /order redirect — users may type /order directly
@@ -3961,8 +3983,8 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
     <div class="max-w-3xl mx-auto px-4">
       <div class="text-center mb-10">
         <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold px-4 py-1.5 rounded-full mb-4"><i class="fas fa-envelope mr-1.5"></i>GET IN TOUCH</span>
-        <h2 class="text-3xl md:text-4xl font-bold text-white mb-3">Ready to Transform Your Roofing Business?</h2>
-        <p class="text-gray-400 max-w-xl mx-auto">Tell us about your business — we'll have you set up with AI-powered roof reports in minutes.</p>
+        <h2 class="text-3xl md:text-4xl font-bold text-white mb-3">${sourcePage === 'pricing' ? 'Questions? Talk to Our Team' : 'Ready to Transform Your Roofing Business?'}</h2>
+        <p class="text-gray-400 max-w-xl mx-auto">${sourcePage === 'pricing' ? 'Not sure which plan is right for you? Tell us about your business and we\'ll recommend the best option.' : 'Tell us about your business — we\'ll have you set up with AI-powered roof reports in minutes.'}</p>
       </div>
       <form id="lead-capture-form" onsubmit="return submitLeadForm(event, '${sourcePage}')" class="bg-[#111111] border border-white/10 rounded-2xl p-8 space-y-5">
         <div>
@@ -11492,6 +11514,56 @@ function getPricingPageHTML() {
 }
 
 // ============================================================
+// SOCIAL LANDING PAGE — /get-started (Instagram/Facebook bio link)
+// Minimal, distraction-free page optimized for social ad traffic
+// ============================================================
+function getSocialLandingHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Get Your Free Roof Measurement Report | Roof Manager</title>
+  <meta name="description" content="Enter your property address and get a free professional satellite roof measurement report in 60 seconds. No credit card required.">
+  <meta name="robots" content="noindex">
+  <meta property="og:title" content="Free Roof Measurement Report — Roof Manager">
+  <meta property="og:description" content="Get a professional satellite roof report in 60 seconds. Free for Instagram & Facebook followers.">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <link rel="canonical" href="https://www.roofmanager.ca/get-started">
+</head>
+<body style="background:#0A0A0A;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px">
+  <div style="max-width:440px;width:100%;text-align:center">
+    <img src="/static/logo.png" alt="Roof Manager" style="width:56px;height:56px;border-radius:12px;margin:0 auto 16px;display:block">
+    <h1 style="font-size:28px;font-weight:900;margin:0 0 8px;line-height:1.2">Get Your Free<br>Roof Measurement Report</h1>
+    <p style="color:#9ca3af;font-size:14px;margin:0 0 24px">Enter your property address and we'll send you a professional satellite roof report in under 60 seconds.</p>
+
+    <form id="social-landing-form" onsubmit="return (async function(e){e.preventDefault();if(e.target.querySelector('[name=website]').value)return false;var b=e.target.querySelector('button[type=submit]');b.disabled=true;b.innerHTML='<i class=\\'fas fa-spinner fa-spin\\'></i> Generating...';var p=new URLSearchParams(location.search);try{var r=await fetch('/api/agents/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:e.target.e.value,address:e.target.a.value||'',source_page:'social-landing',utm_source:p.get('utm_source')||sessionStorage.getItem('_rm_utm_source')||''})});if(r.ok){e.target.innerHTML='<div style=\\'padding:32px 0\\'><div style=\\'width:56px;height:56px;background:#00FF88;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:14px\\'><i class=\\'fas fa-check\\' style=\\'color:#0A0A0A;font-size:24px\\'></i></div><p style=\\'color:#00FF88;font-weight:700;font-size:18px;margin:0 0 6px\\'>Thank You!</p><p style=\\'color:#9ca3af;font-size:14px;margin:0\\'>We\\'ll be in touch shortly with your report.</p></div>';if(typeof window.fireMetaLeadEvent==='function')window.fireMetaLeadEvent({content_name:'social-landing'});return}b.disabled=false;b.textContent='Get Free Report'}catch(x){b.disabled=false;b.textContent='Get Free Report'}return false})(event)" style="text-align:left;position:relative">
+      <input name="website" style="position:absolute;left:-9999px;opacity:0" tabindex="-1" autocomplete="off">
+      <input name="e" type="email" required placeholder="Email address" style="width:100%;padding:14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;font-size:15px;outline:none;margin-bottom:10px;box-sizing:border-box">
+      <input name="a" placeholder="Property address" style="width:100%;padding:14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;font-size:15px;outline:none;margin-bottom:14px;box-sizing:border-box">
+      <button type="submit" style="width:100%;background:#00FF88;color:#0A0A0A;font-weight:800;padding:16px;border:none;border-radius:12px;font-size:16px;cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='#00e67a'" onmouseout="this.style.background='#00FF88'"><i class="fas fa-bolt" style="margin-right:8px"></i>Get Free Report</button>
+    </form>
+
+    <div style="display:flex;justify-content:center;gap:24px;margin-top:24px">
+      <div style="text-align:center"><i class="fas fa-credit-card" style="color:#00FF88;font-size:14px;display:block;margin-bottom:4px"></i><span style="color:#6b7280;font-size:11px">No credit card</span></div>
+      <div style="text-align:center"><i class="fas fa-bolt" style="color:#00FF88;font-size:14px;display:block;margin-bottom:4px"></i><span style="color:#6b7280;font-size:11px">60-second reports</span></div>
+      <div style="text-align:center"><i class="fas fa-users" style="color:#00FF88;font-size:14px;display:block;margin-bottom:4px"></i><span style="color:#6b7280;font-size:11px">5,000+ contractors</span></div>
+    </div>
+
+    <p style="color:#4b5563;font-size:11px;margin-top:32px"><a href="/" style="color:#6b7280;text-decoration:none">Powered by <strong style="color:#9ca3af">Roof Manager</strong></a></p>
+  </div>
+  <script>
+    // Persist UTM params
+    var p = new URLSearchParams(location.search);
+    ['utm_source','utm_medium','utm_campaign','utm_content'].forEach(function(k) {
+      var v = p.get(k);
+      if (v) sessionStorage.setItem('_rm_' + k, v);
+    });
+  </script>
+</body>
+</html>`
+}
+
+// ============================================================
 // BLOG LISTING PAGE — Public SEO lead funnel
 // ============================================================
 function getBlogListingHTML(posts: any[] = []) {
@@ -11926,6 +11998,9 @@ function getBlogPostHTML(post?: any, slug?: string) {
     <div class="text-center py-16 animate-pulse text-gray-500"><i class="fas fa-spinner fa-spin text-3xl mb-4"></i><p>Loading article...</p></div>
   `}
     </article>
+
+    <!-- Lead Magnet — Free Sample Report -->
+    ${blogLeadMagnetHTML()}
 
     <!-- Author / CTA Box -->
     <div id="blog-cta" class="hidden mt-12 bg-[#111111] border border-white/10 rounded-2xl p-8 text-center">

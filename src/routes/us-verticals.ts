@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Env } from '../types'
 import { US_STATES, ALL_STATE_SLUGS, US_CITIES } from '../data/us-states'
+import { inlineQuoteFormHTML, damageAssessmentFormHTML } from '../lib/lead-forms'
 
 const STORM_CLUSTERS: Record<string, string[]> = {
   'hail-belt': ['colorado','texas','oklahoma','kansas','nebraska','south-dakota','north-dakota','minnesota','iowa','missouri'],
@@ -154,6 +155,8 @@ app.get('/insurance-claims/:state', (c) => {
     </div>
   </section>
 
+  <div class="max-w-5xl mx-auto px-4 py-8">${inlineQuoteFormHTML('insurance-claims-' + stateSlug)}</div>
+
   <section class="py-16" style="background:#0d0d0d">
     <div class="max-w-5xl mx-auto px-4">
       <h2 class="text-2xl font-black mb-6">How to File a Roof Damage Claim in ${state.name}</h2>
@@ -231,6 +234,8 @@ app.get('/storm-damage/:state', (c) => {
       </ul>
     </div>
   </section>
+  <div class="max-w-5xl mx-auto px-4 py-8">${damageAssessmentFormHTML('storm-damage-' + stateSlug, 'storm')}</div>
+
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Document ${state.name} Storm Damage Fast</h2>
@@ -318,6 +323,8 @@ app.get('/hail-damage/:state', (c) => {
       <p class="text-gray-300 mt-6 leading-relaxed">${state.roofingNotes}</p>
     </div>
   </section>
+  <div class="max-w-5xl mx-auto px-4 py-8">${damageAssessmentFormHTML('hail-damage-' + stateSlug, 'hail')}</div>
+
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Start Documenting ${state.name} Hail Claims</h2>
@@ -414,6 +421,8 @@ app.get('/hurricane-damage/:state', (c) => {
       </ul>
     </div>
   </section>
+  <div class="max-w-5xl mx-auto px-4 py-8">${damageAssessmentFormHTML('hurricane-damage-' + stateSlug, 'hurricane')}</div>
+
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Ready for ${state.name} Storm Season?</h2>
@@ -536,6 +545,8 @@ app.get('/roof-replacement-cost/:state', (c) => {
       <p class="text-gray-400 text-sm mt-4">Source: National contractor survey data, Angi/HomeAdvisor published averages, and Roof Manager contractor-submitted data, as of 2026. Individual quotes may vary.</p>
     </div>
   </section>
+  <div class="max-w-5xl mx-auto px-4 py-8">${inlineQuoteFormHTML('roof-cost-' + stateSlug)}</div>
+
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Get Accurate ${state.name} Material Estimates</h2>
@@ -672,6 +683,8 @@ app.get('/roofing-contractors/:state', (c) => {
       </tbody></table></div>
     </div>
   </section>
+  <div class="max-w-5xl mx-auto px-4 py-8">${inlineQuoteFormHTML('contractors-' + stateSlug)}</div>
+
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Switch to Roof Manager in ${state.name}</h2>

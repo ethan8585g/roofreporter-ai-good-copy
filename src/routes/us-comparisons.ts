@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { Env } from '../types'
+import { comparisonLeadFormHTML } from '../lib/lead-forms'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -153,6 +154,8 @@ app.get('/eagleview-vs-roofmanager-us', (c) => {
     </div>
   </section>
 
+  <div class="max-w-5xl mx-auto px-4 py-8">${comparisonLeadFormHTML('comparison-eagleview')}</div>
+
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Stop Paying $49–$95/Report</h2>
@@ -206,6 +209,8 @@ app.get('/hover-alternative-us', (c) => {
     </div>
   </section>
   <section class="py-16" style="background:#111"><div class="max-w-5xl mx-auto px-4"><h2 class="text-2xl font-black mb-8">Hover vs Roof Manager</h2>${comparisonTable(rows)}</div></section>
+  <div class="max-w-5xl mx-auto px-4 py-8">${comparisonLeadFormHTML('comparison-hover')}</div>
+
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4"><h2 class="text-3xl font-black mb-4">Switch from Hover and Save</h2>
     <p class="text-blue-200 mb-8">Roof Manager: $8/report, no subscription, full CRM included. Hover: $33–$55/report + $149–$399/month.</p>
@@ -294,6 +299,8 @@ app.get('/pitchgauge-vs-roofmanager', (c) => {
     </div>
   </section>
 
+  <div class="max-w-5xl mx-auto px-4 py-8">${comparisonLeadFormHTML('comparison-pitchgauge')}</div>
+
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Need Full Satellite Reports, Not Just Pitch?</h2>
@@ -333,6 +340,7 @@ app.get('/roofr-vs-roofmanager-us', (c) => {
     </div>
   </section>
   <section class="py-16" style="background:#111"><div class="max-w-5xl mx-auto px-4"><h2 class="text-2xl font-black mb-8">Roofr vs Roof Manager</h2>${comparisonTable(rows)}</div></section>
+  <div class="max-w-5xl mx-auto px-4 py-8">${comparisonLeadFormHTML('comparison-roofr')}</div>
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4"><h2 class="text-3xl font-black mb-4">No Subscription. Just $8/Report.</h2>
     <p class="text-blue-200 mb-8">Try Roof Manager free and compare the output. 3 free reports, no credit card, no subscription required.</p>
@@ -369,6 +377,7 @@ app.get('/roofsnap-vs-roofmanager-us', (c) => {
     </div>
   </section>
   <section class="py-16" style="background:#111"><div class="max-w-5xl mx-auto px-4"><h2 class="text-2xl font-black mb-8">RoofSnap vs Roof Manager</h2>${comparisonTable(rows)}</div></section>
+  <div class="max-w-5xl mx-auto px-4 py-8">${comparisonLeadFormHTML('comparison-roofsnap')}</div>
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4"><h2 class="text-3xl font-black mb-4">Switch from RoofSnap and Save</h2>
     <p class="text-blue-200 mb-8">$8/report. No subscription. Full CRM included. 3 free to try.</p>

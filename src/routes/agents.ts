@@ -24,31 +24,36 @@ async function getCustomer(c: any): Promise<{ id: number; email: string; ownerId
 // ============================================================
 agentsRoutes.post('/leads', async (c) => {
   try {
-    const { name, company_name, phone, email, source_page, message } = await c.req.json()
-    if (!email || !name) return c.json({ error: 'Name and email are required' }, 400)
+    const { name, company_name, phone, email, source_page, message, address, utm_source, website } = await c.req.json()
+    // Honeypot anti-spam: if hidden "website" field is filled, silently accept but don't save
+    if (website) return c.json({ success: true })
+    if (!email) return c.json({ error: 'Email is required' }, 400)
     const emailClean = String(email).trim().toLowerCase()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean)) return c.json({ error: 'Invalid email' }, 400)
+    const cleanName = name ? String(name).trim().slice(0, 200) : 'Website Visitor'
 
     await c.env.DB.prepare(
-      `INSERT INTO leads (name, company_name, phone, email, source_page, message) VALUES (?,?,?,?,?,?)`
+      `INSERT INTO leads (name, company_name, phone, email, source_page, message, address, utm_source) VALUES (?,?,?,?,?,?,?,?)`
     ).bind(
-      String(name).trim().slice(0, 200),
+      cleanName,
       company_name ? String(company_name).trim().slice(0, 200) : '',
       phone ? String(phone).trim().slice(0, 30) : '',
       emailClean,
       source_page || 'unknown',
-      message ? String(message).trim().slice(0, 2000) : ''
+      message ? String(message).trim().slice(0, 2000) : '',
+      address ? String(address).trim().slice(0, 500) : '',
+      utm_source ? String(utm_source).trim().slice(0, 100) : ''
     ).run()
 
     // Track lead capture in GA4
     trackLeadCapture(c.env, source_page || 'unknown', {
-      lead_name: String(name).trim().substring(0, 50),
+      lead_name: cleanName.substring(0, 50),
       lead_company: company_name ? String(company_name).trim().substring(0, 50) : '',
       lead_email_domain: emailClean.split('@')[1] || 'unknown'
     }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     // Email notification to sales@roofmanager.ca — 3-tier fallback
-    const leadSubject = `🔔 New Lead: ${String(name).trim()} — ${source_page || 'website'}`
+    const leadSubject = `🔔 New Lead: ${cleanName} — ${source_page || 'website'}`
     const leadHtml = `
 <div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
   <div style="background:#0f172a;padding:24px;border-radius:12px 12px 0 0">
@@ -57,11 +62,13 @@ agentsRoutes.post('/leads', async (c) => {
   </div>
   <div style="background:white;padding:24px;border:1px solid #e2e8f0;border-top:none">
     <table style="width:100%;border-collapse:collapse">
-      <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:100px"><strong>Name</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${String(name).trim()}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:100px"><strong>Name</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${cleanName}</td></tr>
       <tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Email</strong></td><td style="padding:8px 0;font-size:14px"><a href="mailto:${emailClean}" style="color:#0ea5e9">${emailClean}</a></td></tr>
       ${phone ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Phone</strong></td><td style="padding:8px 0;font-size:14px"><a href="tel:${String(phone).trim()}" style="color:#0ea5e9">${String(phone).trim()}</a></td></tr>` : ''}
       ${company_name ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Company</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${String(company_name).trim()}</td></tr>` : ''}
+      ${address ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Address</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${String(address).trim()}</td></tr>` : ''}
       ${message ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px;vertical-align:top"><strong>Message</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${String(message).trim()}</td></tr>` : ''}
+      ${utm_source ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Source</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${String(utm_source).trim()}</td></tr>` : ''}
     </table>
   </div>
   <div style="background:#f8fafc;padding:16px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;border-top:none;text-align:center">
