@@ -734,7 +734,16 @@ invoiceRoutes.post('/:id/send', async (c) => {
         emailSent = true
       } catch (e: any) {
         emailError = e.message || 'Email send failed'
+        console.error('[invoice-send] Gmail send failed:', emailError)
       }
+    }
+
+    if (!emailSent) {
+      return c.json({
+        error: `Failed to send ${docLabel.toLowerCase()} email to ${invoice.customer_email}. ${emailError || 'Unknown email error.'}`,
+        email_error: emailError || 'Unknown email error',
+        customer_email: invoice.customer_email
+      }, 502)
     }
 
     await c.env.DB.prepare(`UPDATE invoices SET status = 'sent', sent_date = date('now'), updated_at = datetime('now') WHERE id = ?`).bind(id).run()
@@ -743,9 +752,8 @@ invoiceRoutes.post('/:id/send', async (c) => {
 
     return c.json({
       success: true,
-      message: emailSent ? `${docLabel} ${invoice.invoice_number} emailed to ${invoice.customer_email}` : `${docLabel} ${invoice.invoice_number} marked as sent`,
+      message: `${docLabel} ${invoice.invoice_number} emailed to ${invoice.customer_email}`,
       email_sent: emailSent,
-      email_error: emailError || undefined,
       document_type: docType,
       customer_email: invoice.customer_email,
       customer_name: invoice.customer_name,

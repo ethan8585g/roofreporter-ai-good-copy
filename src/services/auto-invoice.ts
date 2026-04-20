@@ -1,5 +1,12 @@
 import type { Bindings } from '../types'
 import { logAutoInvoiceStep } from './auto-invoice-audit'
+import { sendGmailOAuth2 } from './email'
+
+function escHtml(s: string): string {
+  return String(s || '').replace(/[&<>"']/g, (c) =>
+    c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '"' ? '&quot;' : '&#39;'
+  )
+}
 
 export interface AutoInvoiceResult {
   status: 'created' | 'skipped' | 'error'
@@ -41,9 +48,11 @@ function genProposalNumber(): string {
  * Event-driven auto-invoice creator. Call this AFTER a report transitions to
  * status='completed'. Idempotent: safe to call multiple times per order.
  *
- * Produces a DRAFT PROPOSAL (document_type='proposal', status='draft'). The
- * roofer reviews and sends it from the Proposal Dashboard — this function
- * never sends email on its own.
+ * Produces a PROPOSAL (document_type='proposal'). When Gmail OAuth is
+ * configured, the proposal is emailed to the homeowner immediately and
+ * status is set to 'sent'. If email fails or Gmail isn't configured, the
+ * proposal is left as 'draft' so the roofer can send it manually from the
+ * Proposal Dashboard.
  */
 export async function createAutoInvoiceForOrder(
   env: Bindings,
@@ -197,6 +206,71 @@ export async function createAutoInvoiceForOrder(
       step: measurementMissing ? 'quantity_zero_drafted' : 'proposal_drafted',
       reason: `proposal_number=${proposalNumber} total=$${total.toFixed(2)} gross_squares=${grossSquares} bundles=${bundles}`
     })
+
+    // Auto-send the proposal email to the homeowner. If this fails, the proposal
+    // remains in 'draft' so the roofer can retry manually from the dashboard.
+    let emailSent = false
+    let emailError = ''
+    const clientId = (env as any).GMAIL_CLIENT_ID
+    const clientSecret = (env as any).GMAIL_CLIENT_SECRET
+    const refreshToken = (env as any).GMAIL_REFRESH_TOKEN
+    if (!clientId || !clientSecret || !refreshToken) {
+      emailError = 'gmail_not_configured'
+    } else if (measurementMissing) {
+      emailError = 'measurement_missing_skipped_send'
+    } else {
+      try {
+        const origin = (env as any).PUBLIC_ORIGIN || 'https://www.roofmanager.ca'
+        const viewUrl = `${origin}/proposal/view/${shareToken}`
+        const itemsHtml = `<table style="width:100%;border-collapse:collapse;margin:16px 0"><thead><tr style="background:#f8fafc"><th style="text-align:left;padding:8px;border-bottom:2px solid #e2e8f0;font-size:13px;color:#64748b">Item</th><th style="text-align:center;padding:8px;border-bottom:2px solid #e2e8f0;font-size:13px;color:#64748b">Qty</th><th style="text-align:right;padding:8px;border-bottom:2px solid #e2e8f0;font-size:13px;color:#64748b">Amount</th></tr></thead><tbody><tr><td style="padding:8px;border-bottom:1px solid #f1f5f9;font-size:13px">${escHtml(lineDescription)}</td><td style="text-align:center;padding:8px;border-bottom:1px solid #f1f5f9;font-size:13px">${quantity}</td><td style="text-align:right;padding:8px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600">$${subtotal.toFixed(2)}</td></tr></tbody></table>`
+        const emailHtml = `
+<div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
+  <div style="background:linear-gradient(135deg,#0ea5e9,#2563eb);padding:32px;border-radius:16px 16px 0 0;text-align:center">
+    <h1 style="color:white;font-size:22px;margin:0">Roof Manager</h1>
+    <p style="color:#bfdbfe;font-size:13px;margin:4px 0 0">Professional Roof Measurement Reports</p>
+  </div>
+  <div style="background:white;padding:32px;border:1px solid #e2e8f0;border-top:none">
+    <h2 style="color:#1e293b;font-size:18px;margin:0 0 8px">Proposal ${escHtml(proposalNumber)}</h2>
+    <p style="color:#64748b;font-size:14px;margin:0 0 24px">Hi ${escHtml(recipientName)},</p>
+    <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px">Please find your proposal below. Click the link to view it online and accept.</p>
+    ${itemsHtml}
+    <div style="background:#f8fafc;border-radius:12px;padding:16px;margin:16px 0">
+      <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:800;color:#0f172a"><span>Total</span><span>$${total.toFixed(2)} CAD</span></div>
+    </div>
+    <div style="text-align:center;margin:24px 0"><a href="${viewUrl}" style="display:inline-block;background:#0ea5e9;color:white;padding:14px 32px;border-radius:12px;text-decoration:none;font-size:16px;font-weight:700">View Proposal</a></div>
+    <p style="color:#64748b;font-size:12px;text-align:center">Valid until: ${validUntil}</p>
+  </div>
+  <div style="background:#f8fafc;padding:16px;border-radius:0 0 16px 16px;text-align:center;border:1px solid #e2e8f0;border-top:none">
+    <p style="color:#94a3b8;font-size:11px;margin:0">Powered by Roof Manager — Canada's AI Roof Measurement Platform</p>
+  </div>
+</div>`
+        await sendGmailOAuth2(
+          clientId, clientSecret, refreshToken,
+          recipientEmail,
+          `Proposal ${proposalNumber} — $${total.toFixed(2)}`,
+          emailHtml
+        )
+        emailSent = true
+      } catch (e: any) {
+        emailError = (e?.message || String(e)).slice(0, 500)
+        console.error('[auto-invoice] Gmail send failed:', emailError)
+      }
+    }
+
+    if (emailSent) {
+      await env.DB.prepare(
+        `UPDATE invoices SET status = 'sent', sent_date = date('now'), updated_at = datetime('now') WHERE id = ?`
+      ).bind(invoiceId).run()
+      await logAutoInvoiceStep(env, {
+        order_id: orderId, invoice_id: invoiceId, step: 'proposal_emailed',
+        reason: `sent to ${recipientEmail}`
+      })
+    } else {
+      await logAutoInvoiceStep(env, {
+        order_id: orderId, invoice_id: invoiceId, step: 'proposal_email_skipped',
+        reason: emailError
+      })
+    }
 
     return { status: 'created', invoice_id: invoiceId }
   } catch (e: any) {
