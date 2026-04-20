@@ -45,6 +45,33 @@ async function ensureLeadTable(db: any) {
   } catch (e) { leadTableReady = true }
 }
 
+let contactLeadTableReady = false
+async function ensureContactLeadsTable(db: any) {
+  if (contactLeadTableReady) return
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS contact_leads (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        phone TEXT,
+        company TEXT,
+        employees TEXT,
+        interest TEXT,
+        message TEXT NOT NULL,
+        utm_source TEXT,
+        utm_medium TEXT,
+        utm_campaign TEXT,
+        utm_content TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    `).run()
+    try { await db.prepare('CREATE INDEX IF NOT EXISTS idx_contact_leads_email ON contact_leads(email)').run() } catch(e) {}
+    try { await db.prepare('CREATE INDEX IF NOT EXISTS idx_contact_leads_created ON contact_leads(created_at)').run() } catch(e) {}
+    contactLeadTableReady = true
+  } catch (e) { contactLeadTableReady = true }
+}
+
 // Free Asset Report lead (homepage hero + demo portal)
 leadCaptureRoutes.post('/asset-report/lead', async (c) => {
   const body = await c.req.json().catch(() => ({}))
@@ -74,9 +101,11 @@ leadCaptureRoutes.post('/asset-report/lead', async (c) => {
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0">
           <p style="color:#9ca3af;font-size:12px">RoofManager &middot; Commercial Roof Asset Management &middot; Canada</p>
         </div>`
-      await sendGmailEmail(c.env.GCP_SERVICE_ACCOUNT_JSON, String(body.email), subject, html, 'sales@roofmanager.ca').catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+      await sendGmailEmail(c.env.GCP_SERVICE_ACCOUNT_JSON, String(body.email), subject, html, 'sales@roofmanager.ca').catch((e) => console.error('[gmail-send-failed asset-report]', { to: body.email, error: (e && e.message) || e }))
+    } else {
+      console.warn('[gmail-skip] GCP_SERVICE_ACCOUNT_JSON not set — skipping sample PDF email for', body.email)
     }
-  } catch (e) { console.log('[asset-report email]', (e as any).message) }
+  } catch (e) { console.error('[asset-report email]', { to: body.email, error: (e as any).message }) }
 
   notifySalesNewLead(c.env, {
     source: `asset_report:${source}`,
@@ -122,6 +151,8 @@ leadCaptureRoutes.post('/contact/lead', async (c) => {
   const utm_campaign = body.utm_campaign ? String(body.utm_campaign).slice(0, 100) : null
   const utm_content = body.utm_content ? String(body.utm_content).slice(0, 100) : null
 
+  await ensureContactLeadsTable(c.env.DB)
+
   try {
     await c.env.DB.prepare(`
       INSERT INTO contact_leads (name, email, phone, company, employees, interest, message, utm_source, utm_medium, utm_campaign, utm_content)
@@ -165,9 +196,11 @@ leadCaptureRoutes.post('/condo-lead', async (c) => {
           <p style="margin:24px 0"><a href="https://www.roofmanager.ca/static/RoofManager-Reserve-Fund-Cheat-Sheet.pdf" style="background:#00FF88;color:#0A0A0A;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:800">Download Cheat Sheet (PDF)</a></p>
           <p style="color:#6b7280;font-size:13px">We'll be in touch with more property-manager focused resources.</p>
         </div>`
-      await sendGmailEmail(c.env.GCP_SERVICE_ACCOUNT_JSON, String(body.email), subject, html, 'sales@roofmanager.ca').catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+      await sendGmailEmail(c.env.GCP_SERVICE_ACCOUNT_JSON, String(body.email), subject, html, 'sales@roofmanager.ca').catch((e) => console.error('[gmail-send-failed condo-lead]', { to: body.email, error: (e && e.message) || e }))
+    } else {
+      console.warn('[gmail-skip] GCP_SERVICE_ACCOUNT_JSON not set — skipping condo cheat sheet email for', body.email)
     }
-  } catch (e) { console.log('[condo-lead email]', (e as any).message) }
+  } catch (e) { console.error('[condo-lead email]', { to: body.email, error: (e as any).message }) }
 
   notifySalesNewLead(c.env, {
     source: 'condo_cheat_sheet',
