@@ -100,6 +100,26 @@ async function squareRequest(accessToken: string, method: string, path: string, 
   return data
 }
 
+// P1-21: only accept redirect URLs that point to our own origins. Blocks
+// open-redirect attacks via Square checkout.
+const ALLOWED_REDIRECT_HOSTS = new Set<string>([
+  'www.roofmanager.ca',
+  'roofmanager.ca',
+  'localhost:3000',
+  '0.0.0.0:3000',
+])
+function safeRedirectUrl(raw: unknown, fallback: string): string {
+  if (typeof raw !== 'string' || !raw) return fallback
+  try {
+    const u = new URL(raw)
+    if (!ALLOWED_REDIRECT_HOSTS.has(u.host)) return fallback
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return fallback
+    return u.toString()
+  } catch {
+    return fallback
+  }
+}
+
 // ============================================================
 // SQUARE WEBHOOK SIGNATURE VERIFICATION (Web Crypto API)
 // Square uses HMAC-SHA256 over: notificationUrl + body
@@ -122,7 +142,11 @@ export async function verifySquareSignature(body: string, signature: string, sig
     // Convert to base64
     const expectedSig = btoa(String.fromCharCode(...new Uint8Array(sig)))
 
-    return signature === expectedSig
+    // P1-17: timing-safe equality to mitigate signature-forgery timing oracles.
+    if (signature.length !== expectedSig.length) return false
+    let diff = 0
+    for (let i = 0; i < signature.length; i++) diff |= signature.charCodeAt(i) ^ expectedSig.charCodeAt(i)
+    return diff === 0
   } catch (err: any) {
     console.error('[Square Webhook] Signature verification error:', err.message)
     return false
@@ -264,10 +288,10 @@ squareRoutes.post('/checkout', async (c) => {
 
     if (!pkg) return c.json({ error: 'Package not found' }, 404)
 
-    // Determine URLs
+    // Determine URLs — P1-21: constrain to our own origins.
     const origin = new URL(c.req.url).origin
-    const successUrl = success_url || `${origin}/customer/dashboard?payment=success`
-    const cancelUrl = cancel_url || `${origin}/customer/dashboard?payment=cancelled`
+    const successUrl = safeRedirectUrl(success_url, `${origin}/customer/dashboard?payment=success`)
+    const cancelUrl = safeRedirectUrl(cancel_url, `${origin}/customer/dashboard?payment=cancelled`)
 
     // Create Square Payment Link (Quick Pay Checkout)
     const idempotencyKey = `checkout-${customer.customer_id}-${pkg.id}-${Date.now()}`
@@ -337,8 +361,9 @@ squareRoutes.post('/checkout/report', async (c) => {
     const tierLabels: Record<string, string> = { express: 'Express', standard: 'Standard' }
 
     const origin = new URL(c.req.url).origin
-    const successUrlFinal = success_url || `${origin}/customer/dashboard?payment=success`
-    const cancelUrlFinal = cancel_url || `${origin}/customer/dashboard?payment=cancelled`
+    // P1-21: constrain redirect URLs.
+    const successUrlFinal = safeRedirectUrl(success_url, `${origin}/customer/dashboard?payment=success`)
+    const cancelUrlFinal = safeRedirectUrl(cancel_url, `${origin}/customer/dashboard?payment=cancelled`)
 
     // Create Square Payment Link for single report
     const idempotencyKey = `report-${customer.customer_id}-${Date.now()}`
@@ -707,20 +732,17 @@ squareRoutes.post('/webhook', async (c) => {
     const eventId = event.event_id || event.id || `sq_${Date.now()}`
     const eventType = event.type || ''
 
-    // Idempotency check
-    const existing = await c.env.DB.prepare(
-      'SELECT id FROM square_webhook_events WHERE square_event_id = ?'
-    ).bind(eventId).first()
-
-    if (existing) {
-      return c.json({ received: true, duplicate: true })
-    }
-
-    // Store event
-    await c.env.DB.prepare(`
-      INSERT INTO square_webhook_events (square_event_id, event_type, payload)
+    // P1-19: atomic idempotency. INSERT OR IGNORE wins the race under
+    // concurrent webhook deliveries — if meta.changes === 0 we already
+    // processed this event and can safely return 200 without side effects.
+    const insertResult = await c.env.DB.prepare(`
+      INSERT OR IGNORE INTO square_webhook_events (square_event_id, event_type, payload)
       VALUES (?, ?, ?)
     `).bind(eventId, eventType, rawBody).run()
+
+    if (!insertResult.meta.changes) {
+      return c.json({ received: true, duplicate: true })
+    }
 
     // Process based on event type
     switch (eventType) {
