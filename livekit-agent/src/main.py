@@ -83,11 +83,18 @@ async def entrypoint(ctx: JobContext):
         await run_outbound_session(ctx, vad)
         return
 
-    # Fallback: check room metadata for agent_name hint
+    # Fallback: check job/room metadata for agent_name hint.
+    # CreateDispatch delivers metadata to ctx.job.metadata; RoomService/CreateRoom
+    # delivers it to ctx.room.metadata. Try both.
     agent_name = None
-    if ctx.room.metadata:
+    raw_meta = ""
+    if ctx.job and getattr(ctx.job, "metadata", None):
+        raw_meta = ctx.job.metadata
+    elif ctx.room.metadata:
+        raw_meta = ctx.room.metadata
+    if raw_meta:
         try:
-            meta = json.loads(ctx.room.metadata)
+            meta = json.loads(raw_meta)
             agent_name = meta.get("agent_name") or meta.get("agent")
         except:
             pass
@@ -111,11 +118,18 @@ async def entrypoint(ctx: JobContext):
 # ============================================================
 async def run_outbound_session(ctx: JobContext, vad):
     """Run the outbound cold calling agent session."""
-    # Parse metadata from dispatch (prospect info + script)
+    # Parse metadata from dispatch (prospect info + script).
+    # CreateDispatch delivers metadata to ctx.job.metadata; RoomService/CreateRoom
+    # delivers it to ctx.room.metadata. Prefer job metadata, fall back to room.
     metadata = {}
-    if ctx.room.metadata:
+    raw_meta = ""
+    if ctx.job and getattr(ctx.job, "metadata", None):
+        raw_meta = ctx.job.metadata
+    if not raw_meta and ctx.room.metadata:
+        raw_meta = ctx.room.metadata
+    if raw_meta:
         try:
-            metadata = json.loads(ctx.room.metadata)
+            metadata = json.loads(raw_meta)
         except:
             metadata = {}
 
