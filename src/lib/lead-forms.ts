@@ -114,14 +114,65 @@ export function blogLeadMagnetHTML(): string {
     <h3 style="color:#fff;font-size:20px;font-weight:800;margin:10px 0 4px">Get a Free Sample Roof Report</h3>
     <p style="color:#9ca3af;font-size:13px;margin:0">See exactly what your clients receive — full PDF with 3D area, pitch, and material BOM.</p>
   </div>
-  <form onsubmit="return (async function(e){e.preventDefault();if(e.target.querySelector('[name=website]').value)return false;var b=e.target.querySelector('button[type=submit]');b.disabled=true;b.innerHTML='<i class=\\'fas fa-spinner fa-spin\\'></i> Sending...';try{var r=await fetch('/api/asset-report/lead',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:e.target.e.value,address:e.target.a?e.target.a.value:'',source:'blog_lead_magnet'})});if(r.ok){e.target.innerHTML='<div style=\\'text-align:center;padding:20px\\'><div style=\\'width:44px;height:44px;background:#00FF88;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px\\'><i class=\\'fas fa-check\\' style=\\'color:#0A0A0A;font-size:18px\\'></i></div><p style=\\'color:#00FF88;font-weight:700;font-size:15px;margin:0 0 4px\\'>Check your email!</p><p style=\\'color:#9ca3af;font-size:12px;margin:0\\'>We\\'ve sent your free sample report.</p></div>';if(typeof window.fireMetaLeadEvent===\\'function\\')window.fireMetaLeadEvent({content_name:\\'blog_lead_magnet\\'});return}b.disabled=false;b.textContent='Get Report'}catch(x){b.disabled=false;b.textContent='Get Report'}return false})(event)" style="position:relative">
+  <form id="blog-lead-magnet-form" onsubmit="return rmBlogLeadMagnetSubmit(event)" style="position:relative">
     ${honeypot}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
       <input name="e" type="email" required placeholder="Email address" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;color:#fff;font-size:14px;outline:none;width:100%;box-sizing:border-box">
       <input name="a" placeholder="Property address (optional)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;color:#fff;font-size:14px;outline:none;width:100%;box-sizing:border-box">
     </div>
+    <div data-lead-msg style="display:none;margin-bottom:10px;padding:10px 12px;border-radius:8px;font-size:13px;font-weight:600"></div>
     <button type="submit" style="width:100%;background:#00FF88;color:#0A0A0A;font-weight:800;padding:13px;border:none;border-radius:10px;font-size:14px;cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='#00e67a'" onmouseout="this.style.background='#00FF88'"><i class="fas fa-download" style="margin-right:6px"></i>Get Free Sample Report</button>
   </form>
+  <script>
+  if (typeof window.rmBlogLeadMagnetSubmit !== 'function') {
+    window.rmBlogLeadMagnetSubmit = async function(e) {
+      e.preventDefault();
+      var form = e.target;
+      var hp = form.querySelector('[name=website]');
+      if (hp && hp.value) return false;
+      var btn = form.querySelector('button[type=submit]');
+      var msg = form.querySelector('[data-lead-msg]');
+      function showMsg(text, isErr) {
+        if (!msg) return;
+        msg.style.display = 'block';
+        msg.style.background = isErr ? 'rgba(239,68,68,0.15)' : 'rgba(0,255,136,0.15)';
+        msg.style.color = isErr ? '#fca5a5' : '#00FF88';
+        msg.style.border = '1px solid ' + (isErr ? 'rgba(239,68,68,0.3)' : 'rgba(0,255,136,0.3)');
+        msg.textContent = text;
+      }
+      btn.disabled = true;
+      var originalLabel = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+      try {
+        var res = await fetch('/api/asset-report/lead', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: form.e.value.trim(),
+            address: form.a ? form.a.value.trim() : '',
+            source: 'blog_lead_magnet'
+          })
+        });
+        var data = {};
+        try { data = await res.json(); } catch (_) {}
+        if (res.ok && data && data.success !== false) {
+          form.innerHTML = '<div style="text-align:center;padding:20px"><div style="width:44px;height:44px;background:#00FF88;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px"><i class="fas fa-check" style="color:#0A0A0A;font-size:18px"></i></div><p style="color:#00FF88;font-weight:700;font-size:15px;margin:0 0 4px">Check your email!</p><p style="color:#9ca3af;font-size:12px;margin:0">We\\'ve sent your free sample report. If you don\\'t see it in 5 minutes, check spam.</p></div>';
+          if (typeof window.fireMetaLeadEvent === 'function') window.fireMetaLeadEvent({ content_name: 'blog_lead_magnet' });
+          return false;
+        }
+        var errText = (data && data.error) ? String(data.error) : 'Something went wrong. Please try again or email sales@roofmanager.ca directly.';
+        showMsg(errText, true);
+        btn.disabled = false;
+        btn.innerHTML = originalLabel;
+      } catch (err) {
+        showMsg('Network error — please check your connection and try again.', true);
+        btn.disabled = false;
+        btn.innerHTML = originalLabel;
+      }
+      return false;
+    };
+  }
+  </script>
   <p style="text-align:center;color:#6b7280;font-size:11px;margin-top:8px"><i class="fas fa-envelope" style="color:#00FF88;margin-right:4px"></i>Delivered instantly to your inbox</p>
 </section>`
 }

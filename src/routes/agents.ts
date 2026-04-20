@@ -33,18 +33,40 @@ agentsRoutes.post('/leads', async (c) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean)) return c.json({ error: 'Invalid email' }, 400)
     const cleanName = name ? String(name).trim().slice(0, 200) : 'Website Visitor'
 
-    await c.env.DB.prepare(
-      `INSERT INTO leads (name, company_name, phone, email, source_page, message, address, utm_source) VALUES (?,?,?,?,?,?,?,?)`
-    ).bind(
-      cleanName,
-      company_name ? String(company_name).trim().slice(0, 200) : '',
-      phone ? String(phone).trim().slice(0, 30) : '',
-      emailClean,
-      source_page || 'unknown',
-      message ? String(message).trim().slice(0, 2000) : '',
-      address ? String(address).trim().slice(0, 500) : '',
-      utm_source ? String(utm_source).trim().slice(0, 100) : ''
-    ).run()
+    // Resilient insert — fall back to pre-0156 schema if address/utm_source columns
+    // haven't been migrated yet. Without this, the whole endpoint 500s on old DBs
+    // and blog/how-to contact forms show "something went wrong" to the user.
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO leads (name, company_name, phone, email, source_page, message, address, utm_source) VALUES (?,?,?,?,?,?,?,?)`
+      ).bind(
+        cleanName,
+        company_name ? String(company_name).trim().slice(0, 200) : '',
+        phone ? String(phone).trim().slice(0, 30) : '',
+        emailClean,
+        source_page || 'unknown',
+        message ? String(message).trim().slice(0, 2000) : '',
+        address ? String(address).trim().slice(0, 500) : '',
+        utm_source ? String(utm_source).trim().slice(0, 100) : ''
+      ).run()
+    } catch (insertErr: any) {
+      const msg = String(insertErr?.message || insertErr || '')
+      if (/no such column/i.test(msg) && /(address|utm_source)/i.test(msg)) {
+        console.warn('[leads] falling back to pre-0156 schema — run migration 0156 to capture address/utm_source')
+        await c.env.DB.prepare(
+          `INSERT INTO leads (name, company_name, phone, email, source_page, message) VALUES (?,?,?,?,?,?)`
+        ).bind(
+          cleanName,
+          company_name ? String(company_name).trim().slice(0, 200) : '',
+          phone ? String(phone).trim().slice(0, 30) : '',
+          emailClean,
+          source_page || 'unknown',
+          message ? String(message).trim().slice(0, 2000) : ''
+        ).run()
+      } else {
+        throw insertErr
+      }
+    }
 
     // Track lead capture in GA4
     trackLeadCapture(c.env, source_page || 'unknown', {
