@@ -3992,6 +3992,20 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
         <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="block w-full bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl text-center text-lg transition-all border border-white/10 hover:border-[#00FF88]/30">
           <i class="fas fa-calendar-check mr-2 text-[#00FF88]"></i>Book a Free 15-Min Demo Instead
         </a>
+        <div class="mt-5 pt-5 border-t border-white/10 grid sm:grid-cols-3 gap-4 text-center">
+          <a href="tel:+17809833335" class="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
+            <i class="fas fa-phone text-[#00FF88] text-lg"></i>
+            <span class="text-xs font-semibold">(780) 983-3335</span>
+          </a>
+          <a href="mailto:sales@roofmanager.ca" class="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
+            <i class="fas fa-envelope text-[#00FF88] text-lg"></i>
+            <span class="text-xs font-semibold">sales@roofmanager.ca</span>
+          </a>
+          <a href="/contact" class="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
+            <i class="fas fa-comments text-[#00FF88] text-lg"></i>
+            <span class="text-xs font-semibold">Contact Page</span>
+          </a>
+        </div>
       </form>
     </div>
   </section>
@@ -5577,6 +5591,7 @@ function getSampleReportHTML() {
       <a href="/register">Create Free Account <i class="fas fa-arrow-right"></i></a>
     </div>
   </div>
+  ${getContactFormHTML('sample-report')}
   <script src="/static/tracker.js" defer></script>
 </body>
 </html>`
@@ -9636,6 +9651,8 @@ function getGuideHTML(slug: string): string | null {
     <div class="grid md:grid-cols-3 gap-4">${relatedHTML}</div>
   </section>
 
+  ${getContactFormHTML('guide_' + g.slug)}
+
   <footer class="text-gray-400 mt-8" style="background:#0A0A0A">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-10 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
       <p class="text-sm text-gray-500">&copy; 2026 Roof Manager. All rights reserved.</p>
@@ -9643,7 +9660,7 @@ function getGuideHTML(slug: string): string | null {
         <a href="/guides" class="hover:text-[#00FF88] transition-colors">All Guides</a>
         <a href="/blog" class="hover:text-[#00FF88] transition-colors">Blog</a>
         <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a>
-        <a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88] transition-colors">Contact</a>
+        <a href="/contact" class="hover:text-[#00FF88] transition-colors">Contact</a>
       </div>
     </div>
   </footer>
@@ -9720,6 +9737,7 @@ function getHowItWorksPageHTML(): string {
       <a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-8 rounded-xl text-base shadow-2xl transition-all hover:scale-[1.03]"><i class="fas fa-rocket"></i> Start Free</a>
     </div>
   </section>
+  ${getContactFormHTML('how-it-works')}
   <footer class="text-gray-400" style="background:#0A0A0A">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-10 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
       <p class="text-sm text-gray-500">&copy; 2026 Roof Manager. All rights reserved.</p>
@@ -9728,7 +9746,7 @@ function getHowItWorksPageHTML(): string {
         <a href="/faq" class="hover:text-[#00FF88]">FAQ</a>
         <a href="/pricing" class="hover:text-[#00FF88]">Pricing</a>
         <a href="/blog" class="hover:text-[#00FF88]">Blog</a>
-        <a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88]">Contact</a>
+        <a href="/contact" class="hover:text-[#00FF88]">Contact</a>
       </div>
     </div>
   </footer>
@@ -9801,6 +9819,7 @@ function getFAQPageHTML(): string {
       <a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-8 rounded-xl text-base shadow-2xl transition-all hover:scale-[1.03]"><i class="fas fa-rocket"></i> Start Free</a>
     </div>
   </section>
+  ${getContactFormHTML('faq')}
   <footer class="text-gray-400" style="background:#0A0A0A">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-10 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
       <p class="text-sm text-gray-500">&copy; 2026 Roof Manager. All rights reserved.</p>
@@ -9809,7 +9828,7 @@ function getFAQPageHTML(): string {
         <a href="/guides" class="hover:text-[#00FF88]">Tutorials</a>
         <a href="/pricing" class="hover:text-[#00FF88]">Pricing</a>
         <a href="/blog" class="hover:text-[#00FF88]">Blog</a>
-        <a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88]">Contact</a>
+        <a href="/contact" class="hover:text-[#00FF88]">Contact</a>
       </div>
     </div>
   </footer>
@@ -9878,13 +9897,14 @@ function getGuidesIndexHTML(): string {
     <p class="text-lg text-gray-400 max-w-2xl mb-12">Everything you need to run your roofing company on Roof Manager — from ordering your first report to deploying a 24/7 AI receptionist.</p>
     <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5">${cards}</div>
   </section>
+  ${getContactFormHTML('guides')}
   <footer class="text-gray-400" style="background:#0A0A0A">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-10 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
       <p class="text-sm text-gray-500">&copy; 2026 Roof Manager. All rights reserved.</p>
       <div class="flex items-center gap-5 text-sm">
         <a href="/blog" class="hover:text-[#00FF88]">Blog</a>
         <a href="/pricing" class="hover:text-[#00FF88]">Pricing</a>
-        <a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88]">Contact</a>
+        <a href="/contact" class="hover:text-[#00FF88]">Contact</a>
       </div>
     </div>
   </footer>
@@ -10813,6 +10833,8 @@ Authorization: Bearer rm_live_xxxx
       </div>
     </div>
   </section>
+
+  ${getContactFormHTML('services')}
 
   <!-- Footer -->
   <footer style="background:#0A0A0A" class="text-gray-500 border-t border-white/5">
@@ -16182,6 +16204,8 @@ function getHomeownerEstimatePageHTML(): string {
     </div>
   </section>
 
+  ${getContactFormHTML('coverage')}
+
   <!-- Footer -->
   <footer style="background:#0A0A0A">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 py-10 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -16194,7 +16218,7 @@ function getHomeownerEstimatePageHTML(): string {
         <a href="/sample-report" class="hover:text-[#00FF88] transition-colors">Sample Report</a>
         <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a>
         <a href="/faq" class="hover:text-[#00FF88] transition-colors">FAQ</a>
-        <a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy</a>
+        <a href="/contact" class="hover:text-[#00FF88] transition-colors">Contact</a>
       </div>
     </div>
   </footer>
@@ -16341,12 +16365,14 @@ function getToolsHubHTML(): string {
     </div>
   </main>
 
+  ${getContactFormHTML('tools')}
+
   <footer style="border-top:1px solid #1e293b;padding:32px 24px;text-align:center;color:#475569;font-size:13px;margin-top:60px;">
     <div style="margin-bottom:12px;display:flex;justify-content:center;gap:24px;flex-wrap:wrap;">
       <a href="/" style="color:#475569;text-decoration:none;">Home</a>
       <a href="/blog" style="color:#475569;text-decoration:none;">Blog</a>
       <a href="/tools" style="color:#475569;text-decoration:none;">Free Tools</a>
-      <a href="/press" style="color:#475569;text-decoration:none;">Press</a>
+      <a href="/contact" style="color:#475569;text-decoration:none;">Contact</a>
       <a href="/privacy" style="color:#475569;text-decoration:none;">Privacy</a>
     </div>
     <p>© ${new Date().getFullYear()} Roof Manager. Free tools provided for educational and estimating use.</p>
@@ -16775,13 +16801,15 @@ function getPressPageHTML(): string {
     </section>
   </main>
 
+  ${getContactFormHTML('press')}
+
   <footer style="border-top:1px solid #1e293b;padding:32px 24px;text-align:center;color:#475569;font-size:13px;margin-top:60px;">
     <div style="margin-bottom:12px;display:flex;justify-content:center;gap:24px;flex-wrap:wrap;">
       <a href="/" style="color:#475569;text-decoration:none;">Home</a>
       <a href="/blog" style="color:#475569;text-decoration:none;">Blog</a>
       <a href="/tools" style="color:#475569;text-decoration:none;">Free Tools</a>
       <a href="/press" style="color:#f59e0b;text-decoration:none;">Press</a>
-      <a href="/privacy" style="color:#475569;text-decoration:none;">Privacy</a>
+      <a href="/contact" style="color:#475569;text-decoration:none;">Contact</a>
     </div>
     <p>© ${new Date().getFullYear()} Roof Manager · <a href="https://www.roofmanager.ca" style="color:#475569;">www.roofmanager.ca</a></p>
   </footer>

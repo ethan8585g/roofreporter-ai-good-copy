@@ -466,6 +466,17 @@ export async function notifySalesNewLead(env: any, data: {
     }
   }
 
+  // Strategy 3: GCP Service Account Gmail API fallback
+  if (!sent && env.GCP_SERVICE_ACCOUNT_JSON) {
+    try {
+      await sendGmailEmail(env.GCP_SERVICE_ACCOUNT_JSON, 'sales@roofmanager.ca', subject, html, 'sales@roofmanager.ca')
+      sent = true
+      console.log('[notifySalesNewLead] sent via GCP Service Account fallback')
+    } catch (e: any) {
+      console.error('[notifySalesNewLead] GCP Service Account also failed:', e?.message || e)
+    }
+  }
+
   if (!sent) {
     console.error('[notifySalesNewLead] ALL email methods failed — lead notification for', data.email, 'was NOT delivered to sales@roofmanager.ca')
   }

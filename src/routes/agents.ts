@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 import { trackLeadCapture } from '../services/ga4-events'
-import { sendGmailOAuth2 } from '../services/email'
+import { sendGmailOAuth2, sendViaResend, sendGmailEmail } from '../services/email'
 
 export const agentsRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -47,21 +47,9 @@ agentsRoutes.post('/leads', async (c) => {
       lead_email_domain: emailClean.split('@')[1] || 'unknown'
     }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
-    // Email notification to sales@roofmanager.ca
-    const clientId = (c.env as any).GMAIL_CLIENT_ID
-    let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
-    let refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ''
-    // Fallback: check DB for tokens (superadmin email setup stores here)
-    if (!refreshToken || !clientSecret) {
-      try {
-        const dbRefresh = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'gmail_refresh_token' AND master_company_id = 1").first<any>()
-        if (dbRefresh?.setting_value) refreshToken = dbRefresh.setting_value
-        const dbSecret = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1").first<any>()
-        if (dbSecret?.setting_value) clientSecret = dbSecret.setting_value
-      } catch {}
-    }
-    if (clientId && clientSecret && refreshToken) {
-      const leadHtml = `
+    // Email notification to sales@roofmanager.ca — 3-tier fallback
+    const leadSubject = `🔔 New Lead: ${String(name).trim()} — ${source_page || 'website'}`
+    const leadHtml = `
 <div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
   <div style="background:#0f172a;padding:24px;border-radius:12px 12px 0 0">
     <h1 style="color:#38bdf8;font-size:18px;margin:0">🔔 New Lead from Roof Manager</h1>
@@ -80,7 +68,56 @@ agentsRoutes.post('/leads', async (c) => {
     <a href="https://www.roofmanager.ca/super-admin" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Super Admin Dashboard</a>
   </div>
 </div>`
-      sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofmanager.ca', `🔔 New Lead: ${String(name).trim()} — ${source_page || 'website'}`, leadHtml, 'sales@roofmanager.ca').catch((e: any) => console.warn('[Lead Email] Failed:', e.message))
+
+    // Strategy 1: Gmail OAuth2
+    let emailSent = false
+    const clientId = (c.env as any).GMAIL_CLIENT_ID
+    let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
+    let refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ''
+    if (!refreshToken || !clientSecret) {
+      try {
+        const dbRefresh = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'gmail_refresh_token' AND master_company_id = 1").first<any>()
+        if (dbRefresh?.setting_value) refreshToken = dbRefresh.setting_value
+        const dbSecret = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1").first<any>()
+        if (dbSecret?.setting_value) clientSecret = dbSecret.setting_value
+      } catch {}
+    }
+    if (clientId && clientSecret && refreshToken) {
+      try {
+        await sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofmanager.ca', leadSubject, leadHtml, 'sales@roofmanager.ca')
+        emailSent = true
+        console.log('[Lead Email] sent via Gmail OAuth2')
+      } catch (e: any) {
+        console.error('[Lead Email] Gmail OAuth2 failed:', e?.message || e)
+      }
+    } else {
+      console.warn('[Lead Email] Gmail OAuth2 credentials missing')
+    }
+
+    // Strategy 2: Resend API fallback
+    if (!emailSent && (c.env as any).RESEND_API_KEY) {
+      try {
+        await sendViaResend((c.env as any).RESEND_API_KEY, 'sales@roofmanager.ca', leadSubject, leadHtml)
+        emailSent = true
+        console.log('[Lead Email] sent via Resend fallback')
+      } catch (e: any) {
+        console.error('[Lead Email] Resend fallback failed:', e?.message || e)
+      }
+    }
+
+    // Strategy 3: GCP Service Account Gmail API fallback
+    if (!emailSent && (c.env as any).GCP_SERVICE_ACCOUNT_JSON) {
+      try {
+        await sendGmailEmail((c.env as any).GCP_SERVICE_ACCOUNT_JSON, 'sales@roofmanager.ca', leadSubject, leadHtml, 'sales@roofmanager.ca')
+        emailSent = true
+        console.log('[Lead Email] sent via GCP Service Account')
+      } catch (e: any) {
+        console.error('[Lead Email] GCP Service Account failed:', e?.message || e)
+      }
+    }
+
+    if (!emailSent) {
+      console.error('[Lead Email] ALL methods failed — lead notification for', emailClean, 'was NOT delivered')
     }
 
     return c.json({ success: true, message: 'Thank you! We will be in touch shortly.' })

@@ -46,14 +46,36 @@ function nav() {
 </nav>`
 }
 
+function contactCTA(source: string) {
+  return `<section style="background:#0A0A0A" class="py-16 border-t border-white/5">
+  <div class="max-w-2xl mx-auto px-4 text-center">
+    <span style="display:inline-block;background:rgba(0,255,136,0.1);color:#00FF88;font-size:12px;font-weight:700;padding:6px 16px;border-radius:999px;margin-bottom:16px"><i class="fas fa-envelope" style="margin-right:6px"></i>CONTACT US</span>
+    <h2 style="font-size:28px;font-weight:900;color:#fff;margin-bottom:8px">Questions? We're Here to Help</h2>
+    <p style="color:#9ca3af;margin-bottom:24px;font-size:15px">Tell us about your roofing business and we'll get you set up in minutes.</p>
+    <div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:24px;text-align:left">
+      <form onsubmit="return (async function(e){e.preventDefault();var b=e.target.querySelector('button');b.disabled=true;b.textContent='Sending...';try{var r=await fetch('/api/agents/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:e.target.n.value,email:e.target.e.value,message:e.target.m.value,source_page:'${source}'})});var d=await r.json();if(d.success){e.target.innerHTML='<p style=\\'color:#00FF88;font-weight:700;text-align:center;padding:20px\\'>✓ Thank you! We\\'ll be in touch shortly.</p>';return}b.disabled=false;b.textContent='Send Message'}catch(x){b.disabled=false;b.textContent='Send Message'}return false})(event)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <input name="n" required placeholder="Your name" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;color:#fff;font-size:14px;outline:none">
+          <input name="e" type="email" required placeholder="Email address" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;color:#fff;font-size:14px;outline:none">
+        </div>
+        <textarea name="m" rows="2" placeholder="How can we help?" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;color:#fff;font-size:14px;outline:none;resize:none;margin-bottom:12px;box-sizing:border-box"></textarea>
+        <button type="submit" style="width:100%;background:#00FF88;color:#0A0A0A;font-weight:800;padding:14px;border:none;border-radius:10px;font-size:15px;cursor:pointer">Send Message</button>
+      </form>
+      <p style="text-align:center;color:#6b7280;font-size:11px;margin-top:8px"><i class="fas fa-phone" style="color:#00FF88;margin-right:4px"></i>Or call: <a href="tel:+17809833335" style="color:#00FF88">(780) 983-3335</a> · <a href="mailto:sales@roofmanager.ca" style="color:#00FF88">sales@roofmanager.ca</a></p>
+    </div>
+  </div>
+</section>`
+}
+
 function footer() {
-  return `<footer style="background:#0A0A0A;border-top:1px solid rgba(255,255,255,0.06)" class="text-gray-500 py-10 text-center text-sm">
+  return `${contactCTA('us-vertical')}
+<footer style="background:#0A0A0A;border-top:1px solid rgba(255,255,255,0.06)" class="text-gray-500 py-10 text-center text-sm">
   <div class="max-w-4xl mx-auto px-4">
     <p class="text-gray-300 font-semibold mb-2">Roof Manager — Serving All 50 US States &amp; Canada</p>
     <p>&copy; ${new Date().getFullYear()} Roof Manager.</p>
     <div class="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1">
       <a href="/" class="hover:text-white">Home</a><a href="/pricing" class="hover:text-white">Pricing</a><a href="/blog" class="hover:text-white">Blog</a>
-      <a href="/us" class="hover:text-white">US Coverage</a><a href="/us/insurance-claims" class="hover:text-white">Insurance Claims</a>
+      <a href="/contact" class="hover:text-white">Contact</a><a href="/us/insurance-claims" class="hover:text-white">Insurance Claims</a>
       <a href="/us/storm-damage" class="hover:text-white">Storm Damage</a><a href="/us/hail-damage" class="hover:text-white">Hail Damage</a>
     </div>
   </div>
