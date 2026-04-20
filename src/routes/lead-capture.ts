@@ -81,7 +81,7 @@ leadCaptureRoutes.post('/asset-report/lead', async (c) => {
     source: `asset_report:${source}`,
     email: body.email,
     extra: { address, building_count: buildings }
-  }).catch(() => {})
+  }).catch((e: any) => console.error('[asset-report/lead] email notification failed:', e?.message || e))
 
   return c.json({ success: true })
 })
@@ -126,7 +126,7 @@ leadCaptureRoutes.post('/contact/lead', async (c) => {
     source: 'contact_form',
     name, email, phone, company,
     extra: { employees, interest, message, utm_source, utm_medium, utm_campaign }
-  }).catch(() => {})
+  }).catch((e: any) => console.error('[contact/lead] email notification failed:', e?.message || e))
 
   return c.json({ success: true })
 })
@@ -162,7 +162,7 @@ leadCaptureRoutes.post('/condo-lead', async (c) => {
   notifySalesNewLead(c.env, {
     source: 'condo_cheat_sheet',
     name, email: body.email, company
-  }).catch(() => {})
+  }).catch((e: any) => console.error('[condo-lead] email notification failed:', e?.message || e))
 
   return c.json({ success: true, redirect: '/condo-reserve-fund-cheat-sheet/thank-you' })
 })

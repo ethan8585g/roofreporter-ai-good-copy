@@ -2415,7 +2415,7 @@ app.post('/api/demo/lead', async (c) => {
       source: 'demo_portal',
       name, email, phone, company, message,
       extra: { utm_source, utm_medium, utm_campaign, utm_content }
-    }).catch(() => {})
+    }).catch((e: any) => console.error('[demo-portal/lead] email notification failed:', e?.message || e))
 
     return c.json({ success: true })
   } catch (e: any) {

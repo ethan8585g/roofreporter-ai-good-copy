@@ -395,38 +395,24 @@ export async function notifySalesNewLead(env: any, data: {
   message?: string | null
   extra?: Record<string, string | number | null | undefined>
 }): Promise<void> {
-  try {
-    const clientId = env.GMAIL_CLIENT_ID
-    let clientSecret = env.GMAIL_CLIENT_SECRET || ''
-    let refreshToken = env.GMAIL_REFRESH_TOKEN || ''
-    if (!refreshToken || !clientSecret) {
-      try {
-        const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
-        if (r?.setting_value) refreshToken = r.setting_value
-        const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
-        if (s?.setting_value) clientSecret = s.setting_value
-      } catch {}
-    }
-    if (!clientId || !clientSecret || !refreshToken) return
+  const esc = (v: any) => String(v ?? '').replace(/[&<>"']/g, (m) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' } as any)[m])
+  const rows: string[] = []
+  const push = (label: string, val: any, link?: 'mailto' | 'tel') => {
+    if (val === null || val === undefined || val === '') return
+    const v = esc(val)
+    const cell = link === 'mailto' ? `<a href="mailto:${v}" style="color:#0ea5e9">${v}</a>`
+      : link === 'tel' ? `<a href="tel:${v}" style="color:#0ea5e9">${v}</a>`
+      : v
+    rows.push(`<tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:110px;vertical-align:top"><strong>${esc(label)}</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${cell}</td></tr>`)
+  }
+  push('Name', data.name)
+  push('Email', data.email, 'mailto')
+  push('Phone', data.phone, 'tel')
+  push('Company', data.company)
+  push('Message', data.message)
+  if (data.extra) for (const [k, v] of Object.entries(data.extra)) push(k, v)
 
-    const esc = (v: any) => String(v ?? '').replace(/[&<>"']/g, (m) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' } as any)[m])
-    const rows: string[] = []
-    const push = (label: string, val: any, link?: 'mailto' | 'tel') => {
-      if (val === null || val === undefined || val === '') return
-      const v = esc(val)
-      const cell = link === 'mailto' ? `<a href="mailto:${v}" style="color:#0ea5e9">${v}</a>`
-        : link === 'tel' ? `<a href="tel:${v}" style="color:#0ea5e9">${v}</a>`
-        : v
-      rows.push(`<tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:110px;vertical-align:top"><strong>${esc(label)}</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${cell}</td></tr>`)
-    }
-    push('Name', data.name)
-    push('Email', data.email, 'mailto')
-    push('Phone', data.phone, 'tel')
-    push('Company', data.company)
-    push('Message', data.message)
-    if (data.extra) for (const [k, v] of Object.entries(data.extra)) push(k, v)
-
-    const html = `
+  const html = `
 <div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
   <div style="background:#0f172a;padding:24px;border-radius:12px 12px 0 0">
     <h1 style="color:#38bdf8;font-size:18px;margin:0">🔔 New Lead from Roof Manager</h1>
@@ -439,9 +425,48 @@ export async function notifySalesNewLead(env: any, data: {
     <a href="https://www.roofmanager.ca/super-admin" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Super Admin Dashboard</a>
   </div>
 </div>`
-    const subject = `🔔 New Lead: ${data.name || data.email || 'anonymous'} — ${data.source}`
-    await sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofmanager.ca', subject, html, 'sales@roofmanager.ca')
-  } catch (e: any) {
-    console.warn('[notifySalesNewLead] failed:', e?.message || e)
+  const subject = `🔔 New Lead: ${data.name || data.email || 'anonymous'} — ${data.source}`
+
+  // Strategy 1: Try Gmail OAuth2
+  let sent = false
+  const clientId = env.GMAIL_CLIENT_ID
+  let clientSecret = env.GMAIL_CLIENT_SECRET || ''
+  let refreshToken = env.GMAIL_REFRESH_TOKEN || ''
+  if (!refreshToken || !clientSecret) {
+    try {
+      const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
+      if (r?.setting_value) refreshToken = r.setting_value
+      const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
+      if (s?.setting_value) clientSecret = s.setting_value
+    } catch (e: any) {
+      console.warn('[notifySalesNewLead] DB credential lookup failed:', e?.message)
+    }
+  }
+
+  if (clientId && clientSecret && refreshToken) {
+    try {
+      await sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofmanager.ca', subject, html, 'sales@roofmanager.ca')
+      sent = true
+      console.log('[notifySalesNewLead] sent via Gmail OAuth2')
+    } catch (e: any) {
+      console.error('[notifySalesNewLead] Gmail OAuth2 failed:', e?.message || e)
+    }
+  } else {
+    console.warn('[notifySalesNewLead] Gmail OAuth2 credentials missing — clientId:', !!clientId, 'clientSecret:', !!clientSecret, 'refreshToken:', !!refreshToken)
+  }
+
+  // Strategy 2: Fallback to Resend if Gmail failed or unavailable
+  if (!sent && env.RESEND_API_KEY) {
+    try {
+      await sendViaResend(env.RESEND_API_KEY, 'sales@roofmanager.ca', subject, html)
+      sent = true
+      console.log('[notifySalesNewLead] sent via Resend fallback')
+    } catch (e: any) {
+      console.error('[notifySalesNewLead] Resend fallback also failed:', e?.message || e)
+    }
+  }
+
+  if (!sent) {
+    console.error('[notifySalesNewLead] ALL email methods failed — lead notification for', data.email, 'was NOT delivered to sales@roofmanager.ca')
   }
 }
