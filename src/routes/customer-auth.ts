@@ -1727,8 +1727,12 @@ customerAuthRoutes.get('/gcal/auth-url', async (c) => {
     return c.json({ error: 'Google Calendar integration is not configured.' }, 400)
   }
 
+  // P1-16: hardcode OAuth redirect URI per environment (matches callback).
+  const configuredBase = (c.env as any).APP_BASE_URL || 'https://www.roofmanager.ca'
   const url = new URL(c.req.url)
-  const redirectUri = `${url.protocol}//${url.host}/api/customer/gcal/callback`
+  const redirectUri = url.host.startsWith('localhost') || url.host.startsWith('0.0.0.0')
+    ? `${url.protocol}//${url.host}/api/customer/gcal/callback`
+    : `${configuredBase}/api/customer/gcal/callback`
 
   const state = `${customerId}:${crypto.randomUUID().replace(/-/g, '').substring(0, 16)}`
 
@@ -1799,8 +1803,14 @@ customerAuthRoutes.get('/gcal/callback', async (c) => {
     } catch {}
   }
 
+  // P1-16: hardcode the OAuth redirect URI per-environment instead of
+  // deriving from the request Host. Blocks Host-header attacks where a
+  // rogue subdomain steers the code exchange elsewhere.
+  const configuredBase = (c.env as any).APP_BASE_URL || 'https://www.roofmanager.ca'
   const url = new URL(c.req.url)
-  const redirectUri = `${url.protocol}//${url.host}/api/customer/gcal/callback`
+  const redirectUri = url.host.startsWith('localhost') || url.host.startsWith('0.0.0.0')
+    ? `${url.protocol}//${url.host}/api/customer/gcal/callback`
+    : `${configuredBase}/api/customer/gcal/callback`
 
   if (!clientId || !clientSecret) {
     return c.html(`<!DOCTYPE html><html><head><title>Google Calendar</title><link rel="stylesheet" href="/static/tailwind.css"></head>
