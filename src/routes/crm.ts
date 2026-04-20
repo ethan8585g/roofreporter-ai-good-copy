@@ -2982,16 +2982,28 @@ crmRoutes.post('/dispatch/geocode-missing', async (c) => {
      WHERE owner_id = ? AND property_address IS NOT NULL AND property_address != ''
        AND (lat IS NULL OR lng IS NULL) LIMIT 50`
   ).bind(ownerId).all()
+  const jobs = ((rows.results || []) as any[]).filter(j => j.property_address && String(j.property_address).trim())
+
+  // P1-28: batched geocoding (max 5 concurrent) + single DB.batch() update.
+  // Was 2× sequential roundtrips per job.
   let ok = 0, fail = 0
-  for (const job of (rows.results || []) as any[]) {
-    const loc = await geocodeAddress(job.property_address, apiKey)
-    if (loc) {
-      await c.env.DB.prepare(`UPDATE crm_jobs SET lat = ?, lng = ?, updated_at = datetime('now') WHERE id = ?`)
-        .bind(loc.lat, loc.lng, job.id).run()
-      ok++
-    } else fail++
+  const CONCURRENCY = 5
+  const results: Array<{ id: number; loc: any }> = []
+  for (let i = 0; i < jobs.length; i += CONCURRENCY) {
+    const slice = jobs.slice(i, i + CONCURRENCY)
+    const resolved = await Promise.all(slice.map(async (job) => ({
+      id: job.id,
+      loc: await geocodeAddress(job.property_address, apiKey).catch(() => null),
+    })))
+    results.push(...resolved)
   }
-  return c.json({ success: true, geocoded: ok, failed: fail, total: (rows.results || []).length })
+  const updateStmts = results
+    .filter(r => r.loc && typeof r.loc.lat === 'number' && typeof r.loc.lng === 'number')
+    .map(r => c.env.DB.prepare(`UPDATE crm_jobs SET lat = ?, lng = ?, updated_at = datetime('now') WHERE id = ?`).bind(r.loc.lat, r.loc.lng, r.id))
+  if (updateStmts.length) await c.env.DB.batch(updateStmts)
+  ok = updateStmts.length
+  fail = results.length - ok
+  return c.json({ success: true, geocoded: ok, failed: fail, total: jobs.length })
 })
 
 // Optimize route for a crew member on a given date

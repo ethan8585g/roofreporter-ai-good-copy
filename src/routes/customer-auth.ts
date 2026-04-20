@@ -316,13 +316,18 @@ customerAuthRoutes.post('/send-verification', async (c) => {
     if (recentCodes && recentCodes.cnt >= 1) {
       return c.json({ error: 'A verification code was already sent recently. Please wait 30 minutes before requesting another.' }, 429)
     }
-    // Per-IP throttle to slow brute-force enumeration
+    // P1-10: tighter per-IP + per-email throttling to slow brute-force enumeration.
+    // Global: 20 IP requests / hour. Per-email: 3 codes / hour. Lockout after
+    // hitting the limit — no bypass via parallel emails from same IP.
     const clientIp = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
     try {
       await c.env.DB.prepare("CREATE TABLE IF NOT EXISTS verification_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT, email TEXT, created_at TEXT DEFAULT (datetime('now')))").run()
-      const ipAttempts = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM verification_attempts WHERE ip = ? AND created_at > datetime('now', '-1 hour')").bind(clientIp).first<any>()
-      if (ipAttempts && ipAttempts.cnt >= 10) {
-        return c.json({ error: 'Too many verification requests from this network. Please wait and try again.' }, 429)
+      const [ipAttempts, emailAttempts] = await Promise.all([
+        c.env.DB.prepare("SELECT COUNT(*) as cnt FROM verification_attempts WHERE ip = ? AND created_at > datetime('now', '-1 hour')").bind(clientIp).first<any>(),
+        c.env.DB.prepare("SELECT COUNT(*) as cnt FROM verification_attempts WHERE email = ? AND created_at > datetime('now', '-1 hour')").bind(cleanEmail).first<any>(),
+      ])
+      if ((ipAttempts && ipAttempts.cnt >= 20) || (emailAttempts && emailAttempts.cnt >= 3)) {
+        return c.json({ error: 'Too many verification requests. Please wait an hour and try again.' }, 429)
       }
       await c.env.DB.prepare("INSERT INTO verification_attempts (ip, email) VALUES (?, ?)").bind(clientIp, cleanEmail).run()
     } catch (e: any) { console.warn('[verification] rate-limit check failed:', e?.message || e) }
