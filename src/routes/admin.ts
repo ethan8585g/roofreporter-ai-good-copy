@@ -9,6 +9,7 @@ import { addCredits } from '../services/api-billing'
 import { notifyNewReportRequest } from '../services/email'
 import { logAdminAction } from '../lib/audit-log'
 import { clientIp } from '../lib/rate-limit'
+import { encryptSecret, decryptSecret } from '../lib/secret-vault'
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -47,17 +48,31 @@ adminRoutes.use('/*', async (c, next) => {
   // Allow init-db without auth (it's now protected separately)
   // All other routes require valid admin session
   const path = c.req.path.replace('/api/admin', '')
-  
+
   // init-db requires auth separately inside the handler
   if (path === '/init-db') {
     return next()
   }
-  
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+
+  // P1-31: accept the HttpOnly rm_admin_session cookie as a fallback to the
+  // legacy Authorization: Bearer header so browsers that migrated off
+  // localStorage still authenticate.
+  const admin = await validateAdminSession(
+    c.env.DB,
+    c.req.header('Authorization'),
+    c.req.header('Cookie')
+  )
   if (!admin) {
     return c.json({ error: 'Admin authentication required. Please log in at /login' }, 401)
   }
-  
+
+  // P1-14: admin.ts is the superadmin management surface — every route here
+  // requires role === 'superadmin'. Previously the guard was scattered on
+  // ~20 handlers and absent from the rest; consolidating here closes the gap.
+  if (!requireSuperadmin(admin)) {
+    return c.json({ error: 'Superadmin access required' }, 403)
+  }
+
   // Store admin info in context for downstream use
   c.set('admin' as any, admin)
   return next()
@@ -2163,6 +2178,9 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
       // Create secretary config
       const fwdMethod = ['livekit_number', 'call_forwarding', 'sip_trunk'].includes(forwarding_method)
         ? forwarding_method : 'livekit_number'
+      // Encrypt SIP credentials at rest (AES-256-GCM via SIP_ENCRYPTION_KEY).
+      const encSipUser = await encryptSecret(c.env, sip_username || '')
+      const encSipPass = await encryptSecret(c.env, sip_password || '')
       await c.env.DB.prepare(`
         INSERT INTO secretary_config (
           customer_id, business_phone, greeting_script, common_qa, general_notes,
@@ -2180,8 +2198,8 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
         agentPhone || '',
         fwdMethod,
         sip_uri || '',
-        sip_username || '',
-        sip_password || ''
+        encSipUser,
+        encSipPass
       ).run()
 
       // If agent phone provided, mark in pool or insert
@@ -2451,8 +2469,9 @@ adminRoutes.post('/superadmin/secretary/:customerId/sip-config', async (c) => {
   const binds: any[] = []
   if (fwdMethod) { updates.push('forwarding_method = ?'); binds.push(fwdMethod) }
   if (typeof sip_uri === 'string') { updates.push('livekit_sip_uri = ?'); binds.push(sip_uri) }
-  if (typeof sip_username === 'string') { updates.push('sip_username = ?'); binds.push(sip_username) }
-  if (typeof sip_password === 'string') { updates.push('sip_password = ?'); binds.push(sip_password) }
+  // Encrypt SIP credentials on write (AES-256-GCM via SIP_ENCRYPTION_KEY).
+  if (typeof sip_username === 'string') { updates.push('sip_username = ?'); binds.push(await encryptSecret(c.env, sip_username)) }
+  if (typeof sip_password === 'string') { updates.push('sip_password = ?'); binds.push(await encryptSecret(c.env, sip_password)) }
   if (typeof assigned_phone_number === 'string') { updates.push('assigned_phone_number = ?'); binds.push(assigned_phone_number) }
   if (!updates.length) return c.json({ error: 'No fields to update' }, 400)
   updates.push("updated_at = datetime('now')")
@@ -2463,9 +2482,14 @@ adminRoutes.post('/superadmin/secretary/:customerId/sip-config', async (c) => {
   if (redeploy) {
     const cfg = await c.env.DB.prepare('SELECT assigned_phone_number, sip_username, sip_password FROM secretary_config WHERE customer_id = ?').bind(customerId).first<any>()
     if (cfg?.assigned_phone_number) {
+      // Decrypt at the call-site — LiveKit needs the plaintext creds.
+      const [plainUser, plainPass] = await Promise.all([
+        decryptSecret(c.env, cfg.sip_username),
+        decryptSecret(c.env, cfg.sip_password),
+      ])
       deploy = await deployLiveKitForCustomer(c.env, customerId, cfg.assigned_phone_number, {
-        sip_username: cfg.sip_username || undefined,
-        sip_password: cfg.sip_password || undefined,
+        sip_username: plainUser || undefined,
+        sip_password: plainPass || undefined,
         reuse_existing: false,
       })
     }
@@ -2720,19 +2744,22 @@ adminRoutes.post('/superadmin/secretary/:customerId/update-phone', async (c) => 
 
   try {
     const existing = await c.env.DB.prepare('SELECT id FROM secretary_config WHERE customer_id = ?').bind(customerId).first<any>()
+    // Encrypt SIP credentials at rest.
+    const encSipUser = sip_username !== undefined ? await encryptSecret(c.env, sip_username) : undefined
+    const encSipPass = sip_password !== undefined ? await encryptSecret(c.env, sip_password) : undefined
     if (existing) {
       const updates: string[] = [`assigned_phone_number = ?`, `updated_at = datetime('now')`]
       const binds: any[] = [agent_phone_number]
       if (sip_uri !== undefined) { updates.push('livekit_sip_uri = ?'); binds.push(sip_uri) }
-      if (sip_username !== undefined) { updates.push('sip_username = ?'); binds.push(sip_username) }
-      if (sip_password !== undefined) { updates.push('sip_password = ?'); binds.push(sip_password) }
+      if (encSipUser !== undefined) { updates.push('sip_username = ?'); binds.push(encSipUser) }
+      if (encSipPass !== undefined) { updates.push('sip_password = ?'); binds.push(encSipPass) }
       binds.push(customerId)
       await c.env.DB.prepare(`UPDATE secretary_config SET ${updates.join(', ')} WHERE customer_id = ?`).bind(...binds).run()
     } else {
       await c.env.DB.prepare(
         `INSERT INTO secretary_config (customer_id, assigned_phone_number, livekit_sip_uri, sip_username, sip_password, business_phone, greeting_script, is_active, connection_status, forwarding_method, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, '', '', 1, 'pending_forwarding', 'livekit_number', datetime('now'), datetime('now'))`
-      ).bind(customerId, agent_phone_number, sip_uri || '', sip_username || '', sip_password || '').run()
+      ).bind(customerId, agent_phone_number, sip_uri || '', encSipUser || '', encSipPass || '').run()
     }
 
     await c.env.DB.prepare(
@@ -2775,7 +2802,14 @@ adminRoutes.get('/superadmin/secretary/deployment-status', async (c) => {
       WHERE c.is_active = 1
       ORDER BY c.created_at DESC
     `).all<any>()
-    return c.json({ deployments: rows.results || [] })
+    // Mask encrypted sip_username before returning — the dashboard only
+    // needs to show presence, not the raw (encrypted-at-rest) blob.
+    const { maskSecret } = await import('../lib/secret-vault')
+    const deployments = ((rows.results || []) as any[]).map((r) => ({
+      ...r,
+      sip_username: r.sip_username ? maskSecret(r.sip_username) : '',
+    }))
+    return c.json({ deployments })
   } catch (err: any) {
     return c.json({ error: err.message, deployments: [] }, 500)
   }
@@ -3196,16 +3230,21 @@ adminRoutes.post('/superadmin/service-invoices/create', async (c) => {
     const invoiceNumber = `SVC-${d}-${rand}`
     const shareToken = crypto.randomUUID().replace(/-/g, '').substring(0, 24)
 
+    // P1-25: the invoice header + its line items are one logical write.
+    // Previously we issued N+1 non-atomic statements — a mid-loop error left
+    // an invoice with no line items on disk. Insert the header first to get
+    // the auto-generated id, then atomically batch all child rows.
     const invResult = await c.env.DB.prepare(
       `INSERT INTO invoices (invoice_number, customer_id, subtotal, tax_rate, tax_amount, total, currency, status, document_type, notes, share_token, due_date, created_at, updated_at)
        VALUES (?, ?, ?, ?, 0, ?, 'USD', 'draft', 'invoice', ?, ?, ?, datetime('now'), datetime('now'))`
     ).bind(invoiceNumber, customer.id, subtotal, taxRate, total, notes || '', shareToken, due_date || null).run()
     const invoiceId = invResult.meta.last_row_id as number
 
-    for (let i = 0; i < normItems.length; i++) {
-      const it = normItems[i]
-      await c.env.DB.prepare('INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order) VALUES (?, ?, ?, ?, ?, ?)').bind(invoiceId, it.description, it.quantity, it.unit_price, it.quantity * it.unit_price, i).run()
-    }
+    const itemStmts = normItems.map((it: any, i: number) =>
+      c.env.DB.prepare('INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(invoiceId, it.description, it.quantity, it.unit_price, it.quantity * it.unit_price, i)
+    )
+    if (itemStmts.length) await c.env.DB.batch(itemStmts)
 
     const sq = await createSquarePaymentLink(c.env, invoiceId, invoiceNumber, total)
     return c.json({ success: true, invoice_id: invoiceId, invoice_number: invoiceNumber, share_token: shareToken, customer_id: customer.id, total, checkout_url: sq?.url || '' })

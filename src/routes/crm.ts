@@ -357,8 +357,12 @@ crmRoutes.put('/invoices/:id', async (c) => {
 crmRoutes.delete('/invoices/:id', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
-  await c.env.DB.prepare('DELETE FROM crm_invoice_items WHERE invoice_id = ?').bind(c.req.param('id')).run()
-  await c.env.DB.prepare('DELETE FROM crm_invoices WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), ownerId).run()
+  // P1-25: atomic cascade delete.
+  const id = c.req.param('id')
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM crm_invoice_items WHERE invoice_id = ?').bind(id),
+    c.env.DB.prepare('DELETE FROM crm_invoices WHERE id = ? AND owner_id = ?').bind(id, ownerId),
+  ])
   return c.json({ success: true })
 })
 
@@ -1177,15 +1181,15 @@ crmRoutes.post('/proposals', async (c) => {
 
     await logFromContext(c, { entity_type: 'proposal', entity_id: Number(proposalId), action: 'created', metadata: { proposal_number: propNum, title: body.title, total } })
 
-    // Insert line items
+    // P1-25: proposal + line items are one logical write — atomic batch.
     if (body.items && body.items.length > 0) {
-      for (let i = 0; i < body.items.length; i++) {
-        const it = body.items[i]
+      const itemStmts = (body.items as any[]).map((it, i) => {
         const amt = Math.round((it.quantity || 1) * (it.unit_price || 0) * 100) / 100
-        await c.env.DB.prepare(
+        return c.env.DB.prepare(
           'INSERT INTO crm_proposal_items (proposal_id, description, quantity, unit, unit_price, amount, sort_order) VALUES (?,?,?,?,?,?,?)'
-        ).bind(proposalId, it.description || '', it.quantity || 1, it.unit || 'ea', it.unit_price || 0, amt, i).run()
-      }
+        ).bind(proposalId, it.description || '', it.quantity || 1, it.unit || 'ea', it.unit_price || 0, amt, i)
+      })
+      await c.env.DB.batch(itemStmts)
     }
     return c.json({ success: true, id: proposalId, proposal_number: propNum })
   } catch (err: any) {
@@ -1241,16 +1245,18 @@ crmRoutes.put('/proposals/:id', async (c) => {
       body.status || 'draft', body.source_report_id ?? null,
       body.sales_rep_id ?? null, body.sales_rep_name ?? null, id, ownerId).run()
 
-    // Replace line items
+    // P1-25: replacement is one logical write — DELETE + all child INSERTs
+    // atomic so a mid-batch error can't leave the proposal with zero items.
     if (body.items) {
-      await c.env.DB.prepare('DELETE FROM crm_proposal_items WHERE proposal_id = ?').bind(id).run()
+      const stmts = [c.env.DB.prepare('DELETE FROM crm_proposal_items WHERE proposal_id = ?').bind(id)]
       for (let i = 0; i < body.items.length; i++) {
         const it = body.items[i]
         const amt = Math.round((it.quantity || 1) * (it.unit_price || 0) * 100) / 100
-        await c.env.DB.prepare(
+        stmts.push(c.env.DB.prepare(
           'INSERT INTO crm_proposal_items (proposal_id, description, quantity, unit, unit_price, amount, sort_order) VALUES (?,?,?,?,?,?,?)'
-        ).bind(id, it.description || '', it.quantity || 1, it.unit || 'ea', it.unit_price || 0, amt, i).run()
+        ).bind(id, it.description || '', it.quantity || 1, it.unit || 'ea', it.unit_price || 0, amt, i))
       }
+      await c.env.DB.batch(stmts)
     }
     return c.json({ success: true })
   } catch (err: any) {
@@ -1264,9 +1270,12 @@ crmRoutes.delete('/proposals/:id', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   const id = c.req.param('id')
-  await c.env.DB.prepare('DELETE FROM crm_proposal_items WHERE proposal_id = ?').bind(id).run()
-  await c.env.DB.prepare('DELETE FROM proposal_view_log WHERE proposal_id = ?').bind(id).run()
-  await c.env.DB.prepare('DELETE FROM crm_proposals WHERE id = ? AND owner_id = ?').bind(id, ownerId).run()
+  // P1-25: atomic cascade so we can't leave orphan child rows.
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM crm_proposal_items WHERE proposal_id = ?').bind(id),
+    c.env.DB.prepare('DELETE FROM proposal_view_log WHERE proposal_id = ?').bind(id),
+    c.env.DB.prepare('DELETE FROM crm_proposals WHERE id = ? AND owner_id = ?').bind(id, ownerId),
+  ])
   return c.json({ success: true })
 })
 

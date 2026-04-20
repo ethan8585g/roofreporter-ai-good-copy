@@ -106,28 +106,54 @@ function checkEmailRateLimit(invoiceId: string): boolean {
   return true
 }
 
+// P1-27: document + lock whether discount is applied before or after tax.
+// Canadian GST/HST/PST compliance: discount reduces the taxable base, so tax
+// is computed on the *discounted* subtotal. Flip this flag if the business
+// ever needs U.S.-style "tax on full subtotal, then subtract discount".
+export const DISCOUNT_APPLIED_BEFORE_TAX = true
+
+// P1-26: all math runs in integer cents internally. The public contract
+// stays in dollars (what every caller and the DB column expect) but the
+// accumulator is never a float, so we can't lose pennies through repeated
+// float addition. Cents are half-up rounded at each conversion.
+//
+// Inputs: items[].unit_price in dollars, taxRate/discountAmount in percent or
+// dollars depending on discountType.
+// Outputs: { subtotal, taxAmount, discount, total } in dollars, exact to 2dp.
 export function calculateTotals(items: any[], taxRate: number, discountAmount: number, discountType: string = 'fixed') {
-  let subtotal = 0
-  let taxableSubtotal = 0
+  const toCents = (v: number) => Math.round(((typeof v === 'string' ? Number(v) : v) || 0) * 100)
+
+  let subtotalCents = 0
+  let taxableCents = 0
   for (const item of items) {
-    const amount = (item.quantity || 1) * (item.unit_price || 0)
-    subtotal += amount
-    if (item.is_taxable !== false && item.is_taxable !== 0) taxableSubtotal += amount
+    const qty = Number(item.quantity ?? 1) || 0
+    // unit_price can be a float dollar figure → convert via cents on the
+    // multiplication result to avoid "0.1 + 0.2" drift.
+    const unitCents = toCents(item.unit_price)
+    const lineCents = Math.round(qty * unitCents)
+    subtotalCents += lineCents
+    if (item.is_taxable !== false && item.is_taxable !== 0) taxableCents += lineCents
   }
-  const actualDiscount = discountType === 'percentage'
-    ? Math.round(subtotal * (discountAmount / 100) * 100) / 100
-    : (discountAmount || 0)
-  // Apply discount proportionally to taxable amount before computing tax
-  // This ensures tax is calculated on the discounted amount (Canadian tax compliance)
-  const discountRatio = subtotal > 0 ? actualDiscount / subtotal : 0
-  const taxableAfterDiscount = Math.round((taxableSubtotal * (1 - discountRatio)) * 100) / 100
-  const taxAmount = Math.round(taxableAfterDiscount * (taxRate / 100) * 100) / 100
-  const total = Math.round((subtotal - actualDiscount + taxAmount) * 100) / 100
+
+  const discountCents = discountType === 'percentage'
+    ? Math.round(subtotalCents * ((Number(discountAmount) || 0) / 100))
+    : toCents(discountAmount)
+
+  // Discount-before-tax (see DISCOUNT_APPLIED_BEFORE_TAX). Apply proportional
+  // share of the discount to the taxable portion so tax is on the discounted
+  // taxable subtotal, not the gross.
+  let taxableAfterDiscountCents = taxableCents
+  if (DISCOUNT_APPLIED_BEFORE_TAX && subtotalCents > 0) {
+    taxableAfterDiscountCents = Math.round(taxableCents * (1 - discountCents / subtotalCents))
+  }
+  const taxCents = Math.round(taxableAfterDiscountCents * ((Number(taxRate) || 0) / 100))
+  const totalCents = Math.max(0, subtotalCents - discountCents + taxCents)
+
   return {
-    subtotal: Math.round(subtotal * 100) / 100,
-    taxAmount: Math.round(taxAmount * 100) / 100,
-    discount: Math.round(actualDiscount * 100) / 100,
-    total: Math.max(0, total)
+    subtotal: subtotalCents / 100,
+    taxAmount: taxCents / 100,
+    discount: discountCents / 100,
+    total: totalCents / 100,
   }
 }
 
@@ -407,16 +433,19 @@ invoiceRoutes.post('/', async (c) => {
 
     await logFromContext(c, { entity_type: 'invoice', entity_id: Number(invoiceId), action: 'created', metadata: { invoice_number: number, document_type: docType, total, customer_name: crmName } })
 
-    // Insert line items with unit and taxable flag
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
-      const qty = item.quantity || 1
-      const price = item.unit_price || 0
-      const amount = Math.round(qty * price * 100) / 100
-      await c.env.DB.prepare(`
-        INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order, unit, is_taxable, category)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(invoiceId, item.description, qty, price, amount, i, item.unit || 'each', item.is_taxable !== false ? 1 : 0, item.category || '').run()
+    // P1-25: insert all line items atomically so a mid-loop error can't
+    // leave a header row with partial children on disk.
+    if (items.length > 0) {
+      const stmts = items.map((item: any, i: number) => {
+        const qty = item.quantity || 1
+        const price = item.unit_price || 0
+        const amount = Math.round(qty * price * 100) / 100
+        return c.env.DB.prepare(`
+          INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order, unit, is_taxable, category)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(invoiceId, item.description, qty, price, amount, i, item.unit || 'each', item.is_taxable !== false ? 1 : 0, item.category || '')
+      })
+      await c.env.DB.batch(stmts)
     }
 
     await c.env.DB.prepare(`
@@ -541,18 +570,21 @@ invoiceRoutes.put('/:id', async (c) => {
       id
     ).run()
 
+    // P1-25: DELETE + all re-inserts run as a single atomic batch so an
+    // error mid-loop can't leave the invoice with zero items on disk.
     if (items && items.length > 0) {
-      await c.env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id = ?').bind(id).run()
+      const stmts: any[] = [c.env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id = ?').bind(id)]
       for (let i = 0; i < items.length; i++) {
         const item = items[i]
         const qty = item.quantity || 1
         const price = item.unit_price || 0
         const amount = Math.round(qty * price * 100) / 100
-        await c.env.DB.prepare(`
+        stmts.push(c.env.DB.prepare(`
           INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order, unit, is_taxable, category)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(id, item.description, qty, price, amount, i, item.unit || 'each', item.is_taxable !== false ? 1 : 0, item.category || '').run()
+        `).bind(id, item.description, qty, price, amount, i, item.unit || 'each', item.is_taxable !== false ? 1 : 0, item.category || ''))
       }
+      await c.env.DB.batch(stmts)
     }
 
     return c.json({ success: true, invoice: { id, total, status: 'draft', document_type: docType } })
@@ -766,11 +798,16 @@ invoiceRoutes.post('/:id/convert-to-invoice', async (c) => {
 
     const invoiceId = result.meta.last_row_id
 
-    for (const item of (items.results || []) as any[]) {
-      await c.env.DB.prepare(`
-        INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order, unit, is_taxable, category)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(invoiceId, item.description, item.quantity, item.unit_price, item.amount, item.sort_order, item.unit || 'each', item.is_taxable ?? 1, item.category || '').run()
+    // P1-25: copy all source line items atomically.
+    const copyItems = (items.results || []) as any[]
+    if (copyItems.length > 0) {
+      const stmts = copyItems.map((item) =>
+        c.env.DB.prepare(`
+          INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order, unit, is_taxable, category)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(invoiceId, item.description, item.quantity, item.unit_price, item.amount, item.sort_order, item.unit || 'each', item.is_taxable ?? 1, item.category || '')
+      )
+      await c.env.DB.batch(stmts)
     }
 
     return c.json({

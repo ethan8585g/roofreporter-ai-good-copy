@@ -130,8 +130,10 @@ describe('calculateTotals — rounding edge cases', () => {
       [{ quantity: 3, unit_price: 0.3333 }],
       0, 0
     )
-    // 3 * 0.3333 = 0.9999 → rounds to 1.00
-    expect(r.subtotal).toBe(1)
+    // P1-26 integer-cents: 0.3333 → 33¢ per unit, 3 × 33¢ = 99¢ = $0.99.
+    // (Old float-first flow: 3 * 0.3333 = 0.9999 → $1.00. New flow drops
+    // sub-cent fractions at the unit price, never at the end-of-line sum.)
+    expect(r.subtotal).toBe(0.99)
   })
 
   it('rounds tax to 2 decimals', () => {
