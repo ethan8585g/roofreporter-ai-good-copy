@@ -139,8 +139,14 @@ publicApiRoutes.post('/reports', async (c) => {
     return c.json({ error: 'address is required (minimum 5 characters)' }, 400)
   }
 
-  if (address.trim().length > 500) {
-    return c.json({ error: 'address exceeds maximum length of 500 characters' }, 400)
+  // P1-34: enforce 300-char max + allowed-char whitelist. Blocks HTML/CRLF
+  // injection through the public API surface.
+  const trimmedAddress = address.trim()
+  if (trimmedAddress.length > 300) {
+    return c.json({ error: 'address exceeds maximum length of 300 characters' }, 400)
+  }
+  if (!/^[\p{L}\p{N}\s.,'#\-\/]+$/u.test(trimmedAddress)) {
+    return c.json({ error: 'address contains unsupported characters' }, 400)
   }
 
   if (callback_url) {

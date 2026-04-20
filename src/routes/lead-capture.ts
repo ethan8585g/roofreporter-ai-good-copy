@@ -80,8 +80,14 @@ leadCaptureRoutes.post('/asset-report/lead', async (c) => {
   await ensureLeadTable(c.env.DB)
 
   const source = isValidLeadSource(body.source) ? body.source : 'homepage_cta'
-  const address = body.address ? String(body.address).trim().slice(0, 300) : null
+  // P1-33: strip CR/LF/HTML tags from address before storing + rendering in email.
+  const rawAddress = body.address ? String(body.address).replace(/[\r\n\u0000-\u001F\u007F]/g, '').replace(/<[^>]*>/g, '').trim().slice(0, 300) : null
+  const address = rawAddress
   const buildings = body.building_count ? parseInt(body.building_count, 10) : null
+
+  // HTML-escaped copy for splicing into email HTML safely.
+  const escapeHtml = (v: string | null) => v == null ? '' : String(v).replace(/[&<>"'`=\/]/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#x60;','=':'&#x3D;','/':'&#x2F;'}[ch] || ch))
+  const addressForHtml = escapeHtml(address)
 
   await c.env.DB.prepare(
     `INSERT INTO asset_report_leads (email, address, building_count, source) VALUES (?, ?, ?, ?)`
@@ -95,7 +101,7 @@ leadCaptureRoutes.post('/asset-report/lead', async (c) => {
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#ffffff">
           <h1 style="color:#0A0A0A;font-size:22px;margin:0 0 12px">Your Sample Asset Report</h1>
           <p style="color:#374151;line-height:1.6">Thanks for requesting a sample from RoofManager. This preview shows how a live portfolio looks inside our Active Management platform — work orders, maintenance schedules, and client portal views.</p>
-          ${address ? `<p style="color:#6b7280;font-size:14px"><b>Property:</b> ${address}${buildings ? ` &middot; <b>Buildings/Sections:</b> ${buildings}` : ''}</p>` : ''}
+          ${address ? `<p style="color:#6b7280;font-size:14px"><b>Property:</b> ${addressForHtml}${buildings ? ` &middot; <b>Buildings/Sections:</b> ${buildings}` : ''}</p>` : ''}
           <p style="margin:24px 0"><a href="https://www.roofmanager.ca/static/Sample-RoofManager-Report.pdf" style="background:#00FF88;color:#0A0A0A;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:800">Download Sample Report (PDF)</a></p>
           <p style="color:#6b7280;font-size:13px">Questions? Reply to this email or book a 15-minute walkthrough at <a href="https://calendar.app.google/KNLFST4CNxViPPN3A">calendar.app.google</a>.</p>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0">
