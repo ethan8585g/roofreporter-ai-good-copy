@@ -67,7 +67,7 @@ function getPerms(c: any): PermissionContext | null {
 // ── Helpers ──────────────────────────────────────────────────
 function generateNumber(prefix: string): string {
   const d = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-  const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0')
+  const rand = Math.floor(Math.random() * 99999999).toString().padStart(8, '0')
   return `${prefix}-${d}-${rand}`
 }
 
@@ -82,6 +82,30 @@ function generateShareToken(): string {
   return token
 }
 
+// Email format validation
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+export function isValidEmail(email: string): boolean {
+  return typeof email === 'string' && EMAIL_REGEX.test(email.trim()) && email.trim().length <= 320
+}
+
+// Simple in-memory rate limiter for email send endpoints (per invoice ID)
+const emailSendTimestamps = new Map<string, number>()
+const RATE_LIMIT_MS = 60_000 // 1 minute between sends per document
+function checkEmailRateLimit(invoiceId: string): boolean {
+  const key = `send:${invoiceId}`
+  const last = emailSendTimestamps.get(key)
+  const now = Date.now()
+  if (last && now - last < RATE_LIMIT_MS) return false
+  emailSendTimestamps.set(key, now)
+  // Prune old entries periodically to prevent memory leaks
+  if (emailSendTimestamps.size > 500) {
+    for (const [k, v] of emailSendTimestamps) {
+      if (now - v > RATE_LIMIT_MS * 5) emailSendTimestamps.delete(k)
+    }
+  }
+  return true
+}
+
 export function calculateTotals(items: any[], taxRate: number, discountAmount: number, discountType: string = 'fixed') {
   let subtotal = 0
   let taxableSubtotal = 0
@@ -93,7 +117,11 @@ export function calculateTotals(items: any[], taxRate: number, discountAmount: n
   const actualDiscount = discountType === 'percentage'
     ? Math.round(subtotal * (discountAmount / 100) * 100) / 100
     : (discountAmount || 0)
-  const taxAmount = Math.round(taxableSubtotal * (taxRate / 100) * 100) / 100
+  // Apply discount proportionally to taxable amount before computing tax
+  // This ensures tax is calculated on the discounted amount (Canadian tax compliance)
+  const discountRatio = subtotal > 0 ? actualDiscount / subtotal : 0
+  const taxableAfterDiscount = Math.round((taxableSubtotal * (1 - discountRatio)) * 100) / 100
+  const taxAmount = Math.round(taxableAfterDiscount * (taxRate / 100) * 100) / 100
   const total = Math.round((subtotal - actualDiscount + taxAmount) * 100) / 100
   return {
     subtotal: Math.round(subtotal * 100) / 100,
@@ -338,12 +366,14 @@ invoiceRoutes.post('/', async (c) => {
       if (!customer) return c.json({ error: 'Customer not found' }, 404)
     }
 
-    const taxRateVal = tax_rate != null ? tax_rate : 5.0
+    // Validate tax rate is non-negative
+    const taxRateVal = tax_rate != null ? Math.max(0, tax_rate) : 5.0
     const discountVal = discount_amount || 0
     const { subtotal, taxAmount, discount, total } = calculateTotals(items, taxRateVal, discountVal, discount_type || 'fixed')
 
-    const dueDate = new Date()
-    dueDate.setDate(dueDate.getDate() + (due_days || 30))
+    // Normalize due date to midnight UTC to avoid timezone drift
+    const now = new Date()
+    const dueDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + (due_days || 30)))
 
     const defaultTerms = docType === 'proposal'
       ? 'This proposal is valid for 30 days from the date of issue.'
@@ -539,16 +569,24 @@ invoiceRoutes.patch('/:id/status', async (c) => {
     const validStatuses = ['draft', 'sent', 'viewed', 'paid', 'overdue', 'cancelled', 'refunded', 'accepted', 'declined']
     if (!validStatuses.includes(status)) return c.json({ error: 'Invalid status' }, 400)
 
-    const own = await c.env.DB.prepare('SELECT customer_id FROM invoices WHERE id = ?').bind(id).first<any>()
+    const own = await c.env.DB.prepare('SELECT customer_id, status as old_status FROM invoices WHERE id = ?').bind(id).first<any>()
     if (!own) return c.json({ error: 'Invoice not found' }, 404)
     const scope = getScope(c)
     if (!scope.isAdmin && own.customer_id !== scope.ownerId) return c.json({ error: 'Invoice not found' }, 404)
 
-    const updates: string[] = [`status = '${status}'`, "updated_at = datetime('now')"]
+    const updates: string[] = ['status = ?', "updated_at = datetime('now')"]
+    const binds: any[] = [status]
     if (status === 'sent') updates.push("sent_date = date('now')")
     if (status === 'paid') updates.push("paid_date = date('now')")
 
-    await c.env.DB.prepare(`UPDATE invoices SET ${updates.join(', ')} WHERE id = ?`).bind(id).run()
+    await c.env.DB.prepare(`UPDATE invoices SET ${updates.join(', ')} WHERE id = ?`).bind(...binds, id).run()
+
+    // Audit trail
+    const admin = c.get('admin' as any) as any
+    await c.env.DB.prepare(
+      `INSERT INTO invoice_audit_log (invoice_id, action, old_value, new_value, changed_by) VALUES (?, 'status_change', ?, ?, ?)`
+    ).bind(id, own.old_status || '', status, admin?.email || 'unknown').run().catch(() => {})
+
     await c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'status_updated', ?)`).bind(`Document #${id} → ${status}`).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     return c.json({ success: true, status })
@@ -602,8 +640,18 @@ invoiceRoutes.post('/:id/send', async (c) => {
       if (report) attachedReport = { report_id: report.id, order_number: report.order_number, property_address: report.property_address, report_url: `/api/reports/${report.id}/html` }
     }
 
+    // Rate limit check
+    if (!checkEmailRateLimit(id)) {
+      return c.json({ error: 'Please wait at least 1 minute before resending this document' }, 429)
+    }
+
     const docType = invoice.document_type || 'invoice'
     const docLabel = docType.charAt(0).toUpperCase() + docType.slice(1)
+
+    // Validate email before attempting to send
+    if (!invoice.customer_email || !isValidEmail(invoice.customer_email)) {
+      return c.json({ error: 'Customer does not have a valid email address on file' }, 400)
+    }
 
     // Actually send the email via Gmail OAuth2 if configured
     let emailSent = false
@@ -611,6 +659,9 @@ invoiceRoutes.post('/:id/send', async (c) => {
     const clientId = (c.env as any).GMAIL_CLIENT_ID
     const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
     const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN
+    if (!clientId || !clientSecret || !refreshToken) {
+      return c.json({ error: 'Email not configured. Please set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN.' }, 503)
+    }
     if (clientId && clientSecret && refreshToken && invoice.customer_email) {
       try {
         const origin = new URL(c.req.url).origin
@@ -632,7 +683,7 @@ invoiceRoutes.post('/:id/send', async (c) => {
   </div>
   <div style="background:white;padding:32px;border:1px solid #e2e8f0;border-top:none">
     <h2 style="color:#1e293b;font-size:18px;margin:0 0 8px">${docLabel} ${invoice.invoice_number}</h2>
-    <p style="color:#64748b;font-size:14px;margin:0 0 24px">Hi ${invoice.customer_name || 'there'},</p>
+    <p style="color:#64748b;font-size:14px;margin:0 0 24px">Hi ${escapeHtml(invoice.customer_name || 'there')},</p>
     <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px">Please find your ${docLabel.toLowerCase()} below. Click the link to view it online and accept.</p>
     ${itemsHtml}
     <div style="background:#f8fafc;border-radius:12px;padding:16px;margin:16px 0">
@@ -844,23 +895,30 @@ invoiceRoutes.post('/webhook/square', async (c) => {
       ).bind(orderId).first<any>()
 
       if (link) {
-        await c.env.DB.prepare(`
-          UPDATE square_payment_links SET status = 'paid', transaction_id = ?, receipt_url = ?, paid_at = datetime('now'), updated_at = datetime('now')
-          WHERE id = ?
-        `).bind(transactionId, receiptUrl, link.id).run()
-
-        // Mark invoice as paid
-        await c.env.DB.prepare(`
-          UPDATE invoices SET status = 'paid', paid_date = date('now'), payment_method = 'square', payment_reference = ?, updated_at = datetime('now')
-          WHERE id = ?
-        `).bind(transactionId, link.invoice_id).run()
+        // Batch both updates together — if either fails, log the error clearly
+        const batchStmts = [
+          c.env.DB.prepare(`
+            UPDATE square_payment_links SET status = 'paid', transaction_id = ?, receipt_url = ?, paid_at = datetime('now'), updated_at = datetime('now')
+            WHERE id = ?
+          `).bind(transactionId, receiptUrl, link.id),
+          c.env.DB.prepare(`
+            UPDATE invoices SET status = 'paid', paid_date = date('now'), payment_method = 'square', payment_reference = ?, updated_at = datetime('now')
+            WHERE id = ?
+          `).bind(transactionId, link.invoice_id),
+        ]
+        await c.env.DB.batch(batchStmts)
 
         // Log webhook processed
         await c.env.DB.prepare(`
           UPDATE webhook_logs SET processed = 1, invoice_id = ? WHERE event_id = ?
-        `).bind(link.invoice_id, payload.event_id || '').run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+        `).bind(link.invoice_id, payload.event_id || '').run().catch((e) => console.warn("[webhook-log]", (e && e.message) || e))
 
-        await c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'payment_received', ?)`).bind(`Square payment $${(payment.amount_money?.amount || 0) / 100} for invoice #${link.invoice_id}`).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+        // Audit trail for payment
+        await c.env.DB.prepare(
+          `INSERT INTO invoice_audit_log (invoice_id, action, old_value, new_value, changed_by) VALUES (?, 'payment_received', '', ?, 'square_webhook')`
+        ).bind(link.invoice_id, `Square payment $${(payment.amount_money?.amount || 0) / 100} txn:${transactionId}`).run().catch(() => {})
+
+        await c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'payment_received', ?)`).bind(`Square payment $${(payment.amount_money?.amount || 0) / 100} for invoice #${link.invoice_id}`).run().catch((e) => console.warn("[webhook-log]", (e && e.message) || e))
       }
     }
 
@@ -999,13 +1057,17 @@ invoiceRoutes.get('/customers/:id', async (c) => {
 invoiceRoutes.post('/:id/send-gmail', async (c) => {
   try {
     const id = parseInt(c.req.param('id'))
+    // Rate limit
+    if (!checkEmailRateLimit(String(id))) {
+      return c.json({ error: 'Please wait at least 1 minute before resending this invoice' }, 429)
+    }
     const invoice = await c.env.DB.prepare('SELECT i.*, c.name as customer_name, c.email as customer_email FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?').bind(id).first<any>()
     if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
     {
       const scope = getScope(c)
       if (!scope.isAdmin && invoice.customer_id !== scope.ownerId) return c.json({ error: 'Invoice not found' }, 404)
     }
-    if (!invoice.customer_email) return c.json({ error: 'Customer has no email address' }, 400)
+    if (!invoice.customer_email || !isValidEmail(invoice.customer_email)) return c.json({ error: 'Customer has no valid email address' }, 400)
 
     const items = await c.env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order').bind(id).all<any>()
     const lineItems = items.results || []
@@ -1061,7 +1123,7 @@ invoiceRoutes.post('/:id/send-gmail', async (c) => {
   </div>
   <div style="background:white;padding:32px;border:1px solid #e2e8f0;border-top:none">
     <h2 style="color:#1e293b;font-size:18px;margin:0 0 8px">${docLabel} ${invoice.invoice_number}</h2>
-    <p style="color:#64748b;font-size:14px;margin:0 0 24px">Hi ${invoice.customer_name || 'there'},</p>
+    <p style="color:#64748b;font-size:14px;margin:0 0 24px">Hi ${escapeHtml(invoice.customer_name || 'there')},</p>
     <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px">Please find your ${docLabel.toLowerCase()} below. ${paymentUrl ? 'Click the button to pay securely online via Square.' : ''}</p>
     ${itemsHtml}
     <div style="background:#f8fafc;border-radius:12px;padding:16px;margin:16px 0">
@@ -1161,9 +1223,15 @@ invoiceRoutes.post('/:id/send-certificate', async (c) => {
   `).bind(...(scope.isAdmin ? [id] : [id, scope.ownerId])).first<any>()
   if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
 
+  // Rate limit check
+  if (!checkEmailRateLimit(id)) {
+    return c.json({ error: 'Please wait at least 1 minute before resending this certificate' }, 429)
+  }
+
   // Send to the homeowner (crm_customer_email stored on the invoice), not the roofing company owner
   const customerEmail = proposal.crm_customer_email
   if (!customerEmail) return c.json({ error: 'No customer email on file for this proposal. Make sure a CRM customer with an email address is linked to this proposal.' }, 400)
+  if (!isValidEmail(customerEmail)) return c.json({ error: 'Customer email address is not a valid format. Please update the CRM contact email.' }, 400)
 
   const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
   const companyName = proposal.brand_business_name || proposal.owner_company_name || proposal.owner_name || 'Your Roofing Company'
@@ -1284,19 +1352,26 @@ invoiceRoutes.post('/respond/:token', async (c) => {
     if (homeownerEmail) {
       try {
         const ownerForCert = await c.env.DB.prepare(
-          `SELECT auto_send_certificate, name, email, phone, address, city, province, company_name, logo_url,
+          `SELECT auto_send_certificate, cert_trigger_type, name, email, phone, address, city, province, company_name, logo_url,
                   gmail_refresh_token, brand_business_name, brand_logo_url, brand_address,
                   brand_phone, brand_email, brand_license_number, brand_primary_color
            FROM customers WHERE id = ?`
         ).bind(proposal.customer_id).first<any>()
 
-        if (ownerForCert?.auto_send_certificate === 1) {
+        // Only auto-send if enabled AND trigger type is 'proposal_signed' (or default)
+        const triggerType = ownerForCert?.cert_trigger_type || 'proposal_signed'
+        if (ownerForCert?.auto_send_certificate === 1 && triggerType === 'proposal_signed') {
           // Re-fetch the invoice with the orders join to get property_address
           const fullProposal = await c.env.DB.prepare(`
             SELECT i.*, o.property_address as order_property_address
             FROM invoices i LEFT JOIN orders o ON o.id = i.order_id
             WHERE i.id = ?
           `).bind(proposal.id).first<any>()
+
+          // Prevent duplicate certificate sends
+          if (fullProposal?.certificate_sent_at) {
+            // Certificate already sent — skip
+          } else {
 
           const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
           const companyName = ownerForCert.brand_business_name || ownerForCert.company_name || ownerForCert.name || 'Your Roofing Company'
@@ -1321,19 +1396,27 @@ invoiceRoutes.post('/respond/:token', async (c) => {
           const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
           const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ownerForCert.gmail_refresh_token || ''
           if (clientId && clientSecret && refreshToken) {
-            sendGmailOAuth2(
-              clientId, clientSecret, refreshToken,
-              homeownerEmail,
-              `Certificate of New Roof Installation — ${propAddress || 'Your Property'}`,
-              certHtml,
-              ownerForCert.email
-            ).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
-            await c.env.DB.prepare(
-              `UPDATE invoices SET certificate_sent_at = datetime('now') WHERE id = ?`
-            ).bind(proposal.id).run()
+            try {
+              await sendGmailOAuth2(
+                clientId, clientSecret, refreshToken,
+                homeownerEmail,
+                `Certificate of New Roof Installation — ${propAddress || 'Your Property'}`,
+                certHtml,
+                ownerForCert.email
+              )
+              await c.env.DB.prepare(
+                `UPDATE invoices SET certificate_sent_at = datetime('now') WHERE id = ?`
+              ).bind(proposal.id).run()
+            } catch (emailErr: any) {
+              console.error('[cert-auto-send] Email failed:', emailErr?.message || emailErr)
+              // Don't mark certificate_sent_at — it wasn't actually sent
+            }
           }
+          } // close else (duplicate prevention)
         }
-      } catch {}
+      } catch (certErr: any) {
+        console.error('[cert-auto-send] Error:', certErr?.message || certErr)
+      }
     }
   }
 

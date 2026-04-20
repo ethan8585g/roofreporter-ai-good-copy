@@ -83,19 +83,21 @@ describe('calculateTotals — taxable flag', () => {
 })
 
 describe('calculateTotals — discount types', () => {
-  it('applies a fixed discount before tax is added', () => {
+  it('applies discount before computing tax (Canadian tax compliance)', () => {
     const r = calculateTotals(
       [{ quantity: 1, unit_price: 1000 }],
       5,
       100,
       'fixed'
     )
-    // Tax is computed on the full taxable subtotal (1000 * 5% = 50),
-    // THEN discount is subtracted from (subtotal + tax). Current implementation:
-    //   total = subtotal - discount + tax = 1000 - 100 + 50 = 950
+    // Discount is applied proportionally to taxable amount before tax:
+    //   discount = 100, discountRatio = 100/1000 = 0.10
+    //   taxableAfterDiscount = 1000 * (1 - 0.10) = 900
+    //   tax = 900 * 5% = 45
+    //   total = 1000 - 100 + 45 = 945
     expect(r.discount).toBe(100)
-    expect(r.taxAmount).toBe(50)
-    expect(r.total).toBe(950)
+    expect(r.taxAmount).toBe(45)
+    expect(r.total).toBe(945)
   })
 
   it('applies a percentage discount to the subtotal', () => {
