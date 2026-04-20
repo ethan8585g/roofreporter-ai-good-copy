@@ -594,7 +594,7 @@ customerAuthRoutes.post('/register', async (c) => {
     const storedHash = await hashPassword(password)
 
     // Generate referral code
-    const refCode = 'REF-' + crypto.randomUUID().replace(/-/g, '').substring(0, 6).toUpperCase()
+    const refCode = 'REF-' + crypto.randomUUID().replace(/-/g, '').substring(0, 10).toUpperCase()
 
     // Check for referral — referred_by from request body
     let referredBy: number | null = null
@@ -1670,7 +1670,7 @@ customerAuthRoutes.get('/referrals', async (c) => {
   const customer = await c.env.DB.prepare('SELECT referral_code, name, email FROM customers WHERE id = ?').bind(customerId).first<any>()
   let refCode = customer?.referral_code || ''
   if (!refCode) {
-    refCode = 'REF-' + crypto.randomUUID().replace(/-/g, '').substring(0, 6).toUpperCase()
+    refCode = 'REF-' + crypto.randomUUID().replace(/-/g, '').substring(0, 10).toUpperCase()
     await c.env.DB.prepare('UPDATE customers SET referral_code = ? WHERE id = ?').bind(refCode, customerId).run()
   }
 

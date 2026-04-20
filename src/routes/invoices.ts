@@ -481,8 +481,10 @@ invoiceRoutes.put('/:id', async (c) => {
       subtotal = calc.subtotal; taxAmount = calc.taxAmount; discount = calc.discount; total = calc.total
     }
 
-    const dueDate = new Date()
-    dueDate.setDate(dueDate.getDate() + (due_days || 30))
+    // Phase 2: UTC-stable date arithmetic (avoids setDate rollover edge cases
+    // around DST and month boundaries).
+    const dueDays = Number(due_days || 30)
+    const dueDate = new Date(Date.now() + dueDays * 86400000)
 
     // Resolve customer info for CRM contacts
     let resolvedCustomerId = customer_id
@@ -585,7 +587,7 @@ invoiceRoutes.patch('/:id/status', async (c) => {
     const admin = c.get('admin' as any) as any
     await c.env.DB.prepare(
       `INSERT INTO invoice_audit_log (invoice_id, action, old_value, new_value, changed_by) VALUES (?, 'status_change', ?, ?, ?)`
-    ).bind(id, own.old_status || '', status, admin?.email || 'unknown').run().catch(() => {})
+    ).bind(id, own.old_status || '', status, admin?.email || 'unknown').run().catch((e) => console.warn('[invoice-status-audit]', (e && e.message) || e))
 
     await c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'status_updated', ?)`).bind(`Document #${id} → ${status}`).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
@@ -744,7 +746,7 @@ invoiceRoutes.post('/:id/convert-to-invoice', async (c) => {
 
     const invNumber = generateNumber('INV')
     const shareToken = generateShareToken()
-    const dueDate = new Date(); dueDate.setDate(dueDate.getDate() + 30)
+    const dueDate = new Date(Date.now() + 30 * 86400000)
 
     const result = await c.env.DB.prepare(`
       INSERT INTO invoices (invoice_number, customer_id, order_id, subtotal, tax_rate, tax_amount,
@@ -916,7 +918,7 @@ invoiceRoutes.post('/webhook/square', async (c) => {
         // Audit trail for payment
         await c.env.DB.prepare(
           `INSERT INTO invoice_audit_log (invoice_id, action, old_value, new_value, changed_by) VALUES (?, 'payment_received', '', ?, 'square_webhook')`
-        ).bind(link.invoice_id, `Square payment $${(payment.amount_money?.amount || 0) / 100} txn:${transactionId}`).run().catch(() => {})
+        ).bind(link.invoice_id, `Square payment $${(payment.amount_money?.amount || 0) / 100} txn:${transactionId}`).run().catch((e) => console.warn('[invoice-square-audit]', (e && e.message) || e))
 
         await c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'payment_received', ?)`).bind(`Square payment $${(payment.amount_money?.amount || 0) / 100} for invoice #${link.invoice_id}`).run().catch((e) => console.warn("[webhook-log]", (e && e.message) || e))
       }

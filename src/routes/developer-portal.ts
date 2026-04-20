@@ -706,6 +706,9 @@ developerPortalRoutes.get('/dashboard', async (c) => {
   const baseUrl = new URL(c.req.url).origin
   const data = await loadDashboardData(db, account.id)
 
+  // Phase 2: prevent caching of pages that may render secrets/API keys.
+  c.header('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  c.header('Pragma', 'no-cache')
   return c.html(buildDashboardHtml(account, data, baseUrl, { bought }))
 })
 
