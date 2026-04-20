@@ -427,37 +427,81 @@ callCenterRoutes.post('/quick-dial', async (c) => {
     `SELECT livekit_outbound_trunk_id, livekit_inbound_trunk_id FROM cc_phone_config WHERE is_active=1 AND outbound_enabled=1 AND (livekit_outbound_trunk_id IS NOT NULL AND livekit_outbound_trunk_id != '') ORDER BY id DESC LIMIT 1`
   ).first<any>()
   const outboundTrunkId = activeLine?.livekit_outbound_trunk_id || (c.env as any).SIP_OUTBOUND_TRUNK_ID
+  console.log('[QuickDial] trunk resolution:', {
+    from_db: !!activeLine?.livekit_outbound_trunk_id,
+    from_env: !activeLine?.livekit_outbound_trunk_id && !!(c.env as any).SIP_OUTBOUND_TRUNK_ID,
+    resolved: outboundTrunkId ? outboundTrunkId.slice(0, 8) + '…' : 'NONE',
+  })
 
   let token = null
   let sipStatus = 'no_livekit'
   let sipError = ''
 
+  if (!apiKey || !apiSecret || !livekitUrl) {
+    console.warn('[QuickDial] LiveKit env missing:', { has_key: !!apiKey, has_secret: !!apiSecret, has_url: !!livekitUrl })
+  }
+
   if (apiKey && apiSecret && livekitUrl) {
     token = await generateLiveKitJWT(apiKey, apiSecret, `admin-monitor-${agentId}`, roomName, JSON.stringify({ type: 'quick_dial', phone: cleanPhone }))
 
-    // Step 1: Dispatch AI agent (non-blocking — call proceeds even if agent isn't available)
+    // Shared metadata — delivered via room AND job so the agent can read from
+    // ctx.room.metadata OR ctx.job.metadata regardless of dispatch mode.
+    const dispatchMeta = JSON.stringify({
+      prospect_id: prospect.id,
+      agent_id: agentId,
+      agent_name: agent.name,
+      phone: cleanPhone,
+      company: prospect.company_name,
+      contact: prospect.contact_name,
+      webhook_url: new URL(c.req.url).origin + '/api/call-center/call-complete',
+    })
+
+    // Step 0: Pre-create the room with metadata so the unified AgentServer
+    // (auto-dispatch mode) can read prospect info from ctx.room.metadata.
+    try {
+      const createRoomResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.RoomService/CreateRoom', {
+        name: roomName,
+        empty_timeout: 300,
+        max_participants: 4,
+        metadata: dispatchMeta,
+      })
+      console.log('[QuickDial] CreateRoom:', { room: roomName, ok: !createRoomResult?.code, err: createRoomResult?.msg || null })
+    } catch (e: any) {
+      console.warn('[QuickDial] CreateRoom (non-fatal):', e.message)
+    }
+
+    // Step 1: Dispatch AI agent (non-blocking — also harmless if no named agent is registered).
+    // Drop agent_name so LiveKit routes via auto-dispatch on room creation; the unified
+    // AgentServer in livekit-agent/src/main.py routes by room prefix (sales-*).
     let agentDispatched = false
     try {
-      await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.AgentDispatch/CreateDispatch', {
-        room: roomName, agent_name: 'outbound-caller',
-        metadata: JSON.stringify({ prospect_id: prospect.id, agent_id: agentId, agent_name: agent.name, phone: cleanPhone, company: prospect.company_name, contact: prospect.contact_name, webhook_url: new URL(c.req.url).origin + '/api/call-center/call-complete' })
+      const dispatchResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.AgentDispatch/CreateDispatch', {
+        room: roomName,
+        metadata: dispatchMeta,
       })
-      agentDispatched = true
+      agentDispatched = !dispatchResult?.code
+      console.log('[QuickDial] CreateDispatch:', { ok: agentDispatched, err: dispatchResult?.msg || null })
     } catch (e: any) { console.warn('[QuickDial] Agent dispatch (non-fatal):', e.message) }
 
-    // Step 2: Wait for agent to join room before dialing
-    if (agentDispatched) {
-      await new Promise(r => setTimeout(r, 2000))
-    }
+    // Step 2: Wait briefly for the agent to auto-join
+    await new Promise(r => setTimeout(r, 2000))
 
     // Step 3: Dial via SIP — this is what makes the phone ring
     if (outboundTrunkId) {
+      const participantIdentity = 'callee-' + prospect.id + '-' + Date.now()
+      const sipRequest = {
+        sip_trunk_id: outboundTrunkId,
+        sip_call_to: cleanPhone,
+        room_name: roomName,
+        participant_identity: participantIdentity,
+        participant_name: prospect.contact_name || prospect.company_name || 'Prospect',
+        play_dialtone: false,
+        krisp_enabled: true,
+      }
+      console.log('[QuickDial] CreateSIPParticipant →', { trunk: outboundTrunkId.slice(0, 8) + '…', to: cleanPhone, room: roomName, identity: participantIdentity })
       try {
-        const sipResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/CreateSIPParticipant', {
-          sip_trunk_id: outboundTrunkId, sip_call_to: cleanPhone, room_name: roomName,
-          participant_identity: 'callee-' + prospect.id, participant_name: prospect.contact_name || prospect.company_name || 'Prospect',
-          play_dialtone: false, krisp_enabled: true
-        })
+        const sipResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/CreateSIPParticipant', sipRequest)
+        console.log('[QuickDial] CreateSIPParticipant ←', { ok: !sipResult?.code && !sipResult?.error, err: sipResult?.msg || sipResult?.error || null })
         if (sipResult?.code || sipResult?.error) {
           sipStatus = 'sip_error'
           sipError = sipResult.msg || sipResult.error || JSON.stringify(sipResult)
@@ -469,6 +513,7 @@ callCenterRoutes.post('/quick-dial', async (c) => {
       } catch (e: any) {
         sipStatus = 'dial_error'
         sipError = e.message
+        console.warn('[QuickDial] SIP dial threw:', e.message)
         await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='failed', call_outcome=? WHERE livekit_room_id=?").bind('dial_error: ' + e.message, roomName).run()
       }
     } else {
@@ -476,14 +521,23 @@ callCenterRoutes.post('/quick-dial', async (c) => {
     }
   }
 
-  return c.json({
-    success: sipStatus === 'ringing', call_log_id: logRes.meta.last_row_id, room_name: roomName,
+  const response: any = {
+    success: sipStatus === 'ringing',
+    call_log_id: logRes.meta.last_row_id,
+    room_name: roomName,
     prospect: { id: prospect.id, company_name: prospect.company_name, contact_name: prospect.contact_name, phone: cleanPhone },
     agent: { id: agent.id, name: agent.name },
     livekit: token ? { token, url: livekitUrl, room: roomName } : null,
     sip_dial: sipStatus,
-    sip_error: sipError || undefined
-  })
+    sip_error: sipError || undefined,
+  }
+  if (sipStatus === 'no_trunk_configured') {
+    response.error = 'No outbound trunk configured. Go to AI Sales Call Center → Phone Setup → Register LiveKit Number, or set SIP_OUTBOUND_TRUNK_ID in the Worker environment. Run GET /api/call-center/quick-dial/preflight to see which check failed.'
+  } else if (sipStatus === 'no_livekit') {
+    response.error = 'LiveKit credentials missing on the Worker. Set LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET via wrangler secret put.'
+  }
+  console.log('[QuickDial] → client:', { success: response.success, sip_dial: response.sip_dial, call_log_id: response.call_log_id })
+  return c.json(response)
 })
 
 callCenterRoutes.post('/dial', async (c) => {
@@ -567,26 +621,39 @@ callCenterRoutes.post('/dial', async (c) => {
       prospect_id, company: prospect.company_name, phone: prospect.phone,
     }))
 
-    // Step 1: Dispatch AI agent into the room
+    // Shared metadata — delivered via room AND job so the agent can read from
+    // ctx.room.metadata OR ctx.job.metadata regardless of dispatch mode.
+    const dialMeta = JSON.stringify({
+      prospect_id, agent_id, agent_name: agent.name,
+      phone: prospect.phone, company: prospect.company_name, contact: prospect.contact_name,
+      script: campaignScript,
+      webhook_url: new URL(c.req.url).origin + '/api/call-center/call-complete',
+    })
+
+    // Step 0: Pre-create the room with metadata (so AgentServer auto-dispatch can read ctx.room.metadata)
+    try {
+      await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.RoomService/CreateRoom', {
+        name: roomName,
+        empty_timeout: 300,
+        max_participants: 4,
+        metadata: dialMeta,
+      })
+    } catch (e: any) {
+      console.warn('[Dial] CreateRoom (non-fatal):', e.message)
+    }
+
+    // Step 1: Dispatch AI agent into the room (agent_name dropped — unified AgentServer uses auto-dispatch)
     try {
       agentDispatchResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.AgentDispatch/CreateDispatch', {
         room: roomName,
-        agent_name: 'outbound-caller',
-        metadata: JSON.stringify({
-          prospect_id, agent_id, agent_name: agent.name,
-          phone: prospect.phone, company: prospect.company_name, contact: prospect.contact_name,
-          script: campaignScript,
-          webhook_url: new URL(c.req.url).origin + '/api/call-center/call-complete',
-        })
+        metadata: dialMeta,
       })
     } catch (e: any) {
       console.warn('[Dial] Agent dispatch (non-fatal):', e.message)
     }
 
-    // Step 2: Wait for agent to join before dialing
-    if (agentDispatchResult) {
-      await new Promise(r => setTimeout(r, 2000))
-    }
+    // Step 2: Wait briefly for agent to auto-join before dialing
+    await new Promise(r => setTimeout(r, 2000))
 
     // Step 3: Dial the prospect's phone via SIP
     if (outboundTrunkId && prospect.phone) {
@@ -595,7 +662,7 @@ callCenterRoutes.post('/dial', async (c) => {
           sip_trunk_id: outboundTrunkId,
           sip_call_to: prospect.phone.startsWith('+') ? prospect.phone : '+1' + prospect.phone.replace(/\D/g, ''),
           room_name: roomName,
-          participant_identity: 'callee-' + prospect_id,
+          participant_identity: 'callee-' + prospect_id + '-' + Date.now(),
           participant_name: prospect.contact_name || prospect.company_name || 'Prospect',
           play_dialtone: false,
           krisp_enabled: true,
@@ -669,6 +736,105 @@ callCenterRoutes.get('/sip-status', async (c) => {
   } catch (e: any) {
     return c.json({ error: e.message }, 500)
   }
+})
+
+// ============================================================
+// QUICK DIAL PREFLIGHT — Structured health check for the outbound path
+// ============================================================
+callCenterRoutes.get('/quick-dial/preflight', async (c) => {
+  const apiKey = (c.env as any).LIVEKIT_API_KEY
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET
+  const livekitUrl = (c.env as any).LIVEKIT_URL
+  const envTrunk = (c.env as any).SIP_OUTBOUND_TRUNK_ID || null
+
+  const out: any = {
+    livekit: {
+      has_api_key: !!apiKey,
+      has_api_secret: !!apiSecret,
+      has_url: !!livekitUrl,
+      url: livekitUrl || null,
+    },
+    sip: {
+      env_outbound_trunk_id: envTrunk,
+      db_active_outbound_trunks: [] as any[],
+      livekit_outbound_trunks: [] as any[],
+      livekit_phone_numbers: [] as any[],
+    },
+    agent: {
+      worker_reachable: false,
+      agent_names_registered: 'unknown',
+      agents_in_db: [] as any[],
+    },
+    webhook: {
+      call_complete_url: new URL(c.req.url).origin + '/api/call-center/call-complete',
+      reachable: true, // same origin — always reachable
+    },
+    recommendations: [] as string[],
+  }
+
+  // DB: match the exact query /quick-dial uses
+  try {
+    const { results: dbTrunks } = await c.env.DB.prepare(
+      `SELECT id, label, livekit_outbound_trunk_id, is_active, outbound_enabled FROM cc_phone_config WHERE is_active=1 AND outbound_enabled=1 AND (livekit_outbound_trunk_id IS NOT NULL AND livekit_outbound_trunk_id != '') ORDER BY id DESC`
+    ).all<any>()
+    out.sip.db_active_outbound_trunks = dbTrunks || []
+  } catch (e: any) {
+    out.sip.db_active_outbound_trunks = [{ error: e.message }]
+  }
+
+  // DB: registered agents
+  try {
+    const { results: agents } = await c.env.DB.prepare(`SELECT id, name FROM cc_agents ORDER BY id ASC`).all<any>()
+    out.agent.agents_in_db = agents || []
+  } catch (e: any) {
+    out.agent.agents_in_db = [{ error: e.message }]
+  }
+
+  // LiveKit: list trunks, phone numbers, active rooms (rooms → proves worker is reachable)
+  if (apiKey && apiSecret && livekitUrl) {
+    try {
+      const outboundTrunks = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/ListSIPOutboundTrunk', {})
+      out.sip.livekit_outbound_trunks = (outboundTrunks?.items || []).map((t: any) => ({
+        sip_trunk_id: t.sip_trunk_id, name: t.name, numbers: t.numbers,
+      }))
+    } catch (e: any) {
+      out.sip.livekit_outbound_trunks = [{ error: e.message }]
+    }
+    try {
+      const phoneNumbers = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.PhoneNumberService/ListPhoneNumbers', {})
+      out.sip.livekit_phone_numbers = (phoneNumbers?.items || phoneNumbers?.phone_numbers || []).map((p: any) => ({
+        id: p.id, e164_format: p.e164_format || p.number,
+      }))
+    } catch (e: any) {
+      out.sip.livekit_phone_numbers = [{ error: e.message }]
+    }
+    try {
+      // RoomService/ListRooms is cheap and proves the server is reachable + auth works
+      await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.RoomService/ListRooms', {})
+      out.agent.worker_reachable = true
+    } catch (e: any) {
+      out.agent.worker_reachable = false
+    }
+  }
+
+  // Recommendations
+  if (!out.livekit.has_api_key || !out.livekit.has_api_secret || !out.livekit.has_url) {
+    out.recommendations.push('Set LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET as Cloudflare Worker secrets (wrangler secret put).')
+  }
+  if (!envTrunk && (out.sip.db_active_outbound_trunks || []).length === 0) {
+    out.recommendations.push('No outbound trunk available. Either set SIP_OUTBOUND_TRUNK_ID or use Phone Setup → "Register LiveKit Number" (POST /api/call-center/phone-lines/register-livekit) to create one.')
+  }
+  if ((out.sip.livekit_outbound_trunks || []).length === 0 && out.livekit.has_api_key) {
+    out.recommendations.push('LiveKit reports no outbound trunks on this project. Register a number via Phone Setup or the LiveKit dashboard.')
+  }
+  if ((out.agent.agents_in_db || []).length === 0) {
+    out.recommendations.push('No AI agents in cc_agents. Create one in the Agents tab before dialing.')
+  }
+  if (out.livekit.has_api_key && !out.agent.worker_reachable) {
+    out.recommendations.push('LiveKit credentials present but ListRooms failed. Double-check that LIVEKIT_URL matches the project owning the API key.')
+  }
+
+  return c.json(out)
 })
 
 // ============================================================

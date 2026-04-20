@@ -203,12 +203,16 @@
               ${agentOpts || '<option value="">No agents — create one first</option>'}
             </select>
           </div>
-          <div class="sm:col-span-2 flex items-end">
-            <button onclick="ccQuickDial()" class="w-full py-3 bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl text-sm transition-all shadow-lg hover:shadow-xl active:scale-95">
+          <div class="sm:col-span-2 flex items-end gap-2">
+            <button onclick="ccQuickDial()" class="flex-1 py-3 bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl text-sm transition-all shadow-lg hover:shadow-xl active:scale-95">
               <i class="fas fa-phone-alt mr-2"></i>Dial Now
+            </button>
+            <button onclick="ccQuickDialPreflight()" title="Run outbound-dial health check" class="px-3 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-xl text-sm transition-all shadow-lg hover:shadow-xl active:scale-95">
+              <i class="fas fa-stethoscope"></i>
             </button>
           </div>
         </div>
+        <div id="qd-preflight-panel" class="hidden mt-4 bg-black/40 border border-white/10 rounded-xl p-4 text-xs text-gray-200 font-mono whitespace-pre overflow-x-auto max-h-80 overflow-y-auto"></div>
       </div>
 
       <!-- KPI Cards -->
@@ -1217,10 +1221,28 @@
       if (data?.sip_dial === 'no_trunk_configured') {
         window.rmToast('SIP outbound trunk not configured. Set SIP_OUTBOUND_TRUNK_ID in environment.', 'info');
       } else if (data?.sip_dial === 'sip_error' || data?.sip_dial === 'dial_error') {
-        window.rmToast('Call failed: ' + (data.sip_error || 'SIP dial error. Check LiveKit trunk configuration.', 'error'));
+        window.rmToast('Call failed: ' + (data.sip_error || 'SIP dial error. Check LiveKit trunk configuration.'), 'error');
       } else {
         window.rmToast(data?.error || 'Quick dial failed', 'info');
       }
+    }
+  };
+
+  // Quick Dial preflight — calls GET /api/call-center/quick-dial/preflight and dumps JSON
+  window.ccQuickDialPreflight = async function() {
+    const panel = document.getElementById('qd-preflight-panel');
+    if (!panel) return;
+    panel.classList.remove('hidden');
+    panel.textContent = 'Running preflight…';
+    try {
+      const data = await ccFetch('/api/call-center/quick-dial/preflight');
+      const recs = (data && data.recommendations) || [];
+      var header = (recs.length === 0
+        ? '\u2705 All checks passed.\n\n'
+        : '\u26A0\uFE0F ' + recs.length + ' issue(s):\n' + recs.map(function(r){ return '  \u2022 ' + r; }).join('\n') + '\n\n');
+      panel.textContent = header + JSON.stringify(data, null, 2);
+    } catch (e) {
+      panel.textContent = 'Preflight failed: ' + (e && e.message ? e.message : e);
     }
   };
 
