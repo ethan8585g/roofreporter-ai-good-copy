@@ -2829,7 +2829,7 @@ app.get('/proposal/view/:token', async (c) => {
                 reportSectionsHtml += sectionCard('Roof Measurement Summary', 'fa-ruler-combined', `<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">${cards}</div>`)
               }
 
-              // Page 2: Edge Measurements
+              // Page 2: Edge Measurements — plain-English summary above, technical grid collapsed
               if (sec.pitch !== false && (es.total_ridge_ft || es.total_eave_ft)) {
                 const edgeCards = [
                   ['Ridge', es.total_ridge_ft],
@@ -2843,7 +2843,20 @@ app.get('/proposal/view/:token', async (c) => {
                     <p class="text-xs text-gray-500">${label}</p>
                   </div>`
                 ).join('')
-                reportSectionsHtml += sectionCard('Edge Measurements', 'fa-draw-polygon', `<div class="grid grid-cols-3 sm:grid-cols-5 gap-3">${edgeCards}</div>`)
+                const plainBits: string[] = []
+                const area = Math.round(rd.total_true_area_sqft || 0)
+                const squares = m.gross_squares ? m.gross_squares.toFixed(1) : null
+                if (area) plainBits.push(`<li><strong>${area.toLocaleString()} sq ft</strong> of roof surface${squares ? ` — about <strong>${squares} roofing squares</strong>` : ''}.</li>`)
+                if (es.total_ridge_ft) plainBits.push(`<li><strong>${Math.round(es.total_ridge_ft)} ft</strong> of ridge — the peaks running along the top of your roof.</li>`)
+                if (es.total_eave_ft) plainBits.push(`<li><strong>${Math.round(es.total_eave_ft)} ft</strong> of eaves — the lower edges where your gutters attach.</li>`)
+                if (es.total_valley_ft) plainBits.push(`<li><strong>${Math.round(es.total_valley_ft)} ft</strong> of valleys — where two roof slopes meet. These need extra waterproofing.</li>`)
+                if (es.total_hip_ft) plainBits.push(`<li><strong>${Math.round(es.total_hip_ft)} ft</strong> of hips — the angled edges where two sloped sides meet.</li>`)
+                if (es.total_rake_ft) plainBits.push(`<li><strong>${Math.round(es.total_rake_ft)} ft</strong> of rakes — the sloped outer edges of a gabled roof.</li>`)
+                const plainHtml = plainBits.length
+                  ? `<div class="mb-4 p-4 rounded-xl bg-blue-50 border border-blue-100"><p class="text-xs font-bold text-blue-700 uppercase tracking-wider mb-2"><i class="fas fa-lightbulb mr-1"></i>Your roof in plain English</p><ul class="text-sm text-gray-700 space-y-1.5 list-disc pl-5">${plainBits.join('')}</ul></div>`
+                  : ''
+                const body = `${plainHtml}<details${plainBits.length ? '' : ' open'} class="group"><summary class="cursor-pointer text-xs font-semibold text-gray-500 hover:text-gray-700 mb-2 select-none"><i class="fas fa-chevron-right group-open:rotate-90 transition-transform mr-1"></i>Detailed measurements (for contractors & adjusters)</summary><div class="mt-3 grid grid-cols-3 sm:grid-cols-5 gap-3">${edgeCards}</div></details>`
+                reportSectionsHtml += sectionCard('Edge Measurements', 'fa-draw-polygon', body)
               }
 
               // Page 3: Material Take-Off
@@ -2898,6 +2911,38 @@ app.get('/proposal/view/:token', async (c) => {
         const invStatusBadge = invIsAccepted ? 'bg-green-100 text-green-700' : invIsDeclined ? 'bg-red-100 text-red-700' : invProposal.status === 'paid' ? 'bg-green-100 text-green-700' : invProposal.status === 'sent' || invProposal.status === 'viewed' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
         const invStatusLabel = invIsAccepted ? 'ACCEPTED' : invIsDeclined ? 'DECLINED' : (invProposal.status || 'draft').toUpperCase()
         const headerColor = invProposal.accent_color || '#0ea5e9'
+        // Darken accent color for gradient end-stop
+        const darkenHex = (hex: string, amt: number) => {
+          const m = /^#?([0-9a-f]{6})$/i.exec(hex || '')
+          if (!m) return hex
+          const n = parseInt(m[1], 16)
+          const r = Math.max(0, ((n >> 16) & 0xff) - amt)
+          const g = Math.max(0, ((n >> 8) & 0xff) - amt)
+          const b = Math.max(0, (n & 0xff) - amt)
+          return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')
+        }
+        const headerGradient = `linear-gradient(135deg, ${headerColor} 0%, ${darkenHex(headerColor, 45)} 100%)`
+
+        // Parse cert sidecar from notes (injected by proposal-builder.js for Trust Badges)
+        let parsedCerts: { insurance?: string; warranty?: string; wcb?: string; custom?: string } = {}
+        if (invProposal.notes && typeof invProposal.notes === 'string' && invProposal.notes.startsWith('__PB_CERTS__')) {
+          try {
+            const rest = invProposal.notes.slice('__PB_CERTS__'.length)
+            const jsonEnd = rest.indexOf('\n\n')
+            const jsonStr = jsonEnd >= 0 ? rest.slice(0, jsonEnd) : rest
+            parsedCerts = JSON.parse(jsonStr) || {}
+          } catch {}
+        }
+        const escHtml = (s: string) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+        const trustBadgeHtml = (() => {
+          const badges: string[] = []
+          if (parsedCerts.insurance) badges.push(`<div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-100 bg-emerald-50"><i class="fas fa-shield-alt text-emerald-600"></i><div><div class="text-xs font-bold text-emerald-800 leading-tight">Insured</div><div class="text-[10px] text-emerald-700/80 leading-tight">${escHtml(parsedCerts.insurance)}</div></div></div>`)
+          if (parsedCerts.warranty) badges.push(`<div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-sky-100 bg-sky-50"><i class="fas fa-file-contract text-sky-600"></i><div><div class="text-xs font-bold text-sky-800 leading-tight">Warranty</div><div class="text-[10px] text-sky-700/80 leading-tight">${escHtml(parsedCerts.warranty)}</div></div></div>`)
+          if (parsedCerts.wcb) badges.push(`<div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-green-100 bg-green-50"><i class="fas fa-hard-hat text-green-600"></i><div><div class="text-xs font-bold text-green-800 leading-tight">WCB Covered</div><div class="text-[10px] text-green-700/80 leading-tight">${escHtml(parsedCerts.wcb)}</div></div></div>`)
+          if (parsedCerts.custom) badges.push(`<div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-purple-100 bg-purple-50"><i class="fas fa-award text-purple-600"></i><div><div class="text-xs font-bold text-purple-800 leading-tight">Certified</div><div class="text-[10px] text-purple-700/80 leading-tight">${escHtml(parsedCerts.custom)}</div></div></div>`)
+          if (!badges.length) return ''
+          return `<div class="mb-6 p-4 rounded-xl border border-gray-200 bg-gray-50"><div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Credentials & Coverage</div><div class="flex flex-wrap gap-2">${badges.join('')}</div></div>`
+        })()
 
         // Build accept/sign section for proposals/estimates/invoices
         const acceptVerb = docType === 'invoice' ? 'Approve' : 'Accept'
@@ -3016,17 +3061,19 @@ app.get('/proposal/view/:token', async (c) => {
 <body class="bg-gray-100 min-h-screen py-8 px-4">
 <div class="max-w-3xl mx-auto">
   <div class="bg-white rounded-2xl shadow-xl overflow-hidden print:shadow-none">
-    <div style="background:${headerColor}" class="text-white p-8">
-      <div class="flex justify-between items-start">
+    <div style="background:${headerGradient}" class="text-white p-8 relative overflow-hidden">
+      <div style="position:absolute;inset:0;background:radial-gradient(circle at 85% 20%, rgba(255,255,255,0.15), transparent 50%);pointer-events:none"></div>
+      <div class="flex justify-between items-start relative">
         <div><div class="flex items-center gap-3 mb-3"><div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,0.2)"><i class="fas fa-home text-white text-lg"></i></div><div><h1 class="text-xl font-bold">Roof Manager</h1><p class="text-xs" style="color:rgba(255,255,255,0.75)">Professional Roof Measurement Reports</p></div></div><p class="text-sm" style="color:rgba(255,255,255,0.75)">Alberta, Canada</p></div>
         <div class="text-right"><p class="text-2xl font-bold">${docLabel}</p><p class="text-sm" style="color:rgba(255,255,255,0.75)">${invProposal.invoice_number}</p><p class="text-xs mt-1" style="color:rgba(255,255,255,0.75)">${invProposal.issue_date ? new Date(invProposal.issue_date).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : ''}</p></div>
       </div>
     </div>
     <div class="p-8">
       <div class="grid grid-cols-2 gap-6 mb-8">
-        <div><h3 class="text-xs font-bold text-gray-400 uppercase mb-2">Bill To</h3><p class="font-semibold text-gray-800">${invProposal.customer_name || ''}</p><p class="text-sm text-gray-500">${invProposal.company_name || ''}</p><p class="text-sm text-gray-500">${invProposal.customer_email || ''}</p></div>
+        <div><h3 class="text-xs font-bold text-gray-400 uppercase mb-2">Bill To</h3>${invProposal.customer_name ? `<p class="font-semibold text-gray-800">${escHtml(invProposal.customer_name)}</p>` : `<p class="text-sm text-gray-400 italic">Customer name pending</p>`}${invProposal.company_name ? `<p class="text-sm text-gray-500">${escHtml(invProposal.company_name)}</p>` : ''}${invProposal.customer_email ? `<p class="text-sm text-gray-500">${escHtml(invProposal.customer_email)}</p>` : ''}</div>
         <div class="text-right"><h3 class="text-xs font-bold text-gray-400 uppercase mb-2">${docLabel} Details</h3><p class="text-sm text-gray-600"><strong>Status:</strong> <span class="px-2 py-0.5 rounded-full text-xs font-bold ${invStatusBadge}">${invStatusLabel}</span></p>${invProposal.due_date ? `<p class="text-sm text-gray-600 mt-1"><strong>Due:</strong> ${new Date(invProposal.due_date).toLocaleDateString('en-CA')}</p>` : ''}${invProposal.valid_until ? `<p class="text-sm text-gray-600 mt-1"><strong>Valid Until:</strong> ${invProposal.valid_until}</p>` : ''}</div>
       </div>
+      ${trustBadgeHtml}
       ${invProposal.scope_of_work ? `<div class="mb-8 bg-gray-50 rounded-xl p-6"><h3 class="text-sm font-bold text-gray-700 mb-2"><i class="fas fa-clipboard-list mr-1 text-blue-500"></i>Scope of Work</h3><div class="text-sm text-gray-600 whitespace-pre-wrap">${invProposal.scope_of_work}</div></div>` : ''}
       ${reportSectionsHtml ? `<div class="mb-8">${reportSectionsHtml}</div>` : ''}
       ${reportLink ? `<div class="mb-6">${reportLink}</div>` : ''}

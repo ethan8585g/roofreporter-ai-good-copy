@@ -427,8 +427,8 @@
 
   // ── Agent Persona Selector — Choose your AI answering agent ──
   function renderAgentPersonaSelector(c) {
-    var currentVoice = c.agent_voice || (state.phoneSetup && state.phoneSetup.agent_voice) || 'alloy';
-    var currentName = c.agent_name || (state.phoneSetup && state.phoneSetup.agent_name) || 'Sarah';
+    var currentVoice = state.selectedAgentVoice || c.agent_voice || (state.phoneSetup && state.phoneSetup.agent_voice) || 'alloy';
+    var currentName = state.selectedAgentName || c.agent_name || (state.phoneSetup && state.phoneSetup.agent_name) || 'Sarah';
 
     // Agent profiles with voice IDs and descriptions
     var agents = [

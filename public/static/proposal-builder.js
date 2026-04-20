@@ -8,6 +8,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const root = document.getElementById('proposal-root');
   if (!root) return;
 
+  // Responsive input sizing — 16px on mobile prevents iOS zoom on focus;
+  // narrower screens also benefit from larger tap targets.
+  (function injectPbStyles() {
+    if (document.getElementById('pb-responsive-styles')) return;
+    var style = document.createElement('style');
+    style.id = 'pb-responsive-styles';
+    style.textContent = ':root{--pb-input-font:14px} @media (max-width:640px){:root{--pb-input-font:16px}} .pb-invalid{border-color:#ef4444 !important;box-shadow:0 0 0 2px rgba(239,68,68,0.15) !important}';
+    document.head.appendChild(style);
+  })();
+
   const token = localStorage.getItem('rc_customer_token') || localStorage.getItem('rc_token') || '';
   const headers = () => ({ 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' });
 
@@ -66,6 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
     pricingPresets: null, // loaded from settings — auto-apply on report select
     presetsApplied: false, // flag so presets only apply once per proposal
     pricePerBundle: 0, // $/bundle for per-bundle pricing mode
+    activeTemplateId: null, // currently-applied Quick Template (for active pill)
     // Form state
     form: resetForm()
   };
@@ -624,25 +635,35 @@ document.addEventListener('DOMContentLoaded', () => {
       // Inline material take-off panel
       renderMaterialPanel() +
 
-      // Profit summary bar
-      '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:12px;text-align:center">' +
-        '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Line Item Cost</div><div style="color:var(--text-muted);font-size:18px;font-weight:700">$' + totalCost.toFixed(2) + '</div></div>' +
-        '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">My Cost <span style="font-size:8px;opacity:0.6">(editable)</span></div><div style="display:flex;align-items:center;justify-content:center;gap:2px"><span style="color:#ef4444;font-size:20px;font-weight:800">$</span><input type="number" value="' + (state.myCost !== null ? state.myCost : totalCost).toFixed(2) + '" onchange="window.__pbState.myCost=parseFloat(this.value)||null;window.__pbRender()" style="width:90px;background:transparent;border:none;border-bottom:2px solid #ef4444;color:#ef4444;font-size:20px;font-weight:800;text-align:center;padding:0"></div></div>' +
-        '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Customer Price <span style="font-size:8px;opacity:0.6">(editable)</span></div><div style="display:flex;align-items:center;justify-content:center;gap:2px"><span style="color:var(--text-primary);font-size:20px;font-weight:800">$</span><input type="number" value="' + (state.customerPriceOverride !== null ? state.customerPriceOverride : customerTotal).toFixed(2) + '" onchange="window.__pbState.customerPriceOverride=parseFloat(this.value)||null;window.__pbRender()" style="width:90px;background:transparent;border:none;border-bottom:2px solid var(--accent);color:var(--text-primary);font-size:20px;font-weight:800;text-align:center;padding:0"></div></div>' +
-        '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Your Profit</div><div style="color:#22c55e;font-size:20px;font-weight:800">$' + profit.toFixed(2) + '</div></div>' +
-        '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Margin</div><div style="color:#22c55e;font-size:20px;font-weight:800">' + margin.toFixed(1) + '%</div></div>' +
-      '</div>' +
+      // Profit summary bar — with margin health color (red <15% / yellow 15-25% / green >25%)
+      (function() {
+        var mHealthColor = margin < 15 ? '#ef4444' : margin < 25 ? '#f59e0b' : '#22c55e';
+        var mHealthLabel = margin < 15 ? 'Low' : margin < 25 ? 'OK' : 'Healthy';
+        var profitColor = profit < 0 ? '#ef4444' : '#22c55e';
+        return '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:12px;text-align:center">' +
+          '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Line Item Cost</div><div style="color:var(--text-muted);font-size:18px;font-weight:700">$' + totalCost.toFixed(2) + '</div></div>' +
+          '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px" title="Your true cost before markup. Click to edit — overrides line item sum.">My Cost <span style="font-size:8px;opacity:0.6">(editable)</span></div><div style="display:flex;align-items:center;justify-content:center;gap:2px"><span style="color:#ef4444;font-size:20px;font-weight:800">$</span><input type="number" value="' + (state.myCost !== null ? state.myCost : totalCost).toFixed(2) + '" onchange="window.__pbState.myCost=parseFloat(this.value)||null;window.__pbRender()" style="width:90px;background:transparent;border:none;border-bottom:2px solid #ef4444;color:#ef4444;font-size:20px;font-weight:800;text-align:center;padding:0"></div></div>' +
+          '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px" title="What your customer pays. Edit to override the markup/margin calc.">Customer Price <span style="font-size:8px;opacity:0.6">(editable)</span></div><div style="display:flex;align-items:center;justify-content:center;gap:2px"><span style="color:var(--text-primary);font-size:20px;font-weight:800">$</span><input type="number" value="' + (state.customerPriceOverride !== null ? state.customerPriceOverride : customerTotal).toFixed(2) + '" onchange="window.__pbState.customerPriceOverride=parseFloat(this.value)||null;window.__pbRender()" style="width:90px;background:transparent;border:none;border-bottom:2px solid var(--accent);color:var(--text-primary);font-size:20px;font-weight:800;text-align:center;padding:0"></div></div>' +
+          '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Your Profit</div><div style="color:' + profitColor + ';font-size:20px;font-weight:800">$' + profit.toFixed(2) + '</div></div>' +
+          '<div title="Margin health: Low (&lt;15%) / OK (15-25%) / Healthy (&gt;25%)"><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Margin</div><div style="color:' + mHealthColor + ';font-size:20px;font-weight:800">' + margin.toFixed(1) + '%</div><div style="font-size:9px;color:' + mHealthColor + ';font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;opacity:0.85">' + mHealthLabel + '</div></div>' +
+        '</div>';
+      })() +
 
-      // Quick Templates
+      // Quick Templates — with active-template pill
       '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:20px">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">' +
           '<h4 style="color:var(--text-primary);font-size:14px;font-weight:700;margin:0"><i class="fas fa-layer-group" style="color:var(--accent);margin-right:6px"></i>Quick Templates</h4>' +
-          '<span style="color:var(--text-muted);font-size:11px">Click to pre-fill proposal text</span>' +
+          (state.activeTemplateId ? (function() {
+            var active = PROPOSAL_TEMPLATES.find(function(t) { return t.id === state.activeTemplateId; });
+            if (!active) return '';
+            return '<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.35);color:#16a34a;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700"><i class="fas fa-check-circle" style="font-size:10px"></i>' + active.label + ' applied<button onclick="window._pb.clearTemplate()" style="background:none;border:none;color:#16a34a;cursor:pointer;text-decoration:underline;font-size:11px;padding:0;margin-left:4px;font-weight:600">Undo</button></span>';
+          })() : '<span style="color:var(--text-muted);font-size:11px">Click to pre-fill proposal text</span>') +
         '</div>' +
         '<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">' +
           PROPOSAL_TEMPLATES.map(function(t) {
-            return '<button onclick="window._pb.applyTemplate(\'' + t.id + '\')" style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 14px;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:10px;cursor:pointer;min-width:100px" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border-color)\'">' +
-              '<i class="fas ' + t.icon + '" style="color:var(--accent);font-size:16px"></i>' +
+            var isActive = state.activeTemplateId === t.id;
+            return '<button onclick="window._pb.applyTemplate(\'' + t.id + '\')" style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 14px;background:' + (isActive ? 'rgba(34,197,94,0.1)' : 'var(--bg-elevated)') + ';border:' + (isActive ? '2px' : '1px') + ' solid ' + (isActive ? '#22c55e' : 'var(--border-color)') + ';border-radius:10px;cursor:pointer;min-width:100px" onmouseover="this.style.borderColor=\'' + (isActive ? '#22c55e' : 'var(--accent)') + '\'" onmouseout="this.style.borderColor=\'' + (isActive ? '#22c55e' : 'var(--border-color)') + '\'">' +
+              '<i class="fas ' + t.icon + '" style="color:' + (isActive ? '#22c55e' : 'var(--accent)') + ';font-size:16px"></i>' +
               '<span style="color:var(--text-primary);font-size:11px;font-weight:600;text-align:center;white-space:nowrap">' + t.label + '</span>' +
             '</button>';
           }).join('') +
@@ -689,11 +710,23 @@ document.addEventListener('DOMContentLoaded', () => {
           // Customer pricing
           '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px">' +
             '<h4 style="color:var(--text-primary);font-size:14px;font-weight:700;margin-bottom:12px"><i class="fas fa-tags" style="color:var(--accent);margin-right:6px"></i>Customer Pricing</h4>' +
+            // Dual readout — always-on education on markup↔margin equivalence
+            (function() {
+              var mk = Number(markup) || 0;
+              var equivalentMargin = mk > 0 ? (mk / (100 + mk)) * 100 : 0;
+              var mg = Number(marginPct) || 0;
+              var equivalentMarkup = mg > 0 && mg < 100 ? (mg / (100 - mg)) * 100 : 0;
+              return '<div style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text-muted);gap:8px;flex-wrap:wrap">' +
+                '<span style="font-weight:600"><i class="fas fa-info-circle" style="color:var(--accent);margin-right:5px"></i>Markup ' + mk.toFixed(0) + '% = Margin ' + equivalentMargin.toFixed(1) + '%</span>' +
+                '<span style="opacity:0.7">|</span>' +
+                '<span style="font-weight:600">Margin ' + mg.toFixed(0) + '% = Markup ' + (equivalentMarkup > 0 ? equivalentMarkup.toFixed(1) : '∞') + '%</span>' +
+              '</div>';
+            })() +
             '<div style="display:flex;gap:8px;margin-bottom:12px">' +
-              '<button onclick="window.__pbState.pricingEngineMode=\'markup\';window.__pbRender()" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingEngineMode === 'markup' ? 'var(--accent)' : 'var(--border-color)') + ';color:' + (state.pricingEngineMode === 'markup' ? 'var(--accent)' : 'var(--text-muted)') + ';background:transparent">Markup %</button>' +
-              '<button onclick="window.__pbState.pricingEngineMode=\'margin\';window.__pbRender()" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingEngineMode === 'margin' ? 'var(--accent)' : 'var(--border-color)') + ';color:' + (state.pricingEngineMode === 'margin' ? 'var(--accent)' : 'var(--text-muted)') + ';background:transparent">Margin %</button>' +
-              '<button onclick="window.__pbState.pricingEngineMode=\'per_square_customer\';window.__pbRender()" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingEngineMode === 'per_square_customer' ? 'var(--accent)' : 'var(--border-color)') + ';color:' + (state.pricingEngineMode === 'per_square_customer' ? 'var(--accent)' : 'var(--text-muted)') + ';background:transparent">$/Square</button>' +
-              '<button onclick="window.__pbState.pricingEngineMode=\'per_bundle\';window.__pbRender()" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingEngineMode === 'per_bundle' ? 'var(--accent)' : 'var(--border-color)') + ';color:' + (state.pricingEngineMode === 'per_bundle' ? 'var(--accent)' : 'var(--text-muted)') + ';background:transparent">$/Bundle</button>' +
+              '<button onclick="window.__pbState.pricingEngineMode=\'markup\';window.__pbRender()" title="Markup: add this % on top of your cost. 30% markup on $1,000 cost = $1,300 customer price." style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingEngineMode === 'markup' ? 'var(--accent)' : 'var(--border-color)') + ';color:' + (state.pricingEngineMode === 'markup' ? 'var(--accent)' : 'var(--text-muted)') + ';background:transparent">Markup %</button>' +
+              '<button onclick="window.__pbState.pricingEngineMode=\'margin\';window.__pbRender()" title="Margin: take this % off of the price. 30% margin on $1,000 cost = $1,429 customer price. Higher price than same-% markup." style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingEngineMode === 'margin' ? 'var(--accent)' : 'var(--border-color)') + ';color:' + (state.pricingEngineMode === 'margin' ? 'var(--accent)' : 'var(--text-muted)') + ';background:transparent">Margin %</button>' +
+              '<button onclick="window.__pbState.pricingEngineMode=\'per_square_customer\';window.__pbRender()" title="Fixed price per roofing square (100 sq ft)" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingEngineMode === 'per_square_customer' ? 'var(--accent)' : 'var(--border-color)') + ';color:' + (state.pricingEngineMode === 'per_square_customer' ? 'var(--accent)' : 'var(--text-muted)') + ';background:transparent">$/Square</button>' +
+              '<button onclick="window.__pbState.pricingEngineMode=\'per_bundle\';window.__pbRender()" title="Fixed price per bundle of shingles (3 bundles per square)" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingEngineMode === 'per_bundle' ? 'var(--accent)' : 'var(--border-color)') + ';color:' + (state.pricingEngineMode === 'per_bundle' ? 'var(--accent)' : 'var(--text-muted)') + ';background:transparent">$/Bundle</button>' +
             '</div>' +
             (state.pricingEngineMode === 'markup' ?
               '<div><label style="color:var(--text-muted);font-size:11px">Markup % <span style="opacity:0.6">(on cost)</span></label><input type="number" value="' + markup + '" onchange="window.__pbState.markupPercent=Number(this.value);window.__pbRender()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-weight:700;font-size:18px;margin-top:4px" min="0" max="1000" step="1"></div>'
@@ -762,54 +795,61 @@ document.addEventListener('DOMContentLoaded', () => {
             '</div>' +
           '</div>' +
 
-          // Customer details
+          // Customer details — labeled fields, 14px desktop / 16px mobile, format validation
           '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:16px">' +
             '<h4 style="color:var(--text-primary);font-size:14px;font-weight:700;margin-bottom:10px"><i class="fas fa-user" style="color:var(--accent);margin-right:6px"></i>Customer Info</h4>' +
             // Mode toggle
-            '<div style="display:flex;gap:6px;margin-bottom:12px">' +
-              '<button onclick="window.__pbState.form.isNewCustomer=true;window.__pbRender()" style="flex:1;padding:6px 8px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (f.isNewCustomer !== false ? 'var(--accent)' : 'var(--border-color)') + ';background:' + (f.isNewCustomer !== false ? 'rgba(0,255,136,0.08)' : 'transparent') + ';color:' + (f.isNewCustomer !== false ? 'var(--accent)' : 'var(--text-muted)') + '"><i class="fas fa-user-plus" style="margin-right:4px"></i>New Customer</button>' +
-              '<button onclick="window.__pbState.form.isNewCustomer=false;window.__pbRender()" style="flex:1;padding:6px 8px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (f.isNewCustomer === false ? 'var(--accent)' : 'var(--border-color)') + ';background:' + (f.isNewCustomer === false ? 'rgba(0,255,136,0.08)' : 'transparent') + ';color:' + (f.isNewCustomer === false ? 'var(--accent)' : 'var(--text-muted)') + '"><i class="fas fa-users" style="margin-right:4px"></i>Existing Customer</button>' +
+            '<div style="display:flex;gap:6px;margin-bottom:14px">' +
+              '<button onclick="window.__pbState.form.isNewCustomer=true;window.__pbRender()" style="flex:1;padding:8px 10px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid ' + (f.isNewCustomer !== false ? 'var(--accent)' : 'var(--border-color)') + ';background:' + (f.isNewCustomer !== false ? 'rgba(0,255,136,0.08)' : 'transparent') + ';color:' + (f.isNewCustomer !== false ? 'var(--accent)' : 'var(--text-muted)') + '"><i class="fas fa-user-plus" style="margin-right:4px"></i>New Customer</button>' +
+              '<button onclick="window.__pbState.form.isNewCustomer=false;window.__pbRender()" style="flex:1;padding:8px 10px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid ' + (f.isNewCustomer === false ? 'var(--accent)' : 'var(--border-color)') + ';background:' + (f.isNewCustomer === false ? 'rgba(0,255,136,0.08)' : 'transparent') + ';color:' + (f.isNewCustomer === false ? 'var(--accent)' : 'var(--text-muted)') + '"><i class="fas fa-users" style="margin-right:4px"></i>Existing Customer</button>' +
             '</div>' +
             (f.isNewCustomer === false
               ? // Existing customer dropdown
-                '<select onchange="window._pb.selectCustomer(this.value)" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:9px 10px;color:var(--text-primary);font-size:13px;margin-bottom:8px">' +
+                '<div><label style="color:var(--text-muted);font-size:11px;font-weight:600;display:block;margin-bottom:4px">Select Customer</label><select onchange="window._pb.selectCustomer(this.value)" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:10px 12px;color:var(--text-primary);font-size:var(--pb-input-font,14px);margin-bottom:8px">' +
                   '<option value="">— Select a customer —</option>' +
                   custDropdownHtml +
-                '</select>'
-              : // New customer text fields
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-                  '<input id="dash-cust-name" type="text" value="' + (f.customer_name||'').replace(/"/g,'&quot;') + '" placeholder="Customer Name" oninput="window.__pbState.form.customer_name=this.value" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px">' +
-                  '<input id="dash-cust-email" type="email" value="' + (f.customer_email||'').replace(/"/g,'&quot;') + '" placeholder="Email" oninput="window.__pbState.form.customer_email=this.value" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px">' +
-                  '<input id="dash-cust-phone" type="tel" value="' + (f.customer_phone||'').replace(/"/g,'&quot;') + '" placeholder="Phone" oninput="window.__pbState.form.customer_phone=this.value" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px">' +
-                  '<input id="dash-cust-address" type="text" value="' + (f.property_address||'').replace(/"/g,'&quot;') + '" placeholder="Address" oninput="window.__pbState.form.property_address=this.value" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px">' +
+                '</select></div>'
+              : // New customer text fields — labeled, 14px/16px responsive, inline validation
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+                  '<div><label style="color:var(--text-muted);font-size:11px;font-weight:600;display:block;margin-bottom:4px">Customer Name <span style="color:#ef4444">*</span></label><input id="dash-cust-name" type="text" value="' + (f.customer_name||'').replace(/"/g,'&quot;') + '" placeholder="Jane Doe" oninput="window.__pbState.form.customer_name=this.value;window._pb.validateField(this,\'name\')" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:10px 12px;color:var(--text-primary);font-size:var(--pb-input-font,14px)"></div>' +
+                  '<div><label style="color:var(--text-muted);font-size:11px;font-weight:600;display:block;margin-bottom:4px">Email <span style="color:#ef4444">*</span></label><input id="dash-cust-email" type="email" inputmode="email" autocomplete="email" value="' + (f.customer_email||'').replace(/"/g,'&quot;') + '" placeholder="jane@example.com" oninput="window.__pbState.form.customer_email=this.value" onblur="window._pb.validateField(this,\'email\')" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:10px 12px;color:var(--text-primary);font-size:var(--pb-input-font,14px)"><span id="dash-cust-email-err" style="display:none;color:#ef4444;font-size:11px;margin-top:3px">Please enter a valid email address</span></div>' +
+                  '<div><label style="color:var(--text-muted);font-size:11px;font-weight:600;display:block;margin-bottom:4px">Phone</label><input id="dash-cust-phone" type="tel" inputmode="tel" autocomplete="tel" value="' + (f.customer_phone||'').replace(/"/g,'&quot;') + '" placeholder="(555) 123-4567" oninput="window.__pbState.form.customer_phone=this.value" onblur="window._pb.validateField(this,\'phone\')" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:10px 12px;color:var(--text-primary);font-size:var(--pb-input-font,14px)"><span id="dash-cust-phone-err" style="display:none;color:#ef4444;font-size:11px;margin-top:3px">Enter 10+ digits</span></div>' +
+                  '<div><label style="color:var(--text-muted);font-size:11px;font-weight:600;display:block;margin-bottom:4px">Property Address</label><input id="dash-cust-address" type="text" autocomplete="street-address" value="' + (f.property_address||'').replace(/"/g,'&quot;') + '" placeholder="123 Main St, City, Province" oninput="window.__pbState.form.property_address=this.value" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:10px 12px;color:var(--text-primary);font-size:var(--pb-input-font,14px)"></div>' +
                 '</div>'
             ) +
-            '<textarea id="dash-scope" placeholder="Scope of work..." oninput="window.__pbState.form.scope_of_work=this.value" style="width:100%;margin-top:8px;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px;height:60px;resize:vertical">' + (f.scope_of_work||'') + '</textarea>' +
+            '<div style="margin-top:12px"><label style="color:var(--text-muted);font-size:11px;font-weight:600;display:block;margin-bottom:4px">Scope of Work</label><textarea id="dash-scope" placeholder="Describe the work to be performed…" oninput="window.__pbState.form.scope_of_work=this.value" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:10px 12px;color:var(--text-primary);font-size:var(--pb-input-font,14px);height:80px;resize:vertical;line-height:1.5">' + (f.scope_of_work||'') + '</textarea></div>' +
           '</div>' +
 
-          // Certifications
+          // Certifications — labeled with format hints, graceful validation
           '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px">' +
-            '<h4 style="color:var(--text-primary);font-size:14px;font-weight:700;margin-bottom:12px"><i class="fas fa-shield-alt" style="color:var(--accent);margin-right:6px"></i>Certifications</h4>' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-              '<input id="dash-insurance" value="' + (state.attachments.insuranceCert||'') + '" placeholder="Insurance Cert #" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px">' +
-              '<input id="dash-warranty" value="' + (state.attachments.warrantyDoc||'') + '" placeholder="Warranty Document" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px">' +
-              '<input id="dash-wcb" value="' + (state.attachments.wcbCoverage||'') + '" placeholder="WCB Coverage #" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px">' +
-              '<input id="dash-custom" value="' + (state.attachments.customAttachment||'') + '" placeholder="Custom Cert" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px">' +
+            '<h4 style="color:var(--text-primary);font-size:14px;font-weight:700;margin-bottom:6px"><i class="fas fa-shield-alt" style="color:var(--accent);margin-right:6px"></i>Certifications <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(shown as trust badges on the customer-facing proposal)</span></h4>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">' +
+              '<div><label style="color:var(--text-muted);font-size:11px;font-weight:600;display:block;margin-bottom:4px"><i class="fas fa-shield-alt" style="color:#10b981;margin-right:4px"></i>Insurance Cert #</label><input id="dash-insurance" value="' + (state.attachments.insuranceCert||'').replace(/"/g,'&quot;') + '" placeholder="e.g. INS-2026-12345" onchange="window.__pbState.attachments.insuranceCert=this.value" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:10px 12px;color:var(--text-primary);font-size:var(--pb-input-font,14px)"></div>' +
+              '<div><label style="color:var(--text-muted);font-size:11px;font-weight:600;display:block;margin-bottom:4px"><i class="fas fa-file-contract" style="color:#0ea5e9;margin-right:4px"></i>Warranty</label><input id="dash-warranty" value="' + (state.attachments.warrantyDoc||'').replace(/"/g,'&quot;') + '" placeholder="e.g. 25-Year GAF" onchange="window.__pbState.attachments.warrantyDoc=this.value" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:10px 12px;color:var(--text-primary);font-size:var(--pb-input-font,14px)"></div>' +
+              '<div><label style="color:var(--text-muted);font-size:11px;font-weight:600;display:block;margin-bottom:4px"><i class="fas fa-hard-hat" style="color:#16a34a;margin-right:4px"></i>WCB Coverage #</label><input id="dash-wcb" value="' + (state.attachments.wcbCoverage||'').replace(/"/g,'&quot;') + '" placeholder="e.g. WCB-AB-987654" onchange="window.__pbState.attachments.wcbCoverage=this.value" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:10px 12px;color:var(--text-primary);font-size:var(--pb-input-font,14px)"></div>' +
+              '<div><label style="color:var(--text-muted);font-size:11px;font-weight:600;display:block;margin-bottom:4px"><i class="fas fa-award" style="color:#8b5cf6;margin-right:4px"></i>Other Certification</label><input id="dash-custom" value="' + (state.attachments.customAttachment||'').replace(/"/g,'&quot;') + '" placeholder="e.g. GAF Master Elite" onchange="window.__pbState.attachments.customAttachment=this.value" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:10px 12px;color:var(--text-primary);font-size:var(--pb-input-font,14px)"></div>' +
             '</div>' +
           '</div>' +
         '</div>' +
       '</div>' +
 
-      // STICKY ACTION BAR at bottom
+      // STICKY ACTION BAR at bottom — primary CTA (Send) promoted; PDFs grouped under Download
       '<div style="position:sticky;bottom:0;background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-top:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">' +
-        '<div style="display:flex;gap:8px">' +
-          '<button onclick="window._pb.saveDraft()" style="background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--border-color);padding:10px 20px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer"><i class="fas fa-save" style="margin-right:6px"></i>Save Draft</button>' +
-          '<button onclick="window._pb.previewProposal()" style="background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--border-color);padding:10px 20px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer"><i class="fas fa-eye" style="margin-right:6px"></i>Preview</button>' +
+        '<div style="display:flex;gap:4px;align-items:center">' +
+          '<button onclick="window._pb.saveDraft()" style="background:transparent;color:var(--text-muted);border:none;padding:8px 12px;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;text-decoration:underline;text-underline-offset:3px" title="Save draft to your account"><i class="fas fa-save" style="margin-right:4px;opacity:0.7"></i>Save Draft</button>' +
+          '<button onclick="window._pb.previewProposal()" style="background:transparent;color:var(--text-muted);border:none;padding:8px 12px;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;text-decoration:underline;text-underline-offset:3px" title="Open customer-facing preview"><i class="fas fa-eye" style="margin-right:4px;opacity:0.7"></i>Preview</button>' +
         '</div>' +
-        '<div style="display:flex;gap:8px">' +
-          '<button onclick="window._pb.saveAndCreateSupplierOrder()" style="background:#0ea5e9;color:white;border:none;padding:10px 20px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer"><i class="fas fa-truck" style="margin-right:6px"></i>Supplier Order PDF</button>' +
-          '<button onclick="window._pb.downloadCustomerPDF()" style="background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--border-color);padding:10px 20px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer"><i class="fas fa-download" style="margin-right:6px"></i>Customer PDF</button>' +
-          '<button onclick="window._pb.collectDashboardAndSend()" style="background:var(--accent);color:#0a0a0a;border:none;padding:10px 24px;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer"><i class="fas fa-paper-plane" style="margin-right:6px"></i>Send to Customer</button>' +
+        '<div style="display:flex;gap:10px;align-items:center">' +
+          // Download split-button — groups Customer PDF + Supplier Order PDF
+          '<div style="position:relative" id="pb-download-wrap">' +
+            '<button onclick="(function(){var m=document.getElementById(\'pb-download-menu\');if(m)m.style.display=m.style.display===\'block\'?\'none\':\'block\';})()" style="background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--border-color);padding:10px 18px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px" title="Download PDFs"><i class="fas fa-download"></i>Download<i class="fas fa-caret-down" style="opacity:0.7;margin-left:2px"></i></button>' +
+            '<div id="pb-download-menu" style="display:none;position:absolute;bottom:calc(100% + 6px);right:0;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,0.25);min-width:240px;z-index:10">' +
+              '<button onclick="document.getElementById(\'pb-download-menu\').style.display=\'none\';window._pb.downloadCustomerPDF()" style="display:block;width:100%;text-align:left;background:transparent;color:var(--text-primary);border:none;padding:10px 12px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer" onmouseover="this.style.background=\'var(--bg-elevated)\'" onmouseout="this.style.background=\'transparent\'"><i class="fas fa-file-pdf" style="color:#22c55e;margin-right:8px;width:14px"></i>Customer PDF<div style="font-size:11px;color:var(--text-muted);font-weight:400;margin-left:22px;margin-top:2px">Customer-safe — no cost/margin shown</div></button>' +
+              '<button onclick="document.getElementById(\'pb-download-menu\').style.display=\'none\';window._pb.confirmSupplierOrder()" style="display:block;width:100%;text-align:left;background:transparent;color:var(--text-primary);border:none;padding:10px 12px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer" onmouseover="this.style.background=\'var(--bg-elevated)\'" onmouseout="this.style.background=\'transparent\'"><i class="fas fa-truck" style="color:#f97316;margin-right:8px;width:14px"></i>Supplier Order PDF<div style="font-size:11px;color:#f97316;font-weight:400;margin-left:22px;margin-top:2px"><i class="fas fa-exclamation-triangle" style="font-size:9px;margin-right:3px"></i>Contains your cost + margin</div></button>' +
+            '</div>' +
+          '</div>' +
+          // Primary CTA — Send to Customer
+          '<button onclick="window._pb.collectDashboardAndSend()" style="background:linear-gradient(135deg,#10b981,#059669);color:white;border:none;padding:12px 28px;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;box-shadow:0 4px 14px rgba(16,185,129,0.35);transition:all 0.15s" onmouseover="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 6px 20px rgba(16,185,129,0.45)\'" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 4px 14px rgba(16,185,129,0.35)\'" title="Email proposal to customer"><i class="fas fa-paper-plane" style="margin-right:8px"></i>Send to Customer</button>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -1872,7 +1912,20 @@ document.addEventListener('DOMContentLoaded', () => {
         tax_rate: f.tax_rate,
         discount_amount: calcDiscountAmount(),
         discount_type: f.discount_type || 'fixed',
-        notes: f.notes,
+        notes: (function() {
+          // Embed certs as a parseable JSON sidecar so the customer view can render Trust Badges
+          // without needing a new DB column. Prefix keeps it out of human-visible notes.
+          var certs = {
+            insurance: (state.attachments && state.attachments.insuranceCert) || '',
+            warranty: (state.attachments && state.attachments.warrantyDoc) || '',
+            wcb: (state.attachments && state.attachments.wcbCoverage) || '',
+            custom: (state.attachments && state.attachments.customAttachment) || ''
+          };
+          var hasCert = certs.insurance || certs.warranty || certs.wcb || certs.custom;
+          var userNotes = (f.notes || '').trim();
+          if (!hasCert) return userNotes || null;
+          return '__PB_CERTS__' + JSON.stringify(certs) + (userNotes ? '\n\n' + userNotes : '');
+        })(),
         terms: f.payment_terms_text,
         scope_of_work: f.scope_of_work || '',
         warranty_terms: f.warranty_terms || '',
@@ -2491,9 +2544,53 @@ document.addEventListener('DOMContentLoaded', () => {
     collectDashboardAndSend() {
       window._pb.collectDashboardData();
       var hasExisting = !!(state.form.customer_id || state.form.crm_customer_id);
-      if (!state.form.customer_name && !hasExisting) { pbToast('Please enter customer name', 'error'); return; }
-      if (!state.form.customer_email && !hasExisting) { pbToast('Please enter customer email', 'error'); return; }
+      if (!state.form.customer_name && !hasExisting) { pbToast('Please enter customer name', 'error'); var n=document.getElementById('dash-cust-name'); if(n){n.classList.add('pb-invalid');n.focus();} return; }
+      if (!state.form.customer_email && !hasExisting) { pbToast('Please enter customer email', 'error'); var e=document.getElementById('dash-cust-email'); if(e){e.classList.add('pb-invalid');e.focus();} return; }
+      // Format validation — block send only if clearly invalid
+      var emailEl = document.getElementById('dash-cust-email');
+      if (emailEl && !window._pb.validateField(emailEl, 'email')) { pbToast('Please fix the email address', 'error'); emailEl.focus(); return; }
+      var phoneEl = document.getElementById('dash-cust-phone');
+      if (phoneEl && phoneEl.value && !window._pb.validateField(phoneEl, 'phone')) { pbToast('Please fix the phone number or leave it blank', 'error'); phoneEl.focus(); return; }
       saveProposal(true);
+    },
+    validateField(el, kind) {
+      if (!el) return true;
+      var val = (el.value || '').trim();
+      var ok = true;
+      var errId = el.id + '-err';
+      if (kind === 'email') {
+        // Optional when blank, but if present must look like an email
+        ok = !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+      } else if (kind === 'phone') {
+        ok = !val || (val.replace(/\D/g, '').length >= 10);
+      } else if (kind === 'name') {
+        ok = val.length > 0;
+      }
+      if (ok) {
+        el.classList.remove('pb-invalid');
+        var err = document.getElementById(errId); if (err) err.style.display = 'none';
+      } else {
+        el.classList.add('pb-invalid');
+        var err2 = document.getElementById(errId); if (err2) err2.style.display = 'block';
+      }
+      return ok;
+    },
+    confirmSupplierOrder() {
+      var overlay = document.createElement('div');
+      overlay.id = 'pb-supplier-confirm';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center';
+      overlay.innerHTML = '<div style="background:white;border-radius:16px;padding:28px;max-width:460px;width:90%;box-shadow:0 25px 50px rgba(0,0,0,0.3)">' +
+        '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:44px;height:44px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-exclamation-triangle" style="color:#d97706;font-size:18px"></i></div>' +
+        '<div><h3 style="font-size:17px;font-weight:700;color:#111;margin:0">Supplier Order PDF</h3><p style="font-size:12px;color:#6b7280;margin:2px 0 0">This is a sensitive internal document.</p></div></div>' +
+        '<p style="font-size:13px;color:#374151;line-height:1.5;margin:0 0 16px;padding:12px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px"><strong>⚠ This PDF includes your cost, markup, and profit margin.</strong><br>Send it to your supplier only — never to the homeowner.</p>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+          '<button id="pb-supplier-cancel" style="padding:10px 18px;background:#f3f4f6;border:none;border-radius:8px;font-weight:600;font-size:13px;color:#374151;cursor:pointer">Cancel</button>' +
+          '<button id="pb-supplier-ok" style="padding:10px 20px;background:#f97316;color:white;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer"><i class="fas fa-truck" style="margin-right:6px"></i>Download Supplier PDF</button>' +
+        '</div></div>';
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+      document.getElementById('pb-supplier-cancel').onclick = function() { overlay.remove(); };
+      document.getElementById('pb-supplier-ok').onclick = function() { overlay.remove(); window._pb.saveAndCreateSupplierOrder(); };
     },
     async saveAndCreateSupplierOrder() {
       // Save proposal first (silent=true skips the confirm dialog + state reset),
@@ -2532,12 +2629,38 @@ document.addEventListener('DOMContentLoaded', () => {
       var t = PROPOSAL_TEMPLATES.find(function(tpl) { return tpl.id === templateId; });
       if (!t) return;
       window._pb.collectDashboardData();
+      // Snapshot prior values so Undo can restore them
+      state._preTemplateSnapshot = {
+        proposal_title: state.form.proposal_title,
+        proposal_description: state.form.proposal_description,
+        scope_of_work: state.form.scope_of_work,
+        warranty_terms: state.form.warranty_terms,
+        payment_terms_text: state.form.payment_terms_text,
+        activeTemplateId: state.activeTemplateId
+      };
       state.form.proposal_title = t.title;
       state.form.proposal_description = t.description;
       state.form.scope_of_work = t.scope;
       state.form.warranty_terms = t.warranty;
       state.form.payment_terms_text = t.payment;
-      pbToast('Template applied: ' + t.label, 'success');
+      state.activeTemplateId = t.id;
+      pbToast('Template applied: ' + t.label + ' — scroll down to review scope & warranty', 'success');
+      render();
+    },
+    clearTemplate() {
+      var snap = state._preTemplateSnapshot;
+      if (snap) {
+        state.form.proposal_title = snap.proposal_title;
+        state.form.proposal_description = snap.proposal_description;
+        state.form.scope_of_work = snap.scope_of_work;
+        state.form.warranty_terms = snap.warranty_terms;
+        state.form.payment_terms_text = snap.payment_terms_text;
+        state.activeTemplateId = snap.activeTemplateId || null;
+        state._preTemplateSnapshot = null;
+        pbToast('Template removed — prior values restored', 'info');
+      } else {
+        state.activeTemplateId = null;
+      }
       render();
     },
     closePreview() {

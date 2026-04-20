@@ -51,7 +51,7 @@ function authHeaders() {
 
 // ── Bootstrap ──────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  await Promise.all([loadDesigns(), loadAutomationSettings(), loadSendLog(), loadInvoicingSettings()]);
+  await Promise.all([loadDesigns(), loadAutomationSettings(), loadSendLog(), loadInvoicingSettings(), loadCurrentLogo()]);
   certState.loading = false;
   render();
   // Auto-load preview after first render
@@ -290,7 +290,7 @@ async function loadCurrentLogo() {
   try {
     const r = await fetch('/api/customer/me', { headers: authHeaders() });
     const d = await r.json();
-    certState.logoPreview = d.brand_logo_url || null;
+    certState.logoPreview = (d.customer && d.customer.brand_logo_url) || d.brand_logo_url || null;
     render();
   } catch (e) { console.error('Load logo:', e); }
 }
