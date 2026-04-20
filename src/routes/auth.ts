@@ -10,8 +10,9 @@ export const authRoutes = new Hono<{ Bindings: Bindings }>()
 // ============================================================
 async function createAdminSession(db: D1Database, adminId: number): Promise<string> {
   const token = crypto.randomUUID() + '-' + crypto.randomUUID()
-  // 30-day rolling session expiry (renewed on each valid request)
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  // P1-01: 7-day rolling session expiry (renewed on each valid request).
+  // Shrinks blast radius of a stolen token from 30 days to 7.
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
   
   await db.prepare(`
     INSERT INTO admin_sessions (admin_id, session_token, expires_at)
@@ -58,9 +59,9 @@ export async function validateAdminSession(
     WHERE s.session_token = ? AND s.expires_at > datetime('now') AND a.is_active = 1
   `).bind(token).first<any>()
 
-  // Rolling renewal: extend session by 30 days on each valid use
+  // P1-01: rolling renewal also uses the shorter 7-day window.
   if (session) {
-    const newExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    const newExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
     db.prepare('UPDATE admin_sessions SET expires_at = ? WHERE session_token = ?').bind(newExpiry, token).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
   }
 
@@ -202,7 +203,8 @@ authRoutes.post('/login', async (c) => {
     // P0-05: also issue an HttpOnly, Secure, SameSite=Lax cookie. Clients
     // that migrate to cookie-auth will no longer need to stash the token in
     // localStorage. Legacy Bearer flow still works while the frontend migrates.
-    const maxAge = 30 * 24 * 60 * 60
+    // P1-01: cookie lifetime matches the session lifetime (7 days).
+    const maxAge = 7 * 24 * 60 * 60
     c.header('Set-Cookie', `${ADMIN_SESSION_COOKIE}=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`, { append: true })
 
     return c.json({

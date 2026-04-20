@@ -492,7 +492,7 @@ customerAuthRoutes.post('/google', async (c) => {
 
     // Create session
     const token = generateSessionToken()
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // P1-01: 7 days
 
     await c.env.DB.prepare(`
       INSERT INTO customer_sessions (customer_id, session_token, expires_at)
@@ -500,7 +500,7 @@ customerAuthRoutes.post('/google', async (c) => {
     `).bind(customer.id, token, expiresAt).run()
 
     // P0-05: HttpOnly cookie on Google sign-in too.
-    setCustomerSessionCookie(c, token, 30 * 24 * 60 * 60)
+    setCustomerSessionCookie(c, token, 7 * 24 * 60 * 60)
 
     // Log activity
     await c.env.DB.prepare(`
@@ -614,7 +614,7 @@ customerAuthRoutes.post('/register', async (c) => {
     }
 
     const token = generateSessionToken()
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
     
     await c.env.DB.prepare(`
       INSERT INTO customer_sessions (customer_id, session_token, expires_at)
@@ -622,7 +622,7 @@ customerAuthRoutes.post('/register', async (c) => {
     `).bind(result.meta.last_row_id, token, expiresAt).run()
 
     // P0-05: HttpOnly cookie on registration auto-login too.
-    setCustomerSessionCookie(c, token, 30 * 24 * 60 * 60)
+    setCustomerSessionCookie(c, token, 7 * 24 * 60 * 60)
 
     await c.env.DB.prepare(`
       INSERT INTO user_activity_log (company_id, action, details)
@@ -737,7 +737,7 @@ customerAuthRoutes.post('/login', async (c) => {
     ).bind(customer.id).run()
 
     const token = generateSessionToken()
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
     
     await c.env.DB.prepare(`
       INSERT INTO customer_sessions (customer_id, session_token, expires_at)
@@ -745,7 +745,7 @@ customerAuthRoutes.post('/login', async (c) => {
     `).bind(customer.id, token, expiresAt).run()
 
     // P0-05: also set HttpOnly cookie.
-    setCustomerSessionCookie(c, token, 30 * 24 * 60 * 60)
+    setCustomerSessionCookie(c, token, 7 * 24 * 60 * 60)
 
     // Track login event in GA4
     trackUserLogin(c.env as any, String(customer.id), 'email', { email_domain: customer.email.split('@')[1] || 'unknown' }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))

@@ -4042,7 +4042,7 @@ html.light-theme{background:#f5f7fa !important}
 .light-theme [style*="color:#ffffff"]:not([style*="background"]):not([style*="linear-gradient"]){color:#0B0F12 !important}
 </style>
 <script>!function(){var p=window.location.pathname;if(!p.startsWith('/customer')&&!p.startsWith('/admin'))return;var t=localStorage.getItem('rc_dashboard_theme');if(t==='light'){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}else if(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script>
-  <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(function(){})})}</script>
+  <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(function(e){try{console.warn('[sw]',(e&&e.message)||e)}catch(_){}})})}</script>
   <script src="/static/push-subscribe.js" defer></script>
   <script src="/static/push-native.js" defer></script>`
 }
