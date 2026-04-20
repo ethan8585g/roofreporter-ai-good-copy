@@ -844,7 +844,7 @@ crmRoutes.post('/certificate-preview', async (c) => {
     const body = await c.req.json()
     // Fetch owner branding
     const owner = await c.env.DB.prepare(
-      `SELECT name, company_name, logo_url, phone, email, address, city, province,
+      `SELECT name, company_name, phone, email, address, city, province,
               brand_business_name, brand_logo_url, brand_address, brand_phone, brand_email
        FROM customers WHERE id = ?`
     ).bind(ownerId).first<any>()
@@ -853,7 +853,7 @@ crmRoutes.post('/certificate-preview', async (c) => {
     const { generateRoofInstallationCertificateHTML } = await import('../templates/certificate')
     const html = generateRoofInstallationCertificateHTML({
       companyName,
-      companyLogo: owner?.brand_logo_url || owner?.logo_url || undefined,
+      companyLogo: owner?.brand_logo_url || undefined,
       companyAddress,
       companyPhone: owner?.brand_phone || owner?.phone || undefined,
       companyEmail: owner?.brand_email || owner?.email || undefined,
@@ -942,7 +942,7 @@ crmRoutes.get('/proposals/:id/certificate', async (c) => {
   `).bind(id, ownerId).first<any>()
   if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
   const owner = await c.env.DB.prepare(
-    `SELECT name, email, phone, address, city, province, company_name, logo_url,
+    `SELECT name, email, phone, address, city, province, company_name,
             brand_business_name, brand_logo_url, brand_address, brand_phone, brand_email,
             brand_license_number, brand_primary_color FROM customers WHERE id = ?`
   ).bind(ownerId).first<any>()
@@ -951,7 +951,7 @@ crmRoutes.get('/proposals/:id/certificate', async (c) => {
   const companyAddress = owner?.brand_address || [owner?.address, owner?.city, owner?.province].filter(Boolean).join(', ')
   const certHtml = generateRoofInstallationCertificateHTML({
     companyName,
-    companyLogo: owner?.brand_logo_url || owner?.logo_url || undefined,
+    companyLogo: owner?.brand_logo_url || undefined,
     companyAddress: companyAddress || undefined,
     companyPhone: owner?.brand_phone || owner?.phone || undefined,
     companyEmail: owner?.brand_email || owner?.email || undefined,
@@ -982,7 +982,7 @@ crmRoutes.post('/proposals/:id/send-certificate', async (c) => {
   if (!proposal.customer_email) return c.json({ error: 'No customer email on file for this proposal' }, 400)
 
   const owner = await c.env.DB.prepare(
-    `SELECT name, email, phone, address, city, province, company_name, logo_url, gmail_refresh_token,
+    `SELECT name, email, phone, address, city, province, company_name, gmail_refresh_token,
             brand_business_name, brand_logo_url, brand_address, brand_phone, brand_email,
             brand_license_number, brand_primary_color FROM customers WHERE id = ?`
   ).bind(ownerId).first<any>()
@@ -992,7 +992,7 @@ crmRoutes.post('/proposals/:id/send-certificate', async (c) => {
   const companyAddress = owner?.brand_address || [owner?.address, owner?.city, owner?.province].filter(Boolean).join(', ')
   const certHtml = generateRoofInstallationCertificateHTML({
     companyName,
-    companyLogo: owner?.brand_logo_url || owner?.logo_url || undefined,
+    companyLogo: owner?.brand_logo_url || undefined,
     companyAddress: companyAddress || undefined,
     companyPhone: owner?.brand_phone || owner?.phone || undefined,
     companyEmail: owner?.brand_email || owner?.email || undefined,
@@ -1467,7 +1467,7 @@ crmRoutes.put('/jobs/:id', async (c) => {
 
         if (job?.customer_email) {
           const ownerForCert = await c.env.DB.prepare(
-            `SELECT auto_send_certificate, cert_trigger_type, name, email, phone, address, city, province, company_name, logo_url,
+            `SELECT auto_send_certificate, cert_trigger_type, name, email, phone, address, city, province, company_name,
                     gmail_refresh_token, brand_business_name, brand_logo_url, brand_address,
                     brand_phone, brand_email, brand_license_number, brand_primary_color FROM customers WHERE id = ?`
           ).bind(ownerId).first<any>()
@@ -1478,7 +1478,7 @@ crmRoutes.put('/jobs/:id', async (c) => {
             const companyAddress = ownerForCert.brand_address || [ownerForCert.address, ownerForCert.city, ownerForCert.province].filter(Boolean).join(', ')
             const certHtml = generateRoofInstallationCertificateHTML({
               companyName,
-              companyLogo: ownerForCert.brand_logo_url || ownerForCert.logo_url || undefined,
+              companyLogo: ownerForCert.brand_logo_url || undefined,
               companyAddress: companyAddress || undefined,
               companyPhone: ownerForCert.brand_phone || ownerForCert.phone || undefined,
               companyEmail: ownerForCert.brand_email || ownerForCert.email || undefined,
@@ -2520,7 +2520,7 @@ crmRoutes.post('/proposals/respond/:token', async (c) => {
   if (action === 'accept' && proposal.customer_email) {
     try {
       const ownerForCert = await c.env.DB.prepare(
-        `SELECT auto_send_certificate, name, email, phone, address, city, province, company_name, logo_url,
+        `SELECT auto_send_certificate, name, email, phone, address, city, province, company_name,
                 gmail_refresh_token, brand_business_name, brand_logo_url, brand_address,
                 brand_phone, brand_email, brand_license_number, brand_primary_color FROM customers WHERE id = ?`
       ).bind(proposal.owner_id).first<any>()
@@ -2531,7 +2531,7 @@ crmRoutes.post('/proposals/respond/:token', async (c) => {
         const companyAddress = ownerForCert.brand_address || [ownerForCert.address, ownerForCert.city, ownerForCert.province].filter(Boolean).join(', ')
         const certHtml = generateRoofInstallationCertificateHTML({
           companyName,
-          companyLogo: ownerForCert.brand_logo_url || ownerForCert.logo_url || undefined,
+          companyLogo: ownerForCert.brand_logo_url || undefined,
           companyAddress: companyAddress || undefined,
           companyPhone: ownerForCert.brand_phone || ownerForCert.phone || undefined,
           companyEmail: ownerForCert.brand_email || ownerForCert.email || undefined,
