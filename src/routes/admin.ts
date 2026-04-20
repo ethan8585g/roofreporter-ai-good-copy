@@ -7,6 +7,8 @@ import { RoofMeasurementEngine, traceUiToEnginePayload } from '../services/roof-
 import { generateApiKey } from '../middleware/api-auth'
 import { addCredits } from '../services/api-billing'
 import { notifyNewReportRequest } from '../services/email'
+import { logAdminAction } from '../lib/audit-log'
+import { clientIp } from '../lib/rate-limit'
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -2301,7 +2303,8 @@ async function deployLiveKitForCustomer(
   const livekitSipUri = env.LIVEKIT_SIP_URI || ''
 
   if (!apiKey || !apiSecret || !livekitUrl) {
-    return { success: false, trunk_id: '', dispatch_rule_id: '', error: 'LiveKit env vars not configured (LIVEKIT_API_KEY/SECRET/URL)' }
+    // P2: avoid leaking specific env var names in user-facing errors.
+    return { success: false, trunk_id: '', dispatch_rule_id: '', error: 'Voice service not configured. Contact admin.' }
   }
 
   if (opts.reuse_existing !== false) {
@@ -2588,7 +2591,7 @@ adminRoutes.get('/superadmin/phone-numbers/available', async (c) => {
   const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
   const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
   if (!twilioSid || !twilioAuth) {
-    return c.json({ error: 'Twilio not configured — set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN', numbers: [] })
+    return c.json({ error: 'Phone provider not configured. Contact admin.', numbers: [] })
   }
 
   try {
@@ -2792,7 +2795,7 @@ adminRoutes.post('/superadmin/gemini-chat', async (c) => {
   if (!message?.trim()) return c.json({ error: 'Message required' }, 400)
 
   const apiKey = (c.env as any).GEMINI_API_KEY || (c.env as any).GEMINI_ENHANCE_API_KEY
-  if (!apiKey) return c.json({ error: 'Gemini not configured — set GEMINI_API_KEY in Cloudflare secrets' }, 503)
+  if (!apiKey) return c.json({ error: 'AI service not configured. Contact admin.' }, 503)
 
   const systemContext = `You are an AI assistant for the Roof Manager platform super admin dashboard.
 You help the super admin understand platform metrics, troubleshoot issues, draft content, and manage the business.
@@ -2899,7 +2902,17 @@ adminRoutes.delete('/superadmin/users/:id', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const id = parseInt(c.req.param('id'))
+  // P1-23: snapshot before soft-delete so the audit log captures prior state.
+  const before = await c.env.DB.prepare('SELECT id, email, name, is_active FROM customers WHERE id = ?').bind(id).first<any>()
   await c.env.DB.prepare('UPDATE customers SET is_active = 0, email = "deleted_" || id || "_" || email, updated_at = datetime("now") WHERE id = ?').bind(id).run()
+  await logAdminAction(c.env.DB, {
+    admin: { id: admin.id, email: admin.email },
+    action: 'customer.soft_delete',
+    targetType: 'customer',
+    targetId: id,
+    before,
+    ip: clientIp(c),
+  })
   return c.json({ success: true, message: 'Customer soft-deleted' })
 })
 
@@ -2916,6 +2929,15 @@ adminRoutes.post('/superadmin/users/:id/refund', async (c) => {
     await c.env.DB.prepare('UPDATE customers SET report_credits = MAX(0, report_credits - ?), updated_at = datetime("now") WHERE id = ?').bind(credits_to_remove, id).run()
   }
   await c.env.DB.prepare('INSERT INTO user_activity_log (company_id, action, details) VALUES (1, ?, ?)').bind('admin_refund', `Admin refunded customer #${id}: ${reason || ''}, credits removed: ${credits_to_remove || 0}`).run()
+  // P1-23: structured audit log with before/after for post-hoc review.
+  await logAdminAction(c.env.DB, {
+    admin: { id: admin.id, email: admin.email },
+    action: 'customer.refund',
+    targetType: 'customer',
+    targetId: id,
+    after: { payment_id, credits_to_remove: credits_to_remove || 0, reason: reason || '' },
+    ip: clientIp(c),
+  })
   return c.json({ success: true })
 })
 
@@ -3051,6 +3073,15 @@ adminRoutes.post('/superadmin/livekit/trunk/delete', async (c) => {
   try {
     const result = await adminLivekitAPI(apiKey, apiSecret, livekitUrl, '/twirp/livekit.SIP/DeleteSIPTrunk', { sip_trunk_id: trunk_id })
     if (customer_id) await c.env.DB.prepare("UPDATE secretary_config SET livekit_inbound_trunk_id = '', connection_status = 'not_connected', updated_at = datetime('now') WHERE customer_id = ?").bind(customer_id).run()
+    // P1-23 destructive action audit.
+    await logAdminAction(c.env.DB, {
+      admin: { id: admin.id, email: admin.email },
+      action: 'livekit.trunk.delete',
+      targetType: 'sip_trunk',
+      targetId: trunk_id,
+      before: { customer_id },
+      ip: clientIp(c),
+    })
     return c.json({ success: true, result })
   } catch (e: any) { return c.json({ error: e.message }, 500) }
 })
@@ -3065,6 +3096,15 @@ adminRoutes.post('/superadmin/livekit/dispatch/delete', async (c) => {
   try {
     const result = await adminLivekitAPI(apiKey, apiSecret, livekitUrl, '/twirp/livekit.SIP/DeleteSIPDispatchRule', { sip_dispatch_rule_id: dispatch_rule_id })
     if (customer_id) await c.env.DB.prepare("UPDATE secretary_config SET livekit_dispatch_rule_id = '', updated_at = datetime('now') WHERE customer_id = ?").bind(customer_id).run()
+    // P1-23 destructive action audit.
+    await logAdminAction(c.env.DB, {
+      admin: { id: admin.id, email: admin.email },
+      action: 'livekit.dispatch.delete',
+      targetType: 'dispatch_rule',
+      targetId: dispatch_rule_id,
+      before: { customer_id },
+      ip: clientIp(c),
+    })
     return c.json({ success: true, result })
   } catch (e: any) { return c.json({ error: e.message }, 500) }
 })
@@ -3282,8 +3322,18 @@ adminRoutes.delete('/superadmin/seo/backlinks/:id', async (c) => {
   const id = parseInt(c.req.param('id'))
   let existing: any[] = []
   try { const row = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'seo_backlinks' AND master_company_id = 1").first<any>(); existing = row?.setting_value ? JSON.parse(row.setting_value) : [] } catch {}
+  const removed = existing.find((b: any) => b.id === id) || null
   existing = existing.filter((b: any) => b.id !== id)
   await c.env.DB.prepare("INSERT OR REPLACE INTO settings (master_company_id, setting_key, setting_value) VALUES (1, 'seo_backlinks', ?)").bind(JSON.stringify(existing)).run()
+  // P1-23 destructive action audit.
+  await logAdminAction(c.env.DB, {
+    admin: { id: admin.id, email: admin.email },
+    action: 'seo.backlink.delete',
+    targetType: 'seo_backlink',
+    targetId: id,
+    before: removed,
+    ip: clientIp(c),
+  })
   return c.json({ success: true })
 })
 
@@ -3662,6 +3712,16 @@ adminRoutes.delete('/api-accounts/:accountId/keys/:keyId', async (c) => {
   await c.env.DB.prepare(
     'UPDATE api_keys SET revoked_at = ? WHERE id = ? AND account_id = ?'
   ).bind(now, keyId, accountId).run()
+
+  // P1-23 destructive action audit.
+  await logAdminAction(c.env.DB, {
+    admin: { id: admin.id, email: admin.email },
+    action: 'api_key.revoke',
+    targetType: 'api_key',
+    targetId: keyId,
+    after: { account_id: accountId, revoked_at: now },
+    ip: clientIp(c),
+  })
 
   return c.json({ success: true })
 })
