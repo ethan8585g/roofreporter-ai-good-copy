@@ -4,6 +4,15 @@ import { trackUserSignup, trackUserLogin } from '../services/ga4-events'
 import { resolveTeamOwner } from './team'
 import { hashPassword, verifyPassword, isLegacyHash, dummyVerify } from '../lib/password'
 
+// P0-05: HttpOnly cookie name for customer sessions.
+const CUSTOMER_SESSION_COOKIE = 'rm_customer_session'
+function setCustomerSessionCookie(c: any, token: string, maxAgeSeconds: number) {
+  c.header('Set-Cookie', `${CUSTOMER_SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAgeSeconds}`, { append: true })
+}
+function clearCustomerSessionCookie(c: any) {
+  c.header('Set-Cookie', `${CUSTOMER_SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`, { append: true })
+}
+
 export const customerAuthRoutes = new Hono<{ Bindings: Bindings }>()
 
 // Seeds the 12 default material catalog items for a new account so users have
@@ -471,11 +480,14 @@ customerAuthRoutes.post('/google', async (c) => {
     // Create session
     const token = generateSessionToken()
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days
-    
+
     await c.env.DB.prepare(`
       INSERT INTO customer_sessions (customer_id, session_token, expires_at)
       VALUES (?, ?, ?)
     `).bind(customer.id, token, expiresAt).run()
+
+    // P0-05: HttpOnly cookie on Google sign-in too.
+    setCustomerSessionCookie(c, token, 30 * 24 * 60 * 60)
 
     // Log activity
     await c.env.DB.prepare(`
@@ -596,6 +608,9 @@ customerAuthRoutes.post('/register', async (c) => {
       VALUES (?, ?, ?)
     `).bind(result.meta.last_row_id, token, expiresAt).run()
 
+    // P0-05: HttpOnly cookie on registration auto-login too.
+    setCustomerSessionCookie(c, token, 30 * 24 * 60 * 60)
+
     await c.env.DB.prepare(`
       INSERT INTO user_activity_log (company_id, action, details)
       VALUES (1, 'customer_registered', ?)
@@ -709,6 +724,9 @@ customerAuthRoutes.post('/login', async (c) => {
       INSERT INTO customer_sessions (customer_id, session_token, expires_at)
       VALUES (?, ?, ?)
     `).bind(customer.id, token, expiresAt).run()
+
+    // P0-05: also set HttpOnly cookie.
+    setCustomerSessionCookie(c, token, 30 * 24 * 60 * 60)
 
     // Track login event in GA4
     trackUserLogin(c.env as any, String(customer.id), 'email', { email_domain: customer.email.split('@')[1] || 'unknown' }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
@@ -1110,10 +1128,18 @@ customerAuthRoutes.post('/change-password', async (c) => {
 // CUSTOMER LOGOUT
 // ============================================================
 customerAuthRoutes.post('/logout', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  let token = c.req.header('Authorization')?.replace('Bearer ', '') || null
+  if (!token) {
+    const cookieHeader = c.req.header('Cookie') || ''
+    for (const part of cookieHeader.split(/;\s*/)) {
+      if (part.startsWith(`${CUSTOMER_SESSION_COOKIE}=`)) { token = decodeURIComponent(part.slice(CUSTOMER_SESSION_COOKIE.length + 1)); break }
+    }
+  }
   if (token) {
     await c.env.DB.prepare('DELETE FROM customer_sessions WHERE session_token = ?').bind(token).run()
   }
+  // P0-05: clear cookie.
+  clearCustomerSessionCookie(c)
   return c.json({ success: true })
 })
 

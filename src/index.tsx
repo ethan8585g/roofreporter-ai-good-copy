@@ -87,8 +87,25 @@ app.use('*', async (c, next) => {
   if (!headers.has('X-Content-Type-Options')) headers.set('X-Content-Type-Options', 'nosniff')
   if (!headers.has('X-Frame-Options')) headers.set('X-Frame-Options', 'SAMEORIGIN')
   if (!headers.has('Referrer-Policy')) headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
-  if (!headers.has('Strict-Transport-Security')) headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  if (!headers.has('Strict-Transport-Security')) headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
   if (!headers.has('Permissions-Policy')) headers.set('Permissions-Policy', 'geolocation=(self), camera=(), microphone=(), payment=(self)')
+  // CSP in Report-Only mode — logs violations without breaking the site.
+  // Switch to Content-Security-Policy (enforcing) once inline scripts are audited.
+  if (!headers.has('Content-Security-Policy-Report-Only') && !headers.has('Content-Security-Policy')) {
+    headers.set('Content-Security-Policy-Report-Only',
+      "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http:; " +
+      "style-src 'self' 'unsafe-inline' https:; " +
+      "img-src 'self' data: blob: https:; " +
+      "font-src 'self' data: https:; " +
+      "connect-src 'self' https: wss:; " +
+      "frame-src 'self' https:; " +
+      "frame-ancestors 'self'; " +
+      "object-src 'none'; " +
+      "base-uri 'self'; " +
+      "form-action 'self'"
+    )
+  }
 })
 
 // CORS for API routes

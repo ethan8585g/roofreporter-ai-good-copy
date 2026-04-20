@@ -21,11 +21,36 @@ async function createAdminSession(db: D1Database, adminId: number): Promise<stri
   return token
 }
 
-// Exported: validate admin session token and return admin user
-export async function validateAdminSession(db: D1Database, authHeader: string | undefined): Promise<any | null> {
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null
-  const token = authHeader.slice(7)
-  
+// P0-05: cookie name used for the HttpOnly admin session cookie.
+export const ADMIN_SESSION_COOKIE = 'rm_admin_session'
+
+function readCookieValue(cookieHeader: string | undefined | null, name: string): string | null {
+  if (!cookieHeader) return null
+  for (const part of cookieHeader.split(/;\s*/)) {
+    const eq = part.indexOf('=')
+    if (eq < 0) continue
+    if (part.slice(0, eq) === name) return decodeURIComponent(part.slice(eq + 1))
+  }
+  return null
+}
+
+// Exported: validate admin session token and return admin user. Accepts the
+// token via Authorization: Bearer (legacy) OR the rm_admin_session cookie
+// (P0-05: HttpOnly, so safe from XSS exfiltration). Callers can pass the
+// cookie header as an optional third arg; callers that don't stay on Bearer.
+export async function validateAdminSession(
+  db: D1Database,
+  authHeader: string | undefined,
+  cookieHeader?: string | undefined
+): Promise<any | null> {
+  let token: string | null = null
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.slice(7)
+  } else {
+    token = readCookieValue(cookieHeader, ADMIN_SESSION_COOKIE)
+  }
+  if (!token) return null
+
   const session = await db.prepare(`
     SELECT s.admin_id, a.id, a.email, a.name, a.role, a.company_name, a.is_active
     FROM admin_sessions s
@@ -173,6 +198,12 @@ authRoutes.post('/login', async (c) => {
         VALUES (1, 'admin_login', ?)
       `).bind(`Admin login: ${cleanEmail} (${user.role})`).run()
     } catch {}
+
+    // P0-05: also issue an HttpOnly, Secure, SameSite=Lax cookie. Clients
+    // that migrate to cookie-auth will no longer need to stash the token in
+    // localStorage. Legacy Bearer flow still works while the frontend migrates.
+    const maxAge = 30 * 24 * 60 * 60
+    c.header('Set-Cookie', `${ADMIN_SESSION_COOKIE}=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`, { append: true })
 
     return c.json({
       success: true,
@@ -402,14 +433,23 @@ authRoutes.post('/reset-password', async (c) => {
 })
 
 // ============================================================
-// ADMIN LOGOUT — Invalidate session
+// ADMIN LOGOUT — Invalidate session (P1-02: await + assert changes)
 // ============================================================
 authRoutes.post('/logout', async (c) => {
   const authHeader = c.req.header('Authorization')
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7)
+  const cookieHeader = c.req.header('Cookie') || ''
+  let token: string | null = null
+  if (authHeader?.startsWith('Bearer ')) token = authHeader.slice(7)
+  if (!token) {
+    for (const part of cookieHeader.split(/;\s*/)) {
+      if (part.startsWith(`${ADMIN_SESSION_COOKIE}=`)) { token = decodeURIComponent(part.slice(ADMIN_SESSION_COOKIE.length + 1)); break }
+    }
+  }
+  if (token) {
     await c.env.DB.prepare('DELETE FROM admin_sessions WHERE session_token = ?').bind(token).run()
   }
+  // Clear the cookie on the client.
+  c.header('Set-Cookie', `${ADMIN_SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`, { append: true })
   return c.json({ success: true })
 })
 
