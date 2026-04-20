@@ -2693,6 +2693,9 @@ app.get('/report/share/:token', async (c) => {
     c.env.DB.prepare("UPDATE reports SET share_view_count = COALESCE(share_view_count, 0) + 1 WHERE share_token = ?").bind(token).run().catch(() => {})
 
     const addr = [row.property_address, row.property_city, row.property_province].filter(Boolean).join(', ')
+    // P0-02: customer-entered address fields are interpolated into OG meta + header HTML below.
+    const escAddr = String(addr).replace(/[&<>"'`=\/]/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#x60;','=':'&#x3D;','/':'&#x2F;'}[ch] || ''))
+    const escToken = String(token).replace(/[^A-Za-z0-9_\-]/g, '')
 
     // Resolve report HTML (use stored HTML only — avoids bundling template at edge)
     const h = row.professional_report_html || ''
@@ -2705,21 +2708,21 @@ app.get('/report/share/:token', async (c) => {
 </body></html>`, 404)
     }
 
-    // Inject OG meta tags for social sharing
-    const ogTags = `<meta property="og:title" content="Roof Measurement Report — ${addr || 'Professional Analysis'}">
+    // Inject OG meta tags for social sharing — escape user-controlled address + token.
+    const ogTags = `<meta property="og:title" content="Roof Measurement Report — ${escAddr || 'Professional Analysis'}">
 <meta property="og:description" content="Professional satellite roof measurement report with area, pitch, edges, and material estimate. Powered by Roof Manager.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://www.roofmanager.ca/report/share/${token}">
+<meta property="og:url" content="https://www.roofmanager.ca/report/share/${escToken}">
 <meta property="og:site_name" content="Roof Manager">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Roof Report — ${addr || 'Professional Analysis'}">`
+<meta name="twitter:title" content="Roof Report — ${escAddr || 'Professional Analysis'}">`
     const htmlWithOg = reportHtml.replace(/<head[^>]*>/i, `$&\n${ogTags}`)
 
     // Wrap with a public header bar
     const wrappedHtml = htmlWithOg.replace(
       /<body[^>]*>/i,
       `$&<div style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#0f172a;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-between;font-family:Inter,system-ui,sans-serif;font-size:13px">
-  <div style="display:flex;align-items:center;gap:10px"><span style="font-weight:700;color:#38bdf8">Roof Manager</span><span style="color:#94a3b8">|</span><span style="color:#cbd5e1">${addr || 'Roof Report'}</span></div>
+  <div style="display:flex;align-items:center;gap:10px"><span style="font-weight:700;color:#38bdf8">Roof Manager</span><span style="color:#94a3b8">|</span><span style="color:#cbd5e1">${escAddr || 'Roof Report'}</span></div>
   <div style="display:flex;gap:8px"><button onclick="window.print()" style="background:#1e40af;color:#fff;border:none;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">Print / Save PDF</button><a href="https://www.roofmanager.ca" target="_blank" style="background:#065f46;color:#fff;padding:6px 14px;border-radius:8px;text-decoration:none;font-size:12px;font-weight:600">Get Your Own Report</a></div>
 </div><div style="height:48px"></div>`
     )
@@ -4041,6 +4044,11 @@ function getRoverAssistant() {
 // CONTACT US LEAD CAPTURE — Reusable form for all public pages
 // ============================================================
 function getContactFormHTML(sourcePage: string = 'unknown') {
+  // P0-02: escape sourcePage in the data-attribute and read it via dataset
+  // in the submit handler instead of interpolating into an inline onsubmit.
+  // sourcePage may derive from a user-controlled route param (slug), so this
+  // closes the HTML-attribute injection vector.
+  const safeSource = String(sourcePage).replace(/[&<>"'`=\/]/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#x60;','=':'&#x3D;','/':'&#x2F;'}[ch] || ch))
   return `
   <section id="contact-section" class="py-20 border-t border-white/5" style="background:#0A0A0A">
     <div class="max-w-3xl mx-auto px-4">
@@ -4049,7 +4057,7 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
         <h2 class="text-3xl md:text-4xl font-bold text-white mb-3">${sourcePage === 'pricing' ? 'Questions? Talk to Our Team' : 'Ready to Transform Your Roofing Business?'}</h2>
         <p class="text-gray-400 max-w-xl mx-auto">${sourcePage === 'pricing' ? 'Not sure which plan is right for you? Tell us about your business and we\'ll recommend the best option.' : 'Tell us about your business — we\'ll have you set up with AI-powered roof reports in minutes.'}</p>
       </div>
-      <form id="lead-capture-form" onsubmit="return submitLeadForm(event, '${sourcePage}')" class="bg-[#111111] border border-white/10 rounded-2xl p-8 space-y-5">
+      <form id="lead-capture-form" data-source="${safeSource}" onsubmit="return submitLeadForm(event)" class="bg-[#111111] border border-white/10 rounded-2xl p-8 space-y-5">
         <div>
           <label class="block text-sm font-medium text-gray-300 mb-1.5">Full Name <span class="text-[#00FF88]">*</span></label>
           <input type="text" id="lead-name" required placeholder="John Smith" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88] focus:border-transparent outline-none">
@@ -4095,8 +4103,10 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
     </div>
   </section>
   <script>
-  async function submitLeadForm(e, source) {
+  async function submitLeadForm(e) {
     e.preventDefault();
+    var form = e.target && e.target.closest ? e.target.closest('form') : document.getElementById('lead-capture-form');
+    var source = (form && form.dataset && form.dataset.source) || 'unknown';
     var btn = document.getElementById('lead-submit-btn');
     var msg = document.getElementById('lead-form-msg');
     btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...';
@@ -12974,7 +12984,9 @@ function getJoinTeamPageHTML() {
         var res = await fetch('/api/team/invite/' + inviteToken);
         var data = await res.json();
         if (!res.ok || !data.valid) {
-          root.innerHTML = '<div class="bg-red-50 border border-red-200 rounded-xl p-8 text-center"><i class="fas fa-times-circle text-red-500 text-4xl mb-3"></i><p class="text-red-700 font-semibold text-lg">' + (data.error || 'Invalid invitation') + '</p><a href="/" class="mt-4 inline-block text-blue-600 hover:underline">Go to homepage</a></div>';
+          // P0-02: render server-provided error via textContent, not innerHTML.
+          root.innerHTML = '<div class="bg-red-50 border border-red-200 rounded-xl p-8 text-center"><i class="fas fa-times-circle text-red-500 text-4xl mb-3"></i><p id="__invite_err" class="text-red-700 font-semibold text-lg"></p><a href="/" class="mt-4 inline-block text-blue-600 hover:underline">Go to homepage</a></div>';
+          var __errEl = document.getElementById('__invite_err'); if (__errEl) __errEl.textContent = String(data.error || 'Invalid invitation');
           return;
         }
 
@@ -13027,11 +13039,14 @@ function getJoinTeamPageHTML() {
         });
         var data = await res.json();
         if (res.ok && data.success) {
-          msg.innerHTML = '<div class="bg-green-50 border border-green-200 rounded-lg p-4 text-green-700"><i class="fas fa-check-circle mr-1"></i> ' + data.message + '</div>';
+          // P0-02: render server message via textContent.
+          msg.innerHTML = '<div class="bg-green-50 border border-green-200 rounded-lg p-4 text-green-700"><i class="fas fa-check-circle mr-1"></i> <span id="__join_ok"></span></div>';
+          var __okEl = document.getElementById('__join_ok'); if (__okEl) __okEl.textContent = String(data.message || '');
           btn.innerHTML = '<i class="fas fa-check mr-2"></i>Joined!';
           setTimeout(function() { window.location.href = '/customer/dashboard'; }, 1500);
         } else {
-          msg.innerHTML = '<div class="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">' + (data.error || 'Failed to accept') + '</div>';
+          msg.innerHTML = '<div class="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm" id="__join_err"></div>';
+          var __errEl2 = document.getElementById('__join_err'); if (__errEl2) __errEl2.textContent = String(data.error || 'Failed to accept');
           btn.disabled = false; btn.innerHTML = '<i class="fas fa-check mr-2"></i>Accept & Join Team';
         }
       } catch(err) {
@@ -13117,7 +13132,9 @@ function getSelectTypePageHTML() {
           try { var cust = JSON.parse(localStorage.getItem('rc_customer') || '{}'); cust.company_type = type; localStorage.setItem('rc_customer', JSON.stringify(cust)); } catch(e) {}
           window.location.href = '/customer/dashboard';
         } else {
-          msg.innerHTML = '<div class="text-red-600 text-sm">' + (data.error || 'Failed to save. Please try again.') + '</div>';
+          // P0-02: render server error via textContent.
+          msg.innerHTML = '<div class="text-red-600 text-sm" id="__sol_err"></div>';
+          var __solErr = document.getElementById('__sol_err'); if (__solErr) __solErr.textContent = String(data.error || 'Failed to save. Please try again.');
         }
       } catch(err) {
         msg.innerHTML = '<div class="text-red-600 text-sm">Network error. Please try again.</div>';
@@ -15651,7 +15668,8 @@ function getWidgetSettingsPageHTML() {
           document.getElementById('settings-root').classList.remove('hidden');
         })
         .catch(function(e) {
-          document.getElementById('loading').innerHTML = '<p class="text-red-400">Failed to load: ' + e.message + '</p>';
+          // P0-02: render error via textContent so a crafted server message can't inject HTML.
+          var __loading = document.getElementById('loading'); if (__loading) { __loading.innerHTML = '<p class="text-red-400" id="__load_err"></p>'; var __le = document.getElementById('__load_err'); if (__le) __le.textContent = 'Failed to load: ' + String(e && e.message ? e.message : e); }
         });
     }
 
