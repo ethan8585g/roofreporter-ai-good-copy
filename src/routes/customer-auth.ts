@@ -4,6 +4,12 @@ import { trackUserSignup, trackUserLogin } from '../services/ga4-events'
 import { resolveTeamOwner } from './team'
 import { hashPassword, verifyPassword, isLegacyHash, dummyVerify } from '../lib/password'
 
+// P1-11: sanitize values before splicing into MIME headers. Strips CR/LF and
+// control chars that could be used for header injection (inject Bcc, etc.).
+function mimeHeader(v: string | undefined | null): string {
+  return String(v ?? '').replace(/[\r\n\u0000-\u001F\u007F]/g, '').slice(0, 1000)
+}
+
 // P0-05: HttpOnly cookie name for customer sessions.
 const CUSTOMER_SESSION_COOKIE = 'rm_customer_session'
 function setCustomerSessionCookie(c: any, token: string, maxAgeSeconds: number) {
@@ -146,10 +152,11 @@ async function sendVerificationEmail(env: any, toEmail: string, code: string, db
       })
       const tokenData: any = await tokenResp.json()
       if (tokenData.access_token) {
+        // P1-11: strip CR/LF from every splice to block header injection.
         const rawEmail = [
-          `From: Roof Manager <${senderEmail}>`,
-          `To: ${toEmail}`,
-          `Subject: ${emailSubject}`,
+          `From: Roof Manager <${mimeHeader(senderEmail)}>`,
+          `To: ${mimeHeader(toEmail)}`,
+          `Subject: ${mimeHeader(emailSubject)}`,
           'Content-Type: text/html; charset=UTF-8',
           '',
           emailHtml
@@ -222,10 +229,11 @@ async function sendVerificationEmail(env: any, toEmail: string, code: string, db
       const tokenData: any = await tokenResp.json()
 
       if (tokenData.access_token) {
+        // P1-11: strip CR/LF from every splice to block header injection.
         const rawEmail = [
-          `From: Roof Manager <${impersonateEmail}>`,
-          `To: ${toEmail}`,
-          `Subject: ${emailSubject}`,
+          `From: Roof Manager <${mimeHeader(impersonateEmail)}>`,
+          `To: ${mimeHeader(toEmail)}`,
+          `Subject: ${mimeHeader(emailSubject)}`,
           'Content-Type: text/html; charset=UTF-8',
           '',
           emailHtml
@@ -656,17 +664,23 @@ customerAuthRoutes.post('/login', async (c) => {
       return c.json({ error: 'Email and password are required' }, 400)
     }
 
-    // Rate limiting — max 10 login attempts per IP per 15 minutes
+    // P1-05: tighter rate limiting — max 5 attempts / 15 min from either the
+    // same IP or the same email (so a distributed attack still trips the email
+    // limit). Lockout at 15 failures within 1 hour.
     const clientIp = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    const attemptEmail = (email || '').toLowerCase().trim()
     try {
       await c.env.DB.prepare("CREATE TABLE IF NOT EXISTS login_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT, email TEXT, created_at TEXT DEFAULT (datetime('now')))").run()
-      const attempts = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM login_attempts WHERE ip = ? AND created_at > datetime('now', '-15 minutes')").bind(clientIp).first<any>()
-      if (attempts && attempts.cnt >= 10) {
-        return c.json({ error: 'Too many login attempts. Please wait 15 minutes and try again.' }, 429)
+      const [ipCount, emailCount, lockoutCount] = await Promise.all([
+        c.env.DB.prepare("SELECT COUNT(*) as cnt FROM login_attempts WHERE ip = ? AND created_at > datetime('now', '-15 minutes')").bind(clientIp).first<any>(),
+        c.env.DB.prepare("SELECT COUNT(*) as cnt FROM login_attempts WHERE email = ? AND created_at > datetime('now', '-15 minutes')").bind(attemptEmail).first<any>(),
+        c.env.DB.prepare("SELECT COUNT(*) as cnt FROM login_attempts WHERE email = ? AND created_at > datetime('now', '-60 minutes')").bind(attemptEmail).first<any>(),
+      ])
+      if ((lockoutCount && lockoutCount.cnt >= 15) || (ipCount && ipCount.cnt >= 5) || (emailCount && emailCount.cnt >= 5)) {
+        return c.json({ error: 'Too many login attempts. Please wait and try again.' }, 429)
       }
-      await c.env.DB.prepare("INSERT INTO login_attempts (ip, email) VALUES (?, ?)").bind(clientIp, email.toLowerCase().trim()).run()
-      // Cleanup old attempts (non-blocking)
-      c.env.DB.prepare("DELETE FROM login_attempts WHERE created_at < datetime('now', '-1 hour')").run().catch((e) => console.warn('[customer-auth] login_attempts cleanup failed:', e?.message || e))
+      await c.env.DB.prepare("INSERT INTO login_attempts (ip, email) VALUES (?, ?)").bind(clientIp, attemptEmail).run()
+      c.env.DB.prepare("DELETE FROM login_attempts WHERE created_at < datetime('now', '-2 hours')").run().catch((e) => console.warn('[customer-auth] login_attempts cleanup failed:', e?.message || e))
     } catch (e: any) { console.warn('[customer-auth] rate-limit check failed:', e?.message || e) }
 
     // Session + verification code cleanup (piggyback, non-blocking)
@@ -1453,7 +1467,7 @@ async function sendPasswordResetEmail(env: any, toEmail: string, name: string, r
       })
       const tokenData: any = await tokenResp.json()
       if (tokenData.access_token) {
-        const rawEmail = [`From: Roof Manager <${senderEmail}>`, `To: ${toEmail}`, `Subject: ${subject}`, 'Content-Type: text/html; charset=UTF-8', '', html].join('\r\n')
+        const rawEmail = [`From: Roof Manager <${mimeHeader(senderEmail)}>`, `To: ${mimeHeader(toEmail)}`, `Subject: ${mimeHeader(subject)}`, 'Content-Type: text/html; charset=UTF-8', '', html].join('\r\n')
         const encoded = btoa(unescape(encodeURIComponent(rawEmail))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
         const sendResp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
           method: 'POST',

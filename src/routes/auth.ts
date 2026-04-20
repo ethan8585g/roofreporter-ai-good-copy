@@ -387,7 +387,8 @@ authRoutes.post('/forgot-password', async (c) => {
       }
     }
 
-    return c.json({ success: true, message: 'If an admin account with that email exists, a reset link has been sent.' })
+    // P1-07: generic message (not "admin account") to avoid email-enumeration.
+    return c.json({ success: true, message: "If an account exists, we've sent instructions." })
   } catch (err: any) {
     return c.json({ error: 'Failed to process request', details: err.message }, 500)
   }
