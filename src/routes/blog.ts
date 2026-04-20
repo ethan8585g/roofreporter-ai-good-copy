@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { runOnce, seedDefaultKeywords } from '../services/blog-agent'
+import { sanitizeHtml } from '../utils/sanitize-html'
 
 export const blogRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -169,14 +170,19 @@ blogRoutes.post('/admin/posts', async (c) => {
 
     const publishedAt = status === 'published' ? new Date().toISOString() : null
 
+    // P1-32: sanitize admin-authored HTML on write (defense-in-depth against
+    // a compromised admin injecting <script> into the public blog).
+    const safeContent = sanitizeHtml(String(content || ''))
+    const safeExcerpt = sanitizeHtml(String(excerpt || ''))
+
     const result = await c.env.DB.prepare(
       `INSERT INTO blog_posts (slug, title, excerpt, content, cover_image_url, category, tags, author_name, status, is_featured, meta_title, meta_description, read_time_minutes, published_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       finalSlug,
       title,
-      excerpt || '',
-      content,
+      safeExcerpt,
+      safeContent,
       cover_image_url || '',
       category || 'roofing',
       tags || '',
@@ -222,10 +228,14 @@ blogRoutes.put('/admin/posts/:id', async (c) => {
     const wordCount = (content || '').split(/\s+/).length
     const estimatedReadTime = read_time_minutes || Math.max(1, Math.ceil(wordCount / 200))
 
+    // P1-32: sanitize admin-authored HTML on write (same guard as create path).
+    const safeContent = sanitizeHtml(String(content || ''))
+    const safeExcerpt = sanitizeHtml(String(excerpt || ''))
+
     await c.env.DB.prepare(
       `UPDATE blog_posts SET title=?, slug=?, excerpt=?, content=?, cover_image_url=?, category=?, tags=?, author_name=?, status=?, is_featured=?, meta_title=?, meta_description=?, read_time_minutes=?, published_at=?, updated_at=datetime('now') WHERE id=?`
     ).bind(
-      title, slug, excerpt || '', content, cover_image_url || '',
+      title, slug, safeExcerpt, safeContent, cover_image_url || '',
       category || 'roofing', tags || '', author_name || 'Roof Manager Team',
       status || 'draft', is_featured ? 1 : 0,
       meta_title || title, meta_description || excerpt || '',

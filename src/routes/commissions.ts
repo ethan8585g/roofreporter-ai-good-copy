@@ -21,6 +21,8 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
+import { logAdminAction } from '../lib/audit-log'
+import { clientIp } from '../lib/rate-limit'
 
 export const commissionRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -106,6 +108,16 @@ commissionRoutes.post('/rules', async (c) => {
      VALUES (?, ?, ?, ?, ?, ?)`
   ).bind(ownerId, team_member_id, member_name, safeRole, safeType, safeRate).run()
 
+  // P1-24: audit commission rule creation.
+  await logAdminAction(c.env.DB, {
+    admin: { id: ownerId },
+    action: 'commission_rule.create',
+    targetType: 'commission_rule',
+    targetId: result.meta?.last_row_id as number,
+    after: { team_member_id, member_name, role: safeRole, commission_type: safeType, commission_rate: safeRate },
+    ip: clientIp(c),
+  })
+
   return c.json({ success: true, id: result.meta?.last_row_id })
 })
 
@@ -140,12 +152,30 @@ commissionRoutes.put('/rules/:id', async (c) => {
 
   if (fields.length === 0) return c.json({ error: 'No fields to update' }, 400)
 
+  // P1-24: snapshot the row before update so audit log has before+after.
+  const before = await c.env.DB.prepare(
+    'SELECT * FROM commission_rules WHERE id = ? AND owner_id = ?'
+  ).bind(id, ownerId).first<any>()
+
   fields.push("updated_at = datetime('now')")
   params.push(id, ownerId)
 
   await c.env.DB.prepare(
     `UPDATE commission_rules SET ${fields.join(', ')} WHERE id = ? AND owner_id = ?`
   ).bind(...params).run()
+
+  const after = await c.env.DB.prepare(
+    'SELECT * FROM commission_rules WHERE id = ? AND owner_id = ?'
+  ).bind(id, ownerId).first<any>()
+
+  await logAdminAction(c.env.DB, {
+    admin: { id: ownerId },
+    action: 'commission_rule.update',
+    targetType: 'commission_rule',
+    targetId: id,
+    before, after,
+    ip: clientIp(c),
+  })
 
   return c.json({ success: true })
 })
@@ -155,9 +185,25 @@ commissionRoutes.delete('/rules/:id', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
 
+  const id = c.req.param('id')
+
+  // P1-24: snapshot before delete so the deleted row is preserved in audit.
+  const before = await c.env.DB.prepare(
+    'SELECT * FROM commission_rules WHERE id = ? AND owner_id = ?'
+  ).bind(id, ownerId).first<any>()
+
   await c.env.DB.prepare(
     'DELETE FROM commission_rules WHERE id = ? AND owner_id = ?'
-  ).bind(c.req.param('id'), ownerId).run()
+  ).bind(id, ownerId).run()
+
+  await logAdminAction(c.env.DB, {
+    admin: { id: ownerId },
+    action: 'commission_rule.delete',
+    targetType: 'commission_rule',
+    targetId: id,
+    before,
+    ip: clientIp(c),
+  })
 
   return c.json({ success: true })
 })
