@@ -759,7 +759,18 @@ customerAuthRoutes.post('/login', async (c) => {
         company_name: customer.company_name,
         phone: customer.phone,
         google_avatar: customer.google_avatar,
-        role: 'customer'
+        role: 'customer',
+        // P2: include billing/subscription state so /login responses align
+        // with /me and the client doesn't need a second round-trip.
+        subscription_status: customer.subscription_status || 'none',
+        subscription_plan: customer.subscription_plan || 'free',
+        credits_remaining: Math.max(
+          0,
+          (Number(customer.report_credits) || 0) - (Number(customer.credits_used) || 0)
+        ) + Math.max(
+          0,
+          (Number(customer.free_trial_total) || 0) - (Number(customer.free_trial_used) || 0)
+        ),
       },
       token
     })

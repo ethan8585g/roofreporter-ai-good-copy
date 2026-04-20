@@ -74,7 +74,7 @@ async function ensureContactLeadsTable(db: any) {
 
 // Free Asset Report lead (homepage hero + demo portal)
 leadCaptureRoutes.post('/asset-report/lead', async (c) => {
-  const body = await c.req.json().catch(() => ({}))
+  const body = await c.req.json().catch((e) => { console.warn('[lead-capture] invalid JSON body:', (e && e.message) || e); return {} })
   const v = validateLeadInput(body)
   if (!v.ok) return c.json({ error: v.error }, 400)
   await ensureLeadTable(c.env.DB)
@@ -180,7 +180,7 @@ leadCaptureRoutes.post('/contact/lead', async (c) => {
 
 // Condo / Reserve Fund Cheat Sheet lead
 leadCaptureRoutes.post('/condo-lead', async (c) => {
-  const body = await c.req.json().catch(() => ({}))
+  const body = await c.req.json().catch((e) => { console.warn('[lead-capture] invalid JSON body:', (e && e.message) || e); return {} })
   const v = validateLeadInput(body)
   if (!v.ok) return c.json({ error: v.error }, 400)
   await ensureLeadTable(c.env.DB)

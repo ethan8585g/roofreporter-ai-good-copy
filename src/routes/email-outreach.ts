@@ -95,8 +95,10 @@ async function ensureTables(db: D1Database) {
 emailOutreachRoutes.get('/contacts', async (c) => {
   await ensureTables(c.env.DB)
   try {
-    const limit = Math.min(parseInt(c.req.query('limit') || '50'), 200)
-    const offset = parseInt(c.req.query('offset') || '0')
+    // P2/P3: clamp pagination to safe bounds. Prevents offset=9e18 style DoS
+    // and guards against NaN from bad query strings.
+    const limit = Math.max(1, Math.min(Number(parseInt(c.req.query('limit') || '50')) || 50, 200))
+    const offset = Math.max(0, Math.min(Number(parseInt(c.req.query('offset') || '0')) || 0, 1_000_000))
     const contacts = await c.env.DB.prepare(
       `SELECT ec.*, el.name as list_name FROM email_contacts ec
        LEFT JOIN email_lists el ON el.id = ec.list_id
