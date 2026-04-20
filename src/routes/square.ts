@@ -92,11 +92,19 @@ async function squareRequest(accessToken: string, method: string, path: string, 
     body: body ? JSON.stringify(body) : undefined,
   })
 
-  const data: any = await response.json()
+  // P1-20: check response.ok before parsing. Prevents the failure mode
+  // where a 5xx returns HTML and .json() throws a JSON-parse error that
+  // masks the real Square status code.
   if (!response.ok) {
-    const errMsg = data.errors?.[0]?.detail || data.errors?.[0]?.code || `Square API error: ${response.status}`
+    const text = await response.text().catch(() => '')
+    let errMsg = `Square API error: ${response.status}`
+    try {
+      const errData: any = JSON.parse(text)
+      errMsg = errData.errors?.[0]?.detail || errData.errors?.[0]?.code || errMsg
+    } catch {}
     throw new Error(errMsg)
   }
+  const data: any = await response.json()
   return data
 }
 
