@@ -12,6 +12,7 @@ import { runLeadAgent } from './services/lead-agent'
 import { runEmailAgent } from './services/email-agent'
 import { runMonitorAgent } from './services/monitor-agent'
 import { runTrafficAgent } from './services/traffic-agent'
+import { sweepAutoInvoices } from './services/auto-invoice'
 
 // ── Abandoned signup recovery ─────────────────────────────────────────────────
 async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number; skipped: number }> {
@@ -215,6 +216,19 @@ export default {
         }
       })())
     }
+
+    // ── Auto-Invoice Sweep (every cron tick — every 10 min) ───
+    // Safety net for races where the inline hook on report completion
+    // didn't fire (worker killed, deploy boundary, etc). Idempotent.
+    ctx.waitUntil((async () => {
+      const t0 = Date.now()
+      try {
+        const created = await sweepAutoInvoices(env, 60)
+        if (created > 0) console.log(`[CRON:auto-invoice] Drafted ${created} proposal(s)`)
+      } catch (err: any) {
+        console.error('[CRON:auto-invoice] Error:', err?.message)
+      }
+    })())
 
     // ── Traffic Analyst Agent — hourly fallback (on :00 tick) ─
     // Primary trigger is event-driven (fires via /api/analytics/track

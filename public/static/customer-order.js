@@ -516,18 +516,20 @@ function renderPinStep(root, progressBar) {
           </div>
 
           <!-- Optional Customer Details for Invoicing Automation -->
-          ${orderState.invoicingAutoEnabled ? `
           <div style="background:linear-gradient(135deg,#1e3a5f,#1e40af);border-radius:16px;border:1px solid rgba(59,130,246,0.3);padding:20px;overflow:hidden">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:6px">
               <h4 style="font-size:14px;font-weight:700;color:#e0e7ff;margin:0;display:flex;align-items:center;gap:8px">
-                <i class="fas fa-file-invoice-dollar" style="color:#60a5fa"></i>Customer Details for Auto-Invoice
+                <i class="fas fa-file-invoice-dollar" style="color:#60a5fa"></i>Homeowner Details for Auto-Proposal
               </h4>
               <span style="font-size:10px;background:rgba(96,165,250,0.2);color:#93c5fd;padding:3px 10px;border-radius:6px;font-weight:600">OPTIONAL</span>
             </div>
-            <p style="font-size:11px;color:#93c5fd;margin:0 0 14px;line-height:1.5">This form is completely optional. Fill it out to automatically generate and send an invoice to your customer when the report is ready.</p>
+            ${orderState.invoicingAutoEnabled
+              ? `<div style="margin:8px 0 10px;padding:8px 12px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);border-radius:8px;font-size:11px;color:#6ee7b7;font-weight:600"><i class="fas fa-check-circle" style="margin-right:6px"></i>Auto-Proposal ENABLED — a draft proposal will appear in your Proposal Dashboard when the report completes.</div>`
+              : `<div style="margin:8px 0 10px;padding:8px 12px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:8px;font-size:11px;color:#fcd34d;font-weight:600"><i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>Auto-Proposal OFF — enable it in Certificate Automations to auto-draft proposals.</div>`}
+            <p style="font-size:11px;color:#93c5fd;margin:0 0 14px;line-height:1.5">Fill these in so a draft proposal is created for you when the report finishes. You review and send the proposal from the Proposal Dashboard — nothing is emailed automatically.</p>
             <div style="display:flex;flex-direction:column;gap:10px">
               <div>
-                <label style="font-size:11px;font-weight:600;color:#93c5fd;display:block;margin-bottom:4px">Customer Full Name</label>
+                <label style="font-size:11px;font-weight:600;color:#93c5fd;display:block;margin-bottom:4px">Homeowner Full Name</label>
                 <input type="text" id="invoiceCustName" placeholder="e.g. John Smith"
                   value="${orderState.invoiceCustomerName}"
                   oninput="orderState.invoiceCustomerName=this.value"
@@ -554,7 +556,6 @@ function renderPinStep(root, progressBar) {
               </div>
             </div>
           </div>
-          ` : ''}
 
           <div id="orderMsg" class="hidden p-4 rounded-xl text-sm"></div>
 
@@ -1814,12 +1815,12 @@ function buildOrderPayload() {
   if (orderState.needsAdminTrace) {
     payload.needs_admin_trace = 1;
   }
-  // Invoicing automation customer details
-  if (orderState.invoiceCustomerName && orderState.invoiceCustomerEmail) {
-    payload.invoice_customer_name = orderState.invoiceCustomerName;
-    payload.invoice_customer_phone = orderState.invoiceCustomerPhone || '';
-    payload.invoice_customer_email = orderState.invoiceCustomerEmail;
-  }
+  // Homeowner contact for auto-proposal — always attach whatever was entered
+  // and let the server decide whether to draft a proposal when the report
+  // completes. The event-driven hook requires at minimum a valid email.
+  if (orderState.invoiceCustomerName) payload.invoice_customer_name = orderState.invoiceCustomerName.trim();
+  if (orderState.invoiceCustomerEmail) payload.invoice_customer_email = orderState.invoiceCustomerEmail.trim();
+  if (orderState.invoiceCustomerPhone) payload.invoice_customer_phone = orderState.invoiceCustomerPhone.trim();
   return payload;
 }
 
@@ -1941,6 +1942,18 @@ async function useCredit() {
   const lat = parseFloat(orderState.lat);
   const lng = parseFloat(orderState.lng);
   if (isNaN(lat) || isNaN(lng)) { showMsg('error', 'No coordinates.'); return; }
+
+  // Inline validation: if auto-proposal is on and the homeowner name is filled
+  // but email is blank, warn the user — the draft won't be created otherwise.
+  if (orderState.invoicingAutoEnabled
+      && orderState.invoiceCustomerName && !orderState.invoiceCustomerEmail) {
+    showMsg('error', 'Homeowner email is required for the auto-proposal. Add it or clear the name to proceed without.');
+    return;
+  }
+  if (orderState.invoiceCustomerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(orderState.invoiceCustomerEmail)) {
+    showMsg('error', 'Homeowner email looks invalid. Fix it or clear the field to proceed without an auto-proposal.');
+    return;
+  }
 
   const btn = document.getElementById('creditBtn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Placing Order...'; }

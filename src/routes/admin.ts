@@ -83,6 +83,49 @@ adminRoutes.post('/superadmin/test-notification', async (c) => {
   }
 })
 
+// Auto-invoice pipeline health — surfaces Gmail OAuth state + recent runs
+adminRoutes.get('/health/auto-invoice', async (c) => {
+  try {
+    const env = c.env as any
+    const gmailReady = !!(env.GMAIL_CLIENT_ID && env.GMAIL_CLIENT_SECRET && env.GMAIL_REFRESH_TOKEN)
+
+    const enabledCount = await c.env.DB.prepare(
+      'SELECT COUNT(*) as n FROM customers WHERE auto_invoice_enabled = 1'
+    ).first<{ n: number }>()
+
+    const lastRun = await c.env.DB.prepare(`
+      SELECT action, order_id, invoice_id, new_value, created_at
+      FROM invoice_audit_log
+      WHERE action LIKE 'auto_invoice_%'
+      ORDER BY created_at DESC LIMIT 1
+    `).first<any>()
+
+    const lastFailure = await c.env.DB.prepare(`
+      SELECT action, order_id, new_value, created_at
+      FROM invoice_audit_log
+      WHERE action IN ('auto_invoice_error','auto_invoice_email_failed','auto_invoice_gmail_not_configured','auto_invoice_report_timeout')
+      ORDER BY created_at DESC LIMIT 1
+    `).first<any>()
+
+    const recent = await c.env.DB.prepare(`
+      SELECT action, COUNT(*) as n
+      FROM invoice_audit_log
+      WHERE action LIKE 'auto_invoice_%' AND created_at >= datetime('now','-7 days')
+      GROUP BY action ORDER BY n DESC
+    `).all()
+
+    return c.json({
+      gmail_oauth_ready: gmailReady,
+      customers_with_automation: enabledCount?.n ?? 0,
+      last_run: lastRun || null,
+      last_failure: lastFailure || null,
+      last_7d_breakdown: recent.results || []
+    })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
 // Dashboard stats
 adminRoutes.get('/dashboard', async (c) => {
   try {

@@ -8,6 +8,7 @@ import type { Bindings, RoofReport } from '../types'
 import { computeMaterialEstimate } from '../utils/geo-math'
 import { validateAdminSession } from '../routes/auth'
 import { resolveTeamOwner } from './team'
+import { createAutoInvoiceForOrder } from '../services/auto-invoice'
 
 // Services
 import { analyzeRoofGeometry } from '../services/gemini'
@@ -1753,6 +1754,12 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
   await repo.markOrderStatus(c.env.DB, orderId, 'completed')
   await repo.logApiRequest(c.env.DB, orderId, 'solar_datalayers', 'dataLayers:get + GeoTIFF', 200, dlAnalysis.durationMs)
 
+  // Auto-invoice: idempotent — creates a draft proposal if this roofer has
+  // automation enabled and the order captured a homeowner email.
+  ;(c as any).executionCtx?.waitUntil?.(
+    createAutoInvoiceForOrder(c.env, Number(orderId)).catch((e) => console.warn('[auto-invoice] hook error:', e?.message))
+  )
+
   // Auto-email: check if customer has auto_email_reports enabled
   let autoEmailEnabled = false
   let autoEmailRecipient = ''
@@ -3093,6 +3100,9 @@ async function _generateReportForOrderInner(
     await repo.saveCompletedReport(env.DB, orderId, finalReportData, html, baseVersion)
     await repo.markOrderStatus(env.DB, orderId, 'completed')
     console.log(`[Generate] Order ${orderId}: ✅ Report saved as COMPLETED (v${baseVersion}, provider=${finalReportData.metadata?.provider || 'unknown'})`)
+
+    // Auto-invoice hook — fire-and-forget, idempotent
+    createAutoInvoiceForOrder(env, Number(orderId)).catch((e) => console.warn('[auto-invoice] hook error:', e?.message))
 
     // ── AUTO-EMBED for semantic search (non-blocking) ──
     const embedKey = env.GEMINI_ENHANCE_API_KEY || env.GOOGLE_VERTEX_API_KEY
