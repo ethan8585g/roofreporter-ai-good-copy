@@ -36,7 +36,7 @@
   // Build popup HTML
   var popup = document.createElement('div');
   popup.id = 'exit-popup-global';
-  popup.style.cssText = 'position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px)';
+  popup.style.cssText = 'position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)';
 
   var headline = isSocial
     ? 'Special Offer for Our Social Followers'

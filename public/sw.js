@@ -1,7 +1,8 @@
-const CACHE_NAME = 'roofmanager-v2';
+// RC#4: Bumped from v2 to v3 to force-purge stale landing page cache in Safari
+const CACHE_NAME = 'roofmanager-v3';
 
+// RC#4: Removed '/' from precache — always serve fresh HTML for navigation requests
 const PRECACHE_URLS = [
-  '/',
   '/static/tailwind.css',
   '/static/style.css',
   '/static/logo.png',
@@ -45,6 +46,13 @@ self.addEventListener('fetch', (event) => {
       url.pathname.startsWith('/api/customer/auth') ||
       url.pathname.startsWith('/api/payments') ||
       url.pathname.startsWith('/api/square')) {
+    return;
+  }
+
+  // RC#4: Never cache HTML navigation — always go to network
+  // Prevents Safari from serving stale broken landing page on re-visits
+  if (request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/customer/login' || url.pathname === '/pricing') {
+    event.respondWith(fetch(request));
     return;
   }
 

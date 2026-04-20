@@ -5,8 +5,17 @@ import { isDevAccount } from './customer-auth'
 import { trackPaymentCompleted, trackCreditPurchase } from '../services/ga4-events'
 import { resolveTeamOwner } from './team'
 import { validateAdminSession } from './auth'
-import { notifyNewReportRequest } from '../services/email'
+import { notifyNewReportRequest, sendGmailOAuth2 } from '../services/email'
 import { addCredits } from '../services/api-billing'
+
+// Email validation + HTML escape used by auto-invoice email send
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+function isValidEmail(email: string): boolean {
+  return typeof email === 'string' && EMAIL_REGEX.test(email.trim()) && email.trim().length <= 320
+}
+function escapeHtmlForEmail(str: string): string {
+  return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
 
 export const squareRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -595,21 +604,26 @@ squareRoutes.post('/use-credit', async (c) => {
 
     // ============================================================
     // INVOICING AUTOMATION — Auto-create & send invoice if enabled
+    // Stores invoice under roofer's customer_id so it appears in their
+    // dashboard; homeowner details go in crm_customer_* columns.
     // ============================================================
-    if (invoice_customer_name && invoice_customer_email) {
+    if (invoice_customer_name && invoice_customer_email && isValidEmail(invoice_customer_email)) {
       const invoiceAutoPromise = (async () => {
         try {
-          // Check if user has invoicing automation enabled
+          // Check if this roofer has invoicing automation enabled
           const custSettings = await c.env.DB.prepare(
             `SELECT auto_invoice_enabled, invoice_pricing_mode, invoice_price_per_square,
                     invoice_price_per_bundle FROM customers WHERE id = ?`
           ).bind(customer.customer_id).first<any>()
 
-          if (!custSettings || !custSettings.auto_invoice_enabled) return
+          if (!custSettings || !custSettings.auto_invoice_enabled) {
+            console.log(`[Auto-Invoice] Skipped — automation not enabled for customer ${customer.customer_id}`)
+            return
+          }
 
-          // Wait for report to be generated (poll for up to 90 seconds)
+          // Wait for report to complete (poll up to 120s — extra-detailed reports can take 60-90s)
           let report: any = null
-          for (let i = 0; i < 18; i++) {
+          for (let i = 0; i < 24; i++) {
             await new Promise(r => setTimeout(r, 5000))
             report = await c.env.DB.prepare(
               "SELECT * FROM reports WHERE order_id = ? AND status = 'completed'"
@@ -617,7 +631,7 @@ squareRoutes.post('/use-credit', async (c) => {
             if (report) break
           }
           if (!report) {
-            console.warn(`[Auto-Invoice] Report not ready after 90s for order ${newOrderId} — skipping auto-invoice`)
+            console.warn(`[Auto-Invoice] Report not ready after 120s for order ${newOrderId} — skipping`)
             return
           }
 
@@ -649,43 +663,42 @@ squareRoutes.post('/use-credit', async (c) => {
 
           const subtotal = Math.round(quantity * unitPrice * 100) / 100
           const taxRate = 5.0
-          const taxAmount = Math.round(subtotal * taxRate) / 100
+          const taxAmount = Math.round(subtotal * (taxRate / 100) * 100) / 100
           const total = Math.round((subtotal + taxAmount) * 100) / 100
 
-          // Find or create a customer record for the invoice recipient
           const recipientEmail = invoice_customer_email.toLowerCase().trim()
-          let recipientCustomerId: number
-          const existing = await c.env.DB.prepare('SELECT id FROM customers WHERE email = ?').bind(recipientEmail).first<any>()
-          if (existing) {
-            recipientCustomerId = existing.id
-          } else {
-            const ins = await c.env.DB.prepare(
-              'INSERT INTO customers (email, name, phone, is_active) VALUES (?, ?, ?, 1)'
-            ).bind(recipientEmail, invoice_customer_name, invoice_customer_phone || null).run()
-            recipientCustomerId = ins.meta.last_row_id as number
-          }
+          const recipientName = String(invoice_customer_name).trim()
+          const recipientPhone = invoice_customer_phone ? String(invoice_customer_phone).trim() : ''
 
-          // Generate invoice number & share token
+          // Generate invoice number & share token (8-digit random to match manual invoices)
           const invDate = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-          const invRand = Math.floor(Math.random() * 9999).toString().padStart(4, '0')
+          const invRand = Math.floor(Math.random() * 99999999).toString().padStart(8, '0')
           const invoiceNumber = `INV-${invDate}-${invRand}`
-          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+          const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
           let shareToken = ''
           for (let i = 0; i < 32; i++) shareToken += chars[Math.floor(Math.random() * chars.length)]
 
-          const dueDate = new Date()
-          dueDate.setDate(dueDate.getDate() + 30)
+          const now = new Date()
+          const dueDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 30))
 
+          // Store invoice under ROOFER's customer_id so it shows in their dashboard.
+          // Homeowner details go in crm_customer_name/email/phone.
           const invResult = await c.env.DB.prepare(`
-            INSERT INTO invoices (invoice_number, customer_id, order_id, subtotal, tax_rate, tax_amount,
-                                  discount_amount, total, status, due_date, notes, terms, created_by,
-                                  document_type, share_token, share_url)
-            VALUES (?, ?, ?, ?, ?, ?, 0, ?, 'sent', ?, ?, 'Payment due within 30 days of invoice date.', 'auto-invoice', 'invoice', ?, ?)
+            INSERT INTO invoices (
+              invoice_number, customer_id, order_id,
+              crm_customer_name, crm_customer_email, crm_customer_phone,
+              subtotal, tax_rate, tax_amount, discount_amount, discount_type, total,
+              status, due_date, notes, terms, created_by,
+              document_type, share_token, share_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'fixed', ?, 'sent', ?, ?, ?, ?, ?, ?, ?)
           `).bind(
-            invoiceNumber, recipientCustomerId, newOrderId,
+            invoiceNumber, customer.customer_id, newOrderId,
+            recipientName, recipientEmail, recipientPhone,
             subtotal, taxRate, taxAmount, total,
             dueDate.toISOString().slice(0, 10),
             `Auto-generated invoice for ${property_address}`,
+            'Payment due within 30 days of invoice date.',
+            'auto-invoice', 'invoice',
             shareToken, `/proposal/view/${shareToken}`
           ).run()
 
@@ -698,7 +711,57 @@ squareRoutes.post('/use-credit', async (c) => {
             pricingMode === 'per_square' ? 'square' : 'bundle'
           ).run()
 
-          console.log(`[Auto-Invoice] Created invoice ${invoiceNumber} for $${total} CAD — order ${newOrderId} — sent to ${invoice_customer_email}`)
+          // Send the invoice email to the homeowner via Gmail OAuth2
+          const clientId = (c.env as any).GMAIL_CLIENT_ID
+          const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
+          const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN
+          if (!clientId || !clientSecret || !refreshToken) {
+            console.warn(`[Auto-Invoice] Invoice ${invoiceNumber} created (id=${invoiceId}) but Gmail OAuth not configured — email NOT sent`)
+            return
+          }
+
+          try {
+            const origin = new URL(c.req.url).origin
+            const viewUrl = `${origin}/proposal/view/${shareToken}`
+            const emailHtml = `
+<div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
+  <div style="background:linear-gradient(135deg,#0ea5e9,#2563eb);padding:32px;border-radius:16px 16px 0 0;text-align:center">
+    <h1 style="color:white;font-size:22px;margin:0">Roof Manager</h1>
+    <p style="color:#bfdbfe;font-size:13px;margin:4px 0 0">Professional Roof Measurement Reports</p>
+  </div>
+  <div style="background:white;padding:32px;border:1px solid #e2e8f0;border-top:none">
+    <h2 style="color:#1e293b;font-size:18px;margin:0 0 8px">Invoice ${invoiceNumber}</h2>
+    <p style="color:#64748b;font-size:14px;margin:0 0 24px">Hi ${escapeHtmlForEmail(recipientName || 'there')},</p>
+    <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px">Please find your invoice below for the roofing work at <strong>${escapeHtmlForEmail(property_address)}</strong>. Click the link to view it online.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0">
+      <thead><tr style="background:#f8fafc"><th style="text-align:left;padding:8px;border-bottom:2px solid #e2e8f0;font-size:13px;color:#64748b">Item</th><th style="text-align:center;padding:8px;border-bottom:2px solid #e2e8f0;font-size:13px;color:#64748b">Qty</th><th style="text-align:right;padding:8px;border-bottom:2px solid #e2e8f0;font-size:13px;color:#64748b">Amount</th></tr></thead>
+      <tbody><tr><td style="padding:8px;border-bottom:1px solid #f1f5f9;font-size:13px">${escapeHtmlForEmail(lineDescription)}</td><td style="text-align:center;padding:8px;border-bottom:1px solid #f1f5f9;font-size:13px">${quantity}</td><td style="text-align:right;padding:8px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600">$${subtotal.toFixed(2)}</td></tr></tbody>
+    </table>
+    <div style="background:#f8fafc;border-radius:12px;padding:16px;margin:16px 0">
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:#64748b;margin-bottom:4px"><span>Subtotal</span><span>$${subtotal.toFixed(2)}</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:#64748b;margin-bottom:8px"><span>Tax (${taxRate}%)</span><span>$${taxAmount.toFixed(2)}</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:800;color:#0f172a;border-top:1px solid #e2e8f0;padding-top:8px"><span>Total</span><span>$${total.toFixed(2)} CAD</span></div>
+    </div>
+    <div style="text-align:center;margin:24px 0"><a href="${viewUrl}" style="display:inline-block;background:#0ea5e9;color:white;padding:14px 32px;border-radius:12px;text-decoration:none;font-size:16px;font-weight:700">View Invoice</a></div>
+    <p style="color:#64748b;font-size:12px;text-align:center">Payment due by ${dueDate.toISOString().slice(0,10)}</p>
+  </div>
+  <div style="background:#f8fafc;padding:16px;border-radius:0 0 16px 16px;text-align:center;border:1px solid #e2e8f0;border-top:none">
+    <p style="color:#94a3b8;font-size:11px;margin:0">Powered by Roof Manager — Canada's AI Roof Measurement Platform</p>
+  </div>
+</div>`
+            await sendGmailOAuth2(
+              clientId, clientSecret, refreshToken,
+              recipientEmail,
+              `Invoice ${invoiceNumber} — $${total.toFixed(2)} CAD`,
+              emailHtml
+            )
+            await c.env.DB.prepare(
+              `UPDATE invoices SET sent_date = date('now') WHERE id = ?`
+            ).bind(invoiceId).run().catch(() => { /* sent_date column may not exist */ })
+            console.log(`[Auto-Invoice] Created + emailed invoice ${invoiceNumber} ($${total} CAD) to ${recipientEmail} — order ${newOrderId}`)
+          } catch (emailErr: any) {
+            console.warn(`[Auto-Invoice] Invoice ${invoiceNumber} created (id=${invoiceId}) but email send failed: ${emailErr.message}`)
+          }
         } catch (e: any) {
           console.warn(`[Auto-Invoice] Failed for order ${newOrderId}: ${e.message}`)
         }

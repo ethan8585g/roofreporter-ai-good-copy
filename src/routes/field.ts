@@ -247,7 +247,7 @@ const FIELD_HTML = `<!doctype html>
   :root { --bg:#0b1220; --card:#111a2e; --line:#1f2a44; --text:#e7ecf5; --muted:#93a4c3; --accent:#3b82f6; --ok:#10b981; --warn:#f59e0b; --err:#ef4444; }
   * { box-sizing:border-box; }
   html,body { margin:0; padding:0; background:var(--bg); color:var(--text); font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
-  header { position:sticky; top:0; z-index:5; background:rgba(11,18,32,.95); backdrop-filter:blur(8px); border-bottom:1px solid var(--line); padding:env(safe-area-inset-top) 16px 12px; }
+  header { position:sticky; top:0; z-index:5; background:rgba(11,18,32,.95); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); border-bottom:1px solid var(--line); padding:env(safe-area-inset-top) 16px 12px; }
   .h { display:flex; align-items:center; justify-content:space-between; padding-top:12px; }
   .h h1 { font-size:17px; margin:0; }
   .sync { font-size:12px; color:var(--muted); }

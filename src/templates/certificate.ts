@@ -124,7 +124,8 @@ function row(label: string, value: string, alt: boolean): string {
 
 function logoHTML(companyLogo: string | undefined, companyName: string, accentColor: string, size = 64): string {
   if (companyLogo) return `<img src="${companyLogo}" alt="${companyName}" style="width:${size}px;height:${size}px;object-fit:contain;border-radius:8px">`
-  return `<div style="width:${size}px;height:${size}px;background:${accentColor};border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:${Math.round(size * 0.44)}px;color:white">🏠</div>`
+  const initials = companyName.split(/\s+/).map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'RC'
+  return `<div style="width:${size}px;height:${size}px;background:${accentColor};border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:${Math.round(size * 0.34)}px;font-weight:700;color:white;letter-spacing:1px">${initials}</div>`
 }
 
 // ─── CLASSIC ──────────────────────────────────────────────────
@@ -408,7 +409,7 @@ function generateModernCertificate(args: CertificateArgs): string {
   .company-name { font-family: 'Montserrat', system-ui, sans-serif; font-size: 20px; font-weight: 700; color: white; }
   .company-details { font-size: 11px; color: rgba(255,255,255,0.85); margin-top: 4px; line-height: 1.5; }
   .cert-badge {
-    background: rgba(255,255,255,0.15); backdrop-filter: blur(8px);
+    background: rgba(255,255,255,0.15); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
     border-radius: 12px; padding: 12px 18px; text-align: center;
   }
   .cert-badge-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: rgba(255,255,255,0.7); }

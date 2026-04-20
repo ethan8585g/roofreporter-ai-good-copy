@@ -266,7 +266,17 @@ window.fireMetaLeadEvent=function(d){if(typeof fbq==='function')fbq('track','Lea
 <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${metaPixelId}&ev=PageView&noscript=1"/></noscript>
 ` : `<script>window.fireMetaLeadEvent=function(){};</script>`
 
-      const injected = body.replace('</body>', `${ga4Script}${googleAdsScript}${metaPixelScript}${claritySnippet}${AB_SCRIPT}
+      // RC#1: Translate widget — moved out of <head> (invalid HTML) and injected at top of <body>
+      // Safari's strict parser closed <head> early when it saw the <div>, reparenting following scripts
+      // and breaking getElementById() calls. Now renders in valid position and uses DOMContentLoaded.
+      const translateWidget = `<div id="gt-wrapper"><button id="gt-toggle" aria-label="Select language" title="Select language">&#127760;</button><div id="gt-panel"><div id="google_translate_element"></div><button id="gt-close" aria-label="Close language selector" title="Close">&times;</button></div></div>
+<script>function googleTranslateElementInit(){try{new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,fr,es,de,pt,it,zh-CN,zh-TW,ja,ko,ar,hi,bn,ur,tr,vi,th,id,pl,uk,ru,nl,sv,da,no,fi,el,he,ro,cs,hu,ms,tl',layout:google.translate.TranslateElement.InlineLayout.SIMPLE,autoDisplay:false},'google_translate_element')}catch(e){}}document.addEventListener('DOMContentLoaded',function(){var t=document.getElementById('gt-toggle');if(t)t.onclick=function(){var p=document.getElementById('gt-panel');if(p)p.classList.toggle('open')};var c=document.getElementById('gt-close');if(c)c.onclick=function(){var p=document.getElementById('gt-panel');if(p)p.classList.remove('open')}});</script>
+<script src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" defer></script>`
+
+      // Inject translate widget right after opening <body> tag
+      let bodyWithWidget = body.replace(/<body([^>]*)>/, `<body$1>\n${translateWidget}`)
+
+      const injected = bodyWithWidget.replace('</body>', `${ga4Script}${googleAdsScript}${metaPixelScript}${claritySnippet}${AB_SCRIPT}
 <script src="/static/toast.js"></script>
 <script src="/static/tracker.js" defer></script>
 <script src="/static/exit-intent.js" defer></script>
@@ -688,7 +698,8 @@ app.get('/auth/magic', async (c) => {
   return c.html(`<!DOCTYPE html><html><head><title>Signing in...</title></head>
 <body>
 <script>
-localStorage.setItem('rc_customer_token', '${sessionToken}');
+// RC#5: Guard localStorage for iOS Safari Private Browsing — QuotaExceededError would halt script
+try { localStorage.setItem('rc_customer_token', '${sessionToken}'); } catch(e) {}
 window.location.href = '${redirectUrl}';
 </script>
 <p>Signing you in...</p>
@@ -3836,21 +3847,20 @@ function getHeadTags() {
   <link rel="dns-prefetch" href="//maps.googleapis.com">
   <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">
   <link rel="manifest" href="/manifest.json">
-  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Roof Manager">
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="stylesheet" href="/static/tailwind.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
+  <!-- RC#6: Font Awesome preload pattern — reliable in iOS Safari (media=print onload hack is flaky) -->
+  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
   ${getTailwindConfig()}
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="alternate" type="application/rss+xml" title="Roof Manager Blog" href="https://www.roofmanager.ca/feed.xml">
   <link rel="stylesheet" href="/static/style.css">
   <style>#gt-wrapper{position:fixed;bottom:20px;left:20px;z-index:9998}#gt-toggle{width:44px;height:44px;border-radius:50%;background:white;border:1px solid #e2e8f0;box-shadow:0 4px 20px rgba(0,0,0,0.15);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;transition:transform 0.2s}#gt-toggle:hover{transform:scale(1.1)}#gt-panel{display:none;position:absolute;bottom:54px;left:0;background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.15);padding:8px 12px;border:1px solid #e2e8f0;font-size:13px;white-space:nowrap}#gt-panel.open{display:flex;align-items:center;gap:8px}#gt-close{background:none;border:none;cursor:pointer;font-size:18px;color:#6b7280;padding:0 0 0 4px;line-height:1}#gt-close:hover{color:#111}.goog-te-gadget{font-family:inherit!important}.goog-te-gadget-simple{background:transparent!important;border:none!important;padding:0!important;font-size:13px!important}.goog-te-menu-value span{color:#374151!important}.goog-te-banner-frame{display:none!important}body{top:0!important}@media(max-width:768px){#gt-wrapper{bottom:auto;top:74px;left:8px}#gt-toggle{width:36px;height:36px;font-size:16px}#gt-panel{bottom:auto;top:44px}}</style>
-  <div id="gt-wrapper"><button id="gt-toggle" aria-label="Select language" title="Select language">&#127760;</button><div id="gt-panel"><div id="google_translate_element"></div><button id="gt-close" aria-label="Close language selector" title="Close">&times;</button></div></div>
-  <script>function googleTranslateElementInit(){new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,fr,es,de,pt,it,zh-CN,zh-TW,ja,ko,ar,hi,bn,ur,tr,vi,th,id,pl,uk,ru,nl,sv,da,no,fi,el,he,ro,cs,hu,ms,tl',layout:google.translate.TranslateElement.InlineLayout.SIMPLE,autoDisplay:false},'google_translate_element')}document.getElementById('gt-toggle').onclick=function(){document.getElementById('gt-panel').classList.toggle('open')};document.getElementById('gt-close').onclick=function(){document.getElementById('gt-panel').classList.remove('open')}</script>
-  <script src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" defer></script>
+  <!-- RC#2: rrTrack shim — prevents ReferenceError in inline onclick handlers before tracker.js loads -->
+  <script>window.rrTrack=window.rrTrack||function(){};</script>
   <style id="theme-vars">
 :root{--bg-page:#0A0A0A;--bg-card:#111111;--bg-card-hover:rgba(255,255,255,0.05);--bg-elevated:#1a1a1a;--text-primary:#fff;--text-secondary:#d1d5db;--text-muted:#9ca3af;--border-color:rgba(255,255,255,0.1);--accent:#00FF88;--accent-hover:#00e67a}
 /* ── LIGHT THEME — Roofr-inspired white/blue ── */
@@ -3959,7 +3969,7 @@ html.light-theme{background:#f5f7fa !important}
 .light-theme [style*="color:#ffffff"]:not([style*="background"]):not([style*="linear-gradient"]){color:#0B0F12 !important}
 </style>
 <script>!function(){var p=window.location.pathname;if(!p.startsWith('/customer')&&!p.startsWith('/admin'))return;var t=localStorage.getItem('rc_dashboard_theme');if(t==='light'){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}else if(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script>
-  <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}</script>
+  <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(function(){})})}</script>
   <script src="/static/push-subscribe.js" defer></script>
   <script src="/static/push-native.js" defer></script>`
 }
@@ -5248,8 +5258,7 @@ function getLoginPageHTML() {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          localStorage.setItem('rc_user', JSON.stringify(data.user));
-          localStorage.setItem('rc_token', data.token);
+          try { localStorage.setItem('rc_user', JSON.stringify(data.user)); localStorage.setItem('rc_token', data.token); } catch(e) {}
           window.location.href = '/super-admin';
         } else {
           errDiv.textContent = data.error || 'Login failed.';
@@ -6006,6 +6015,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     }
     .landing-nav.scrolled {
       background: rgba(10, 10, 10, 0.95);
+      -webkit-backdrop-filter: blur(20px);
       backdrop-filter: blur(20px);
       box-shadow: 0 1px 0 rgba(255,255,255,0.05);
     }
@@ -7058,7 +7068,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   </script>
   <script src="/static/landing.js?v=20260408a" defer></script>
   <!-- Mobile sticky bottom CTA bar — two buttons, hides inside hero -->
-  <div id="mobileStickyCta" class="md:hidden" style="position:fixed;bottom:0;left:0;right:0;z-index:60;display:none;background:rgba(10,10,10,0.97);backdrop-filter:blur(16px);border-top:1px solid rgba(255,255,255,0.08);padding:12px 16px;gap:10px;flex-direction:row">
+  <div id="mobileStickyCta" class="md:hidden" style="position:fixed;bottom:0;left:0;right:0;z-index:60;display:none;background:rgba(10,10,10,0.97);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-top:1px solid rgba(255,255,255,0.08);padding:12px 16px;gap:10px;flex-direction:row">
     <a href="/demo" onclick="rrTrack('cta_click',{location:'sticky_mobile_demo'})" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:rgba(255,255,255,0.07);color:#fff;font-weight:700;padding:12px 10px;border-radius:12px;font-size:14px;text-decoration:none;border:1px solid rgba(255,255,255,0.12);min-height:48px"><i class="fas fa-calendar-check" style="color:#00FF88;font-size:13px"></i>Book Demo</a>
     <a href="/register" onclick="rrTrack('cta_click',{location:'sticky_mobile_signup'})" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:#00FF88;color:#0A0A0A;font-weight:800;padding:12px 10px;border-radius:12px;font-size:14px;text-decoration:none;box-shadow:0 8px 24px rgba(0,255,136,0.3);min-height:48px"><i class="fas fa-rocket" style="font-size:13px"></i>Start Free</a>
     <button aria-label="Dismiss sticky bar" onclick="document.getElementById('mobileStickyCta').style.display='none';try{sessionStorage.setItem('rm_sticky_dismiss','1')}catch(e){}" style="position:absolute;top:-10px;right:10px;width:22px;height:22px;border-radius:999px;background:#111;color:#9ca3af;border:1px solid rgba(255,255,255,0.15);font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center">&times;</button>
@@ -7105,7 +7115,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   -->
 
   <!-- Asset Report Lead-Capture Modal -->
-  <div id="assetReportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)">
+  <div id="assetReportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;padding:20px;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)">
     <div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:28px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,255,136,0.15)">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">
         <div>
@@ -7171,7 +7181,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 
   <!-- Exit-Intent Modal (desktop only, once per session) -->
   <!-- Exit-intent modal v2 — registration-focused -->
-  <div id="exitIntentModal" role="dialog" aria-modal="true" aria-labelledby="exitIntentTitle" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px)">
+  <div id="exitIntentModal" role="dialog" aria-modal="true" aria-labelledby="exitIntentTitle" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;align-items:center;justify-content:center;padding:20px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)">
     <div style="background:#111111;border:1px solid rgba(0,255,136,0.3);border-radius:20px;padding:32px 28px;max-width:440px;width:100%;box-shadow:0 24px 80px rgba(0,255,136,0.12);position:relative">
       <button id="exitIntentClose" aria-label="Dismiss" style="position:absolute;top:12px;right:14px;background:none;border:none;color:#6b7280;font-size:22px;cursor:pointer;line-height:1;padding:4px">&times;</button>
       <!-- Social proof nudge -->
@@ -8417,8 +8427,7 @@ function getCustomerLoginHTML(googleClientId = '') {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          localStorage.setItem('rc_customer', JSON.stringify(data.customer));
-          localStorage.setItem('rc_customer_token', data.token);
+          try { localStorage.setItem('rc_customer', JSON.stringify(data.customer)); localStorage.setItem('rc_customer_token', data.token); } catch(e) {}
           if (btn) btn.innerHTML = '<i class="fas fa-check mr-2"></i>Success!';
           if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 1.0, currency: 'USD' });
           window.location.href = '/customer/dashboard';
@@ -8542,8 +8551,7 @@ function getCustomerLoginHTML(googleClientId = '') {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          localStorage.setItem('rc_customer', JSON.stringify(data.customer));
-          localStorage.setItem('rc_customer_token', data.token);
+          try { localStorage.setItem('rc_customer', JSON.stringify(data.customer)); localStorage.setItem('rc_customer_token', data.token); } catch(e) {}
           if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 1.0, currency: 'USD' });
           window.location.href = '/customer/dashboard';
         } else {
@@ -8668,7 +8676,7 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
       if (document.getElementById('cmdPalette')) return;
       var ov = document.createElement('div');
       ov.id = 'cmdPalette';
-      ov.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:flex-start;justify-content:center;padding-top:15vh;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px)';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:flex-start;justify-content:center;padding-top:15vh;background:rgba(0,0,0,0.6);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)';
       ov.innerHTML = '<div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:16px;width:480px;max-width:95vw;max-height:60vh;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5)">' +
         '<div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.05)"><input id="cmdInput" type="text" placeholder="Search pages\u2026" style="width:100%;background:transparent;border:none;outline:none;color:white;font-size:15px" autofocus></div>' +
         '<div id="cmdResults" style="max-height:50vh;overflow-y:auto;padding:4px"></div>' +
@@ -10446,7 +10454,7 @@ function getServicesPageHTML() {
 </head>
 <body class="min-h-screen" style="background:var(--bg-page)">
   <!-- Navigation -->
-  <nav class="fixed top-0 left-0 right-0 z-50" style="background:rgba(10,10,10,0.95);backdrop-filter:blur(20px)">
+  <nav class="fixed top-0 left-0 right-0 z-50" style="background:rgba(10,10,10,0.95);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between" style="height:72px">
       <a href="/" class="flex items-center gap-3">
         <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
@@ -11010,7 +11018,7 @@ function getCoveragePageHTML() {
 </head>
 <body class="min-h-screen" style="background:var(--bg-page)">
   <!-- Navigation -->
-  <nav class="fixed top-0 left-0 right-0 z-50" style="background:rgba(10,10,10,0.95);backdrop-filter:blur(20px)">
+  <nav class="fixed top-0 left-0 right-0 z-50" style="background:rgba(10,10,10,0.95);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between" style="height:72px">
       <a href="/" class="flex items-center gap-3">
         <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
@@ -13053,9 +13061,7 @@ function getSelectTypePageHTML() {
         });
         var data = await res.json();
         if (res.ok && data.success) {
-          var cust = JSON.parse(localStorage.getItem('rc_customer') || '{}');
-          cust.company_type = type;
-          localStorage.setItem('rc_customer', JSON.stringify(cust));
+          try { var cust = JSON.parse(localStorage.getItem('rc_customer') || '{}'); cust.company_type = type; localStorage.setItem('rc_customer', JSON.stringify(cust)); } catch(e) {}
           window.location.href = '/customer/dashboard';
         } else {
           msg.innerHTML = '<div class="text-red-600 text-sm">' + (data.error || 'Failed to save. Please try again.') + '</div>';
