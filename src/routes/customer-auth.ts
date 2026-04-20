@@ -1462,7 +1462,8 @@ customerAuthRoutes.post('/forgot-password', async (c) => {
 
       if (!recent || recent.cnt < 1) {
         const token = crypto.randomUUID() + '-' + crypto.randomUUID()
-        const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+        // P0-06: tighten expiry from 60 → 30 minutes.
+        const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString()
 
         // Invalidate previous tokens for this email
         await c.env.DB.prepare(

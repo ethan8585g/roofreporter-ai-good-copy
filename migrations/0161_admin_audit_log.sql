@@ -33,18 +33,3 @@ CREATE TABLE IF NOT EXISTS admin_tool_audit (
 
 CREATE INDEX IF NOT EXISTS idx_admin_tool_admin ON admin_tool_audit(admin_id, ts);
 CREATE INDEX IF NOT EXISTS idx_admin_tool_tool  ON admin_tool_audit(tool, ts);
-
--- Password reset token single-use store.
--- P0-06 — tokens now live server-side, only an opaque ID travels in the URL.
-CREATE TABLE IF NOT EXISTS password_reset_tokens (
-  id           TEXT PRIMARY KEY,
-  user_type    TEXT NOT NULL,   -- 'admin' | 'customer'
-  user_id      INTEGER NOT NULL,
-  token_hash   TEXT NOT NULL,   -- PBKDF2 hash of the token (never store plain)
-  expires_at   TEXT NOT NULL,
-  used_at      TEXT,
-  created_at   TEXT DEFAULT (datetime('now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_prt_user ON password_reset_tokens(user_type, user_id);
-CREATE INDEX IF NOT EXISTS idx_prt_expires ON password_reset_tokens(expires_at);

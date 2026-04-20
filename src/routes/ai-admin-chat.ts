@@ -1,4 +1,6 @@
 import { Hono } from 'hono'
+import { logAdminToolCall } from '../lib/audit-log'
+import { limitByKey, clientIp } from '../lib/rate-limit'
 
 type Bindings = {
   DB: D1Database
@@ -8,6 +10,24 @@ type Bindings = {
 }
 
 export const aiAdminChatRoutes = new Hono<{ Bindings: Bindings }>()
+
+// P0-08: allowlist of setting keys this tool may touch. Pricing and feature
+// flags are intentionally excluded — those changes must go through an explicit
+// admin UI, not a chat-driven tool call.
+const ALLOWED_SETTING_KEYS = new Set<string>([
+  'company_name', 'company_email', 'company_phone',
+  'landing_hero_title', 'landing_hero_subtitle', 'landing_cta_text',
+  'report_header_text', 'report_footer_text',
+  'announcement_banner',
+])
+
+// P0-08: tools that mutate state require per-admin rate limiting.
+const MUTATION_TOOLS = new Set<string>([
+  'update_setting', 'create_blog_post', 'update_blog_post',
+  'update_order_status', 'update_site_content', 'manage_credit_package',
+  'send_announcement', 'manage_customer', 'generate_report_content',
+])
+const CREDIT_GRANT_TOOLS = new Set<string>(['manage_customer'])
 
 // ── Auth middleware — superadmin only ──────────────────────────────
 aiAdminChatRoutes.use('/*', async (c, next) => {
@@ -19,6 +39,7 @@ aiAdminChatRoutes.use('/*', async (c, next) => {
   if (!session || session.role !== 'superadmin') return c.json({ error: 'Forbidden' }, 403)
   c.set('adminId' as any, session.admin_id)
   c.set('adminName' as any, session.name || session.email)
+  c.set('adminEmail' as any, session.email)
   await next()
 })
 
@@ -243,6 +264,11 @@ async function executeTool(toolName: string, args: any, db: D1Database): Promise
       }
 
       case 'update_setting': {
+        // P0-08: refuse keys outside the allowlist. Price/feature-flag changes
+        // must go through an explicit admin UI.
+        if (!ALLOWED_SETTING_KEYS.has(args.key)) {
+          return { result: null, success: false, message: `Setting key "${args.key}" is not allowed via chat. Use the admin Settings UI.` }
+        }
         const existing = await db.prepare(
           `SELECT id FROM settings WHERE master_company_id = 1 AND setting_key = ?`
         ).bind(args.key).first<any>()
@@ -546,9 +572,44 @@ aiAdminChatRoutes.post('/chat', async (c) => {
           toolArgs = {}
         }
 
+        const adminId = c.get('adminId' as any) as number
+        const adminEmail = c.get('adminEmail' as any) as string | undefined
+
+        // P0-08: rate limits. 10 mutations / hour / admin; 1 credit-grant / day.
+        if (MUTATION_TOOLS.has(toolName)) {
+          const rl = await limitByKey(c, 'ai-admin-mut', `admin:${adminId}`, 10, 3600)
+          if (!rl.ok) {
+            const toolResult = { result: null, success: false, message: `Rate limit: too many mutations this hour. Try again in ${rl.resetSeconds}s.` }
+            await logAdminToolCall(c.env.DB, { admin: { id: adminId, email: adminEmail }, tool: toolName, args: toolArgs, result: 'denied', ip: clientIp(c), error: 'rate_limit_mutations' })
+            actions.push({ tool: toolName, args: toolArgs, ...toolResult })
+            fullMessages.push({ role: 'tool', content: JSON.stringify(toolResult), tool_call_id: toolCall.id } as any)
+            continue
+          }
+        }
+        if (CREDIT_GRANT_TOOLS.has(toolName) && toolArgs?.action === 'add_credits') {
+          const rl = await limitByKey(c, 'ai-admin-credit', `admin:${adminId}`, 1, 86400)
+          if (!rl.ok) {
+            const toolResult = { result: null, success: false, message: `Rate limit: only one credit grant per day via chat. Try again in ${rl.resetSeconds}s.` }
+            await logAdminToolCall(c.env.DB, { admin: { id: adminId, email: adminEmail }, tool: toolName, args: toolArgs, result: 'denied', ip: clientIp(c), error: 'rate_limit_credit' })
+            actions.push({ tool: toolName, args: toolArgs, ...toolResult })
+            fullMessages.push({ role: 'tool', content: JSON.stringify(toolResult), tool_call_id: toolCall.id } as any)
+            continue
+          }
+        }
+
         console.log(`[AI Admin Chat] Executing tool: ${toolName}`, JSON.stringify(toolArgs).slice(0, 200))
         const toolResult = await executeTool(toolName, toolArgs, c.env.DB)
         actions.push({ tool: toolName, args: toolArgs, ...toolResult })
+
+        // P0-08: persist every tool call to admin_tool_audit.
+        await logAdminToolCall(c.env.DB, {
+          admin: { id: adminId, email: adminEmail },
+          tool: toolName,
+          args: toolArgs,
+          result: toolResult.success ? 'ok' : 'error',
+          ip: clientIp(c),
+          error: toolResult.success ? undefined : toolResult.message,
+        })
 
         fullMessages.push({
           role: 'tool',

@@ -6,6 +6,8 @@
 
 import { Hono } from 'hono'
 import { runTrafficAgent } from '../services/traffic-agent'
+import { validateAdminSession } from './auth'
+import { limitByIp } from '../lib/rate-limit'
 
 type Bindings = {
   DB: D1Database
@@ -21,6 +23,24 @@ type Bindings = {
 const LIVE_ANALYSIS_COOLDOWN_MS = 10 * 60 * 1000
 
 export const analyticsRoutes = new Hono<{ Bindings: Bindings }>()
+
+// P0-07: every analytics endpoint except /track and /track-page requires an
+// authenticated admin session. /track stays public (client beacon) but is
+// rate-limited to mitigate scraping/spam.
+analyticsRoutes.use('*', async (c, next) => {
+  const path = c.req.path.replace(/^.*\/analytics/, '')
+  // Public ingestion endpoints — rate-limited, no auth.
+  if (path === '/track' || path === '/track-page' || path.startsWith('/track')) {
+    const rl = await limitByIp(c, 'analytics-track', 60, 60)
+    if (!rl.ok) return c.json({ error: 'rate_limited', retry_after_s: rl.resetSeconds }, 429)
+    return next()
+  }
+  // All other analytics routes — admin only.
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Not authenticated' }, 401)
+  ;(c as any).set('admin', admin)
+  return next()
+})
 
 // ============================================================
 // PUBLIC: Beacon endpoint — receives tracking events from client JS

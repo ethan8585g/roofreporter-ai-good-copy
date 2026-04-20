@@ -822,6 +822,9 @@ app.get('/login', (c) => {
 
 // Admin Password Reset Page (linked from reset email)
 app.get('/reset-password', (c) => {
+  // P0-06: block token leakage via Referer on outbound clicks from the reset page.
+  c.header('Referrer-Policy', 'no-referrer')
+  c.header('Cache-Control', 'no-store, no-cache, must-revalidate')
   return c.html(getAdminResetPasswordHTML())
 })
 
@@ -833,6 +836,9 @@ app.get('/customer/login', (c) => {
 
 // Customer Password Reset Page (linked from reset email)
 app.get('/customer/reset-password', (c) => {
+  // P0-06: block token leakage via Referer on outbound clicks from the reset page.
+  c.header('Referrer-Policy', 'no-referrer')
+  c.header('Cache-Control', 'no-store, no-cache, must-revalidate')
   return c.html(getCustomerResetPasswordHTML())
 })
 
