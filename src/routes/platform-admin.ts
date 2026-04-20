@@ -12,6 +12,7 @@
  */
 import { Hono } from 'hono'
 import { validateAdminSession } from './auth'
+import { hashPassword } from '../lib/password'
 
 type Bindings = { DB: D1Database; [key: string]: any }
 const platformAdmin = new Hono<{ Bindings: Bindings }>()
@@ -76,10 +77,8 @@ platformAdmin.post('/onboard-customer', async (c) => {
   try {
     const existing = await c.env.DB.prepare('SELECT id FROM customers WHERE email = ?').bind(email).first<any>()
     if (existing) return c.json({ error: 'Account with this email already exists', customer_id: existing.id }, 400)
-    // Hash password
-    const data = new TextEncoder().encode(password + 'roofreporter_salt_2024')
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-    const hashedPassword = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
+    // Hash password — PBKDF2-SHA512/600k (src/lib/password.ts)
+    const hashedPassword = await hashPassword(password)
     // Create customer with membership tier
     const result = await c.env.DB.prepare(`INSERT INTO customers (name, email, password_hash, phone, company_name, brand_business_name, is_active, membership_tier_id, membership_started_at, created_at, updated_at) VALUES (?,?,?,?,?,?,1,?,datetime('now'),datetime('now'),datetime('now'))`).bind(
       contact_name, email, hashedPassword, phone || '', business_name || '', business_name || '', membership_tier_id || null
@@ -114,9 +113,7 @@ platformAdmin.post('/onboard-customer', async (c) => {
       for (const tm of team_members) {
         if (!tm.email || !tm.name) continue
         const tmPass = tm.password || email.split('@')[0] + '123'
-        const tmData = new TextEncoder().encode(tmPass + 'roofreporter_salt_2024')
-        const tmHash = await crypto.subtle.digest('SHA-256', tmData)
-        const tmHashedPw = Array.from(new Uint8Array(tmHash)).map(b => b.toString(16).padStart(2, '0')).join('')
+        const tmHashedPw = await hashPassword(tmPass)
         await c.env.DB.prepare(`INSERT INTO customer_team_members (customer_id, name, email, password_hash, role, phone, permissions) VALUES (?,?,?,?,?,?,?)`).bind(
           customerId, tm.name, tm.email, tmHashedPw, tm.role || 'member', tm.phone || '', JSON.stringify(tm.permissions || { can_view_calls: true, can_edit_config: false })
         ).run()
@@ -160,9 +157,7 @@ platformAdmin.post('/customers/:customerId/team', async (c) => {
   if (!b.email || !b.name) return c.json({ error: 'Name and email required' }, 400)
   try {
     const pw = b.password || 'changeme123'
-    const d = new TextEncoder().encode(pw + 'roofreporter_salt_2024')
-    const hb = await crypto.subtle.digest('SHA-256', d)
-    const hash = Array.from(new Uint8Array(hb)).map(x => x.toString(16).padStart(2, '0')).join('')
+    const hash = await hashPassword(pw)
     const r = await c.env.DB.prepare('INSERT INTO customer_team_members (customer_id, name, email, password_hash, role, phone, permissions) VALUES (?,?,?,?,?,?,?)').bind(
       cid, b.name, b.email, hash, b.role || 'member', b.phone || '', JSON.stringify(b.permissions || { can_view_calls: true })
     ).run()

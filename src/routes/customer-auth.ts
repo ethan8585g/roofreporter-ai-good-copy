@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { trackUserSignup, trackUserLogin } from '../services/ga4-events'
 import { resolveTeamOwner } from './team'
+import { hashPassword, verifyPassword, isLegacyHash, dummyVerify } from '../lib/password'
 
 export const customerAuthRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -30,77 +31,17 @@ async function seedDefaultMaterials(db: any, ownerId: number) {
 }
 
 // ============================================================
-// DEV / TEST ACCOUNT — Only active when DEV_MODE env var is set
+// DEV / TEST ACCOUNT — P0-04: source-level credential bypass removed.
+// The dev account still exists in the DB (dev@reusecanada.ca) and logs in
+// through the normal PBKDF2 path. `isDevAccount` is kept only to gate
+// credit-grant side effects for that row when DEV_MODE is set.
 // ============================================================
-const DEV_ACCOUNT = {
-  email: 'dev@reusecanada.ca',
-  password: 'DevTest2026!',
-  name: 'Roof Manager Dev',
-  company_name: 'Roof Manager (Dev Testing)',
-  phone: '780-000-0000'
-}
+const DEV_ACCOUNT_EMAIL = 'dev@reusecanada.ca'
 
-// When env is passed and DEV_MODE is not set, dev account is disabled.
-// When env is not passed (legacy callers), dev account is also disabled for safety.
 export function isDevAccount(email: string, env?: any): boolean {
   const devEnabled = env ? !!(env as any).DEV_MODE : false
   if (!devEnabled) return false
-  return email.toLowerCase().trim() === DEV_ACCOUNT.email
-}
-
-// ============================================================
-// PASSWORD HELPERS — PBKDF2 (100,000 iterations, SHA-256)
-// Cloudflare Workers Web Crypto API compatible.
-// Format: pbkdf2:<salt>:<hash>  |  Legacy: <salt>:<hash> (SHA-256)
-// ============================================================
-async function hashPassword(password: string, salt?: string): Promise<{ hash: string, salt: string }> {
-  const s = salt || crypto.randomUUID()
-  const enc = new TextEncoder()
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']
-  )
-  const hashBuffer = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: enc.encode(s), iterations: 100000, hash: 'SHA-256' },
-    keyMaterial, 256
-  )
-  const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
-  return { hash: hashHex, salt: s }
-}
-
-// Constant-time string comparison — avoids timing leaks on password verify.
-function timingSafeEq(a: string, b: string): boolean {
-  const len = Math.max(a.length, b.length)
-  let diff = a.length ^ b.length
-  for (let i = 0; i < len; i++) {
-    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0)
-  }
-  return diff === 0
-}
-
-async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
-  // New PBKDF2 format: pbkdf2:<salt>:<hash>
-  if (storedHash.startsWith('pbkdf2:')) {
-    const inner = storedHash.slice(7)
-    const idx = inner.indexOf(':')
-    if (idx < 0) return false
-    const salt = inner.slice(0, idx)
-    const hash = inner.slice(idx + 1)
-    const result = await hashPassword(password, salt)
-    return timingSafeEq(result.hash, hash)
-  }
-  // Legacy SHA-256 format: <salt>:<hash> — allow login, upgrade on next save
-  const parts = storedHash.split(':')
-  if (parts.length !== 2) return false
-  const [salt, hash] = parts
-  const enc = new TextEncoder()
-  const data = enc.encode(password + salt)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
-  return timingSafeEq(hashHex, hash)
-}
-
-function serializeHash(hash: string, salt: string): string {
-  return `pbkdf2:${salt}:${hash}`
+  return email.toLowerCase().trim() === DEV_ACCOUNT_EMAIL
 }
 
 function generateSessionToken(): string {
@@ -111,9 +52,12 @@ function generateSessionToken(): string {
 // EMAIL VERIFICATION — 6-digit code sent to email before registration
 // ============================================================
 
+// P1-09: crypto.getRandomValues instead of Math.random
 function generateVerificationCode(): string {
-  // 6-digit numeric code
-  return Math.floor(100000 + Math.random() * 900000).toString()
+  const buf = new Uint32Array(1)
+  crypto.getRandomValues(buf)
+  const n = 100000 + (buf[0] % 900000)
+  return n.toString()
 }
 
 // Send email using best available provider
@@ -622,8 +566,7 @@ customerAuthRoutes.post('/register', async (c) => {
       return c.json({ error: 'An account with this email already exists' }, 409)
     }
 
-    const { hash, salt } = await hashPassword(password)
-    const storedHash = serializeHash(hash, salt)
+    const storedHash = await hashPassword(password)
 
     // Generate referral code
     const refCode = 'REF-' + crypto.randomUUID().replace(/-/g, '').substring(0, 6).toUpperCase()
@@ -718,64 +661,9 @@ customerAuthRoutes.post('/login', async (c) => {
     const cleanEmail = email.toLowerCase().trim()
 
     // ============================================================
-    // DEV ACCOUNT — only active when DEV_MODE env var is set
+    // P0-04: source-level dev bypass removed. The dev@reusecanada.ca
+    // row exists in DB and logs in through the normal path below.
     // ============================================================
-    if ((c.env as any).DEV_MODE && cleanEmail === DEV_ACCOUNT.email && password === DEV_ACCOUNT.password) {
-      let devCustomer = await c.env.DB.prepare(
-        'SELECT * FROM customers WHERE email = ?'
-      ).bind(DEV_ACCOUNT.email).first<any>()
-
-      if (!devCustomer) {
-        // Auto-create dev account with massive trial allocation
-        const { hash, salt } = await hashPassword(DEV_ACCOUNT.password)
-        const storedHash = serializeHash(hash, salt)
-        const result = await c.env.DB.prepare(`
-          INSERT INTO customers (email, name, phone, company_name, password_hash, report_credits, credits_used, free_trial_total, free_trial_used, is_active)
-          VALUES (?, ?, ?, ?, ?, 999999, 0, 999999, 0, 1)
-        `).bind(DEV_ACCOUNT.email, DEV_ACCOUNT.name, DEV_ACCOUNT.phone, DEV_ACCOUNT.company_name, storedHash).run()
-
-        devCustomer = await c.env.DB.prepare(
-          'SELECT * FROM customers WHERE email = ?'
-        ).bind(DEV_ACCOUNT.email).first<any>()
-      } else {
-        // Ensure dev account always has unlimited credits (reset every login)
-        await c.env.DB.prepare(`
-          UPDATE customers SET 
-            free_trial_total = 999999, report_credits = 999999,
-            is_active = 1, last_login = datetime('now'), updated_at = datetime('now')
-          WHERE email = ?
-        `).bind(DEV_ACCOUNT.email).run()
-      }
-
-      await c.env.DB.prepare(
-        "UPDATE customers SET last_login = datetime('now'), updated_at = datetime('now') WHERE id = ?"
-      ).bind(devCustomer.id).run()
-
-      const token = generateSessionToken()
-      const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() // 1 year
-      await c.env.DB.prepare(`
-        INSERT INTO customer_sessions (customer_id, session_token, expires_at)
-        VALUES (?, ?, ?)
-      `).bind(devCustomer.id, token, expiresAt).run()
-
-      return c.json({
-        success: true,
-        customer: {
-          id: devCustomer.id,
-          email: DEV_ACCOUNT.email,
-          name: DEV_ACCOUNT.name,
-          company_name: DEV_ACCOUNT.company_name,
-          phone: DEV_ACCOUNT.phone,
-          role: 'customer',
-          is_dev: true,
-          credits_remaining: 999999,
-          free_trial_remaining: 999999,
-          free_trial_total: 999999,
-          paid_credits_remaining: 999999
-        },
-        token
-      })
-    }
 
     // ============================================================
     // NORMAL CUSTOMER LOGIN
@@ -785,6 +673,8 @@ customerAuthRoutes.post('/login', async (c) => {
     ).bind(cleanEmail).first<any>()
 
     if (!customer) {
+      // P1-08: constant-time response when user not found.
+      await dummyVerify(password)
       return c.json({ error: 'Invalid email or password' }, 401)
     }
 
@@ -795,6 +685,17 @@ customerAuthRoutes.post('/login', async (c) => {
     const valid = await verifyPassword(password, customer.password_hash)
     if (!valid) {
       return c.json({ error: 'Invalid email or password' }, 401)
+    }
+
+    // P0-03: upgrade legacy hashes transparently after successful verify.
+    if (isLegacyHash(customer.password_hash)) {
+      try {
+        const fresh = await hashPassword(password)
+        await c.env.DB.prepare("UPDATE customers SET password_hash = ?, updated_at = datetime('now') WHERE id = ?")
+          .bind(fresh, customer.id).run()
+      } catch (e) {
+        console.warn('[customer-auth] hash upgrade failed:', (e as any)?.message)
+      }
     }
 
     await c.env.DB.prepare(
@@ -1192,14 +1093,15 @@ customerAuthRoutes.post('/change-password', async (c) => {
     return c.json({ error: 'Current password is incorrect' }, 400)
   }
 
-  // Hash new password using PBKDF2 and store as serialized pbkdf2:<salt>:<hash>
-  const { hash, salt } = await hashPassword(new_password)
-  const storedHash = serializeHash(hash, salt)
+  const storedHash = await hashPassword(new_password)
 
   await c.env.DB.prepare(`
     UPDATE customers SET password_hash = ?, updated_at = datetime('now')
     WHERE id = ?
   `).bind(storedHash, session.customer_id).run()
+
+  // P1-04: invalidate all customer sessions on password change.
+  await c.env.DB.prepare('DELETE FROM customer_sessions WHERE customer_id = ?').bind(session.customer_id).run().catch(() => {})
 
   return c.json({ success: true })
 })
@@ -1604,8 +1506,7 @@ customerAuthRoutes.post('/reset-password', async (c) => {
       return c.json({ error: 'This reset link is invalid or has expired. Please request a new one.' }, 400)
     }
 
-    const { hash, salt } = await hashPassword(new_password)
-    const storedHash = serializeHash(hash, salt)
+    const storedHash = await hashPassword(new_password)
 
     await c.env.DB.prepare(
       "UPDATE customers SET password_hash = ?, updated_at = datetime('now') WHERE email = ?"
@@ -1614,6 +1515,12 @@ customerAuthRoutes.post('/reset-password', async (c) => {
     await c.env.DB.prepare(
       'UPDATE password_reset_tokens SET used = 1 WHERE token = ?'
     ).bind(token).run()
+
+    // P1-04: invalidate all sessions for this customer on password reset
+    const cust = await c.env.DB.prepare('SELECT id FROM customers WHERE email = ?').bind(record.email).first<any>()
+    if (cust?.id) {
+      await c.env.DB.prepare('DELETE FROM customer_sessions WHERE customer_id = ?').bind(cust.id).run().catch(() => {})
+    }
 
     return c.json({ success: true, message: 'Password updated successfully. You can now sign in with your new password.' })
   } catch (err: any) {

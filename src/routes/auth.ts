@@ -1,66 +1,8 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
+import { hashPassword, verifyPassword, isLegacyHash, dummyVerify } from '../lib/password'
 
 export const authRoutes = new Hono<{ Bindings: Bindings }>()
-
-// ============================================================
-// PASSWORD HASHING — PBKDF2 (100,000 iterations, SHA-256)
-// Cloudflare Workers Web Crypto API compatible.
-// Format stored in DB: pbkdf2:<salt>:<hash>
-// Legacy SHA-256 format (<salt>:<hash>) still verified for
-// backwards-compatible login; re-hashed on next password change.
-// ============================================================
-async function hashPassword(password: string, salt?: string): Promise<{ hash: string, salt: string }> {
-  const s = salt || crypto.randomUUID()
-  const enc = new TextEncoder()
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']
-  )
-  const hashBuffer = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: enc.encode(s), iterations: 100000, hash: 'SHA-256' },
-    keyMaterial, 256
-  )
-  const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
-  return { hash: hashHex, salt: s }
-}
-
-// Constant-time string comparison — mitigates timing side-channels on password
-// verification. XOR accumulator: always walks max(a,b) length; zero only if
-// lengths match AND every character matches.
-function timingSafeEq(a: string, b: string): boolean {
-  const len = Math.max(a.length, b.length)
-  let diff = a.length ^ b.length
-  for (let i = 0; i < len; i++) {
-    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0)
-  }
-  return diff === 0
-}
-
-async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
-  // New PBKDF2 format: pbkdf2:<salt>:<hash>
-  if (storedHash.startsWith('pbkdf2:')) {
-    const inner = storedHash.slice(7)
-    const idx = inner.indexOf(':')
-    if (idx < 0) return false
-    const salt = inner.slice(0, idx)
-    const hash = inner.slice(idx + 1)
-    const result = await hashPassword(password, salt)
-    return timingSafeEq(result.hash, hash)
-  }
-  // Legacy SHA-256 format: <salt>:<hash> — allow login, will upgrade on next save
-  const parts = storedHash.split(':')
-  if (parts.length !== 2) return false
-  const [salt, hash] = parts
-  const enc = new TextEncoder()
-  const data = enc.encode(password + salt)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
-  return timingSafeEq(hashHex, hash)
-}
-
-function serializeHash(hash: string, salt: string): string {
-  return `pbkdf2:${salt}:${hash}`
-}
 
 // ============================================================
 // ADMIN SESSION MANAGEMENT — DB-backed sessions with expiry
@@ -147,9 +89,8 @@ async function ensureBootstrapAdmin(db: D1Database, env: any): Promise<void> {
     return
   }
 
-  const { hash, salt } = await hashPassword(bootstrapPassword)
-  const storedHash = serializeHash(hash, salt)
-  
+  const storedHash = await hashPassword(bootstrapPassword)
+
   await db.prepare(`
     INSERT INTO admin_users (email, password_hash, name, role, company_name, is_active)
     VALUES (?, ?, ?, 'superadmin', 'Roof Manager', 1)
@@ -181,6 +122,9 @@ authRoutes.post('/login', async (c) => {
     ).bind(cleanEmail).first<any>()
 
     if (!user) {
+      // P1-08: run a dummy verify so login latency looks identical whether
+      // or not the email exists (defeat timing-based email enumeration).
+      await dummyVerify(password)
       return c.json({ error: 'Admin access is restricted. Use the customer portal at /customer/login' }, 403)
     }
 
@@ -188,10 +132,21 @@ authRoutes.post('/login', async (c) => {
     if (!user.password_hash) {
       return c.json({ error: 'Account not properly configured. Contact admin.' }, 500)
     }
-    
+
     const valid = await verifyPassword(password, user.password_hash)
     if (!valid) {
       return c.json({ error: 'Invalid password' }, 401)
+    }
+
+    // P0-03: transparently upgrade legacy hashes after a successful login.
+    if (isLegacyHash(user.password_hash)) {
+      try {
+        const fresh = await hashPassword(password)
+        await c.env.DB.prepare("UPDATE admin_users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?")
+          .bind(fresh, user.id).run()
+      } catch (e) {
+        console.warn('[auth] hash upgrade failed:', (e as any)?.message)
+      }
     }
 
     // Update last login
@@ -314,11 +269,13 @@ authRoutes.post('/change-password', async (c) => {
     }
 
     // Set new password
-    const { hash, salt } = await hashPassword(new_password)
-    const storedHash = serializeHash(hash, salt)
+    const storedHash = await hashPassword(new_password)
     await c.env.DB.prepare(
       "UPDATE admin_users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?"
     ).bind(storedHash, admin.admin_id || admin.id).run()
+
+    // P1-03/P1-04: invalidate all sessions for this admin on credential change
+    await c.env.DB.prepare('DELETE FROM admin_sessions WHERE admin_id = ?').bind(admin.admin_id || admin.id).run().catch(() => {})
 
     return c.json({ success: true, message: 'Password changed successfully' })
   } catch (err: any) {
@@ -421,8 +378,7 @@ authRoutes.post('/reset-password', async (c) => {
       return c.json({ error: 'This reset link is invalid or has expired. Please request a new one.' }, 400)
     }
 
-    const { hash, salt } = await hashPassword(new_password)
-    const storedHash = serializeHash(hash, salt)
+    const storedHash = await hashPassword(new_password)
 
     await c.env.DB.prepare(
       "UPDATE admin_users SET password_hash = ?, updated_at = datetime('now') WHERE email = ?"
@@ -431,6 +387,12 @@ authRoutes.post('/reset-password', async (c) => {
     await c.env.DB.prepare(
       'UPDATE password_reset_tokens SET used = 1 WHERE token = ?'
     ).bind(token).run()
+
+    // P1-03: invalidate all sessions for this admin on password reset
+    const admin = await c.env.DB.prepare('SELECT id FROM admin_users WHERE email = ?').bind(record.email).first<any>()
+    if (admin?.id) {
+      await c.env.DB.prepare('DELETE FROM admin_sessions WHERE admin_id = ?').bind(admin.id).run().catch(() => {})
+    }
 
     return c.json({ success: true, message: 'Admin password updated. You can now sign in.' })
   } catch (err: any) {
