@@ -74,14 +74,17 @@ platformAdmin.post('/onboard-customer', async (c) => {
     greeting_script, common_qa, general_notes, agent_phone_number,
     directories, team_members, welcome_package } = b
   if (!email || !password || !contact_name) return c.json({ error: 'Email, password, and contact name are required' }, 400)
+  // P2: normalize email to lowercase at the boundary so duplicate accounts
+  // can't be created with mixed case (Admin@Foo.com vs admin@foo.com).
+  const cleanEmail = String(email).toLowerCase().trim()
   try {
-    const existing = await c.env.DB.prepare('SELECT id FROM customers WHERE email = ?').bind(email).first<any>()
+    const existing = await c.env.DB.prepare('SELECT id FROM customers WHERE email = ?').bind(cleanEmail).first<any>()
     if (existing) return c.json({ error: 'Account with this email already exists', customer_id: existing.id }, 400)
     // Hash password — PBKDF2-SHA512/600k (src/lib/password.ts)
     const hashedPassword = await hashPassword(password)
     // Create customer with membership tier
     const result = await c.env.DB.prepare(`INSERT INTO customers (name, email, password_hash, phone, company_name, brand_business_name, is_active, membership_tier_id, membership_started_at, created_at, updated_at) VALUES (?,?,?,?,?,?,1,?,datetime('now'),datetime('now'),datetime('now'))`).bind(
-      contact_name, email, hashedPassword, phone || '', business_name || '', business_name || '', membership_tier_id || null
+      contact_name, cleanEmail, hashedPassword, phone || '', business_name || '', business_name || '', membership_tier_id || null
     ).run()
     const customerId = result.meta.last_row_id as number
 
@@ -112,12 +115,13 @@ platformAdmin.post('/onboard-customer', async (c) => {
     if (team_members && Array.isArray(team_members)) {
       for (const tm of team_members) {
         if (!tm.email || !tm.name) continue
-        const tmPass = tm.password || email.split('@')[0] + '123'
+        const tmCleanEmail = String(tm.email).toLowerCase().trim()
+        const tmPass = tm.password || cleanEmail.split('@')[0] + '123'
         const tmHashedPw = await hashPassword(tmPass)
         await c.env.DB.prepare(`INSERT INTO customer_team_members (customer_id, name, email, password_hash, role, phone, permissions) VALUES (?,?,?,?,?,?,?)`).bind(
-          customerId, tm.name, tm.email, tmHashedPw, tm.role || 'member', tm.phone || '', JSON.stringify(tm.permissions || { can_view_calls: true, can_edit_config: false })
+          customerId, tm.name, tmCleanEmail, tmHashedPw, tm.role || 'member', tm.phone || '', JSON.stringify(tm.permissions || { can_view_calls: true, can_edit_config: false })
         ).run()
-        teamResults.push({ name: tm.name, email: tm.email, role: tm.role || 'member' })
+        teamResults.push({ name: tm.name, email: tmCleanEmail, role: tm.role || 'member' })
       }
     }
 
@@ -127,17 +131,17 @@ platformAdmin.post('/onboard-customer', async (c) => {
     // Track onboarding
     try {
       await c.env.DB.prepare("INSERT INTO onboarded_customers (customer_id, business_name, contact_name, email, phone, secretary_enabled, secretary_phone_number, secretary_mode, agent_phone_number, notes) VALUES (?,?,?,?,?,1,?,?,?,?)").bind(
-        customerId, business_name || '', contact_name, email, phone || '',
+        customerId, business_name || '', contact_name, cleanEmail, phone || '',
         agent_phone_number || '', secretary_mode || 'full', agent_phone_number || '',
         `Onboarded via Enhanced Platform Admin. Tier: ${membership_tier_id || 'none'}. Team: ${teamResults.length} members.`
       ).run()
     } catch {}
 
     return c.json({
-      success: true, customer_id: customerId, email,
+      success: true, customer_id: customerId, email: cleanEmail,
       team_members_created: teamResults.length,
       membership_tier_id: membership_tier_id || null,
-      message: `${contact_name} onboarded with Secretary AI${teamResults.length ? ` + ${teamResults.length} team members` : ''}. Login: ${email}`
+      message: `${contact_name} onboarded with Secretary AI${teamResults.length ? ` + ${teamResults.length} team members` : ''}. Login: ${cleanEmail}`
     })
   } catch (err: any) { return c.json({ error: err.message }, 500) }
 })
@@ -155,11 +159,13 @@ platformAdmin.post('/customers/:customerId/team', async (c) => {
   const cid = parseInt(c.req.param('customerId')); if (isNaN(cid)) return c.json({ error: "Invalid id" }, 400);
   const b = await c.req.json()
   if (!b.email || !b.name) return c.json({ error: 'Name and email required' }, 400)
+  // P2: normalize email on storage.
+  const cleanEmail = String(b.email).toLowerCase().trim()
   try {
     const pw = b.password || 'changeme123'
     const hash = await hashPassword(pw)
     const r = await c.env.DB.prepare('INSERT INTO customer_team_members (customer_id, name, email, password_hash, role, phone, permissions) VALUES (?,?,?,?,?,?,?)').bind(
-      cid, b.name, b.email, hash, b.role || 'member', b.phone || '', JSON.stringify(b.permissions || { can_view_calls: true })
+      cid, b.name, cleanEmail, hash, b.role || 'member', b.phone || '', JSON.stringify(b.permissions || { can_view_calls: true })
     ).run()
     return c.json({ success: true, id: r.meta.last_row_id })
   } catch (e: any) { return c.json({ error: e.message }, 500) }

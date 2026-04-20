@@ -620,6 +620,9 @@ developerPortalRoutes.post('/signup', async (c) => {
 // ── GET /developer/login ──────────────────────────────────────────────────────
 
 developerPortalRoutes.get('/login', async (c) => {
+  // P2: login page should never be cached.
+  c.header('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  c.header('Pragma', 'no-cache')
   const error = c.req.query('error') ?? ''
   const errorMsg = error === 'invalid' ? 'Invalid email or password.'
     : error === 'suspended' ? 'Account is suspended. Contact support@roofmanager.ca.'
@@ -878,6 +881,10 @@ developerPortalRoutes.get('/reports/:jobId/pdf', async (c) => {
 developerPortalRoutes.get('/usage', async (c) => {
   const account = await requireAuth(c)
   if (!account) return c.redirect('/developer/login')
+
+  // P2: usage dashboard may surface key activity; don't cache.
+  c.header('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  c.header('Pragma', 'no-cache')
 
   const db = c.env.DB
   const now = Math.floor(Date.now() / 1000)

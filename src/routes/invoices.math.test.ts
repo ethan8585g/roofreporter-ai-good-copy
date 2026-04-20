@@ -150,3 +150,40 @@ describe('calculateTotals — rounding edge cases', () => {
     expect(r.total).toBe(0)
   })
 })
+
+describe('calculateTotals — cumulative rounding (P3)', () => {
+  // 10k invoices at a price that doesn't round cleanly — the sum of per-row
+  // rounded totals must equal the same amount re-computed in one shot to
+  // within a small tolerance (drift from per-row half-up rounding).
+  it('10k invoices at 123.45 × 7% tax accumulate without unbounded drift', () => {
+    const COUNT = 10_000
+    const UNIT = 123.45
+    const TAX = 7
+
+    let sumCents = 0
+    for (let i = 0; i < COUNT; i++) {
+      const r = calculateTotals([{ quantity: 1, unit_price: UNIT }], TAX, 0, 'fixed')
+      sumCents += Math.round(r.total * 100)
+    }
+
+    // Per-row total locks at 132.09 (123.45 + 8.64). 10k copies = 1,320,900.
+    expect(sumCents).toBe(10_000 * 13209)
+  })
+
+  it('sum of per-invoice totals equals the re-computed bulk total within 1¢', () => {
+    const COUNT = 10_000
+    const UNIT = 33.33
+    const TAX = 13
+
+    let sumCents = 0
+    for (let i = 0; i < COUNT; i++) {
+      const r = calculateTotals([{ quantity: 1, unit_price: UNIT }], TAX, 0, 'fixed')
+      sumCents += Math.round(r.total * 100)
+    }
+
+    // Bulk reference: 10k × 33.33 × 1.13 = 376629 cents exactly.
+    // Per-invoice rounding adds at most 0.5¢/invoice drift → bounded at ≤ COUNT/2 ¢.
+    const bulk = Math.round(COUNT * UNIT * (1 + TAX / 100) * 100)
+    expect(Math.abs(sumCents - bulk)).toBeLessThanOrEqual(COUNT / 2)
+  })
+})

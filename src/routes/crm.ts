@@ -2958,12 +2958,15 @@ crmRoutes.post('/jobs/:id/geocode', async (c) => {
   if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
   const id = parseInt(c.req.param('id'), 10)
   const apiKey = c.env.GOOGLE_MAPS_API_KEY
-  if (!apiKey) return c.json({ error: 'GOOGLE_MAPS_API_KEY not configured' }, 500)
+  if (!apiKey) return c.json({ error: 'Geocoding is not configured. Contact admin.' }, 500)
   const job = await c.env.DB.prepare(
     `SELECT id, property_address FROM crm_jobs WHERE id = ? AND owner_id = ?`
   ).bind(id, ownerId).first<any>()
   if (!job) return c.json({ error: 'Job not found' }, 404)
-  if (!job.property_address) return c.json({ error: 'Job has no address' }, 400)
+  // P2: reject blank/whitespace addresses early (was string-truthy only).
+  if (!job.property_address || !String(job.property_address).trim()) {
+    return c.json({ error: 'Job has no address' }, 400)
+  }
   const loc = await geocodeAddress(job.property_address, apiKey)
   if (!loc) return c.json({ error: 'Geocoding failed' }, 502)
   await c.env.DB.prepare(`UPDATE crm_jobs SET lat = ?, lng = ?, updated_at = datetime('now') WHERE id = ?`)
@@ -2976,7 +2979,7 @@ crmRoutes.post('/dispatch/geocode-missing', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
   const apiKey = c.env.GOOGLE_MAPS_API_KEY
-  if (!apiKey) return c.json({ error: 'GOOGLE_MAPS_API_KEY not configured' }, 500)
+  if (!apiKey) return c.json({ error: 'Geocoding is not configured. Contact admin.' }, 500)
   const rows = await c.env.DB.prepare(
     `SELECT id, property_address FROM crm_jobs
      WHERE owner_id = ? AND property_address IS NOT NULL AND property_address != ''

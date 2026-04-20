@@ -5420,8 +5420,11 @@ function getAdminResetPasswordHTML() {
   </div>
 
   <script>
+    // P2: validate the token shape client-side so a malformed URL fails fast
+    // and doesn't send garbage to /api/auth/reset-password.
     const token = new URLSearchParams(window.location.search).get('token');
-    if (!token) {
+    var TOKEN_RE = /^[A-Za-z0-9\-]{20,200}$/;
+    if (!token || !TOKEN_RE.test(token)) {
       document.getElementById('resetForm').classList.add('hidden');
       document.getElementById('resetInvalid').classList.remove('hidden');
     }
@@ -5526,8 +5529,10 @@ function getCustomerResetPasswordHTML() {
   </div>
 
   <script>
+    // P2: validate the token shape client-side so a malformed URL fails fast.
     const token = new URLSearchParams(window.location.search).get('token');
-    if (!token) {
+    var TOKEN_RE_C = /^[A-Za-z0-9\-]{20,200}$/;
+    if (!token || !TOKEN_RE_C.test(token)) {
       document.getElementById('resetForm').classList.add('hidden');
       document.getElementById('resetInvalid').classList.remove('hidden');
     }
@@ -7137,6 +7142,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 
   <!-- Navbar scroll effect -->
   <script>
+    // P3: passive scroll listener — we only read position, never preventDefault.
     window.addEventListener('scroll', () => {
       const nav = document.getElementById('landing-nav');
       if (window.scrollY > 50) {
@@ -7144,7 +7150,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       } else {
         nav.classList.remove('scrolled');
       }
-    });
+    }, { passive: true });
   </script>
   <script src="/static/landing.js?v=20260408a" defer></script>
   <!-- Mobile sticky bottom CTA bar — two buttons, hides inside hero -->
@@ -8618,11 +8624,15 @@ function getCustomerLoginHTML(googleClientId = '') {
       const password = document.getElementById('custRegPassword').value;
       const confirm = document.getElementById('custRegConfirm').value;
       const err = document.getElementById('custRegError');
+      const btn = document.getElementById('regSubmitBtn');
       err.classList.add('hidden');
       if (!name || !email || !password) { err.textContent = 'Name, email, and password required.'; err.classList.remove('hidden'); return; }
       if (password.length < 6) { err.textContent = 'Password must be at least 6 characters.'; err.classList.remove('hidden'); return; }
       if (password !== confirm) { err.textContent = 'Passwords do not match.'; err.classList.remove('hidden'); return; }
       if (!_regVerificationToken) { err.textContent = 'Please verify your email first.'; err.classList.remove('hidden'); return; }
+      // P2: disable the button while the network call is in flight so users
+      // can't spam duplicate registrations.
+      if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
       try {
         const res = await fetch('/api/customer/register', {
           method: 'POST',
@@ -8633,12 +8643,19 @@ function getCustomerLoginHTML(googleClientId = '') {
         if (res.ok && data.success) {
           try { localStorage.setItem('rc_customer', JSON.stringify(data.customer)); localStorage.setItem('rc_customer_token', data.token); } catch(e) {}
           if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 1.0, currency: 'USD' });
+          // P2: stop any dirty-form beforeunload warning before redirecting.
+          try { window.onbeforeunload = null; } catch(_) {}
           window.location.href = '/customer/dashboard';
         } else {
+          if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
           err.textContent = data.error || 'Registration failed.';
           err.classList.remove('hidden');
         }
-      } catch(e) { err.textContent = 'Network error.'; err.classList.remove('hidden'); }
+      } catch(e) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Create account'; }
+        err.textContent = 'Network error.';
+        err.classList.remove('hidden');
+      }
     }
 
     async function handleGoogleCredential(response) {
