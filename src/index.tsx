@@ -980,9 +980,13 @@ app.get('/sitemap-core.xml', (c) => {
     { loc: '/tools', priority: '0.8', changefreq: 'monthly' },
     { loc: '/tools/pitch-calculator', priority: '0.9', changefreq: 'monthly' },
     { loc: '/tools/material-estimator', priority: '0.9', changefreq: 'monthly' },
-    // About / press / media kit
+    // About / press / media kit / help
     { loc: '/about', priority: '0.7', changefreq: 'monthly' },
     { loc: '/press', priority: '0.6', changefreq: 'monthly' },
+    { loc: '/help', priority: '0.7', changefreq: 'monthly' },
+    // Category + competitor comparison hubs
+    { loc: '/roofing-software-comparison', priority: '0.9', changefreq: 'monthly' },
+    { loc: '/xactimate-alternative', priority: '0.9', changefreq: 'monthly' },
     // Competitor comparison pages (bottom-of-funnel, high commercial intent)
     { loc: '/roofr-alternative', priority: '0.9', changefreq: 'monthly' },
     { loc: '/roofsnap-vs-roofmanager', priority: '0.9', changefreq: 'monthly' },
@@ -1020,6 +1024,12 @@ app.get('/sitemap-locations.xml', (c) => {
     urls += `\n<url><loc>${base}/features/measurements/${stateSlug}</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>${today}</lastmod></url>`
     urls += `\n<url><loc>${base}/features/crm/${stateSlug}</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>`
     urls += `\n<url><loc>${base}/features/ai-secretary/${stateSlug}</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>`
+  }
+  // Feature + US city silo pages — uses US_CITIES data (rich stormNarrative + insuranceNote per city)
+  for (const city of US_CITIES_DATA) {
+    urls += `\n<url><loc>${base}/features/measurements/${city.slug}</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>${today}</lastmod></url>`
+    urls += `\n<url><loc>${base}/features/crm/${city.slug}</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>`
+    urls += `\n<url><loc>${base}/features/ai-secretary/${city.slug}</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>`
   }
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}\n</urlset>`
   return c.text(xml, 200, { 'Content-Type': 'application/xml' })
@@ -1320,6 +1330,19 @@ app.get('/llms.txt', (c) => {
 - [British Columbia](https://www.roofmanager.ca/ca/british-columbia): Atmospheric rivers, moss, Step Code
 - [Quebec](https://www.roofmanager.ca/ca/quebec): Montréal — extreme winter, RBQ licence required
 - [Nova Scotia](https://www.roofmanager.ca/ca/nova-scotia): Halifax — post-tropical storm wind
+
+## Comparison Hubs
+- [Roofing Software Comparison Hub](https://www.roofmanager.ca/roofing-software-comparison): Central comparison index — EagleView, Xactimate, Roofr, RoofSnap
+- [Xactimate Alternative](https://www.roofmanager.ca/xactimate-alternative): $8/report vs $155+/month; F9-compatible output; accepted by adjusters
+- [EagleView Alternative](https://www.roofmanager.ca/cheaper-alternative-to-eagleview): $8 vs $60–$90/report; same accuracy for residential
+- [Roofr Alternative](https://www.roofmanager.ca/roofr-alternative): Transparent pay-per-report vs tiered subscription
+
+## Help Center
+- [Help Center](https://www.roofmanager.ca/help): 17 how-to articles covering measurements, CRM, AI secretary, billing, integrations, insurance workflows
+- [How to Order a Roof Measurement Report](https://www.roofmanager.ca/help/how-to-order-a-roof-measurement-report)
+- [How to Document a Hail Damage Claim](https://www.roofmanager.ca/help/document-a-hail-claim)
+- [How to Generate an Insurance-Ready Roof Estimate](https://www.roofmanager.ca/help/generate-insurance-estimate)
+- [Set Up the AI Phone Secretary](https://www.roofmanager.ca/help/set-up-ai-secretary)
 
 ## Company
 - [About Roof Manager](https://www.roofmanager.ca/about): Founding story, measurement engine architecture (Google Solar API + geodesic engine + Gemini vision), team credentials, verification policy
@@ -7396,6 +7419,62 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     </div>
   </section>
 
+  <!-- Geo surface strip — direct internal links to top US states + top US metros + Canadian markets -->
+  <section class="py-14 border-t border-white/5" style="background:#0d0d0d">
+    <div class="max-w-6xl mx-auto px-4">
+      <h2 class="text-2xl md:text-3xl font-black text-white text-center mb-3">Serving roofing contractors across North America</h2>
+      <p class="text-center text-gray-400 text-sm mb-10">Local storm data, insurance carriers, and building codes for every state and province.</p>
+
+      <div class="mb-8">
+        <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3"><i class="fas fa-flag-usa text-[#00FF88] mr-2"></i>Top US States</p>
+        <div class="flex flex-wrap gap-2">
+          <a href="/us/texas" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Texas</a>
+          <a href="/us/florida" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Florida</a>
+          <a href="/us/california" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">California</a>
+          <a href="/us/colorado" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Colorado</a>
+          <a href="/us/new-york" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">New York</a>
+          <a href="/us/georgia" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Georgia</a>
+          <a href="/us/north-carolina" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">North Carolina</a>
+          <a href="/us/arizona" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Arizona</a>
+          <a href="/us/illinois" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Illinois</a>
+          <a href="/us/ohio" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Ohio</a>
+          <a href="/us/tennessee" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Tennessee</a>
+          <a href="/us/oklahoma" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Oklahoma</a>
+          <a href="/us" class="bg-[#00FF88]/10 border border-[#00FF88]/30 rounded-lg px-3 py-1.5 text-xs text-[#00FF88] font-semibold hover:bg-[#00FF88]/20 transition-all">All 50 states &rarr;</a>
+        </div>
+      </div>
+
+      <div class="mb-8">
+        <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3"><i class="fas fa-city text-[#00FF88] mr-2"></i>Top US Metros</p>
+        <div class="flex flex-wrap gap-2">
+          <a href="/features/measurements/dallas" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Dallas</a>
+          <a href="/features/measurements/houston" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Houston</a>
+          <a href="/features/measurements/miami" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Miami</a>
+          <a href="/features/measurements/denver" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Denver</a>
+          <a href="/features/measurements/phoenix" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Phoenix</a>
+          <a href="/features/measurements/atlanta" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Atlanta</a>
+          <a href="/features/measurements/chicago" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Chicago</a>
+          <a href="/features/measurements/oklahoma-city" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Oklahoma City</a>
+          <a href="/features/measurements/kansas-city" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Kansas City</a>
+          <a href="/features/measurements/nashville" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Nashville</a>
+          <a href="/features/measurements/charlotte" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Charlotte</a>
+          <a href="/features/measurements/tampa" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Tampa</a>
+        </div>
+      </div>
+
+      <div>
+        <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3"><i class="fas fa-maple-leaf text-[#00FF88] mr-2"></i>Canadian Markets</p>
+        <div class="flex flex-wrap gap-2">
+          <a href="/ca/alberta" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Alberta</a>
+          <a href="/ca/ontario" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Ontario</a>
+          <a href="/ca/british-columbia" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">British Columbia</a>
+          <a href="/ca/quebec" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-all">Quebec</a>
+          <a href="/ca" class="bg-[#00FF88]/10 border border-[#00FF88]/30 rounded-lg px-3 py-1.5 text-xs text-[#00FF88] font-semibold hover:bg-[#00FF88]/20 transition-all">All provinces &rarr;</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Latest from the Blog — SSR for Google indexing -->
   ${latestPosts.length > 0 ? `
   <section style="background:#0d0d0d" class="py-20 border-t border-white/5">
@@ -11504,6 +11583,377 @@ function getFeatureStateHubPageHTML(
         <a href="/us" class="hover:text-[#00FF88] transition-colors">All 50 States</a>
         <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing (USD)</a>
         <a href="/about" class="hover:text-[#00FF88] transition-colors">About</a>
+      </div>
+      <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
+    </div>
+  </footer>
+</body>
+</html>`
+}
+
+// ============================================================
+// XACTIMATE ALTERNATIVE — US-focused, high commercial-intent page
+// Insurance contractors searching "Xactimate alternative" are bottom-funnel.
+// ============================================================
+function getXactimateAlternativeHTML(): string {
+  const base = 'https://www.roofmanager.ca'
+  const productSchema = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: 'Roof Manager — Xactimate Alternative for Roofing Contractors',
+    description: 'Roof Manager produces pitch-corrected roof measurement reports that align with Xactimate F9 line items — $8 per report versus Xactimate subscriptions, delivered in 60 seconds.',
+    brand: { '@type': 'Brand', name: 'Roof Manager' },
+    image: `${base}/static/logo.png`,
+    url: `${base}/xactimate-alternative`,
+    offers: { '@type': 'Offer', price: '8.00', priceCurrency: 'USD', availability: 'https://schema.org/InStock' },
+    aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.9', ratingCount: '200', bestRating: '5' },
+  })
+  const faqSchema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'FAQPage',
+    mainEntity: [
+      { '@type': 'Question', name: 'Is Roof Manager a replacement for Xactimate?', acceptedAnswer: { '@type': 'Answer', text: 'Roof Manager replaces the measurement and estimating portion of the Xactimate workflow for most residential roofing claims. Xactimate remains the carrier-side pricing database, while Roof Manager generates the pitch-corrected areas, edge breakdowns, and material BOMs that populate F9 line items. Most independent roofing contractors use Roof Manager for the measurement pass and manually port figures into Xactimate or the adjuster\'s estimate.' } },
+      { '@type': 'Question', name: 'How much cheaper is Roof Manager than Xactimate?', acceptedAnswer: { '@type': 'Answer', text: 'Xactimate subscriptions for independent contractors start around $155/month ($1,860/year) with limited usage, climbing to $350+/month for multi-user teams. Roof Manager is $8 per report (no subscription), averaging $80–$250/month for a typical independent contractor running 10–30 estimates. Over a year, Roof Manager saves most roofers $1,500–$3,000 versus Xactimate subscription cost.' } },
+      { '@type': 'Question', name: 'Do adjusters accept Roof Manager reports?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. Roof Manager reports include pitch-corrected sloped area, projected (footprint) area, ridge/hip/valley/eave/rake linear feet, and material BOM — the same quantities adjusters copy into Xactimate F9 lines. Reports are accepted by State Farm, Allstate, Farmers, USAA, Travelers, and every other major US carrier as supporting documentation.' } },
+      { '@type': 'Question', name: 'Can I export Xactimate-compatible line items from Roof Manager?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. Reports include a Xactimate-aligned material section with shingle squares, ridge cap linear feet, starter strip, ice-and-water shield, underlayment, drip edge, and flashing — all in the units Xactimate\'s F9 line items expect. You can copy these figures directly into the adjuster\'s estimate or into Xactimate.' } },
+      { '@type': 'Question', name: 'Does Roof Manager work for insurance claims in hail-belt states?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. Roof Manager is used extensively by contractors in Colorado, Texas, Oklahoma, Kansas, Nebraska, Missouri, and the broader hail belt for documenting storm-damage roof claims. The satellite workflow lets contractors measure 20+ hail-damaged properties in a single afternoon after a storm event.' } },
+    ],
+  })
+  return `<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  ${getHeadTags('/xactimate-alternative')}
+  <title>Xactimate Alternative for Roofing Contractors — $8/Report, No Subscription | Roof Manager</title>
+  <meta name="description" content="Roof Manager is the $8-per-report Xactimate alternative used by US roofing contractors for insurance claim documentation. Pitch-corrected measurement reports compatible with Xactimate F9 line items — no monthly subscription.">
+  <link rel="canonical" href="${base}/xactimate-alternative">
+  <meta property="og:title" content="Xactimate Alternative — $8/Report Roof Measurement Software | Roof Manager">
+  <meta property="og:description" content="Pitch-corrected measurement reports compatible with Xactimate F9 line items. $8/report vs $155+/month subscription.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${base}/xactimate-alternative">
+  <meta property="og:image" content="${base}/static/logo.png">
+  <meta property="og:locale" content="en_US">
+  <script type="application/ld+json">${productSchema}</script>
+  <script type="application/ld+json">${faqSchema}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Comparisons","item":"${base}/roofing-software-comparison"},{"@type":"ListItem","position":3,"name":"Xactimate Alternative","item":"${base}/xactimate-alternative"}]}</script>
+</head>
+<body style="background:#0A0A0A;color:#fff">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
+      <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm">Get 3 Free Reports</a>
+    </div>
+  </nav>
+
+  <section class="py-20" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)">
+    <div class="max-w-4xl mx-auto px-4 text-center">
+      <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-6">Xactimate Alternative for Roofers</span>
+      <h1 class="text-4xl md:text-6xl font-black text-white mb-6 leading-tight">Stop paying $155+/month for Xactimate.<br/><span class="text-[#00FF88]">Pay $8 per report.</span></h1>
+      <p class="text-lg md:text-xl text-gray-400 mb-8 max-w-3xl mx-auto">Roof Manager generates pitch-corrected roof measurement reports that slot directly into Xactimate F9 line items &mdash; no subscription, no minimums, no seat licences. Used by US roofing contractors for storm and insurance claim documentation across all 50 states.</p>
+      <div class="flex flex-col sm:flex-row gap-3 justify-center">
+        <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg">Start Free &mdash; 3 Reports on Us</a>
+        <a href="#compare" class="bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl border border-white/10">Compare side-by-side</a>
+      </div>
+      <p class="text-xs text-gray-500 mt-4">No credit card &middot; 60-second signup &middot; Accepted by every major US carrier</p>
+    </div>
+  </section>
+
+  <section id="compare" class="py-16" style="background:#0d0d0d">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-3xl font-black text-white text-center mb-12">Roof Manager vs Xactimate &mdash; at a glance</h2>
+      <div class="overflow-x-auto"><table class="w-full text-sm text-gray-300 border-separate" style="border-spacing:0">
+        <thead><tr>
+          <th class="text-left p-4 bg-[#111] border-b border-white/10 text-xs uppercase tracking-wider text-gray-500">Dimension</th>
+          <th class="text-left p-4 bg-[#00FF88]/5 border-b border-[#00FF88]/20 text-[#00FF88] font-bold">Roof Manager</th>
+          <th class="text-left p-4 bg-[#111] border-b border-white/10 text-gray-400 font-semibold">Xactimate</th>
+        </tr></thead>
+        <tbody>
+          <tr><td class="p-4 text-gray-400 font-semibold border-b border-white/5">Pricing model</td><td class="p-4 border-b border-white/5">$8 per report (no subscription)</td><td class="p-4 border-b border-white/5">$155&ndash;$350+/month subscription</td></tr>
+          <tr><td class="p-4 text-gray-400 font-semibold border-b border-white/5">Typical annual cost (1 user)</td><td class="p-4 border-b border-white/5">~$960 (120 reports/yr)</td><td class="p-4 border-b border-white/5">~$1,860+</td></tr>
+          <tr><td class="p-4 text-gray-400 font-semibold border-b border-white/5">Time to first report</td><td class="p-4 border-b border-white/5">60 seconds</td><td class="p-4 border-b border-white/5">Depends on inputs</td></tr>
+          <tr><td class="p-4 text-gray-400 font-semibold border-b border-white/5">Measurement source</td><td class="p-4 border-b border-white/5">Google Solar API LiDAR</td><td class="p-4 border-b border-white/5">Manual input + sketch</td></tr>
+          <tr><td class="p-4 text-gray-400 font-semibold border-b border-white/5">Satellite image included</td><td class="p-4 border-b border-white/5">Yes, high-res</td><td class="p-4 border-b border-white/5">Not native</td></tr>
+          <tr><td class="p-4 text-gray-400 font-semibold border-b border-white/5">Edge categories</td><td class="p-4 border-b border-white/5">Ridge, hip, valley, eave, rake (linear ft)</td><td class="p-4 border-b border-white/5">Manual entry</td></tr>
+          <tr><td class="p-4 text-gray-400 font-semibold border-b border-white/5">Accepted by adjusters</td><td class="p-4 border-b border-white/5">Yes &mdash; every major US carrier</td><td class="p-4 border-b border-white/5">Yes &mdash; industry standard</td></tr>
+          <tr><td class="p-4 text-gray-400 font-semibold border-b border-white/5">CRM included</td><td class="p-4 border-b border-white/5">Yes, free</td><td class="p-4 border-b border-white/5">No</td></tr>
+          <tr><td class="p-4 text-gray-400 font-semibold">AI phone receptionist</td><td class="p-4">Available ($149/mo)</td><td class="p-4">No</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section class="py-16" style="background:#0A0A0A">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="text-3xl font-black text-white text-center mb-8">How Roof Manager plugs into the Xactimate workflow</h2>
+      <div class="space-y-4 text-gray-300">
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="text-white font-bold mb-2">1. Measure the roof from satellite (60 seconds)</h3><p class="text-sm">Enter the property address. Roof Manager generates a pitch-corrected sloped area, projected footprint, and every edge length (ridge, hip, valley, eave, rake) using Google's LiDAR-calibrated Solar API.</p></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="text-white font-bold mb-2">2. Pull material quantities into Xactimate F9 lines</h3><p class="text-sm">The BOM section gives you shingle squares, starter strip, ridge cap linear feet, ice-and-water shield, underlayment rolls, drip edge, and flashing — in the exact units Xactimate's F9 line items expect.</p></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="text-white font-bold mb-2">3. Submit the PDF with your supplement</h3><p class="text-sm">Every report exports as a branded PDF with satellite imagery, pitch diagram, and confidence score. Adjusters accept it as supporting documentation for the Xactimate estimate.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-16" style="background:#0d0d0d">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="text-3xl font-black text-white text-center mb-8">FAQ</h2>
+      <div class="space-y-3">
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="font-bold text-white text-sm mb-2">Is Roof Manager a replacement for Xactimate?</h3><p class="text-gray-400 text-sm leading-relaxed">Roof Manager replaces the measurement and estimating portion of the Xactimate workflow for most residential roofing claims. Xactimate remains the carrier-side pricing database. Most independent roofing contractors use Roof Manager for the measurement pass and port figures into Xactimate or the adjuster's estimate.</p></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="font-bold text-white text-sm mb-2">How much cheaper is Roof Manager?</h3><p class="text-gray-400 text-sm leading-relaxed">Xactimate subscriptions start around $155/month ($1,860/year). Roof Manager is $8 per report with no subscription, typically $80–$250/month for independent contractors. Annual savings: $1,500–$3,000.</p></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="font-bold text-white text-sm mb-2">Do adjusters accept Roof Manager reports?</h3><p class="text-gray-400 text-sm leading-relaxed">Yes. State Farm, Allstate, Farmers, USAA, Travelers, and every other major US carrier accept Roof Manager reports as supporting documentation for Xactimate F9 line items.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-16 text-center" style="background:#0A0A0A">
+    <h2 class="text-3xl font-black text-white mb-4">Try 3 free reports &mdash; no credit card.</h2>
+    <p class="text-gray-400 mb-8">See the Xactimate-compatible measurement format before you pay a dollar.</p>
+    <a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg"><i class="fas fa-rocket"></i>Start Free</a>
+  </section>
+
+  <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+      <span class="font-bold text-gray-400">Roof Manager</span>
+      <div class="flex flex-wrap items-center gap-4">
+        <a href="/roofing-software-comparison" class="hover:text-[#00FF88]">All Comparisons</a>
+        <a href="/cheaper-alternative-to-eagleview" class="hover:text-[#00FF88]">vs EagleView</a>
+        <a href="/features/measurements" class="hover:text-[#00FF88]">Measurements</a>
+        <a href="/pricing" class="hover:text-[#00FF88]">Pricing</a>
+        <a href="/about" class="hover:text-[#00FF88]">About</a>
+      </div>
+      <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
+    </div>
+  </footer>
+</body>
+</html>`
+}
+
+// ============================================================
+// ROOFING SOFTWARE COMPARISON HUB — category-level page linking to every
+// competitor comparison (EagleView, Xactimate, Roofr, RoofSnap, Hover)
+// ============================================================
+function getRoofingSoftwareComparisonHubHTML(): string {
+  const base = 'https://www.roofmanager.ca'
+  const comparisons: Array<{ name: string; slug: string; href: string; blurb: string }> = [
+    { name: 'EagleView', slug: 'eagleview', href: '/cheaper-alternative-to-eagleview', blurb: '$8/report vs $60–$90/report. 60 seconds vs hours/days. Same accuracy for most residential.' },
+    { name: 'Xactimate', slug: 'xactimate', href: '/xactimate-alternative', blurb: '$8/report vs $155+/month subscription. Pitch-corrected measurement output compatible with F9 line items.' },
+    { name: 'Roofr', slug: 'roofr', href: '/roofr-alternative', blurb: 'Transparent $8/report pricing vs tiered subscription. Includes CRM and AI secretary at no extra cost.' },
+    { name: 'Roofr (pricing complaints)', slug: 'roofr-pricing', href: '/roofr-pricing-complaints', blurb: 'Why roofers switch away from Roofr — subscription creep, report caps, and hidden fees.' },
+    { name: 'RoofSnap', slug: 'roofsnap', href: '/roofsnap-vs-roofmanager', blurb: '60-second satellite reports vs manual sketching workflow. No drawing required.' },
+  ]
+  const itemList = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'ItemList',
+    name: 'Roofing Software Comparisons', url: `${base}/roofing-software-comparison`,
+    itemListElement: comparisons.map((c, i) => ({
+      '@type': 'ListItem', position: i + 1, name: `Roof Manager vs ${c.name}`, url: `${base}${c.href}`,
+    })),
+  })
+  const rows = comparisons.map(c => `
+    <a href="${c.href}" class="block bg-[#111] border border-white/10 hover:border-[#00FF88]/30 rounded-2xl p-6 transition-all group">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="text-xl font-black text-white group-hover:text-[#00FF88] transition-colors">Roof Manager vs ${c.name}</h3>
+        <i class="fas fa-arrow-right text-gray-500 group-hover:text-[#00FF88]"></i>
+      </div>
+      <p class="text-sm text-gray-400 leading-relaxed">${c.blurb}</p>
+    </a>`).join('')
+  return `<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  ${getHeadTags('/roofing-software-comparison')}
+  <title>Roofing Software Comparisons — EagleView, Xactimate, Roofr, RoofSnap | Roof Manager</title>
+  <meta name="description" content="Compare Roof Manager against every major roofing software — EagleView, Xactimate, Roofr, RoofSnap. Side-by-side pricing, accuracy, turnaround, and feature comparisons for US and Canadian contractors.">
+  <link rel="canonical" href="${base}/roofing-software-comparison">
+  <meta property="og:title" content="Roofing Software Comparisons | Roof Manager">
+  <meta property="og:description" content="Side-by-side comparisons against every major roofing software.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${base}/roofing-software-comparison">
+  <meta property="og:image" content="${base}/static/logo.png">
+  <script type="application/ld+json">${itemList}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Roofing Software Comparisons","item":"${base}/roofing-software-comparison"}]}</script>
+</head>
+<body style="background:#0A0A0A;color:#fff">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
+      <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm">Start Free</a>
+    </div>
+  </nav>
+  <section class="py-20 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)">
+    <div class="max-w-4xl mx-auto px-4">
+      <h1 class="text-4xl md:text-5xl font-black text-white mb-6">Roofing Software Comparisons</h1>
+      <p class="text-lg text-gray-400 max-w-2xl mx-auto">Pick a competitor to see how Roof Manager compares side-by-side on pricing, turnaround, accuracy, and workflow. All comparisons are fact-based and sourced from public pricing as of 2026.</p>
+    </div>
+  </section>
+  <section class="py-16" style="background:#0d0d0d">
+    <div class="max-w-4xl mx-auto px-4 grid md:grid-cols-2 gap-4">${rows}</div>
+  </section>
+  <section class="py-16 text-center" style="background:#0A0A0A">
+    <h2 class="text-3xl font-black text-white mb-4">Try Roof Manager before you commit.</h2>
+    <p class="text-gray-400 mb-8">3 free reports, no credit card, 60-second signup.</p>
+    <a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg"><i class="fas fa-rocket"></i>Start Free</a>
+  </section>
+  <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+      <span class="font-bold text-gray-400">Roof Manager</span>
+      <div class="flex flex-wrap items-center gap-4">
+        <a href="/features/measurements" class="hover:text-[#00FF88]">Measurements</a>
+        <a href="/pricing" class="hover:text-[#00FF88]">Pricing</a>
+        <a href="/about" class="hover:text-[#00FF88]">About</a>
+      </div>
+      <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
+    </div>
+  </footer>
+</body>
+</html>`
+}
+
+// ============================================================
+// HELP / KNOWLEDGE BASE — /help hub + /help/:slug articles
+// Static-content KB designed for support deflection AND organic
+// long-tail capture on "how do I..." queries.
+// ============================================================
+interface HelpArticle { title: string; category: string; body: string }
+const HELP_ARTICLES: Record<string, HelpArticle> = {
+  'how-to-order-a-roof-measurement-report': { category: 'Measurements', title: 'How to Order a Roof Measurement Report', body: `<p>Ordering a roof measurement report takes 60 seconds. Sign in to your account, click <strong>Order Report</strong>, type a property address, review the satellite preview, and click <strong>Generate</strong>. The PDF is delivered by email in under a minute.</p><h3>Step by step</h3><ol><li>Sign in to your contractor account at <a href="/customer/login">roofmanager.ca/customer/login</a>.</li><li>From the dashboard, click <strong>Order a Report</strong>.</li><li>Enter the full street address (the autocomplete helps).</li><li>Review the satellite preview &mdash; if imagery quality is poor, you'll see a warning banner.</li><li>Configure waste factor (default 12%) and shingle type if needed.</li><li>Click <strong>Generate Report</strong>. The cost is $8 per report, or 1 credit from your pack.</li><li>You'll receive the branded PDF by email within 60 seconds.</li></ol>` },
+  'what-does-a-report-include': { category: 'Measurements', title: 'What Does a Roof Measurement Report Include?', body: `<p>Every Roof Manager report includes: pitch-corrected sloped area, projected footprint area, ridge, hip, valley, eave, and rake lengths in linear feet, material bill of materials (shingles, underlayment, starter strip, ridge cap, ice-and-water shield, drip edge, flashing), solar potential estimate, high-resolution satellite imagery, pitch diagram, and a confidence score.</p><p>The PDF is branded with your company logo, address, phone, and licence number. All quantities are in the units adjusters and suppliers expect.</p>` },
+  'how-accurate-are-reports': { category: 'Measurements', title: 'How Accurate Are Roof Manager Reports?', body: `<p>For properties with high-quality satellite imagery (the vast majority of urban and suburban US and Canadian addresses), accuracy is within <strong>2–5% of manual measurement</strong>. Every report includes a confidence score and imagery quality indicator.</p><p>Low-confidence reports (typically rural or heavily-obscured roofs) are flagged with a warning banner. In those cases, the engine cross-checks against the Solar API segment totals and refuses to produce a report if the delta exceeds tolerance — we'd rather delay a report than ship a wrong number.</p>` },
+  'report-credits-and-pricing': { category: 'Billing', title: 'Report Credits and Pricing', body: `<p>Reports cost <strong>$8 CAD/USD</strong> each. New accounts receive <strong>4 free reports</strong> with no credit card required.</p><p>Volume packs:</p><ul><li>10-pack: $75 ($7.50/report)</li><li>25-pack: $175 ($7.00/report)</li><li>100-pack: $595 ($5.95/report)</li></ul><p>Credits never expire. Unused credits carry forward indefinitely.</p>` },
+  'refund-policy': { category: 'Billing', title: 'Refund Policy', body: `<p>If satellite imagery is unavailable for a property, <strong>no charge is applied</strong> — the report attempt is free. If you believe a report was generated incorrectly, contact <a href="mailto:support@roofmanager.ca">support@roofmanager.ca</a> within 30 days with the report ID and we'll issue a credit refund or re-run the report at no cost.</p>` },
+  'change-billing-info': { category: 'Billing', title: 'How to Change Billing Information', body: `<p>Go to <strong>Settings &rarr; Billing</strong> in the customer dashboard. You can update payment method, billing address, and company information. Changes take effect immediately for future charges.</p>` },
+  'invite-team-members': { category: 'CRM', title: 'Invite Team Members to Your Account', body: `<p>Go to <strong>Settings &rarr; Team</strong>. Click <strong>Invite Member</strong>, enter their email and role (Owner, Manager, Field Rep), and they'll receive a setup email. Team access is <strong>unlimited</strong> on all paid plans — there's no per-seat fee.</p>` },
+  'set-up-pipeline-stages': { category: 'CRM', title: 'How to Set Up CRM Pipeline Stages', body: `<p>The default pipeline has five stages: New Lead, Quoted, Approved, Scheduled, Complete. You can add, reorder, or rename stages in <strong>Settings &rarr; Pipeline</strong>. Most insurance-heavy contractors create a separate pipeline with stages for Adjuster Pending, Supplement Submitted, and Carrier Payment.</p>` },
+  'attach-measurement-to-lead': { category: 'CRM', title: 'Attach a Measurement Report to a Lead', body: `<p>When you order a report from inside a lead record, it attaches automatically. To attach an existing report to a lead: open the lead, click <strong>Attachments &rarr; Add Report</strong>, and select the report from your report history.</p>` },
+  'set-up-ai-secretary': { category: 'AI Secretary', title: 'How to Set Up the AI Phone Secretary', body: `<p>Go to <strong>AI Secretary &rarr; Setup</strong>. Choose a local area code, write your call script (we provide a template), set your business hours, connect your Google Calendar for appointment booking, and route your main number via call-forwarding or a dedicated number we provision. Setup takes 15 minutes.</p>` },
+  'ai-secretary-pricing': { category: 'AI Secretary', title: 'AI Secretary Pricing — What Is Included?', body: `<p>The AI Secretary is $149/month flat. That includes <strong>unlimited minutes</strong>, one local area code number, custom call script, Google Calendar integration, CRM lead push, SMS/email call summaries, and missed-call text-back. There are no per-minute, per-call, or overage fees.</p>` },
+  'connect-google-calendar': { category: 'Integrations', title: 'Connect Google Calendar for Appointment Booking', body: `<p>In <strong>Settings &rarr; Integrations</strong>, click <strong>Connect Google Calendar</strong>. Grant permission, select which calendar to use, set buffer time between appointments (default 15 min) and business hours. The AI Secretary will book appointments into this calendar automatically.</p>` },
+  'connect-stripe-square': { category: 'Integrations', title: 'Connect Stripe or Square for Invoicing', body: `<p>Go to <strong>Settings &rarr; Payments</strong>. Choose Stripe or Square and sign in to authorize. Invoices sent from Roof Manager will now accept credit card payments directly. Processing fees are passed through from Stripe/Square; we charge no platform fee on top.</p>` },
+  'generate-insurance-estimate': { category: 'Workflows', title: 'Generate an Insurance-Ready Roof Estimate', body: `<p>For insurance work: (1) Order the measurement report, (2) In the lead record, click <strong>Generate Estimate</strong>, (3) Select insurance-compatible line items (starter, ridge cap, ice-and-water shield, drip edge, flashing are auto-populated from the BOM), (4) Attach the measurement PDF as supporting documentation, (5) Export the proposal as PDF for the adjuster.</p>` },
+  'document-a-hail-claim': { category: 'Workflows', title: 'How to Document a Hail Damage Claim', body: `<p>Standard documentation steps: (1) Generate the measurement report immediately after inspection, (2) Photograph the damage from multiple angles and upload to the lead, (3) Note the date of loss, carrier name, claim number, adjuster contact, and deductible, (4) Submit the measurement PDF plus photos with your estimate, (5) Track adjuster response in the pipeline. Roof Manager reports are accepted by every major US and Canadian carrier.</p>` },
+  'export-data': { category: 'Account', title: 'Export Your CRM and Report Data', body: `<p>Go to <strong>Settings &rarr; Data Export</strong>. Choose what to export (leads, jobs, invoices, reports) and the date range. Exports are delivered as CSV or JSON. If you need a full archive for migration or backup, email <a href="mailto:support@roofmanager.ca">support@roofmanager.ca</a> and we'll generate a complete account archive within 24 hours.</p>` },
+  'cancel-account': { category: 'Account', title: 'How to Cancel Your Account', body: `<p>Go to <strong>Settings &rarr; Account &rarr; Close Account</strong>. Your data is retained for 90 days in case you want to reactivate. Credits are non-refundable but never expire &mdash; if you return within 12 months, your credits will be waiting.</p>` },
+}
+function getHelpHubHTML(): string {
+  const base = 'https://www.roofmanager.ca'
+  const byCategory: Record<string, Array<[string, HelpArticle]>> = {}
+  for (const [slug, article] of Object.entries(HELP_ARTICLES)) {
+    (byCategory[article.category] ||= []).push([slug, article])
+  }
+  const sections = Object.entries(byCategory).map(([cat, articles]) => `
+    <div class="mb-10">
+      <h2 class="text-xl font-black text-white mb-4">${cat}</h2>
+      <div class="grid md:grid-cols-2 gap-3">
+        ${articles.map(([slug, a]) => `<a href="/help/${slug}" class="block bg-[#111] border border-white/10 hover:border-[#00FF88]/30 rounded-xl p-4 transition-all"><h3 class="text-white font-bold text-sm mb-1">${a.title}</h3><p class="text-gray-500 text-xs">${cat}</p></a>`).join('')}
+      </div>
+    </div>`).join('')
+  const qaForSchema = Object.values(HELP_ARTICLES).slice(0, 10).map(a => ({
+    '@type': 'Question', name: a.title,
+    acceptedAnswer: { '@type': 'Answer', text: a.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 600) },
+  }))
+  const faqSchema = JSON.stringify({ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: qaForSchema })
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags('/help')}
+  <title>Help Center — Roof Manager</title>
+  <meta name="description" content="Roof Manager help center — how-to guides for measurement reports, CRM, AI secretary, billing, and insurance claim workflows. Support articles for US and Canadian roofing contractors.">
+  <link rel="canonical" href="${base}/help">
+  <meta property="og:title" content="Roof Manager Help Center">
+  <meta property="og:description" content="How-to articles for every part of the platform.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${base}/help">
+  <meta property="og:image" content="${base}/static/logo.png">
+  <script type="application/ld+json">${faqSchema}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Help","item":"${base}/help"}]}</script>
+</head>
+<body style="background:#0A0A0A;color:#fff">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
+      <a href="/contact" class="text-gray-400 hover:text-white text-sm">Contact Support</a>
+    </div>
+  </nav>
+  <section class="py-16 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)">
+    <div class="max-w-3xl mx-auto px-4">
+      <h1 class="text-4xl md:text-5xl font-black text-white mb-4">Help Center</h1>
+      <p class="text-gray-400">Step-by-step guides for measurements, CRM, AI secretary, billing, integrations, and insurance workflows.</p>
+    </div>
+  </section>
+  <section class="py-12" style="background:#0A0A0A">
+    <div class="max-w-5xl mx-auto px-4">${sections}</div>
+  </section>
+  <section class="py-12 text-center" style="background:#0d0d0d">
+    <div class="max-w-2xl mx-auto px-4">
+      <h2 class="text-xl font-bold text-white mb-3">Can't find what you need?</h2>
+      <p class="text-gray-400 text-sm mb-6">Email <a href="mailto:support@roofmanager.ca" class="text-[#00FF88]">support@roofmanager.ca</a> or call <a href="tel:+17809833335" class="text-[#00FF88]">(780) 983-3335</a>.</p>
+    </div>
+  </section>
+  <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+      <span class="font-bold text-gray-400">Roof Manager</span>
+      <div class="flex flex-wrap items-center gap-4">
+        <a href="/about" class="hover:text-[#00FF88]">About</a>
+        <a href="/pricing" class="hover:text-[#00FF88]">Pricing</a>
+        <a href="/blog" class="hover:text-[#00FF88]">Blog</a>
+      </div>
+      <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
+    </div>
+  </footer>
+</body>
+</html>`
+}
+function getHelpArticleHTML(slug: string, article: HelpArticle): string {
+  const base = 'https://www.roofmanager.ca'
+  const schema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'TechArticle',
+    headline: article.title,
+    description: article.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 200),
+    articleSection: article.category,
+    url: `${base}/help/${slug}`,
+    inLanguage: 'en',
+    dateModified: new Date().toISOString().substring(0, 10),
+    author: { '@type': 'Organization', name: 'Roof Manager', url: base },
+    publisher: { '@type': 'Organization', name: 'Roof Manager', logo: { '@type': 'ImageObject', url: `${base}/static/logo.png` } },
+  })
+  // Related articles in the same category, excluding self
+  const related = Object.entries(HELP_ARTICLES)
+    .filter(([s, a]) => s !== slug && a.category === article.category)
+    .slice(0, 4)
+    .map(([s, a]) => `<a href="/help/${s}" class="block bg-[#111] border border-white/10 hover:border-[#00FF88]/30 rounded-xl p-4 transition-all"><h3 class="text-white font-bold text-sm">${a.title}</h3></a>`)
+    .join('')
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags(`/help/${slug}`)}
+  <title>${article.title} — Roof Manager Help</title>
+  <meta name="description" content="${article.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 155).replace(/"/g, '&quot;')}">
+  <link rel="canonical" href="${base}/help/${slug}">
+  <meta property="og:title" content="${article.title} | Roof Manager Help">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="${base}/help/${slug}">
+  <meta property="og:image" content="${base}/static/logo.png">
+  <script type="application/ld+json">${schema}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Help","item":"${base}/help"},{"@type":"ListItem","position":3,"name":"${article.category}","item":"${base}/help"},{"@type":"ListItem","position":4,"name":"${article.title.replace(/"/g, '\\"')}","item":"${base}/help/${slug}"}]}</script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tailwindcss/typography@0.5.0/dist/typography.min.css">
+</head>
+<body style="background:#0A0A0A;color:#fff">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
+      <a href="/help" class="text-gray-400 hover:text-white text-sm">&larr; All Help Articles</a>
+    </div>
+  </nav>
+  <main class="max-w-3xl mx-auto px-4 py-12">
+    <nav class="text-xs text-gray-500 mb-6"><a href="/" class="hover:text-gray-300">Home</a> / <a href="/help" class="hover:text-gray-300">Help</a> / <span class="text-gray-400">${article.category}</span></nav>
+    <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-4">${article.category}</span>
+    <h1 class="text-3xl md:text-4xl font-black text-white mb-6 leading-tight">${article.title}</h1>
+    <div class="prose prose-invert prose-lg max-w-none text-gray-300">${article.body}</div>
+    ${related ? `<div class="mt-16 border-t border-white/5 pt-8"><h2 class="text-xl font-bold text-white mb-4">Related &mdash; ${article.category}</h2><div class="grid md:grid-cols-2 gap-3">${related}</div></div>` : ''}
+    <div class="mt-12 text-center"><a href="/contact" class="text-[#00FF88] hover:underline text-sm">Still need help? Contact support &rarr;</a></div>
+  </main>
+  <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+      <span class="font-bold text-gray-400">Roof Manager</span>
+      <div class="flex flex-wrap items-center gap-4">
+        <a href="/help" class="hover:text-[#00FF88]">Help Center</a>
+        <a href="/about" class="hover:text-[#00FF88]">About</a>
+        <a href="/pricing" class="hover:text-[#00FF88]">Pricing</a>
       </div>
       <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
     </div>
