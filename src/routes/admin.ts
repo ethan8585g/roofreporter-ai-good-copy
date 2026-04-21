@@ -3949,6 +3949,25 @@ adminRoutes.get('/auto-proposal/health', async (c) => {
   })
 })
 
+// POST /api/admin/auto-proposal/trigger?order_id=N
+// Superadmin-only diagnostic: manually invokes the same event-driven
+// createAutoInvoiceForOrder path that fires from report completion.
+// Idempotent (the service itself skips if an auto-invoice row already
+// exists for the order). Returns the service's structured result.
+adminRoutes.post('/auto-proposal/trigger', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const orderIdRaw = c.req.query('order_id')
+  const orderId = orderIdRaw ? parseInt(orderIdRaw, 10) : NaN
+  if (!Number.isFinite(orderId) || orderId <= 0) {
+    return c.json({ error: 'order_id query param required (positive integer)' }, 400)
+  }
+
+  const result = await createAutoInvoiceForOrder(c.env, orderId)
+  return c.json({ order_id: orderId, result })
+})
+
 // GET /api/admin/auto-proposal/audit?order_id=N
 // Returns the full auto-invoice audit trail for a single order,
 // oldest → newest. Useful to diagnose why a specific proposal did or
