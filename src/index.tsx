@@ -937,6 +937,7 @@ app.get('/sitemap-index.xml', (c) => {
   <sitemap><loc>${base}/sitemap-us-states.xml</loc><lastmod>${today}</lastmod></sitemap>
   <sitemap><loc>${base}/sitemap-us-cities.xml</loc><lastmod>${today}</lastmod></sitemap>
   <sitemap><loc>${base}/sitemap-us-verticals.xml</loc><lastmod>${today}</lastmod></sitemap>
+  <sitemap><loc>${base}/sitemap-ca-provinces.xml</loc><lastmod>${today}</lastmod></sitemap>
   <sitemap><loc>${base}/sitemap-comparisons.xml</loc><lastmod>${today}</lastmod></sitemap>
   <sitemap><loc>${base}/image-sitemap.xml</loc><lastmod>${today}</lastmod></sitemap>
 </sitemapindex>`
@@ -1086,6 +1087,17 @@ app.get('/sitemap-us-states.xml', (c) => {
   let urls = `<url><loc>${base}/us</loc><changefreq>monthly</changefreq><priority>0.9</priority><lastmod>${today}</lastmod></url>\n`
   for (const slug of US_ALL_STATE_SLUGS) {
     urls += `<url><loc>${base}/us/${slug}</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>${today}</lastmod></url>\n`
+  }
+  return c.text(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>`, 200, { 'Content-Type': 'application/xml' })
+})
+
+// SEO: Canadian provinces sitemap — /ca hub + each /ca/:province
+app.get('/sitemap-ca-provinces.xml', (c) => {
+  const base = 'https://www.roofmanager.ca'
+  const today = new Date().toISOString().substring(0, 10)
+  let urls = `<url><loc>${base}/ca</loc><changefreq>monthly</changefreq><priority>0.9</priority><lastmod>${today}</lastmod></url>\n`
+  for (const slug of CA_ALL_PROVINCE_SLUGS) {
+    urls += `<url><loc>${base}/ca/${slug}</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>${today}</lastmod></url>\n`
   }
   return c.text(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>`, 200, { 'Content-Type': 'application/xml' })
 })
