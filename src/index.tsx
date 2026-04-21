@@ -71,7 +71,11 @@ import usStatesRoutes from './routes/us-states'
 import usVerticalsRoutes from './routes/us-verticals'
 import usComparisonsRoutes from './routes/us-comparisons'
 import caProvincesRoutes from './routes/ca-provinces'
+import { ukApp as ukRoutes, auApp as auRoutes } from './routes/intl-regions'
+import { ALL_UK_REGION_SLUGS } from './data/uk-regions'
+import { ALL_AU_REGION_SLUGS } from './data/au-regions'
 import { INDEXNOW_KEY } from './services/indexnow'
+import { getBundle as getI18nBundle, LOCALES as I18N_LOCALES, LOCALE_LANG as I18N_LOCALE_LANG, type Locale as I18NLocale } from './services/i18n'
 import { ALL_STATE_SLUGS as US_ALL_STATE_SLUGS, US_CITIES as US_CITIES_DATA, US_STATES, type USStateData, type USCityData } from './data/us-states'
 import { ALL_PROVINCE_SLUGS as CA_ALL_PROVINCE_SLUGS } from './data/ca-provinces'
 import { processOrderQueue } from './services/ai-agent'
@@ -292,11 +296,14 @@ window.fireMetaContactEvent=function(d){if(typeof fbq==='function')fbq('track','
 ` : `<script>window.fireMetaLeadEvent=function(){};window.fireMetaContactEvent=function(){};</script>`
 
       // RC#1: Translate widget — moved out of <head> (invalid HTML) and injected at top of <body>
-      // Safari's strict parser closed <head> early when it saw the <div>, reparenting following scripts
-      // and breaking getElementById() calls. Now renders in valid position and uses DOMContentLoaded.
+      // Safari's strict parser closed <head> early when it saw the <div>, reparenting following scripts.
+      // CWV upgrade: the ~50KB translate.google.com script is now lazy-loaded on first click of the
+      // globe button instead of eagerly on every page load. Most visitors never open the language
+      // panel, so this saves a subrequest + ~50KB on every pageview.
       const translateWidget = `<div id="gt-wrapper"><button id="gt-toggle" aria-label="Select language" title="Select language">&#127760;</button><div id="gt-panel"><div id="google_translate_element"></div><button id="gt-close" aria-label="Close language selector" title="Close">&times;</button></div></div>
-<script>function googleTranslateElementInit(){try{new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,fr,es,de,pt,it,zh-CN,zh-TW,ja,ko,ar,hi,bn,ur,tr,vi,th,id,pl,uk,ru,nl,sv,da,no,fi,el,he,ro,cs,hu,ms,tl',layout:google.translate.TranslateElement.InlineLayout.SIMPLE,autoDisplay:false},'google_translate_element')}catch(e){}}document.addEventListener('DOMContentLoaded',function(){var t=document.getElementById('gt-toggle');if(t)t.onclick=function(){var p=document.getElementById('gt-panel');if(p)p.classList.toggle('open')};var c=document.getElementById('gt-close');if(c)c.onclick=function(){var p=document.getElementById('gt-panel');if(p)p.classList.remove('open')}});</script>
-<script src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" defer></script>`
+<script>function googleTranslateElementInit(){try{new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,fr,es,de,pt,it,zh-CN,zh-TW,ja,ko,ar,hi,bn,ur,tr,vi,th,id,pl,uk,ru,nl,sv,da,no,fi,el,he,ro,cs,hu,ms,tl',layout:google.translate.TranslateElement.InlineLayout.SIMPLE,autoDisplay:false},'google_translate_element')}catch(e){}}
+(function(){var loaded=false;function loadGT(){if(loaded)return;loaded=true;var s=document.createElement('script');s.src='//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';s.async=true;document.head.appendChild(s);}document.addEventListener('DOMContentLoaded',function(){var t=document.getElementById('gt-toggle');if(t){t.addEventListener('click',function(){loadGT();var p=document.getElementById('gt-panel');if(p)p.classList.toggle('open');});}var c=document.getElementById('gt-close');if(c)c.onclick=function(){var p=document.getElementById('gt-panel');if(p)p.classList.remove('open')};});})();
+</script>`
 
       // Inject translate widget right after opening <body> tag
       let bodyWithWidget = body.replace(/<body([^>]*)>/, `<body$1>\n${translateWidget}`)
@@ -327,6 +334,9 @@ app.route('/us', usVerticalsRoutes)
 app.route('/us', usStatesRoutes)
 // ── CA SEO/GEO expansion routes ── Canadian province hub + per-province pages
 app.route('/ca', caProvincesRoutes)
+// ── International SEO/GEO expansion ── UK + AU hubs + region pages
+app.route('/uk', ukRoutes)
+app.route('/au', auRoutes)
 // US comparison pages (specific slugs, must come before catch-alls)
 app.route('/', usComparisonsRoutes)
 
@@ -948,6 +958,8 @@ app.get('/sitemap-index.xml', (c) => {
   <sitemap><loc>${base}/sitemap-us-cities.xml</loc><lastmod>${today}</lastmod></sitemap>
   <sitemap><loc>${base}/sitemap-us-verticals.xml</loc><lastmod>${today}</lastmod></sitemap>
   <sitemap><loc>${base}/sitemap-ca-provinces.xml</loc><lastmod>${today}</lastmod></sitemap>
+  <sitemap><loc>${base}/sitemap-intl.xml</loc><lastmod>${today}</lastmod></sitemap>
+  <sitemap><loc>${base}/sitemap-i18n.xml</loc><lastmod>${today}</lastmod></sitemap>
   <sitemap><loc>${base}/sitemap-comparisons.xml</loc><lastmod>${today}</lastmod></sitemap>
   <sitemap><loc>${base}/image-sitemap.xml</loc><lastmod>${today}</lastmod></sitemap>
 </sitemapindex>`
@@ -1152,7 +1164,47 @@ app.get('/sitemap-ca-provinces.xml', (c) => {
   for (const slug of CA_ALL_PROVINCE_SLUGS) {
     urls += `<url><loc>${base}/ca/${slug}</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>${today}</lastmod></url>\n`
   }
-  return c.text(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>`, 200, { 'Content-Type': 'application/xml' })
+  return c.text(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>`, 200, { 'Content-Type': 'application/xml', 'Cache-Control': 'public, max-age=3600, s-maxage=3600' })
+})
+
+// SEO: Multilingual (fr/es) sitemap — three translated pages per locale
+app.get('/sitemap-i18n.xml', (c) => {
+  const base = 'https://www.roofmanager.ca'
+  const today = new Date().toISOString().substring(0, 10)
+  const locales = ['fr', 'es']
+  const paths = ['', '/pricing', '/about']
+  let urls = ''
+  for (const locale of locales) {
+    for (const p of paths) {
+      // Each URL includes xhtml alternate links for en + all locales for
+      // proper hreflang signaling in the sitemap itself (belt + suspenders
+      // on top of <link rel="alternate"> in the HTML head).
+      const loc = `${base}/${locale}${p}`
+      const enLoc = `${base}${p || '/'}`
+      const altTags = [
+        `<xhtml:link rel="alternate" hreflang="en" href="${enLoc}"/>`,
+        ...locales.map(l => `<xhtml:link rel="alternate" hreflang="${l === 'fr' ? 'fr-CA' : 'es-US'}" href="${base}/${l}${p}"/>`),
+        `<xhtml:link rel="alternate" hreflang="x-default" href="${enLoc}"/>`,
+      ].join('')
+      urls += `<url><loc>${loc}</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod>${altTags}</url>\n`
+    }
+  }
+  return c.text(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls}</urlset>`, 200, { 'Content-Type': 'application/xml', 'Cache-Control': 'public, max-age=3600, s-maxage=3600' })
+})
+
+// SEO: International (UK + AU) sitemap
+app.get('/sitemap-intl.xml', (c) => {
+  const base = 'https://www.roofmanager.ca'
+  const today = new Date().toISOString().substring(0, 10)
+  let urls = `<url><loc>${base}/uk</loc><changefreq>monthly</changefreq><priority>0.9</priority><lastmod>${today}</lastmod></url>\n`
+  for (const slug of ALL_UK_REGION_SLUGS) {
+    urls += `<url><loc>${base}/uk/${slug}</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>${today}</lastmod></url>\n`
+  }
+  urls += `<url><loc>${base}/au</loc><changefreq>monthly</changefreq><priority>0.9</priority><lastmod>${today}</lastmod></url>\n`
+  for (const slug of ALL_AU_REGION_SLUGS) {
+    urls += `<url><loc>${base}/au/${slug}</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>${today}</lastmod></url>\n`
+  }
+  return c.text(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>`, 200, { 'Content-Type': 'application/xml', 'Cache-Control': 'public, max-age=3600, s-maxage=3600' })
 })
 
 // SEO: US Cities sitemap
@@ -1660,6 +1712,16 @@ app.get('/tools/solar-production-estimator', (c) => c.html(getSolarProductionEst
 app.get('/tools/solar-production-estimator/embed', (c) => c.html(getSolarProductionEstimatorHTML(true)))
 // About — company story, mission, team credentials (E-E-A-T signal page)
 app.get('/about', (c) => c.html(getAboutPageHTML()))
+// Multilingual MVP — /fr and /es mirror of landing + pricing + about.
+// AI-translated; production copy should be replaced with human-reviewed
+// translations before a full marketing push. Every translated page emits
+// hreflang tags cross-linking en / fr / es + x-default.
+app.get('/fr', (c) => c.html(getI18nLandingHTML('fr')))
+app.get('/es', (c) => c.html(getI18nLandingHTML('es')))
+app.get('/fr/pricing', (c) => c.html(getI18nPricingHTML('fr')))
+app.get('/es/pricing', (c) => c.html(getI18nPricingHTML('es')))
+app.get('/fr/about', (c) => c.html(getI18nAboutHTML('fr')))
+app.get('/es/about', (c) => c.html(getI18nAboutHTML('es')))
 // Author profile pages (E-E-A-T author identity for blog citations)
 app.get('/authors/roof-manager-editorial-team', (c) => c.html(getAuthorPageHTML()))
 // Best roofing contractors directory — hub + per-city
@@ -13402,17 +13464,17 @@ function getPricingPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags('/pricing')}
-  <title>Roof Report Pricing — AI Measurements from $5/Report | Roof Manager</title>
+  <title>Roof Report Pricing — From $5.95 | Roof Manager</title>
   <meta name="description" content="Simple roof report pricing. 4 free reports to start, then $8/report. Save with credit packs: 10-pack at $7.50/ea, 25-pack at $7.00/ea, 100-pack at $5.95/ea. Includes CRM, proposals, invoicing, and AI secretary.">
   <link rel="canonical" href="https://www.roofmanager.ca/pricing">
-  <meta property="og:title" content="Roof Report Pricing — From $5/Report (100-Pack)">
+  <meta property="og:title" content="Roof Report Pricing — From $5.95/Report (100-Pack)"> <!-- conv-v5: $5 was a lie; cheapest is $5.95 -->
   <meta property="og:description" content="AI-powered roof measurement reports with full CRM. 4 free reports, then pay per report or buy credit packs.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/pricing">
   <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Roof Manager Pricing — From $5/Report">
+  <meta name="twitter:title" content="Roof Manager Pricing — From $5.95/Report"> <!-- conv-v5: $5 was a lie -->
   <meta name="twitter:description" content="AI roof measurements with full CRM. 4 free reports included.">
   <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
   <script type="application/ld+json">
@@ -19182,6 +19244,186 @@ function getPitchCalculatorEmbedHTML(): string {
     }
     calc(6)
   </script>
+</body>
+</html>`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MULTILINGUAL MVP — /fr and /es for landing + pricing + about.
+// Content comes from src/services/i18n.ts; translations are AI-generated
+// and flagged for human review via an on-page notice.
+// ─────────────────────────────────────────────────────────────────────────────
+function i18nHead(locale: I18NLocale, title: string, desc: string, canonicalPath: string): string {
+  const base = 'https://www.roofmanager.ca'
+  const lang = I18N_LOCALE_LANG[locale]
+  const altLinks = [
+    `<link rel="alternate" hreflang="en" href="${base}${canonicalPath.replace(/^\/(fr|es)/, '') || '/'}">`,
+    ...I18N_LOCALES.map(l => {
+      const lp = canonicalPath.replace(/^\/(fr|es)/, `/${l}`)
+      return `<link rel="alternate" hreflang="${I18N_LOCALE_LANG[l]}" href="${base}${lp}">`
+    }),
+    `<link rel="alternate" hreflang="x-default" href="${base}${canonicalPath.replace(/^\/(fr|es)/, '') || '/'}">`,
+  ].join('\n  ')
+  return `<meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#00FF88">
+  <link rel="stylesheet" href="/static/tailwind.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>* { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }</style>
+  <link rel="icon" href="/static/logo.png" type="image/png">
+  <title>${title}</title>
+  <meta name="description" content="${desc}">
+  <link rel="canonical" href="${base}${canonicalPath}">
+  ${altLinks}
+  <meta property="og:locale" content="${lang.replace('-', '_')}">
+  <meta property="og:title" content="${title}">
+  <meta property="og:description" content="${desc}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${base}${canonicalPath}">
+  <meta property="og:image" content="${base}/static/logo.png">`
+}
+
+function i18nNav(locale: I18NLocale): string {
+  const m = getI18nBundle(locale)
+  return `<nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.05)" class="sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/${locale}" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover" width="36" height="36" loading="eager"><span class="text-white font-bold text-lg">Roof Manager</span></a>
+      <div class="hidden md:flex items-center gap-5 text-sm">
+        <a href="/${locale}/pricing" class="text-gray-400 hover:text-white">${m.nav_pricing}</a>
+        <a href="/${locale}/about" class="text-gray-400 hover:text-white">${m.nav_about}</a>
+        <a href="/" class="text-gray-400 hover:text-white"><i class="fas fa-globe mr-1"></i>English</a>
+        <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl">${m.cta_start_free}</a>
+      </div>
+    </div>
+  </nav>`
+}
+
+function i18nFooter(locale: I18NLocale): string {
+  const m = getI18nBundle(locale)
+  return `<footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+      <p>&copy; ${new Date().getFullYear()} Roof Manager — ${m.footer_tagline}</p>
+      <div class="flex flex-wrap items-center gap-4">
+        <a href="/${locale}/pricing" class="hover:text-[#00FF88]">${m.nav_pricing}</a>
+        <a href="/${locale}/about" class="hover:text-[#00FF88]">${m.footer_about_link}</a>
+        <a href="/" class="hover:text-[#00FF88]"><i class="fas fa-globe"></i> English</a>
+      </div>
+    </div>
+  </footer>`
+}
+
+function i18nTranslationNotice(locale: I18NLocale): string {
+  const m = getI18nBundle(locale)
+  return `<div style="background:rgba(245,158,11,0.12);border-bottom:1px solid rgba(245,158,11,0.35);color:#fde68a;font-size:12px;padding:6px 16px;text-align:center">
+    <i class="fas fa-triangle-exclamation" style="margin-right:6px;color:#f59e0b"></i>${m.landing_translation_notice}
+  </div>`
+}
+
+function getI18nLandingHTML(locale: I18NLocale): string {
+  const base = 'https://www.roofmanager.ca'
+  const m = getI18nBundle(locale)
+  const lang = I18N_LOCALE_LANG[locale]
+  return `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+  ${i18nHead(locale, `Roof Manager — ${m.brand_tagline}`, m.landing_hero_body, `/${locale}`)}
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"WebPage","name":"Roof Manager — ${m.brand_tagline}","url":"${base}/${locale}","inLanguage":"${lang}","description":"${m.landing_hero_body.replace(/"/g, '\\"')}"}
+  </script>
+</head>
+<body style="background:#0A0A0A;color:#fff">
+  ${i18nTranslationNotice(locale)}
+  ${i18nNav(locale)}
+  <section class="py-16 md:py-24 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)">
+    <div class="max-w-3xl mx-auto px-4">
+      <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-6">${m.landing_hero_badge}</span>
+      <h1 class="text-4xl md:text-6xl font-black text-white mb-4 leading-tight">${m.landing_hero_title}<br/><span class="text-[#00FF88]">${m.landing_hero_title_highlight}</span></h1>
+      <p class="text-lg md:text-xl text-gray-400 mb-8 leading-relaxed">${m.landing_hero_body}</p>
+      <ul class="text-left max-w-xl mx-auto space-y-2 text-sm text-gray-300 mb-8">
+        <li><i class="fas fa-check text-[#00FF88] mr-2"></i>${m.landing_hero_bullet_1}</li>
+        <li><i class="fas fa-check text-[#00FF88] mr-2"></i>${m.landing_hero_bullet_2}</li>
+        <li><i class="fas fa-check text-[#00FF88] mr-2"></i>${m.landing_hero_bullet_3}</li>
+        <li><i class="fas fa-check text-[#00FF88] mr-2"></i>${m.landing_hero_bullet_4}</li>
+      </ul>
+      <a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg"><i class="fas fa-rocket"></i>${m.landing_hero_cta}</a>
+      <p class="text-xs text-gray-500 mt-4">${m.landing_hero_disclaimer}</p>
+    </div>
+  </section>
+  ${i18nFooter(locale)}
+</body>
+</html>`
+}
+
+function getI18nPricingHTML(locale: I18NLocale): string {
+  const base = 'https://www.roofmanager.ca'
+  const m = getI18nBundle(locale)
+  const lang = I18N_LOCALE_LANG[locale]
+  return `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+  ${i18nHead(locale, `${m.pricing_title} | Roof Manager`, m.pricing_subtitle, `/${locale}/pricing`)}
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"Product","name":"Roof Manager","description":"${m.pricing_subtitle.replace(/"/g, '\\"')}","brand":{"@type":"Brand","name":"Roof Manager"},"offers":[{"@type":"Offer","name":"${m.pricing_free_label}","price":"0","priceCurrency":"USD","description":"${m.pricing_free_desc.replace(/"/g, '\\"')}"},{"@type":"Offer","name":"${m.pricing_per_report_label}","price":"8.00","priceCurrency":"USD","description":"${m.pricing_per_report_desc.replace(/"/g, '\\"')}"}]}
+  </script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/${locale}"},{"@type":"ListItem","position":2,"name":"${m.nav_pricing}","item":"${base}/${locale}/pricing"}]}</script>
+</head>
+<body style="background:#0A0A0A;color:#fff">
+  ${i18nTranslationNotice(locale)}
+  ${i18nNav(locale)}
+  <section class="py-16 text-center" style="background:#0A0A0A">
+    <div class="max-w-3xl mx-auto px-4">
+      <h1 class="text-4xl md:text-5xl font-black text-white mb-4">${m.pricing_title}</h1>
+      <p class="text-gray-400 mb-8">${m.pricing_subtitle}</p>
+      <div class="grid md:grid-cols-2 gap-4 text-left">
+        <div class="bg-[#111] border border-white/10 rounded-2xl p-6"><h2 class="text-xl font-bold text-[#00FF88] mb-2">${m.pricing_free_label}</h2><p class="text-gray-300 text-sm">${m.pricing_free_desc}</p></div>
+        <div class="bg-[#111] border border-white/10 rounded-2xl p-6"><h2 class="text-xl font-bold text-[#00FF88] mb-2">${m.pricing_per_report_label}</h2><p class="text-gray-300 text-sm">${m.pricing_per_report_desc}</p></div>
+      </div>
+      <ul class="mt-8 space-y-2 text-sm text-gray-400">
+        <li>${m.pricing_pack_10}</li>
+        <li>${m.pricing_pack_25}</li>
+        <li>${m.pricing_pack_100}</li>
+      </ul>
+      <p class="text-gray-500 text-xs mt-6">${m.pricing_no_sub_note}</p>
+      <a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg mt-8"><i class="fas fa-rocket"></i>${m.cta_get_4_free}</a>
+    </div>
+  </section>
+  ${i18nFooter(locale)}
+</body>
+</html>`
+}
+
+function getI18nAboutHTML(locale: I18NLocale): string {
+  const base = 'https://www.roofmanager.ca'
+  const m = getI18nBundle(locale)
+  const lang = I18N_LOCALE_LANG[locale]
+  return `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+  ${i18nHead(locale, `${m.about_h1} | Roof Manager`, m.about_body, `/${locale}/about`)}
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"AboutPage","name":"${m.about_h1}","url":"${base}/${locale}/about","inLanguage":"${lang}","description":"${m.about_body.replace(/"/g, '\\"')}","isPartOf":{"@type":"WebSite","name":"Roof Manager","url":"${base}/"}}
+  </script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/${locale}"},{"@type":"ListItem","position":2,"name":"${m.nav_about}","item":"${base}/${locale}/about"}]}</script>
+</head>
+<body style="background:#0A0A0A;color:#fff">
+  ${i18nTranslationNotice(locale)}
+  ${i18nNav(locale)}
+  <main class="max-w-3xl mx-auto px-4 py-16">
+    <h1 class="text-3xl md:text-5xl font-black text-white mb-6 leading-tight">${m.about_h1}<br/><span class="text-[#00FF88]">${m.about_h1_highlight}</span></h1>
+    <p class="text-lg text-gray-300 mb-10 leading-relaxed">${m.about_body}</p>
+    <section class="mb-10 bg-[#111] border border-white/10 rounded-2xl p-6 md:p-8">
+      <h2 class="text-xl font-bold text-white mb-3">${m.about_mission_h}</h2>
+      <p class="text-gray-300 leading-relaxed">${m.about_mission_body}</p>
+    </section>
+    <section class="mb-10 bg-[#111] border border-white/10 rounded-2xl p-6 md:p-8">
+      <h2 class="text-xl font-bold text-white mb-3">${m.about_how_h}</h2>
+      <p class="text-gray-300 leading-relaxed">${m.about_how_body}</p>
+    </section>
+    <a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 px-8 rounded-xl"><i class="fas fa-rocket"></i>${m.cta_get_4_free}</a>
+  </main>
+  ${i18nFooter(locale)}
 </body>
 </html>`
 }
