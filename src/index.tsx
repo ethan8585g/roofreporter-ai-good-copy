@@ -17,6 +17,7 @@ import { solarPipelineRoutes } from './routes/solar-pipeline'
 import { solarPresentationRoutes } from './routes/solar-presentation'
 import { solarDocumentsRoutes } from './routes/solar-documents'
 import { solarPermitsRoutes } from './routes/solar-permits'
+import { solarProposalsRoutes } from './routes/solar-proposals'
 import { invoiceRoutes } from './routes/invoices'
 import { automationsRoutes } from './routes/automations'
 import { squareRoutes } from './routes/square'
@@ -70,7 +71,7 @@ import usStatesRoutes from './routes/us-states'
 import usVerticalsRoutes from './routes/us-verticals'
 import usComparisonsRoutes from './routes/us-comparisons'
 import caProvincesRoutes from './routes/ca-provinces'
-import { ALL_STATE_SLUGS as US_ALL_STATE_SLUGS, US_CITIES as US_CITIES_DATA } from './data/us-states'
+import { ALL_STATE_SLUGS as US_ALL_STATE_SLUGS, US_CITIES as US_CITIES_DATA, US_STATES, type USStateData } from './data/us-states'
 import { ALL_PROVINCE_SLUGS as CA_ALL_PROVINCE_SLUGS } from './data/ca-provinces'
 import { processOrderQueue } from './services/ai-agent'
 import { runContentAgent } from './services/content-agent'
@@ -346,6 +347,7 @@ app.route('/api/customer/solar-pipeline', solarPipelineRoutes)
 app.route('/api/customer/solar-presentation', solarPresentationRoutes)
 app.route('/api/customer/solar-documents', solarDocumentsRoutes)
 app.route('/api/customer/solar-permits', solarPermitsRoutes)
+app.route('/api/customer/solar-proposals', solarProposalsRoutes)
 app.route('/api/customer', customerAuthRoutes)
 app.route('/api/customer-auth', customerAuthRoutes)
 app.route('/api/invoices', invoiceRoutes)
@@ -1006,11 +1008,17 @@ app.get('/sitemap-locations.xml', (c) => {
   for (const slug of Object.keys(seoCountries)) {
     urls += `\n<url><loc>${base}/roof-measurement/${slug}</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>${today}</lastmod></url>`
   }
-  // Feature+city silo pages (new deep architecture — measurements + crm + ai-secretary)
+  // Feature+city silo pages (deep architecture — measurements + crm + ai-secretary)
   for (const slug of Object.keys(seoCities)) {
     urls += `\n<url><loc>${base}/features/measurements/${slug}</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>${today}</lastmod></url>`
     urls += `\n<url><loc>${base}/features/crm/${slug}</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>`
     urls += `\n<url><loc>${base}/features/ai-secretary/${slug}</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>`
+  }
+  // Feature + US state silo pages (primary-market long-tail — all 50 states × 3 features)
+  for (const stateSlug of US_ALL_STATE_SLUGS) {
+    urls += `\n<url><loc>${base}/features/measurements/${stateSlug}</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>${today}</lastmod></url>`
+    urls += `\n<url><loc>${base}/features/crm/${stateSlug}</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>`
+    urls += `\n<url><loc>${base}/features/ai-secretary/${stateSlug}</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>`
   }
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}\n</urlset>`
   return c.text(xml, 200, { 'Content-Type': 'application/xml' })
@@ -1276,6 +1284,45 @@ app.get('/llms.txt', (c) => {
 - [Tennessee](https://www.roofmanager.ca/us/tennessee): Nashville, Memphis — tornado and hail
 - [Oklahoma](https://www.roofmanager.ca/us/oklahoma): Oklahoma City, Tulsa — tornado alley
 - [All 50 US States](https://www.roofmanager.ca/us): Storm profiles, building codes, city coverage for every state
+
+## US State × Feature Hubs (primary market — 330M+ population)
+- [Roof Measurement Software by State](https://www.roofmanager.ca/features/measurements): Deep state-level pages for /features/measurements/:state
+- [Roofing CRM by State](https://www.roofmanager.ca/features/crm): Deep state-level pages for /features/crm/:state
+- [AI Phone Receptionist by State](https://www.roofmanager.ca/features/ai-secretary): Deep state-level pages for /features/ai-secretary/:state
+
+### Examples — US State × Feature
+- [Texas Roofing CRM](https://www.roofmanager.ca/features/crm/texas): Dallas/Houston/Austin hail-and-hurricane pipeline workflows
+- [Florida AI Phone Receptionist](https://www.roofmanager.ca/features/ai-secretary/florida): Hurricane-surge call answering, FBC claim intake
+- [Colorado Roof Measurement Software](https://www.roofmanager.ca/features/measurements/colorado): Class 4 hail-belt reports
+- [California Roofing CRM](https://www.roofmanager.ca/features/crm/california): WUI roofing pipeline, Title 24 compliance workflow
+- [New York AI Phone Receptionist](https://www.roofmanager.ca/features/ai-secretary/new-york): Ice-storm emergency call handling
+
+### Examples — US City × Feature
+- [Dallas Roof Measurement Reports](https://www.roofmanager.ca/features/measurements/dallas): Satellite reports for Dallas-area contractors
+- [Houston Roofing CRM](https://www.roofmanager.ca/features/crm/houston): Hurricane-season pipeline and claim tracking
+- [Denver AI Phone Receptionist](https://www.roofmanager.ca/features/ai-secretary/denver): 24/7 hail-storm call surge handling
+- [Phoenix Roof Measurement Reports](https://www.roofmanager.ca/features/measurements/phoenix): Monsoon and UV-exposed roof reports
+- [Miami Roof Measurement Reports](https://www.roofmanager.ca/features/measurements/miami): FBC-compliant hurricane-zone reports
+
+## US Verticals (by state)
+- [Insurance Claims by State](https://www.roofmanager.ca/us/insurance-claims): Carrier-specific claim documentation guides
+- [Storm Damage Assessment](https://www.roofmanager.ca/us/storm-damage): State-level storm documentation workflows
+- [Hail Damage](https://www.roofmanager.ca/us/hail-damage): Hail-belt state guides (CO, TX, OK, KS, NE, SD)
+- [Hurricane Damage](https://www.roofmanager.ca/us/hurricane-damage): Gulf Coast and Atlantic coverage (FL, TX, LA, NC, SC)
+- [Roof Replacement Cost by State](https://www.roofmanager.ca/us/roof-replacement-cost): State-level average pricing data
+- [Roofing Contractor Software by State](https://www.roofmanager.ca/us/roofing-contractors): Software comparison guides per state
+
+## Canadian Province Hubs (secondary market — CAD pricing, hosted in Canada)
+- [Canada Hub](https://www.roofmanager.ca/ca): All 10 provinces + 3 territories
+- [Alberta](https://www.roofmanager.ca/ca/alberta): Calgary hail corridor; Class 4 recommended
+- [Ontario](https://www.roofmanager.ca/ca/ontario): Toronto, Ottawa, GTA — ice storms, OBC 2024
+- [British Columbia](https://www.roofmanager.ca/ca/british-columbia): Atmospheric rivers, moss, Step Code
+- [Quebec](https://www.roofmanager.ca/ca/quebec): Montréal — extreme winter, RBQ licence required
+- [Nova Scotia](https://www.roofmanager.ca/ca/nova-scotia): Halifax — post-tropical storm wind
+
+## Company
+- [About Roof Manager](https://www.roofmanager.ca/about): Founding story, measurement engine architecture (Google Solar API + geodesic engine + Gemini vision), team credentials, verification policy
+- [Press & Media](https://www.roofmanager.ca/press): Company overview, stats, brand assets, press contact
 
 ## Blog Categories
 - [Blog Home](https://www.roofmanager.ca/blog): Industry guides, AI technology, storm damage, solar, business ops (April 2026)
@@ -1548,23 +1595,33 @@ app.get('/guides/:slug', (c) => {
 })
 
 // Feature + City silo pages — deepest architectural layer (hub: /features/measurements → spoke: /features/measurements/calgary)
-app.get('/features/measurements/:city', (c) => {
-  const slug = c.req.param('city').toLowerCase()
+// Each handler first tries a city match (seoCities covers CA + a handful of
+// US cities), then falls back to a US state match. Primary US TAM sits in
+// the state-level pages, so unknown city slugs that are US state slugs now
+// render the state-feature hub instead of redirecting away.
+app.get('/features/measurements/:slug', (c) => {
+  const slug = c.req.param('slug').toLowerCase()
   const city = seoCities[slug]
-  if (!city) return c.redirect('/features/measurements')
-  return c.html(getFeatureCityPageHTML(slug, city))
+  if (city) return c.html(getFeatureCityPageHTML(slug, city))
+  const state = US_STATES[slug]
+  if (state) return c.html(getFeatureStateHubPageHTML('measurements', slug, state))
+  return c.redirect('/features/measurements')
 })
-app.get('/features/crm/:city', (c) => {
-  const slug = c.req.param('city').toLowerCase()
+app.get('/features/crm/:slug', (c) => {
+  const slug = c.req.param('slug').toLowerCase()
   const city = seoCities[slug]
-  if (!city) return c.redirect('/features/crm')
-  return c.html(getFeatureCityHubPageHTML('crm', slug, city))
+  if (city) return c.html(getFeatureCityHubPageHTML('crm', slug, city))
+  const state = US_STATES[slug]
+  if (state) return c.html(getFeatureStateHubPageHTML('crm', slug, state))
+  return c.redirect('/features/crm')
 })
-app.get('/features/ai-secretary/:city', (c) => {
-  const slug = c.req.param('city').toLowerCase()
+app.get('/features/ai-secretary/:slug', (c) => {
+  const slug = c.req.param('slug').toLowerCase()
   const city = seoCities[slug]
-  if (!city) return c.redirect('/features/ai-secretary')
-  return c.html(getFeatureCityHubPageHTML('ai-secretary', slug, city))
+  if (city) return c.html(getFeatureCityHubPageHTML('ai-secretary', slug, city))
+  const state = US_STATES[slug]
+  if (state) return c.html(getFeatureStateHubPageHTML('ai-secretary', slug, state))
+  return c.redirect('/features/ai-secretary')
 })
 
 // Competitor comparison pages — bottom-of-funnel, high commercial intent
@@ -10843,6 +10900,230 @@ function getFeatureCityHubPageHTML(
         <a href="/features/ai-secretary" class="hover:text-[#00FF88] transition-colors">AI Secretary</a>
         <a href="/features/measurements/${slug}" class="hover:text-[#00FF88] transition-colors">${city.name} Reports</a>
         <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a>
+        <a href="/about" class="hover:text-[#00FF88] transition-colors">About</a>
+      </div>
+      <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
+    </div>
+  </footer>
+</body>
+</html>`
+}
+
+// ============================================================
+// FEATURE × US STATE HUB — state-level spokes for measurements/crm/ai-secretary
+// Uses src/data/us-states.ts (storm profile, building code, insurers, metros)
+// to produce long-tail pages targeting "roofing CRM Texas", "AI phone
+// receptionist Florida", "roof measurement software California", etc.
+// ============================================================
+function getFeatureStateHubPageHTML(
+  featureSlug: 'measurements' | 'crm' | 'ai-secretary',
+  stateSlug: string,
+  state: USStateData
+): string {
+  const f = featureHubConfig[featureSlug]
+  if (!f) return '<html><body>Not found</body></html>'
+  const base = 'https://www.roofmanager.ca'
+  const today = new Date().toISOString().substring(0, 10)
+
+  const featureLabel =
+    featureSlug === 'measurements' ? 'Roof Measurement Software' :
+    featureSlug === 'crm' ? 'Roofing CRM' : 'AI Phone Receptionist'
+  const title = `${featureLabel} for ${state.name} Roofing Contractors — 2026`
+  const desc =
+    featureSlug === 'measurements'
+      ? `Satellite roof measurement reports for ${state.name} roofing contractors. $8 USD per report after 3 free. Insurance-ready documentation for ${state.stormProfile.primaryPeril.toLowerCase()} claims in all ${state.name} metros.`
+      : featureSlug === 'crm'
+      ? `Roofing CRM software for ${state.name} contractors. Pipeline, proposals, invoicing, job scheduling. Free with every Roof Manager account. Built for ${state.name} storm-response and insurance claim workflows.`
+      : `24/7 AI phone receptionist for ${state.name} roofing contractors. Never miss a storm-surge call. Local ${state.code} area code numbers, automated lead capture, and Google Calendar booking. $149/month flat.`
+
+  const breadcrumbSchema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: base },
+      { '@type': 'ListItem', position: 2, name: 'Features', item: `${base}/services` },
+      { '@type': 'ListItem', position: 3, name: f.title, item: `${base}/features/${featureSlug}` },
+      { '@type': 'ListItem', position: 4, name: state.name, item: `${base}/features/${featureSlug}/${stateSlug}` },
+    ],
+  })
+  const softwareSchema = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': ['SoftwareApplication', 'LocalBusiness'],
+    name: `${f.schemaName} — ${state.name}`,
+    applicationCategory: f.schemaCategory,
+    operatingSystem: 'Web, iOS, Android',
+    url: `${base}/features/${featureSlug}/${stateSlug}`,
+    image: `${base}/static/logo.png`,
+    description: desc,
+    areaServed: { '@type': 'State', name: state.name },
+    address: { '@type': 'PostalAddress', addressRegion: state.code, addressCountry: 'US' },
+    offers: featureSlug === 'measurements'
+      ? { '@type': 'Offer', price: '8.00', priceCurrency: 'USD', description: 'Per report after 3 free' }
+      : featureSlug === 'crm'
+      ? { '@type': 'Offer', price: '0.00', priceCurrency: 'USD', description: 'Free with any Roof Manager account' }
+      : { '@type': 'Offer', price: '149.00', priceCurrency: 'USD', description: 'Flat monthly rate, unlimited minutes' },
+    aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.9', ratingCount: '200', bestRating: '5' },
+    provider: { '@type': 'Organization', name: 'Roof Manager', url: base },
+    dateModified: today,
+  })
+
+  const stateFaqs =
+    featureSlug === 'measurements'
+      ? [
+          { q: `How accurate are satellite roof measurements in ${state.name}?`, a: `For ${state.name} properties with high-quality imagery (most urban and suburban addresses), accuracy is within 2–5% of manual measurement. Reports cost $8 USD after 3 free. ${state.roofingNotes}` },
+          { q: `Are Roof Manager reports accepted by ${state.name} insurance adjusters?`, a: `Yes. Reports include pitch-corrected area, edge breakdowns, and material BOMs accepted by ${state.topInsurers.slice(0, 3).join(', ')}, and other major ${state.name} carriers for ${state.stormProfile.primaryPeril.toLowerCase()} claims.` },
+        ]
+      : featureSlug === 'crm'
+      ? [
+          { q: `Does Roof Manager CRM support ${state.name} insurance claim tracking?`, a: `Yes. ${state.name} contractors typically create dedicated pipeline stages for ${state.stormProfile.primaryPeril.toLowerCase()} claims — adjuster pending, supplement submitted, carrier payment. The CRM integrates with measurement reports, proposals, and invoicing to carry claim data through the full job lifecycle.` },
+          { q: `What ${state.name} metros does Roof Manager serve?`, a: `All of them. Top ${state.name} metros on the platform include ${state.metros.slice(0, 5).join(', ')}. Google Solar API coverage is available for the vast majority of ${state.name} addresses.` },
+        ]
+      : [
+          { q: `Can the AI receptionist handle ${state.name} storm-season call surges?`, a: `Yes. ${state.name} sees approximately ${state.stormProfile.avgClaimsPerYear} roofing claims per year, typically clustered around ${state.stormProfile.primaryPeril.toLowerCase()} events. The AI answers every simultaneous call with zero hold times — no missed leads during the critical first 48 hours after a storm.` },
+          { q: `Does the AI recognize ${state.name} insurance carrier names?`, a: `Yes. The AI is trained on ${state.topInsurers.slice(0, 4).join(', ')}, and other major ${state.name} carriers. It captures claim numbers, carrier names, adjuster info, and deductible details automatically during the call.` },
+        ]
+  const combinedFaqs = [...stateFaqs, ...f.faq.slice(0, 3)]
+  const faqSchema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'FAQPage',
+    mainEntity: combinedFaqs.map(item => ({
+      '@type': 'Question', name: item.q,
+      acceptedAnswer: { '@type': 'Answer', text: item.a },
+    })),
+  })
+
+  const metroList = state.metros.slice(0, 8).map(m =>
+    `<div class="bg-white/5 border border-white/10 rounded-xl p-4"><div class="font-bold text-white text-sm">${m}</div><div class="text-gray-500 text-xs mt-1">${state.name}</div></div>`
+  ).join('')
+
+  const capabilities = f.capabilities.slice(0, 6).map(cap =>
+    `<li class="flex items-start gap-3 text-sm text-gray-300 leading-relaxed"><i class="fas fa-check-circle text-[${f.accentColor}] mt-0.5 flex-shrink-0"></i><span>${cap}</span></li>`
+  ).join('')
+
+  const faqHTML = combinedFaqs.map(item =>
+    `<div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="font-bold text-white text-sm mb-2">${item.q}</h3><p class="text-gray-400 text-sm leading-relaxed">${item.a}</p></div>`
+  ).join('')
+
+  return `<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  ${getHeadTags(`/features/${featureSlug}/${stateSlug}`)}
+  <title>${title} | Roof Manager</title>
+  <meta name="description" content="${desc}">
+  <link rel="canonical" href="${base}/features/${featureSlug}/${stateSlug}">
+  <meta property="og:title" content="${title} | Roof Manager">
+  <meta property="og:description" content="${desc}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${base}/features/${featureSlug}/${stateSlug}">
+  <meta property="og:image" content="${f.ogImage}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:site_name" content="Roof Manager">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="${f.ogImage}">
+  <meta name="geo.region" content="US-${state.code}">
+  <meta name="geo.placename" content="${state.name}, United States">
+  <script type="application/ld+json">${breadcrumbSchema}</script>
+  <script type="application/ld+json">${softwareSchema}</script>
+  <script type="application/ld+json">${faqSchema}</script>
+</head>
+<body style="background:#0A0A0A">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36" loading="eager">
+        <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
+      </a>
+      <div class="flex items-center gap-5">
+        <a href="/features/measurements" class="${featureSlug === 'measurements' ? `text-[${f.accentColor}]` : 'text-gray-400 hover:text-white'} text-sm font-medium transition-colors">Measurements</a>
+        <a href="/features/crm" class="${featureSlug === 'crm' ? `text-[${f.accentColor}]` : 'text-gray-400 hover:text-white'} text-sm font-medium transition-colors">CRM</a>
+        <a href="/features/ai-secretary" class="${featureSlug === 'ai-secretary' ? `text-[${f.accentColor}]` : 'text-gray-400 hover:text-white'} text-sm font-medium transition-colors">AI Secretary</a>
+        <a href="/us/${stateSlug}" class="text-gray-400 hover:text-white text-sm font-medium transition-colors">${state.name}</a>
+        <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm transition-all">Start Free</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-7xl mx-auto px-4 pt-6 pb-2">
+    <nav class="flex items-center gap-2 text-xs text-gray-500">
+      <a href="/" class="hover:text-gray-300 transition-colors">Home</a>
+      <span>/</span>
+      <a href="/services" class="hover:text-gray-300 transition-colors">Features</a>
+      <span>/</span>
+      <a href="/features/${featureSlug}" class="hover:text-gray-300 transition-colors">${f.title}</a>
+      <span>/</span>
+      <span class="text-gray-300">${state.name}</span>
+    </nav>
+  </div>
+
+  <section class="py-20 lg:py-24" style="background:#0A0A0A">
+    <div class="max-w-5xl mx-auto px-4">
+      <div class="inline-flex items-center gap-2 bg-[${f.accentColor}]/10 text-[${f.accentColor}] rounded-full px-4 py-1.5 text-sm font-semibold mb-6"><i class="${f.icon}"></i> ${featureLabel} &middot; ${state.name}, ${state.code}</div>
+      <h1 class="text-4xl lg:text-5xl font-black text-white mb-6 leading-tight tracking-tight">${title}</h1>
+      <p class="text-lg text-gray-400 mb-8 leading-relaxed max-w-3xl">${desc}</p>
+      <p class="text-sm text-gray-500 mb-8 max-w-3xl"><i class="fas fa-info-circle text-[${f.accentColor}] mr-1"></i>${state.roofingNotes}</p>
+      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <a href="/register" onclick="rrTrack('cta_click',{location:'feature_state_${featureSlug}_${stateSlug}_hero'})" class="inline-flex items-center justify-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-8 rounded-xl text-base shadow-xl shadow-[#00FF88]/20 transition-all hover:scale-[1.02]"><i class="fas fa-rocket"></i> Start Free in ${state.name}</a>
+        <a href="/us/${stateSlug}" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-3.5 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-map-marker-alt text-[${f.accentColor}]"></i> ${state.name} Hub</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-16 border-t border-white/5" style="background:#0d0d0d">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-2xl lg:text-3xl font-black text-white mb-8 text-center">What ${state.name} Contractors Get</h2>
+      <div class="bg-[#111] border border-white/10 rounded-2xl p-8">
+        <ul class="space-y-4">${capabilities}</ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-16 border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-2xl font-black text-white mb-8 text-center">Top ${state.name} Metros Using Roof Manager</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">${metroList}</div>
+    </div>
+  </section>
+
+  <section class="py-16 border-t border-white/5" style="background:#0d0d0d">
+    <div class="max-w-4xl mx-auto px-4">
+      <h2 class="text-2xl font-black text-white mb-8 text-center">${state.name} Storm &amp; Insurance Context</h2>
+      <div class="grid md:grid-cols-3 gap-6 mb-6">
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><div class="text-[${f.accentColor}] font-bold text-lg mb-1">${state.stormProfile.hailDaysPerYear}</div><div class="text-white font-semibold text-sm">Hail days/year</div></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><div class="text-[${f.accentColor}] font-bold text-lg mb-1">${state.stormProfile.avgClaimsPerYear}</div><div class="text-white font-semibold text-sm">Annual roofing claims</div></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><div class="text-[${f.accentColor}] font-bold text-lg mb-1">${state.buildingCode.adoptedIRC}</div><div class="text-white font-semibold text-sm">Building code</div></div>
+      </div>
+      <div class="bg-[#111] border border-white/10 rounded-xl p-5">
+        <div class="text-white font-semibold text-sm mb-2">Primary peril</div>
+        <div class="text-gray-300 text-sm">${state.stormProfile.primaryPeril}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-16 border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="text-2xl font-black text-white mb-8 text-center">FAQ &mdash; ${featureLabel} in ${state.name}</h2>
+      <div class="space-y-3">${faqHTML}</div>
+    </div>
+  </section>
+
+  <section class="py-16 border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-3xl mx-auto px-4 text-center">
+      <h2 class="text-2xl font-black text-white mb-4">Ready to serve ${state.name} faster?</h2>
+      <p class="text-gray-400 mb-8 text-sm">${featureSlug === 'measurements' ? '3 free reports on signup, no credit card.' : featureSlug === 'crm' ? 'Free forever. 4 free measurement reports included.' : '$149/month flat, unlimited minutes.'}</p>
+      <a href="/register" onclick="rrTrack('cta_click',{location:'feature_state_${featureSlug}_${stateSlug}_footer'})" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.03]"><i class="fas fa-rocket"></i> Start Free &mdash; ${state.name}</a>
+    </div>
+  </section>
+
+  <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+      <div class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" loading="lazy" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
+      <div class="flex flex-wrap items-center gap-4">
+        <a href="/features/measurements" class="hover:text-[#00FF88] transition-colors">Measurements</a>
+        <a href="/features/crm" class="hover:text-[#00FF88] transition-colors">CRM</a>
+        <a href="/features/ai-secretary" class="hover:text-[#00FF88] transition-colors">AI Secretary</a>
+        <a href="/us/${stateSlug}" class="hover:text-[#00FF88] transition-colors">${state.name} Hub</a>
+        <a href="/us" class="hover:text-[#00FF88] transition-colors">All 50 States</a>
+        <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing (USD)</a>
         <a href="/about" class="hover:text-[#00FF88] transition-colors">About</a>
       </div>
       <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
