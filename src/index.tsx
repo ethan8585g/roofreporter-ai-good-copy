@@ -4,7 +4,7 @@ import { getAccessToken, getProjectId, getServiceAccountEmail } from './services
 import { trackProposalViewed } from './services/ga4-events'
 import { buildClientAnalyticsScript } from './services/analytics-events'
 import { AB_SCRIPT } from './lib/ab'
-import { blogLeadMagnetHTML } from './lib/lead-forms'
+import { blogLeadMagnetHTML, freeMeasurementReportFormHTML } from './lib/lead-forms'
 import { ordersRoutes } from './routes/orders'
 import { companiesRoutes } from './routes/companies'
 import { settingsRoutes } from './routes/settings'
@@ -56,6 +56,7 @@ import { homeDesignerRoutes } from './routes/home-designer'
 import { sam3Routes } from './routes/sam3-analysis'
 import { platformAdmin } from './routes/platform-admin'
 import { superAdminBi } from './routes/super-admin-bi'
+import { superAdminLeads } from './routes/super-admin-leads'
 import { fieldRoutes, fieldUiRoutes } from './routes/field'
 import { publicApiRoutes } from './routes/public-api'
 import { publicPreviewRoutes } from './routes/public-preview'
@@ -380,6 +381,7 @@ app.route('/api/home-designer', homeDesignerRoutes)
 app.route('/api/sam3', sam3Routes)
 app.route('/api/admin/platform', platformAdmin)
 app.route('/api/admin/bi', superAdminBi)
+app.route('/api/admin/leads', superAdminLeads)
 app.route('/api/ai-autopilot', aiAutopilotRoutes)
 app.route('/api/agent-hub', agentHubRoutes)
 app.route('/api/field', fieldRoutes)
@@ -960,7 +962,8 @@ app.get('/sitemap-core.xml', (c) => {
     { loc: '/tools', priority: '0.8', changefreq: 'monthly' },
     { loc: '/tools/pitch-calculator', priority: '0.9', changefreq: 'monthly' },
     { loc: '/tools/material-estimator', priority: '0.9', changefreq: 'monthly' },
-    // Press / media kit
+    // About / press / media kit
+    { loc: '/about', priority: '0.7', changefreq: 'monthly' },
     { loc: '/press', priority: '0.6', changefreq: 'monthly' },
     // Competitor comparison pages (bottom-of-funnel, high commercial intent)
     { loc: '/roofr-alternative', priority: '0.9', changefreq: 'monthly' },
@@ -1506,6 +1509,8 @@ app.get('/tools/pitch-calculator', (c) => c.html(getPitchCalculatorHTML()))
 app.get('/tools/pitch-calculator/embed', (c) => c.html(getPitchCalculatorEmbedHTML()))
 app.get('/tools/material-estimator', (c) => c.html(getMaterialEstimatorHTML()))
 app.get('/tools/material-estimator/embed', (c) => c.html(getMaterialEstimatorEmbedHTML()))
+// About — company story, mission, team credentials (E-E-A-T signal page)
+app.get('/about', (c) => c.html(getAboutPageHTML()))
 // Press / media kit
 app.get('/press', (c) => c.html(getPressPageHTML()))
 app.get('/guides/:slug', (c) => {
@@ -3907,15 +3912,22 @@ function getTailwindConfig() {
   </script>`
 }
 
-function getHeadTags() {
+function getHeadTags(canonicalPath?: string) {
+  // Per-page hreflang when a canonical path is supplied; defaults to the
+  // homepage for backward compatibility with callers that haven't been
+  // updated yet. The site is a single English property targeting en-US and
+  // en-CA, so all locale tags point to the same URL.
+  const hreflangTarget = canonicalPath
+    ? `https://www.roofmanager.ca${canonicalPath.startsWith('/') ? canonicalPath : '/' + canonicalPath}`
+    : 'https://www.roofmanager.ca/'
   return `<meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="google-site-verification" content="CvzH14V1vTrop4cCx2z90ZUFnt4GJJNr1KkgiywoO2g" />
   <meta name="theme-color" content="#00FF88">
-  <link rel="alternate" hreflang="en-US" href="https://www.roofmanager.ca/">
-  <link rel="alternate" hreflang="en-CA" href="https://www.roofmanager.ca/">
-  <link rel="alternate" hreflang="en" href="https://www.roofmanager.ca/">
-  <link rel="alternate" hreflang="x-default" href="https://www.roofmanager.ca/">
+  <link rel="alternate" hreflang="en-US" href="${hreflangTarget}">
+  <link rel="alternate" hreflang="en-CA" href="${hreflangTarget}">
+  <link rel="alternate" hreflang="en" href="${hreflangTarget}">
+  <link rel="alternate" hreflang="x-default" href="${hreflangTarget}">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://maps.googleapis.com">
   <link rel="preconnect" href="https://maps.gstatic.com" crossorigin>
@@ -5004,6 +5016,11 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
           <span class="label text-sm font-semibold">Inbox</span>
           <span id="sa-sidebar-inbox-badge" style="margin-left:auto;background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none">0</span>
         </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-section="leads" onclick="saSetSection('leads', this)">
+          <i class="fas fa-user-plus w-5 text-center"></i>
+          <span class="label text-sm font-semibold">Leads</span>
+          <span id="sa-sidebar-leads-badge" style="margin-left:auto;background:#10b981;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none">0</span>
+        </div>
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-section="customers" onclick="saSetSection('customers', this)">
           <i class="fas fa-users w-5 text-center"></i>
           <span class="label text-sm font-semibold">Customers</span>
@@ -5064,6 +5081,7 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
     // saSetSection is defined in super-admin-dashboard.js — handles section switching
   </script>
   <script src="/static/super-admin-dashboard.js?v=${Date.now()}"></script>
+  <script src="/static/super-admin-leads.js?v=${Date.now()}"></script>
   <script src="/static/admin-agent-chat.js?v=${Date.now()}"></script>
   <script src="/static/call-center.js"></script>
   <script src="/static/meta-connect.js"></script>
@@ -6320,6 +6338,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               Claim My 4 Free Reports &#x2192;
             </a>
             <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:0">No credit card. Takes 60 seconds.</p>
+            <!-- Lead magnet: zero-friction "give us your address, we'll email the report" -->
+            ${freeMeasurementReportFormHTML('homepage_hero', 'hero')}
 
             <!-- Preview result panel -->
             <div id="hero-preview-result" style="display:none;margin-bottom:16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:16px">
@@ -10090,7 +10110,7 @@ function getFeatureHubPageHTML(featureSlug: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  ${getHeadTags()}
+  ${getHeadTags(`/features/${f.slug}`)}
   <title>${f.title} | Roof Manager</title>
   <meta name="description" content="${f.metaDesc}">
   <link rel="canonical" href="${base}/features/${f.slug}">
@@ -11298,7 +11318,7 @@ function getPricingPageHTML() {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  ${getHeadTags()}
+  ${getHeadTags('/pricing')}
   <title>Roof Report Pricing — AI Measurements from $5/Report | Roof Manager</title>
   <meta name="description" content="Simple roof report pricing. 4 free reports to start, then $8/report. Save with credit packs: 10-pack at $7.50/ea, 25-pack at $7.00/ea, 100-pack at $5.95/ea. Includes CRM, proposals, invoicing, and AI secretary.">
   <link rel="canonical" href="https://www.roofmanager.ca/pricing">
@@ -11617,6 +11637,10 @@ function getPricingPageHTML() {
       <p class="text-center text-xs mt-4" style="color:var(--text-muted)">All prices in USD. Credits never expire.</p>
     </div>
     </div>
+    <!-- Lead magnet: zero-friction way to get a report before paying -->
+    <div style="max-width:1100px;margin:0 auto;padding:0 20px">
+      ${freeMeasurementReportFormHTML('pricing_page', 'inline')}
+    </div>
   </main>
   ${getContactFormHTML('pricing')}
   <script src="/static/pricing.js"></script>
@@ -11863,6 +11887,7 @@ function getBlogListingHTML(posts: any[] = []) {
         <div>
           <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Company</h4>
           <ul class="space-y-2.5 text-sm">
+            <li><a href="/about" class="hover:text-[#00FF88] transition-colors">About</a></li>
             <li><a href="/press" class="hover:text-[#00FF88] transition-colors">Press &amp; Media</a></li>
             <li><a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy Policy</a></li>
             <li><a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms of Service</a></li>
@@ -11899,11 +11924,24 @@ function getBlogPostHTML(post?: any, slug?: string) {
   const published = post?.published_at || ''
   const updated = post?.updated_at || ''
   const author = post?.author_name || 'Roof Manager Team'
+  // E-E-A-T: Person author with expertise signals. Falls back cleanly for
+  // historical posts authored as the editorial team.
+  const authorSchema = JSON.stringify({
+    '@type': 'Person',
+    name: author === 'Roof Manager Team' ? 'Roof Manager Editorial Team' : author,
+    url: 'https://www.roofmanager.ca/about',
+    jobTitle: 'Roofing measurement & software engineering team',
+    description: 'Roofing-domain engineers and measurement specialists who build and verify satellite roof measurement reports, CRM automation, and AI receptionist workflows at Roof Manager.',
+    knowsAbout: ['roof measurement', 'satellite imagery analysis', 'Google Solar API', 'roofing CRM', 'insurance estimating', 'hail damage assessment', 'solar suitability'],
+    worksFor: { '@type': 'Organization', name: 'Roof Manager', url: 'https://www.roofmanager.ca/' },
+  })
+  const wordCount = post?.content ? String(post.content).replace(/<[^>]+>/g, ' ').trim().split(/\s+/).length : 0
+  const keywords = post?.tags || ''
   const blogSchema = post ? `<script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"BlogPosting","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":{"@type":"Organization","name":"${author}"},"publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://www.roofmanager.ca/static/logo.png"}}}
+  {"@context":"https://schema.org","@type":"BlogPosting","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":${authorSchema},"publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://www.roofmanager.ca/static/logo.png"}},"mainEntityOfPage":{"@type":"WebPage","@id":"https://www.roofmanager.ca/blog/${slug || ''}"},"inLanguage":"en","articleSection":"${(post.category || '').replace(/"/g, '\\"')}","keywords":"${keywords.replace(/"/g, '\\"')}","wordCount":${wordCount}}
   </script>
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"Article","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":{"@type":"Organization","name":"Roof Manager"},"publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://www.roofmanager.ca/static/logo.png"}},"mainEntityOfPage":{"@type":"WebPage","@id":"https://www.roofmanager.ca/blog/${slug || ''}"}}
+  {"@context":"https://schema.org","@type":"Article","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":${authorSchema},"publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://www.roofmanager.ca/static/logo.png"}},"mainEntityOfPage":{"@type":"WebPage","@id":"https://www.roofmanager.ca/blog/${slug || ''}"},"inLanguage":"en","articleSection":"${(post.category || '').replace(/"/g, '\\"')}","keywords":"${keywords.replace(/"/g, '\\"')}","wordCount":${wordCount}}
   </script>` : ''
   const breadcrumbSchema = slug ? `<script type="application/ld+json">
 {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Blog","item":"https://www.roofmanager.ca/blog"},{"@type":"ListItem","position":3,"name":"${(post?.title || '').replace(/"/g, '\\"')}","item":"https://www.roofmanager.ca/blog/${slug}"}]}
@@ -12094,12 +12132,14 @@ function getBlogPostHTML(post?: any, slug?: string) {
     <div class="mb-8">
       ${post.cover_image_url ? `<img src="${post.cover_image_url}" alt="${(post.title || '').replace(/"/g, '&quot;')}" class="w-full h-auto rounded-2xl mb-8 shadow-lg" />` : ''}
       <h1 class="text-3xl md:text-4xl font-black text-white mb-4 leading-tight">${post.title || ''}</h1>
-      <div class="flex flex-wrap items-center gap-4 text-sm text-gray-500 mb-6">
-        <span><i class="fas fa-user mr-1"></i>${post.author_name || 'Roof Manager Team'}</span>
-        <span><i class="fas fa-calendar mr-1"></i>${post.published_at ? new Date(post.published_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''}</span>
+      <div class="flex flex-wrap items-center gap-4 text-sm text-gray-500 mb-3">
+        <a href="/about" class="text-gray-300 hover:text-[#00FF88] transition-colors" rel="author"><i class="fas fa-user-edit mr-1"></i>By ${(post.author_name === 'Roof Manager Team' || !post.author_name) ? 'Roof Manager Editorial Team' : post.author_name}</a>
+        ${post.published_at ? `<span><i class="fas fa-calendar mr-1"></i>Published ${new Date(post.published_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>` : ''}
+        ${(post.updated_at && post.published_at && new Date(post.updated_at).toDateString() !== new Date(post.published_at).toDateString()) ? `<span class="text-[#00FF88]"><i class="fas fa-sync-alt mr-1"></i>Updated ${new Date(post.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>` : ''}
         <span><i class="fas fa-clock mr-1"></i>${post.read_time_minutes || 5} min read</span>
         ${post.category ? `<span class="bg-[#00FF88]/10 text-[#00FF88] px-2 py-0.5 rounded text-xs font-bold">${post.category}</span>` : ''}
       </div>
+      <p class="text-xs text-gray-600 mb-6"><i class="fas fa-shield-alt text-[#00FF88] mr-1"></i>Reviewed by roofing measurement engineers · Roof Manager is the roof measurement & CRM platform trusted by 5,000+ contractors across the US & Canada.</p>
     </div>
     ${post.excerpt ? `<div style="background:#111111;border-left:4px solid #00FF88;padding:1.25rem 1.5rem;margin-bottom:2rem;border-radius:0 8px 8px 0;">
       <p style="font-weight:700;color:#00FF88;margin:0 0 0.5rem;font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;">TL;DR</p>
@@ -12168,6 +12208,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
         <div>
           <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Company</h4>
           <ul class="space-y-2.5 text-sm">
+            <li><a href="/about" class="hover:text-[#00FF88] transition-colors">About</a></li>
             <li><a href="/press" class="hover:text-[#00FF88] transition-colors">Press &amp; Media</a></li>
             <li><a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy Policy</a></li>
             <li><a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms of Service</a></li>
@@ -16847,6 +16888,224 @@ function getPitchCalculatorEmbedHTML(): string {
     }
     calc(6)
   </script>
+</body>
+</html>`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ABOUT — /about
+// Company story + E-E-A-T signal page. Trust/credibility for both human
+// visitors and AI assistants that cite author/org context.
+// ─────────────────────────────────────────────────────────────────────────────
+function getAboutPageHTML(): string {
+  const base = 'https://www.roofmanager.ca'
+  const aboutSchema = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'AboutPage',
+    url: `${base}/about`,
+    name: 'About Roof Manager',
+    description: 'Roof Manager is the satellite roof measurement and roofing CRM platform built by a team of measurement engineers and software developers for roofing contractors across the US and Canada.',
+    inLanguage: 'en',
+    isPartOf: { '@type': 'WebSite', name: 'Roof Manager', url: base },
+    mainEntity: {
+      '@type': 'Organization',
+      name: 'Roof Manager',
+      url: base,
+      logo: `${base}/static/logo.png`,
+      foundingDate: '2024',
+      description: 'AI-powered satellite roof measurement reports, CRM, proposals, invoicing, and voice receptionist for residential and commercial roofing contractors.',
+      areaServed: ['Canada', 'United States'],
+      knowsAbout: [
+        'satellite roof measurement',
+        'Google Solar API',
+        'LiDAR elevation modelling',
+        'roof pitch calculation',
+        'material take-off',
+        'insurance roof claims',
+        'hail damage assessment',
+        'solar suitability reports',
+        'roofing CRM',
+        'AI voice receptionist',
+      ],
+      slogan: 'Property-grade roof measurements in under 60 seconds.',
+      sameAs: [
+        'https://www.facebook.com/roofmanager',
+        'https://www.instagram.com/roofmanager',
+      ],
+      contactPoint: [{ '@type': 'ContactPoint', contactType: 'customer support', email: 'hello@roofmanager.ca', availableLanguage: 'English' }],
+    },
+  })
+  const breadcrumbSchema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: `${base}/` },
+      { '@type': 'ListItem', position: 2, name: 'About', item: `${base}/about` },
+    ],
+  })
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags('/about')}
+  <title>About Roof Manager — The Roof Measurement & CRM Platform Built for Contractors</title>
+  <meta name="description" content="Roof Manager is built by measurement engineers and software developers for roofing contractors across the US and Canada. Learn how we build our satellite measurement engine, what we verify, and the accuracy we deliver.">
+  <link rel="canonical" href="${base}/about">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="About Roof Manager — The Roof Measurement & CRM Platform">
+  <meta property="og:description" content="Satellite roof measurement reports, CRM, and AI voice receptionist — built by roofing-domain engineers for contractors across North America.">
+  <meta property="og:image" content="${base}/static/logo.png">
+  <meta property="og:url" content="${base}/about">
+  <meta property="og:site_name" content="Roof Manager">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="About Roof Manager">
+  <meta name="twitter:description" content="The roof measurement & CRM platform trusted by 5,000+ contractors.">
+  <meta name="twitter:image" content="${base}/static/logo.png">
+  <script type="application/ld+json">${aboutSchema}</script>
+  <script type="application/ld+json">${breadcrumbSchema}</script>
+</head>
+<body class="min-h-screen" style="background:#0A0A0A;color:#fff">
+  <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.05)" class="sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
+        <span class="text-white font-bold text-lg">Roof Manager</span>
+      </a>
+      <div class="hidden md:flex items-center gap-5">
+        <a href="/pricing" class="text-gray-400 hover:text-white text-sm">Pricing</a>
+        <a href="/blog" class="text-gray-400 hover:text-white text-sm">Blog</a>
+        <a href="/about" class="text-[#00FF88] font-semibold text-sm border-b-2 border-[#00FF88] pb-0.5">About</a>
+        <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-lg text-sm">Get 4 Free Reports</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-5xl mx-auto px-4 py-4">
+    <nav class="text-sm text-gray-500">
+      <a href="/" class="hover:text-[#00FF88]">Home</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-300 font-medium">About</span>
+    </nav>
+  </div>
+
+  <main class="max-w-5xl mx-auto px-4 pb-20">
+    <section class="text-center mb-16">
+      <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-6">About Roof Manager</span>
+      <h1 class="text-4xl md:text-6xl font-black text-white mb-6 leading-tight">The roof measurement platform<br/><span class="text-[#00FF88]">built for contractors, by engineers.</span></h1>
+      <p class="text-lg md:text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">Roof Manager is a satellite roof measurement report and complete CRM &mdash; proposals, invoicing, AI voice receptionist &mdash; engineered for residential and commercial roofing contractors across the United States and Canada. We build the tools we wish existed when we were sourcing measurement reports ourselves.</p>
+    </section>
+
+    <section class="bg-[#111] border border-white/10 rounded-2xl p-8 md:p-12 mb-12">
+      <h2 class="text-2xl md:text-3xl font-black text-white mb-4">Our mission</h2>
+      <p class="text-gray-300 text-lg leading-relaxed">To remove the ladder, the driving time, and the third-party markup from every residential roof estimate &mdash; and to give independent contractors the same measurement, CRM, and automation capabilities the large franchises pay five-figure monthly fees for.</p>
+    </section>
+
+    <section class="mb-16">
+      <h2 class="text-2xl md:text-3xl font-black text-white mb-8 text-center">Why we built this</h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="bg-[#111] border border-red-500/20 rounded-2xl p-6">
+          <h3 class="text-red-400 font-bold text-sm uppercase tracking-wider mb-3"><i class="fas fa-times-circle mr-1"></i>The old way</h3>
+          <ul class="space-y-3 text-gray-300 text-sm leading-relaxed">
+            <li><i class="fas fa-chevron-right text-red-400 text-xs mr-2"></i>Drive 45 minutes each way to measure a roof</li>
+            <li><i class="fas fa-chevron-right text-red-400 text-xs mr-2"></i>Pay $60&ndash;$90 per EagleView report, wait hours or days</li>
+            <li><i class="fas fa-chevron-right text-red-400 text-xs mr-2"></i>Toggle between 5 disconnected tools for CRM, invoicing, proposals</li>
+            <li><i class="fas fa-chevron-right text-red-400 text-xs mr-2"></i>Miss calls after hours and lose leads to a competitor who answered</li>
+          </ul>
+        </div>
+        <div class="bg-[#111] border border-[#00FF88]/20 rounded-2xl p-6">
+          <h3 class="text-[#00FF88] font-bold text-sm uppercase tracking-wider mb-3"><i class="fas fa-check-circle mr-1"></i>The Roof Manager way</h3>
+          <ul class="space-y-3 text-gray-300 text-sm leading-relaxed">
+            <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>Enter an address, receive a measured report in 60 seconds</li>
+            <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>$8 per report (flat), or $5.95 each on a 100-pack</li>
+            <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>CRM, proposals, invoicing, and AI secretary in one platform</li>
+            <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>A 24/7 AI phone receptionist qualifies every inbound call</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-16">
+      <h2 class="text-2xl md:text-3xl font-black text-white mb-4 text-center">How we build our measurement engine</h2>
+      <p class="text-gray-400 text-center max-w-3xl mx-auto mb-10">We don't resell someone else's measurement reports. The engine is our own &mdash; verifiable, auditable, and cross-checked against multiple authoritative data sources before a number ever reaches your report.</p>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="bg-[#111] border border-white/10 rounded-xl p-6">
+          <div class="text-[#00FF88] text-2xl mb-3"><i class="fas fa-satellite-dish"></i></div>
+          <h3 class="text-white font-bold text-lg mb-2">Google Solar API</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">We pull the authoritative building footprint, per-plane pitch, roof-segment decomposition, and DSM elevation raster for every property &mdash; the same data source Google uses for its own solar insights product.</p>
+        </div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-6">
+          <div class="text-[#00FF88] text-2xl mb-3"><i class="fas fa-ruler-combined"></i></div>
+          <h3 class="text-white font-bold text-lg mb-2">Geodesic measurement engine</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">User-drawn GPS traces (eaves, ridges, hips, valleys) are processed through our own spherical-geodesic math library &mdash; published in TypeScript and a standalone Python reference implementation &mdash; to compute projected area, sloped area, edge lengths, and material take-off at configurable waste factors.</p>
+        </div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-6">
+          <div class="text-[#00FF88] text-2xl mb-3"><i class="fas fa-eye"></i></div>
+          <h3 class="text-white font-bold text-lg mb-2">Gemini vision analysis</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Google Gemini 2.0 and 2.5 models inspect aerial imagery, drone captures, and homeowner photos to identify material, flag visible damage, estimate remaining service life, and classify storm versus wear causation.</p>
+        </div>
+      </div>
+      <p class="text-gray-500 text-sm text-center mt-8 max-w-3xl mx-auto"><i class="fas fa-shield-alt text-[#00FF88] mr-1"></i>The engine cross-checks against the Solar API's own segment totals and flags the job for review whenever the two diverge beyond tolerance &mdash; rather than silently emitting a wrong number.</p>
+    </section>
+
+    <section class="mb-16">
+      <h2 class="text-2xl md:text-3xl font-black text-white mb-8 text-center">The numbers</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-[#111] border border-white/10 rounded-xl p-6 text-center">
+          <div class="text-3xl md:text-4xl font-black text-[#00FF88] mb-1">5,000+</div>
+          <div class="text-xs text-gray-400 uppercase tracking-wider">Roofers on the platform</div>
+        </div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-6 text-center">
+          <div class="text-3xl md:text-4xl font-black text-[#00FF88] mb-1">2&ndash;5%</div>
+          <div class="text-xs text-gray-400 uppercase tracking-wider">Accuracy vs. manual measurement</div>
+        </div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-6 text-center">
+          <div class="text-3xl md:text-4xl font-black text-[#00FF88] mb-1">60s</div>
+          <div class="text-xs text-gray-400 uppercase tracking-wider">Typical report turnaround</div>
+        </div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-6 text-center">
+          <div class="text-3xl md:text-4xl font-black text-[#00FF88] mb-1">US + CA</div>
+          <div class="text-xs text-gray-400 uppercase tracking-wider">Coverage across North America</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-16">
+      <h2 class="text-2xl md:text-3xl font-black text-white mb-8 text-center">What we stand for</h2>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="bg-[#111] border border-white/10 rounded-xl p-6">
+          <h3 class="text-white font-bold text-lg mb-2"><i class="fas fa-balance-scale text-[#00FF88] mr-2"></i>Verifiable accuracy</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Every report includes an imagery quality score, a confidence rating, and &mdash; when the measurement diverges from the Solar API reference &mdash; an explicit review flag. We'd rather delay one report than deliver a wrong number.</p>
+        </div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-6">
+          <h3 class="text-white font-bold text-lg mb-2"><i class="fas fa-tag text-[#00FF88] mr-2"></i>No subscriptions</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">We never charge a monthly platform fee. CRM, proposals, invoicing, and the AI secretary are included. You pay $8 per report &mdash; or less on credit packs &mdash; and that's it.</p>
+        </div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-6">
+          <h3 class="text-white font-bold text-lg mb-2"><i class="fas fa-map-marked-alt text-[#00FF88] mr-2"></i>Built for North America</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Material BOMs respect both metric and imperial units. Pricing benchmarks are tracked per province and per state. The AI secretary handles both Canadian French and US Spanish. We're not a generic global product squinting at two markets &mdash; we're built for them.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="bg-gradient-to-br from-[#00FF88]/10 to-transparent border border-[#00FF88]/20 rounded-2xl p-8 md:p-12 text-center">
+      <h2 class="text-2xl md:text-3xl font-black text-white mb-4">Try the platform &mdash; no card, no call.</h2>
+      <p class="text-gray-400 text-lg mb-8 max-w-2xl mx-auto">Four free property-grade reports with every new account. See the full platform: measurements, CRM, proposals, invoicing, AI secretary.</p>
+      <a href="/register" class="inline-block bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-xl shadow-[#00FF88]/20 transition-all hover:scale-[1.03]"><i class="fas fa-gift mr-2"></i>Get 4 Free Reports <i class="fas fa-arrow-right ml-1"></i></a>
+      <p class="text-xs text-gray-500 mt-4">60-second signup &middot; No credit card required</p>
+    </section>
+  </main>
+
+  <footer style="background:#0A0A0A" class="text-gray-500 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4 py-12 flex flex-col md:flex-row items-center justify-between gap-4">
+      <p class="text-xs text-gray-600">&copy; 2026 Roof Manager. All rights reserved.</p>
+      <div class="flex items-center gap-5 text-xs">
+        <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a>
+        <a href="/blog" class="hover:text-[#00FF88] transition-colors">Blog</a>
+        <a href="/press" class="hover:text-[#00FF88] transition-colors">Press</a>
+        <a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy</a>
+        <a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms</a>
+        <a href="mailto:hello@roofmanager.ca" class="hover:text-[#00FF88] transition-colors">Contact</a>
+      </div>
+    </div>
+  </footer>
 </body>
 </html>`
 }
