@@ -93,6 +93,19 @@ leadCaptureRoutes.post('/asset-report/lead', async (c) => {
     `INSERT INTO asset_report_leads (email, address, building_count, source) VALUES (?, ?, ?, ?)`
   ).bind(String(body.email).toLowerCase().trim(), address, buildings, source).run()
 
+  // Mirror into unified `leads` table so super-admin leads inbox surfaces it.
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO leads (name, email, address, source_page, message) VALUES (?, ?, ?, ?, ?)`
+    ).bind(
+      body.email ? String(body.email).split('@')[0].slice(0, 60) : 'Blog visitor',
+      String(body.email).toLowerCase().trim(),
+      address,
+      `blog:${source}`,
+      `Free sample/measurement report request from blog${address ? ` — ${address}` : ''}${buildings ? ` (${buildings} buildings)` : ''}`,
+    ).run()
+  } catch (e: any) { console.warn('[asset-report/lead] leads mirror insert skipped:', e?.message) }
+
   // Fire email with sample report link
   try {
     if (c.env.GCP_SERVICE_ACCOUNT_JSON) {
@@ -168,6 +181,13 @@ leadCaptureRoutes.post('/contact/lead', async (c) => {
     console.error('[contact/lead insert]', e?.message)
     return c.json({ error: 'Failed to save lead' }, 500)
   }
+
+  // Mirror into unified `leads` table so super-admin leads inbox surfaces it.
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO leads (name, email, phone, company_name, source_page, message, utm_source) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(name, email.toLowerCase(), phone, company, utm_source || 'contact_form', message, utm_source).run()
+  } catch (e: any) { console.warn('[contact/lead] leads mirror insert skipped:', e?.message) }
 
   notifySalesNewLead(c.env, {
     source: 'contact_form',

@@ -303,7 +303,18 @@ CANADIAN MARKET REQUIREMENTS:
 - Mention CAD pricing where relevant: Roof Manager reports cost $8 CAD after 3 free.
 - Reference relevant Canadian building codes (NBC, provincial codes) where applicable.`
 
-  return `You are an expert SEO/GEO content writer for ${brand}
+  return `You are an expert SEO/GEO content writer AND satellite roof-measurement keyword strategist for ${brand}
+
+KEYWORD EXPERTISE (deep domain — use this vocabulary naturally where relevant):
+- Primary terms: "satellite roof measurement", "aerial roof measurement", "instant roof measurement report", "roof measurement software", "roof measurement app", "contractor roof measurement", "roof estimating software", "roof takeoff software", "roofer CRM", "roofing CRM", "roofing business software", "roofing proposal software".
+- Competitor-comparison intent: "EagleView alternative", "EagleView vs", "Roofr alternative", "RoofSnap alternative", "Hover alternative", "GAF QuickMeasure alternative", "cheaper than EagleView".
+- Insurance / storm intent: "hail damage roof inspection", "storm restoration roof measurement", "insurance roof claim measurement", "Xactimate sketch", "insurance-grade roof report".
+- Solar intent: "solar roof suitability report", "roof pitch for solar", "Google Solar API", "PVWatts", "solar panel roof measurement".
+- Technical: "LiDAR roof measurement", "DSM roof elevation", "roof pitch calculator", "roof square footage calculator", "projected vs sloped area", "waste factor", "material take-off", "bundle calculator".
+- GEO/answer-engine intent: use exact-match How/What/Why/Cost/Best-X-for-Y phrasings that match People Also Ask and ChatGPT citations.
+
+THIS ARTICLE IS A LEAD FUNNEL. Every blog post ends with two auto-injected forms (free sample report + contact form) plus a super-admin CTA. Write the article as a funnel: (1) hook that names the reader's pain with a number, (2) what the reader actually needs to know, (3) how satellite measurement + Roof Manager solves it, (4) explicit CTA language that tees up the forms below — e.g., "Grab the free sample report at the end of this article to see exactly what contractors receive." The reader should arrive at the forms already primed to convert.
+
 Write a 1400-2000 word blog article targeting the keyword "${row.keyword}"${geo}.
 Intent: ${row.intent}. Audience: professional roofing contractors.
 ${usFraming}
@@ -329,7 +340,17 @@ CORE REQUIREMENTS:
 
 7. SCHEMA: Include a <script type="application/ld+json"> block with BOTH BlogPosting AND FAQPage schemas. For step-by-step articles, also include HowTo schema.
 
-8. Start with a concrete hook that answers the page's target query in the FIRST 50 WORDS with at least one specific number. Bad: "Replacing your roof is a big decision." Good: "Replacing a roof on a 2,000 sq ft Texas home costs $9,000–$18,000 in 2026, depending on material, pitch, and the insurer's settlement terms."
+8. INLINE IMAGES (mandatory): Embed 2–3 <img> tags distributed through the article body (after 1st H2, after 3rd H2, and optionally before the FAQ). Choose ONLY from these real, royalty-free, topic-relevant Unsplash URLs — never invent image URLs:
+   - Roof / shingles / contractor: https://images.unsplash.com/photo-1632759145355-6b9b1a1f57cd?w=1200&q=70
+   - Hail / storm damage: https://images.unsplash.com/photo-1504609813442-a8924e83f76e?w=1200&q=70
+   - Insurance / paperwork: https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=1200&q=70
+   - Solar panels on roof: https://images.unsplash.com/photo-1509390157308-aa3f4b9b2f58?w=1200&q=70
+   - Aerial / satellite city view: https://images.unsplash.com/photo-1502920917128-1aa500764cbd?w=1200&q=70
+   - Commercial roof / flat roof: https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1200&q=70
+   - Contractor at laptop: https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=1200&q=70
+   Every <img> MUST have descriptive, keyword-rich alt text (for SEO + accessibility) and style="width:100%;border-radius:12px;margin:24px 0;" plus loading="lazy".
+
+9. Start with a concrete hook that answers the page's target query in the FIRST 50 WORDS with at least one specific number. Bad: "Replacing your roof is a big decision." Good: "Replacing a roof on a 2,000 sq ft Texas home costs $9,000–$18,000 in 2026, depending on material, pitch, and the insurer's settlement terms."
 
 ${row.geo_modifier ? `LOCAL CONTEXT: Mention ${row.geo_modifier}-specific factors — local climate, building codes, top insurers, storm history. Include at least one statistic specific to ${row.geo_modifier}.` : ''}
 
