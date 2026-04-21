@@ -1090,6 +1090,7 @@ function renderReportRequestsView() {
       '<p style="font-size:13px;color:#6b7280;margin-top:2px">All measurement report orders — review, trace, and deliver</p>' +
     '</div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button onclick="saOpenCreateOrderModal()" style="font-size:12px;border:none;border-radius:8px;padding:6px 14px;background:#0ea5e9;color:#fff;font-weight:700;cursor:pointer"><i class="fas fa-plus mr-1"></i>New Report Order</button>' +
       '<select onchange="saFilterReportReq(this.value)" style="font-size:12px;border:1px solid #374151;border-radius:8px;padding:6px 12px;background:#1f2937;color:#d1d5db">' +
         ['', 'pending', 'processing', 'completed', 'failed', 'cancelled'].map(function(s) {
           var labels = { '': 'All', pending: 'Pending', processing: 'Processing', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' };
@@ -1151,7 +1152,7 @@ function renderReportRequestsView() {
     html += '<div style="background:#1e293b;border:1px solid #334155;border-radius:14px;overflow:hidden">' +
       '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">' +
         '<thead><tr style="background:#0f172a;border-bottom:1px solid #334155">' +
-          ['Order #', 'Customer', 'Property Address', 'Date', 'Status', 'Report', 'Actions'].map(function(h) {
+          ['Order #', 'Customer', 'Property Address', 'Date', 'Status', 'Report', 'Share Views', 'Actions'].map(function(h) {
             return '<th style="padding:12px 14px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap">' + h + '</th>';
           }).join('') +
         '</tr></thead><tbody>';
@@ -1159,6 +1160,14 @@ function renderReportRequestsView() {
     orders.forEach(function(o, i) {
       var rs = o.report_status || 'pending';
       var os = o.status || 'pending';
+      var views = (o.share_view_count != null) ? o.share_view_count : 0;
+      var hasShare = !!o.share_token;
+      var shareCell = hasShare
+        ? '<div style="display:flex;align-items:center;gap:6px;white-space:nowrap">' +
+            '<span style="padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;background:rgba(56,189,248,0.15);color:#38bdf8" title="Times the shared link has been opened"><i class="fas fa-eye mr-1"></i>' + views + '</span>' +
+            '<button onclick="saCopyShareLink(\'' + o.share_token + '\')" title="Copy share link" style="padding:3px 8px;background:#1f2937;color:#94a3b8;font-size:11px;border:1px solid #374151;border-radius:6px;cursor:pointer"><i class="fas fa-link"></i></button>' +
+          '</div>'
+        : '<span style="color:#4b5563;font-size:11px">—</span>';
       html += '<tr style="border-bottom:1px solid #1e293b;background:' + (i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)') + '">' +
         '<td style="padding:11px 14px;font-family:monospace;font-size:12px;color:#94a3b8;white-space:nowrap">' + (o.order_number || '#' + o.id) + '</td>' +
         '<td style="padding:11px 14px;color:#cbd5e1;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
@@ -1169,6 +1178,7 @@ function renderReportRequestsView() {
         '<td style="padding:11px 14px;color:#64748b;white-space:nowrap;font-size:12px">' + (o.created_at || '').slice(0, 10) + '</td>' +
         '<td style="padding:11px 14px"><span style="padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;background:' + statusBg(os) + ';color:' + statusColor(os) + '">' + os + '</span></td>' +
         '<td style="padding:11px 14px"><span style="padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;background:' + statusBg(rs) + ';color:' + statusColor(rs) + '">' + rs + '</span></td>' +
+        '<td style="padding:11px 14px">' + shareCell + '</td>' +
         '<td style="padding:11px 14px;white-space:nowrap">' +
           (o.needs_admin_trace ?
             '<button onclick="saOpenTraceModal(' + o.id + ',' + (o.latitude || 0) + ',' + (o.longitude || 0) + ',\'' + (o.property_address || '').replace(/'/g, "\\'") + '\',\'' + (o.order_number || '') + '\')" style="padding:5px 12px;background:#f59e0b;color:#111;font-size:11px;font-weight:700;border:none;border-radius:6px;cursor:pointer"><i class="fas fa-drafting-compass mr-1"></i>Trace</button>' :
@@ -1183,6 +1193,137 @@ function renderReportRequestsView() {
 
   return html;
 }
+
+// ── Copy shared report link to clipboard ───────────────────
+window.saCopyShareLink = function(token) {
+  var url = window.location.origin + '/report/share/' + token;
+  var done = function() { saToast('Share link copied — ' + url); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(done).catch(function() {
+      window.prompt('Copy this share link:', url);
+    });
+  } else {
+    window.prompt('Copy this share link:', url);
+  }
+};
+
+function saToast(msg) {
+  var t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0f172a;color:#f9fafb;border:1px solid #334155;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:10000;box-shadow:0 4px 20px rgba(0,0,0,0.4)';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function(){ t.remove(); }, 2600);
+}
+
+// ── Create New Report Order (Super Admin) ──────────────────
+window.saOpenCreateOrderModal = function() {
+  var existing = document.getElementById('sa-create-order-modal');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'sa-create-order-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML =
+    '<div style="background:#111827;border:1px solid #374151;border-radius:16px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto">' +
+      '<div style="padding:18px 22px;border-bottom:1px solid #374151;display:flex;align-items:center;justify-content:space-between">' +
+        '<div>' +
+          '<div style="color:#f9fafb;font-size:16px;font-weight:800"><i class="fas fa-satellite-dish mr-2" style="color:#0ea5e9"></i>New Roof Measurement Report</div>' +
+          '<div style="color:#6b7280;font-size:12px;margin-top:3px">Create an order — a report will be generated for this address</div>' +
+        '</div>' +
+        '<button onclick="document.getElementById(\'sa-create-order-modal\').remove()" style="color:#6b7280;background:none;border:none;font-size:22px;cursor:pointer;line-height:1">&times;</button>' +
+      '</div>' +
+      '<form id="sa-create-order-form" onsubmit="return saSubmitCreateOrder(event)" style="padding:20px 22px;display:flex;flex-direction:column;gap:14px">' +
+        saOrderField('property_address', 'Property Address', 'text', true, '123 Main St, Toronto, ON M5V 1A1') +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          saOrderField('homeowner_name', 'Homeowner Name', 'text', true, 'Jane Smith') +
+          saOrderField('homeowner_email', 'Homeowner Email', 'email', false, 'jane@example.com') +
+        '</div>' +
+        saOrderField('homeowner_phone', 'Homeowner Phone', 'tel', false, '(555) 123-4567') +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          saOrderField('requester_name', 'Requester Name', 'text', true, 'Roof Manager Admin') +
+          saOrderField('requester_email', 'Requester Email', 'email', false, '') +
+        '</div>' +
+        '<div>' +
+          '<label style="display:block;color:#9ca3af;font-size:12px;font-weight:600;margin-bottom:5px">Service Tier <span style="color:#ef4444">*</span></label>' +
+          '<select name="service_tier" required style="width:100%;padding:9px 12px;background:#1f2937;border:1px solid #374151;border-radius:8px;color:#f9fafb;font-size:13px">' +
+            '<option value="standard">Standard — $10</option>' +
+            '<option value="express">Express — $10</option>' +
+          '</select>' +
+        '</div>' +
+        '<div>' +
+          '<label style="display:block;color:#9ca3af;font-size:12px;font-weight:600;margin-bottom:5px">Notes</label>' +
+          '<textarea name="notes" rows="2" placeholder="Internal notes (optional)" style="width:100%;padding:9px 12px;background:#1f2937;border:1px solid #374151;border-radius:8px;color:#f9fafb;font-size:13px;resize:vertical"></textarea>' +
+        '</div>' +
+        '<label style="display:flex;align-items:center;gap:8px;color:#d1d5db;font-size:13px;cursor:pointer">' +
+          '<input type="checkbox" name="needs_admin_trace" checked style="width:16px;height:16px;accent-color:#0ea5e9">' +
+          'Queue for manual trace (recommended)' +
+        '</label>' +
+        '<div id="sa-create-order-error" style="display:none;background:rgba(239,68,68,0.12);border:1px solid #ef4444;color:#fca5a5;padding:10px 12px;border-radius:8px;font-size:12px"></div>' +
+        '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px">' +
+          '<button type="button" onclick="document.getElementById(\'sa-create-order-modal\').remove()" style="padding:10px 18px;background:#1f2937;color:#9ca3af;font-size:13px;font-weight:600;border:1px solid #374151;border-radius:8px;cursor:pointer">Cancel</button>' +
+          '<button type="submit" id="sa-create-order-submit" style="padding:10px 22px;background:#0ea5e9;color:#fff;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer"><i class="fas fa-paper-plane mr-1.5"></i>Create Order</button>' +
+        '</div>' +
+      '</form>' +
+    '</div>';
+  document.body.appendChild(overlay);
+};
+
+function saOrderField(name, label, type, required, placeholder) {
+  return '<div>' +
+    '<label style="display:block;color:#9ca3af;font-size:12px;font-weight:600;margin-bottom:5px">' + label + (required ? ' <span style="color:#ef4444">*</span>' : '') + '</label>' +
+    '<input type="' + type + '" name="' + name + '"' + (required ? ' required' : '') + ' placeholder="' + (placeholder || '') + '" style="width:100%;padding:9px 12px;background:#1f2937;border:1px solid #374151;border-radius:8px;color:#f9fafb;font-size:13px">' +
+  '</div>';
+}
+
+window.saSubmitCreateOrder = async function(e) {
+  e.preventDefault();
+  var form = document.getElementById('sa-create-order-form');
+  var btn = document.getElementById('sa-create-order-submit');
+  var errBox = document.getElementById('sa-create-order-error');
+  if (!form || !btn) return false;
+  errBox.style.display = 'none';
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i>Creating...';
+
+  var fd = new FormData(form);
+  var payload = {
+    property_address: (fd.get('property_address') || '').toString().trim(),
+    homeowner_name: (fd.get('homeowner_name') || '').toString().trim(),
+    homeowner_email: (fd.get('homeowner_email') || '').toString().trim() || null,
+    homeowner_phone: (fd.get('homeowner_phone') || '').toString().trim() || null,
+    requester_name: (fd.get('requester_name') || '').toString().trim(),
+    requester_email: (fd.get('requester_email') || '').toString().trim() || null,
+    service_tier: (fd.get('service_tier') || 'standard').toString(),
+    notes: (fd.get('notes') || '').toString().trim() || null,
+    needs_admin_trace: fd.get('needs_admin_trace') ? 1 : 0
+  };
+
+  try {
+    var res = await saFetch('/api/orders/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res) return false;
+    var data = await res.json();
+    if (!res.ok || !data.success) {
+      errBox.textContent = data.error || 'Failed to create order';
+      errBox.style.display = 'block';
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-paper-plane mr-1.5"></i>Create Order';
+      return false;
+    }
+    document.getElementById('sa-create-order-modal').remove();
+    saToast('Order created — ' + (data.order && data.order.order_number ? data.order.order_number : '#' + data.order.id));
+    loadView('report-requests');
+  } catch (err) {
+    errBox.textContent = (err && err.message) || 'Network error';
+    errBox.style.display = 'block';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-paper-plane mr-1.5"></i>Create Order';
+  }
+  return false;
+};
 
 // ============================================================
 // VIEW 3: ORDER HISTORY & LOGISTICS

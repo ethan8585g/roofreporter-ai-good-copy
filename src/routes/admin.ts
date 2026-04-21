@@ -7,7 +7,7 @@ import { validateTraceUi } from '../utils/trace-validation'
 import { RoofMeasurementEngine, traceUiToEnginePayload } from '../services/roof-measurement-engine'
 import { generateApiKey } from '../middleware/api-auth'
 import { addCredits } from '../services/api-billing'
-import { notifyNewReportRequest } from '../services/email'
+import { notifyNewReportRequest, sendGmailOAuth2, sendViaResend, sendGmailEmail } from '../services/email'
 import { logAdminAction } from '../lib/audit-log'
 import { clientIp } from '../lib/rate-limit'
 import { encryptSecret, decryptSecret } from '../lib/secret-vault'
@@ -98,6 +98,83 @@ adminRoutes.post('/superadmin/test-notification', async (c) => {
     return c.json({ success: true, sent_to: 'sales@roofmanager.ca' })
   } catch (err: any) {
     return c.json({ error: err.message }, 500)
+  }
+})
+
+// Email pipeline diagnostic — surfaces the actual provider error rather than
+// swallowing it. notifyNewReportRequest() catches its own errors so the regular
+// test-notification endpoint always returns 200 even when delivery fails.
+adminRoutes.get('/superadmin/email-diagnostic', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const env: any = c.env
+  const recipient = c.req.query('to') || 'sales@roofmanager.ca'
+
+  // Resolve credentials with same DB-fallback logic as notifyNewReportRequest
+  const clientId = env.GMAIL_CLIENT_ID || ''
+  let clientSecret = env.GMAIL_CLIENT_SECRET || ''
+  let refreshToken = env.GMAIL_REFRESH_TOKEN || ''
+  let clientSecretSource = clientSecret ? 'env' : 'missing'
+  let refreshTokenSource = refreshToken ? 'env' : 'missing'
+  if (!clientSecret || !refreshToken) {
+    try {
+      const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
+      if (r?.setting_value && !refreshToken) { refreshToken = r.setting_value; refreshTokenSource = 'db' }
+      const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
+      if (s?.setting_value && !clientSecret) { clientSecret = s.setting_value; clientSecretSource = 'db' }
+    } catch (e: any) {
+      return c.json({ ok: false, step: 'db_lookup', error: e?.message })
+    }
+  }
+
+  const credentials = {
+    clientId: clientId ? `${clientId.slice(0, 8)}…(${clientId.length}c)` : null,
+    clientSecret: clientSecret ? `set (${clientSecretSource}, ${clientSecret.length}c)` : null,
+    refreshToken: refreshToken ? `set (${refreshTokenSource}, ${refreshToken.length}c)` : null,
+    senderEmail: env.GMAIL_SENDER_EMAIL || null,
+    resendApiKey: env.RESEND_API_KEY ? 'set' : null,
+    gcpServiceAccount: env.GCP_SERVICE_ACCOUNT_JSON ? 'set' : null,
+  }
+
+  // Try Resend first if configured
+  if (env.RESEND_API_KEY) {
+    try {
+      const r = await sendViaResend(env.RESEND_API_KEY, recipient, '[Diagnostic] Roof Manager email test', '<p>This is a diagnostic email.</p>')
+      return c.json({ ok: true, provider: 'resend', credentials, sent_to: recipient, message_id: r.id })
+    } catch (e: any) {
+      return c.json({ ok: false, provider: 'resend', credentials, step: 'resend_send', error: e?.message })
+    }
+  }
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    return c.json({ ok: false, credentials, step: 'credentials_missing', error: 'Gmail OAuth2 credentials incomplete (need clientId + clientSecret + refreshToken)' })
+  }
+
+  // Step 1 — refresh access token. This is where stale/revoked refresh tokens fail.
+  let accessToken = ''
+  try {
+    const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'refresh_token', client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken }).toString(),
+      signal: AbortSignal.timeout(10000)
+    })
+    const text = await tokenResp.text()
+    if (!tokenResp.ok) {
+      return c.json({ ok: false, provider: 'gmail_oauth2', credentials, step: 'token_refresh', http_status: tokenResp.status, error: text })
+    }
+    accessToken = JSON.parse(text).access_token
+  } catch (e: any) {
+    return c.json({ ok: false, provider: 'gmail_oauth2', credentials, step: 'token_refresh_network', error: e?.message })
+  }
+
+  // Step 2 — actual send
+  try {
+    const r = await sendGmailOAuth2(clientId, clientSecret, refreshToken, recipient, '[Diagnostic] Roof Manager email test', '<p>This is a diagnostic email from /api/admin/superadmin/email-diagnostic.</p>', env.GMAIL_SENDER_EMAIL || null)
+    return c.json({ ok: true, provider: 'gmail_oauth2', credentials, sent_to: recipient, message_id: r.id, access_token_preview: accessToken.slice(0, 12) + '…' })
+  } catch (e: any) {
+    return c.json({ ok: false, provider: 'gmail_oauth2', credentials, step: 'gmail_send', error: e?.message })
   }
 })
 
@@ -1244,6 +1321,7 @@ adminRoutes.get('/superadmin/orders', async (c) => {
         c.name as customer_name, c.email as customer_email, c.company_name as customer_company,
         r.status as report_status, r.created_at as report_started_at, r.updated_at as report_completed_at,
         r.gross_squares, r.confidence_score, r.complexity_class,
+        r.share_token, r.share_view_count, r.share_sent_at,
         CASE
           WHEN r.updated_at IS NOT NULL AND r.created_at IS NOT NULL
           THEN CAST((julianday(r.updated_at) - julianday(r.created_at)) * 86400 AS INTEGER)
