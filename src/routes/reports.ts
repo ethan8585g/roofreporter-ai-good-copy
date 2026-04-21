@@ -7,6 +7,7 @@ import { Hono } from 'hono'
 import type { Bindings, RoofReport } from '../types'
 import { computeMaterialEstimate } from '../utils/geo-math'
 import { validateAdminSession } from '../routes/auth'
+import { getCustomerSessionToken } from '../lib/session-tokens'
 import { resolveTeamOwner } from './team'
 import { createAutoInvoiceForOrder } from '../services/auto-invoice'
 
@@ -68,10 +69,13 @@ reportsRoutes.onError((err, c) => {
 })
 
 // ── AUTH MIDDLEWARE ──
-async function validateAdminOrCustomer(db: D1Database, authHeader: string | undefined) {
-  const admin = await validateAdminSession(db, authHeader)
+async function validateAdminOrCustomer(c: any) {
+  const db: D1Database = c.env.DB
+  const authHeader = c.req.header('Authorization')
+  const cookieHeader = c.req.header('Cookie')
+  const admin = await validateAdminSession(db, authHeader, cookieHeader)
   if (admin) return { ...admin, role: 'admin' }
-  const token = authHeader?.replace('Bearer ', '')
+  const token = getCustomerSessionToken(c)
   if (!token) return null
   const session = await db.prepare(`
     SELECT cs.customer_id, c.email, c.name FROM customer_sessions cs
@@ -87,7 +91,7 @@ async function validateAdminOrCustomer(db: D1Database, authHeader: string | unde
 reportsRoutes.use('/*', async (c, next) => {
   const path = c.req.path
   if (path.endsWith('/html') || path.endsWith('/simple') || path.endsWith('/proposal') || path.endsWith('/pdf') || path.endsWith('/webhook-update') || path.endsWith('/webhooks/resend') || path.endsWith('/enhancement-status') || path.endsWith('/calculate-from-trace') || path.endsWith('/pitch-multipliers') || path.endsWith('/calculate-roof-specs') || path.endsWith('/export.json') || path.endsWith('/export.csv') || path.endsWith('/solar-panel-layout') || path.endsWith('/bom') || path.endsWith('/bom.csv') || path.endsWith('/bom.xml')) return next()
-  const user = await validateAdminOrCustomer(c.env.DB, c.req.header('Authorization'))
+  const user = await validateAdminOrCustomer(c)
   if (!user) return c.json({ error: 'Authentication required' }, 401)
   c.set('user' as any, user)
   return next()
@@ -2349,7 +2353,7 @@ reportsRoutes.get('/:orderId/enhancement-status', async (c) => {
   const token = authHeader?.replace('Bearer ', '')
   const webhookSecret = c.env.REPORT_WEBHOOK_SECRET
   // Allow both webhook token and normal admin/customer auth
-  const user = await validateAdminOrCustomer(c.env.DB, c.req.header('Authorization'))
+  const user = await validateAdminOrCustomer(c)
   if (!user && (!webhookSecret || !token || token !== webhookSecret)) {
     return c.json({ error: 'Authentication required' }, 401)
   }
@@ -2382,7 +2386,7 @@ reportsRoutes.get('/:orderId/enhancement-status', async (c) => {
 // ============================================================
 reportsRoutes.get('/:orderId/ai-imagery-status', async (c) => {
   const orderId = c.req.param('orderId')
-  const user = await validateAdminOrCustomer(c.env.DB, c.req.header('Authorization'))
+  const user = await validateAdminOrCustomer(c)
   if (!user) return c.json({ error: 'Authentication required' }, 401)
 
   const imageryStatus = await repo.getAIImageryStatus(c.env.DB, orderId)

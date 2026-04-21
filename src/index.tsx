@@ -148,7 +148,11 @@ app.use('*', async (c, next) => {
 
   try {
     const body = await c.res.text()
-    if (body.includes('</body>') && !body.includes('tracker.js')) {
+    // Idempotency guard — use a unique sentinel so the check doesn't
+    // false-match on source comments that mention 'tracker.js'. The
+    // sentinel is appended inside the injected bundle.
+    const INJECTION_SENTINEL = '<!-- rm-analytics-widgets-injected -->'
+    if (body.includes('</body>') && !body.includes(INJECTION_SENTINEL)) {
       // Build GA4 gtag.js snippet if measurement ID is configured
       const ga4Id = (c.env as any).GA4_MEASUREMENT_ID || ''
       const ga4Script = ga4Id ? `
@@ -300,9 +304,31 @@ window.fireMetaContactEvent=function(d){if(typeof fbq==='function')fbq('track','
       // CWV upgrade: the ~50KB translate.google.com script is now lazy-loaded on first click of the
       // globe button instead of eagerly on every page load. Most visitors never open the language
       // panel, so this saves a subrequest + ~50KB on every pageview.
-      const translateWidget = `<div id="gt-wrapper"><button id="gt-toggle" aria-label="Select language" title="Select language">&#127760;</button><div id="gt-panel"><div id="google_translate_element"></div><button id="gt-close" aria-label="Close language selector" title="Close">&times;</button></div></div>
+      // X button now lives INSIDE the panel at top-right (styled red on hover);
+      // clicking it closes the panel and dismisses the whole widget for 30 days
+      // via localStorage. Click-outside and Escape close the panel without dismissing.
+      const translateWidget = `<div id="gt-wrapper"><button id="gt-toggle" aria-label="Select language" title="Select language">&#127760;</button><div id="gt-panel"><button id="gt-close" aria-label="Close and hide language selector" title="Close">&times;</button><div id="google_translate_element"></div></div></div>
 <script>function googleTranslateElementInit(){try{new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,fr,es,de,pt,it,zh-CN,zh-TW,ja,ko,ar,hi,bn,ur,tr,vi,th,id,pl,uk,ru,nl,sv,da,no,fi,el,he,ro,cs,hu,ms,tl',layout:google.translate.TranslateElement.InlineLayout.SIMPLE,autoDisplay:false},'google_translate_element')}catch(e){}}
-(function(){var loaded=false;function loadGT(){if(loaded)return;loaded=true;var s=document.createElement('script');s.src='//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';s.async=true;document.head.appendChild(s);}document.addEventListener('DOMContentLoaded',function(){var t=document.getElementById('gt-toggle');if(t){t.addEventListener('click',function(){loadGT();var p=document.getElementById('gt-panel');if(p)p.classList.toggle('open');});}var c=document.getElementById('gt-close');if(c)c.onclick=function(){var p=document.getElementById('gt-panel');if(p)p.classList.remove('open')};});})();
+(function(){
+  var DISMISS_KEY='rm_gt_dismissed_until';
+  var loaded=false;
+  function loadGT(){if(loaded)return;loaded=true;var s=document.createElement('script');s.src='//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';s.async=true;document.head.appendChild(s);}
+  function isDismissed(){try{var v=localStorage.getItem(DISMISS_KEY);return v&&parseInt(v,10)>Date.now();}catch(e){return false;}}
+  function setDismissed(){try{localStorage.setItem(DISMISS_KEY,String(Date.now()+30*24*60*60*1000));}catch(e){}}
+  function closePanel(){var p=document.getElementById('gt-panel');if(p)p.classList.remove('open');}
+  function dismissWidget(){setDismissed();var w=document.getElementById('gt-wrapper');if(w)w.classList.add('dismissed');}
+  document.addEventListener('DOMContentLoaded',function(){
+    var w=document.getElementById('gt-wrapper');if(!w)return;
+    if(isDismissed()){w.classList.add('dismissed');return;}
+    var t=document.getElementById('gt-toggle');
+    var p=document.getElementById('gt-panel');
+    var c=document.getElementById('gt-close');
+    if(t){t.addEventListener('click',function(e){e.stopPropagation();loadGT();if(p)p.classList.toggle('open');});}
+    if(c){c.addEventListener('click',function(e){e.stopPropagation();e.preventDefault();closePanel();dismissWidget();});}
+    document.addEventListener('click',function(e){if(!p||!p.classList.contains('open'))return;if(w.contains(e.target))return;closePanel();});
+    document.addEventListener('keydown',function(e){if(e.key==='Escape'&&p&&p.classList.contains('open'))closePanel();});
+  });
+})();
 </script>`
 
       // Inject translate widget right after opening <body> tag
@@ -312,6 +338,7 @@ window.fireMetaContactEvent=function(d){if(typeof fbq==='function')fbq('track','
 <script src="/static/toast.js"></script>
 <script src="/static/tracker.js" defer></script>
 <script src="/static/exit-intent.js" defer></script>
+<!-- rm-analytics-widgets-injected -->
 </body>`)
       c.res = new Response(injected, {
         status: c.res.status,
@@ -4482,7 +4509,33 @@ function getHeadTags(canonicalPath?: string) {
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="alternate" type="application/rss+xml" title="Roof Manager Blog" href="https://www.roofmanager.ca/feed.xml">
   <link rel="stylesheet" href="/static/style.css">
-  <style>#gt-wrapper{position:fixed;bottom:20px;left:20px;z-index:9998}#gt-toggle{width:44px;height:44px;border-radius:50%;background:white;border:1px solid #e2e8f0;box-shadow:0 4px 20px rgba(0,0,0,0.15);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;transition:transform 0.2s}#gt-toggle:hover{transform:scale(1.1)}#gt-panel{display:none;position:absolute;bottom:54px;left:0;background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.15);padding:8px 12px;border:1px solid #e2e8f0;font-size:13px;white-space:nowrap}#gt-panel.open{display:flex;align-items:center;gap:8px}#gt-close{background:none;border:none;cursor:pointer;font-size:18px;color:#6b7280;padding:0 0 0 4px;line-height:1}#gt-close:hover{color:#111}.goog-te-gadget{font-family:inherit!important}.goog-te-gadget-simple{background:transparent!important;border:none!important;padding:0!important;font-size:13px!important}.goog-te-menu-value span{color:#374151!important}.goog-te-banner-frame{display:none!important}body{top:0!important}@media(max-width:768px){#gt-wrapper{bottom:auto;top:74px;left:8px}#gt-toggle{width:36px;height:36px;font-size:16px}#gt-panel{bottom:auto;top:44px}}</style>
+  <style>
+    /* Google Translate widget — low-profile floating control.
+       Design: translucent/small by default so it doesn't compete with
+       primary CTAs; brightens on hover/focus. The panel has a clearly-
+       visible X in the top-right, click-outside-to-close, and Escape key
+       support. Dismissal persists for 30 days via localStorage so the
+       globe itself hides entirely after an explicit close. */
+    #gt-wrapper{position:fixed;bottom:16px;left:16px;z-index:9998}
+    #gt-wrapper.dismissed{display:none}
+    #gt-toggle{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.75);border:1px solid rgba(0,0,0,0.1);box-shadow:0 2px 10px rgba(0,0,0,0.12);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;opacity:0.55;transition:opacity 0.2s,transform 0.2s,background 0.2s}
+    #gt-toggle:hover,#gt-toggle:focus{opacity:1;transform:scale(1.08);background:#fff;outline:none}
+    #gt-panel{display:none;position:absolute;bottom:46px;left:0;background:#fff;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,0.25);padding:28px 16px 14px 14px;border:1px solid rgba(0,0,0,0.08);font-size:13px;white-space:nowrap;min-width:220px}
+    #gt-panel.open{display:block}
+    #gt-close{position:absolute;top:4px;right:4px;width:26px;height:26px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:50%;cursor:pointer;font-size:16px;color:#6b7280;padding:0;line-height:1;display:flex;align-items:center;justify-content:center;transition:background 0.15s,color 0.15s}
+    #gt-close:hover,#gt-close:focus{background:#ef4444;color:#fff;border-color:#ef4444;outline:none}
+    #gt-close:focus-visible{box-shadow:0 0 0 2px #00FF88}
+    .goog-te-gadget{font-family:inherit!important}
+    .goog-te-gadget-simple{background:transparent!important;border:none!important;padding:0!important;font-size:13px!important}
+    .goog-te-menu-value span{color:#374151!important}
+    .goog-te-banner-frame{display:none!important}
+    body{top:0!important}
+    @media(max-width:768px){
+      #gt-wrapper{bottom:auto;top:74px;left:8px}
+      #gt-toggle{width:32px;height:32px;font-size:14px}
+      #gt-panel{bottom:auto;top:40px}
+    }
+  </style>
   <!-- RC#2: rrTrack shim — prevents ReferenceError in inline onclick handlers before tracker.js loads -->
   <script>window.rrTrack=window.rrTrack||function(){};</script>
   <style id="theme-vars">
@@ -6908,78 +6961,64 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-32 pb-24 lg:pt-40 lg:pb-32">
         <div class="grid lg:grid-cols-2 gap-16 lg:gap-20 items-center">
           <div>
+            <!-- conv-v5: hero rewritten — one primary CTA, demoted preview/contact to inline text links, trust bar replaces chip soup -->
             <div class="inline-flex items-center gap-2.5 bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-full px-5 py-2.5 mb-8 backdrop-blur-sm">
               <span class="relative flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00FF88]"></span></span>
-              <span class="text-sm font-semibold text-[#00FF88] tracking-wide">Trusted by 5,000+ Roofers — US &amp; Canada</span>
+              <span class="text-sm font-semibold text-[#00FF88] tracking-wide">Trusted by 200+ Contractors — US &amp; Canada</span>
             </div>
-            <h1 class="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] text-white mb-8 tracking-tight">Get 4 Free Roof Reports<br/><span class="neon-text">No Credit Card Required.</span></h1>
-            <h2 class="text-lg lg:text-xl text-gray-400 mb-10 max-w-xl leading-relaxed font-normal">Property-grade measurements, slope, area, and material take-off. <span class="text-white font-semibold">No credit card. No call. Cancel any time.</span></h2>
-            <!-- Address-first hero preview -->
-            <div id="hero-preview-form" style="margin-bottom:16px">
+            <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] text-white mb-6 tracking-tight">Satellite Roof Reports + CRM <span class="neon-text">Built for Roofing &amp; Solar Contractors</span></h1>
+            <h2 class="text-lg lg:text-xl text-gray-300 mb-8 max-w-xl leading-relaxed font-normal">Accurate roof measurements in 60 seconds, a full CRM, and an AI phone secretary — for less than the cost of a single EagleView.</h2>
+
+            <!-- Primary CTA (ONE) -->
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 mb-4">
+              <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_primary'});gtag&amp;&amp;gtag('event','conversion',{send_to:'AW-18080319225'})}catch(e){}" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px] whitespace-nowrap"><i class="fas fa-gift" aria-hidden="true"></i>Start free — 4 roof reports, no card<i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform" aria-hidden="true"></i></a>
+              <a href="#hero-preview-form" onclick="try{rrTrack('cta_click',{location:'hero_secondary_preview'});var i=document.getElementById('hero-address');if(i){i.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(function(){i.focus()},400)}}catch(e){}" class="text-sm text-gray-300 hover:text-white inline-flex items-center gap-1.5 whitespace-nowrap">Or try a free preview with any address <i class="fas fa-arrow-right text-[10px]" aria-hidden="true"></i></a>
+            </div>
+            <a href="/contact" onclick="try{rrTrack('cta_click',{location:'hero_tertiary_contact'})}catch(e){}" class="text-xs text-gray-500 hover:text-gray-300 inline-block mb-5">Talk to sales</a>
+
+            <!-- Trust bar (single-line on desktop, wraps on mobile) -->
+            <p class="text-[13px] text-gray-500 leading-relaxed mb-10">
+              <span class="inline-flex items-center gap-1 mr-3 whitespace-nowrap"><i class="fas fa-check text-[#00FF88] text-[10px]" aria-hidden="true"></i>No credit card</span>
+              <span class="inline-flex items-center gap-1 mr-3 whitespace-nowrap"><i class="fas fa-check text-[#00FF88] text-[10px]" aria-hidden="true"></i>Cancel any time</span>
+              <span class="inline-flex items-center gap-1 mr-3 whitespace-nowrap"><i class="fas fa-check text-[#00FF88] text-[10px]" aria-hidden="true"></i>Works in all 50 states + every Canadian province</span>
+              <span class="inline-flex items-center gap-1 whitespace-nowrap"><i class="fas fa-check text-[#00FF88] text-[10px]" aria-hidden="true"></i>4.9/5 from 200+ contractors</span>
+            </p>
+
+            <!-- Address-preview (demoted: kept for high-intent visitors but visually secondary) -->
+            <div id="hero-preview-form" class="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4 max-w-xl">
+              <label for="hero-address" class="block text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-2">Free preview — no account needed</label>
               <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <input id="hero-address" type="text" placeholder="Enter a property address&#x2026;"
-                  autocomplete="off"
-                  style="flex:1;min-width:200px;padding:14px 16px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:12px;font-size:15px;outline:none;box-sizing:border-box"
+                  autocomplete="off" inputmode="text"
+                  style="flex:1;min-width:200px;padding:14px 16px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:12px;font-size:16px;outline:none;box-sizing:border-box"
                   onfocus="this.style.borderColor='#00FF88'"
                   onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
                 <button type="button" id="hero-preview-btn" onclick="startPreview()"
-                  style="padding:14px 20px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:12px;font-size:14px;cursor:pointer;white-space:nowrap;flex-shrink:0">
-                  Measure this roof &#x2192;
+                  style="padding:14px 20px;background:rgba(255,255,255,0.1);color:#fff;font-weight:700;border:1px solid rgba(255,255,255,0.15);border-radius:12px;font-size:14px;cursor:pointer;white-space:nowrap;flex-shrink:0">
+                  Preview roof &#x2192;
                 </button>
               </div>
-              <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:6px">Free sample &#xB7; No account needed</p>
             </div>
-            <a href="/register" onclick="rrTrack('cta_click',{location:'hero'})"
-              style="display:inline-block;background:#ff5a1f;color:#fff;font-weight:700;padding:18px 32px;border-radius:8px;font-size:18px;text-decoration:none;margin-bottom:6px">
-              Claim My 4 Free Reports &#x2192;
-            </a>
-            <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:0">No credit card. Takes 60 seconds.</p>
-            <!-- Lead magnet: zero-friction "give us your address, we'll email the report" -->
-            ${freeMeasurementReportFormHTML('homepage_hero', 'hero')}
 
-            <!-- Preview result panel -->
+            <!-- Preview result panel (unchanged behavior, demoted Book demo to plain text) -->
             <div id="hero-preview-result" style="display:none;margin-bottom:16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:16px">
               <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
-                <img id="preview-sat-img" src="" alt="Satellite view of roof"
+                <img id="preview-sat-img" src="" alt="Satellite view of the property you entered"
                   style="width:130px;height:90px;object-fit:cover;border-radius:8px;flex-shrink:0;background:#1a1a1a">
                 <div style="flex:1;min-width:160px">
                   <div id="preview-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px"></div>
-                  <a id="preview-cta-register" href="/register"
+                  <a id="preview-cta-register" href="/register" onclick="try{rrTrack('cta_click',{location:'preview_result'})}catch(e){}"
                     style="display:inline-block;background:#00FF88;color:#0A0A0A;font-weight:800;padding:9px 16px;border-radius:8px;font-size:13px;text-decoration:none;margin-right:8px">
                     Create account to download &#x2192;
                   </a>
-                  <a href="/demo" style="font-size:12px;color:rgba(255,255,255,0.5);text-decoration:none">Book demo</a>
                 </div>
               </div>
             </div>
 
-            <div class="flex flex-col gap-4 mb-6">
-              <a href="/register" onclick="rrTrack('cta_click',{location:'hero_primary',variant:'contractor_signup'})" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px]"><i class="fas fa-gift"></i> Get 4 FREE Reports &mdash; No Card Required <i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform"></i></a>
-              <p class="text-xs text-gray-500"><i class="fas fa-lock text-[#00FF88] mr-1"></i>No credit card &nbsp;&middot;&nbsp; <span>&#127464;&#127462;</span> Hosted in Canada &nbsp;&middot;&nbsp; <i class="fas fa-bolt text-[#00FF88] mr-1"></i>60-sec signup</p>
-              <!-- Three tertiary text links — keeps primary CTA dominant -->
-              <div class="flex flex-wrap gap-x-5 gap-y-2 text-sm">
-                <a href="/sample-report" onclick="rrTrack('cta_click',{location:'hero_tertiary',variant:'sample_report'})" class="inline-flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors"><i class="fas fa-play-circle text-[#00FF88] text-xs"></i>See sample report <i class="fas fa-arrow-right text-[10px]"></i></a>
-                <a href="/demo" onclick="rrTrack('cta_click',{location:'hero_tertiary',variant:'book_demo'})" class="inline-flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors"><i class="fas fa-calendar-check text-[#00FF88] text-xs"></i>Book a 20-min demo <i class="fas fa-arrow-right text-[10px]"></i></a>
-                <a href="/contact" onclick="rrTrack('cta_click',{location:'hero_tertiary',variant:'talk_to_us'})" class="inline-flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors"><i class="fas fa-comments text-[#00FF88] text-xs"></i>Talk to us <i class="fas fa-arrow-right text-[10px]"></i></a>
-              </div>
+            <!-- Mobile-only primary CTA mirror (desktop has it above) -->
+            <div class="lg:hidden mt-8">
+              <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_mobile_primary'});gtag&amp;&amp;gtag('event','conversion',{send_to:'AW-18080319225'})}catch(e){}" class="flex items-center justify-center gap-3 bg-[#00FF88] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px]"><i class="fas fa-gift" aria-hidden="true"></i>Start free — 4 roof reports, no card<i class="fas fa-arrow-right text-sm" aria-hidden="true"></i></a>
             </div>
-            <!-- Self-serve callout — makes it unmistakably clear anyone can sign up right now -->
-            <div class="mb-6 -mt-2 flex items-start gap-3 bg-[#00FF88]/8 border border-[#00FF88]/20 rounded-xl px-4 py-3">
-              <i class="fas fa-info-circle text-[#00FF88] text-sm mt-0.5 flex-shrink-0"></i>
-              <p class="text-sm text-gray-300 leading-snug"><strong class="text-white">Anyone can register right now</strong> — just click the button above, create your account in under 60 seconds, and <strong style="color:#00FF88">4 free roof measurement reports are instantly waiting for you.</strong> No approval needed, no waiting, no sales call.</p>
-            </div>
-            <p class="text-xs mb-6 -mt-4"><strong style="color:#00FF88">4 free reports included</strong> <span class="text-gray-500">&middot; No credit card &middot; Cancel anytime</span></p>
-            <div class="flex items-center gap-4 mb-4">
-              <div class="flex items-center gap-0.5"><i class="fas fa-star text-[#00FF88] text-sm"></i><i class="fas fa-star text-[#00FF88] text-sm"></i><i class="fas fa-star text-[#00FF88] text-sm"></i><i class="fas fa-star text-[#00FF88] text-sm"></i><i class="fas fa-star text-[#00FF88] text-sm"></i></div>
-              <span class="text-sm text-gray-500"><strong class="text-white font-semibold">4.9/5</strong> from 200+ reviews</span>
-            </div>
-            <div class="flex flex-wrap items-center gap-3 text-sm">
-              <span class="inline-flex items-center gap-1.5 font-bold rounded-full px-3 py-1.5" style="background:#00FF8820;color:#00FF88;border:1px solid #00FF8840"><i class="fas fa-gift text-[10px]"></i>4 FREE reports on signup</span>
-              <span class="inline-flex items-center gap-1.5 text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-credit-card text-[#00FF88] text-[10px]"></i>No credit card</span>
-              <span class="inline-flex items-center gap-1.5 text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-bolt text-[#00FF88] text-[10px]"></i>Reports in under 60s</span>
-              <span class="inline-flex items-center gap-1.5 text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-check text-[#00FF88] text-[10px]"></i>Full CRM free forever</span>
-            </div>
-            <div class="lg:hidden mt-10 flex flex-col gap-3"><a href="/register" onclick="rrTrack('cta_click',{location:'hero_mobile'})" class="flex items-center justify-center gap-3 bg-[#00FF88] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px]"><i class="fas fa-gift"></i> Get 4 FREE Reports &mdash; No Card <i class="fas fa-arrow-right text-sm"></i></a><a href="/demo" onclick="rrTrack('cta_click',{location:'hero_mobile_demo'})" class="flex items-center justify-center gap-3 bg-white/5 text-white font-bold py-4 px-8 rounded-xl text-base border border-white/10 min-h-[52px]"><i class="fas fa-calendar-check text-[#00FF88]"></i> Book a Free Demo</a></div>
           </div>
           <div class="hidden lg:block">
             <div class="relative">
@@ -7447,7 +7486,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           </div>`).join('')}
         </div>
         <div class="text-center mt-10 scroll-animate">
-          <a href="/register" onclick="rrTrack('cta_click',{location:'testimonial_strip_cta'})" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-8 rounded-xl text-sm transition-all hover:scale-[1.02]"><i class="fas fa-gift"></i> Join 5,000+ contractors — 4 free reports</a>
+          <a href="/register" onclick="rrTrack('cta_click',{location:'testimonial_strip_cta'})" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-8 rounded-xl text-sm transition-all hover:scale-[1.02]"><i class="fas fa-gift"></i> Join 200+ contractors — 4 free reports</a>
         </div>
       </div>
     </section>
@@ -7951,7 +7990,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <div style="display:flex">
           ${['M','S','J','L','P'].map(i=>`<div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#00FF88,#22d3ee);border:2px solid #111;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#0A0A0A;margin-left:-6px;first:margin-left:0">${i}</div>`).join('')}
         </div>
-        <span style="color:#9ca3af;font-size:12px">5,000+ contractors already saving time</span>
+        <span style="color:#9ca3af;font-size:12px">200+ contractors already saving time</span>
       </div>
       <div id="exitIntentTitle" style="color:#00FF88;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px">&#x1F381; Before you go</div>
       <h3 style="color:#fff;font-size:22px;font-weight:900;margin:0 0 8px;line-height:1.2">Claim your 4 free reports</h3>
@@ -8106,8 +8145,8 @@ function getContactPageHTML() {
     * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
     html { scroll-behavior: smooth; }
     .input-field {
-      width: 100%; padding: 11px 14px; background: #0A0A0A; color: #fff;
-      border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 14px;
+      width: 100%; padding: 12px 14px; background: #0A0A0A; color: #fff;
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 16px;
       box-sizing: border-box; outline: none; transition: border-color 0.2s;
     }
     .input-field:focus { border-color: rgba(0,255,136,0.5); }
@@ -8147,6 +8186,7 @@ function getContactPageHTML() {
         <style>@media(min-width:760px){#contact-grid{grid-template-columns:1.4fr 1fr}}</style>
 
         <!-- LEFT: Form -->
+        <!-- conv-v5: contact page optimized per V5 Section 6 -->
         <div style="background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:36px">
           <h2 style="font-size:20px;font-weight:800;color:#fff;margin:0 0 24px">Send us a message</h2>
           <form id="contact-form" onsubmit="return submitContactForm(event)">
@@ -8155,31 +8195,33 @@ function getContactPageHTML() {
             <input type="hidden" id="cf-utm-medium" name="utm_medium">
             <input type="hidden" id="cf-utm-campaign" name="utm_campaign">
             <input type="hidden" id="cf-utm-content" name="utm_content">
+            <!-- Honeypot: hidden from humans, bots fill it in -->
+            <input type="text" name="website" id="contact-website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" aria-hidden="true">
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-              <label>
+              <label for="contact-name">
                 <span class="label-text">Full Name *</span>
-                <input required name="name" type="text" placeholder="Jane Smith" class="input-field" minlength="2" maxlength="80" autocomplete="name" aria-label="Full Name">
+                <input required id="contact-name" name="name" type="text" placeholder="Jane Smith" class="input-field" minlength="2" maxlength="80" autocomplete="name" aria-label="Full Name">
               </label>
-              <label>
+              <label for="contact-email">
                 <span class="label-text">Work Email *</span>
-                <input required name="email" type="email" placeholder="jane@yourcompany.com" class="input-field" autocomplete="email" aria-label="Work Email">
+                <input required id="contact-email" name="email" type="email" inputmode="email" placeholder="jane@yourcompany.com" class="input-field" autocomplete="email" aria-label="Work Email">
               </label>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-              <label>
+              <label for="contact-phone">
                 <span class="label-text">Phone (optional)</span>
-                <input name="phone" type="tel" placeholder="(403) 555-0100" class="input-field" autocomplete="tel" aria-label="Phone number">
+                <input id="contact-phone" name="phone" type="tel" inputmode="tel" placeholder="(403) 555-0100" class="input-field" autocomplete="tel" aria-label="Phone number">
               </label>
-              <label>
+              <label for="contact-company">
                 <span class="label-text">Company (optional)</span>
-                <input name="company" type="text" placeholder="ABC Roofing Inc." class="input-field" autocomplete="organization" aria-label="Company name">
+                <input id="contact-company" name="company" type="text" placeholder="ABC Roofing Inc." class="input-field" autocomplete="organization" aria-label="Company name">
               </label>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-              <label>
-                <span class="label-text">Company Size</span>
-                <select name="employees" class="input-field" aria-label="Company size">
+              <label for="contact-employees">
+                <span class="label-text">Employees</span>
+                <select id="contact-employees" name="employees" class="input-field" aria-label="Company size">
                   <option value="">Select size…</option>
                   <option value="1-5">1–5 employees</option>
                   <option value="6-25">6–25 employees</option>
@@ -8187,32 +8229,42 @@ function getContactPageHTML() {
                   <option value="100+">100+ employees</option>
                 </select>
               </label>
-              <label>
-                <span class="label-text">What are you interested in?</span>
-                <select name="interest" class="input-field" aria-label="Area of interest">
-                  <option value="">Select topic…</option>
-                  <option value="measurements">Measurement Reports</option>
-                  <option value="crm">CRM &amp; Invoicing</option>
-                  <option value="solar">Solar Design</option>
-                  <option value="pricing">Pricing &amp; Plans</option>
-                  <option value="api">API Access</option>
+              <label for="contact-interest">
+                <span class="label-text">What are you looking for?</span>
+                <select id="contact-interest" name="interest" class="input-field" aria-label="What are you looking for?">
+                  <option value="">What are you looking for?</option>
+                  <option value="use">I want to use Roof Manager for my business</option>
+                  <option value="wholesale">I want a wholesale / reseller account</option>
+                  <option value="integrate">I want to integrate with an existing CRM</option>
+                  <option value="press">Press / partnership</option>
                   <option value="other">Other</option>
                 </select>
               </label>
             </div>
-            <label style="display:block;margin-bottom:20px">
+            <label for="contact-message" style="display:block;margin-bottom:18px">
               <span class="label-text">Message *</span>
-              <textarea required name="message" rows="5" placeholder="Tell us about your business, your team size, and what you're hoping Roof Manager can help with…" class="input-field" style="resize:vertical;min-height:110px" minlength="10" maxlength="2000" aria-label="Message"></textarea>
+              <textarea required id="contact-message" name="message" rows="5" placeholder="Tell us about your business, your team size, and what you're hoping Roof Manager can help with…" class="input-field" style="resize:vertical;min-height:110px" minlength="10" maxlength="2000" aria-label="Message"></textarea>
             </label>
             <div id="contact-form-error" style="display:none;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#fca5a5;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px"></div>
+            <p style="text-align:center;color:#9ca3af;font-size:13px;margin:0 0 12px;line-height:1.5">
+              Prefer to just try it? <a href="/register" onclick="try{rrTrack('cta_click',{location:'contact_self_serve'})}catch(e){}" style="color:#9ca3af;text-decoration:underline">Start free — 4 reports, no card</a>
+            </p>
             <button type="submit" id="contact-submit-btn" style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;transition:opacity 0.2s">
               <i class="fas fa-paper-plane" style="margin-right:8px"></i>Send Message
             </button>
           </form>
-          <div id="contact-form-success" style="display:none;text-align:center;padding:40px 20px">
-            <i class="fas fa-check-circle" style="color:#00FF88;font-size:48px;margin-bottom:16px"></i>
-            <h3 style="color:#fff;font-size:22px;font-weight:800;margin:0 0 8px">Got it — we'll be in touch!</h3>
-            <p style="color:#9ca3af;font-size:15px;margin:0">Usually within 2 business hours. Check your inbox.</p>
+          <div id="contact-form-success" style="display:none;background:#0d1117;border:1px solid rgba(0,255,136,0.2);border-radius:16px;padding:32px 24px;text-align:center">
+            <div style="width:60px;height:60px;border-radius:50%;background:rgba(0,255,136,0.12);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px">
+              <i class="fas fa-check-circle" style="color:#00FF88;font-size:30px"></i>
+            </div>
+            <h3 style="color:#fff;font-size:22px;font-weight:800;margin:0 0 10px">Thanks, we got your message.</h3>
+            <p style="color:#9ca3af;font-size:15px;line-height:1.6;margin:0 0 22px">We'll reply within 2 business hours.</p>
+            <a href="/demo" onclick="try{rrTrack('cta_click',{location:'contact_success_demo'})}catch(e){}" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#00FF88;color:#0A0A0A;font-weight:800;padding:13px 24px;border-radius:12px;text-decoration:none;font-size:15px;margin-bottom:14px">
+              <span aria-hidden="true">📅</span> Book a 20-min call
+            </a>
+            <div>
+              <a href="/register" onclick="try{rrTrack('cta_click',{location:'contact_success_register'})}catch(e){}" style="color:#9ca3af;font-size:14px;text-decoration:underline;font-weight:500">Or register and start measuring now →</a>
+            </div>
           </div>
         </div>
 
@@ -8257,7 +8309,7 @@ function getContactPageHTML() {
           <!-- Trust strip -->
           <div style="background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:8px">
             <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#9ca3af"><i class="fas fa-star" style="color:#00FF88"></i> 4.9/5 from 200+ reviews</div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#9ca3af"><i class="fas fa-users" style="color:#00FF88"></i> 5,000+ contractors US &amp; CA</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#9ca3af"><i class="fas fa-users" style="color:#00FF88"></i> 200+ contractors US &amp; CA</div>
             <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#9ca3af"><i class="fas fa-credit-card" style="color:#00FF88"></i> No credit card to start</div>
           </div>
         </aside>
@@ -8287,6 +8339,15 @@ function getContactPageHTML() {
       var btn = document.getElementById('contact-submit-btn');
       var errEl = document.getElementById('contact-form-error');
       errEl.style.display = 'none';
+
+      // Honeypot — silently succeed if bot filled it
+      var hp = document.getElementById('contact-website');
+      if (hp && hp.value) {
+        f.style.display = 'none';
+        document.getElementById('contact-form-success').style.display = 'block';
+        return false;
+      }
+
       btn.disabled = true; btn.textContent = 'Sending…';
 
       var payload = {
@@ -8316,9 +8377,22 @@ function getContactPageHTML() {
           btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:8px"></i>Send Message';
           return;
         }
-        try { rrTrack('lead_capture', { source: 'contact_form', interest: payload.interest }); } catch(_){}
-        try { gtag('event', 'generate_lead', { form: 'contact', value: 1 }); } catch(_){}
-        window.location.href = '/contact/thank-you?ref=contact';
+        // conv-v5: fire all three lead events on success
+        try { if (typeof gtag === 'function') gtag('event', 'generate_lead', { form_location: 'contact', form: 'contact', value: 1 }); } catch(_){}
+        try {
+          if (typeof window.fireMetaLeadEvent === 'function') {
+            window.fireMetaLeadEvent({ content_name: 'contact_form', form_location: 'contact' });
+          } else if (typeof fbq === 'function') {
+            fbq('track', 'Lead', { content_name: 'contact_form', form_location: 'contact' });
+          }
+        } catch(_){}
+        try { if (typeof rrTrack === 'function') rrTrack('lead_submit', { form: 'contact', interest: payload.interest }); } catch(_){}
+        // Google Ads conversion (kept for parity with prior thank-you page)
+        try { if (typeof gtag === 'function') gtag('event', 'conversion', { send_to: 'AW-18080319225/contact_form_submitted' }); } catch(_){}
+        // Swap form -> inline success card (do NOT redirect)
+        f.style.display = 'none';
+        document.getElementById('contact-form-success').style.display = 'block';
+        try { window.scrollTo({ top: document.getElementById('contact-form-success').getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' }); } catch(_){}
       })
       .catch(function(){
         errEl.textContent = 'Network error — please try again.';
@@ -8618,23 +8692,27 @@ function getCustomerRegisterPageHTML(prefillEmail = '', googleClientId = '', pre
         </div>
 
         ${googleClientId ? `
+<!-- conv-v5: Google SSO as PRIMARY option above email/password -->
 <div id="g_id_onload"
   data-client_id="${googleClientId}"
   data-callback="handleGoogleCredential"
   data-auto_prompt="false">
 </div>
-<div class="g_id_signin"
-  data-type="standard"
-  data-shape="rectangular"
-  data-theme="outline"
-  data-text="continue_with"
-  data-size="large"
-  data-width="100%"
-  onclick="rrTrack('oauth_click',{provider:'google'})">
+<div style="display:flex;justify-content:center;margin-bottom:6px" onclick="rrTrack('oauth_click',{provider:'google'})">
+  <div class="g_id_signin"
+    data-type="standard"
+    data-shape="pill"
+    data-theme="filled_black"
+    data-text="continue_with"
+    data-size="large"
+    data-width="320"
+    data-logo_alignment="left">
+  </div>
 </div>
-<div style="display:flex;align-items:center;gap:12px;margin:16px 0">
+<p style="text-align:center;margin:0 0 14px;font-size:12px;color:#6b7280">Fastest &#8211; 1-click, no password</p>
+<div style="display:flex;align-items:center;gap:12px;margin:12px 0 18px">
   <div style="flex:1;height:1px;background:#e5e7eb"></div>
-  <span style="font-size:13px;color:#6b7280;white-space:nowrap">or continue with email</span>
+  <span style="font-size:13px;color:#6b7280;white-space:nowrap">or sign up with email</span>
   <div style="flex:1;height:1px;background:#e5e7eb"></div>
 </div>
 ` : ''}
@@ -8668,37 +8746,97 @@ ${previewId ? `
             <p style="text-align:center;margin-top:10px;font-size:13px;color:#6b7280">&#x1F512; No credit card &nbsp;&middot;&nbsp; &#x1F1E8;&#x1F1E6; Canadian data &nbsp;&middot;&nbsp; &#x26A1; 60-sec setup</p>
           </div>
 
-          <!-- Step 2: password + name -->
+          <!-- Step 2: password + name + B2B qualifying fields -->
+          <!-- conv-v5: B2B qualifying fields added per V5 Section 5 -->
           <div id="step2" style="display:none">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:14px;color:#6b7280">
               <button type="button" onclick="goToStep1()" style="background:none;border:none;cursor:pointer;color:#00CC70;font-weight:600;font-size:14px;padding:0">&#x2190; Back</button>
               <span>Step 2 of 2</span>
             </div>
             <div id="step2-email-display" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:14px;color:#374151"></div>
-            <label style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Full Name</label>
+
+            <!-- Honeypot (hidden from humans, bots fill it) -->
+            <div aria-hidden="true" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">
+              <label for="reg-website">Website</label>
+              <input id="reg-website" type="text" name="website" tabindex="-1" autocomplete="off">
+            </div>
+
+            <label for="reg-name" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Full Name</label>
             <input id="reg-name" type="text" name="name" autocomplete="name" required
               placeholder="Jane Smith"
-              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:12px"
+              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px"
               onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
-            <label style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Password</label>
+
+            <label for="reg-password" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Password</label>
             <input id="reg-password" type="password" name="password" autocomplete="new-password" required minlength="8"
               data-clarity-mask="true"
               placeholder="Min. 8 characters"
-              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:6px"
+              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:6px"
               onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'"
               oninput="updateStrengthMeter(this.value)">
             <div id="strength-meter" style="height:4px;background:#e5e7eb;border-radius:2px;margin-bottom:12px;overflow:hidden">
               <div id="strength-bar" style="height:100%;width:0%;transition:width 0.3s,background 0.3s;border-radius:2px"></div>
             </div>
-            <label style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Company <span style="font-weight:400;color:#9ca3af">(optional)</span></label>
-            <input id="reg-company" type="text" name="company_name" autocomplete="organization"
+
+            <label for="reg-company" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Company Name</label>
+            <input id="reg-company" type="text" name="company_name" autocomplete="organization" required
               placeholder="Acme Roofing"
-              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:16px"
+              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px"
               onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
-            <button type="button" onclick="submitRegForm()"
-              style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:16px;cursor:pointer">
-              Create Account &#x2192;
-            </button>
+
+            <label for="reg-phone" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Mobile # <span style="font-weight:400;color:#6b7280">(so we can help you if you hit an issue)</span></label>
+            <input id="reg-phone" type="tel" name="phone" inputmode="tel" autocomplete="tel" required
+              placeholder="(555) 123-4567"
+              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:6px"
+              onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
+            <div style="text-align:right;margin-bottom:12px">
+              <a href="#" id="reg-skip-phone" onclick="skipPhone(event)" style="font-size:12px;color:#6b7280;text-decoration:underline">Skip for now</a>
+            </div>
+
+            <label for="reg-company-size" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">How big is your crew?</label>
+            <select id="reg-company-size" name="company_size" required
+              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px;background:#fff;color:#111"
+              onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
+              <option value="">Select crew size...</option>
+              <option value="solo">Just me (solo)</option>
+              <option value="2-5">2&#8211;5 crew members</option>
+              <option value="6-15">6&#8211;15 crew members</option>
+              <option value="16-50">16&#8211;50 crew members</option>
+              <option value="50+">50+</option>
+            </select>
+
+            <label for="reg-primary-use" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">What do you mostly do? <span style="font-weight:400;color:#9ca3af">(optional)</span></label>
+            <select id="reg-primary-use" name="primary_use"
+              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:16px;background:#fff;color:#111"
+              onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
+              <option value="">Select focus...</option>
+              <option value="storm">Storm / insurance work</option>
+              <option value="retail">Retail / residential</option>
+              <option value="commercial">Commercial</option>
+              <option value="solar">Solar</option>
+              <option value="other">Other</option>
+            </select>
+
+            <!-- Sticky submit on mobile (<=640px) via class; inline styles cover desktop -->
+            <style>
+              @media (max-width: 640px) {
+                #reg-submit-wrap {
+                  position: sticky;
+                  bottom: 0;
+                  background: #fff;
+                  padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+                  margin: 0 -4px;
+                  border-top: 1px solid #e5e7eb;
+                  z-index: 5;
+                }
+              }
+            </style>
+            <div id="reg-submit-wrap">
+              <button type="button" onclick="submitRegForm()"
+                style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:16px;cursor:pointer">
+                Create Account &#x2192;
+              </button>
+            </div>
           </div>
         </form>
         <p style="text-align:center;color:#9ca3af;font-size:12px;margin:14px 0 0"><i class="fas fa-lock" style="margin-right:5px"></i>256-bit SSL encrypted &nbsp;&middot;&nbsp; Hosted in Canada</p>
@@ -8816,27 +8954,75 @@ ${previewId ? `
       }
     })();
 
+    // conv-v5: skip-phone link — clears phone + removes required, then submits
+    function skipPhone(ev) {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      var p = document.getElementById('reg-phone');
+      if (p) { p.value = ''; p.removeAttribute('required'); }
+      rrTrack('signup_phone_skipped', {});
+      submitRegForm();
+      return false;
+    }
+
+    // conv-v5: fire GA4 + Meta + rrTrack sign_up events
+    function fireSignupEvents(method, companySize, primaryUse) {
+      try {
+        if (typeof gtag === 'function') {
+          gtag('event', 'sign_up', { method: method, company_size: companySize || '', primary_use: primaryUse || '' });
+        }
+        if (typeof fbq === 'function') {
+          fbq('track', 'CompleteRegistration');
+        }
+        if (typeof rrTrack === 'function') {
+          rrTrack('sign_up', { method: method, company_size: companySize || '', primary_use: primaryUse || '' });
+        }
+      } catch (e) { /* never block redirect on analytics */ }
+    }
+
     async function submitRegForm(e) {
       if (e) e.preventDefault();
       var email = document.getElementById('reg-email').value.trim();
       var password = document.getElementById('reg-password').value;
       var name = document.getElementById('reg-name').value.trim();
-      var company = (document.getElementById('reg-company') || {}).value || '';
+      var company = (document.getElementById('reg-company') || {}).value.trim() || '';
+      var phone = ((document.getElementById('reg-phone') || {}).value || '').trim();
+      var companySize = (document.getElementById('reg-company-size') || {}).value || '';
+      var primaryUse = (document.getElementById('reg-primary-use') || {}).value || '';
+      var honeypot = (document.getElementById('reg-website') || {}).value || '';
+
       if (!email || !password || !name) {
         var err2 = document.getElementById('reg-error');
         if (err2) { err2.textContent = 'Please fill in all required fields.'; err2.style.display = 'block'; }
         return;
       }
-      rrTrack('signup_submit_attempt', {});
+      if (!company) {
+        var errC = document.getElementById('reg-error');
+        if (errC) { errC.textContent = 'Please enter your company name.'; errC.style.display = 'block'; }
+        var ce = document.getElementById('reg-company'); if (ce) ce.focus();
+        return;
+      }
+
+      rrTrack('signup_submit_attempt', { company_size: companySize, primary_use: primaryUse });
       var refCode = localStorage.getItem('rr_ref_code') || new URLSearchParams(window.location.search).get('ref') || '';
       var res = await fetch('/api/customer-auth/register', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({email: email, password: password, name: name, company_name: company, referred_by_code: refCode})
+        body: JSON.stringify({
+          email: email,
+          password: password,
+          name: name,
+          company_name: company,
+          phone: phone,
+          company_size: companySize,
+          primary_use: primaryUse,
+          website: honeypot,
+          referred_by_code: refCode
+        })
       });
       var data = await res.json();
       if (data.success) {
         rrTrack('signup_submit_success', {});
+        fireSignupEvents('email', companySize, primaryUse);
         localStorage.removeItem('rr_signup_draft');
         fetch('/api/customer-auth/signup-started', {
           method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -8863,8 +9049,12 @@ ${previewId ? `
       const data = await res.json();
       if (data.success) {
         rrTrack('oauth_success', {provider: 'google'});
+        // conv-v5: fire sign_up only on brand-new Google accounts (isNew)
+        if (data.is_new || data.welcome) {
+          fireSignupEvents('google', '', '');
+        }
         // P1-31: rely on the HttpOnly rm_customer_session cookie.
-        window.location.href = data.is_new ? '/onboarding' : '/customer/dashboard';
+        window.location.href = (data.is_new || data.welcome) ? '/onboarding' : '/customer/dashboard';
       } else {
         rrTrack('oauth_error', {provider: 'google', reason: data.error});
         const errEl = document.getElementById('reg-error');
@@ -13594,6 +13784,13 @@ function getPricingPageHTML() {
           Get Started
         </a>
       </div>
+    </div>
+
+    <!-- conv-v5: How pricing works (removes ambiguity B2B buyers feel seeing 5 prices) -->
+    <div class="rounded-2xl border p-6 mb-8 max-w-3xl mx-auto text-center" style="background:var(--bg-card);border-color:var(--border-color)">
+      <h2 class="text-lg font-bold mb-3" style="color:var(--text-primary)"><i class="fas fa-info-circle text-[#00FF88] mr-2" aria-hidden="true"></i>How pricing works</h2>
+      <p class="text-base mb-1" style="color:var(--text-primary)"><strong>Month 1:</strong> 4 reports free, no card.</p>
+      <p class="text-base" style="color:var(--text-primary)"><strong>After:</strong> $8 per report, or buy 100 credits for $5.95 each.</p>
     </div>
 
     <!-- Credit Packs -->
