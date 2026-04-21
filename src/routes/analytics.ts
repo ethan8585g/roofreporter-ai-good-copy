@@ -36,7 +36,7 @@ analyticsRoutes.use('*', async (c, next) => {
     return next()
   }
   // All other analytics routes — admin only.
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Not authenticated' }, 401)
   ;(c as any).set('admin', admin)
   return next()
