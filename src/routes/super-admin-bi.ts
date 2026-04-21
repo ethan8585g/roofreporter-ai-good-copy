@@ -19,7 +19,7 @@ const superAdminBi = new Hono<{ Bindings: Bindings }>()
 
 // Auth middleware — superadmin only
 superAdminBi.use('/*', async (c, next) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin authentication required' }, 401)
   if (!requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   c.set('admin' as any, admin)
