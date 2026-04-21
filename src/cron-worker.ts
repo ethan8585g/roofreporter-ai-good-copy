@@ -7,7 +7,7 @@
 
 import type { Bindings } from './types'
 import { processOrderQueue } from './services/ai-agent'
-import { runContentAgent } from './services/content-agent'
+import { runOnce as runBlogAgent } from './services/blog-agent'
 import { runLeadAgent } from './services/lead-agent'
 import { runEmailAgent } from './services/email-agent'
 import { runMonitorAgent } from './services/monitor-agent'
@@ -135,12 +135,12 @@ export default {
       })())
     }
 
-    // ── Content Agent (daily at 8am UTC) ─────────────────────
-    if (hour === 8 && await isAgentEnabled('content')) {
+    // ── Blog Agent (Gemini) — daily at 8, 14, 20 UTC (3 posts/day) ──
+    if ((hour === 8 || hour === 14 || hour === 20) && minute < 10 && await isAgentEnabled('content')) {
       ctx.waitUntil((async () => {
         const t0 = Date.now()
         try {
-          const result = await runContentAgent(env)
+          const result = await runBlogAgent(env)
           const summary = result.skipped ? 'No keywords in queue'
             : result.ok ? `Published "${result.keyword}" (q=${result.quality?.overall}%)`
             : `Failed: ${result.error}`

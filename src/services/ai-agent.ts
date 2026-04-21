@@ -589,7 +589,7 @@ async function notifyReportReady(env: Bindings, order: any, orderId: number) {
       <div style="padding: 30px; background: #f8f9fa;">
         <h2>Your Roof Measurement Report is Ready!</h2>
         <p>Hi ${order.requester_name || order.homeowner_name},</p>
-        <p>Great news — your roof measurement report for <strong>${order.property_address}</strong> has been completed using our AI-powered measurement system.</p>
+        <p>Great news — your roof measurement report for <strong>${order.property_address}</strong> is ready.</p>
         <p style="text-align: center; margin: 30px 0;">
           <a href="${reportUrl}" style="background: #0ea5e9; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold;">
             View Your Report

@@ -9,8 +9,20 @@
 
 import type { Bindings } from '../types'
 
-const MODEL_DRAFT = 'gemini-2.0-flash-exp'
-const MODEL_GATE = 'gemini-2.0-flash-exp'
+const MODEL_DRAFT = 'gemini-2.5-flash'
+const MODEL_GATE = 'gemini-2.5-flash'
+const BANNED_PHRASES = [
+  'ai-powered', 'ai powered', 'ai-driven', 'ai driven',
+  'revolutionize', 'revolutionary', 'game-changer', 'game changer',
+  'unlock', 'empower', 'cutting-edge', 'next-generation', 'next generation',
+  'in today\'s world', 'in the modern era',
+]
+const ALLOWED_INTERNAL_PATHS = [
+  '/features/measurements', '/features/crm', '/features/ai-secretary', '/features/virtual-try-on',
+  '/tools/pitch-calculator', '/tools/material-estimator', '/tools/shingle-calculator',
+  '/tools/insurance-deductible-estimator', '/tools/solar-production-estimator',
+  '/pricing', '/services', '/help', '/blog', '/contact', '/sample-report', '/get-started',
+]
 const QUALITY_THRESHOLD = 74      // 0-100, raised from 72. GEO-optimized articles require higher baseline.
 const MAX_ATTEMPTS = 2
 const LOCK_MINUTES = 10
@@ -253,7 +265,30 @@ function buildDraftPrompt(row: QueueRow): string {
   const geo = row.geo_modifier ? ` in ${row.geo_modifier}` : ''
   const market = (row as any).market || 'us'
   const isUS = market === 'us' || (!market && !['Toronto','Calgary','Vancouver','Ottawa','Edmonton','Winnipeg','Montreal','Mississauga','Hamilton','Regina','Saskatoon','Halifax'].includes(row.geo_modifier || ''))
-  const brand = `Roof Manager (roofmanager.ca) — AI-powered roofing measurement + CRM platform.`
+  const brand = `Roof Manager (roofmanager.ca) — roof measurement and roofer CRM software for professional roofing and solar contractors.
+
+VOCABULARY RULE: Never use the phrase "AI-powered", "AI-driven", or any "AI-[adjective]" puffery. Describe specific capabilities by what they do (e.g., "satellite measurement", "Gemini vision analysis for roof condition", "voice receptionist that answers missed calls"). "AI" may appear when naming a specific model or comparing systems, never as a generic marketing modifier.
+
+PRODUCT TRUTH (use only these facts when describing the product; do not invent features):
+- Core measurement engine: Google Solar API (building footprint, pitch, segment geometry) + proprietary geodesic engine that has user-drawn GPS traces (eaves, ridges, hips, valleys) cross-checked against DSM elevation rasters. Every number is verifiable — not a black-box satellite guess.
+- AI vision: Gemini 2.0/2.5 analyzes roof imagery for condition, material, damage, and geometry extraction. A Cloud Run custom model provides secondary validation.
+- Output: a branded 3-page PDF report with projected + sloped area, edge lengths by type (eave/ridge/hip/valley/rake), pitch per facet, waste factor, and a full material take-off (bundles, underlayment, starter, ridge cap, drip edge, ice & water, nails).
+- Pricing: first 3 reports FREE, then $8 USD / $8 CAD per report. No subscription required. No per-seat fee. No annual contract.
+- Built-in CRM: pipeline (leads → quoted → won/lost), jobs, invoices, payments (Stripe + Square), customer portal, and a proposal builder with interactive homeowner-facing web proposals and PVWatts solar simulation.
+- AI Receptionist / Secretary: 24/7 LiveKit voice agent that answers missed calls, qualifies leads, books estimates, and hands off hot calls — with live transcripts.
+- Integrations: Google Maps / Solar API, Gmail OAuth (sends reports from the contractor's own address), Resend, Stripe, Square, Telnyx, LiveKit.
+- Platform: Cloudflare Workers + D1 — edge-deployed, fast from every US/CA metro, SOC-friendly architecture.
+
+POSITIONING vs. COMPETITORS (factual, no trash talk):
+- vs EagleView / GAF QuickMeasure / Hover: Roof Manager produces contractor-verifiable traces (you draw, engine validates) at $8/report instead of $20–$90/report, and delivers in minutes not hours.
+- vs Roofr / RoofSnap: Roof Manager bundles measurement + CRM + proposals + AI receptionist in one platform with no per-seat pricing.
+- vs manual measurement / drone-only workflows: Roof Manager removes the roof-walk for quoting (safer, faster) while keeping a drone/ladder check optional for final scope.
+
+IDEAL CUSTOMER: independent roofing contractors (1–50 trucks), solar installers, storm-restoration crews, and public adjusters in US + Canada. Typical pain: EagleView cost, slow turnaround, missed calls, fragmented tools.
+
+BRAND VOICE: confident, plain-spoken, contractor-to-contractor. No hype. Lead with numbers, pricing, and time saved. Never say "revolutionary", "game-changer", "unlock", or "empower".
+
+WHEN RELEVANT (not forced): weave in ONE product mention that fits naturally — e.g., "Tools like Roof Manager generate this measurement from satellite imagery in under 5 minutes for $8." Avoid stacking multiple product plugs. The article must stand on its own as useful content; the product fits only where the reader would benefit.`
   const usFraming = isUS ? `
 US MARKET REQUIREMENTS (this article targets US contractors):
 - Use US English spelling (not Canadian). Write "aluminum" not "aluminium", "labor" not "labour".
@@ -278,11 +313,13 @@ CORE REQUIREMENTS:
 
 2. SPEAKABLE SECTION: Wrap your opening paragraph and FAQ with <section data-speakable="true">. This improves Google Assistant and Siri citation frequency.
 
-3. INTERNAL LINKS: Include at minimum 8 internal links:
-   - 2 to feature hubs: /features/measurements and /features/crm
-   - 2 to relevant location pages: /us/${row.geo_modifier ? row.geo_modifier.toLowerCase().replace(/ /g,'-') : 'texas'} or /roof-measurement/[city-slug]
-   - 2 to relevant blog posts (use descriptive anchor text, link to /blog)
-   - 2 to tools: /tools/pitch-calculator and /tools/material-estimator
+3. INTERNAL LINKS: Include 6-10 internal links. You MAY ONLY link to these real URLs (do not invent paths):
+   - Feature hubs: /features/measurements, /features/crm, /features/ai-secretary, /features/virtual-try-on
+   - Tools: /tools/pitch-calculator, /tools/material-estimator, /tools/shingle-calculator, /tools/insurance-deductible-estimator, /tools/solar-production-estimator
+   - Pricing + signup: /pricing, /get-started, /sample-report
+   - Location hub: /us/${row.geo_modifier ? row.geo_modifier.toLowerCase().replace(/ /g,'-') : 'texas'} (state pages exist for all 50 states — link only to actual US state names)
+   - Content: /blog (listing), /help (knowledge base), /services, /contact
+   Requirement: minimum 2 links to /features/*, minimum 2 links to /tools/*, minimum 1 link to /pricing, minimum 1 link to /blog. Use descriptive anchor text (not "click here").
 
 4. FAQ SECTION: 8-10 Q&As in a visible FAQ. Include 3 "People Also Ask"-style questions that mirror top Google PAA boxes for this topic.
 
@@ -328,7 +365,8 @@ Evaluate on 0-100 scale:
 - geo_optimization (0-100): Has <section class="key-facts"> with 5+ factual bullet points? Has <section data-speakable="true">? Has named author attribution? Has Sources section with 3+ real citations? Has 5+ specific numbers (percentages, dates, dollar amounts)? Each present = +20 points.
 ${isUS ? `- us_alignment (0-100): No "CAD" in body text? Uses "feet"/"sq ft" not metric? Mentions at least 1 US insurer? Mentions at least 1 US building code? Mentions at least 1 US state? Each = +20 points.` : ''}
 - schema_present: boolean — is there a <script type="application/ld+json"> block?
-- internal_links: count of <a href="/...> internal links (target: 8+)
+- internal_links: count of <a href="/...> internal links (target: 6+)
+- brand_voice (0-100): 100 if the article contains NONE of these banned phrases (case-insensitive): ${BANNED_PHRASES.map(p => `"${p}"`).join(', ')}. Subtract 25 per occurrence.
 
 Return STRICT JSON:
 {
@@ -337,11 +375,18 @@ Return STRICT JSON:
   "keyword_fit": 0-100,
   "readability": 0-100,
   "geo_optimization": 0-100,
+  "brand_voice": 0-100,
   ${isUS ? '"us_alignment": 0-100,' : ''}
   "schema_present": true|false,
   "internal_links": 0,
   "issues": ["short list of concrete problems, empty if none"]
 }`
+}
+
+function hasBannedPhrase(html: string): string | null {
+  const hay = html.toLowerCase()
+  for (const p of BANNED_PHRASES) if (hay.includes(p)) return p
+  return null
 }
 
 async function callGemini(apiKey: string, model: string, prompt: string): Promise<string> {
@@ -392,6 +437,14 @@ async function publishDraft(db: D1Database, draft: DraftOutput, row: QueueRow): 
   const existing = await db.prepare(`SELECT id FROM blog_posts WHERE slug = ?`).bind(slug).first()
   if (existing) slug = `${slug}-${Date.now().toString(36)}`
 
+  const coverByCategory: Record<string, string> = {
+    roofing: 'https://images.unsplash.com/photo-1632759145355-6b9b1a1f57cd?w=1600&q=75',
+    insurance: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=1600&q=75',
+    solar: 'https://images.unsplash.com/photo-1509390157308-aa3f4b9b2f58?w=1600&q=75',
+    commercial: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1600&q=75',
+  }
+  const coverUrl = coverByCategory[row.target_category || 'roofing'] || coverByCategory.roofing
+
   const result = await db.prepare(
     `INSERT INTO blog_posts
       (slug, title, excerpt, content, cover_image_url, category, tags, meta_title, meta_description, status, read_time_minutes, published_at)
@@ -401,7 +454,7 @@ async function publishDraft(db: D1Database, draft: DraftOutput, row: QueueRow): 
     draft.title,
     draft.excerpt,
     draft.content_html,
-    null,
+    coverUrl,
     row.target_category || 'roofing',
     (draft.tags || []).join(','),
     draft.meta_title,
@@ -462,7 +515,11 @@ export async function runOnce(env: Bindings): Promise<RunResult> {
 
     const score = await scoreDraft(env, row, draft)
     const geoOk = (score as any).geo_optimization === undefined || (score as any).geo_optimization >= 60
-    const passed = score.overall >= QUALITY_THRESHOLD && score.schema_present && score.internal_links >= 2 && geoOk
+    const bannedHit = hasBannedPhrase(draft.content_html)
+    if (bannedHit) {
+      score.issues = [...(score.issues || []), `banned phrase: "${bannedHit}"`]
+    }
+    const passed = score.overall >= QUALITY_THRESHOLD && score.schema_present && score.internal_links >= 2 && geoOk && !bannedHit
 
     await logEvent(db, {
       queue_id: row.id,

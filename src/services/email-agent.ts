@@ -45,7 +45,9 @@ export function buildCampaignPrompt(stats: CampaignStats): string {
     ? `Most contacts came from: ${stats.top_sources.join(', ')}.`
     : ''
 
-  return `You are a content strategist for Roof Manager (roofmanager.ca) — Canada's AI-powered roofing measurement platform for contractors and property managers.
+  return `You are a content strategist for Roof Manager (roofmanager.ca) — roof measurement and roofer CRM software for contractors and property managers across the US and Canada.
+
+Never write "AI-powered" or "AI-driven" — describe specific capabilities instead.
 
 Write a weekly educational email campaign for ${stats.total_contacts} unengaged contacts.
 Current average open rate: ${openRate}. ${lastCampaign} ${sources}

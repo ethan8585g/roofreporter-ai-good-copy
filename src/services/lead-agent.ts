@@ -48,7 +48,9 @@ export function buildLeadPrompt(lead: LeadRow): string {
   }
   const sourceLabel = sourceMap[lead.source] || 'our website'
 
-  return `You are writing a follow-up email on behalf of Roof Manager (roofmanager.ca) — Canada's AI-powered roofing measurement and quoting platform used by property managers, roofing contractors, and condo boards.
+  return `You are writing a follow-up email on behalf of Roof Manager (roofmanager.ca) — roof measurement and roofer CRM software used by property managers, roofing contractors, and condo boards across the US and Canada.
+
+Never write "AI-powered" or "AI-driven" — describe specific capabilities instead (satellite measurement, voice receptionist, etc.).
 
 The lead is: ${name}${company}. They requested information${address}${buildingNote} via ${sourceLabel}.
 

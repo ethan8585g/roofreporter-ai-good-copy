@@ -26,7 +26,9 @@ export interface ContentRunResult {
 
 export function buildContentPrompt(row: QueueRow): string {
   const geo = row.geo_modifier ? ` in ${row.geo_modifier}` : ''
-  return `You are an expert SEO/GEO content writer for Roof Manager (roofmanager.ca) — Canada's AI-powered roofing measurement and quoting platform.
+  return `You are an expert SEO/GEO content writer for Roof Manager (roofmanager.ca) — roof measurement and roofer CRM software for contractors and property managers across the US and Canada.
+
+Never write "AI-powered" or "AI-driven" — describe specific capabilities instead (satellite measurement, voice receptionist, Gemini vision analysis, etc.).
 
 Write a 1200-1800 word blog article targeting the keyword "${row.keyword}"${geo}.
 Intent: ${row.intent}. Target audience: Canadian homeowners and roofing contractors.
