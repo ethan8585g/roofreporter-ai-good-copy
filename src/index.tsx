@@ -18,6 +18,7 @@ import { solarPresentationRoutes } from './routes/solar-presentation'
 import { solarDocumentsRoutes } from './routes/solar-documents'
 import { solarPermitsRoutes } from './routes/solar-permits'
 import { invoiceRoutes } from './routes/invoices'
+import { automationsRoutes } from './routes/automations'
 import { squareRoutes } from './routes/square'
 import { crmRoutes } from './routes/crm'
 import { claimsRoutes } from './routes/claims'
@@ -68,7 +69,9 @@ import { customerLeadsRoutes } from './routes/customer-leads'
 import usStatesRoutes from './routes/us-states'
 import usVerticalsRoutes from './routes/us-verticals'
 import usComparisonsRoutes from './routes/us-comparisons'
+import caProvincesRoutes from './routes/ca-provinces'
 import { ALL_STATE_SLUGS as US_ALL_STATE_SLUGS, US_CITIES as US_CITIES_DATA } from './data/us-states'
+import { ALL_PROVINCE_SLUGS as CA_ALL_PROVINCE_SLUGS } from './data/ca-provinces'
 import { processOrderQueue } from './services/ai-agent'
 import { runContentAgent } from './services/content-agent'
 import { runLeadAgent } from './services/lead-agent'
@@ -318,6 +321,8 @@ window.fireMetaLeadEvent=function(d){if(typeof fbq==='function')fbq('track','Lea
 // ── US SEO/GEO expansion routes ── (verticals before states — specific paths must precede /:state/:city catch-alls)
 app.route('/us', usVerticalsRoutes)
 app.route('/us', usStatesRoutes)
+// ── CA SEO/GEO expansion routes ── Canadian province hub + per-province pages
+app.route('/ca', caProvincesRoutes)
 // US comparison pages (specific slugs, must come before catch-alls)
 app.route('/', usComparisonsRoutes)
 
@@ -344,6 +349,7 @@ app.route('/api/customer/solar-permits', solarPermitsRoutes)
 app.route('/api/customer', customerAuthRoutes)
 app.route('/api/customer-auth', customerAuthRoutes)
 app.route('/api/invoices', invoiceRoutes)
+app.route('/api/automations', automationsRoutes)
 app.route('/api/square', squareRoutes)
 app.route('/api/crm', crmRoutes)
 app.route('/api/claims', claimsRoutes)
@@ -382,6 +388,14 @@ app.route('/api/sam3', sam3Routes)
 app.route('/api/admin/platform', platformAdmin)
 app.route('/api/admin/bi', superAdminBi)
 app.route('/api/admin/leads', superAdminLeads)
+
+// Exit-intent modal body — returns the free-measurement-report form variant.
+// Kept out of getHeadTags so the modal HTML only ships when actually triggered.
+app.get('/api/exit-intent-form', (c) => {
+  const source = c.req.query('source') || 'exit_intent'
+  const safeSource = String(source).replace(/[^a-z0-9_]/gi, '').slice(0, 50) || 'exit_intent'
+  return c.html(freeMeasurementReportFormHTML(safeSource, 'modal'))
+})
 app.route('/api/ai-autopilot', aiAutopilotRoutes)
 app.route('/api/agent-hub', agentHubRoutes)
 app.route('/api/field', fieldRoutes)
@@ -4058,7 +4072,65 @@ html.light-theme{background:#f5f7fa !important}
 <script>!function(){var p=window.location.pathname;if(!p.startsWith('/customer')&&!p.startsWith('/admin'))return;var t=localStorage.getItem('rc_dashboard_theme');if(t==='light'){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}else if(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script>
   <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(function(e){try{console.warn('[sw]',(e&&e.message)||e)}catch(_){}})})}</script>
   <script src="/static/push-subscribe.js" defer></script>
-  <script src="/static/push-native.js" defer></script>`
+  <script src="/static/push-native.js" defer></script>
+  <!-- ── UTM attribution + exit-intent lead-magnet modal (public pages only) ── -->
+  <script>(function(){
+    try {
+      var ss = window.sessionStorage;
+      if (!ss) return;
+      var q = new URLSearchParams(location.search);
+      ['utm_source','utm_medium','utm_campaign','utm_content','utm_term'].forEach(function(k){
+        var v = q.get(k);
+        if (v && !ss.getItem('_rm_'+k)) ss.setItem('_rm_'+k, v.slice(0,100));
+      });
+      if (!ss.getItem('_rm_referrer')) {
+        var r = document.referrer || '';
+        if (r && r.indexOf(location.host) === -1) ss.setItem('_rm_referrer', r.slice(0,200));
+      }
+    } catch(_) {}
+
+    // Exit-intent modal: skip admin/customer/api surfaces and already-captured visitors.
+    var p = location.pathname || '';
+    if (p.indexOf('/super-admin') === 0 || p.indexOf('/customer') === 0 || p.indexOf('/admin') === 0 || p.indexOf('/api/') === 0 || p.indexOf('/register') === 0 || p.indexOf('/login') === 0) return;
+
+    function shouldShow() {
+      try {
+        if (sessionStorage.getItem('rm_exit_intent_shown')) return false;
+        if (sessionStorage.getItem('rm_lead_captured')) return false;
+      } catch(_) {}
+      return true;
+    }
+
+    function openModal() {
+      if (!shouldShow()) return;
+      try { sessionStorage.setItem('rm_exit_intent_shown', '1'); } catch(_) {}
+      fetch('/api/exit-intent-form?source=exit_intent', { method: 'GET' })
+        .then(function(r){ return r.ok ? r.text() : ''; })
+        .then(function(html){
+          if (!html) return;
+          var el = document.createElement('div');
+          el.id = 'rm-exit-modal';
+          el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
+          el.innerHTML = '<div style="position:relative;background:#111827;border:1px solid rgba(0,255,136,0.25);border-radius:18px;padding:28px;max-width:540px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,0.5)">' +
+            '<button onclick="document.getElementById(\'rm-exit-modal\').remove()" aria-label="Close" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.08);border:none;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px">\u00d7</button>' +
+            html +
+            '</div>';
+          el.addEventListener('click', function(ev){ if (ev.target === el) el.remove(); });
+          document.body.appendChild(el);
+        })
+        .catch(function(){});
+    }
+
+    // Desktop: mouseleave toward the top of the viewport.
+    document.addEventListener('mouseout', function(e) {
+      if (!e.relatedTarget && !e.toElement && e.clientY < 10) openModal();
+    });
+    // Mobile: 25-second dwell + pagehide as secondary triggers.
+    if (/Mobi|Android/i.test(navigator.userAgent)) {
+      setTimeout(openModal, 25000);
+      window.addEventListener('pagehide', openModal);
+    }
+  })();</script>`
 }
 
 // Rover chatbot widget script tag — inject on public pages only
@@ -10324,6 +10396,8 @@ function getFeatureHubPageHTML(featureSlug: string): string {
     </div>
   </section>
 
+  ${f.slug === 'measurements' ? `<section style="background:#0A0A0A;padding:20px 0">${freeMeasurementReportFormHTML('features_measurements', 'inline')}</section>` : ''}
+
   ${getContactFormHTML(`feature_${f.slug}`)}
 
   <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
@@ -16167,7 +16241,7 @@ function getCertificateAutomationsPageHTML() {
         <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Automations</h1>
-          <p style="color:#9ca3af" class="text-xs">Certificates & Invoicing</p>
+          <p style="color:#9ca3af" class="text-xs">Certificates & Proposals</p>
         </div>
       </a>
       <nav class="flex items-center space-x-4">
