@@ -1039,8 +1039,17 @@ adminRoutes.get('/superadmin/users', async (c) => {
   const admin = c.get('admin' as any)
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
+    // D1 rejects result sets with too many columns, so we explicitly select
+    // only the customer fields the super-admin User Registry renders. Using
+    // `c.*` on the now ~80-column `customers` table returned
+    // "D1_ERROR: too many columns in result set" and left the dashboard empty.
     const users = await c.env.DB.prepare(`
-      SELECT c.*,
+      SELECT
+        c.id, c.email, c.name, c.phone, c.company_name,
+        c.google_id, c.google_avatar,
+        c.is_active, c.last_login, c.created_at,
+        c.free_trial_used, c.free_trial_total,
+        c.report_credits, c.credits_used,
         'owner' as user_type,
         NULL as team_member_id,
         NULL as team_role,
