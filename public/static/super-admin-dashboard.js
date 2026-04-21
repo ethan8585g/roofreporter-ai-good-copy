@@ -1369,9 +1369,11 @@ function saInitTraceMap(lat, lng, address) {
         if (distM < 1.5) { saCloseEaveSection(); return; }
       }
       pts.push(e.latLng);
-      // Numbered marker
+      // Numbered marker — clickable:false so it never absorbs a click meant
+      // for a ridge/hip/valley placed on top of this eave dot.
       var mk = new google.maps.Marker({
         position: e.latLng, map: map,
+        clickable: false,
         icon: { path: google.maps.SymbolPath.CIRCLE, scale: 5, fillColor: '#22c55e', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1.5 },
         label: { text: String(pts.length), color: '#fff', fontSize: '10px', fontWeight: '700' }
       });
@@ -1386,6 +1388,7 @@ function saInitTraceMap(lat, lng, address) {
       var colors = { vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626' };
       var annMk = new google.maps.Marker({
         position: e.latLng, map: map,
+        clickable: false,
         icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: colors[tool], fillOpacity: 0.9, strokeColor: '#fff', strokeWeight: 2 },
         title: tool
       });
@@ -1398,6 +1401,7 @@ function saInitTraceMap(lat, lng, address) {
         var colorMap = { ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb' };
         s._segStartMarker = new google.maps.Marker({
           position: e.latLng, map: map,
+          clickable: false,
           icon: { path: google.maps.SymbolPath.CIRCLE, scale: 4, fillColor: colorMap[tool] || '#fff', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1 }
         });
       } else {
