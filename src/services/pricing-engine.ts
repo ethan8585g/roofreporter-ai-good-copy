@@ -466,3 +466,152 @@ export function generateProgressBilling(
 function round2(n: number): number {
   return Math.round(n * 100) / 100
 }
+
+// ============================================================
+// BUNDLE / UNIT PRICE SHEET — roofer uploads per-unit prices once,
+// engine multiplies against material take-off from a roof report.
+// ============================================================
+export interface MaterialUnitPrices {
+  shingle_bundle: number          // $ per bundle (3 bundles/sq)
+  underlayment_roll: number       // $ per synthetic underlayment roll (4/sq)
+  ice_water_roll: number          // $ per ice & water shield roll (2 sq)
+  ridge_cap_bundle: number        // $ per ridge-cap bundle (~35 lf/bundle)
+  drip_edge_lf: number            // $ per linear foot
+  starter_strip_lf: number        // $ per linear foot
+  valley_flashing_lf: number      // $ per linear foot
+  nails_box: number               // $ per box of roofing nails
+  caulk_tube: number              // $ per tube
+  labor_per_square: number        // $ per square installed
+  tearoff_per_square: number      // $ per square torn off
+  dumpster_flat: number           // $ per dumpster
+  dumpster_sqft_per_unit: number  // coverage sqft per dumpster
+  tax_rate: number                // decimal (e.g. 0.05)
+}
+
+export const DEFAULT_MATERIAL_UNIT_PRICES: MaterialUnitPrices = {
+  shingle_bundle: 42,
+  underlayment_roll: 110,
+  ice_water_roll: 90,
+  ridge_cap_bundle: 65,
+  drip_edge_lf: 1.75,
+  starter_strip_lf: 1.25,
+  valley_flashing_lf: 3.25,
+  nails_box: 48,
+  caulk_tube: 8,
+  labor_per_square: 180,
+  tearoff_per_square: 45,
+  dumpster_flat: 450,
+  dumpster_sqft_per_unit: 3000,
+  tax_rate: 0.05,
+}
+
+export interface TraceMaterialsInput {
+  shingles_bundles?: number
+  underlayment_rolls?: number
+  ice_water_shield_rolls_2sq?: number
+  ice_water_shield_sqft?: number
+  ridge_cap_bundles?: number
+  ridge_cap_lf?: number
+  drip_edge_total_lf?: number
+  starter_strip_lf?: number
+  valley_flashing_lf?: number
+  roofing_nails_lbs?: number
+  caulk_tubes?: number
+  shingles_squares_gross?: number
+  shingles_squares_net?: number
+}
+
+// Calculate a proposal from the report's actual material take-off
+// multiplied against the user's saved per-unit price sheet.
+// This drives the "bundle pricing" mode of the proposal builder.
+export function calculateFromMaterials(
+  materials: TraceMaterialsInput,
+  measurements: RoofMeasurements,
+  prices: MaterialUnitPrices,
+  opts: { include_labor?: boolean; include_tearoff?: boolean; include_disposal?: boolean } = {}
+): ProposalResult {
+  const lineItems: ProposalLineItem[] = []
+  const grossSquares = materials.shingles_squares_gross ||
+    (measurements.total_area_sqft > 0 ? (measurements.total_area_sqft / 100) * 1.15 : 0)
+
+  const pushItem = (
+    item: string, description: string, qty: number, unit: string, unitPrice: number
+  ) => {
+    if (!(qty > 0) || !(unitPrice > 0)) return
+    lineItems.push({
+      item, description,
+      qty: round2(qty), unit,
+      unit_price: round2(unitPrice),
+      price: round2(qty * unitPrice),
+    })
+  }
+
+  pushItem('Shingles', `Architectural shingles — take-off from roof report`,
+    materials.shingles_bundles || 0, 'bundles', prices.shingle_bundle)
+
+  pushItem('Underlayment', `Synthetic underlayment`,
+    materials.underlayment_rolls || 0, 'rolls', prices.underlayment_roll)
+
+  const iwRolls = materials.ice_water_shield_rolls_2sq ||
+    (materials.ice_water_shield_sqft ? Math.ceil(materials.ice_water_shield_sqft / 200) : 0)
+  pushItem('Ice & Water Shield', `Self-adhered membrane at eaves / valleys`,
+    iwRolls, 'rolls', prices.ice_water_roll)
+
+  const ridgeBundles = materials.ridge_cap_bundles ||
+    (materials.ridge_cap_lf ? Math.ceil(materials.ridge_cap_lf / 35) : 0)
+  pushItem('Ridge Cap Shingles', `Ridge & hip caps`,
+    ridgeBundles, 'bundles', prices.ridge_cap_bundle)
+
+  pushItem('Drip Edge', `Eaves + rakes`,
+    materials.drip_edge_total_lf || 0, 'lf', prices.drip_edge_lf)
+
+  pushItem('Starter Strip', `Eave starter course`,
+    materials.starter_strip_lf || 0, 'lf', prices.starter_strip_lf)
+
+  pushItem('Valley Flashing', `Galvanized valley metal`,
+    materials.valley_flashing_lf || 0, 'lf', prices.valley_flashing_lf)
+
+  if (materials.roofing_nails_lbs && materials.roofing_nails_lbs > 0) {
+    const boxes = Math.max(1, Math.ceil(materials.roofing_nails_lbs / 50))
+    pushItem('Roofing Nails', `Coil nails (${Math.round(materials.roofing_nails_lbs)} lbs)`,
+      boxes, 'boxes', prices.nails_box)
+  }
+
+  pushItem('Caulk / Sealant', `Roof sealant tubes`,
+    materials.caulk_tubes || 0, 'tubes', prices.caulk_tube)
+
+  if (opts.include_labor !== false && grossSquares > 0) {
+    pushItem('Installation Labor', `Professional installation`,
+      grossSquares, 'squares', prices.labor_per_square)
+  }
+  if (opts.include_tearoff !== false && grossSquares > 0 && prices.tearoff_per_square > 0) {
+    pushItem('Tear-off (Existing Roofing)', `Remove existing roofing`,
+      grossSquares, 'squares', prices.tearoff_per_square)
+  }
+  if (opts.include_disposal !== false && measurements.total_area_sqft > 0 && prices.dumpster_flat > 0) {
+    const perUnit = prices.dumpster_sqft_per_unit || 3000
+    const dumpsters = Math.max(1, Math.ceil(measurements.total_area_sqft / perUnit))
+    pushItem('Disposal & Dumpster', `${dumpsters} dumpster${dumpsters > 1 ? 's' : ''} rental + haul-away`,
+      dumpsters, 'dumpsters', prices.dumpster_flat)
+  }
+
+  const subtotal = round2(lineItems.reduce((s, it) => s + it.price, 0))
+  const taxAmount = round2(subtotal * (prices.tax_rate || 0))
+  const totalPrice = round2(subtotal + taxAmount)
+
+  return {
+    line_items: lineItems,
+    subtotal,
+    tax_rate: prices.tax_rate || 0,
+    tax_amount: taxAmount,
+    total_price: totalPrice,
+    waste_factor_pct: 15,
+    gross_squares: round2(grossSquares),
+    net_area_sqft: measurements.total_area_sqft,
+    metadata: {
+      engine_version: 'Roof Manager PricingEngine v1.0 (bundle mode)',
+      generated_at: new Date().toISOString(),
+      preset_name: 'Bundle Price Sheet',
+    },
+  }
+}

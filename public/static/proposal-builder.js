@@ -76,6 +76,17 @@ document.addEventListener('DOMContentLoaded', () => {
     pricingPresets: null, // loaded from settings — auto-apply on report select
     presetsApplied: false, // flag so presets only apply once per proposal
     pricePerBundle: 0, // $/bundle for per-bundle pricing mode
+    // Bundle Pricing mode — roofer's per-unit price sheet. Multiplied against
+    // the roof report's material take-off to auto-generate proposal line items.
+    bundlePrices: {
+      shingle_bundle: 42, underlayment_roll: 110, ice_water_roll: 90,
+      ridge_cap_bundle: 65, drip_edge_lf: 1.75, starter_strip_lf: 1.25,
+      valley_flashing_lf: 3.25, nails_box: 48, caulk_tube: 8,
+      labor_per_square: 180, tearoff_per_square: 45,
+      dumpster_flat: 450, dumpster_sqft_per_unit: 3000, tax_rate: 0.05
+    },
+    bundlePricesLoaded: false,
+    bundleBuilding: false,
     activeTemplateId: null, // currently-applied Quick Template (for active pill)
     // Form state
     form: resetForm()
@@ -676,12 +687,44 @@ document.addEventListener('DOMContentLoaded', () => {
         '<div>' +
           // Pricing mode toggle
           '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:16px">' +
-            '<div style="display:flex;gap:8px;margin-bottom:12px">' +
-              '<button onclick="window.__pbState.pricingMethod=\'line_item\';window.__pbRender()" style="flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingMethod === 'line_item' ? 'var(--accent)' : 'var(--border-color)') + ';background:' + (state.pricingMethod === 'line_item' ? 'rgba(0,255,136,0.1)' : 'transparent') + ';color:' + (state.pricingMethod === 'line_item' ? 'var(--accent)' : 'var(--text-muted)') + '">Line Item</button>' +
-              '<button onclick="window.__pbState.pricingMethod=\'per_square\';window.__pbRender()" style="flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingMethod === 'per_square' ? 'var(--accent)' : 'var(--border-color)') + ';background:' + (state.pricingMethod === 'per_square' ? 'rgba(0,255,136,0.1)' : 'transparent') + ';color:' + (state.pricingMethod === 'per_square' ? 'var(--accent)' : 'var(--text-muted)') + '">Per Square</button>' +
+            '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">' +
+              '<button onclick="window.__pbState.pricingMethod=\'line_item\';window.__pbRender()" style="flex:1;min-width:90px;padding:8px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingMethod === 'line_item' ? 'var(--accent)' : 'var(--border-color)') + ';background:' + (state.pricingMethod === 'line_item' ? 'rgba(0,255,136,0.1)' : 'transparent') + ';color:' + (state.pricingMethod === 'line_item' ? 'var(--accent)' : 'var(--text-muted)') + '" title="Add each line item manually">Line Item</button>' +
+              '<button onclick="window.__pbState.pricingMethod=\'per_square\';window.__pbRender()" style="flex:1;min-width:90px;padding:8px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingMethod === 'per_square' ? 'var(--accent)' : 'var(--border-color)') + ';background:' + (state.pricingMethod === 'per_square' ? 'rgba(0,255,136,0.1)' : 'transparent') + ';color:' + (state.pricingMethod === 'per_square' ? 'var(--accent)' : 'var(--text-muted)') + '" title="Flat $/square × roof size">Per Square</button>' +
+              '<button onclick="window._pb.activateBundleSheet()" style="flex:1;min-width:90px;padding:8px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingMethod === 'bundle_sheet' ? 'var(--accent)' : 'var(--border-color)') + ';background:' + (state.pricingMethod === 'bundle_sheet' ? 'rgba(0,255,136,0.1)' : 'transparent') + ';color:' + (state.pricingMethod === 'bundle_sheet' ? 'var(--accent)' : 'var(--text-muted)') + '" title="Enter your per-bundle/per-unit prices once; engine auto-builds line items from the roof report\'s material take-off">Bundle Pricing</button>' +
             '</div>' +
 
-            (state.pricingMethod === 'per_square' ?
+            (state.pricingMethod === 'bundle_sheet' ?
+              (function() {
+                var bp = state.bundlePrices || {};
+                var priceInput = function(key, label, suffix) {
+                  var val = bp[key] != null ? bp[key] : '';
+                  return '<div><label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:2px">' + label + '</label>' +
+                    '<div style="display:flex;align-items:center;gap:4px"><span style="color:var(--text-muted);font-size:12px">$</span>' +
+                    '<input type="number" step="0.01" value="' + val + '" onchange="window._pb.setBundlePrice(\'' + key + '\',this.value)" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:6px;padding:6px 8px;color:var(--text-primary);font-weight:700;font-size:13px">' +
+                    (suffix ? '<span style="color:var(--text-muted);font-size:10px;white-space:nowrap">' + suffix + '</span>' : '') + '</div></div>';
+                };
+                var hasReport = !!state.selectedReport;
+                return '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px"><i class="fas fa-info-circle" style="color:var(--accent);margin-right:4px"></i>Enter your per-unit prices once. Pick a roof report, then "Build from Report" — the engine multiplies each material quantity by your price.</div>' +
+                  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">' +
+                    priceInput('shingle_bundle', 'Shingle bundle', '/bundle') +
+                    priceInput('underlayment_roll', 'Underlayment', '/roll') +
+                    priceInput('ice_water_roll', 'Ice & water', '/roll') +
+                    priceInput('ridge_cap_bundle', 'Ridge cap', '/bundle') +
+                    priceInput('drip_edge_lf', 'Drip edge', '/lf') +
+                    priceInput('starter_strip_lf', 'Starter strip', '/lf') +
+                    priceInput('valley_flashing_lf', 'Valley flashing', '/lf') +
+                    priceInput('nails_box', 'Nails', '/box') +
+                    priceInput('caulk_tube', 'Caulk', '/tube') +
+                    priceInput('labor_per_square', 'Labor', '/sq') +
+                    priceInput('tearoff_per_square', 'Tear-off', '/sq') +
+                    priceInput('dumpster_flat', 'Dumpster', 'flat') +
+                  '</div>' +
+                  '<div style="display:flex;gap:8px;margin-top:10px">' +
+                    '<button onclick="window._pb.saveBundlePrices()" style="flex:1;padding:8px;border-radius:8px;background:var(--bg-elevated);border:1px solid var(--border-color);color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer"><i class="fas fa-save" style="margin-right:4px"></i>Save Price Sheet</button>' +
+                    '<button onclick="window._pb.buildFromReportBundle()" ' + (hasReport ? '' : 'disabled') + ' style="flex:2;padding:8px;border-radius:8px;background:' + (hasReport ? 'var(--accent)' : '#374151') + ';border:none;color:' + (hasReport ? '#000' : '#9ca3af') + ';font-size:12px;font-weight:700;cursor:' + (hasReport ? 'pointer' : 'not-allowed') + '"><i class="fas fa-bolt" style="margin-right:4px"></i>' + (state.bundleBuilding ? 'Building…' : (hasReport ? 'Build from Report' : 'Select a report first')) + '</button>' +
+                  '</div>';
+              })()
+            : state.pricingMethod === 'per_square' ?
               '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
                 '<div><label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:4px">Your Cost/Sq</label><input type="number" value="' + (state.pricePerSquare || 0) + '" onchange="window.__pbState.pricePerSquare=Number(this.value);window.__pbRender()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-weight:700"></div>' +
                 '<div><label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:4px">Roof Squares</label><input type="number" value="' + squares + '" oninput="window.__pbState.manualSquares=Number(this.value)||0;window.__pbRender()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-weight:700;font-size:16px" min="0" step="0.5"></div>' +
@@ -2433,6 +2476,72 @@ document.addEventListener('DOMContentLoaded', () => {
     setPricing(method) {
       state.pricingMethod = method;
       render();
+    },
+    setBundlePrice(key, value) {
+      var n = Number(value);
+      if (!isFinite(n) || n < 0) return;
+      state.bundlePrices = Object.assign({}, state.bundlePrices, {});
+      state.bundlePrices[key] = n;
+    },
+    async activateBundleSheet() {
+      state.pricingMethod = 'bundle_sheet';
+      if (!state.bundlePricesLoaded) {
+        try {
+          var r = await fetch('/api/admin/proposal-pricing', { headers: headers() });
+          if (r.ok) {
+            var data = await r.json();
+            var saved = data && data.presets && data.presets.material_unit_prices;
+            if (saved && typeof saved === 'object') {
+              state.bundlePrices = Object.assign({}, state.bundlePrices, saved);
+            }
+          }
+        } catch (e) { /* keep defaults */ }
+        state.bundlePricesLoaded = true;
+      }
+      render();
+    },
+    async saveBundlePrices() {
+      try {
+        var r = await fetch('/api/admin/proposal-pricing', {
+          method: 'PUT', headers: headers(),
+          body: JSON.stringify({ material_unit_prices: state.bundlePrices })
+        });
+        if (r.ok) pbToast('Price sheet saved', 'success');
+        else pbToast('Failed to save price sheet', 'error');
+      } catch (e) { pbToast('Failed to save price sheet', 'error'); }
+    },
+    async buildFromReportBundle() {
+      if (!state.selectedReport) { pbToast('Select a roof report first', 'error'); return; }
+      if (state.bundleBuilding) return;
+      state.bundleBuilding = true; render();
+      try {
+        var r = await fetch('/api/crm/proposals/from-report-bundle', {
+          method: 'POST', headers: headers(),
+          body: JSON.stringify({
+            report_id: state.selectedReport.id,
+            material_unit_prices: state.bundlePrices
+          })
+        });
+        var data = await r.json();
+        if (!r.ok || !data.success) {
+          pbToast(data.error || 'Failed to build proposal from report', 'error');
+        } else {
+          var items = (data.line_items || []).map(function(li) {
+            return {
+              description: li.item ? (li.item + (li.description ? ' — ' + li.description : '')) : (li.description || ''),
+              quantity: li.qty, unit: li.unit, unit_price: li.unit_price,
+              is_taxable: true, category: 'material'
+            };
+          });
+          state.form.items = items;
+          state.customerPriceOverride = data.total_price;
+          pbToast('Built ' + items.length + ' line items from report', 'success');
+        }
+      } catch (e) {
+        pbToast('Build failed: ' + (e.message || 'unknown'), 'error');
+      } finally {
+        state.bundleBuilding = false; render();
+      }
     },
     async seedCatalog() {
       var res = await fetch('/api/crm/catalog/seed-defaults', { method: 'POST', headers: headers() }).then(function(r) { return r.json(); }).catch(function() { return null; });

@@ -308,6 +308,25 @@ adminRoutes.get('/proposal-pricing', async (c) => {
     labor_per_square: 180,
     include_tearoff: true,
     tearoff_per_square: 45,
+    // Full per-unit price sheet for "bundle pricing" mode — engine
+    // multiplies these against the report's material take-off to
+    // auto-generate proposal line items.
+    material_unit_prices: {
+      shingle_bundle: 42,
+      underlayment_roll: 110,
+      ice_water_roll: 90,
+      ridge_cap_bundle: 65,
+      drip_edge_lf: 1.75,
+      starter_strip_lf: 1.25,
+      valley_flashing_lf: 3.25,
+      nails_box: 48,
+      caulk_tube: 8,
+      labor_per_square: 180,
+      tearoff_per_square: 45,
+      dumpster_flat: 450,
+      dumpster_sqft_per_unit: 3000,
+      tax_rate: 0.05,
+    },
   }
   let presets = defaults
   if (row?.material_preferences) {
@@ -325,6 +344,17 @@ adminRoutes.put('/proposal-pricing', async (c) => {
   const presets: any = {}
   for (const key of allowed) {
     if (body[key] !== undefined) presets[key] = body[key]
+  }
+  if (body.material_unit_prices && typeof body.material_unit_prices === 'object') {
+    const mupAllowed = ['shingle_bundle', 'underlayment_roll', 'ice_water_roll', 'ridge_cap_bundle',
+      'drip_edge_lf', 'starter_strip_lf', 'valley_flashing_lf', 'nails_box', 'caulk_tube',
+      'labor_per_square', 'tearoff_per_square', 'dumpster_flat', 'dumpster_sqft_per_unit', 'tax_rate']
+    const mup: any = {}
+    for (const k of mupAllowed) {
+      const v = body.material_unit_prices[k]
+      if (v !== undefined && v !== null && !isNaN(Number(v))) mup[k] = Number(v)
+    }
+    presets.material_unit_prices = mup
   }
 
   // Read existing material_preferences and merge proposal_pricing into it

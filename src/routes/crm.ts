@@ -7,6 +7,7 @@ import { validateAdminSession } from './auth'
 import { logFromContext } from '../lib/team-activity'
 import { geocodeAddress, optimizeRoute, type LatLng } from '../services/geocoding'
 import { autoCreateCommission } from './commissions'
+import { calculateFromMaterials, DEFAULT_MATERIAL_UNIT_PRICES, type MaterialUnitPrices } from '../services/pricing-engine'
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -1103,6 +1104,95 @@ crmRoutes.post('/proposals/from-report', async (c) => {
     return c.json({ tiers, measurements: { total_area: totalArea } })
   } catch (err: any) {
     return c.json({ error: 'Failed to generate tiers: ' + err.message }, 500)
+  }
+})
+
+// Bundle-pricing mode — build line items from a report's material take-off
+// multiplied against the roofer's saved per-unit price sheet. Engine lives in
+// pricing-engine.ts; the saved price sheet is stored inside
+// master_companies.material_preferences.proposal_pricing.material_unit_prices.
+crmRoutes.post('/proposals/from-report-bundle', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  try {
+    const body = await c.req.json()
+    const reportId = body.report_id
+    if (!reportId) return c.json({ error: 'report_id is required' }, 400)
+
+    const report = await c.env.DB.prepare(
+      'SELECT id, order_id, api_response_raw, report_json, roof_footprint_sqft, roof_area_sqft FROM reports WHERE id = ?'
+    ).bind(reportId).first<any>()
+    if (!report) return c.json({ error: 'Report not found' }, 404)
+
+    // Find the trace_measurement blob — it may be stored under report_json,
+    // api_response_raw, or the parent order's trace_measurement_json.
+    let trace: any = null
+    const tryParse = (v: any) => {
+      if (!v) return null
+      try { return typeof v === 'string' ? JSON.parse(v) : v } catch { return null }
+    }
+    const rj = tryParse(report.report_json)
+    const api = tryParse(report.api_response_raw)
+    trace = rj?.trace_measurement || rj || api?.trace_measurement || api
+    if (!trace?.materials_estimate && report.order_id) {
+      const ord = await c.env.DB.prepare(
+        'SELECT trace_measurement_json FROM orders WHERE id = ?'
+      ).bind(report.order_id).first<any>()
+      if (ord?.trace_measurement_json) trace = tryParse(ord.trace_measurement_json)
+    }
+
+    const mat = trace?.materials_estimate || {}
+    const km = trace?.key_measurements || {}
+    const lm = trace?.linear_measurements || {}
+
+    const measurements = {
+      total_area_sqft: km.total_roof_area_sloped_ft2 || report.roof_area_sqft || 0,
+      ridge_ft: lm.ridges_total_ft || 0,
+      hip_ft: lm.hips_total_ft || 0,
+      valley_ft: lm.valleys_total_ft || 0,
+      eave_ft: lm.eaves_total_ft || 0,
+      rake_ft: lm.rakes_total_ft || 0,
+      perimeter_ft: lm.perimeter_eave_rake_ft || 0,
+      drip_edge_ft: lm.drip_edge_total_ft || 0,
+      dominant_pitch: km.dominant_pitch_label || '',
+    }
+
+    // Load the roofer's saved per-unit price sheet (may be overridden in request body).
+    let prices: MaterialUnitPrices = { ...DEFAULT_MATERIAL_UNIT_PRICES }
+    const mc = await c.env.DB.prepare(
+      'SELECT material_preferences FROM master_companies WHERE id = 1'
+    ).first<any>()
+    if (mc?.material_preferences) {
+      try {
+        const parsed = JSON.parse(mc.material_preferences)
+        const saved = parsed?.proposal_pricing?.material_unit_prices
+        if (saved && typeof saved === 'object') prices = { ...prices, ...saved }
+      } catch {}
+    }
+    if (body.material_unit_prices && typeof body.material_unit_prices === 'object') {
+      prices = { ...prices, ...body.material_unit_prices }
+    }
+
+    const result = calculateFromMaterials(mat, measurements, prices, {
+      include_labor: body.include_labor !== false,
+      include_tearoff: body.include_tearoff !== false,
+      include_disposal: body.include_disposal !== false,
+    })
+
+    return c.json({
+      success: true,
+      measurements,
+      materials: mat,
+      prices_used: prices,
+      line_items: result.line_items,
+      subtotal: result.subtotal,
+      tax_rate: result.tax_rate,
+      tax_amount: result.tax_amount,
+      total_price: result.total_price,
+    })
+  } catch (err: any) {
+    console.error('[CRM] from-report-bundle failed:', err?.message)
+    return c.json({ error: 'Failed to build bundle proposal: ' + (err?.message || 'unknown') }, 500)
   }
 })
 
