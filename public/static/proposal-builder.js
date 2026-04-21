@@ -541,7 +541,7 @@ document.addEventListener('DOMContentLoaded', () => {
         '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">' +
           '<button onclick="window.__pbState.createStep=1;window.__pbRender()" style="color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border-color);padding:12px 24px;border-radius:999px;cursor:pointer;font-weight:600">&larr; Back</button>' +
           '<button onclick="window.__pbState.showNewSupplierForm=true;window.__pbRender()" style="color:var(--text-primary);background:var(--bg-card);border:1px solid var(--border-color);padding:12px 24px;border-radius:999px;cursor:pointer;font-weight:600"><i class="fas fa-plus" style="margin-right:6px"></i>New Supplier</button>' +
-          '<button onclick="window.__pbState.createStep=3;window.__pbState.form.isNewCustomer=true;window.__pbRender()" style="background:var(--accent);color:#0a0a0a;border:none;padding:12px 40px;border-radius:999px;font-weight:800;font-size:15px;cursor:pointer">Confirm & Build Proposal &rarr;</button>' +
+          '<button onclick="window.__pbState.createStep=3;window.__pbState.form.isNewCustomer=(window.__pbState.customers||[]).length===0;window.__pbRender()" style="background:var(--accent);color:#0a0a0a;border:none;padding:12px 40px;border-radius:999px;font-weight:800;font-size:15px;cursor:pointer">Confirm & Build Proposal &rarr;</button>' +
         '</div>' +
         (state.showNewSupplierForm ? '<div style="margin-top:24px">' + renderSupplierSetup() + '</div>' : '') +
       '</div>';
