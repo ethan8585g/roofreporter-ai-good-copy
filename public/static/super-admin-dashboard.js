@@ -3027,10 +3027,23 @@ function renderGA4View() {
   // ── TRAFFIC SOURCES TAB ──
   if (tab === 'sources') {
     const srcData = report.traffic_sources || {};
-    const srcRows = ga4Rows(srcData);
+    let srcRows = ga4Rows(srcData);
+    let srcFromFallback = false;
 
-    const channelContent = srcRows.length === 0 ? '<p class="text-gray-400 text-sm py-4">No traffic source data.</p>'
-      : '<div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50"><tr>' +
+    // Fallback: if GA4 returned no rows, classify our own site_analytics data
+    // (referrers + UTM sources) into GA4-style channel groups so the tab always has data.
+    if (srcRows.length === 0) {
+      const fb = buildFallbackTrafficChannels(SA.data.analytics);
+      if (fb.length > 0) { srcRows = fb; srcFromFallback = true; }
+    }
+
+    const fallbackBadge = srcFromFallback
+      ? '<div class="mb-3 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"><i class="fas fa-info-circle mr-1"></i>GA4 returned no data for this period — showing data from our own site_analytics instead. Configure GA4 (Property ID + Service Account) for richer channel grouping.</div>'
+      : '';
+
+    const channelContent = (srcRows.length === 0 ? '<p class="text-gray-400 text-sm py-4">No traffic source data.</p>' : fallbackBadge)
+      + (srcRows.length === 0 ? '' :
+        '<div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50"><tr>' +
           '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Channel Group</th>' +
           '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Sessions</th>' +
           '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Users</th>' +
@@ -3051,12 +3064,17 @@ function renderGA4View() {
             '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[3] || 0) + '</td>' +
           '</tr>';
         }).join('') +
-        '</tbody></table></div>';
+        '</tbody></table></div>');
 
-    // Acquisition detail
-    const acqRows2 = ga4Rows(report.acquisition || {});
+    // Acquisition detail — prefer GA4, fall back to utm_sources/top_referrers
+    let acqRows2 = ga4Rows(report.acquisition || {});
+    let acqFromFallback = false;
+    if (acqRows2.length === 0) {
+      const fb = buildFallbackAcquisition(SA.data.analytics);
+      if (fb.length > 0) { acqRows2 = fb; acqFromFallback = true; }
+    }
     const acqContent = acqRows2.length === 0 ? ''
-      : saSection('Acquisition Detail (Source / Medium)', 'fa-route',
+      : saSection('Acquisition Detail (Source / Medium)' + (acqFromFallback ? ' — site_analytics' : ''), 'fa-route',
           '<div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50"><tr>' +
           '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Source</th>' +
           '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Medium</th>' +
@@ -3075,7 +3093,7 @@ function renderGA4View() {
           '</tr>').join('') +
           '</tbody></table></div>');
 
-    return header + tabNav + saSection('Traffic Channels (GA4)', 'fa-route', channelContent) + acqContent;
+    return header + tabNav + saSection('Traffic Channels' + (srcFromFallback ? ' (site_analytics fallback)' : ' (GA4)'), 'fa-route', channelContent) + acqContent;
   }
 
   // ── GEOGRAPHY TAB ──
@@ -10717,6 +10735,76 @@ function renderGrowthTrafficView() {
       '<hr class="border-gray-200">' +
       '<div>' + ga4Html + '</div>' +
     '</div>';
+}
+
+// ── TRAFFIC SOURCES FALLBACK (when GA4 is unconfigured or returns empty) ─────
+// Classifies site_analytics referrers + UTM sources into GA4-style channel groups.
+function _rmHostOf(url) {
+  if (!url) return '';
+  try {
+    var u = String(url).indexOf('http') === 0 ? new URL(url) : new URL('https://' + url);
+    return u.hostname.toLowerCase().replace(/^www\./, '');
+  } catch(_) { return String(url).toLowerCase().replace(/^www\./, ''); }
+}
+function _rmMatches(host, list) {
+  if (!host) return false;
+  for (var i = 0; i < list.length; i++) {
+    if (host === list[i] || host.endsWith('.' + list[i])) return true;
+  }
+  return false;
+}
+function _rmClassifyHost(host) {
+  var SEARCH = ['google.com','google.ca','google.co.uk','google.com.au','google.co.in','bing.com','duckduckgo.com','yahoo.com','search.yahoo.com','yandex.com','baidu.com'];
+  var AI = ['chat.openai.com','chatgpt.com','openai.com','claude.ai','perplexity.ai','gemini.google.com','bard.google.com','copilot.microsoft.com','you.com','phind.com','poe.com'];
+  var SOCIAL = ['facebook.com','l.facebook.com','m.facebook.com','fb.com','fb.me','instagram.com','l.instagram.com','linkedin.com','lnkd.in','twitter.com','t.co','x.com','reddit.com','pinterest.com','tiktok.com','youtube.com','youtu.be'];
+  if (!host) return 'Direct';
+  if (_rmMatches(host, SEARCH)) return 'Organic Search';
+  if (_rmMatches(host, AI)) return 'AI Assistants';
+  if (_rmMatches(host, SOCIAL)) return 'Organic Social';
+  return 'Referral';
+}
+function buildFallbackTrafficChannels(analytics) {
+  if (!analytics) return [];
+  var referrers = analytics.top_referrers || [];
+  var utmSources = analytics.utm_sources || [];
+  var utmMediums = analytics.utm_mediums || [];
+  var channels = {};
+  function bump(name, hits, visitors) {
+    if (!channels[name]) channels[name] = { sessions: 0, users: 0 };
+    channels[name].sessions += hits || 0;
+    channels[name].users += visitors || 0;
+  }
+  referrers.forEach(function(r) {
+    bump(_rmClassifyHost(_rmHostOf(r.referrer || '')), r.hits, r.visitors);
+  });
+  // Paid search via utm_medium=cpc / paid social via fb_ads / google_ads
+  utmMediums.forEach(function(m) {
+    var v = String(m.value || '').toLowerCase();
+    if (v === 'cpc' || v === 'ppc' || v === 'paid' || v === 'paid-search') bump('Paid Search', m.hits, m.visitors);
+    else if (v === 'paid-social' || v === 'paidsocial') bump('Paid Social', m.hits, m.visitors);
+    else if (v === 'email') bump('Email', m.hits, m.visitors);
+    else if (v === 'display' || v === 'banner') bump('Display', m.hits, m.visitors);
+  });
+  var out = Object.keys(channels).map(function(k) {
+    return [k, channels[k].sessions, channels[k].users, 0];
+  });
+  out.sort(function(a, b) { return b[1] - a[1]; });
+  return out;
+}
+function buildFallbackAcquisition(analytics) {
+  if (!analytics) return [];
+  var referrers = analytics.top_referrers || [];
+  var utmSources = analytics.utm_sources || [];
+  var rows = [];
+  referrers.slice(0, 15).forEach(function(r) {
+    var host = _rmHostOf(r.referrer || '');
+    rows.push([host || '(direct)', 'referral', r.hits || 0, r.visitors || 0, 0, 0]);
+  });
+  utmSources.slice(0, 15).forEach(function(u) {
+    rows.push([String(u.value || '').toLowerCase(), 'utm', u.hits || 0, u.visitors || 0, 0, 0]);
+  });
+  rows.sort(function(a, b) { return b[2] - a[2]; });
+  return rows.slice(0, 25);
 }
 
 // ── LEAD SOURCE ATTRIBUTION CARDS (Growth → Traffic) ─────────
