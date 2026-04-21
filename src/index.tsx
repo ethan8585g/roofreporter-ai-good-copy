@@ -1006,9 +1006,11 @@ app.get('/sitemap-locations.xml', (c) => {
   for (const slug of Object.keys(seoCountries)) {
     urls += `\n<url><loc>${base}/roof-measurement/${slug}</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>${today}</lastmod></url>`
   }
-  // Feature+city silo pages (new deep architecture)
+  // Feature+city silo pages (new deep architecture — measurements + crm + ai-secretary)
   for (const slug of Object.keys(seoCities)) {
     urls += `\n<url><loc>${base}/features/measurements/${slug}</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>${today}</lastmod></url>`
+    urls += `\n<url><loc>${base}/features/crm/${slug}</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>`
+    urls += `\n<url><loc>${base}/features/ai-secretary/${slug}</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>`
   }
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}\n</urlset>`
   return c.text(xml, 200, { 'Content-Type': 'application/xml' })
@@ -1551,6 +1553,18 @@ app.get('/features/measurements/:city', (c) => {
   const city = seoCities[slug]
   if (!city) return c.redirect('/features/measurements')
   return c.html(getFeatureCityPageHTML(slug, city))
+})
+app.get('/features/crm/:city', (c) => {
+  const slug = c.req.param('city').toLowerCase()
+  const city = seoCities[slug]
+  if (!city) return c.redirect('/features/crm')
+  return c.html(getFeatureCityHubPageHTML('crm', slug, city))
+})
+app.get('/features/ai-secretary/:city', (c) => {
+  const slug = c.req.param('city').toLowerCase()
+  const city = seoCities[slug]
+  if (!city) return c.redirect('/features/ai-secretary')
+  return c.html(getFeatureCityHubPageHTML('ai-secretary', slug, city))
 })
 
 // Competitor comparison pages — bottom-of-funnel, high commercial intent
@@ -10616,6 +10630,220 @@ function getFeatureCityPageHTML(slug: string, city: { name: string; province: st
         <a href="/roof-measurement/${slug}" class="hover:text-[#00FF88] transition-colors">${city.name} Coverage</a>
         <a href="/services" class="hover:text-[#00FF88] transition-colors">All Features</a>
         <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a>
+      </div>
+      <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
+    </div>
+  </footer>
+</body>
+</html>`
+}
+
+// ============================================================
+// FEATURE × CITY HUB PAGE — CRM / AI Secretary spokes
+// A single generalized renderer that pulls the feature hub config
+// (headline, capabilities, FAQ, accent, schema name/category) and
+// overlays city-specific framing. Measurements keeps its own
+// dedicated function above; this one handles everything else.
+// ============================================================
+function getFeatureCityHubPageHTML(
+  featureSlug: 'crm' | 'ai-secretary',
+  slug: string,
+  city: { name: string; province: string; lat: string; lng: string }
+): string {
+  const f = featureHubConfig[featureSlug]
+  if (!f) return '<html><body>Not found</body></html>'
+  const base = 'https://www.roofmanager.ca'
+  const today = new Date().toISOString().substring(0, 10)
+
+  const featureLabel =
+    featureSlug === 'crm' ? 'Roofing CRM' : 'AI Phone Receptionist'
+  const title = `${featureLabel} Software for ${city.name}, ${city.province} Roofing Contractors`
+  const desc =
+    featureSlug === 'crm'
+      ? `Roofing CRM, pipeline, invoicing, and proposals for ${city.name} roofing contractors. Manage your entire ${city.name}, ${city.province} book of business in one platform. Free to start — no credit card.`
+      : `24/7 AI phone receptionist for ${city.name} roofing contractors. Never miss a call, book appointments automatically, capture storm leads around the clock. Bilingual support and local ${city.province} area code numbers.`
+
+  const breadcrumbSchema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: base },
+      { '@type': 'ListItem', position: 2, name: 'Features', item: `${base}/services` },
+      { '@type': 'ListItem', position: 3, name: f.title, item: `${base}/features/${featureSlug}` },
+      { '@type': 'ListItem', position: 4, name: city.name, item: `${base}/features/${featureSlug}/${slug}` },
+    ],
+  })
+  const softwareSchema = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': ['SoftwareApplication', 'LocalBusiness'],
+    name: `${f.schemaName} — ${city.name}`,
+    applicationCategory: f.schemaCategory,
+    operatingSystem: 'Web, iOS, Android',
+    url: `${base}/features/${featureSlug}/${slug}`,
+    image: `${base}/static/logo.png`,
+    description: desc,
+    geo: { '@type': 'GeoCoordinates', latitude: city.lat, longitude: city.lng },
+    areaServed: { '@type': 'City', name: city.name },
+    address: { '@type': 'PostalAddress', addressLocality: city.name, addressRegion: city.province, addressCountry: 'CA' },
+    offers: featureSlug === 'crm'
+      ? { '@type': 'Offer', price: '0.00', priceCurrency: 'CAD', description: 'Free with any Roof Manager account' }
+      : { '@type': 'Offer', price: '149.00', priceCurrency: 'CAD', description: 'Flat monthly rate, unlimited minutes' },
+    aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.9', ratingCount: '200', bestRating: '5' },
+    provider: { '@type': 'Organization', name: 'Roof Manager', url: base },
+    dateModified: today,
+  })
+
+  // Blend 2 city-specific FAQs with the first 3 feature-level FAQs for
+  // both user skim-ability and LLM citation density.
+  const cityFaqs =
+    featureSlug === 'crm'
+      ? [
+          { q: `Does Roof Manager CRM work for ${city.name} roofing contractors?`, a: `Yes. Roof Manager CRM is used by roofing contractors across ${city.name}, ${city.province} to manage leads, pipelines, jobs, invoices, and proposals. The platform is hosted in Canada, priced in CAD, and the full CRM is included free with every account.` },
+          { q: `Can I track insurance (hail/wind) claims separately from retail jobs in ${city.name}?`, a: `Yes. ${city.name} contractors typically create separate pipeline stages for insurance claim tracking (adjuster pending, supplement, carrier payment) and retail estimates. Both flows integrate with the measurement reports and invoicing modules.` },
+        ]
+      : [
+          { q: `Does the AI receptionist work for a ${city.name} roofing business?`, a: `Yes. We provision a local ${city.province} area code number for your ${city.name} business. The AI answers every inbound call 24/7, captures lead details, books appointments into your Google Calendar, and logs the call into your Roof Manager CRM automatically.` },
+          { q: `Can the AI handle hail/storm surge call volume in ${city.name}?`, a: `Yes. During storm events across ${city.province}, call volume can spike 10-50x in a single afternoon. The AI answers every simultaneous call with zero hold times — no missed leads, no voicemail-to-competitor losses.` },
+        ]
+  const combinedFaqs = [...cityFaqs, ...f.faq.slice(0, 3)]
+  const faqSchema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'FAQPage',
+    mainEntity: combinedFaqs.map(item => ({
+      '@type': 'Question', name: item.q,
+      acceptedAnswer: { '@type': 'Answer', text: item.a },
+    })),
+  })
+
+  // Spoke-to-spoke internal linking to nearby cities in the same province
+  // first, then a few from elsewhere for topic-cluster breadth.
+  const allCitySlugs = Object.keys(seoCities)
+  const nearby = allCitySlugs.filter(s => s !== slug && seoCities[s].province === city.province).slice(0, 4)
+  const other = allCitySlugs.filter(s => s !== slug && seoCities[s].province !== city.province).slice(0, 4)
+  const nearbyCityLinks = [...nearby, ...other].slice(0, 6).map(s => {
+    const c2 = seoCities[s]
+    return `<a href="/features/${featureSlug}/${s}" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-gray-400 hover:text-white transition-all"><i class="fas fa-map-marker-alt text-[${f.accentColor}] text-[10px]"></i>${c2.name}</a>`
+  }).join('')
+
+  const capabilities = f.capabilities.slice(0, 6).map(cap =>
+    `<li class="flex items-start gap-3 text-sm text-gray-300 leading-relaxed"><i class="fas fa-check-circle text-[${f.accentColor}] mt-0.5 flex-shrink-0"></i><span>${cap}</span></li>`
+  ).join('')
+
+  const faqHTML = combinedFaqs.map(item =>
+    `<div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="font-bold text-white text-sm mb-2">${item.q}</h3><p class="text-gray-400 text-sm leading-relaxed">${item.a}</p></div>`
+  ).join('')
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags(`/features/${featureSlug}/${slug}`)}
+  <title>${title} | Roof Manager</title>
+  <meta name="description" content="${desc}">
+  <link rel="canonical" href="${base}/features/${featureSlug}/${slug}">
+  <meta property="og:title" content="${title} | Roof Manager">
+  <meta property="og:description" content="${desc}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${base}/features/${featureSlug}/${slug}">
+  <meta property="og:image" content="${f.ogImage}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:site_name" content="Roof Manager">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="${f.ogImage}">
+  <meta name="geo.region" content="${city.province}">
+  <meta name="geo.placename" content="${city.name}, ${city.province}">
+  <meta name="geo.position" content="${city.lat};${city.lng}">
+  <script type="application/ld+json">${breadcrumbSchema}</script>
+  <script type="application/ld+json">${softwareSchema}</script>
+  <script type="application/ld+json">${faqSchema}</script>
+</head>
+<body style="background:#0A0A0A">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36" loading="eager">
+        <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
+      </a>
+      <div class="flex items-center gap-5">
+        <a href="/features/measurements" class="text-gray-400 hover:text-white text-sm font-medium transition-colors">Measurements</a>
+        <a href="/features/crm" class="${featureSlug === 'crm' ? `text-[${f.accentColor}]` : 'text-gray-400 hover:text-white'} text-sm font-medium transition-colors">CRM</a>
+        <a href="/features/ai-secretary" class="${featureSlug === 'ai-secretary' ? `text-[${f.accentColor}]` : 'text-gray-400 hover:text-white'} text-sm font-medium transition-colors">AI Secretary</a>
+        <a href="/pricing" class="text-gray-400 hover:text-white text-sm font-medium transition-colors">Pricing</a>
+        <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm transition-all">Start Free</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-7xl mx-auto px-4 pt-6 pb-2">
+    <nav class="flex items-center gap-2 text-xs text-gray-500">
+      <a href="/" class="hover:text-gray-300 transition-colors">Home</a>
+      <span>/</span>
+      <a href="/services" class="hover:text-gray-300 transition-colors">Features</a>
+      <span>/</span>
+      <a href="/features/${featureSlug}" class="hover:text-gray-300 transition-colors">${f.title}</a>
+      <span>/</span>
+      <span class="text-gray-300">${city.name}</span>
+    </nav>
+  </div>
+
+  <!-- Hero -->
+  <section class="py-20 lg:py-24" style="background:#0A0A0A">
+    <div class="max-w-5xl mx-auto px-4">
+      <div class="inline-flex items-center gap-2 bg-[${f.accentColor}]/10 text-[${f.accentColor}] rounded-full px-4 py-1.5 text-sm font-semibold mb-6"><i class="${f.icon}"></i> ${featureLabel} &middot; ${city.name}, ${city.province}</div>
+      <h1 class="text-4xl lg:text-5xl font-black text-white mb-6 leading-tight tracking-tight">${title}</h1>
+      <p class="text-lg text-gray-400 mb-8 leading-relaxed max-w-3xl">${desc}</p>
+      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <a href="/register" onclick="rrTrack('cta_click',{location:'feature_city_${featureSlug}_${slug}_hero'})" class="inline-flex items-center justify-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-8 rounded-xl text-base shadow-xl shadow-[#00FF88]/20 transition-all hover:scale-[1.02]"><i class="fas fa-rocket"></i> Start Free in ${city.name}</a>
+        <a href="/features/${featureSlug}" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-3.5 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all"><i class="${f.icon} text-[${f.accentColor}]"></i> See all ${f.title.toLowerCase()} features</a>
+      </div>
+      <p class="text-xs text-gray-600"><i class="fas fa-lock mr-1 text-[${f.accentColor}]"></i>${featureSlug === 'crm' ? 'No credit card · CRM is free forever · Instant access' : 'Unlimited minutes · No per-call fees · $149/month flat'}</p>
+    </div>
+  </section>
+
+  <!-- Capabilities -->
+  <section class="py-16 border-t border-white/5" style="background:#0d0d0d">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-2xl lg:text-3xl font-black text-white mb-8 text-center">What ${city.name} Roofing Contractors Get</h2>
+      <div class="bg-[#111] border border-white/10 rounded-2xl p-8">
+        <ul class="space-y-4">${capabilities}</ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="py-16 border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="text-2xl font-black text-white mb-8 text-center">Frequently Asked Questions &mdash; ${featureLabel} in ${city.name}</h2>
+      <div class="space-y-3">${faqHTML}</div>
+    </div>
+  </section>
+
+  <!-- Nearby -->
+  <section class="py-12 border-t border-white/5" style="background:#0d0d0d">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-lg font-bold text-white mb-4 text-center">Also Available Near ${city.name}</h2>
+      <div class="flex flex-wrap justify-center gap-2">${nearbyCityLinks}</div>
+      <div class="text-center mt-4"><a href="/features/${featureSlug}" class="text-xs text-gray-500 hover:text-[${f.accentColor}] transition-colors">View ${f.title.toLowerCase()} overview &rarr;</a></div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="py-16 border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-3xl mx-auto px-4 text-center">
+      <h2 class="text-2xl font-black text-white mb-4">Ready to ${featureSlug === 'crm' ? 'organize every ' + city.name + ' lead' : 'stop missing ' + city.name + ' calls'}?</h2>
+      <p class="text-gray-400 mb-8 text-sm">${featureSlug === 'crm' ? 'Free CRM. No credit card. 4 free measurement reports included.' : '$149/month flat, unlimited minutes, cancel any time.'}</p>
+      <a href="/register" onclick="rrTrack('cta_click',{location:'feature_city_${featureSlug}_${slug}_footer'})" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.03]"><i class="fas fa-rocket"></i> Start Free &mdash; ${city.name}</a>
+    </div>
+  </section>
+
+  <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+      <div class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" loading="lazy" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
+      <div class="flex flex-wrap items-center gap-4">
+        <a href="/features/measurements" class="hover:text-[#00FF88] transition-colors">Measurements</a>
+        <a href="/features/crm" class="hover:text-[#00FF88] transition-colors">CRM</a>
+        <a href="/features/ai-secretary" class="hover:text-[#00FF88] transition-colors">AI Secretary</a>
+        <a href="/features/measurements/${slug}" class="hover:text-[#00FF88] transition-colors">${city.name} Reports</a>
+        <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a>
+        <a href="/about" class="hover:text-[#00FF88] transition-colors">About</a>
       </div>
       <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
     </div>
