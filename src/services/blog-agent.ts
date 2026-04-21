@@ -9,6 +9,7 @@
 
 import type { Bindings } from '../types'
 import { pingGoogleIndexing } from './indexing-api'
+import { pingIndexNow } from './indexnow'
 
 const MODEL_DRAFT = 'gemini-2.5-flash'
 const MODEL_GATE = 'gemini-2.5-flash'
@@ -567,16 +568,25 @@ export async function runOnce(env: Bindings): Promise<RunResult> {
     ).bind(postId, row.id).run()
     await logEvent(db, { queue_id: row.id, post_id: postId, stage: 'publish', quality_score: score.overall, passed_gate: true })
 
-    // Ping Google Indexing API — fire-and-forget. If the service account
-    // isn't configured or lacks Search Console ownership, pingGoogleIndexing
-    // no-ops instead of throwing, so publishing is never blocked by this.
+    // Ping Google Indexing API + IndexNow (Bing/Yandex/Naver) in parallel.
+    // Fire-and-forget. If the service account isn't configured or lacks
+    // Search Console ownership, pingGoogleIndexing no-ops instead of
+    // throwing. IndexNow has no auth and almost never fails.
     try {
       const postUrl = `https://www.roofmanager.ca/blog/${draft.slug}`
-      const ping = await pingGoogleIndexing(env as any, postUrl, 'URL_UPDATED')
+      const [google, indexnow] = await Promise.all([
+        pingGoogleIndexing(env as any, postUrl, 'URL_UPDATED'),
+        pingIndexNow([postUrl]),
+      ])
       await logEvent(db, {
         queue_id: row.id, post_id: postId,
-        stage: ping.ok ? 'indexing_ping_ok' : (ping.skipped ? 'indexing_ping_skipped' : 'indexing_ping_failed'),
-        error: ping.error,
+        stage: google.ok ? 'indexing_ping_ok' : (google.skipped ? 'indexing_ping_skipped' : 'indexing_ping_failed'),
+        error: google.error,
+      })
+      await logEvent(db, {
+        queue_id: row.id, post_id: postId,
+        stage: indexnow.ok ? 'indexnow_ping_ok' : 'indexnow_ping_failed',
+        error: indexnow.error,
       })
     } catch (_e) {
       // never let indexing ping failure corrupt the publish

@@ -30,11 +30,13 @@ export interface IndexingPingResult {
 
 /** Ping the Google Indexing API for a single URL. Never throws. */
 export async function pingGoogleIndexing(
-  env: { INDEXING_SA_JSON?: string; GCP_SERVICE_ACCOUNT_JSON?: string },
+  env: { INDEXING_SA_JSON?: string; GCP_SERVICE_ACCOUNT_JSON?: string; GCP_SERVICE_ACCOUNT_KEY?: string },
   url: string,
   type: IndexingType = 'URL_UPDATED',
 ): Promise<IndexingPingResult> {
-  const saJson = env.INDEXING_SA_JSON || env.GCP_SERVICE_ACCOUNT_JSON
+  // Accept all three historical env-var names for the service account JSON.
+  // The canonical Pages secret name in this project is GCP_SERVICE_ACCOUNT_KEY.
+  const saJson = env.INDEXING_SA_JSON || env.GCP_SERVICE_ACCOUNT_JSON || env.GCP_SERVICE_ACCOUNT_KEY
   if (!saJson) {
     return { ok: false, url, type, skipped: true, error: 'no service account configured' }
   }
@@ -63,11 +65,52 @@ export async function pingGoogleIndexing(
   }
 }
 
-/** Ping multiple URLs in parallel. Returns one result per input. */
+/**
+ * Ping multiple URLs in a single batch. Shares one access token across the
+ * whole list (JWT + token exchange happen once) so Cloudflare Workers'
+ * 50-subrequest limit doesn't bite on ping-all operations with 100+ posts.
+ * Never throws — per-URL failures come back as an entry with ok=false.
+ */
 export async function pingGoogleIndexingBatch(
-  env: { INDEXING_SA_JSON?: string; GCP_SERVICE_ACCOUNT_JSON?: string },
+  env: { INDEXING_SA_JSON?: string; GCP_SERVICE_ACCOUNT_JSON?: string; GCP_SERVICE_ACCOUNT_KEY?: string },
   urls: string[],
   type: IndexingType = 'URL_UPDATED',
 ): Promise<IndexingPingResult[]> {
-  return Promise.all(urls.map(u => pingGoogleIndexing(env, u, type)))
+  const saJson = env.INDEXING_SA_JSON || env.GCP_SERVICE_ACCOUNT_JSON || env.GCP_SERVICE_ACCOUNT_KEY
+  if (!saJson) {
+    return urls.map(url => ({ ok: false, url, type, skipped: true, error: 'no service account configured' }))
+  }
+  let accessToken: string
+  try {
+    const sa = JSON.parse(saJson)
+    if (sa.type !== 'service_account') {
+      return urls.map(url => ({ ok: false, url, type, error: `expected service_account, got ${sa.type}` }))
+    }
+    const jwt = await createJWT(sa, [INDEXING_SCOPE])
+    const tokenResp = await exchangeJWTForToken(jwt)
+    accessToken = tokenResp.access_token
+  } catch (e: any) {
+    return urls.map(url => ({ ok: false, url, type, error: (e && e.message) || String(e) }))
+  }
+  // Google Indexing API accepts one URL per call. Send in parallel but
+  // reuse the same access token — 1 ping per URL instead of 3.
+  return Promise.all(urls.map(async (url): Promise<IndexingPingResult> => {
+    try {
+      const res = await fetch(INDEXING_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url, type }),
+      })
+      if (!res.ok) {
+        const body = await res.text().catch(() => '')
+        return { ok: false, url, type, status: res.status, error: body.slice(0, 400) }
+      }
+      return { ok: true, url, type, status: res.status }
+    } catch (e: any) {
+      return { ok: false, url, type, error: (e && e.message) || String(e) }
+    }
+  }))
 }

@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { runOnce, seedDefaultKeywords } from '../services/blog-agent'
 import { pingGoogleIndexing, pingGoogleIndexingBatch } from '../services/indexing-api'
+import { pingIndexNow } from '../services/indexnow'
 import { sanitizeHtml } from '../utils/sanitize-html'
 
 export const blogRoutes = new Hono<{ Bindings: Bindings }>()
@@ -399,6 +400,27 @@ blogRoutes.post('/admin/indexing/ping-all', async (c) => {
     const ok = results.filter(r => r.ok).length
     const skipped = results.filter(r => r.skipped).length
     return c.json({ total: results.length, ok, skipped, failed: results.length - ok - skipped, results })
+  } catch (e: any) {
+    return c.json({ error: e.message || String(e) }, 500)
+  }
+})
+
+// Admin: IndexNow — zero-auth ping to Bing/Yandex/Naver/Seznam.
+// POST body: { urls: [...] }. If omitted, submits every published blog post.
+blogRoutes.post('/admin/indexnow/ping', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Unauthorized' }, 401)
+  try {
+    const body = await c.req.json().catch(() => ({})) as { urls?: string[] }
+    let urls = body.urls
+    if (!urls || !urls.length) {
+      const posts = await c.env.DB.prepare(
+        `SELECT slug FROM blog_posts WHERE status = 'published' ORDER BY published_at DESC LIMIT 500`
+      ).all()
+      urls = (posts.results || []).map((p: any) => `https://www.roofmanager.ca/blog/${p.slug}`)
+    }
+    const result = await pingIndexNow(urls)
+    return c.json(result)
   } catch (e: any) {
     return c.json({ error: e.message || String(e) }, 500)
   }

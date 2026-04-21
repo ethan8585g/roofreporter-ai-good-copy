@@ -71,6 +71,7 @@ import usStatesRoutes from './routes/us-states'
 import usVerticalsRoutes from './routes/us-verticals'
 import usComparisonsRoutes from './routes/us-comparisons'
 import caProvincesRoutes from './routes/ca-provinces'
+import { INDEXNOW_KEY } from './services/indexnow'
 import { ALL_STATE_SLUGS as US_ALL_STATE_SLUGS, US_CITIES as US_CITIES_DATA, US_STATES, type USStateData, type USCityData } from './data/us-states'
 import { ALL_PROVINCE_SLUGS as CA_ALL_PROVINCE_SLUGS } from './data/ca-provinces'
 import { processOrderQueue } from './services/ai-agent'
@@ -894,6 +895,11 @@ app.get('/customer/invoice/:id', (c) => {
 app.get('/google46a10be18f6bfc61.html', (c) => {
   return c.text('google-site-verification: google46a10be18f6bfc61.html')
 })
+
+// IndexNow key verification file — IndexNow spec requires the key to be
+// retrievable at https://<host>/<key>.txt so Bing/Yandex can verify
+// ownership on first ping. Any URL matching /<INDEXNOW_KEY>.txt returns it.
+app.get(`/${INDEXNOW_KEY}.txt`, (c) => c.text(INDEXNOW_KEY, 200, { 'Content-Type': 'text/plain; charset=utf-8' }))
 
 // SEO: sitemap.xml
 app.get('/sitemap.xml', async (c) => {
