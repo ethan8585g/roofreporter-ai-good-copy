@@ -780,9 +780,10 @@ app.get('/signup', (c) => {
   return c.redirect('/register' + qs, 302)
 })
 
-// Public sample report — static preview for visitors evaluating the product
+// Public sample report — redirects to a real shared report so visitors see
+// the live product output, not a static mock-up.
 app.get('/sample-report', (c) => {
-  return c.html(getSampleReportHTML())
+  return c.redirect('https://www.roofmanager.ca/report/share/70f969fb607c4c40b6a2', 302)
 })
 
 // Order Form page (new route)
