@@ -407,7 +407,7 @@ function renderDashboard() {
             '</a>' +
             '<a href="/pricing" class="flex items-center gap-3 p-3 rounded-xl transition-colors" style="background:var(--bg-elevated)">' +
               '<div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background:var(--bg-card);border:1px solid var(--border-color)"><i class="fas fa-coins text-white text-sm"></i></div>' +
-              '<div><p class="font-semibold text-sm" style="color:var(--text-primary)">Buy Credits</p><p class="text-xs" style="color:var(--text-muted)">From $5.95/report USD</p></div>' +
+              '<div><p class="font-semibold text-sm" style="color:var(--text-primary)">Buy Credits</p><p class="text-xs" style="color:var(--text-muted)">From $5.95/report CAD</p></div>' +
             '</a>' +
           '</div>' +
         '</div>' +

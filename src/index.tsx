@@ -13677,11 +13677,11 @@ function getPricingPageHTML() {
     "image": "https://www.roofmanager.ca/static/logo.png",
     "url": "https://www.roofmanager.ca/pricing",
     "offers": [
-      {"@type": "Offer", "name": "Free Trial", "price": "0", "priceCurrency": "USD", "description": "4 free professional roof measurement reports", "availability": "https://schema.org/InStock"},
-      {"@type": "Offer", "name": "Per Report", "price": "8.00", "priceCurrency": "USD", "description": "Pay-per-report after free trial", "availability": "https://schema.org/InStock"},
-      {"@type": "Offer", "name": "10-Pack", "price": "75.00", "priceCurrency": "USD", "description": "10 report credits at $7.50 each", "availability": "https://schema.org/InStock", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "7.50", "priceCurrency": "USD", "referenceQuantity": {"@type": "QuantitativeValue", "value": "1", "unitCode": "EA"}}},
-      {"@type": "Offer", "name": "25-Pack", "price": "175.00", "priceCurrency": "USD", "description": "25 report credits at $7 each", "availability": "https://schema.org/InStock", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "7.00", "priceCurrency": "USD", "referenceQuantity": {"@type": "QuantitativeValue", "value": "1", "unitCode": "EA"}}},
-      {"@type": "Offer", "name": "100-Pack", "price": "595.00", "priceCurrency": "USD", "description": "100 report credits at $5.95 each", "availability": "https://schema.org/InStock", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "5.95", "priceCurrency": "USD", "referenceQuantity": {"@type": "QuantitativeValue", "value": "1", "unitCode": "EA"}}}
+      {"@type": "Offer", "name": "Free Trial", "price": "0", "priceCurrency": "CAD", "description": "4 free professional roof measurement reports", "availability": "https://schema.org/InStock"},
+      {"@type": "Offer", "name": "Per Report", "price": "8.00", "priceCurrency": "CAD", "description": "Pay-per-report after free trial", "availability": "https://schema.org/InStock"},
+      {"@type": "Offer", "name": "10-Pack", "price": "75.00", "priceCurrency": "CAD", "description": "10 report credits at $7.50 each", "availability": "https://schema.org/InStock", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "7.50", "priceCurrency": "CAD", "referenceQuantity": {"@type": "QuantitativeValue", "value": "1", "unitCode": "EA"}}},
+      {"@type": "Offer", "name": "25-Pack", "price": "175.00", "priceCurrency": "CAD", "description": "25 report credits at $7 each", "availability": "https://schema.org/InStock", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "7.00", "priceCurrency": "CAD", "referenceQuantity": {"@type": "QuantitativeValue", "value": "1", "unitCode": "EA"}}},
+      {"@type": "Offer", "name": "100-Pack", "price": "595.00", "priceCurrency": "CAD", "description": "100 report credits at $5.95 each", "availability": "https://schema.org/InStock", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "5.95", "priceCurrency": "CAD", "referenceQuantity": {"@type": "QuantitativeValue", "value": "1", "unitCode": "EA"}}}
     ],
     "aggregateRating": {"@type": "AggregateRating", "ratingValue": "4.9", "ratingCount": "200", "bestRating": "5"},
     "review": [
@@ -13769,7 +13769,7 @@ function getPricingPageHTML() {
         </div>
         <div class="text-center mb-6">
           <span class="text-5xl font-black" style="color:var(--text-primary)">$8</span>
-          <span class="text-sm ml-1" style="color:var(--text-muted)">USD / report</span>
+          <span class="text-sm ml-1" style="color:var(--text-muted)">CAD / report</span>
         </div>
         <ul class="space-y-3 mb-6 text-sm">
           <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>Satellite-based roof area &amp; perimeter</li>
@@ -13802,7 +13802,7 @@ function getPricingPageHTML() {
         <div class="text-xs mb-3" style="color:var(--text-muted)">10 reports</div>
         <div class="mb-2">
           <span class="text-3xl font-black" style="color:var(--text-primary)">$75</span>
-          <span class="text-xs ml-1" style="color:var(--text-muted)">USD</span>
+          <span class="text-xs ml-1" style="color:var(--text-muted)">CAD</span>
         </div>
         <p class="text-sm font-semibold text-brand-600 mb-1">$7.50/report</p>
         <span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Save 6%</span>
@@ -13816,7 +13816,7 @@ function getPricingPageHTML() {
         <div class="text-xs mb-3" style="color:var(--text-muted)">25 reports</div>
         <div class="mb-2">
           <span class="text-3xl font-black" style="color:var(--text-primary)">$175</span>
-          <span class="text-xs ml-1" style="color:var(--text-muted)">USD</span>
+          <span class="text-xs ml-1" style="color:var(--text-muted)">CAD</span>
         </div>
         <p class="text-sm font-semibold text-brand-600 mb-1">$7.00/report</p>
         <span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Save 13%</span>
@@ -13830,7 +13830,7 @@ function getPricingPageHTML() {
         <div class="text-xs mb-3" style="color:var(--text-muted)">100 reports</div>
         <div class="mb-2">
           <span class="text-3xl font-black" style="color:var(--text-primary)">$595</span>
-          <span class="text-xs ml-1" style="color:var(--text-muted)">USD</span>
+          <span class="text-xs ml-1" style="color:var(--text-muted)">CAD</span>
         </div>
         <p class="text-sm font-semibold text-brand-600 mb-1">$5.95/report</p>
         <span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Save 26%</span>
@@ -13844,19 +13844,19 @@ function getPricingPageHTML() {
     <div class="max-w-4xl mx-auto mb-16">
       <h2 class="text-2xl font-bold mb-2 text-center" style="color:var(--text-primary)">Add-On Services</h2>
       <p class="text-center mb-8" style="color:var(--text-muted)">Power up your business with AI tools and team management.</p>
-      <div class="grid md:grid-cols-2 gap-6 mb-8">
-        <!-- AI Roofer Secretary -->
+      <div class="max-w-lg mx-auto mb-8">
+        <!-- AI Roofer / Solar Sales Secretary -->
         <div class="bg-gradient-to-br from-indigo-900 to-purple-900 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden">
           <div class="absolute top-0 right-0 bg-green-500 text-white text-[10px] font-black px-3 py-1 rounded-bl-lg uppercase tracking-wider">1 Month Free Trial</div>
           <div class="flex items-center gap-3 mb-4">
             <div class="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center"><i class="fas fa-phone-alt text-xl"></i></div>
             <div>
-              <h3 class="text-xl font-bold">AI Roofer Secretary</h3>
+              <h3 class="text-xl font-bold">AI Roofer / Solar Sales Secretary</h3>
               <p class="text-purple-200 text-xs">24/7 AI phone answering for your business</p>
             </div>
           </div>
           <div class="mb-4">
-            <span class="text-4xl font-black">$299</span><span class="text-lg font-normal text-purple-200">/month</span>
+            <span class="text-4xl font-black">$299</span><span class="text-lg font-normal text-purple-200"> CAD /month</span>
           </div>
           <ul class="space-y-2 text-sm mb-6">
             <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Answers calls in a natural human voice</li>
@@ -13867,29 +13867,6 @@ function getPricingPageHTML() {
           </ul>
           <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_signup'})" class="block w-full py-3 text-center font-bold rounded-xl bg-white text-indigo-900 hover:bg-purple-50 transition-all hover:scale-[1.02] shadow-lg">
             Start Free Trial
-          </a>
-        </div>
-        <!-- Instant Estimator -->
-        <div class="bg-gradient-to-br from-emerald-900 to-teal-900 rounded-2xl p-8 text-white shadow-xl">
-          <div class="flex items-center gap-3 mb-4">
-            <div class="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center"><i class="fas fa-calculator text-xl"></i></div>
-            <div>
-              <h3 class="text-xl font-bold">Instant Estimator Tool</h3>
-              <p class="text-emerald-200 text-xs">Let customers get instant roof quotes</p>
-            </div>
-          </div>
-          <div class="mb-2">
-            <span class="text-4xl font-black">$125</span><span class="text-lg font-normal text-emerald-200">/month</span>
-          </div>
-          <p class="text-emerald-300 text-xs mb-4">Or <strong class="text-white">$199/month</strong> to embed on your own website too</p>
-          <ul class="space-y-2 text-sm mb-6">
-            <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Customers enter address, get instant estimate</li>
-            <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Branded with your company info</li>
-            <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Captures leads directly to your CRM</li>
-            <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>+$74/mo to add embeddable widget for your site</li>
-          </ul>
-          <a href="/register" class="block w-full py-3 text-center font-bold rounded-xl bg-white text-emerald-900 hover:bg-emerald-50 transition-all hover:scale-[1.02] shadow-lg">
-            Get Started
           </a>
         </div>
       </div>
@@ -13983,7 +13960,7 @@ function getPricingPageHTML() {
           </tbody>
         </table>
       </div>
-      <p class="text-center text-xs mt-4" style="color:var(--text-muted)">All prices in USD. Credits never expire.</p>
+      <p class="text-center text-xs mt-4" style="color:var(--text-muted)">All prices in CAD. Credits never expire.</p>
     </div>
     </div>
     <!-- Lead magnet: zero-friction way to get a report before paying -->
