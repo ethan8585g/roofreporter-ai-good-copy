@@ -861,9 +861,10 @@ function renderUsersView() {
       <p class="text-sm text-gray-500 mt-1">Complete user registry with account details, credits, and order history</p>
     </div>
 
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+    <div class="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
       ${samc('Total Users', s.total_users || users.length, 'fa-users', 'blue')}
       ${samc('Active Users', s.active_users || 0, 'fa-user-check', 'green', (s.new_signups_7d || 0) + ' new (7d) · ' + (s.new_signups_30d || 0) + ' new (30d)')}
+      ${samc('Logged In', s.ever_logged_in || 0, 'fa-sign-in-alt', 'teal', (s.never_logged_in || 0) + ' never logged in')}
       ${samc('Google Sign-In', s.google_users || 0, 'fa-google', 'red')}
       ${samc('Paying Customers', s.paying_users || 0, 'fa-credit-card', 'amber')}
       ${samc('Credits Available', s.total_credits_available || 0, 'fa-coins', 'indigo', (s.total_credits_used || 0) + ' used')}
@@ -884,11 +885,12 @@ function renderUsersView() {
               <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Completed</th>
               <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Revenue</th>
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Last Order</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Last Login</th>
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Joined</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-50">
-            ${users.length === 0 ? '<tr><td colspan="11" class="px-4 py-8 text-center text-gray-400">No registered users yet</td></tr>' : ''}
+            ${users.length === 0 ? '<tr><td colspan="12" class="px-4 py-8 text-center text-gray-400">No registered users yet</td></tr>' : ''}
             ${users.map(u => `
               <tr class="hover:bg-teal-50/30 transition-colors">
                 <td class="px-4 py-3">
@@ -916,6 +918,7 @@ function renderUsersView() {
                 <td class="px-4 py-3 text-center font-medium text-green-600">${u.completed_reports || 0}</td>
                 <td class="px-4 py-3 text-right font-bold text-gray-800">${$$(u.total_spent)}</td>
                 <td class="px-4 py-3 text-xs text-gray-500">${fmtDate(u.last_order_date)}</td>
+                <td class="px-4 py-3 text-xs">${u.last_login ? `<span class="text-green-600 font-medium" title="${fmtDateTime(u.last_login)}"><i class="fas fa-check-circle mr-1"></i>${fmtDate(u.last_login)}</span>` : '<span class="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-full uppercase">Never</span>'}</td>
                 <td class="px-4 py-3 text-xs text-gray-500">${fmtDate(u.created_at)}</td>
               </tr>
             `).join('')}

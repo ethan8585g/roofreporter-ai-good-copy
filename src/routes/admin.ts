@@ -1104,7 +1104,9 @@ adminRoutes.get('/superadmin/users', async (c) => {
         SUM(free_trial_used) as total_trial_used,
         SUM(free_trial_total) as total_trial_available,
         SUM(CASE WHEN created_at >= date('now', '-7 days') THEN 1 ELSE 0 END) as new_signups_7d,
-        SUM(CASE WHEN created_at >= date('now', '-30 days') THEN 1 ELSE 0 END) as new_signups_30d
+        SUM(CASE WHEN created_at >= date('now', '-30 days') THEN 1 ELSE 0 END) as new_signups_30d,
+        SUM(CASE WHEN last_login IS NULL THEN 1 ELSE 0 END) as never_logged_in,
+        SUM(CASE WHEN last_login IS NOT NULL THEN 1 ELSE 0 END) as ever_logged_in
       FROM customers
     `).first()
 
