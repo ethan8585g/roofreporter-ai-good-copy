@@ -17281,6 +17281,10 @@ function getSuperAdminBiHTML(): string {
           <i class="fas fa-circle text-green-500 w-5 text-center" style="font-size:8px"></i>
           <span class="text-sm font-medium">Live Visitors</span>
         </div>
+        <div class="bi-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-view="blog" onclick="biSetView('blog')">
+          <i class="fas fa-blog w-5 text-center"></i>
+          <span class="text-sm font-medium">Blog &amp; SEO</span>
+        </div>
       </nav>
       <div class="p-3 border-t border-slate-800">
         <a href="/super-admin" class="bi-nav-item rounded-xl px-4 py-2.5 flex items-center gap-3 text-gray-500 no-underline text-xs">
@@ -17301,7 +17305,7 @@ function getSuperAdminBiHTML(): string {
     </main>
   </div>
 
-  <script src="/static/super-admin-bi.js?v=1"></script>
+  <script src="/static/super-admin-bi.js?v=2"></script>
 </body>
 </html>`
 }

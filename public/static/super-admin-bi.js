@@ -146,6 +146,7 @@
       case 'funnel': await loadFunnel(); break
       case 'health': await loadCustomerHealth(); break
       case 'live': await loadLive(); break
+      case 'blog': await loadBlogAnalytics(); break
       default: document.getElementById('bi-main').innerHTML = '<p class="text-gray-500">Unknown view</p>'
     }
   }
@@ -667,6 +668,160 @@
     if (BI.liveInterval) clearInterval(BI.liveInterval)
     BI.liveInterval = setInterval(fetchLive, 30000)
   }
+
+  // ── BLOG & SEO ANALYTICS ─────────────────────────────────────
+  async function loadBlogAnalytics(period) {
+    const p = period || BI.blogPeriod || '30d'
+    BI.blogPeriod = p
+    const res = await biFetch('/api/admin/bi/blog-analytics?period=' + p)
+    const main = document.getElementById('bi-main')
+    if (!res || !main) { main && (main.innerHTML = errorHTML('Failed')); return }
+    let d
+    try { d = await res.json() } catch { main.innerHTML = errorHTML('Invalid response'); return }
+
+    const ov = d.overview || {}
+    const posts = d.posts || []
+    const refs = d.top_referrers || []
+    const searchRefs = d.search_referrers || []
+    const issues = d.issues || []
+
+    const orgSearchVisitors = searchRefs.reduce((s, r) => s + (r.unique_visitors || 0), 0)
+
+    function seoScorePill(score) {
+      const cls = score >= 70 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-700'
+        : score >= 40 ? 'bg-amber-500/20 text-amber-300 border-amber-700'
+        : 'bg-red-500/20 text-red-300 border-red-700'
+      return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border ${cls}">${score}</span>`
+    }
+
+    function truncate(s, n) { return !s ? '' : (s.length > n ? s.slice(0, n) + '…' : s) }
+    function cleanReferrer(r) {
+      if (!r || r === 'Direct') return 'Direct'
+      try { return new URL(r).hostname.replace(/^www\./, '') } catch { return truncate(r, 40) }
+    }
+
+    const maxWin = Math.max(...posts.map(x => x.unique_visitors_window || 0), 1)
+    const postRows = posts.slice(0, 50).map(x => `
+      <tr class="border-t border-slate-700 hover:bg-slate-750">
+        <td class="py-2 px-3">
+          <a href="/blog/${x.slug}" target="_blank" class="text-xs font-semibold text-white hover:text-indigo-300 block truncate max-w-[280px]" title="${x.title}">${x.title}</a>
+          <div class="text-[10px] text-gray-600 truncate">${x.category || '—'} · ${x.read_time_minutes || '?'}min · ${x.age_days != null ? x.age_days + 'd old' : ''}</div>
+        </td>
+        <td class="py-2 px-3 text-xs text-right">
+          <div class="text-white font-bold">${(x.unique_visitors_window || 0).toLocaleString()}</div>
+          <div class="w-14 h-1 bg-slate-700 rounded-full mt-1 ml-auto">
+            <div class="h-1 bg-indigo-500 rounded-full" style="width:${Math.round(((x.unique_visitors_window || 0) / maxWin) * 100)}%"></div>
+          </div>
+        </td>
+        <td class="py-2 px-3 text-xs text-gray-300 text-right">${(x.pageviews_window || 0).toLocaleString()}</td>
+        <td class="py-2 px-3 text-xs text-gray-400 text-right">${(x.lifetime_views || 0).toLocaleString()}</td>
+        <td class="py-2 px-3 text-xs text-gray-400 text-right">${x.avg_time_on_page ? x.avg_time_on_page + 's' : '—'}</td>
+        <td class="py-2 px-3 text-xs text-gray-400 text-right">${x.avg_scroll_depth ? x.avg_scroll_depth + '%' : '—'}</td>
+        <td class="py-2 px-3 text-right">${seoScorePill(x.seo_score)}</td>
+      </tr>`).join('')
+
+    const refRows = refs.map(r => {
+      const totalRefs = refs.reduce((s, x) => s + (x.unique_visitors || 0), 0) || 1
+      const pct = Math.round((r.unique_visitors / totalRefs) * 100)
+      return `<div class="flex items-center justify-between py-1.5">
+        <span class="text-xs text-gray-300 truncate max-w-[180px]" title="${r.referrer}">${cleanReferrer(r.referrer)}</span>
+        <div class="flex items-center gap-2">
+          <div class="w-16 h-1.5 bg-slate-700 rounded-full">
+            <div class="h-1.5 bg-indigo-500 rounded-full" style="width:${pct}%"></div>
+          </div>
+          <span class="text-xs font-semibold text-white w-10 text-right">${r.unique_visitors}</span>
+        </div>
+      </div>`
+    }).join('')
+
+    const searchRows = searchRefs.length ? searchRefs.map(r => `
+      <div class="flex items-center justify-between py-1.5">
+        <span class="text-xs text-gray-300 truncate max-w-[180px]" title="${r.referrer}"><i class="fas fa-search text-emerald-400 mr-1 text-[10px]"></i>${cleanReferrer(r.referrer)}</span>
+        <span class="text-xs font-semibold text-emerald-300">${r.unique_visitors}</span>
+      </div>`).join('') : '<p class="text-xs text-gray-600 italic">No organic search traffic captured yet.<br>Verify roofmanager.ca in Google Search Console to unlock real rankings.</p>'
+
+    const sevClass = { high: 'text-red-400', medium: 'text-amber-400', low: 'text-gray-400' }
+    const sevIcon = { high: 'fas fa-exclamation-triangle', medium: 'fas fa-exclamation-circle', low: 'fas fa-info-circle' }
+    const issueRows = issues.slice(0, 20).map(i => `
+      <div class="flex items-start gap-2 py-2 border-b border-slate-800 last:border-0">
+        <i class="${sevIcon[i.severity]} ${sevClass[i.severity]} mt-0.5 shrink-0 text-xs"></i>
+        <div class="min-w-0 flex-1">
+          <a href="/blog/${i.slug}" target="_blank" class="text-xs text-white hover:text-indigo-300 font-medium truncate block">${i.title}</a>
+          <div class="text-[11px] text-gray-500">${i.issue}</div>
+        </div>
+      </div>`).join('')
+
+    main.innerHTML = `
+      <div class="space-y-6">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-bold text-white flex items-center gap-2">
+            <i class="fas fa-blog text-indigo-400"></i> Blog &amp; SEO Analytics
+          </h2>
+          <div class="flex gap-1">
+            ${['7d','30d','90d'].map(x => `
+              <button onclick="biLoadBlog('${x}')" class="px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${BI.blogPeriod === x ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-gray-400 hover:bg-slate-600'}">${x}</button>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          ${kpiCard('Blog Pageviews', (ov.pageviews || 0).toLocaleString(), `${p} window`, 'fas fa-eye', 'bg-indigo-600')}
+          ${kpiCard('Unique Readers', (ov.unique_visitors || 0).toLocaleString(), `${ov.sessions || 0} sessions`, 'fas fa-users', 'bg-blue-600')}
+          ${kpiCard('Organic Search', orgSearchVisitors.toLocaleString(), 'from Google/Bing/etc.', 'fas fa-search', 'bg-emerald-600')}
+          ${kpiCard('Blog → Signup', (ov.blog_to_signup_rate || 0) + '%', `${ov.blog_to_signup_converted || 0} of ${ov.blog_to_signup_visitors || 0} readers`, 'fas fa-user-plus', 'bg-purple-600')}
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          ${kpiCard('Total Posts', ov.total_posts || 0, 'published', 'fas fa-file-alt', 'bg-gray-600')}
+          ${kpiCard('Avg Time', ov.avg_time_on_page ? ov.avg_time_on_page + 's' : '—', 'on blog pages', 'fas fa-hourglass-half', 'bg-teal-600')}
+          ${kpiCard('Avg Scroll', ov.avg_scroll_depth ? ov.avg_scroll_depth + '%' : '—', 'engagement', 'fas fa-arrows-alt-v', 'bg-cyan-600')}
+          ${kpiCard('Zero-View Posts', ov.zero_view_posts || 0, 'never been read', 'fas fa-ghost', (ov.zero_view_posts || 0) > 0 ? 'bg-amber-600' : 'bg-gray-600')}
+        </div>
+
+        <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+          <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-gray-300"><i class="fas fa-trophy text-yellow-400 mr-2"></i>Post Performance (${p})</h3>
+            <span class="text-xs text-gray-500">Ranked by unique readers in window</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[820px]">
+              <thead><tr class="text-xs text-gray-600 uppercase bg-slate-900/50">
+                <th class="py-2 px-3 text-left">Post</th>
+                <th class="py-2 px-3 text-right">Unique (${p})</th>
+                <th class="py-2 px-3 text-right">Views (${p})</th>
+                <th class="py-2 px-3 text-right">Lifetime Views</th>
+                <th class="py-2 px-3 text-right">Avg Time</th>
+                <th class="py-2 px-3 text-right">Scroll</th>
+                <th class="py-2 px-3 text-right">SEO Score</th>
+              </tr></thead>
+              <tbody>${postRows || '<tr><td colspan="7" class="text-center text-gray-600 py-6 text-xs">No published posts yet</td></tr>'}</tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+            <h3 class="text-xs font-semibold text-gray-500 uppercase mb-3"><i class="fas fa-external-link-alt mr-1"></i>Traffic Sources</h3>
+            ${refRows || '<p class="text-xs text-gray-600">No referrers yet</p>'}
+          </div>
+          <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+            <h3 class="text-xs font-semibold text-gray-500 uppercase mb-3"><i class="fas fa-search mr-1 text-emerald-400"></i>Organic Search</h3>
+            ${searchRows}
+          </div>
+          <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+            <h3 class="text-xs font-semibold text-gray-500 uppercase mb-3"><i class="fas fa-stethoscope mr-1 text-amber-400"></i>SEO Health Issues</h3>
+            ${issueRows || '<p class="text-xs text-emerald-400">All posts pass basic SEO checks</p>'}
+          </div>
+        </div>
+
+        <div class="bg-gradient-to-r from-indigo-900/40 to-purple-900/40 border border-indigo-700/40 rounded-xl p-5">
+          <h3 class="text-sm font-bold text-white mb-2"><i class="fas fa-rocket text-indigo-400 mr-2"></i>Unlock Real Google Rankings</h3>
+          <p class="text-xs text-gray-300 mb-3">This dashboard tracks visitors who <em>arrived</em> on your blog. To see the keywords you rank for, your average Google position, and which pages are one spot away from page one, connect Google Search Console.</p>
+          <p class="text-xs text-gray-400">Next step: verify <code class="bg-slate-800 px-1.5 py-0.5 rounded text-indigo-300">roofmanager.ca</code> in Search Console, then ping me to wire up the API — I'll add keyword rank tracking to this page.</p>
+        </div>
+      </div>`
+  }
+  window.biLoadBlog = loadBlogAnalytics
 
   // ── Expose globals ────────────────────────────────────────────
   window.biSetView = biSetView

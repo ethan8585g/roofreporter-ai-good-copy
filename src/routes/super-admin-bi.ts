@@ -314,6 +314,206 @@ superAdminBi.get('/anomalies', async (c) => {
   }
 })
 
+// ── BLOG / SEO ANALYTICS ──────────────────────────────────────
+// Per-post traffic + SEO funnel data: joins blog_posts with site_analytics
+// to surface which posts drive the most organic traffic, engagement, and conversions.
+superAdminBi.get('/blog-analytics', async (c) => {
+  const period = c.req.query('period') === '30d' ? '-30 days'
+    : c.req.query('period') === '90d' ? '-90 days'
+    : '-7 days'
+  const periodLabel = period === '-30 days' ? '30d' : period === '-90 days' ? '90d' : '7d'
+
+  try {
+    const db = c.env.DB
+
+    const [postsRow, perPostRow, overviewRow, referrerRow, searchReferrerRow, conversionRow, orphanRow] = await db.batch([
+      // All published posts with lifetime view_count + SEO meta
+      db.prepare(`
+        SELECT id, slug, title, category, tags, author_name, is_featured,
+               view_count, read_time_minutes, meta_title, meta_description,
+               published_at, created_at
+        FROM blog_posts
+        WHERE status = 'published'
+        ORDER BY published_at DESC
+      `),
+      // Per-post engagement in window from site_analytics
+      db.prepare(`
+        SELECT page_url,
+               COUNT(*) as pageviews,
+               COUNT(DISTINCT visitor_id) as unique_visitors,
+               COUNT(DISTINCT session_id) as sessions,
+               ROUND(AVG(NULLIF(time_on_page,0)),0) as avg_time_on_page,
+               ROUND(AVG(NULLIF(scroll_depth,0)),0) as avg_scroll_depth
+        FROM site_analytics
+        WHERE event_type='pageview'
+          AND page_url LIKE '/blog/%'
+          AND page_url NOT LIKE '/admin%'
+          AND created_at >= datetime('now',?)
+        GROUP BY page_url
+      `).bind(period),
+      // Aggregate blog traffic overview
+      db.prepare(`
+        SELECT COUNT(*) as pageviews,
+               COUNT(DISTINCT visitor_id) as unique_visitors,
+               COUNT(DISTINCT session_id) as sessions,
+               ROUND(AVG(NULLIF(time_on_page,0)),0) as avg_time_on_page,
+               ROUND(AVG(NULLIF(scroll_depth,0)),0) as avg_scroll_depth
+        FROM site_analytics
+        WHERE event_type='pageview'
+          AND page_url LIKE '/blog/%'
+          AND page_url NOT LIKE '/admin%'
+          AND created_at >= datetime('now',?)
+      `).bind(period),
+      // Top referrers driving blog traffic
+      db.prepare(`
+        SELECT COALESCE(NULLIF(referrer,''), 'Direct') as referrer,
+               COUNT(*) as pageviews,
+               COUNT(DISTINCT visitor_id) as unique_visitors
+        FROM site_analytics
+        WHERE event_type='pageview'
+          AND page_url LIKE '/blog/%'
+          AND created_at >= datetime('now',?)
+        GROUP BY referrer
+        ORDER BY unique_visitors DESC
+        LIMIT 15
+      `).bind(period),
+      // Search-engine referrers only (organic SEO proxy)
+      db.prepare(`
+        SELECT referrer,
+               COUNT(*) as pageviews,
+               COUNT(DISTINCT visitor_id) as unique_visitors
+        FROM site_analytics
+        WHERE event_type='pageview'
+          AND page_url LIKE '/blog/%'
+          AND created_at >= datetime('now',?)
+          AND (referrer LIKE '%google.%' OR referrer LIKE '%bing.%'
+               OR referrer LIKE '%duckduckgo.%' OR referrer LIKE '%yahoo.%'
+               OR referrer LIKE '%yandex.%' OR referrer LIKE '%ecosia.%')
+        GROUP BY referrer
+        ORDER BY unique_visitors DESC
+        LIMIT 10
+      `).bind(period),
+      // Blog-to-signup conversion: visitors who hit a blog page AND became customers in window
+      db.prepare(`
+        SELECT COUNT(DISTINCT sa.visitor_id) as blog_visitors,
+               COUNT(DISTINCT CASE WHEN cust.id IS NOT NULL THEN sa.visitor_id END) as converted
+        FROM site_analytics sa
+        LEFT JOIN customers cust ON cust.email IS NOT NULL
+          AND cust.created_at >= sa.created_at
+          AND cust.created_at <= datetime(sa.created_at,'+7 days')
+        WHERE sa.event_type='pageview'
+          AND sa.page_url LIKE '/blog/%'
+          AND sa.created_at >= datetime('now',?)
+      `).bind(period),
+      // Orphan detection: posts published but with zero lifetime views
+      db.prepare(`
+        SELECT COUNT(*) as zero_view_posts
+        FROM blog_posts
+        WHERE status='published' AND (view_count IS NULL OR view_count=0)
+      `)
+    ]) as any[]
+
+    const posts = (postsRow.results || []) as any[]
+    const perPost = new Map<string, any>()
+    for (const r of (perPostRow.results || []) as any[]) {
+      perPost.set(r.page_url, r)
+    }
+
+    // Build per-post row: combine lifetime view_count + windowed engagement
+    const postRows = posts.map((p: any) => {
+      const url = `/blog/${p.slug}`
+      const stats = perPost.get(url) || {}
+      const publishedAt = p.published_at ? new Date(p.published_at).getTime() : null
+      const ageDays = publishedAt ? Math.floor((Date.now() - publishedAt) / 86400000) : null
+
+      // SEO health score (0-100): meta completeness + engagement signals
+      let seoScore = 0
+      if (p.meta_title && p.meta_title.length >= 30 && p.meta_title.length <= 65) seoScore += 20
+      else if (p.meta_title) seoScore += 10
+      if (p.meta_description && p.meta_description.length >= 120 && p.meta_description.length <= 160) seoScore += 20
+      else if (p.meta_description) seoScore += 10
+      if ((p.view_count || 0) >= 100) seoScore += 25
+      else if ((p.view_count || 0) >= 10) seoScore += 15
+      else if ((p.view_count || 0) > 0) seoScore += 5
+      if ((stats.avg_scroll_depth || 0) >= 60) seoScore += 20
+      else if ((stats.avg_scroll_depth || 0) >= 30) seoScore += 10
+      if ((stats.avg_time_on_page || 0) >= 60) seoScore += 15
+      else if ((stats.avg_time_on_page || 0) >= 30) seoScore += 8
+
+      return {
+        id: p.id,
+        slug: p.slug,
+        title: p.title,
+        category: p.category,
+        tags: p.tags,
+        author_name: p.author_name,
+        is_featured: p.is_featured,
+        read_time_minutes: p.read_time_minutes,
+        published_at: p.published_at,
+        age_days: ageDays,
+        lifetime_views: p.view_count || 0,
+        pageviews_window: stats.pageviews || 0,
+        unique_visitors_window: stats.unique_visitors || 0,
+        sessions_window: stats.sessions || 0,
+        avg_time_on_page: stats.avg_time_on_page || 0,
+        avg_scroll_depth: stats.avg_scroll_depth || 0,
+        meta_title: p.meta_title,
+        meta_title_len: p.meta_title ? p.meta_title.length : 0,
+        meta_description: p.meta_description,
+        meta_description_len: p.meta_description ? p.meta_description.length : 0,
+        seo_score: seoScore,
+        is_orphan: (p.view_count || 0) === 0 && ageDays != null && ageDays > 14
+      }
+    })
+
+    // Sort by windowed unique visitors desc, then lifetime views
+    postRows.sort((a: any, b: any) =>
+      (b.unique_visitors_window - a.unique_visitors_window) ||
+      (b.lifetime_views - a.lifetime_views))
+
+    const overview = (overviewRow.results?.[0] || {}) as any
+    const conversion = (conversionRow.results?.[0] || {}) as any
+    const blogVisitors = conversion.blog_visitors || 0
+    const converted = conversion.converted || 0
+
+    // SEO-health issues to flag
+    const issues: Array<{ slug: string; title: string; issue: string; severity: string }> = []
+    for (const p of postRows) {
+      if (!p.meta_title) issues.push({ slug: p.slug, title: p.title, issue: 'Missing meta title', severity: 'high' })
+      else if (p.meta_title_len > 65) issues.push({ slug: p.slug, title: p.title, issue: `Meta title too long (${p.meta_title_len} chars — cut to ≤65)`, severity: 'medium' })
+      else if (p.meta_title_len < 30) issues.push({ slug: p.slug, title: p.title, issue: `Meta title too short (${p.meta_title_len} chars — aim 30-65)`, severity: 'low' })
+
+      if (!p.meta_description) issues.push({ slug: p.slug, title: p.title, issue: 'Missing meta description', severity: 'high' })
+      else if (p.meta_description_len > 160) issues.push({ slug: p.slug, title: p.title, issue: `Meta description too long (${p.meta_description_len} chars — cut to ≤160)`, severity: 'medium' })
+      else if (p.meta_description_len < 120) issues.push({ slug: p.slug, title: p.title, issue: `Meta description too short (${p.meta_description_len} chars — aim 120-160)`, severity: 'low' })
+
+      if (p.is_orphan) issues.push({ slug: p.slug, title: p.title, issue: `Zero views after ${p.age_days} days — needs promotion or rewrite`, severity: 'medium' })
+    }
+
+    return c.json({
+      period: periodLabel,
+      overview: {
+        total_posts: posts.length,
+        pageviews: overview.pageviews || 0,
+        unique_visitors: overview.unique_visitors || 0,
+        sessions: overview.sessions || 0,
+        avg_time_on_page: overview.avg_time_on_page || 0,
+        avg_scroll_depth: overview.avg_scroll_depth || 0,
+        zero_view_posts: (orphanRow.results?.[0]?.zero_view_posts as number) || 0,
+        blog_to_signup_visitors: blogVisitors,
+        blog_to_signup_converted: converted,
+        blog_to_signup_rate: blogVisitors > 0 ? Math.round((converted / blogVisitors) * 100) : 0
+      },
+      posts: postRows,
+      top_referrers: (referrerRow.results || []) as any[],
+      search_referrers: (searchReferrerRow.results || []) as any[],
+      issues: issues.slice(0, 50)
+    })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
 // ── API PERFORMANCE ───────────────────────────────────────────
 superAdminBi.get('/api-performance', async (c) => {
   const days = parseInt(c.req.query('days') || '7')
