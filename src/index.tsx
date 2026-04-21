@@ -931,7 +931,7 @@ app.get('/sitemap.xml', async (c) => {
     }
   } catch {}
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>`
-  return c.text(xml, 200, { 'Content-Type': 'application/xml' })
+  return c.text(xml, 200, { 'Content-Type': 'application/xml', 'Cache-Control': 'public, max-age=3600, s-maxage=3600' })
 })
 
 // SEO: Sitemap index (master file pointing to segmented sub-sitemaps)
@@ -950,7 +950,7 @@ app.get('/sitemap-index.xml', (c) => {
   <sitemap><loc>${base}/sitemap-comparisons.xml</loc><lastmod>${today}</lastmod></sitemap>
   <sitemap><loc>${base}/image-sitemap.xml</loc><lastmod>${today}</lastmod></sitemap>
 </sitemapindex>`
-  return c.text(xml, 200, { 'Content-Type': 'application/xml' })
+  return c.text(xml, 200, { 'Content-Type': 'application/xml', 'Cache-Control': 'public, max-age=3600, s-maxage=3600' })
 })
 
 // SEO: Core sitemap — static pages + feature hub pages
@@ -1009,7 +1009,15 @@ app.get('/sitemap-core.xml', (c) => {
   ]
   const urls = pages.map(p => `<url><loc>${base}${p.loc}</loc><changefreq>${p.changefreq}</changefreq><priority>${p.priority}</priority><lastmod>${today}</lastmod></url>`).join('\n')
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>`
-  return c.text(xml, 200, { 'Content-Type': 'application/xml' })
+  // Cache sitemaps for 1 hour at the edge so polling crawlers don't re-fetch
+  // unchanged payloads. Last-Modified lets conditional GETs (If-Modified-Since)
+  // short-circuit with a 304 once Cloudflare caches see the header.
+  const lastMod = new Date(today + 'T00:00:00Z').toUTCString()
+  return c.text(xml, 200, {
+    'Content-Type': 'application/xml',
+    'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+    'Last-Modified': lastMod,
+  })
 })
 
 // SEO: Locations sitemap — geo pages + feature/city silo pages
@@ -1049,7 +1057,7 @@ app.get('/sitemap-locations.xml', (c) => {
     urls += `\n<url><loc>${base}/best-roofing-contractors/${slug}</loc><changefreq>weekly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>`
   }
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}\n</urlset>`
-  return c.text(xml, 200, { 'Content-Type': 'application/xml' })
+  return c.text(xml, 200, { 'Content-Type': 'application/xml', 'Cache-Control': 'public, max-age=3600, s-maxage=3600' })
 })
 
 // SEO: Blog sitemap — dynamic from DB
@@ -1063,7 +1071,7 @@ app.get('/sitemap-blog.xml', async (c) => {
     }
   } catch {}
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}\n</urlset>`
-  return c.text(xml, 200, { 'Content-Type': 'application/xml' })
+  return c.text(xml, 200, { 'Content-Type': 'application/xml', 'Cache-Control': 'public, max-age=3600, s-maxage=3600' })
 })
 
 // SEO: RSS feed
@@ -1121,7 +1129,7 @@ app.get('/image-sitemap.xml', async (c) => {
     }
   } catch {}
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${urls}</urlset>`
-  return c.text(xml, 200, { 'Content-Type': 'application/xml' })
+  return c.text(xml, 200, { 'Content-Type': 'application/xml', 'Cache-Control': 'public, max-age=3600, s-maxage=3600' })
 })
 
 // SEO: US States sitemap
@@ -1484,7 +1492,7 @@ Every roof measurement report includes:
 
 | Plan | Price | Includes |
 |---|---|---|
-| Free Trial | $0 | 3 professional reports, full CRM access, no credit card required |
+| Free Trial | $0 | 4 professional reports, full CRM access, no credit card required | <!-- conv-v5: trial count matches free_trial_total=4 in DB insert -->
 | Per Report | $8 USD | Pay-per-report after trial |
 | 10-Pack | $75 USD ($7.50/report) | Starter volume discount |
 | 25-Pack | $175 USD ($7.00/report) | Popular volume discount |
@@ -2056,8 +2064,8 @@ app.get('/roof-measurement/:city', (c) => {
   const addrCountry = isUS ? 'US' : isCa ? 'CA' : city.province
   const countryLabel = isUS ? 'United States' : isCa ? 'Canada' : ''
   const priceText = isUS
-    ? 'Reports cost $8 per report after 3 free trial reports (billed in USD for US customers).'
-    : 'Reports cost $8 CAD per report after 3 free trial reports.'
+    ? 'Reports cost $8 per report after 4 free trial reports (billed in USD for US customers).'
+    : 'Reports cost $8 CAD per report after 4 free trial reports.'
   const priceVisible = isUS ? '$8 per report (USD)' : '$8 CAD per report'
   const breadcrumbItems = isUS
     ? `[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Locations","item":"https://www.roofmanager.ca/coverage"},{"@type":"ListItem","position":3,"name":"United States","item":"https://www.roofmanager.ca/roof-measurement/united-states"},{"@type":"ListItem","position":4,"name":"${city.province}","item":"https://www.roofmanager.ca/us/${city.province.toLowerCase().replace(/ /g,'-')}"},{"@type":"ListItem","position":5,"name":"${city.name}","item":"https://www.roofmanager.ca/roof-measurement/${citySlug}"}]`
@@ -2185,7 +2193,7 @@ app.get('/roof-measurement/:city', (c) => {
         </div>
         <div class="bg-[#111111] border border-white/10 rounded-xl p-6">
           <h3 class="text-white font-bold mb-2">How much does a roof report cost in ${city.name}?</h3>
-          <p class="text-gray-400 text-sm leading-relaxed">Roof measurement reports for ${city.name} properties cost ${priceVisible} after your 3 free trial reports. Volume discounts are available — 25-packs at $7/report and 100-packs at $5.95/report. Full CRM, invoicing, and proposal tools are included free.</p>
+          <p class="text-gray-400 text-sm leading-relaxed">Roof measurement reports for ${city.name} properties cost ${priceVisible} after your 4 free trial reports. Volume discounts are available — 25-packs at $7/report and 100-packs at $5.95/report. Full CRM, invoicing, and proposal tools are included free.</p>
         </div>
         <div class="bg-[#111111] border border-white/10 rounded-xl p-6">
           <h3 class="text-white font-bold mb-2">Does Roof Manager work for ${city.name}, ${city.province} roofing contractors?</h3>
@@ -4077,6 +4085,126 @@ app.get('/sites/:subdomain/:slug', async (c) => {
   if (!page?.html_snapshot) return c.notFound()
 
   return c.html(page.html_snapshot)
+})
+
+// ============================================================
+// CUSTOM 404 — branded "page not found" with search + popular links.
+// Every unmatched route (and every c.notFound() call) renders this page.
+// Captures bounce traffic from old links, typos, and deleted content.
+// ============================================================
+app.notFound((c) => {
+  const base = 'https://www.roofmanager.ca'
+  const path = c.req.path
+  // Build a search suggestion from the attempted path segments.
+  const hint = path.split('/').filter(Boolean).join(' ').replace(/-/g, ' ').slice(0, 80)
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags(path)}
+  <title>Page Not Found (404) — Roof Manager</title>
+  <meta name="description" content="The page you were looking for on Roof Manager couldn't be found. Try the search, browse the most popular pages, or head back to the homepage.">
+  <meta name="robots" content="noindex,follow">
+  <link rel="canonical" href="${base}${path}">
+</head>
+<body style="background:#0A0A0A;color:#fff">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
+      <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm">Start Free</a>
+    </div>
+  </nav>
+  <section class="py-16 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)">
+    <div class="max-w-2xl mx-auto px-4">
+      <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-6">404 &middot; Page not found</span>
+      <h1 class="text-4xl md:text-5xl font-black text-white mb-4">This page doesn't exist.</h1>
+      <p class="text-gray-400 mb-8">The URL <code class="bg-white/5 px-2 py-0.5 rounded text-xs">${path.replace(/</g, '&lt;').slice(0, 120)}</code> didn't resolve. Try the search or pick a popular destination below.</p>
+      <form action="/help" method="get" class="relative max-w-lg mx-auto">
+        <input name="q" type="search" placeholder="Search help articles, guides, and blog posts&hellip;" autocomplete="off" value="${hint.replace(/"/g, '&quot;')}" class="w-full bg-[#111] border border-white/10 focus:border-[#00FF88] rounded-xl pl-11 pr-4 py-3.5 text-white text-sm outline-none transition-colors" style="box-sizing:border-box">
+        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"></i>
+      </form>
+    </div>
+  </section>
+  <section class="py-12" style="background:#0A0A0A">
+    <div class="max-w-4xl mx-auto px-4">
+      <h2 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Popular destinations</h2>
+      <div class="grid md:grid-cols-2 gap-3">
+        <a href="/" class="bg-[#111] border border-white/10 hover:border-[#00FF88]/30 rounded-xl p-4 transition-all"><h3 class="text-white font-bold text-sm"><i class="fas fa-home text-[#00FF88] mr-2"></i>Home</h3><p class="text-gray-500 text-xs mt-1">AI roof measurement + CRM for contractors</p></a>
+        <a href="/features/measurements" class="bg-[#111] border border-white/10 hover:border-[#00FF88]/30 rounded-xl p-4 transition-all"><h3 class="text-white font-bold text-sm"><i class="fas fa-satellite text-[#00FF88] mr-2"></i>Measurement Reports</h3><p class="text-gray-500 text-xs mt-1">Satellite reports in 60 seconds, $8/report</p></a>
+        <a href="/features/crm" class="bg-[#111] border border-white/10 hover:border-[#00FF88]/30 rounded-xl p-4 transition-all"><h3 class="text-white font-bold text-sm"><i class="fas fa-users text-[#00FF88] mr-2"></i>Roofing CRM</h3><p class="text-gray-500 text-xs mt-1">Pipeline, invoicing, proposals — free</p></a>
+        <a href="/features/ai-secretary" class="bg-[#111] border border-white/10 hover:border-[#00FF88]/30 rounded-xl p-4 transition-all"><h3 class="text-white font-bold text-sm"><i class="fas fa-headset text-[#00FF88] mr-2"></i>AI Phone Receptionist</h3><p class="text-gray-500 text-xs mt-1">24/7 call answering for $149/mo</p></a>
+        <a href="/pricing" class="bg-[#111] border border-white/10 hover:border-[#00FF88]/30 rounded-xl p-4 transition-all"><h3 class="text-white font-bold text-sm"><i class="fas fa-tag text-[#00FF88] mr-2"></i>Pricing</h3><p class="text-gray-500 text-xs mt-1">4 free reports &middot; $8/each after</p></a>
+        <a href="/blog" class="bg-[#111] border border-white/10 hover:border-[#00FF88]/30 rounded-xl p-4 transition-all"><h3 class="text-white font-bold text-sm"><i class="fas fa-newspaper text-[#00FF88] mr-2"></i>Blog</h3><p class="text-gray-500 text-xs mt-1">Roofing insights &middot; AI measurement &middot; insurance</p></a>
+        <a href="/help" class="bg-[#111] border border-white/10 hover:border-[#00FF88]/30 rounded-xl p-4 transition-all"><h3 class="text-white font-bold text-sm"><i class="fas fa-life-ring text-[#00FF88] mr-2"></i>Help Center</h3><p class="text-gray-500 text-xs mt-1">Step-by-step guides for every feature</p></a>
+        <a href="/us" class="bg-[#111] border border-white/10 hover:border-[#00FF88]/30 rounded-xl p-4 transition-all"><h3 class="text-white font-bold text-sm"><i class="fas fa-flag-usa text-[#00FF88] mr-2"></i>US Coverage</h3><p class="text-gray-500 text-xs mt-1">All 50 states &middot; state-specific pages</p></a>
+      </div>
+    </div>
+  </section>
+  <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+      <span class="font-bold text-gray-400">Roof Manager</span>
+      <div class="flex flex-wrap items-center gap-4">
+        <a href="/about" class="hover:text-[#00FF88]">About</a>
+        <a href="/pricing" class="hover:text-[#00FF88]">Pricing</a>
+        <a href="/help" class="hover:text-[#00FF88]">Help</a>
+        <a href="/contact" class="hover:text-[#00FF88]">Contact</a>
+      </div>
+      <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
+    </div>
+  </footer>
+</body>
+</html>`
+  return c.html(html, 404)
+})
+
+// ============================================================
+// OG IMAGE FALLBACK — /og/:slug.svg
+// Blog posts without a cover_image_url get a branded 1200x630 SVG with
+// the title rendered. SVG is valid for og:image on Google SERP + AI
+// crawlers. Social platforms fallback to static logo when needed.
+// ============================================================
+app.get('/og/:filename', async (c) => {
+  const filename = c.req.param('filename')
+  if (!filename.endsWith('.svg')) return c.notFound()
+  const slug = filename.slice(0, -4)
+  try {
+    const post = await c.env.DB.prepare(
+      `SELECT title, category FROM blog_posts WHERE slug = ? AND status = 'published'`,
+    ).bind(slug).first<{ title: string; category: string | null }>()
+    const title = post?.title || 'Roof Manager'
+    const category = (post?.category || 'roofing').replace(/-/g, ' ')
+    // Break title into ~2 visual lines (roughly ≤38 chars each) for readability
+    const words = title.split(/\s+/)
+    const lines: string[] = []
+    let cur = ''
+    for (const w of words) {
+      if ((cur + ' ' + w).trim().length > 38 && cur) { lines.push(cur); cur = w }
+      else cur = (cur + ' ' + w).trim()
+    }
+    if (cur) lines.push(cur)
+    const displayLines = lines.slice(0, 3)
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0A0A0A"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1200" height="6" fill="#00FF88"/>
+  <text x="80" y="100" font-family="Inter, system-ui, sans-serif" font-size="22" font-weight="700" fill="#00FF88" letter-spacing="4">ROOF MANAGER</text>
+  <text x="80" y="140" font-family="Inter, system-ui, sans-serif" font-size="18" fill="#9ca3af" letter-spacing="2">${esc(category.toUpperCase())}</text>
+  ${displayLines.map((ln, i) => `<text x="80" y="${260 + i * 80}" font-family="Inter, system-ui, sans-serif" font-size="64" font-weight="800" fill="#ffffff">${esc(ln)}</text>`).join('\n  ')}
+  <text x="80" y="560" font-family="Inter, system-ui, sans-serif" font-size="20" fill="#9ca3af">www.roofmanager.ca  &#8226;  Satellite roof measurement &amp; CRM</text>
+</svg>`
+    return c.body(svg, 200, {
+      'Content-Type': 'image/svg+xml; charset=utf-8',
+      'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+    })
+  } catch {
+    return c.notFound()
+  }
 })
 
 // ============================================================
@@ -7264,7 +7392,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     </section>
 
     <!-- PRICING -->
-    <section id="pricing" class="py-24" style="background:#0A0A0A"><div class="max-w-6xl mx-auto px-4"><div class="text-center mb-16 scroll-animate"><div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold mb-4"><i class="fas fa-tag"></i> Simple Pricing</div><h2 class="text-3xl lg:text-5xl font-black text-white mb-4 tracking-tight">Plans That Scale With You</h2><p class="text-lg text-gray-400 max-w-2xl mx-auto">Start free, pay per report, or save big with volume packs. CRM always included.</p></div><div class="grid lg:grid-cols-3 gap-6 items-start mb-16"><div class="scroll-animate bg-[#111111] rounded-2xl border border-white/10 p-8 hover:shadow-xl transition-shadow"><div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Free Trial</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$0</span></div><p class="text-sm text-gray-400 mb-6">4 free reports + full platform access</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>3 professional PDF reports</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Full CRM &amp; invoicing</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Customer management</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Proposals &amp; job tracking</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Door-to-door manager</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Virtual roof try-on</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Team collaboration</li></ul><a href="/register" onclick="rrTrack('cta_click',{location:'pricing',plan:'free'})" class="block text-center py-3.5 rounded-xl font-bold border-2 border-white/20 text-white hover:bg-white hover:text-[#0A0A0A] transition-all min-h-[48px]">Start Free Trial</a></div><div class="scroll-animate relative" style="transition-delay:100ms"><div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#00FF88] text-[#0A0A0A] text-xs font-extrabold px-5 py-1.5 rounded-full shadow-lg z-10">MOST POPULAR</div><div class="bg-[#111111] rounded-2xl border-2 border-[#00FF88]/50 shadow-xl shadow-[#00FF88]/10 p-8"><div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Per Report</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$8</span><span class="text-xl text-gray-500">CAD</span><span class="text-sm text-gray-500 ml-1">/ report</span></div><div class="flex items-center gap-2 mb-1"><span class="text-sm text-gray-500 line-through">$50&ndash;100 EagleView</span><span class="text-xs font-bold text-[#00FF88] bg-[#00FF88]/10 px-2 py-0.5 rounded-full">Save 90%+</span></div><p class="text-xs text-[#00FF88] font-semibold mb-6"><i class="fas fa-gift mr-1"></i>First 4 reports FREE</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Full 3D area with pitch adjustment</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Complete edge breakdown</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Material BOM with pricing</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Solar potential analysis</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Professional PDF download</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Instant delivery (&lt;60s)</li></ul><a href="/register" onclick="rrTrack('cta_click',{location:'pricing',plan:'per_report'})" class="block text-center py-3.5 rounded-xl font-extrabold bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">Get Started Free</a></div></div><div class="scroll-animate relative" style="transition-delay:200ms"><div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white text-xs font-bold px-5 py-1.5 rounded-full shadow-lg z-10">BEST VALUE</div><div class="bg-[#111111] rounded-2xl border-2 border-[#a78bfa]/50 p-8"><div class="text-sm font-bold text-[#a78bfa] uppercase tracking-wider mb-2">Volume Packs</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$5.95</span><span class="text-xl text-gray-500">USD</span><span class="text-sm text-gray-500 ml-1">/ report</span></div><p class="text-sm text-gray-400 mb-1">Best rate on the 100-Pack — credits never expire</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>10-Pack — $75 ($7.50/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>25-Pack — $175 ($7.00/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>100-Pack — $595 ($5.95/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>Credits never expire</li></ul><a href="/demo" onclick="rrTrack('cta_click',{location:'pricing',plan:'b2b'})" class="block text-center py-3.5 rounded-xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">Book a Volume Demo</a></div></div></div></div></section>
+    <section id="pricing" class="py-24" style="background:#0A0A0A"><div class="max-w-6xl mx-auto px-4"><div class="text-center mb-16 scroll-animate"><div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold mb-4"><i class="fas fa-tag"></i> Simple Pricing</div><h2 class="text-3xl lg:text-5xl font-black text-white mb-4 tracking-tight">Plans That Scale With You</h2><p class="text-lg text-gray-400 max-w-2xl mx-auto">Start free, pay per report, or save big with volume packs. CRM always included.</p></div><div class="grid lg:grid-cols-3 gap-6 items-start mb-16"><div class="scroll-animate bg-[#111111] rounded-2xl border border-white/10 p-8 hover:shadow-xl transition-shadow"><div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Free Trial</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$0</span></div><p class="text-sm text-gray-400 mb-6">4 free reports + full platform access</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>4 professional PDF reports</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Full CRM &amp; invoicing</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Customer management</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Proposals &amp; job tracking</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Door-to-door manager</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Virtual roof try-on</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Team collaboration</li></ul><a href="/register" onclick="rrTrack('cta_click',{location:'pricing',plan:'free'})" class="block text-center py-3.5 rounded-xl font-bold border-2 border-white/20 text-white hover:bg-white hover:text-[#0A0A0A] transition-all min-h-[48px]">Start Free Trial</a></div><div class="scroll-animate relative" style="transition-delay:100ms"><div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#00FF88] text-[#0A0A0A] text-xs font-extrabold px-5 py-1.5 rounded-full shadow-lg z-10">MOST POPULAR</div><div class="bg-[#111111] rounded-2xl border-2 border-[#00FF88]/50 shadow-xl shadow-[#00FF88]/10 p-8"><div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Per Report</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$8</span><span class="text-xl text-gray-500">CAD</span><span class="text-sm text-gray-500 ml-1">/ report</span></div><div class="flex items-center gap-2 mb-1"><span class="text-sm text-gray-500 line-through">$50&ndash;100 EagleView</span><span class="text-xs font-bold text-[#00FF88] bg-[#00FF88]/10 px-2 py-0.5 rounded-full">Save 90%+</span></div><p class="text-xs text-[#00FF88] font-semibold mb-6"><i class="fas fa-gift mr-1"></i>First 4 reports FREE</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Full 3D area with pitch adjustment</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Complete edge breakdown</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Material BOM with pricing</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Solar potential analysis</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Professional PDF download</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Instant delivery (&lt;60s)</li></ul><a href="/register" onclick="rrTrack('cta_click',{location:'pricing',plan:'per_report'})" class="block text-center py-3.5 rounded-xl font-extrabold bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">Get Started Free</a></div></div><div class="scroll-animate relative" style="transition-delay:200ms"><div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white text-xs font-bold px-5 py-1.5 rounded-full shadow-lg z-10">BEST VALUE</div><div class="bg-[#111111] rounded-2xl border-2 border-[#a78bfa]/50 p-8"><div class="text-sm font-bold text-[#a78bfa] uppercase tracking-wider mb-2">Volume Packs</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$5.95</span><span class="text-xl text-gray-500">USD</span><span class="text-sm text-gray-500 ml-1">/ report</span></div><p class="text-sm text-gray-400 mb-1">Best rate on the 100-Pack — credits never expire</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>10-Pack — $75 ($7.50/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>25-Pack — $175 ($7.00/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>100-Pack — $595 ($5.95/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>Credits never expire</li></ul><a href="/demo" onclick="rrTrack('cta_click',{location:'pricing',plan:'b2b'})" class="block text-center py-3.5 rounded-xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">Book a Volume Demo</a></div></div></div></div></section>
 
     <!-- TESTIMONIALS -->
     <section class="py-24" style="background:#0d0d0d"><div class="max-w-7xl mx-auto px-4"><div class="text-center mb-16 scroll-animate"><div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold mb-4"><i class="fas fa-quote-left"></i> What Roofers Say</div><h2 class="text-3xl lg:text-4xl font-black text-white mb-4 tracking-tight">Trusted by Roofing Professionals</h2><p class="text-lg text-gray-400">Real results from contractors worldwide.</p><div class="flex items-center justify-center gap-2 mt-4"><div class="flex items-center gap-0.5"><i class="fas fa-star text-[#00FF88] text-lg"></i><i class="fas fa-star text-[#00FF88] text-lg"></i><i class="fas fa-star text-[#00FF88] text-lg"></i><i class="fas fa-star text-[#00FF88] text-lg"></i><i class="fas fa-star text-[#00FF88] text-lg"></i></div><span class="text-white font-bold">4.9/5</span><span class="text-gray-500">&mdash; 200+ reviews</span></div></div><div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6"><div class="scroll-animate" style="transition-delay:0ms"><div class="h-full bg-[#111111] border border-white/10 rounded-2xl p-6 hover:shadow-xl hover:border-[#00FF88]/30 transition-all duration-300 flex flex-col"><div class="bg-[#00FF88]/10 rounded-lg px-3 py-2 mb-4 flex items-center gap-2"><i class="fas fa-piggy-bank text-[#00FF88] text-sm"></i><span class="text-sm font-bold text-[#00FF88]">Saves $1,500+/month</span></div><div class="flex items-center justify-between mb-3"><div class="flex items-center gap-0.5"><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i></div><span class="inline-flex items-center gap-1 text-[10px] font-semibold text-[#00FF88] bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-full px-2 py-0.5"><i class="fas fa-check-circle text-[#00FF88]"></i>Verified</span></div><p class="text-gray-400 text-sm leading-relaxed mb-6 flex-1">"Saves me 2 hours per estimate. I used to climb every roof with a tape measure. Now I order a report, get the BOM, and quote the job from my truck."</p><div class="flex items-center gap-3 pt-4 border-t border-white/10"><div class="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">MD</div><div class="flex-1 min-w-0"><p class="font-semibold text-white text-sm">Mike D.</p><p class="text-xs text-gray-500">Roofing Contractor, JPG Roofing LTD</p><p class="text-[10px] text-gray-500">Calgary, AB</p></div></div></div></div><div class="scroll-animate" style="transition-delay:100ms"><div class="h-full bg-[#111111] border border-white/10 rounded-2xl p-6 hover:shadow-xl hover:border-[#00FF88]/30 transition-all duration-300 flex flex-col"><div class="bg-[#00FF88]/10 rounded-lg px-3 py-2 mb-4 flex items-center gap-2"><i class="fas fa-bullseye text-[#00FF88] text-sm"></i><span class="text-sm font-bold text-[#00FF88]">99% material accuracy</span></div><div class="flex items-center justify-between mb-3"><div class="flex items-center gap-0.5"><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i></div><span class="inline-flex items-center gap-1 text-[10px] font-semibold text-[#00FF88] bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-full px-2 py-0.5"><i class="fas fa-check-circle text-[#00FF88]"></i>Verified</span></div><p class="text-gray-400 text-sm leading-relaxed mb-6 flex-1">"The material BOM alone is worth it. Shingle counts, underlayment rolls, nail quantities &mdash; my supplier orders are dead accurate every time."</p><div class="flex items-center gap-3 pt-4 border-t border-white/10"><div class="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">SK</div><div class="flex-1 min-w-0"><p class="font-semibold text-white text-sm">Sarah K.</p><p class="text-xs text-gray-500">Project Manager, Summit Exteriors</p><p class="text-[10px] text-gray-500">Edmonton, AB</p></div></div></div></div><div class="scroll-animate" style="transition-delay:200ms"><div class="h-full bg-[#111111] border border-white/10 rounded-2xl p-6 hover:shadow-xl hover:border-[#00FF88]/30 transition-all duration-300 flex flex-col"><div class="bg-[#00FF88]/10 rounded-lg px-3 py-2 mb-4 flex items-center gap-2"><i class="fas fa-chart-line text-[#00FF88] text-sm"></i><span class="text-sm font-bold text-[#00FF88]">+23% close rate</span></div><div class="flex items-center justify-between mb-3"><div class="flex items-center gap-0.5"><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i></div><span class="inline-flex items-center gap-1 text-[10px] font-semibold text-[#00FF88] bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-full px-2 py-0.5"><i class="fas fa-check-circle text-[#00FF88]"></i>Verified</span></div><p class="text-gray-400 text-sm leading-relaxed mb-6 flex-1">"We run 15-20 estimates a week. At $7 per report we save thousands vs drone surveys. Our close rate jumped 23% because professional reports build instant trust."</p><div class="flex items-center gap-3 pt-4 border-t border-white/10"><div class="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">JR</div><div class="flex-1 min-w-0"><p class="font-semibold text-white text-sm">James R.</p><p class="text-xs text-gray-500">Owner, Apex Roofing Co.</p><p class="text-[10px] text-gray-500">Vancouver, BC</p></div></div></div></div></div></div></section>
@@ -9700,7 +9828,7 @@ function getComparisonPageHTML(slug: string): string {
   <section class="py-20 border-t border-white/5" style="background:#0A0A0A">
     <div class="max-w-3xl mx-auto px-4 text-center">
       <h2 class="text-3xl font-black text-white mb-4">Ready to Switch? Start Free Today.</h2>
-      <p class="text-gray-400 mb-8">3 free measurement reports. No credit card. Native CAD. Full CRM included.</p>
+      <p class="text-gray-400 mb-8">4 free measurement reports. No credit card. Native CAD. Full CRM included.</p>
       <a href="/register" onclick="rrTrack('cta_click',{location:'comparison_${slug}_footer'})" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-12 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.03]"><i class="fas fa-rocket"></i> Start Free — No Credit Card</a>
       <p class="text-xs text-gray-600 mt-4">Also available: <a href="/roofr-alternative" class="hover:text-[#00FF88] transition-colors">Roofr alternative</a> · <a href="/cheaper-alternative-to-eagleview" class="hover:text-[#00FF88] transition-colors">EagleView alternative</a> · <a href="/features/measurements" class="hover:text-[#00FF88] transition-colors">AI measurement reports</a></p>
     </div>
@@ -10579,6 +10707,45 @@ function getFeatureHubPageHTML(featureSlug: string): string {
       acceptedAnswer: { '@type': 'Answer', text: item.a },
     })),
   })
+  // HowTo schema — describes the "use this feature" workflow per hub. Gives
+  // Google a structured step-by-step rich result anchor on feature landing
+  // pages (previously only /how-it-works emitted HowTo).
+  const howToStepsByFeature: Record<string, { step: string; text: string }[]> = {
+    'measurements': [
+      { step: 'Enter the property address', text: 'Type any US or Canadian address into the Order Report form. Autocomplete confirms the roof outline on satellite.' },
+      { step: 'Configure pitch and waste factor', text: 'Defaults work for 95% of residential roofs; override pitch per segment or waste factor if the job calls for it.' },
+      { step: 'Generate the report', text: 'The engine pulls Google Solar API LiDAR + imagery, computes 3D sloped area, pitch per plane, and edge lengths, and cross-checks against segment totals.' },
+      { step: 'Deliver the branded PDF', text: 'Receive a branded PDF with material BOM in under 60 seconds. First 4 reports are free — no credit card.' },
+    ],
+    'crm': [
+      { step: 'Create the lead', text: 'Add leads manually, from a measurement report, via the AI receptionist, or via a website contact form.' },
+      { step: 'Move through the pipeline', text: 'Drag through New, Quoted, Approved, Scheduled, Complete. Insurance claims get separate stages for Adjuster Pending, Supplement, Carrier Payment.' },
+      { step: 'Send proposals and invoices', text: 'Proposals auto-populate from the measurement report BOM. Invoices accept Stripe or Square with no platform fee.' },
+      { step: 'Follow up automatically', text: 'Day-3, day-7, day-14 follow-up reminders fire automatically on quoted leads. Close at 2-3x the no-follow-up rate.' },
+    ],
+    'ai-secretary': [
+      { step: 'Pick your local area code number', text: 'We provision a local US or CA area code number in your market during setup.' },
+      { step: 'Write your call script', text: 'A template is provided; customize for your company name, greeting, service area, and price points.' },
+      { step: 'Connect Google Calendar', text: 'The AI books appointments directly into your calendar with a buffer between jobs.' },
+      { step: 'Go live', text: 'Forward your main line or publish the new number. The AI answers every call 24/7 for $149/month flat — no per-minute fees.' },
+    ],
+    'virtual-try-on': [
+      { step: 'Upload the homeowner\'s house photo', text: 'Drag a front-elevation photo into the try-on tool from the customer portal or send a capture link to the homeowner.' },
+      { step: 'Pick shingle colors', text: 'Choose 2-3 candidate shingle colors / styles from the Roof Manager library or your own product set.' },
+      { step: 'Render the preview', text: 'AI vision overlays each shingle on the photo in seconds.' },
+      { step: 'Share the comparison', text: 'Send the side-by-side preview to the homeowner in a proposal. Virtual try-on lifts close rate substantially on color-sensitive retail jobs.' },
+    ],
+  }
+  const howToSteps = howToStepsByFeature[f.slug] || []
+  const howToSchema = howToSteps.length > 0 ? JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'HowTo',
+    name: `How to use ${f.title}`,
+    description: f.metaDesc,
+    totalTime: f.slug === 'ai-secretary' ? 'PT15M' : (f.slug === 'virtual-try-on' ? 'PT2M' : 'PT1M'),
+    step: howToSteps.map((s, i) => ({
+      '@type': 'HowToStep', position: i + 1, name: s.step, text: s.text,
+    })),
+  }) : ''
   const topCityLinks = f.topCities.map(slug => {
     const city = seoCities[slug]
     if (!city) return ''
@@ -10605,6 +10772,7 @@ function getFeatureHubPageHTML(featureSlug: string): string {
   <script type="application/ld+json">${breadcrumbSchema}</script>
   <script type="application/ld+json">${softwareSchema}</script>
   <script type="application/ld+json">${faqSchema}</script>
+  ${howToSchema ? `<script type="application/ld+json">${howToSchema}</script>` : ''}
 </head>
 <body style="background:#0A0A0A">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
@@ -11252,7 +11420,7 @@ function getFeatureUSCityPageHTML(
   const title = `${featureLabel} for ${city.name}, ${city.stateCode} Roofing Contractors — 2026`
   const descRaw =
     featureSlug === 'measurements'
-      ? `Satellite roof measurement reports for ${city.name}, ${city.state} contractors. $8 USD per report after 3 free. Insurance-ready documentation accepted by ${city.state} adjusters.`
+      ? `Satellite roof measurement reports for ${city.name}, ${city.state} contractors. $8 USD per report after 4 free. Insurance-ready documentation accepted by ${city.state} adjusters.`
       : featureSlug === 'crm'
       ? `Roofing CRM software for ${city.name}, ${city.state} contractors. Pipeline, proposals, invoicing, job scheduling. Free with every Roof Manager account. Built for ${city.state} storm-response workflows.`
       : `24/7 AI phone receptionist for ${city.name}, ${city.state} roofing contractors. Local ${city.stateCode} area code numbers, automated storm-surge call handling, $149/month flat.`
@@ -11280,7 +11448,7 @@ function getFeatureUSCityPageHTML(
     areaServed: { '@type': 'City', name: city.name },
     address: { '@type': 'PostalAddress', addressLocality: city.name, addressRegion: city.stateCode, addressCountry: 'US' },
     offers: featureSlug === 'measurements'
-      ? { '@type': 'Offer', price: '8.00', priceCurrency: 'USD', description: 'Per report after 3 free' }
+      ? { '@type': 'Offer', price: '8.00', priceCurrency: 'USD', description: 'Per report after 4 free' }
       : featureSlug === 'crm'
       ? { '@type': 'Offer', price: '0.00', priceCurrency: 'USD' }
       : { '@type': 'Offer', price: '149.00', priceCurrency: 'USD', description: 'Flat monthly rate, unlimited minutes' },
@@ -11417,7 +11585,7 @@ function getFeatureUSCityPageHTML(
   <section class="py-16 border-t border-white/5" style="background:#0A0A0A">
     <div class="max-w-3xl mx-auto px-4 text-center">
       <h2 class="text-2xl font-black text-white mb-4">Ready to serve ${city.name} faster?</h2>
-      <p class="text-gray-400 mb-8 text-sm">${featureSlug === 'measurements' ? '3 free reports, no credit card.' : featureSlug === 'crm' ? 'CRM free forever. 4 free measurement reports included.' : '$149/month flat, unlimited minutes.'}</p>
+      <p class="text-gray-400 mb-8 text-sm">${featureSlug === 'measurements' ? '4 free reports, no credit card.' : featureSlug === 'crm' ? 'CRM free forever. 4 free measurement reports included.' : '$149/month flat, unlimited minutes.'}</p>
       <a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.03]"><i class="fas fa-rocket"></i> Start Free &mdash; ${city.name}</a>
     </div>
   </section>
@@ -11463,7 +11631,7 @@ function getFeatureStateHubPageHTML(
   const title = `${featureLabel} for ${state.name} Roofing Contractors — 2026`
   const desc =
     featureSlug === 'measurements'
-      ? `Satellite roof measurement reports for ${state.name} roofing contractors. $8 USD per report after 3 free. Insurance-ready documentation for ${state.stormProfile.primaryPeril.toLowerCase()} claims in all ${state.name} metros.`
+      ? `Satellite roof measurement reports for ${state.name} roofing contractors. $8 USD per report after 4 free. Insurance-ready documentation for ${state.stormProfile.primaryPeril.toLowerCase()} claims in all ${state.name} metros.`
       : featureSlug === 'crm'
       ? `Roofing CRM software for ${state.name} contractors. Pipeline, proposals, invoicing, job scheduling. Free with every Roof Manager account. Built for ${state.name} storm-response and insurance claim workflows.`
       : `24/7 AI phone receptionist for ${state.name} roofing contractors. Never miss a storm-surge call. Local ${state.code} area code numbers, automated lead capture, and Google Calendar booking. $149/month flat.`
@@ -11489,7 +11657,7 @@ function getFeatureStateHubPageHTML(
     areaServed: { '@type': 'State', name: state.name },
     address: { '@type': 'PostalAddress', addressRegion: state.code, addressCountry: 'US' },
     offers: featureSlug === 'measurements'
-      ? { '@type': 'Offer', price: '8.00', priceCurrency: 'USD', description: 'Per report after 3 free' }
+      ? { '@type': 'Offer', price: '8.00', priceCurrency: 'USD', description: 'Per report after 4 free' }
       : featureSlug === 'crm'
       ? { '@type': 'Offer', price: '0.00', priceCurrency: 'USD', description: 'Free with any Roof Manager account' }
       : { '@type': 'Offer', price: '149.00', priceCurrency: 'USD', description: 'Flat monthly rate, unlimited minutes' },
@@ -12043,7 +12211,7 @@ function getXactimateAlternativeHTML(): string {
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
-      <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm">Get 3 Free Reports</a>
+      <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm">Get 4 Free Reports</a>
     </div>
   </nav>
 
@@ -12107,7 +12275,7 @@ function getXactimateAlternativeHTML(): string {
   </section>
 
   <section class="py-16 text-center" style="background:#0A0A0A">
-    <h2 class="text-3xl font-black text-white mb-4">Try 3 free reports &mdash; no credit card.</h2>
+    <h2 class="text-3xl font-black text-white mb-4">Try 4 free reports &mdash; no credit card.</h2>
     <p class="text-gray-400 mb-8">See the Xactimate-compatible measurement format before you pay a dollar.</p>
     <a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg"><i class="fas fa-rocket"></i>Start Free</a>
   </section>
@@ -12190,7 +12358,7 @@ function getRoofingSoftwareComparisonHubHTML(): string {
   </section>
   <section class="py-16 text-center" style="background:#0A0A0A">
     <h2 class="text-3xl font-black text-white mb-4">Try Roof Manager before you commit.</h2>
-    <p class="text-gray-400 mb-8">3 free reports, no credit card, 60-second signup.</p>
+    <p class="text-gray-400 mb-8">4 free reports, no credit card, 60-second signup.</p>
     <a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg"><i class="fas fa-rocket"></i>Start Free</a>
   </section>
   <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
@@ -12896,7 +13064,7 @@ Authorization: Bearer rm_live_xxxx
   <section class="py-20 text-center" style="background:#0A0A0A">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black text-white mb-4">Ready to Run Your Business Smarter?</h2>
-      <p class="text-gray-400 mb-8">Start with 3 free roof measurement reports. Full CRM included. No credit card required.</p>
+      <p class="text-gray-400 mb-8">Start with 4 free roof measurement reports. Full CRM included. No credit card required.</p>
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
         <a href="/register" class="inline-flex items-center justify-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.02]"><i class="fas fa-rocket"></i> Start Free — 4 Reports On Us</a>
         <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 transition-all"><i class="fas fa-calendar-check text-[#00FF88]"></i> Book a Demo</a>
@@ -13259,7 +13427,7 @@ function getPricingPageHTML() {
     "image": "https://www.roofmanager.ca/static/logo.png",
     "url": "https://www.roofmanager.ca/pricing",
     "offers": [
-      {"@type": "Offer", "name": "Free Trial", "price": "0", "priceCurrency": "USD", "description": "3 free professional roof measurement reports", "availability": "https://schema.org/InStock"},
+      {"@type": "Offer", "name": "Free Trial", "price": "0", "priceCurrency": "USD", "description": "4 free professional roof measurement reports", "availability": "https://schema.org/InStock"},
       {"@type": "Offer", "name": "Per Report", "price": "8.00", "priceCurrency": "USD", "description": "Pay-per-report after free trial", "availability": "https://schema.org/InStock"},
       {"@type": "Offer", "name": "10-Pack", "price": "75.00", "priceCurrency": "USD", "description": "10 report credits at $7.50 each", "availability": "https://schema.org/InStock", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "7.50", "priceCurrency": "USD", "referenceQuantity": {"@type": "QuantitativeValue", "value": "1", "unitCode": "EA"}}},
       {"@type": "Offer", "name": "25-Pack", "price": "175.00", "priceCurrency": "USD", "description": "25 report credits at $7 each", "availability": "https://schema.org/InStock", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "7.00", "priceCurrency": "USD", "referenceQuantity": {"@type": "QuantitativeValue", "value": "1", "unitCode": "EA"}}},
@@ -13300,7 +13468,7 @@ function getPricingPageHTML() {
         <i class="fas fa-gift text-3xl"></i>
         <h2 class="text-3xl font-extrabold">4 Free Reports When You Sign Up</h2>
       </div>
-      <p class="text-green-100 text-lg mb-6">No credit card required. Create an account and get 3 professional roof measurement reports — completely free.</p>
+      <p class="text-green-100 text-lg mb-6">No credit card required. Create an account and get 4 professional roof measurement reports — completely free.</p>
       <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_signup'})" class="inline-flex items-center gap-2 bg-white text-green-700 font-bold py-3 px-8 rounded-xl text-lg shadow-lg transition-all hover:scale-105 hover:bg-green-50">
         <i class="fas fa-user-plus"></i>
         Sign Up Free
@@ -13765,7 +13933,7 @@ function getBlogListingHTML(posts: any[] = []) {
     <!-- Funnel CTA — Every blog reader gets pushed to lander -->
     <div class="mt-16 bg-[#111111] border border-white/10 rounded-2xl p-8 md:p-12 text-center text-white">
       <h3 class="text-2xl md:text-3xl font-black mb-3 tracking-tight">Ready to Try It Yourself?</h3>
-      <p class="text-gray-400 mb-6 max-w-xl mx-auto">Get 3 free professional roof measurement reports. No credit card required. Full CRM included.</p>
+      <p class="text-gray-400 mb-6 max-w-xl mx-auto">Get 4 free professional roof measurement reports. No credit card required. Full CRM included.</p>
       <a href="/lander" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-3 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.02]">
         <i class="fas fa-gift"></i>
         Claim Your 4 Free Reports
@@ -13843,7 +14011,10 @@ function getBlogListingHTML(posts: any[] = []) {
 function getBlogPostHTML(post?: any, slug?: string) {
   const title = post ? (post.meta_title || post.title) + ' — Roof Manager Blog' : 'Blog Post - Roof Manager'
   const desc = post ? (post.meta_description || post.excerpt || '') : ''
-  const image = post?.cover_image_url || 'https://www.roofmanager.ca/static/logo.png'
+  // Prefer the post's actual cover image; fall back to a dynamically-rendered
+  // SVG with the post title if none was set (better than a generic logo).
+  const image = post?.cover_image_url
+    || (slug ? `https://www.roofmanager.ca/og/${slug}.svg` : 'https://www.roofmanager.ca/static/logo.png')
   const canonical = slug ? `https://www.roofmanager.ca/blog/${slug}` : ''
   const published = post?.published_at || ''
   const updated = post?.updated_at || ''
@@ -14174,7 +14345,7 @@ function getLanderFunnelHTML() {
 <head>
   ${getHeadTags()}
   <title>Get Your Free Roof Measurement Report - Roof Manager</title>
-  <meta name="description" content="Professional satellite-powered roof measurement reports in under 60 seconds. Start with 3 FREE reports. No credit card required. Used by roofing contractors across the US &amp; Canada.">
+  <meta name="description" content="Professional satellite-powered roof measurement reports in under 60 seconds. Start with 4 FREE reports. No credit card required. Used by roofing contractors across the US &amp; Canada.">
   <meta property="og:title" content="Free Roof Measurement Reports - Roof Manager">
   <meta property="og:description" content="Get accurate roof area, pitch, material BOM, and more in 60 seconds. 4 free reports. No credit card.">
   <meta property="og:type" content="website">
@@ -14217,7 +14388,7 @@ function getLanderFunnelHTML() {
         <div>
           <div class="inline-flex items-center gap-2 bg-green-500/10 border border-green-400/30 rounded-full px-4 py-1.5 mb-6">
             <i class="fas fa-gift text-green-400 text-sm"></i>
-            <span class="text-sm font-medium text-green-300">3 FREE Reports on Signup — No Credit Card</span>
+            <span class="text-sm font-medium text-green-300">4 FREE Reports on Signup — No Credit Card</span>
           </div>
 
           <h1 class="text-4xl lg:text-6xl font-black leading-tight mb-6 tracking-tight">
@@ -14355,7 +14526,7 @@ function getLanderFunnelHTML() {
         Your Next 4 Reports<br/>Are On Us
       </h2>
       <p class="text-lg text-gray-300 mb-10 max-w-xl mx-auto">
-        Sign up in 30 seconds, get 3 free professional roof measurement reports, and access the full CRM — no credit card required.
+        Sign up in 30 seconds, get 4 free professional roof measurement reports, and access the full CRM — no credit card required.
       </p>
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
         <a href="/register" class="group inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-12 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">

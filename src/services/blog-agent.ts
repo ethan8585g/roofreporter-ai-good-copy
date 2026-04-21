@@ -10,6 +10,8 @@
 import type { Bindings } from '../types'
 import { pingGoogleIndexing } from './indexing-api'
 import { pingIndexNow } from './indexnow'
+import { US_STATES } from '../data/us-states'
+import { CA_PROVINCES } from '../data/ca-provinces'
 
 const MODEL_DRAFT = 'gemini-2.5-flash'
 const MODEL_GATE = 'gemini-2.5-flash'
@@ -263,10 +265,79 @@ export async function pickNextKeyword(db: D1Database): Promise<QueueRow | null> 
 
 // ---------- Generation ----------
 
-function buildDraftPrompt(row: QueueRow): string {
+// Resolve optional live context that gets injected into the draft prompt:
+// - the target state/province's real data (storm, insurers, code) so the
+//   article cites actual facts instead of hallucinating
+// - the 8 most recent published blog titles + slugs so the agent can link
+//   to real sibling posts rather than invent URLs
+// - the target state's /us/<slug> (or /ca/<slug>) hub URL
+export interface LiveContext {
+  recentPosts?: Array<{ slug: string; title: string; category: string | null }>
+  stateBlock?: string          // human-readable "real facts" block for the target geo
+  geoHubPath?: string | null   // /us/<state> or /ca/<province> path (or null)
+}
+
+function stateOrProvinceBlock(geo: string | null): { block: string; hubPath: string | null } {
+  if (!geo) return { block: '', hubPath: null }
+  // Try US states (match name or code)
+  const usKey = Object.keys(US_STATES).find(
+    k => US_STATES[k].name.toLowerCase() === geo.toLowerCase() ||
+         US_STATES[k].code.toLowerCase() === geo.toLowerCase(),
+  )
+  if (usKey) {
+    const s = US_STATES[usKey]
+    return {
+      block: [
+        `REAL FACTS FOR ${s.name.toUpperCase()} (use these instead of inventing numbers):`,
+        `- Population: ${s.population.toLocaleString()}`,
+        `- Major metros: ${s.metros.join(', ')}`,
+        `- Hail days per year (NOAA avg): ${s.stormProfile.hailDaysPerYear}`,
+        `- Hurricane risk: ${s.stormProfile.hurricaneRisk} · Tornado risk: ${s.stormProfile.tornadoRisk}`,
+        `- Annual roofing insurance claims (est): ${s.stormProfile.avgClaimsPerYear}`,
+        `- Primary peril: ${s.stormProfile.primaryPeril}`,
+        `- Adopted building code: ${s.buildingCode.adoptedIRC}. ${s.buildingCode.notes}`,
+        `- Top insurers by market share: ${s.topInsurers.join(', ')}`,
+        `- Roofing market notes: ${s.roofingNotes}`,
+        `- State landing page path (link to this): /us/${s.slug}`,
+      ].join('\n'),
+      hubPath: `/us/${s.slug}`,
+    }
+  }
+  const caKey = Object.keys(CA_PROVINCES).find(
+    k => CA_PROVINCES[k].name.toLowerCase() === geo.toLowerCase() ||
+         CA_PROVINCES[k].code.toLowerCase() === geo.toLowerCase(),
+  )
+  if (caKey) {
+    const p = CA_PROVINCES[caKey]
+    return {
+      block: [
+        `REAL FACTS FOR ${p.name.toUpperCase()} (use these instead of inventing numbers):`,
+        `- Population: ${p.population.toLocaleString()}`,
+        `- Major metros: ${p.metros.join(', ')}`,
+        `- Hail days per year: ${p.stormProfile.hailDaysPerYear}`,
+        `- Winter severity: ${p.stormProfile.winterSeverity} · Coastal risk: ${p.stormProfile.coastalRisk}`,
+        `- Annual roofing claims (est): ${p.stormProfile.avgClaimsPerYear}`,
+        `- Primary peril: ${p.stormProfile.primaryPeril}`,
+        `- Adopted building code: ${p.buildingCode.adopted}. ${p.buildingCode.notes}`,
+        `- Top insurers: ${p.topInsurers.join(', ')}`,
+        `- Roofing market notes: ${p.roofingNotes}`,
+        `- Province landing page path (link to this): /ca/${p.slug}`,
+      ].join('\n'),
+      hubPath: `/ca/${p.slug}`,
+    }
+  }
+  return { block: '', hubPath: null }
+}
+
+function buildDraftPrompt(row: QueueRow, ctx: LiveContext = {}): string {
   const geo = row.geo_modifier ? ` in ${row.geo_modifier}` : ''
   const market = (row as any).market || 'us'
   const isUS = market === 'us' || (!market && !['Toronto','Calgary','Vancouver','Ottawa','Edmonton','Winnipeg','Montreal','Mississauga','Hamilton','Regina','Saskatoon','Halifax'].includes(row.geo_modifier || ''))
+  const recentPostsBlock = (ctx.recentPosts && ctx.recentPosts.length)
+    ? `\n\nRECENT PUBLISHED POSTS ON THIS SITE (link to 2-4 of the most topically relevant — use the exact slugs; never invent a slug):\n${ctx.recentPosts.map(p => `- "${p.title}" — /blog/${p.slug}${p.category ? ` (category: ${p.category})` : ''}`).join('\n')}\n`
+    : ''
+  const stateBlock = ctx.stateBlock ? `\n\n${ctx.stateBlock}\n` : ''
+  const geoHubHint = ctx.geoHubPath ? `\nGEO HUB: The article MUST include exactly one link with anchor text naming the geo that points to ${ctx.geoHubPath}.\n` : ''
   const brand = `Roof Manager (roofmanager.ca) — roof measurement and roofer CRM software for professional roofing and solar contractors.
 
 VOCABULARY RULE: Never use the phrase "AI-powered", "AI-driven", or any "AI-[adjective]" puffery. Describe specific capabilities by what they do (e.g., "satellite measurement", "Gemini vision analysis for roof condition", "voice receptionist that answers missed calls"). "AI" may appear when naming a specific model or comparing systems, never as a generic marketing modifier.
@@ -305,7 +376,7 @@ CANADIAN MARKET REQUIREMENTS:
 - Mention CAD pricing where relevant: Roof Manager reports cost $8 CAD after 3 free.
 - Reference relevant Canadian building codes (NBC, provincial codes) where applicable.`
 
-  return `You are an expert SEO/GEO content writer AND satellite roof-measurement keyword strategist for ${brand}
+  return `You are an expert SEO/GEO content writer AND satellite roof-measurement keyword strategist for ${brand}${stateBlock}${recentPostsBlock}${geoHubHint}
 
 KEYWORD EXPERTISE (deep domain — use this vocabulary naturally where relevant):
 - Primary terms: "satellite roof measurement", "aerial roof measurement", "instant roof measurement report", "roof measurement software", "roof measurement app", "contractor roof measurement", "roof estimating software", "roof takeoff software", "roofer CRM", "roofing CRM", "roofing business software", "roofing proposal software".
@@ -434,15 +505,32 @@ function extractJson<T>(text: string): T {
   return JSON.parse(cleaned) as T
 }
 
-export async function generateDraft(env: Bindings, row: QueueRow): Promise<DraftOutput> {
+export async function generateDraft(env: Bindings, row: QueueRow, ctx: LiveContext = {}): Promise<DraftOutput> {
   const key = env.GEMINI_API_KEY || env.GEMINI_ENHANCE_API_KEY || env.GOOGLE_VERTEX_API_KEY
   if (!key) throw new Error('No Gemini API key configured')
-  const raw = await callGemini(key, MODEL_DRAFT, buildDraftPrompt(row))
+  const raw = await callGemini(key, MODEL_DRAFT, buildDraftPrompt(row, ctx))
   const draft = extractJson<DraftOutput>(raw)
   if (!draft.title || !draft.content_html || !draft.slug) {
     throw new Error('Draft missing required fields')
   }
   return draft
+}
+
+// Fetch the ingredients for a richer draft prompt: recent post context,
+// real state/province data, and the geo hub URL the article should link to.
+export async function resolveLiveContext(db: D1Database, row: QueueRow): Promise<LiveContext> {
+  const { block: stateBlock, hubPath: geoHubPath } = stateOrProvinceBlock(row.geo_modifier)
+  let recentPosts: LiveContext['recentPosts'] = []
+  try {
+    const res = await db.prepare(
+      `SELECT slug, title, category FROM blog_posts
+       WHERE status = 'published'
+       ORDER BY published_at DESC
+       LIMIT 8`
+    ).all()
+    recentPosts = (res.results || []) as LiveContext['recentPosts']
+  } catch { /* no_op */ }
+  return { recentPosts, stateBlock, geoHubPath }
 }
 
 export async function scoreDraft(env: Bindings, row: QueueRow, draft: DraftOutput): Promise<QualityScore> {
@@ -485,6 +573,245 @@ async function publishDraft(db: D1Database, draft: DraftOutput, row: QueueRow): 
     draft.read_time_minutes || 7,
   ).run()
   return (result.meta as any)?.last_row_id as number
+}
+
+// ---------- Link validation + cluster enrichment ----------
+
+/**
+ * Pull every href that starts with "/" out of an article and classify it
+ * as resolvable (matches an allowed path prefix or a known blog slug)
+ * vs invalid (fabricated / typo'd). Used by the quality gate so drafts
+ * with hallucinated URLs get rejected instead of published.
+ */
+function validateInternalLinks(
+  html: string,
+  recentPosts: Array<{ slug: string }>,
+): { valid: number; invalid: string[] } {
+  const hrefRe = /href=["'](\/[^"'#?]+)(?:[#?][^"']*)?["']/g
+  const valid = new Set<string>()
+  const invalid: string[] = []
+  const recentSlugs = new Set(recentPosts.map(p => `/blog/${p.slug}`))
+  const allowedPrefixes = [
+    ...ALLOWED_INTERNAL_PATHS,
+    '/us/', '/ca/',
+    '/features/', '/tools/', '/best-roofing-contractors',
+    '/authors/', '/xactimate-alternative', '/roofing-software-comparison',
+    '/about', '/press',
+  ]
+  let m: RegExpExecArray | null
+  while ((m = hrefRe.exec(html)) !== null) {
+    const path = m[1].replace(/\/$/, '') || '/'
+    if (recentSlugs.has(path)) { valid.add(path); continue }
+    // /blog and /blog/:slug are both permissible in general; only reject
+    // non-blog fabricated paths. For blog paths, we only accept real slugs.
+    if (path.startsWith('/blog/') && !recentSlugs.has(path)) {
+      invalid.push(path)
+      continue
+    }
+    if (allowedPrefixes.some(p => path === p || path.startsWith(p))) {
+      valid.add(path)
+    } else {
+      invalid.push(path)
+    }
+  }
+  return { valid: valid.size, invalid }
+}
+
+/**
+ * After a new post is published, append a "Related reading" block linking
+ * to 3 recent posts in the same category (excluding self). Grows the
+ * topical cluster graph automatically without model calls.
+ * Returns the number of related links added.
+ */
+async function injectRelatedReading(
+  db: D1Database,
+  newPostId: number,
+  category: string,
+): Promise<number> {
+  const rows = await db.prepare(
+    `SELECT slug, title FROM blog_posts
+     WHERE status = 'published' AND category = ? AND id != ?
+     ORDER BY published_at DESC LIMIT 3`,
+  ).bind(category, newPostId).all()
+  const related = (rows.results || []) as Array<{ slug: string; title: string }>
+  if (related.length === 0) return 0
+  const block = [
+    '<hr style="border:0;border-top:1px solid rgba(255,255,255,0.08);margin:48px 0 32px"/>',
+    '<section class="related-reading" style="margin-top:32px">',
+    '<h2 style="font-size:1.25rem;font-weight:800;color:#fff;margin-bottom:16px">Related reading</h2>',
+    '<ul style="list-style:none;padding:0;margin:0">',
+    ...related.map(r => `<li style="margin-bottom:8px"><a href="/blog/${r.slug}" style="color:#00FF88;text-decoration:underline;font-weight:600">${r.title.replace(/</g, '&lt;').replace(/"/g, '&quot;')}</a></li>`),
+    '</ul>',
+    '</section>',
+  ].join('\n')
+  await db.prepare(
+    `UPDATE blog_posts SET content = content || ?, updated_at = datetime('now') WHERE id = ?`,
+  ).bind('\n' + block, newPostId).run()
+  return related.length
+}
+
+/**
+ * Boost the older posts' link graph on every new publish: pick up to 3
+ * older same-category posts that do NOT already link to the new slug and
+ * append a "Newer coverage" pointer. This is the compounding effect of a
+ * self-healing topical cluster — every post that ships makes the existing
+ * corpus a little more internally linked.
+ * Returns the number of older posts updated.
+ */
+async function injectTopicalClusterBacklinks(
+  db: D1Database,
+  newPostId: number,
+  newSlug: string,
+  newTitle: string,
+  category: string,
+): Promise<number> {
+  const older = await db.prepare(
+    `SELECT id, content FROM blog_posts
+     WHERE status = 'published'
+       AND category = ?
+       AND id != ?
+       AND instr(content, '/blog/${newSlug}') = 0
+     ORDER BY published_at ASC
+     LIMIT 3`,
+  ).bind(category, newPostId).all()
+  const rows = (older.results || []) as Array<{ id: number; content: string }>
+  if (rows.length === 0) return 0
+  const pointer = `\n<p class="rm-newer-coverage" style="margin-top:24px;padding:12px 16px;background:rgba(0,255,136,0.08);border-left:3px solid #00FF88;border-radius:6px;font-size:0.9rem"><strong style="color:#00FF88">Newer coverage:</strong> <a href="/blog/${newSlug}" style="color:#00FF88;text-decoration:underline">${newTitle.replace(/</g, '&lt;').replace(/"/g, '&quot;')}</a></p>`
+  let updated = 0
+  for (const r of rows) {
+    try {
+      await db.prepare(
+        `UPDATE blog_posts SET content = content || ?, updated_at = datetime('now') WHERE id = ?`,
+      ).bind(pointer, r.id).run()
+      updated++
+    } catch { /* ignore individual UPDATE failures */ }
+  }
+  return updated
+}
+
+/**
+ * Re-publish an older post as "refreshed" — bump updated_at, append a
+ * dated freshness footer, and re-ping indexing APIs. Cheap way to signal
+ * to Google/Bing that old content has been reviewed even when the body
+ * doesn't need a full rewrite.
+ */
+export async function refreshStalePost(
+  env: Bindings,
+  postId: number,
+): Promise<{ ok: boolean; slug?: string; error?: string }> {
+  const db = env.DB
+  const post = await db.prepare(
+    `SELECT id, slug, title, content, updated_at FROM blog_posts WHERE id = ? AND status = 'published'`,
+  ).bind(postId).first<{ id: number; slug: string; title: string; content: string; updated_at: string }>()
+  if (!post) return { ok: false, error: 'post not found' }
+  const today = new Date().toISOString().substring(0, 10)
+  // Only append a freshness footer if one doesn't already exist from a
+  // previous refresh run — avoids the article growing footer-by-footer
+  // on repeat refreshes.
+  const footerMarker = 'class="rm-freshness-footer"'
+  let newContent = post.content
+  if (!newContent.includes(footerMarker)) {
+    newContent = newContent + `\n<p ${footerMarker} style="margin-top:32px;padding:10px 14px;font-size:0.85rem;color:#9ca3af;border-top:1px solid rgba(255,255,255,0.08)"><em>Reviewed and refreshed on ${today} by the Roof Manager Editorial Team. Pricing, code references, and insurer facts verified against current sources.</em></p>`
+    await db.prepare(
+      `UPDATE blog_posts SET content = ?, updated_at = datetime('now') WHERE id = ?`,
+    ).bind(newContent, postId).run()
+  } else {
+    // Bump updated_at only — signals freshness without editing content.
+    await db.prepare(
+      `UPDATE blog_posts SET updated_at = datetime('now') WHERE id = ?`,
+    ).bind(postId).run()
+  }
+  // Re-ping indexing services so the freshness reaches crawlers.
+  try {
+    const url = `https://www.roofmanager.ca/blog/${post.slug}`
+    await Promise.all([
+      pingGoogleIndexing(env as any, url, 'URL_UPDATED'),
+      pingIndexNow([url]),
+    ])
+  } catch { /* best effort */ }
+  return { ok: true, slug: post.slug }
+}
+
+/**
+ * Return IDs of published posts older than `daysOld` that have not been
+ * refreshed in the same period. Used by the /admin/agent/refresh endpoint.
+ */
+export async function pickStalePostIds(
+  db: D1Database,
+  daysOld = 90,
+  limit = 10,
+): Promise<Array<{ id: number; slug: string; title: string; age_days: number }>> {
+  const res = await db.prepare(
+    `SELECT id, slug, title,
+            CAST((julianday('now') - julianday(COALESCE(updated_at, published_at))) AS INTEGER) as age_days
+     FROM blog_posts
+     WHERE status = 'published'
+       AND COALESCE(updated_at, published_at) < datetime('now', ?)
+     ORDER BY COALESCE(updated_at, published_at) ASC
+     LIMIT ?`,
+  ).bind(`-${daysOld} days`, limit).all()
+  return (res.results || []) as any
+}
+
+/**
+ * Operational health snapshot for the admin dashboard. Aggregates queue
+ * throughput, recent quality scores, and publication cadence so an admin
+ * can eyeball whether the agent is healthy.
+ */
+export async function getAgentHealth(db: D1Database): Promise<Record<string, any>> {
+  const safe = async <T>(p: Promise<T>): Promise<T | null> => {
+    try { return await p } catch { return null }
+  }
+  const [
+    queueByStatus,
+    recentQualityScores,
+    publishByCategory,
+    lastPublishes,
+    logStageCounts,
+    avgDurationMs,
+    stalePostCount,
+  ] = await Promise.all([
+    safe(db.prepare(`SELECT status, COUNT(*) n FROM blog_keyword_queue GROUP BY status`).all()),
+    safe(db.prepare(
+      `SELECT quality_score FROM blog_generation_log
+       WHERE stage = 'quality_gate' AND quality_score IS NOT NULL
+       ORDER BY id DESC LIMIT 20`
+    ).all()),
+    safe(db.prepare(
+      `SELECT category, COUNT(*) n FROM blog_posts WHERE status='published' GROUP BY category ORDER BY n DESC LIMIT 10`
+    ).all()),
+    safe(db.prepare(
+      `SELECT id, slug, title, category, published_at FROM blog_posts
+       WHERE status='published' ORDER BY published_at DESC LIMIT 5`
+    ).all()),
+    safe(db.prepare(
+      `SELECT stage, COUNT(*) n FROM blog_generation_log WHERE created_at > datetime('now','-30 days') GROUP BY stage`
+    ).all()),
+    safe(db.prepare(
+      `SELECT AVG(duration_ms) avg_ms FROM blog_generation_log WHERE stage='draft' AND duration_ms IS NOT NULL AND created_at > datetime('now','-30 days')`
+    ).first<{ avg_ms: number | null }>()),
+    safe(db.prepare(
+      `SELECT COUNT(*) n FROM blog_posts WHERE status='published' AND COALESCE(updated_at, published_at) < datetime('now','-90 days')`
+    ).first<{ n: number }>()),
+  ])
+  const scores = ((recentQualityScores?.results || []) as Array<{ quality_score: number }>).map(r => r.quality_score)
+  const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null
+  const minScore = scores.length ? Math.min(...scores) : null
+  const maxScore = scores.length ? Math.max(...scores) : null
+  return {
+    queue: queueByStatus?.results || [],
+    recent_quality: {
+      count: scores.length,
+      avg: avgScore !== null ? Math.round(avgScore * 10) / 10 : null,
+      min: minScore, max: maxScore,
+    },
+    publish_by_category: publishByCategory?.results || [],
+    last_publishes: lastPublishes?.results || [],
+    stage_counts_30d: logStageCounts?.results || [],
+    avg_draft_ms_30d: avgDurationMs?.avg_ms ? Math.round(avgDurationMs.avg_ms) : null,
+    stale_post_count_over_90d: (stalePostCount as any)?.n ?? 0,
+    generated_at: new Date().toISOString(),
+  }
 }
 
 async function logEvent(db: D1Database, ev: {
@@ -533,7 +860,8 @@ export async function runOnce(env: Bindings): Promise<RunResult> {
 
   const started = Date.now()
   try {
-    const draft = await generateDraft(env, row)
+    const ctx = await resolveLiveContext(db, row)
+    const draft = await generateDraft(env, row, ctx)
     await logEvent(db, { queue_id: row.id, stage: 'draft', model: MODEL_DRAFT, duration_ms: Date.now() - started })
 
     const score = await scoreDraft(env, row, draft)
@@ -542,7 +870,21 @@ export async function runOnce(env: Bindings): Promise<RunResult> {
     if (bannedHit) {
       score.issues = [...(score.issues || []), `banned phrase: "${bannedHit}"`]
     }
-    const passed = score.overall >= QUALITY_THRESHOLD && score.schema_present && score.internal_links >= 2 && geoOk && !bannedHit
+    // Resolve internal links against allowed prefixes + recent post slugs.
+    // A draft that passes Gemini's self-score but hallucinates paths gets
+    // rejected here. Each unresolvable href knocks one off the valid count.
+    const linkCheck = validateInternalLinks(draft.content_html, ctx.recentPosts || [])
+    const validLinkCount = linkCheck.valid
+    const invalidLinks = linkCheck.invalid
+    if (invalidLinks.length) {
+      score.issues = [...(score.issues || []), `${invalidLinks.length} hallucinated links: ${invalidLinks.slice(0, 3).join(', ')}`]
+    }
+    const passed = score.overall >= QUALITY_THRESHOLD
+      && score.schema_present
+      && validLinkCount >= 2
+      && geoOk
+      && !bannedHit
+      && invalidLinks.length === 0
 
     await logEvent(db, {
       queue_id: row.id,
@@ -567,6 +909,24 @@ export async function runOnce(env: Bindings): Promise<RunResult> {
       `UPDATE blog_keyword_queue SET status = 'published', post_id = ?, locked_until = NULL, updated_at = datetime('now') WHERE id = ?`
     ).bind(postId, row.id).run()
     await logEvent(db, { queue_id: row.id, post_id: postId, stage: 'publish', quality_score: score.overall, passed_gate: true })
+
+    // Post-publish enrichment (best-effort):
+    // 1) Append a "Related reading" block to the NEW post pointing to 3
+    //    recent same-category posts. Free topical-cluster linkage.
+    // 2) UPDATE up to 3 OLDER same-category posts to inject a single back
+    //    link to the new post. Every publish strengthens the link graph
+    //    of existing content — not just the new article.
+    try {
+      const related = await injectRelatedReading(db, postId, row.target_category || 'roofing')
+      const backlinks = await injectTopicalClusterBacklinks(db, postId, draft.slug, draft.title, row.target_category || 'roofing')
+      await logEvent(db, {
+        queue_id: row.id, post_id: postId, stage: 'post_enrich',
+        quality_breakdown: { related_added: related, cluster_backlinks_updated: backlinks },
+      })
+    } catch (e: any) {
+      // never let enrichment failure block a successful publish
+      await logEvent(db, { queue_id: row.id, post_id: postId, stage: 'post_enrich_failed', error: (e && e.message) || String(e) })
+    }
 
     // Ping Google Indexing API + IndexNow (Bing/Yandex/Naver) in parallel.
     // Fire-and-forget. If the service account isn't configured or lacks

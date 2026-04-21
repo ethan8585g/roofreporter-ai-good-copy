@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
-import { runOnce, seedDefaultKeywords } from '../services/blog-agent'
+import { runOnce, seedDefaultKeywords, pickStalePostIds, refreshStalePost, getAgentHealth } from '../services/blog-agent'
 import { pingGoogleIndexing, pingGoogleIndexingBatch } from '../services/indexing-api'
 import { pingIndexNow } from '../services/indexnow'
 import { sanitizeHtml } from '../utils/sanitize-html'
@@ -363,6 +363,77 @@ blogRoutes.post('/admin/agent/run', async (c) => {
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
   const result = await runOnce(c.env)
   return c.json(result, result.ok ? 200 : 200)
+})
+
+// Admin: agent health snapshot — queue stats, recent quality scores,
+// publish cadence, stale-post count. Use to eyeball whether the
+// autonomous pipeline is healthy.
+blogRoutes.get('/admin/agent/health', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Unauthorized' }, 401)
+  try {
+    return c.json(await getAgentHealth(c.env.DB))
+  } catch (e: any) {
+    return c.json({ error: e.message || String(e) }, 500)
+  }
+})
+
+// Admin: list stale published posts (default >90 days old, max 50).
+blogRoutes.get('/admin/agent/stale', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Unauthorized' }, 401)
+  const days = Math.max(1, parseInt(c.req.query('days') || '90'))
+  const limit = Math.min(50, Math.max(1, parseInt(c.req.query('limit') || '10')))
+  try {
+    const rows = await pickStalePostIds(c.env.DB, days, limit)
+    return c.json({ days, limit, count: rows.length, posts: rows })
+  } catch (e: any) {
+    return c.json({ error: e.message || String(e) }, 500)
+  }
+})
+
+// Admin: refresh one stale post (appends freshness footer + re-pings
+// Google/IndexNow). Body: { id: <post_id> }. If omitted, auto-picks the
+// single oldest post past the threshold.
+blogRoutes.post('/admin/agent/refresh', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Unauthorized' }, 401)
+  try {
+    const body = await c.req.json().catch(() => ({})) as { id?: number; days?: number }
+    let postId = body.id
+    if (!postId) {
+      const rows = await pickStalePostIds(c.env.DB, body.days || 90, 1)
+      if (!rows.length) return c.json({ ok: false, skipped: true, reason: 'no stale posts' })
+      postId = rows[0].id
+    }
+    const result = await refreshStalePost(c.env, postId)
+    return c.json(result)
+  } catch (e: any) {
+    return c.json({ error: e.message || String(e) }, 500)
+  }
+})
+
+// Admin: bulk refresh — runs `refreshStalePost` across the oldest N stale
+// posts. Use sparingly; 10 posts at a time is a reasonable ceiling to
+// avoid blowing the Pages subrequest budget.
+blogRoutes.post('/admin/agent/refresh-batch', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Unauthorized' }, 401)
+  try {
+    const body = await c.req.json().catch(() => ({})) as { days?: number; limit?: number }
+    const days = body.days || 90
+    const limit = Math.min(10, body.limit || 5)
+    const stale = await pickStalePostIds(c.env.DB, days, limit)
+    const results: Array<{ id: number; slug?: string; ok: boolean; error?: string }> = []
+    for (const p of stale) {
+      const r = await refreshStalePost(c.env, p.id)
+      results.push({ id: p.id, slug: r.slug, ok: r.ok, error: r.error })
+    }
+    const ok = results.filter(r => r.ok).length
+    return c.json({ total: results.length, ok, failed: results.length - ok, results })
+  } catch (e: any) {
+    return c.json({ error: e.message || String(e) }, 500)
+  }
 })
 
 // Admin: manually ping Google Indexing API for a single URL or a list of URLs
