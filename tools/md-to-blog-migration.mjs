@@ -6,9 +6,21 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { marked } from 'marked'
 
-const INPUTS = process.argv.slice(2)
+// Parse flags. Supports:
+//   --days-ago N       emit published_at = datetime('now','-N days')
+//   --published-at TS  emit published_at = exact SQL datetime literal
+const rawArgs = process.argv.slice(2)
+let daysAgo = null
+let publishedAt = null
+const INPUTS = []
+for (let i = 0; i < rawArgs.length; i++) {
+  const a = rawArgs[i]
+  if (a === '--days-ago') { daysAgo = parseInt(rawArgs[++i], 10); continue }
+  if (a === '--published-at') { publishedAt = rawArgs[++i]; continue }
+  INPUTS.push(a)
+}
 if (!INPUTS.length) {
-  console.error('usage: md-to-blog-migration.mjs <file.md> [more...]')
+  console.error('usage: md-to-blog-migration.mjs [--days-ago N | --published-at TS] <file.md> [more...]')
   process.exit(1)
 }
 
@@ -82,6 +94,13 @@ for (const file of INPUTS) {
   const metaDescription = fm.meta_description || excerpt
   const readTime = parseInt(fm.read_time_minutes || '10', 10)
 
+  // published_at SQL expression — defaults to now. Staggered publish windows
+  // are useful when back-filling drafts so the archive doesn't look like a
+  // single-day content dump.
+  let publishedExpr = `datetime('now')`
+  if (publishedAt) publishedExpr = `'${sqlEscape(publishedAt)}'`
+  else if (daysAgo !== null && !Number.isNaN(daysAgo)) publishedExpr = `datetime('now','-${daysAgo} days')`
+
   const sql = `-- Auto-generated from ${path.basename(file)} via tools/md-to-blog-migration.mjs
 -- slug: ${slug}
 
@@ -103,7 +122,7 @@ INSERT OR IGNORE INTO blog_posts (
   '${sqlEscape(metaTitle)}',
   '${sqlEscape(metaDescription)}',
   ${readTime},
-  datetime('now')
+  ${publishedExpr}
 );
 `
   process.stdout.write(sql + '\n')
