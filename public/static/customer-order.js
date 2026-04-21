@@ -524,9 +524,9 @@ function renderPinStep(root, progressBar) {
               <span style="font-size:10px;background:rgba(96,165,250,0.2);color:#93c5fd;padding:3px 10px;border-radius:6px;font-weight:600">OPTIONAL</span>
             </div>
             ${orderState.invoicingAutoEnabled
-              ? `<div style="margin:8px 0 10px;padding:8px 12px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);border-radius:8px;font-size:11px;color:#6ee7b7;font-weight:600"><i class="fas fa-check-circle" style="margin-right:6px"></i>Auto-Proposal ENABLED — a draft proposal will appear in your Proposal Dashboard when the report completes.</div>`
-              : `<div style="margin:8px 0 10px;padding:8px 12px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:8px;font-size:11px;color:#fcd34d;font-weight:600"><i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>Auto-Proposal OFF — enable it in Certificate Automations to auto-draft proposals.</div>`}
-            <p style="font-size:11px;color:#93c5fd;margin:0 0 14px;line-height:1.5">Fill these in so a draft proposal is created for you when the report finishes. You review and send the proposal from the Proposal Dashboard — nothing is emailed automatically.</p>
+              ? `<div style="margin:8px 0 10px;padding:8px 12px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);border-radius:8px;font-size:11px;color:#6ee7b7;font-weight:600"><i class="fas fa-check-circle" style="margin-right:6px"></i>Auto-Proposal ENABLED — proposal will be drafted AND emailed to the homeowner the moment the report completes.</div>`
+              : `<div style="margin:8px 0 10px;padding:8px 12px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:8px;font-size:11px;color:#fcd34d;font-weight:600"><i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>Auto-Proposal OFF — proposals will be drafted but NOT emailed. Turn on Auto-Proposal in Certificate Automations to auto-email.</div>`}
+            <p style="font-size:11px;color:#93c5fd;margin:0 0 14px;line-height:1.5">When the report completes, we draft and email this proposal to the homeowner automatically using your Gmail. You can still edit or revoke it from the Proposal Dashboard before they open it.</p>
             <div style="display:flex;flex-direction:column;gap:10px">
               <div>
                 <label style="font-size:11px;font-weight:600;color:#93c5fd;display:block;margin-bottom:4px">Homeowner Full Name</label>
@@ -2000,6 +2000,10 @@ function showOrderSuccessOverlay(order) {
   const designBtn = (_isSolarCust && orderId)
     ? '<a href="/customer/solar-design?report_id=' + orderId + '" style="display:inline-block;margin-top:10px;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;padding:12px 22px;border-radius:12px;font-weight:700;font-size:14px;text-decoration:none;box-shadow:0 6px 18px rgba(245,158,11,0.35)"><i class="fas fa-solar-panel" style="margin-right:6px"></i>Design Solar Panels</a>'
     : '';
+  const autoProp = order?.auto_proposal;
+  const autoPropLine = (autoProp && autoProp.will_send && autoProp.recipient)
+    ? '<div style="margin:12px auto 0;padding:10px 14px;background:linear-gradient(135deg,#ecfeff,#cffafe);border:1px solid #a5f3fc;border-radius:12px;text-align:left;font-size:12px;color:#0e7490;display:flex;gap:8px;align-items:flex-start"><i class="fas fa-envelope-open-text" style="color:#0891b2;margin-top:2px"></i><div><strong>Homeowner will receive their proposal</strong> at <span style="font-family:monospace">' + autoProp.recipient + '</span> as soon as your report finishes (usually under 60 seconds).</div></div>'
+    : '';
   
   // Create full-screen overlay
   const overlay = document.createElement('div');
@@ -2020,6 +2024,7 @@ function showOrderSuccessOverlay(order) {
         </div>
         <p style="color:#3b82f6;font-size:12px;margin-top:6px">This takes 20-40 seconds. You'll see it on your dashboard.</p>
       </div>
+      ${autoPropLine}
       ${designBtn}
       <p style="color:#9ca3af;font-size:12px;margin-top:12px"><i class="fas fa-arrow-right mr-1"></i>${_isSolarCust ? 'Or wait — redirecting to dashboard...' : 'Redirecting to dashboard...'}</p>
     </div>

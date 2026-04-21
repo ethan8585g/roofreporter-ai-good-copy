@@ -412,7 +412,7 @@ reportsRoutes.post('/:orderId/generate', async (c) => {
 
   // Generate base report (WELD + PAINT + POLISH — NO heavy AI)
   // This saves report as 'completed' immediately
-  const result = await generateReportForOrder(orderId, c.env)
+  const result = await generateReportForOrder(orderId, c.env, (c as any).executionCtx)
   if (!result.success) {
     const status = result.error === 'Order not found' ? 404
       : result.error === 'Already in progress' ? 409
@@ -452,7 +452,7 @@ reportsRoutes.post('/:orderId/retry', async (c) => {
   await repo.resetReportForRetry(c.env.DB, orderId)
 
   // Generate base report only — no enhancement or AI imagery inline
-  const result = await generateReportForOrder(orderId, c.env).catch(e => {
+  const result = await generateReportForOrder(orderId, c.env, (c as any).executionCtx).catch(e => {
     console.error(`[Retry] ${orderId}:`, e.message)
     return { success: false, error: e.message } as any
   })
@@ -1654,7 +1654,7 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
   // This uses trace coordinates for ALL geometry (not Solar API footprint)
   if (order.roof_trace_json) {
     console.log(`[GenerateEnhanced] Order ${orderId}: Has trace data — delegating to generateReportForOrder (trace-first)`)
-    const traceResult = await generateReportForOrder(orderId, c.env)
+    const traceResult = await generateReportForOrder(orderId, c.env, (c as any).executionCtx)
     if (traceResult.success) {
       return c.json({ success: true, report_version: traceResult.version || '5.0', report: traceResult.report, provider: 'trace_engine' })
     }
@@ -1792,6 +1792,8 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
         const enhHtml = generateProfessionalReportHTML(enhanced)
         const enhVer = enhanced.report_version || '3.1'
         await repo.saveEnhancedReport(c.env.DB, orderId, enhHtml, JSON.stringify(enhanced), enhVer, 0)
+        // Stays-completed re-write after enhancement — report already fired the
+        // auto-invoice hook at base completion above. Do NOT re-fire here.
         await c.env.DB.prepare(`UPDATE reports SET status = 'completed', updated_at = datetime('now') WHERE order_id = ?`).bind(orderId).run()
         console.log(`[Enhanced-Inline] Order ${orderId}: ✅ Polished (v${enhVer})`)
         trackReportEnhanced(c.env, String(orderId), { version: enhVer, enhanced: true }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
@@ -2427,6 +2429,12 @@ reportsRoutes.post('/recovery/stuck', async (c) => {
       await repo.markOrderStatus(c.env.DB, row.order_id, 'completed')
       recovered.push(row.order_id as number)
       console.log(`[Recovery] Auto-recovered stuck report: order ${row.order_id} (was ${row.status})`)
+      // Terminal transition for recovered orders — fire auto-invoice hook so
+      // any missed proposals get drafted. Idempotent; no-op if one already exists.
+      ;(c as any).executionCtx?.waitUntil?.(
+        createAutoInvoiceForOrder(c.env, Number(row.order_id))
+          .catch((e) => console.warn('[auto-invoice] recovery hook error:', e?.message))
+      )
     } catch (e: any) {
       console.error(`[Recovery] Failed to recover order ${row.order_id}:`, e.message)
     }
@@ -2470,7 +2478,8 @@ export async function enhanceReportInline(
       const html = generateProfessionalReportHTML(enhanced)
       const version = enhanced.report_version || '3.1'
       await repo.saveEnhancedReport(env.DB, orderId, html, JSON.stringify(enhanced), version, 0)
-      // Report is already 'completed' — just ensure it stays that way
+      // Report is already 'completed' — stays-completed re-write; auto-invoice
+      // hook already fired at base completion. Do NOT re-fire here.
       await env.DB.prepare(`UPDATE reports SET status = 'completed', updated_at = datetime('now') WHERE order_id = ?`).bind(orderId).run()
       console.log(`[Enhance-Inline] Order ${orderId}: ✅ Polished (v${version}, ${html.length} chars)`)
       trackReportEnhanced(env, String(orderId), { version, enhanced: true }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
@@ -2569,7 +2578,7 @@ export async function generateAIImageryForReport(
 // segments, or edge calculations. Only pitch (slope) and imagery.
 // ============================================================
 export async function generateReportForOrder(
-  orderId: number | string, env: Bindings
+  orderId: number | string, env: Bindings, ctx?: ExecutionContext
 ): Promise<{ success: boolean; report?: RoofReport; error?: string; version?: string; provider?: string; hasEnhanceKey?: boolean }> {
   // ── GLOBAL 25-SECOND TIMEOUT ──
   // Cloudflare Workers have a 30s CPU budget. We cap at 25s to ensure
@@ -2582,7 +2591,7 @@ export async function generateReportForOrder(
     setTimeout(() => resolve({ success: false, error: `Report generation timed out after ${GENERATION_TIMEOUT_MS / 1000}s. This order will be retried automatically.` }), GENERATION_TIMEOUT_MS)
   })
 
-  const generationPromise = _generateReportForOrderInner(orderId, env, generationStart)
+  const generationPromise = _generateReportForOrderInner(orderId, env, generationStart, ctx)
 
   const result = await Promise.race([generationPromise, timeoutPromise])
 
@@ -2599,7 +2608,7 @@ export async function generateReportForOrder(
 }
 
 async function _generateReportForOrderInner(
-  orderId: number | string, env: Bindings, startTime: number
+  orderId: number | string, env: Bindings, startTime: number, ctx?: ExecutionContext
 ): Promise<{ success: boolean; report?: RoofReport; error?: string; version?: string; provider?: string; hasEnhanceKey?: boolean }> {
   try {
     const order = await repo.getOrderById(env.DB, orderId)
@@ -2616,6 +2625,10 @@ async function _generateReportForOrderInner(
       const staleMs = existing.generation_started_at ? Date.now() - new Date(existing.generation_started_at + 'Z').getTime() : Infinity
       if (staleMs > 90_000) {
         console.warn(`[Generate] Order ${orderId}: Auto-recovering stuck 'enhancing' report (${Math.round(staleMs/1000)}s old)`)
+        // Pre-generation recovery: if the report was previously stuck in
+        // 'enhancing', base completion already fired the auto-invoice hook.
+        // The current run continues on to a fresh generate → saveCompletedReport
+        // which will re-run the hook (idempotent). No extra hook needed here.
         await env.DB.prepare(`UPDATE reports SET status = 'completed', enhancement_status = 'enhancement_failed', enhancement_error = 'Auto-recovered: stuck >90s', updated_at = datetime('now') WHERE order_id = ?`).bind(orderId).run()
         await repo.markOrderStatus(env.DB, orderId, 'completed')
       }
@@ -3102,8 +3115,14 @@ async function _generateReportForOrderInner(
     await repo.markOrderStatus(env.DB, orderId, 'completed')
     console.log(`[Generate] Order ${orderId}: ✅ Report saved as COMPLETED (v${baseVersion}, provider=${finalReportData.metadata?.provider || 'unknown'})`)
 
-    // Auto-invoice hook — fire-and-forget, idempotent
-    createAutoInvoiceForOrder(env, Number(orderId)).catch((e) => console.warn('[auto-invoice] hook error:', e?.message))
+    // Auto-invoice hook — fire-and-forget, idempotent. Must be wrapped in
+    // waitUntil so Cloudflare doesn't kill the worker before Gmail send
+    // completes. ctx is threaded in from the HTTP handler's c.executionCtx.
+    {
+      const autoInvP = createAutoInvoiceForOrder(env, Number(orderId))
+        .catch((e) => console.warn('[auto-invoice] hook error:', e?.message))
+      if (ctx?.waitUntil) ctx.waitUntil(autoInvP)
+    }
 
     // ── AUTO-EMBED for semantic search (non-blocking) ──
     const embedKey = env.GEMINI_ENHANCE_API_KEY || env.GOOGLE_VERTEX_API_KEY

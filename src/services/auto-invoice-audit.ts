@@ -10,6 +10,8 @@ export type AutoInvoiceStep =
   | 'report_timeout'
   | 'invoice_inserted'
   | 'proposal_drafted'
+  | 'proposal_emailed'
+  | 'proposal_email_skipped'
   | 'email_sent'
   | 'email_failed'
   | 'gmail_not_configured'

@@ -466,8 +466,8 @@ customerAuthRoutes.post('/google', async (c) => {
     } else {
       // Create new customer with 4 free trial reports (NOT paid credits)
       const result = await c.env.DB.prepare(`
-        INSERT INTO customers (email, name, google_id, google_avatar, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used)
-        VALUES (?, ?, ?, ?, 1, 1, 0, 0, 4, 0)
+        INSERT INTO customers (email, name, google_id, google_avatar, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, auto_invoice_enabled)
+        VALUES (?, ?, ?, ?, 1, 1, 0, 0, 4, 0, 1)
       `).bind(email, name, googleId, avatar).run()
 
       customer = {
@@ -606,8 +606,8 @@ customerAuthRoutes.post('/register', async (c) => {
 
     // Insert with 4 free trial reports (NOT paid credits) — email_verified = 1 since we verified
     const result = await c.env.DB.prepare(`
-      INSERT INTO customers (email, name, phone, company_name, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by)
-      VALUES (?, ?, ?, ?, ?, 1, 1, 0, 0, 4, 0, ?, ?)
+      INSERT INTO customers (email, name, phone, company_name, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by, auto_invoice_enabled)
+      VALUES (?, ?, ?, ?, ?, 1, 1, 0, 0, 4, 0, ?, ?, 1)
     `).bind(cleanEmail, name, phone || null, company_name || null, storedHash, refCode, referredBy).run()
 
     if (!result.meta.last_row_id) {

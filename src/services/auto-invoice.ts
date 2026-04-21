@@ -106,8 +106,11 @@ export async function createAutoInvoiceForOrder(
       return { status: 'skipped', reason: 'automation_disabled' }
     }
 
+    // Prod schema stores measurements on direct columns (gross_squares, bundle_count)
+    // and the full JSON in api_response_raw. There is no report_data column.
     const report = await env.DB.prepare(
-      `SELECT status, report_data FROM reports WHERE order_id = ?`
+      `SELECT status, gross_squares, bundle_count, api_response_raw
+       FROM reports WHERE order_id = ?`
     ).bind(orderId).first<any>()
     if (!report || report.status !== 'completed') {
       await logAutoInvoiceStep(env, {
@@ -117,21 +120,46 @@ export async function createAutoInvoiceForOrder(
       return { status: 'skipped', reason: 'report_not_completed' }
     }
 
+    // Direct columns first (the normal case). Fall back to parsing the raw JSON
+    // blob if direct columns are null/zero — keeps us resilient to upstream drift
+    // and to older reports that may pre-date the direct-column write path.
     let reportData: any = {}
-    try { reportData = JSON.parse(report.report_data || '{}') } catch { /* empty */ }
+    try { reportData = JSON.parse(report.api_response_raw || '{}') } catch { /* empty */ }
 
-    const grossSquares = pickNumber(reportData, [
+    const directGross = Number(report.gross_squares) || 0
+    const directBundles = Number(report.bundle_count) || 0
+
+    const grossSquares = directGross > 0 ? directGross : pickNumber(reportData, [
       'gross_squares', 'true_area_squares', 'roof_area_squares',
+      'materials.gross_squares',
       'measurements.gross_squares', 'measurements.true_area_squares',
       'full_report.measurements.gross_squares',
       'full_report.gross_squares',
       'bom.gross_squares'
     ])
-    const bundles = pickNumber(reportData, [
-      'total_bundles', 'bom_total_bundles',
+    const bundles = directBundles > 0 ? directBundles : pickNumber(reportData, [
+      'bundle_count', 'total_bundles', 'bom_total_bundles',
+      'materials.bundle_count',
       'measurements.total_bundles', 'bom.total_bundles',
       'full_report.bom.total_bundles', 'full_report.total_bundles'
     ])
+
+    // Diagnostic: if nothing resolved — direct columns null AND JSON fallback
+    // empty — log key shape so ops can diagnose from Cloudflare tail.
+    if (grossSquares <= 0 && bundles <= 0) {
+      const topKeys = reportData && typeof reportData === 'object' ? Object.keys(reportData) : []
+      const measKeys = reportData?.measurements && typeof reportData.measurements === 'object'
+        ? Object.keys(reportData.measurements) : []
+      const materialsKeys = reportData?.materials && typeof reportData.materials === 'object'
+        ? Object.keys(reportData.materials) : []
+      console.warn(
+        `[auto-invoice] no squares/bundles resolved for order ${orderId}; ` +
+        `direct_gross=${report.gross_squares} direct_bundles=${report.bundle_count} ` +
+        `top_keys=${JSON.stringify(topKeys)} ` +
+        `measurements_keys=${JSON.stringify(measKeys)} ` +
+        `materials_keys=${JSON.stringify(materialsKeys)}`
+      )
+    }
 
     const pricingMode = settings.invoice_pricing_mode || 'per_square'
     let quantity = 0

@@ -51,11 +51,11 @@ async function geocodeAddress(address: string, apiKey: string): Promise<{ lat: n
 // Enhancement & AI imagery are triggered separately by the dashboard
 // polling endpoint, each in their own HTTP request/timeout window.
 // ============================================================
-async function triggerReportGeneration(orderId: number, env: Bindings): Promise<boolean> {
+async function triggerReportGeneration(orderId: number, env: Bindings, ctx?: ExecutionContext): Promise<boolean> {
   try {
     const startMs = Date.now()
     console.log(`[Auto-Generate] Phase 1: Base report for order ${orderId}`)
-    const result = await generateReportForOrder(orderId, env)
+    const result = await generateReportForOrder(orderId, env, ctx)
     const elapsed = Date.now() - startMs
     console.log(`[Auto-Generate] Order ${orderId}: ${result.success ? 'SUCCESS' : result.error || 'FAILED'} — provider: ${result.provider || 'n/a'}, ${elapsed}ms`)
 
@@ -204,8 +204,8 @@ async function getCustomerFromToken(db: D1Database, token: string | undefined): 
   if (!customer) {
     // Auto-create a linked customer account with ample free trials
     const result = await db.prepare(`
-      INSERT INTO customers (name, email, is_active, free_trial_total, free_trial_used, report_credits, credits_used)
-      VALUES (?, ?, 1, 999, 0, 0, 0)
+      INSERT INTO customers (name, email, is_active, free_trial_total, free_trial_used, report_credits, credits_used, auto_invoice_enabled)
+      VALUES (?, ?, 1, 999, 0, 0, 0, 1)
       RETURNING *
     `).bind(admin.name || admin.email, admin.email).first<any>()
     customer = result
@@ -631,7 +631,7 @@ squareRoutes.post('/use-credit', async (c) => {
     } else {
       // Normal auto-generation — Fire-and-forget via waitUntil()
       try {
-        const generatePromise = triggerReportGeneration(newOrderId, c.env)
+        const generatePromise = triggerReportGeneration(newOrderId, c.env, (c as any).executionCtx)
         if ((c as any).executionCtx?.waitUntil) {
           ;(c as any).executionCtx.waitUntil(generatePromise)
           console.log(`[Use-Credit] Order ${newOrderId}: Generation dispatched via waitUntil — responding immediately`)
@@ -680,6 +680,18 @@ squareRoutes.post('/use-credit', async (c) => {
     const newFreeTrialRemaining = isTrial ? freeTrialRemaining - 1 : freeTrialRemaining
     const newPaidRemaining = isTrial ? paidRemaining : paidRemaining - 1
 
+    // Auto-proposal signal for the success overlay. True only when BOTH the
+    // roofer has automation enabled AND they captured a valid homeowner email.
+    let autoProposalWillSend = false
+    if (autoInvEmail && autoInvName) {
+      try {
+        const s = await c.env.DB.prepare(
+          `SELECT auto_invoice_enabled FROM customers WHERE id = ?`
+        ).bind(customer.customer_id).first<{ auto_invoice_enabled: number }>()
+        autoProposalWillSend = !!s?.auto_invoice_enabled
+      } catch { /* non-fatal */ }
+    }
+
     return c.json({
       success: true,
       order: {
@@ -692,7 +704,11 @@ squareRoutes.post('/use-credit', async (c) => {
         payment_status: paymentStatus,
         is_trial: isTrial,
         latitude: geocodedLat,
-        longitude: geocodedLng
+        longitude: geocodedLng,
+        auto_proposal: {
+          will_send: autoProposalWillSend,
+          recipient: autoProposalWillSend ? autoInvEmail : null
+        }
       },
       credits_remaining: newFreeTrialRemaining + newPaidRemaining,
       free_trial_remaining: newFreeTrialRemaining,
@@ -861,7 +877,7 @@ squareRoutes.post('/webhook', async (c) => {
 
           // Auto-trigger report generation (background via waitUntil)
           try {
-            const generatePromise = triggerReportGeneration(webhookOrderId, c.env)
+            const generatePromise = triggerReportGeneration(webhookOrderId, c.env, (c as any).executionCtx)
             if ((c as any).executionCtx?.waitUntil) {
               ;(c as any).executionCtx.waitUntil(generatePromise)
               console.log(`[Square Webhook] Order ${webhookOrderId}: Generation dispatched via waitUntil`)
@@ -1132,7 +1148,7 @@ squareRoutes.get('/verify-payment', async (c) => {
 
           // Trigger report generation in background
           try {
-            const generatePromise = triggerReportGeneration(newOrderId, c.env)
+            const generatePromise = triggerReportGeneration(newOrderId, c.env, (c as any).executionCtx)
             if ((c as any).executionCtx?.waitUntil) {
               ;(c as any).executionCtx.waitUntil(generatePromise)
             } else {

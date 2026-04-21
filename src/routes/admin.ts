@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { validateAdminSession, requireSuperadmin } from './auth'
 import { generateReportForOrder } from './reports'
+import { createAutoInvoiceForOrder } from '../services/auto-invoice'
 import { validateTraceUi } from '../utils/trace-validation'
 import { RoofMeasurementEngine, traceUiToEnginePayload } from '../services/roof-measurement-engine'
 import { generateApiKey } from '../middleware/api-auth'
@@ -131,9 +132,27 @@ adminRoutes.get('/health/auto-invoice', async (c) => {
       GROUP BY action ORDER BY n DESC
     `).all()
 
+    // Backlog: reports completed for auto-invoice customers that still have
+    // no auto-invoice draft. If this stays non-zero for >15 min in prod,
+    // the cron sweep is broken.
+    const backlog = await c.env.DB.prepare(`
+      SELECT COUNT(*) AS n
+      FROM reports r
+      JOIN orders o ON o.id = r.order_id
+      JOIN customers c ON c.id = o.customer_id
+      WHERE r.status = 'completed'
+        AND c.auto_invoice_enabled = 1
+        AND o.invoice_customer_email IS NOT NULL AND o.invoice_customer_email != ''
+        AND NOT EXISTS (
+          SELECT 1 FROM invoices i
+          WHERE i.order_id = r.order_id AND i.created_by = 'auto-invoice'
+        )
+    `).first<{ n: number }>()
+
     return c.json({
       gmail_oauth_ready: gmailReady,
       customers_with_automation: enabledCount?.n ?? 0,
+      backlog: backlog?.n ?? 0,
       last_run: lastRun || null,
       last_failure: lastFailure || null,
       last_7d_breakdown: recent.results || []
@@ -2149,9 +2168,12 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
       INSERT INTO customers (email, password_hash, name, company_name, phone,
         is_active, email_verified, free_trial_total, free_trial_used, report_credits,
         subscription_plan, subscription_status, trial_ends_at, subscription_price_cents,
+        auto_invoice_enabled,
         created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, 1, 1, 3, 0, 0, ?, 'trialing',
-        datetime('now', '+' || ? || ' days'), ?, datetime('now'), datetime('now'))
+        datetime('now', '+' || ? || ' days'), ?,
+        1,
+        datetime('now'), datetime('now'))
     `).bind(
       email.toLowerCase(), password_hash, contact_name,
       business_name || contact_name,
@@ -2446,8 +2468,8 @@ adminRoutes.post('/superadmin/users/create', async (c) => {
     const result = await c.env.DB.prepare(`
       INSERT INTO customers (email, password_hash, name, company_name, phone,
         is_active, email_verified, free_trial_total, free_trial_used, report_credits,
-        subscription_plan, subscription_status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 1, 1, 0, 0, 0, 'starter', 'inactive', datetime('now'), datetime('now'))
+        subscription_plan, subscription_status, auto_invoice_enabled, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 1, 1, 0, 0, 0, 'starter', 'inactive', 1, datetime('now'), datetime('now'))
     `).bind(email.toLowerCase(), password_hash, name, company_name || name, phone || '').run()
     const customerId = (result as any).meta?.last_row_id
     return c.json({ success: true, customer_id: customerId, email: email.toLowerCase() })
@@ -3565,7 +3587,17 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
     ).bind(traceStr, orderId).run()
 
     // Generate the report (this is admin submitting so we call synchronously within worker timeout)
-    const result = await generateReportForOrder(orderId, c.env)
+    const result = await generateReportForOrder(orderId, c.env, (c as any).executionCtx)
+
+    // Auto-invoice: admin-traced orders previously only got a draft proposal
+    // when the 10-minute cron sweep ran. Hook it inline so the roofer sees
+    // the proposal within seconds of the trace being submitted.
+    if (result?.success) {
+      const ctx = (c as any).executionCtx
+      const autoInvP = createAutoInvoiceForOrder(c.env, Number(orderId))
+        .catch((e) => console.warn('[auto-invoice] admin-trace hook error:', e?.message))
+      if (ctx?.waitUntil) ctx.waitUntil(autoInvP)
+    }
 
     // Notify the customer via push (best-effort)
     try {
@@ -3852,4 +3884,78 @@ adminRoutes.get('/api-stats', async (c) => {
     total_jobs: totalJobs?.cnt ?? 0,
     errors_last_24h: recentErrors?.cnt ?? 0
   })
+})
+
+// ============================================================
+// AUTO-PROPOSAL OBSERVABILITY (superadmin-only)
+// These surface the health of the auto-invoice pipeline without
+// requiring shell access to wrangler / D1.
+// ============================================================
+
+// GET /api/admin/auto-proposal/health
+// Reports whether Gmail is configured, when the last successful send
+// happened, how many auto-drafts are pending, plus the last 10 audit
+// rows across all orders.
+adminRoutes.get('/auto-proposal/health', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const env: any = c.env
+  const gmailConfigured = !!(env.GMAIL_CLIENT_ID && env.GMAIL_CLIENT_SECRET && env.GMAIL_REFRESH_TOKEN)
+
+  const [lastSent, pendingDrafts, recent, counts24h] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT created_at FROM invoice_audit_log
+       WHERE action = 'auto_invoice_proposal_emailed'
+       ORDER BY id DESC LIMIT 1`
+    ).first<{ created_at: string }>(),
+    c.env.DB.prepare(
+      `SELECT COUNT(*) as n FROM invoices
+       WHERE created_by = 'auto-invoice' AND status = 'draft'`
+    ).first<{ n: number }>(),
+    c.env.DB.prepare(
+      `SELECT id, order_id, invoice_id, action, new_value as reason, created_at
+       FROM invoice_audit_log
+       WHERE changed_by = 'auto-invoice'
+       ORDER BY id DESC LIMIT 10`
+    ).all(),
+    c.env.DB.prepare(
+      `SELECT action, COUNT(*) as n FROM invoice_audit_log
+       WHERE changed_by = 'auto-invoice'
+         AND created_at >= datetime('now', '-1 day')
+       GROUP BY action ORDER BY n DESC`
+    ).all(),
+  ])
+
+  return c.json({
+    gmail_configured: gmailConfigured,
+    last_successful_send_at: lastSent?.created_at ?? null,
+    pending_drafts_count: pendingDrafts?.n ?? 0,
+    last_10_audit_log_entries: recent.results || [],
+    action_counts_last_24h: counts24h.results || []
+  })
+})
+
+// GET /api/admin/auto-proposal/audit?order_id=N
+// Returns the full auto-invoice audit trail for a single order,
+// oldest → newest. Useful to diagnose why a specific proposal did or
+// did not get sent.
+adminRoutes.get('/auto-proposal/audit', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const orderIdRaw = c.req.query('order_id')
+  const orderId = orderIdRaw ? parseInt(orderIdRaw, 10) : NaN
+  if (!Number.isFinite(orderId) || orderId <= 0) {
+    return c.json({ error: 'order_id query param required (positive integer)' }, 400)
+  }
+
+  const rows = await c.env.DB.prepare(
+    `SELECT id, order_id, invoice_id, action, new_value as reason, created_at
+     FROM invoice_audit_log
+     WHERE order_id = ? AND changed_by = 'auto-invoice'
+     ORDER BY id ASC`
+  ).bind(orderId).all()
+
+  return c.json({ order_id: orderId, entries: rows.results || [] })
 })
