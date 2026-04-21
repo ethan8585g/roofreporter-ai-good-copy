@@ -2610,6 +2610,53 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
+      // Auto-populate material line items from the report's take-off.
+      // Calls the same backend engine as the "Build from Report" button so the
+      // proposal opens already filled in with shingle bundles, underlayment,
+      // ridge cap, drip edge, etc. priced against the roofer's saved unit sheet.
+      // Labor/tear-off/disposal are excluded here and handled by the preset
+      // block below so the user's proposal-pricing settings stay authoritative.
+      if (state.selectedReport) {
+        if (!state.bundlePricesLoaded) {
+          try {
+            var ppPricesRes = await fetch('/api/admin/proposal-pricing', { headers: headers() });
+            if (ppPricesRes.ok) {
+              var ppPricesData = await ppPricesRes.json();
+              var savedUnitPrices = ppPricesData && ppPricesData.presets && ppPricesData.presets.material_unit_prices;
+              if (savedUnitPrices && typeof savedUnitPrices === 'object') {
+                state.bundlePrices = Object.assign({}, state.bundlePrices, savedUnitPrices);
+              }
+            }
+          } catch (e) { /* keep defaults */ }
+          state.bundlePricesLoaded = true;
+        }
+        try {
+          var autoMatRes = await fetch('/api/crm/proposals/from-report-bundle', {
+            method: 'POST', headers: headers(),
+            body: JSON.stringify({
+              report_id: state.selectedReport.id,
+              material_unit_prices: state.bundlePrices,
+              include_labor: false,
+              include_tearoff: false,
+              include_disposal: false
+            })
+          });
+          if (autoMatRes.ok) {
+            var autoMatData = await autoMatRes.json();
+            if (autoMatData && autoMatData.success && Array.isArray(autoMatData.line_items) && autoMatData.line_items.length) {
+              state.form.items = autoMatData.line_items.map(function(li) {
+                return {
+                  description: li.item ? (li.item + (li.description ? ' — ' + li.description : '')) : (li.description || ''),
+                  quantity: li.qty, unit: li.unit, unit_price: li.unit_price,
+                  is_taxable: true, category: 'material'
+                };
+              });
+              pbToast('Auto-added ' + state.form.items.length + ' materials from report', 'success');
+            }
+          }
+        } catch (e) { /* non-fatal — user can still add items manually */ }
+      }
+
       // Auto-apply pricing presets from settings when a report is selected
       if (state.selectedReport && state.pricingPresets && !state.presetsApplied) {
         var pp = state.pricingPresets;
