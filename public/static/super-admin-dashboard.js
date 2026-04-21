@@ -368,16 +368,18 @@ async function loadView(view) {
         break;
       case 'growth-traffic':
         try {
-          const [siteRes, ga4SRes, ga4RRes, ga4RtRes] = await Promise.all([
+          const [siteRes, ga4SRes, ga4RRes, ga4RtRes, leadSrcRes] = await Promise.all([
             saFetch('/api/analytics/dashboard?period=' + (SA.analyticsPeriod || '7d')),
             saFetch('/api/analytics/ga4/status'),
             saFetch('/api/analytics/ga4/report?period=' + (SA.ga4Period || '7d')),
-            saFetch('/api/analytics/ga4/realtime')
+            saFetch('/api/analytics/ga4/realtime'),
+            saFetch('/api/admin/bi/lead-sources?period=' + (SA.analyticsPeriod || '7d'))
           ]);
           if (siteRes) SA.data.analytics = await siteRes.json();
           if (ga4SRes) SA.data.ga4_status = await ga4SRes.json();
           if (ga4RRes) { var r = await ga4RRes.json(); SA.data.ga4_report = r.success ? r : null; }
           if (ga4RtRes) { var r2 = await ga4RtRes.json(); SA.data.ga4_realtime = r2.success ? r2 : null; }
+          if (leadSrcRes && leadSrcRes.ok) { SA.data.lead_sources = await leadSrcRes.json(); }
         } catch(e) { console.warn('Traffic load error:', e); }
         break;
       case 'growth-marketing':
@@ -10700,14 +10702,119 @@ function renderGrowthTrafficView() {
   // Reuse existing analytics + GA4 views directly (no extra section nesting)
   var siteHtml = (typeof renderAnalyticsView === 'function') ? renderAnalyticsView() : '';
   var ga4Html = (typeof renderGA4View === 'function') ? renderGA4View() : '';
+  var leadSourcesHtml = renderLeadSourcesCard();
+  var blogPerfHtml = renderBlogPerformanceCard();
 
   return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-chart-area mr-2 text-blue-500"></i>Traffic</h2><p class="text-sm text-gray-500 mt-1">Site analytics and Google Analytics combined</p></div>' +
     liveBanner +
     '<div class="space-y-8">' +
+      '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">' +
+        '<div>' + leadSourcesHtml + '</div>' +
+        '<div>' + blogPerfHtml + '</div>' +
+      '</div>' +
+      '<hr class="border-gray-200">' +
       '<div>' + siteHtml + '</div>' +
       '<hr class="border-gray-200">' +
       '<div>' + ga4Html + '</div>' +
     '</div>';
+}
+
+// ── LEAD SOURCE ATTRIBUTION CARDS (Growth → Traffic) ─────────
+function renderLeadSourcesCard() {
+  var ls = SA.data.lead_sources || { buckets: [], blogs: [], total_leads: 0, total_sessions: 0, period: (SA.analyticsPeriod || '7d') };
+  var buckets = Array.isArray(ls.buckets) ? ls.buckets : [];
+  var total = buckets.reduce(function(s, b) { return s + (b.count || 0); }, 0) || 1;
+  var totalSessions = ls.total_sessions || 0;
+  var convRate = totalSessions > 0 ? ((ls.total_leads || 0) / totalSessions * 100) : 0;
+  var iconFor = {
+    blog: 'fas fa-blog text-emerald-500',
+    ai: 'fas fa-robot text-purple-500',
+    facebook: 'fab fa-facebook-f text-blue-600',
+    instagram: 'fab fa-instagram text-pink-500',
+    google: 'fab fa-google text-amber-500',
+    direct: 'fas fa-link text-gray-500',
+    other: 'fas fa-question text-gray-400'
+  };
+  var labelFor = { blog:'Blog', ai:'AI Assistants', facebook:'Facebook', instagram:'Instagram', google:'Google Search', direct:'Direct', other:'Other' };
+  var order = ['blog','ai','facebook','instagram','google','direct','other'];
+  var map = {};
+  buckets.forEach(function(b) { map[b.source] = b.count || 0; });
+  var rows = order.map(function(k) {
+    var count = map[k] || 0;
+    var pct = Math.round((count / total) * 100);
+    return '<div class="flex items-center gap-3 py-2">' +
+      '<div class="w-7 text-center"><i class="' + (iconFor[k] || iconFor.other) + '"></i></div>' +
+      '<div class="flex-1 min-w-0">' +
+        '<div class="flex items-center justify-between mb-1">' +
+          '<span class="text-sm font-semibold text-gray-800">' + labelFor[k] + '</span>' +
+          '<span class="text-xs text-gray-500">' + count + ' ' + (count === 1 ? 'lead' : 'leads') + ' · ' + pct + '%</span>' +
+        '</div>' +
+        '<div class="w-full h-2 bg-gray-100 rounded-full overflow-hidden">' +
+          '<div class="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full" style="width:' + pct + '%"></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  return '<div class="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">' +
+    '<div class="flex items-start justify-between mb-4">' +
+      '<div>' +
+        '<h3 class="text-lg font-bold text-gray-900 flex items-center gap-2"><i class="fas fa-funnel-dollar text-indigo-500"></i>Lead Sources</h3>' +
+        '<p class="text-xs text-gray-500 mt-0.5">Where your leads came from (' + (ls.period || SA.analyticsPeriod || '7d') + ')</p>' +
+      '</div>' +
+      '<div class="flex gap-3 text-right">' +
+        '<div><div class="text-xl font-bold text-gray-900">' + (ls.total_leads || 0).toLocaleString() + '</div><div class="text-[10px] text-gray-500 uppercase">Leads</div></div>' +
+        '<div><div class="text-xl font-bold text-gray-900">' + totalSessions.toLocaleString() + '</div><div class="text-[10px] text-gray-500 uppercase">Sessions</div></div>' +
+        '<div><div class="text-xl font-bold text-emerald-600">' + convRate.toFixed(2) + '%</div><div class="text-[10px] text-gray-500 uppercase">Conv</div></div>' +
+      '</div>' +
+    '</div>' +
+    (rows || '<p class="text-xs text-gray-500">No leads captured in this period yet.</p>') +
+  '</div>';
+}
+
+function renderBlogPerformanceCard() {
+  var ls = SA.data.lead_sources || { blogs: [] };
+  var blogs = Array.isArray(ls.blogs) ? ls.blogs : [];
+  var header = '<div class="flex items-start justify-between mb-4">' +
+    '<div>' +
+      '<h3 class="text-lg font-bold text-gray-900 flex items-center gap-2"><i class="fas fa-blog text-emerald-500"></i>Blog Performance</h3>' +
+      '<p class="text-xs text-gray-500 mt-0.5">Leads generated per blog post</p>' +
+    '</div>' +
+    '<span class="text-xs text-gray-500">' + blogs.length + ' ' + (blogs.length === 1 ? 'post' : 'posts') + '</span>' +
+  '</div>';
+  if (!blogs.length) {
+    return '<div class="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">' + header +
+      '<p class="text-xs text-gray-500">No blog-attributed leads in this period yet. Blog attribution starts tracking as new leads come in.</p>' +
+    '</div>';
+  }
+  var max = Math.max.apply(null, blogs.map(function(b) { return b.count || 0; }).concat([1]));
+  var rows = blogs.map(function(b) {
+    var pct = Math.round(((b.count || 0) / max) * 100);
+    var slug = String(b.slug || '(unknown)');
+    var isKnown = slug && slug !== '(unknown blog)';
+    var slugCell = isKnown
+      ? '<a href="/blog/' + encodeURIComponent(slug) + '" target="_blank" rel="noopener" class="text-xs text-emerald-700 hover:text-emerald-900 font-semibold truncate block" title="' + slug + '">/blog/' + slug + '</a>'
+      : '<span class="text-xs text-gray-400 italic">' + slug + '</span>';
+    return '<tr class="border-t border-gray-100 hover:bg-gray-50">' +
+      '<td class="py-2 px-3 max-w-xs truncate">' + slugCell + '</td>' +
+      '<td class="py-2 px-3 text-right"><span class="text-xs text-gray-900 font-bold">' + (b.count || 0) + '</span></td>' +
+      '<td class="py-2 px-3 w-1/2">' +
+        '<div class="w-full h-2 bg-gray-100 rounded-full overflow-hidden">' +
+          '<div class="h-full bg-gradient-to-r from-emerald-500 to-teal-500" style="width:' + pct + '%"></div>' +
+        '</div>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+  return '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm">' +
+    '<div class="p-6 pb-3">' + header + '</div>' +
+    '<table class="w-full">' +
+      '<thead><tr class="text-xs text-gray-500 uppercase bg-gray-50">' +
+        '<th class="py-2 px-3 text-left font-semibold">Blog Post</th>' +
+        '<th class="py-2 px-3 text-right font-semibold">Leads</th>' +
+        '<th class="py-2 px-3 text-left font-semibold">Share</th>' +
+      '</tr></thead>' +
+      '<tbody>' + rows + '</tbody>' +
+    '</table>' +
+  '</div>';
 }
 
 function renderGrowthMarketingView() {
