@@ -515,17 +515,17 @@ function renderPinStep(root, progressBar) {
             </div>
           </div>
 
-          <!-- Optional Customer Details for Invoicing Automation -->
+          <!-- Optional Customer Details for Proposal Automation -->
           <div style="background:linear-gradient(135deg,#1e3a5f,#1e40af);border-radius:16px;border:1px solid rgba(59,130,246,0.3);padding:20px;overflow:hidden">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:6px">
               <h4 style="font-size:14px;font-weight:700;color:#e0e7ff;margin:0;display:flex;align-items:center;gap:8px">
-                <i class="fas fa-file-invoice-dollar" style="color:#60a5fa"></i>Homeowner Details for Auto-Proposal
+                <i class="fas fa-file-signature" style="color:#60a5fa"></i>Homeowner Details for Auto-Proposal
               </h4>
               <span style="font-size:10px;background:rgba(96,165,250,0.2);color:#93c5fd;padding:3px 10px;border-radius:6px;font-weight:600">OPTIONAL</span>
             </div>
             ${orderState.invoicingAutoEnabled
-              ? `<div style="margin:8px 0 10px;padding:8px 12px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);border-radius:8px;font-size:11px;color:#6ee7b7;font-weight:600"><i class="fas fa-check-circle" style="margin-right:6px"></i>Auto-Proposal ENABLED — proposal will be drafted AND emailed to the homeowner the moment the report completes.</div>`
-              : `<div style="margin:8px 0 10px;padding:8px 12px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:8px;font-size:11px;color:#fcd34d;font-weight:600"><i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>Auto-Proposal OFF — proposals will be drafted but NOT emailed. Turn on Auto-Proposal in Certificate Automations to auto-email.</div>`}
+              ? `<div style="margin:8px 0 10px;padding:8px 12px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);border-radius:8px;font-size:11px;color:#6ee7b7;font-weight:600"><i class="fas fa-check-circle" style="margin-right:6px"></i>Proposal Automation ENABLED — proposal will be drafted AND emailed to the homeowner the moment the report completes.</div>`
+              : `<div style="margin:8px 0 10px;padding:8px 12px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:8px;font-size:11px;color:#fcd34d;font-weight:600"><i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>Proposal Automation OFF — proposals will be drafted but NOT emailed. Turn it on from your automation settings to auto-email.</div>`}
             <p style="font-size:11px;color:#93c5fd;margin:0 0 14px;line-height:1.5">When the report completes, we draft and email this proposal to the homeowner automatically using your Gmail. You can still edit or revoke it from the Proposal Dashboard before they open it.</p>
             <div style="display:flex;flex-direction:column;gap:10px">
               <div>

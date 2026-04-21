@@ -245,7 +245,7 @@ async function saveInvoicingSettings(updates) {
       method: 'PUT', headers: authHeaders(),
       body: JSON.stringify(updates),
     });
-    showToast('Invoicing automation settings saved!');
+    showToast('Proposal automation settings saved!');
   } catch (e) { showToast('Failed to save', true); }
 }
 
@@ -808,13 +808,13 @@ function render() {
     ` : ''}
 
     <!-- ════════════════════════════════════════════════════════ -->
-    <!-- INVOICING AUTOMATION -->
+    <!-- PROPOSAL AUTOMATION -->
     <!-- ════════════════════════════════════════════════════════ -->
     <div style="margin-top:48px;padding-top:40px;border-top:2px solid #e5e7eb">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px">
         <div>
-          <h2 style="font-size:24px;font-weight:800;color:#111;margin:0"><i class="fas fa-file-invoice-dollar" style="margin-right:10px;color:#2563eb"></i>Invoicing Automation</h2>
-          <p style="font-size:14px;color:#6b7280;margin-top:4px">Automatically generate and send invoices when you order a measurement report</p>
+          <h2 style="font-size:24px;font-weight:800;color:#111;margin:0"><i class="fas fa-file-signature" style="margin-right:10px;color:#2563eb"></i>Proposal Automation</h2>
+          <p style="font-size:14px;color:#6b7280;margin-top:4px">Automatically draft and email a proposal to the homeowner when a measurement report completes</p>
         </div>
       </div>
 
@@ -822,9 +822,9 @@ function render() {
       <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border-radius:16px;border:1px solid #93c5fd;padding:20px 24px;margin-bottom:20px">
         <p style="font-size:13px;font-weight:700;color:#1e40af;margin:0 0 10px"><i class="fas fa-info-circle" style="margin-right:6px"></i>How it works</p>
         <ol style="font-size:13px;color:#1e3a5f;line-height:1.8;margin:0;padding-left:20px">
-          <li>Turn on the automation and set your pricing below</li>
-          <li>When ordering a report, fill out the optional customer details form</li>
-          <li>Once the report generates, an invoice is automatically created and emailed to your customer</li>
+          <li>Turn on Proposal Automation and set your pricing below</li>
+          <li>When placing a measurement order, fill out the optional homeowner details form</li>
+          <li>Once the report completes, a proposal is automatically drafted and emailed to the homeowner from your connected Gmail</li>
         </ol>
       </div>
 
@@ -832,8 +832,8 @@ function render() {
       <div style="background:white;border-radius:16px;border:1px solid #e5e7eb;padding:24px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
         <div style="display:flex;align-items:center;justify-content:space-between">
           <div>
-            <p style="font-size:16px;font-weight:700;color:#111;margin:0"><i class="fas fa-bolt" style="margin-right:8px;color:#2563eb"></i>Auto-Invoice</p>
-            <p style="font-size:12px;color:#6b7280;margin-top:4px">When enabled, invoices are sent automatically after each report you order (if customer details are provided)</p>
+            <p style="font-size:16px;font-weight:700;color:#111;margin:0"><i class="fas fa-bolt" style="margin-right:8px;color:#2563eb"></i>Auto-Proposal</p>
+            <p style="font-size:12px;color:#6b7280;margin-top:4px">When on, a proposal is drafted and emailed to the homeowner the moment the report completes (requires homeowner email on the order)</p>
           </div>
           <button onclick="saveInvoicingSettings({ auto_invoice_enabled: !certState.invoicingSettings.auto_invoice_enabled })"
             style="position:relative;width:52px;height:28px;border-radius:14px;border:none;cursor:pointer;background:${certState.invoicingSettings.auto_invoice_enabled ? '#2563eb' : '#d1d5db'};transition:background 0.2s">
@@ -852,7 +852,7 @@ function render() {
                 <div style="width:36px;height:36px;border-radius:8px;background:#dbeafe;display:flex;align-items:center;justify-content:center"><i class="fas fa-th-large" style="color:#2563eb;font-size:16px"></i></div>
                 <div style="font-size:14px;font-weight:700;color:#111">Price per Square</div>
               </div>
-              <p style="font-size:12px;color:#6b7280;line-height:1.4;margin:0">Set a dollar amount per roofing square (100 sq ft). Invoice total = squares x price.</p>
+              <p style="font-size:12px;color:#6b7280;line-height:1.4;margin:0">Set a dollar amount per roofing square (100 sq ft). Proposal total = squares x price.</p>
             </button>
             <button onclick="saveInvoicingSettings({ invoice_pricing_mode: 'per_bundle' })"
               style="padding:18px;border-radius:12px;border:2px solid ${certState.invoicingSettings.invoice_pricing_mode === 'per_bundle' ? '#2563eb' : '#e5e7eb'};background:${certState.invoicingSettings.invoice_pricing_mode === 'per_bundle' ? '#eff6ff' : 'white'};cursor:pointer;text-align:left;transition:all 0.2s">
@@ -860,7 +860,7 @@ function render() {
                 <div style="width:36px;height:36px;border-radius:8px;background:#fef3c7;display:flex;align-items:center;justify-content:center"><i class="fas fa-boxes" style="color:#d97706;font-size:16px"></i></div>
                 <div style="font-size:14px;font-weight:700;color:#111">Price per Bundle</div>
               </div>
-              <p style="font-size:12px;color:#6b7280;line-height:1.4;margin:0">Set a dollar amount per shingle bundle. Invoice total = bundles x price.</p>
+              <p style="font-size:12px;color:#6b7280;line-height:1.4;margin:0">Set a dollar amount per shingle bundle. Proposal total = bundles x price.</p>
             </button>
           </div>
 
@@ -887,8 +887,8 @@ function render() {
         ` : `
         <div style="margin-top:20px;padding:24px;text-align:center;background:#f9fafb;border-radius:12px;border:1px dashed #d1d5db">
           <i class="fas fa-toggle-off" style="font-size:32px;color:#d1d5db;margin-bottom:12px"></i>
-          <p style="font-size:14px;font-weight:600;color:#6b7280;margin:0">Invoicing automation is disabled</p>
-          <p style="font-size:12px;color:#9ca3af;margin-top:4px">Toggle on to auto-send invoices when you order reports with customer details</p>
+          <p style="font-size:14px;font-weight:600;color:#6b7280;margin:0">Proposal Automation is off</p>
+          <p style="font-size:12px;color:#9ca3af;margin-top:4px">Turn it on to auto-email a proposal to the homeowner when a report completes</p>
         </div>
         `}
       </div>
