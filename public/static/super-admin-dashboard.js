@@ -1101,6 +1101,15 @@ function renderReportRequestsView() {
     '</div>' +
   '</div>';
 
+  // Prominent "Order Report" CTA panel
+  html += '<div style="background:linear-gradient(135deg,#0c4a6e,#0369a1);border:1px solid #0ea5e9;border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px">' +
+    '<div>' +
+      '<div style="color:#fff;font-size:15px;font-weight:800"><i class="fas fa-satellite-dish mr-2"></i>Order a Roof Measurement Report</div>' +
+      '<div style="color:#bae6fd;font-size:12px;margin-top:3px">Create an order for any address — report is generated after trace submission</div>' +
+    '</div>' +
+    '<button onclick="saOpenCreateOrderModal()" style="padding:10px 22px;background:#fff;color:#0369a1;font-size:13px;font-weight:800;border:none;border-radius:10px;cursor:pointer;white-space:nowrap"><i class="fas fa-plus mr-1.5"></i>New Report Order</button>' +
+  '</div>';
+
   // Stat cards
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:24px">';
   [['Total', counts.total || 0, '#0ea5e9', 'fa-clipboard-list'],
