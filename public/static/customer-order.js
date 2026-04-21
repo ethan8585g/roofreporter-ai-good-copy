@@ -3,6 +3,24 @@
 // 3-Step flow: Pin Roof → Trace Outline → Review & Pay
 // ============================================================
 
+// Phone-only detection. Intentionally EXCLUDES iPads and Android tablets — their
+// larger screens don't suffer the fat-finger problem the mobile-tracing UX is solving.
+// Also excludes desktops. Detection: coarse pointer + viewport < 820px + mobile UA hints
+// (iPads report as "Macintosh" in modern iPadOS, so we gate on screen width too).
+function isPhoneDevice() {
+  try {
+    const ua = (navigator.userAgent || '').toLowerCase();
+    const isIPad = /ipad/.test(ua) || (ua.includes('macintosh') && navigator.maxTouchPoints > 1);
+    if (isIPad) return false;
+    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    const phoneWidth = Math.min(window.innerWidth, window.innerHeight) < 820;
+    const mobileUA = /iphone|android.*mobile|windows phone|ipod/.test(ua);
+    return (coarse && phoneWidth) || mobileUA;
+  } catch (e) {
+    return false;
+  }
+}
+
 const orderState = {
   step: 'pin', // 'pin' | 'trace' | 'review'
   billing: null,
@@ -697,7 +715,56 @@ function renderTraceStep(root, progressBar) {
             </div>
             <span id="traceModeDesc" class="text-xs text-gray-400">${m.desc}</span>
           </div>
-          <div id="traceMap" style="min-height: 500px; cursor: crosshair; flex: 1;"></div>
+          <div style="position:relative; flex: 1; display:flex; flex-direction:column;">
+            <div id="traceMap" style="min-height: 500px; cursor: crosshair; flex: 1;"></div>
+            <!-- Phone-only overlays: hidden by default, unhidden by enablePhoneTraceUI() after initTraceMap -->
+            <div id="phoneTraceOverlay" style="display:none;">
+              <!-- Center reticle — points are placed at its center via the FAB or long-press -->
+              <div id="phoneReticle" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none; z-index:5;">
+                <svg width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="22" cy="22" r="18" fill="none" stroke="white" stroke-width="1.5" opacity="0.85"/>
+                  <circle cx="22" cy="22" r="18" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-dasharray="4 3" opacity="0.95"/>
+                  <line x1="22" y1="2"  x2="22" y2="14" stroke="#22c55e" stroke-width="2.5"/>
+                  <line x1="22" y1="30" x2="22" y2="42" stroke="#22c55e" stroke-width="2.5"/>
+                  <line x1="2"  y1="22" x2="14" y2="22" stroke="#22c55e" stroke-width="2.5"/>
+                  <line x1="30" y1="22" x2="42" y2="22" stroke="#22c55e" stroke-width="2.5"/>
+                  <circle cx="22" cy="22" r="2.5" fill="#22c55e"/>
+                </svg>
+              </div>
+              <!-- Sticky live-metrics bar — big, readable, always visible during tracing -->
+              <div id="phoneMetricsBar" style="position:absolute; top:8px; left:8px; right:8px; background:rgba(17,17,17,0.88); border:1px solid rgba(34,197,94,0.35); border-radius:10px; padding:8px 10px; display:flex; justify-content:space-around; align-items:center; font-family:-apple-system,system-ui,sans-serif; z-index:6; backdrop-filter:blur(4px);">
+                <div style="text-align:center;">
+                  <div style="font-size:10px; color:#9ca3af; text-transform:uppercase; letter-spacing:0.5px;">Area</div>
+                  <div id="phoneMetricArea" style="font-size:18px; font-weight:700; color:#22c55e;">—</div>
+                </div>
+                <div style="width:1px; height:28px; background:rgba(255,255,255,0.15);"></div>
+                <div style="text-align:center;">
+                  <div style="font-size:10px; color:#9ca3af; text-transform:uppercase; letter-spacing:0.5px;">Perimeter</div>
+                  <div id="phoneMetricPerim" style="font-size:18px; font-weight:700; color:#22c55e;">—</div>
+                </div>
+                <div style="width:1px; height:28px; background:rgba(255,255,255,0.15);"></div>
+                <div style="text-align:center;">
+                  <div style="font-size:10px; color:#9ca3af; text-transform:uppercase; letter-spacing:0.5px;" id="phoneMetricCountLabel">Points</div>
+                  <div id="phoneMetricCount" style="font-size:18px; font-weight:700; color:#e5e7eb;">0</div>
+                </div>
+              </div>
+              <!-- Primary FAB: drop point at reticle -->
+              <button id="phonePlaceFab" type="button" onclick="placePointAtReticle()"
+                style="position:absolute; bottom:18px; left:50%; transform:translateX(-50%); min-width:160px; padding:14px 22px; border-radius:999px; background:#22c55e; color:white; font-size:15px; font-weight:700; border:none; box-shadow:0 6px 16px rgba(0,0,0,0.4); z-index:7; touch-action:manipulation;">
+                <i class="fas fa-crosshairs" style="margin-right:6px;"></i><span id="phonePlaceFabLabel">Place Point</span>
+              </button>
+              <!-- Undo FAB, thumb-reachable bottom-right -->
+              <button id="phoneUndoFab" type="button" onclick="undoLastTrace()"
+                style="position:absolute; bottom:18px; right:12px; width:52px; height:52px; border-radius:50%; background:rgba(17,17,17,0.92); color:#e5e7eb; border:1px solid rgba(255,255,255,0.18); box-shadow:0 6px 16px rgba(0,0,0,0.4); z-index:7; touch-action:manipulation;">
+                <i class="fas fa-undo"></i>
+              </button>
+              <!-- Finish-line FAB, shown only during ridge/hip/valley mode when 1 point is placed -->
+              <button id="phoneFinishFab" type="button" onclick="finishCurrentLine()"
+                style="display:none; position:absolute; bottom:18px; left:12px; padding:12px 16px; border-radius:999px; background:#3b82f6; color:white; font-size:13px; font-weight:700; border:none; box-shadow:0 6px 16px rgba(0,0,0,0.4); z-index:7; touch-action:manipulation;">
+                <i class="fas fa-check" style="margin-right:4px;"></i>Finish Line
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -933,16 +1000,20 @@ function initTraceMap() {
   if (!mapDiv || typeof google === 'undefined' || !google.maps) return;
 
   const center = { lat: parseFloat(orderState.lat), lng: parseFloat(orderState.lng) };
+  const isPhone = isPhoneDevice();
+  orderState.traceIsPhone = isPhone;
 
   orderState.traceMap = new google.maps.Map(mapDiv, {
     center,
-    zoom: 21,
+    zoom: isPhone ? 22 : 21,       // Phones: start zoomed-in so a roof fills the viewport
+    minZoom: isPhone ? 20 : undefined,  // Phone tracing is pointless below zoom 20
     mapTypeId: 'satellite',
     tilt: 0,
-    fullscreenControl: true,
+    fullscreenControl: !isPhone,   // FAB overlaps fullscreen button on phones
     streetViewControl: false,
-    zoomControl: true,
-    mapTypeControl: true,
+    zoomControl: !isPhone,         // Pinch-to-zoom only on phones, zoom buttons overlap FABs
+    mapTypeControl: !isPhone,
+    gestureHandling: isPhone ? 'greedy' : 'auto',  // One-finger pan on phones (no "use two fingers" overlay)
     mapTypeControlOptions: {
       style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
       mapTypeIds: ['satellite', 'hybrid']
@@ -969,18 +1040,182 @@ function initTraceMap() {
   google.maps.event.trigger(orderState.traceMap, 'resize');
   orderState.traceMap.setCenter(center);
 
-  orderState.traceMap.addListener('click', (e) => {
-    handleTraceClick({ lat: e.latLng.lat(), lng: e.latLng.lng() });
-  });
+  if (!isPhone) {
+    // Desktop / iPad: click-to-place (unchanged behavior)
+    orderState.traceMap.addListener('click', (e) => {
+      handleTraceClick({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+    });
+    orderState.traceMap.addListener('dblclick', (e) => {
+      e.stop();
+      finishCurrentLine();
+    });
+  } else {
+    // Phone: disable tap-to-place to stop accidental pan-taps from dropping ghost points.
+    // Points are placed via the reticle "Place point" FAB or via long-press on the map.
+    setupPhoneTraceHandlers(mapDiv);
+    enablePhoneTraceUI();
+  }
+}
 
-  orderState.traceMap.addListener('dblclick', (e) => {
-    e.stop();
-    finishCurrentLine();
-  });
+// Show the phone overlay (reticle, FABs, metrics bar) and adjust map container for it.
+function enablePhoneTraceUI() {
+  const overlay = document.getElementById('phoneTraceOverlay');
+  if (overlay) overlay.style.display = 'block';
+  const mapEl = document.getElementById('traceMap');
+  if (mapEl) mapEl.style.cursor = 'default';  // Phones don't need the desktop crosshair cursor
+  updatePhoneMetricsBar();
+  updatePhoneFabLabels();
+}
+
+// Phone-only: long-press anywhere on the map drops a point at the touch location,
+// and the reticle FAB drops a point at screen center. Both call handleTraceClick.
+function setupPhoneTraceHandlers(mapDiv) {
+  let pressTimer = null;
+  let startX = 0, startY = 0;
+  let moved = false;
+  const LONGPRESS_MS = 500;
+  const MOVE_CANCEL_PX = 10;
+
+  const cancel = () => {
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+  };
+
+  mapDiv.addEventListener('touchstart', (ev) => {
+    if (ev.touches.length !== 1) { cancel(); return; }
+    const t = ev.touches[0];
+    startX = t.clientX; startY = t.clientY; moved = false;
+    cancel();
+    pressTimer = setTimeout(() => {
+      pressTimer = null;
+      const rect = mapDiv.getBoundingClientRect();
+      const x = startX - rect.left;
+      const y = startY - rect.top;
+      const latLng = containerPxToLatLng(orderState.traceMap, x, y);
+      if (latLng) {
+        hapticTick();
+        handleTraceClick(latLng);
+      }
+    }, LONGPRESS_MS);
+  }, { passive: true });
+
+  mapDiv.addEventListener('touchmove', (ev) => {
+    if (!pressTimer) return;
+    const t = ev.touches[0];
+    if (Math.abs(t.clientX - startX) > MOVE_CANCEL_PX || Math.abs(t.clientY - startY) > MOVE_CANCEL_PX) {
+      moved = true;
+      cancel();
+    }
+  }, { passive: true });
+
+  mapDiv.addEventListener('touchend', cancel, { passive: true });
+  mapDiv.addEventListener('touchcancel', cancel, { passive: true });
+}
+
+// Convert a pixel within the map container to lat/lng. Uses the map's projection + current bounds.
+function containerPxToLatLng(map, x, y) {
+  try {
+    const proj = map.getProjection();
+    if (!proj) return null;
+    const bounds = map.getBounds();
+    if (!bounds) return null;
+    const ne = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+    const topRight = proj.fromLatLngToPoint(ne);
+    const bottomLeft = proj.fromLatLngToPoint(sw);
+    const scale = Math.pow(2, map.getZoom());
+    const worldPt = new google.maps.Point(
+      x / scale + bottomLeft.x,
+      y / scale + topRight.y
+    );
+    const ll = proj.fromPointToLatLng(worldPt);
+    return { lat: ll.lat(), lng: ll.lng() };
+  } catch (e) { return null; }
+}
+
+// Tiny haptic buzz on phones that support it. Silent no-op otherwise.
+function hapticTick() {
+  try { if (navigator.vibrate) navigator.vibrate(10); } catch (e) {}
+}
+
+// Find the nearest existing eaves vertex within `tolM` metres; return that vertex or null.
+// Used on phones to snap near-miss taps to shared corners across sections.
+function snapToNearbyVertex(pt, tolM) {
+  let best = null;
+  let bestD = tolM;
+  const consider = (v) => {
+    const d = getDistanceM(pt, v);
+    if (d < bestD) { bestD = d; best = v; }
+  };
+  (orderState.traceEavesSections || []).forEach(s => (s.points || []).forEach(consider));
+  (orderState.traceEavesPoints || []).forEach(consider);
+  return best;
+}
+
+// Place a point at the current map center — wired to the mobile reticle FAB.
+function placePointAtReticle() {
+  if (!orderState.traceMap) return;
+  const c = orderState.traceMap.getCenter();
+  if (!c) return;
+  hapticTick();
+  handleTraceClick({ lat: c.lat(), lng: c.lng() });
+}
+window.placePointAtReticle = placePointAtReticle;
+
+// Refresh the mobile sticky metrics bar + FAB labels. Called from updateTraceUI.
+// Safe to call on non-phone devices — it bails if the overlay isn't present.
+function updatePhoneMetricsBar() {
+  if (!orderState.traceIsPhone) return;
+  const bar = document.getElementById('phoneTraceOverlay');
+  if (!bar) return;
+  const areaEl = document.getElementById('phoneMetricArea');
+  const perimEl = document.getElementById('phoneMetricPerim');
+  const countEl = document.getElementById('phoneMetricCount');
+  const countLabelEl = document.getElementById('phoneMetricCountLabel');
+  if (areaEl) areaEl.textContent = orderState.liveFootprintSqft ? orderState.liveFootprintSqft.toLocaleString() + ' ft²' : '—';
+  if (perimEl) perimEl.textContent = orderState.livePerimeterFt ? orderState.livePerimeterFt.toLocaleString() + ' ft' : '—';
+  const mode = orderState.traceMode;
+  if (countEl && countLabelEl) {
+    if (mode === 'eaves') {
+      countLabelEl.textContent = 'Points';
+      countEl.textContent = orderState.traceEavesPoints.length;
+    } else if (mode === 'ridge')   { countLabelEl.textContent = 'Ridges';   countEl.textContent = orderState.traceRidgeLines.length; }
+    else if (mode === 'hip')       { countLabelEl.textContent = 'Hips';     countEl.textContent = orderState.traceHipLines.length; }
+    else if (mode === 'valley')    { countLabelEl.textContent = 'Valleys';  countEl.textContent = orderState.traceValleyLines.length; }
+    else if (mode === 'vent')      { countLabelEl.textContent = 'Vents';    countEl.textContent = orderState.traceVents.length; }
+    else if (mode === 'skylight')  { countLabelEl.textContent = 'Skylights';countEl.textContent = orderState.traceSkylights.length; }
+    else if (mode === 'chimney')   { countLabelEl.textContent = 'Chimneys'; countEl.textContent = orderState.traceChimneys.length; }
+  }
+}
+
+function updatePhoneFabLabels() {
+  if (!orderState.traceIsPhone) return;
+  const labelEl = document.getElementById('phonePlaceFabLabel');
+  const finishFab = document.getElementById('phoneFinishFab');
+  if (!labelEl || !finishFab) return;
+  const mode = orderState.traceMode;
+  const labels = {
+    eaves: 'Place Point',
+    ridge: 'Place Ridge',
+    hip: 'Place Hip',
+    valley: 'Place Valley',
+    vent: 'Place Vent',
+    skylight: 'Place Skylight',
+    chimney: 'Place Chimney'
+  };
+  labelEl.textContent = labels[mode] || 'Place Point';
+  // Finish-line FAB: only show during ridge/hip/valley when exactly 1 point is placed (waiting for the 2nd)
+  const needsFinish = (mode === 'ridge' || mode === 'hip' || mode === 'valley') && orderState.traceCurrentLine.length === 1;
+  finishFab.style.display = needsFinish ? 'block' : 'none';
 }
 
 function handleTraceClick(pt) {
   const mode = orderState.traceMode;
+  // Phone-only: snap to any nearby existing vertex (across all sections and the current in-progress
+  // section) so adjacent polygons share exact corners instead of near-miss corners. 2m tolerance.
+  if (orderState.traceIsPhone && mode === 'eaves') {
+    const snapped = snapToNearbyVertex(pt, 2.0);
+    if (snapped) pt = snapped;
+  }
   if (mode === 'eaves') {
     if (orderState.traceEavesPoints.length >= 3) {
       const first = orderState.traceEavesPoints[0];
@@ -1494,6 +1729,10 @@ function updateTraceUI() {
     orderState.liveFootprintSqft = null;
     orderState.livePerimeterFt = null;
   }
+
+  // Phone-only: refresh sticky metrics bar + FAB labels (no-op on desktop/iPad)
+  updatePhoneMetricsBar();
+  updatePhoneFabLabels();
 
   // Update mode button counts
   const modeCountMap = { eaves: eavesSections > 0 ? eavesSections + (eavesSections === 1 ? ' sect' : ' sects') + (eavesCount > 0 ? '+' : '') : eavesCount + ' pts', ridge: ridgeCount, hip: hipCount, valley: valleyCount, vent: ventCount, skylight: skylightCount, chimney: chimneyCount };
