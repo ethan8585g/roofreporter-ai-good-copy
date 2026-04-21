@@ -82,7 +82,7 @@ adminRoutes.use('/*', async (c, next) => {
 // Test notification email — superadmin only
 adminRoutes.post('/superadmin/test-notification', async (c) => {
   try {
-    const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+    const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
     if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
     await notifyNewReportRequest(c.env, {
@@ -380,7 +380,7 @@ adminRoutes.put('/proposal-pricing', async (c) => {
 // ============================================================
 adminRoutes.post('/init-db', async (c) => {
   // Require admin auth for schema initialization
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) {
     return c.json({ error: 'Superadmin authentication required for database initialization' }, 403)
   }
@@ -1466,7 +1466,7 @@ adminRoutes.get('/superadmin/trial-expiry', async (c) => {
 
 // GET /superadmin/inbox — Unified conversations across all channels
 adminRoutes.get('/superadmin/inbox', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   try {
@@ -1799,7 +1799,7 @@ adminRoutes.get('/superadmin/inbox', async (c) => {
 
 // GET /superadmin/inbox/unread-count — Lightweight badge count
 adminRoutes.get('/superadmin/inbox/unread-count', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   try {
@@ -1817,7 +1817,7 @@ adminRoutes.get('/superadmin/inbox/unread-count', async (c) => {
 
 // GET /superadmin/inbox/lead/:type/:id — Single lead detail (type = lead|sitelead|contact|demo)
 adminRoutes.get('/superadmin/inbox/lead/:type/:id', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   const type = c.req.param('type')
   const id = c.req.param('id')
@@ -1849,7 +1849,7 @@ adminRoutes.get('/superadmin/inbox/lead/:type/:id', async (c) => {
 
 // POST /superadmin/inbox/mark-read — Mark a conversation as read for this admin
 adminRoutes.post('/superadmin/inbox/mark-read', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const { conversation_id, channel } = await c.req.json()
@@ -1872,7 +1872,7 @@ adminRoutes.post('/superadmin/inbox/mark-read', async (c) => {
 
 // POST /superadmin/inbox/reply — Reply to a conversation (writes to correct channel)
 adminRoutes.post('/superadmin/inbox/reply', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const { conversation_id, channel, message } = await c.req.json()
@@ -1909,7 +1909,7 @@ adminRoutes.post('/superadmin/inbox/reply', async (c) => {
 
 // GET /superadmin/secretary/overview — Full overview of all secretary subscribers
 adminRoutes.get('/superadmin/secretary/overview', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     // Subscription stats
@@ -1991,7 +1991,7 @@ adminRoutes.get('/superadmin/secretary/overview', async (c) => {
 
 // GET /superadmin/secretary/subscribers — All subscribers with details
 adminRoutes.get('/superadmin/secretary/subscribers', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const subscribers = await c.env.DB.prepare(`
@@ -2033,7 +2033,7 @@ adminRoutes.get('/superadmin/secretary/subscribers', async (c) => {
 
 // GET /superadmin/secretary/revenue — Revenue analytics & subscription lifecycle
 adminRoutes.get('/superadmin/secretary/revenue', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const period = c.req.query('period') || 'monthly'
@@ -2135,7 +2135,7 @@ adminRoutes.get('/superadmin/secretary/revenue', async (c) => {
 
 // GET /superadmin/secretary/calls — Recent call logs across all subscribers
 adminRoutes.get('/superadmin/secretary/calls', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const limit = parseInt(c.req.query('limit') || '50')
@@ -2183,7 +2183,7 @@ adminRoutes.get('/superadmin/secretary/calls', async (c) => {
 
 // GET /superadmin/onboarding/list — List all onboarded customers with secretary status
 adminRoutes.get('/superadmin/onboarding/list', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const rows = await c.env.DB.prepare(`
@@ -2214,7 +2214,7 @@ adminRoutes.get('/superadmin/onboarding/list', async (c) => {
 
 // POST /superadmin/onboarding/create — Create customer + optionally set up Secretary AI
 adminRoutes.post('/superadmin/onboarding/create', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   const body = await c.req.json()
@@ -2533,7 +2533,7 @@ async function createSquarePaymentLink(env: any, invoiceId: number, invoiceNumbe
 
 // POST /superadmin/users/create — Standalone create-user (no secretary, no invoice)
 adminRoutes.post('/superadmin/users/create', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   const { email, password, name, company_name, phone } = await c.req.json()
@@ -2560,7 +2560,7 @@ adminRoutes.post('/superadmin/users/create', async (c) => {
 
 // POST /superadmin/secretary/:customerId/sip-config — Update SIP fields without re-onboarding
 adminRoutes.post('/superadmin/secretary/:customerId/sip-config', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   const customerId = parseInt(c.req.param('customerId'))
@@ -2601,7 +2601,7 @@ adminRoutes.post('/superadmin/secretary/:customerId/sip-config', async (c) => {
 
 // POST /superadmin/secretary/:customerId/test-call — Verify trunk health via LiveKit list API
 adminRoutes.post('/superadmin/secretary/:customerId/test-call', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   const customerId = parseInt(c.req.param('customerId'))
@@ -2653,7 +2653,7 @@ adminRoutes.post('/superadmin/secretary/:customerId/test-call', async (c) => {
 
 // POST /superadmin/deploy-secretary/:customerId — Deploy LiveKit agent for existing customer
 adminRoutes.post('/superadmin/deploy-secretary/:customerId', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || admin.role !== 'superadmin') return c.json({ error: 'Unauthorized' }, 403)
 
   const customerId = parseInt(c.req.param('customerId'))
@@ -2674,7 +2674,7 @@ adminRoutes.post('/superadmin/deploy-secretary/:customerId', async (c) => {
 
 // POST /superadmin/onboarding/:id/toggle-secretary — Enable/disable secretary AI
 adminRoutes.post('/superadmin/onboarding/:id/toggle-secretary', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   const customerId = parseInt(c.req.param('id'))
@@ -2708,7 +2708,7 @@ adminRoutes.post('/superadmin/onboarding/:id/toggle-secretary', async (c) => {
 
 // GET /superadmin/phone-numbers/available — Search Twilio available numbers
 adminRoutes.get('/superadmin/phone-numbers/available', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   const country = c.req.query('country') || 'CA'
@@ -2741,7 +2741,7 @@ adminRoutes.get('/superadmin/phone-numbers/available', async (c) => {
 
 // POST /superadmin/phone-numbers/purchase — Buy from Twilio + add to phone pool
 adminRoutes.post('/superadmin/phone-numbers/purchase', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   const { phone_number, purpose } = await c.req.json()
@@ -2782,7 +2782,7 @@ adminRoutes.post('/superadmin/phone-numbers/purchase', async (c) => {
 
 // POST /superadmin/phone-pool/add — Manually add a number to the pool without Twilio purchase
 adminRoutes.post('/superadmin/phone-pool/add', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   const { phone_number, region } = await c.req.json()
@@ -2801,7 +2801,7 @@ adminRoutes.post('/superadmin/phone-pool/add', async (c) => {
 
 // POST /superadmin/phone-pool/assign — Assign pool number to a customer + optional LiveKit deploy
 adminRoutes.post('/superadmin/phone-pool/assign', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   const { phone_number, customer_id, deploy_livekit } = await c.req.json()
@@ -2837,7 +2837,7 @@ adminRoutes.post('/superadmin/phone-pool/assign', async (c) => {
 
 // POST /superadmin/secretary/:customerId/update-phone — Set/change agent phone number + optional redeploy
 adminRoutes.post('/superadmin/secretary/:customerId/update-phone', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   const customerId = parseInt(c.req.param('customerId'))
@@ -2885,7 +2885,7 @@ adminRoutes.post('/superadmin/secretary/:customerId/update-phone', async (c) => 
 
 // GET /superadmin/secretary/deployment-status — All customers' LiveKit SIP trunk deployment status
 adminRoutes.get('/superadmin/secretary/deployment-status', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   try {
@@ -2924,7 +2924,7 @@ adminRoutes.get('/superadmin/secretary/deployment-status', async (c) => {
 // NOTE: Full Gemini chat is handled by /api/gemini (geminiRoutes) which is mounted in index.tsx
 // This stub ensures the superadmin dashboard's saFetch calls to /api/admin/superadmin/gemini-chat still work
 adminRoutes.post('/superadmin/gemini-chat', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   const { message, history = [] } = await c.req.json()
@@ -2965,7 +2965,7 @@ Keep responses concise and actionable. Current date: ${new Date().toISOString().
 
 // Search customers
 adminRoutes.get('/superadmin/users/search', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const q = c.req.query('q') || ''
   if (!q || q.length < 2) return c.json({ customers: [] })
@@ -2979,7 +2979,7 @@ adminRoutes.get('/superadmin/users/search', async (c) => {
 
 // Edit customer
 adminRoutes.put('/superadmin/users/:id', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const id = parseInt(c.req.param('id'))
   const { name, email, company_name, phone, subscription_plan, report_credits } = await c.req.json()
@@ -3000,7 +3000,7 @@ adminRoutes.put('/superadmin/users/:id', async (c) => {
 
 // Adjust credits
 adminRoutes.post('/superadmin/users/:id/adjust-credits', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const id = parseInt(c.req.param('id'))
   const { amount, reason } = await c.req.json()
@@ -3017,7 +3017,7 @@ adminRoutes.post('/superadmin/users/:id/adjust-credits', async (c) => {
 
 // Suspend customer
 adminRoutes.post('/superadmin/users/:id/suspend', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const id = parseInt(c.req.param('id'))
   await c.env.DB.prepare('UPDATE customers SET is_active = 0, updated_at = datetime("now") WHERE id = ?').bind(id).run()
@@ -3026,7 +3026,7 @@ adminRoutes.post('/superadmin/users/:id/suspend', async (c) => {
 
 // Reactivate customer
 adminRoutes.post('/superadmin/users/:id/reactivate', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const id = parseInt(c.req.param('id'))
   await c.env.DB.prepare('UPDATE customers SET is_active = 1, updated_at = datetime("now") WHERE id = ?').bind(id).run()
@@ -3035,7 +3035,7 @@ adminRoutes.post('/superadmin/users/:id/reactivate', async (c) => {
 
 // Delete customer (soft)
 adminRoutes.delete('/superadmin/users/:id', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const id = parseInt(c.req.param('id'))
   // P1-23: snapshot before soft-delete so the audit log captures prior state.
@@ -3054,7 +3054,7 @@ adminRoutes.delete('/superadmin/users/:id', async (c) => {
 
 // Refund
 adminRoutes.post('/superadmin/users/:id/refund', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const id = parseInt(c.req.param('id'))
   const { payment_id, credits_to_remove, reason } = await c.req.json()
@@ -3079,7 +3079,7 @@ adminRoutes.post('/superadmin/users/:id/refund', async (c) => {
 
 // CSV Export — customers
 adminRoutes.get('/superadmin/users/export', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const rows = await c.env.DB.prepare('SELECT id, name, email, company_name, phone, subscription_plan, report_credits, credits_used, free_trial_total, free_trial_used, is_active, created_at FROM customers ORDER BY created_at DESC').all<any>()
   let csv = 'ID,Name,Email,Company,Phone,Plan,Credits,Used,Free Trial,Free Used,Active,Created\n'
@@ -3091,7 +3091,7 @@ adminRoutes.get('/superadmin/users/export', async (c) => {
 
 // CSV Export — orders
 adminRoutes.get('/superadmin/orders/export', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const rows = await c.env.DB.prepare('SELECT o.id, o.order_number, o.property_address, o.status, o.payment_status, o.price, o.service_tier, o.is_trial, o.created_at, c.name as customer_name, c.email as customer_email FROM orders o LEFT JOIN customers c ON c.id = o.customer_id ORDER BY o.created_at DESC LIMIT 5000').all<any>()
   let csv = 'ID,Order Number,Address,Status,Payment,Price,Tier,Trial,Created,Customer,Email\n'
@@ -3107,7 +3107,7 @@ adminRoutes.get('/superadmin/orders/export', async (c) => {
 
 // Telephony status
 adminRoutes.get('/superadmin/telephony-status', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const lkConfigured = !!(c.env as any).LIVEKIT_API_KEY && !!(c.env as any).LIVEKIT_URL
   const trunks = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_config WHERE livekit_inbound_trunk_id IS NOT NULL AND livekit_inbound_trunk_id != ''").first<any>()
@@ -3119,7 +3119,7 @@ adminRoutes.get('/superadmin/telephony-status', async (c) => {
 
 // LiveKit overview
 adminRoutes.get('/superadmin/livekit/overview', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const configs = await c.env.DB.prepare("SELECT COUNT(*) as total, SUM(CASE WHEN is_active=1 THEN 1 ELSE 0 END) as active FROM secretary_config").first<any>()
   const calls30d = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE created_at > datetime('now', '-30 days')").first<any>()
@@ -3129,7 +3129,7 @@ adminRoutes.get('/superadmin/livekit/overview', async (c) => {
 
 // Secretary configs list
 adminRoutes.get('/superadmin/livekit/secretary-configs', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const rows = await c.env.DB.prepare(
     `SELECT sc.*, c.name as customer_name, c.email as customer_email, c.company_name
@@ -3140,7 +3140,7 @@ adminRoutes.get('/superadmin/livekit/secretary-configs', async (c) => {
 
 // Phone pool
 adminRoutes.get('/superadmin/livekit/phone-pool', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const rows = await c.env.DB.prepare(
     `SELECT p.*, c.name as customer_name, c.email as customer_email
@@ -3151,7 +3151,7 @@ adminRoutes.get('/superadmin/livekit/phone-pool', async (c) => {
 
 // Add phone to pool
 adminRoutes.post('/superadmin/livekit/phone-pool/add', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const { phone_number, region } = await c.req.json()
   if (!phone_number) return c.json({ error: 'phone_number required' }, 400)
@@ -3161,7 +3161,7 @@ adminRoutes.post('/superadmin/livekit/phone-pool/add', async (c) => {
 
 // Release phone from customer
 adminRoutes.post('/superadmin/livekit/phone-pool/release', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const { phone_number } = await c.req.json()
   await c.env.DB.prepare("UPDATE secretary_phone_pool SET status = 'available', assigned_to_customer_id = NULL, updated_at = datetime('now') WHERE phone_number = ?").bind(phone_number).run()
@@ -3170,7 +3170,7 @@ adminRoutes.post('/superadmin/livekit/phone-pool/release', async (c) => {
 
 // Toggle secretary config
 adminRoutes.post('/superadmin/livekit/secretary-config/toggle', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const { customer_id, enabled } = await c.req.json()
   await c.env.DB.prepare('UPDATE secretary_config SET is_active = ?, updated_at = datetime("now") WHERE customer_id = ?').bind(enabled ? 1 : 0, customer_id).run()
@@ -3179,7 +3179,7 @@ adminRoutes.post('/superadmin/livekit/secretary-config/toggle', async (c) => {
 
 // Get customer secretary config
 adminRoutes.get('/superadmin/livekit/secretary-config/:customerId', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const config = await c.env.DB.prepare('SELECT sc.*, c.name, c.email, c.company_name FROM secretary_config sc LEFT JOIN customers c ON c.id = sc.customer_id WHERE sc.customer_id = ?').bind(parseInt(c.req.param('customerId'))).first<any>()
   if (!config) return c.json({ error: 'Config not found' }, 404)
@@ -3189,7 +3189,7 @@ adminRoutes.get('/superadmin/livekit/secretary-config/:customerId', async (c) =>
 
 // Create SIP trunk via LiveKit
 adminRoutes.post('/superadmin/livekit/trunk/create', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const { customer_id, phone_number } = await c.req.json()
   if (!customer_id || !phone_number) return c.json({ error: 'customer_id and phone_number required' }, 400)
@@ -3201,7 +3201,7 @@ adminRoutes.post('/superadmin/livekit/trunk/create', async (c) => {
 
 // Delete SIP trunk
 adminRoutes.post('/superadmin/livekit/trunk/delete', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const { trunk_id, customer_id } = await c.req.json()
   const apiKey = (c.env as any).LIVEKIT_API_KEY; const apiSecret = (c.env as any).LIVEKIT_API_SECRET; const livekitUrl = (c.env as any).LIVEKIT_URL
@@ -3224,7 +3224,7 @@ adminRoutes.post('/superadmin/livekit/trunk/delete', async (c) => {
 
 // Delete dispatch rule
 adminRoutes.post('/superadmin/livekit/dispatch/delete', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const { dispatch_rule_id, customer_id } = await c.req.json()
   const apiKey = (c.env as any).LIVEKIT_API_KEY; const apiSecret = (c.env as any).LIVEKIT_API_SECRET; const livekitUrl = (c.env as any).LIVEKIT_URL
@@ -3247,7 +3247,7 @@ adminRoutes.post('/superadmin/livekit/dispatch/delete', async (c) => {
 
 // Phone numbers — owned
 adminRoutes.get('/superadmin/phone-numbers/owned', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const rows = await c.env.DB.prepare('SELECT p.*, c.name as customer_name FROM secretary_phone_pool p LEFT JOIN customers c ON c.id = p.assigned_to_customer_id ORDER BY p.created_at DESC').all<any>()
   return c.json({ phones: rows.results || [] })
@@ -3259,7 +3259,7 @@ adminRoutes.get('/superadmin/phone-numbers/owned', async (c) => {
 
 // System health
 adminRoutes.get('/superadmin/system-health', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const checks: Record<string, any> = {}
   // DB check
@@ -3285,7 +3285,7 @@ adminRoutes.get('/superadmin/system-health', async (c) => {
 
 // Paywall status
 adminRoutes.get('/superadmin/paywall-status', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const tiers = await c.env.DB.prepare("SELECT subscription_plan, COUNT(*) as cnt FROM customers WHERE is_active = 1 GROUP BY subscription_plan").all<any>()
   const packages = await c.env.DB.prepare("SELECT * FROM credit_packages WHERE is_active = 1 ORDER BY sort_order").all<any>()
@@ -3294,7 +3294,7 @@ adminRoutes.get('/superadmin/paywall-status', async (c) => {
 
 // Service invoices
 adminRoutes.get('/superadmin/service-invoices', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const rows = await c.env.DB.prepare("SELECT i.*, c.name as customer_name, c.email as customer_email FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.master_company_id = 1 ORDER BY i.created_at DESC LIMIT 200").all<any>()
   return c.json({ invoices: rows.results || [] })
@@ -3302,7 +3302,7 @@ adminRoutes.get('/superadmin/service-invoices', async (c) => {
 
 // Service invoice — create by customer email
 adminRoutes.post('/superadmin/service-invoices/create', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const { customer_email, items, due_date, notes } = await c.req.json()
   if (!customer_email || !items || !items.length) return c.json({ error: 'customer_email and items required' }, 400)
@@ -3358,7 +3358,7 @@ adminRoutes.post('/superadmin/service-invoices/create', async (c) => {
 
 // Service invoice — send via email
 adminRoutes.post('/superadmin/service-invoices/:id/send', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const id = parseInt(c.req.param('id'))
 
@@ -3379,7 +3379,7 @@ adminRoutes.post('/superadmin/service-invoices/:id/send', async (c) => {
 
 // Sales scripts
 adminRoutes.get('/superadmin/sales-scripts', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   try {
     const rows = await c.env.DB.prepare('SELECT * FROM cc_campaigns ORDER BY created_at DESC').all<any>()
@@ -3389,7 +3389,7 @@ adminRoutes.get('/superadmin/sales-scripts', async (c) => {
 
 // Call center stats
 adminRoutes.get('/superadmin/call-center/stats', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   try {
     const total = await c.env.DB.prepare('SELECT COUNT(*) as cnt FROM cc_call_logs').first<any>()
@@ -3402,7 +3402,7 @@ adminRoutes.get('/superadmin/call-center/stats', async (c) => {
 
 // Secretary monitor
 adminRoutes.get('/superadmin/secretary/monitor', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const active = await c.env.DB.prepare(
     `SELECT sc.customer_id, sc.is_active, sc.secretary_mode, sc.connection_status, sc.assigned_phone_number, sc.agent_name,
@@ -3416,7 +3416,7 @@ adminRoutes.get('/superadmin/secretary/monitor', async (c) => {
 
 // SEO page meta
 adminRoutes.get('/superadmin/seo/page-meta', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   try {
     const rows = await c.env.DB.prepare("SELECT * FROM settings WHERE setting_key LIKE 'seo_%' AND master_company_id = 1").all<any>()
@@ -3426,7 +3426,7 @@ adminRoutes.get('/superadmin/seo/page-meta', async (c) => {
 
 // Save SEO page meta
 adminRoutes.put('/superadmin/seo/page-meta', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const { page_url, meta_title, meta_description, og_image } = await c.req.json()
   if (!page_url) return c.json({ error: 'page_url required' }, 400)
@@ -3438,7 +3438,7 @@ adminRoutes.put('/superadmin/seo/page-meta', async (c) => {
 
 // Backlinks
 adminRoutes.get('/superadmin/seo/backlinks', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   try {
     const rows = await c.env.DB.prepare("SELECT * FROM settings WHERE setting_key = 'seo_backlinks' AND master_company_id = 1").first<any>()
@@ -3447,7 +3447,7 @@ adminRoutes.get('/superadmin/seo/backlinks', async (c) => {
 })
 
 adminRoutes.post('/superadmin/seo/backlinks', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const { url, anchor_text, domain_authority } = await c.req.json()
   let existing: any[] = []
@@ -3458,7 +3458,7 @@ adminRoutes.post('/superadmin/seo/backlinks', async (c) => {
 })
 
 adminRoutes.delete('/superadmin/seo/backlinks/:id', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const id = parseInt(c.req.param('id'))
   let existing: any[] = []
@@ -3480,7 +3480,7 @@ adminRoutes.delete('/superadmin/seo/backlinks/:id', async (c) => {
 
 // Onboarding config
 adminRoutes.get('/superadmin/onboarding/config', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   try {
     const row = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'onboarding_config' AND master_company_id = 1").first<any>()
@@ -3492,7 +3492,7 @@ adminRoutes.get('/superadmin/onboarding/config', async (c) => {
 // MANUAL TRACE QUEUE — Get orders waiting for admin trace
 // ============================================================
 adminRoutes.get('/superadmin/orders/needs-trace', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   try {
     const orders = await c.env.DB.prepare(`
@@ -3521,7 +3521,7 @@ adminRoutes.get('/superadmin/orders/needs-trace', async (c) => {
 // trace (if any). Used by the admin review panel to QA an override.
 // ============================================================
 adminRoutes.post('/superadmin/orders/:id/preview-trace', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const orderId = parseInt(c.req.param('id'))
   if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
@@ -3727,7 +3727,7 @@ async function adminLivekitAPI(apiKey: string, apiSecret: string, livekitUrl: st
 
 // ── GET /api/admin/api-queue — Jobs awaiting tracing ────────────────────────
 adminRoutes.get('/api-queue', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin auth required' }, 401)
   if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
 
@@ -3748,7 +3748,7 @@ adminRoutes.get('/api-queue', async (c) => {
 
 // ── GET /api/admin/api-accounts — List all API accounts ────────────────────
 adminRoutes.get('/api-accounts', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin auth required' }, 401)
   if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
 
@@ -3766,7 +3766,7 @@ adminRoutes.get('/api-accounts', async (c) => {
 
 // ── POST /api/admin/api-accounts — Create a new API account ─────────────────
 adminRoutes.post('/api-accounts', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin auth required' }, 401)
   if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
 
@@ -3796,7 +3796,7 @@ adminRoutes.post('/api-accounts', async (c) => {
 
 // ── PATCH /api/admin/api-accounts/:accountId — Update account ───────────────
 adminRoutes.patch('/api-accounts/:accountId', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin auth required' }, 401)
   if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
 
@@ -3822,7 +3822,7 @@ adminRoutes.patch('/api-accounts/:accountId', async (c) => {
 
 // ── POST /api/admin/api-accounts/:accountId/keys — Issue a new API key ──────
 adminRoutes.post('/api-accounts/:accountId/keys', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin auth required' }, 401)
   if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
 
@@ -3853,7 +3853,7 @@ adminRoutes.post('/api-accounts/:accountId/keys', async (c) => {
 
 // ── DELETE /api/admin/api-accounts/:accountId/keys/:keyId — Revoke key ──────
 adminRoutes.delete('/api-accounts/:accountId/keys/:keyId', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin auth required' }, 401)
   if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
 
@@ -3879,7 +3879,7 @@ adminRoutes.delete('/api-accounts/:accountId/keys/:keyId', async (c) => {
 
 // ── GET /api/admin/api-accounts/:accountId/keys — List keys for account ─────
 adminRoutes.get('/api-accounts/:accountId/keys', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin auth required' }, 401)
   if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
 
@@ -3894,7 +3894,7 @@ adminRoutes.get('/api-accounts/:accountId/keys', async (c) => {
 
 // ── GET /api/admin/superadmin/api-accounts — Enriched list for super admin UI ─
 adminRoutes.get('/superadmin/api-accounts', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin auth required' }, 401)
   if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
 
@@ -3931,7 +3931,7 @@ adminRoutes.get('/superadmin/api-accounts', async (c) => {
 
 // ── GET /api/admin/superadmin/api-accounts/:id/ledger — Per-account ledger ───
 adminRoutes.get('/superadmin/api-accounts/:accountId/ledger', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin auth required' }, 401)
   if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
 
@@ -3947,7 +3947,7 @@ adminRoutes.get('/superadmin/api-accounts/:accountId/ledger', async (c) => {
 
 // ── GET /api/admin/api-stats — Dashboard summary ────────────────────────────
 adminRoutes.get('/api-stats', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin auth required' }, 401)
   if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
 
