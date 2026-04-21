@@ -84,7 +84,7 @@ app.get('/eagleview-vs-roofmanager-us', (c) => {
   const rows: Array<[string, string, string]> = [
     ['Report Price (USD)', '$8 per report', '$49–$95 per report'],
     ['Volume Pack Price', '$5.95/report (100-pack)', 'No volume pricing'],
-    ['Free Reports', '3 free on signup', 'None'],
+    ['Free Reports', '4 free on signup', 'None'],
     ['Credit card required to start', 'No', 'Yes'],
     ['Turn-around time', '< 60 seconds', '2–4 hours'],
     ['Full CRM Included', '✓ Pipeline, jobs, contacts', '✗ Measurement only'],
@@ -104,7 +104,7 @@ app.get('/eagleview-vs-roofmanager-us', (c) => {
   <link rel="canonical" href="https://www.roofmanager.ca/eagleview-vs-roofmanager-us">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
     {"@type":"Question","name":"Is Roof Manager as accurate as EagleView?","acceptedAnswer":{"@type":"Answer","text":"Yes. Both Roof Manager and EagleView deliver approximately 99% accuracy compared to manual measurements. Roof Manager uses Google Solar API with LiDAR-calibrated 3D building models. EagleView uses its proprietary Nearmap imagery. Both produce pitch-corrected area calculations accepted by US insurance adjusters."}},
-    {"@type":"Question","name":"How much cheaper is Roof Manager than EagleView?","acceptedAnswer":{"@type":"Answer","text":"EagleView charges $49–$95 per report depending on tier and report type. Roof Manager charges $8 per report (USD) after 3 free reports. At 50 reports/month, that's $400 vs $2,450–$4,750 — a savings of over $2,000/month for a busy contractor."}},
+    {"@type":"Question","name":"How much cheaper is Roof Manager than EagleView?","acceptedAnswer":{"@type":"Answer","text":"EagleView charges $49–$95 per report depending on tier and report type. Roof Manager charges $8 per report (USD) after 4 free reports. At 50 reports/month, that's $400 vs $2,450–$4,750 — a savings of over $2,000/month for a busy contractor."}},
     {"@type":"Question","name":"Does Roof Manager work for insurance claims like EagleView?","acceptedAnswer":{"@type":"Answer","text":"Yes. Roof Manager reports include pitch-corrected area, edge breakdowns, and material BOMs accepted by US insurance adjusters for storm, hail, and hurricane damage claims. EagleView has a longer track record with adjusters, but Roof Manager reports are increasingly accepted across all 50 states."}},
     {"@type":"Question","name":"What does EagleView have that Roof Manager doesn't?","acceptedAnswer":{"@type":"Answer","text":"EagleView has a longer market history, native Xactimate export, and dedicated enterprise account management. For high-volume commercial estimators and national insurance carriers, EagleView's integrations may be deeper. Roof Manager compensates with dramatically lower cost and an integrated CRM/invoicing platform that EagleView doesn't offer."}}
   ]}</script>
@@ -147,9 +147,9 @@ app.get('/eagleview-vs-roofmanager-us', (c) => {
       <h2 class="text-2xl font-black mb-8">Frequently Asked Questions</h2>
       <div class="space-y-4">
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Is Roof Manager as accurate as EagleView?</h3><p class="text-gray-400 text-sm">Yes. Both deliver ~99% accuracy. Roof Manager uses Google Solar API LiDAR-calibrated 3D building models; EagleView uses Nearmap. Both produce pitch-corrected area accepted by US adjusters.</p></div>
-        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">How much cheaper is Roof Manager than EagleView?</h3><p class="text-gray-400 text-sm">EagleView: $49–$95/report. Roof Manager: $8/report USD after 3 free. At 50 reports/month: $400 vs $2,450–$4,750 — savings of $2,000–$4,350/month.</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">How much cheaper is Roof Manager than EagleView?</h3><p class="text-gray-400 text-sm">EagleView: $49–$95/report. Roof Manager: $8/report USD after 4 free. At 50 reports/month: $400 vs $2,450–$4,750 — savings of $2,000–$4,350/month.</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Does Roof Manager work for insurance claims?</h3><p class="text-gray-400 text-sm">Yes. Reports include pitch-corrected area, edge breakdowns, and material BOMs accepted by US adjusters for storm, hail, and hurricane claims across all 50 states.</p></div>
-        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Can I switch from EagleView to Roof Manager?</h3><p class="text-gray-400 text-sm">Yes. Start with 3 free reports to compare the output. Most EagleView users can port their workflow directly — the report format is similar and the PDF output is compatible with standard US adjuster documentation requirements.</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Can I switch from EagleView to Roof Manager?</h3><p class="text-gray-400 text-sm">Yes. Start with 4 free reports to compare the output. Most EagleView users can port their workflow directly — the report format is similar and the PDF output is compatible with standard US adjuster documentation requirements.</p></div>
       </div>
     </div>
   </section>
@@ -160,7 +160,7 @@ app.get('/eagleview-vs-roofmanager-us', (c) => {
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Stop Paying $49–$95/Report</h2>
       <p class="text-blue-200 mb-4">Get the same satellite accuracy as EagleView for $8 USD. Plus a full CRM, invoicing, and AI tools — all included.</p>
-      <p class="text-sky-300 text-sm mb-8">No credit card required · 3 free reports · Works in all 50 US states</p>
+      <p class="text-sky-300 text-sm mb-8">No credit card required · 4 free reports · Works in all 50 US states</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
@@ -187,7 +187,7 @@ app.get('/eagleview-vs-roofmanager-us', (c) => {
 app.get('/hover-alternative-us', (c) => {
   const rows: Array<[string, string, string]> = [
     ['Report Price (USD)', '$8 per report', '$33–$55 per report'],
-    ['Free Reports', '3 free on signup', 'None'],
+    ['Free Reports', '4 free on signup', 'None'],
     ['Monthly subscription', 'No — pay per report', '$149–$399/month'],
     ['Full CRM Included', '✓ Built-in', '✗ Measurement only'],
     ['Invoicing & Proposals', '✓ Built-in', '✗ Add-on'],
@@ -229,7 +229,7 @@ app.get('/pitchgauge-vs-roofmanager', (c) => {
     ['Satellite roof area', '✓ Full satellite report', '✗ Manual pitch measurement only'],
     ['Material BOM', '✓ Full BOM generated', 'Limited — manual calculation'],
     ['Report Price (USD)', '$8 per report', '$9.99–$14.99/month subscription'],
-    ['Free Reports', '3 free on signup', 'Limited free tier'],
+    ['Free Reports', '4 free on signup', 'Limited free tier'],
     ['Insurance documentation', '✓ Full PDF for adjusters', '✗ Not intended for insurance'],
     ['CRM / Pipeline', '✓ Full CRM', '✗ Not included'],
     ['Invoicing & Proposals', '✓ Built-in', '✗ Not included'],
@@ -304,7 +304,7 @@ app.get('/pitchgauge-vs-roofmanager', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Need Full Satellite Reports, Not Just Pitch?</h2>
-      <p class="text-blue-200 mb-8">Roof Manager generates complete satellite reports — area, pitch, edges, BOM — in under 60 seconds. $8 USD per report. 3 free to start.</p>
+      <p class="text-blue-200 mb-8">Roof Manager generates complete satellite reports — area, pitch, edges, BOM — in under 60 seconds. $8 USD per report. 4 free to start.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
@@ -317,7 +317,7 @@ app.get('/pitchgauge-vs-roofmanager', (c) => {
 app.get('/roofr-vs-roofmanager-us', (c) => {
   const rows: Array<[string, string, string]> = [
     ['Report Price (USD)', '$8 per report', '$15–$35 per report'],
-    ['Free Reports', '3 free on signup', 'Limited'],
+    ['Free Reports', '4 free on signup', 'Limited'],
     ['Monthly subscription', 'No subscription required', '$99–$299/month'],
     ['Full CRM Included', '✓ Built-in', '✓ Built-in (limited)'],
     ['Invoicing & Proposals', '✓ Full', '✓ Partial'],
@@ -343,7 +343,7 @@ app.get('/roofr-vs-roofmanager-us', (c) => {
   <div class="max-w-5xl mx-auto px-4 py-8">${comparisonLeadFormHTML('comparison-roofr')}</div>
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4"><h2 class="text-3xl font-black mb-4">No Subscription. Just $8/Report.</h2>
-    <p class="text-blue-200 mb-8">Try Roof Manager free and compare the output. 3 free reports, no credit card, no subscription required.</p>
+    <p class="text-blue-200 mb-8">Try Roof Manager free and compare the output. 4 free reports, no credit card, no subscription required.</p>
     <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a></div>
   </section>
   <section class="py-8" style="background:#0d0d0d"><div class="max-w-5xl mx-auto px-4"><p class="text-gray-500 text-xs font-semibold uppercase mb-3">Other Comparisons</p><div class="flex flex-wrap gap-2"><a href="/eagleview-vs-roofmanager-us" class="text-xs text-sky-400 bg-sky-400/10 border border-sky-400/20 rounded-full px-3 py-1">vs EagleView</a><a href="/hover-alternative-us" class="text-xs text-sky-400 bg-sky-400/10 border border-sky-400/20 rounded-full px-3 py-1">vs Hover</a><a href="/pitchgauge-vs-roofmanager" class="text-xs text-sky-400 bg-sky-400/10 border border-sky-400/20 rounded-full px-3 py-1">vs PitchGauge</a></div></div></section>
@@ -356,7 +356,7 @@ app.get('/roofr-vs-roofmanager-us', (c) => {
 app.get('/roofsnap-vs-roofmanager-us', (c) => {
   const rows: Array<[string, string, string]> = [
     ['Report Price (USD)', '$8 per report', '$10–$25 per report'],
-    ['Free Reports', '3 free on signup', 'None'],
+    ['Free Reports', '4 free on signup', 'None'],
     ['Monthly subscription', 'No subscription', '$89–$249/month'],
     ['Full CRM Included', '✓ Built-in', '✓ Limited'],
     ['Invoicing & Proposals', '✓ Full', '✓ Partial'],
@@ -380,7 +380,7 @@ app.get('/roofsnap-vs-roofmanager-us', (c) => {
   <div class="max-w-5xl mx-auto px-4 py-8">${comparisonLeadFormHTML('comparison-roofsnap')}</div>
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4"><h2 class="text-3xl font-black mb-4">Switch from RoofSnap and Save</h2>
-    <p class="text-blue-200 mb-8">$8/report. No subscription. Full CRM included. 3 free to try.</p>
+    <p class="text-blue-200 mb-8">$8/report. No subscription. Full CRM included. 4 free to try.</p>
     <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a></div>
   </section>
   ${footer()}</body></html>`

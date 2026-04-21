@@ -787,7 +787,7 @@
         <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-left">
           <p class="text-sm font-semibold text-blue-800 mb-2"><i class="fas fa-gift mr-1"></i>Your Free Trial Includes:</p>
           <ul class="text-sm text-blue-700 space-y-1">
-            <li><i class="fas fa-check mr-1 text-blue-500"></i>3 free roof reports to start</li>
+            <li><i class="fas fa-check mr-1 text-blue-500"></i>4 free roof reports to start</li>
             <li><i class="fas fa-check mr-1 text-blue-500"></i>Full CRM access</li>
             <li><i class="fas fa-check mr-1 text-blue-500"></i>14 days to explore all features</li>
           </ul>

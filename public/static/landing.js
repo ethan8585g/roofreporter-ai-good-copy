@@ -166,7 +166,7 @@ function injectStickyCTABar() {
         <span class="text-white text-sm font-medium">Trusted by 5,000+ Canadian Roofers</span>
       </div>
       <div class="flex items-center gap-3 flex-1 sm:flex-none justify-end">
-        <span class="text-gray-400 text-sm hidden md:inline">Get 3 Free Reports &mdash; No CC Required</span>
+        <span class="text-gray-400 text-sm hidden md:inline">Get 4 Free Reports &mdash; No CC Required</span>
         <a href="/signup" onclick="rrTrack('cta_click',{location:'sticky_bar'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2.5 px-6 rounded-lg text-sm shadow-lg transition-all hover:scale-105 whitespace-nowrap min-h-[44px] flex items-center gap-2">
           <i class="fas fa-rocket"></i> Start Free
         </a>
@@ -197,13 +197,13 @@ function injectExitIntentPopup() {
     <div class="bg-[#111111] rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform scale-95 opacity-0 transition-all duration-300 border border-white/10" id="exit-popup-inner">
       <div class="bg-gradient-to-r from-[#00FF88]/20 to-[#00FF88]/10 p-6 text-white text-center border-b border-white/10">
         <h3 class="text-2xl font-black mb-2">Wait! Don't Leave Empty-Handed</h3>
-        <p class="text-gray-400 text-sm">Get 3 free professional roof measurement reports &mdash; no credit card required.</p>
+        <p class="text-gray-400 text-sm">Get 4 free professional roof measurement reports &mdash; no credit card required.</p>
       </div>
       <div class="p-6">
         <div class="space-y-4 mb-6">
           <div class="flex items-center gap-3">
             <div class="w-8 h-8 bg-[#00FF88]/10 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-file-alt text-[#00FF88] text-xs"></i></div>
-            <span class="text-sm text-gray-300"><strong class="text-white">3 Free Reports</strong> &mdash; professional PDF with 3D area, BOM, solar data</span>
+            <span class="text-sm text-gray-300"><strong class="text-white">4 Free Reports</strong> &mdash; professional PDF with 3D area, BOM, solar data</span>
           </div>
           <div class="flex items-center gap-3">
             <div class="w-8 h-8 bg-[#00FF88]/10 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-th-large text-[#00FF88] text-xs"></i></div>
@@ -217,7 +217,7 @@ function injectExitIntentPopup() {
         <form onsubmit="return exitPopupSubmit(event)" class="space-y-3">
           <input type="email" id="exit-email" required placeholder="Enter your email" class="w-full px-4 py-3 border border-white/10 bg-white/5 rounded-xl focus:ring-2 focus:ring-[#00FF88] focus:border-[#00FF88] text-sm text-white placeholder-gray-500">
           <button type="submit" class="w-full bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 rounded-xl shadow-lg transition-all hover:scale-[1.02] min-h-[48px] text-sm">
-            <i class="fas fa-gift mr-2"></i>Claim My 3 Free Reports
+            <i class="fas fa-gift mr-2"></i>Claim My 4 Free Reports
           </button>
         </form>
         <button onclick="closeExitPopup()" class="w-full mt-3 text-gray-500 hover:text-gray-300 text-xs text-center py-2 transition-colors">No thanks, I'll pass on free reports</button>

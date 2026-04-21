@@ -40,10 +40,10 @@
 
   var headline = isSocial
     ? 'Special Offer for Our Social Followers'
-    : 'Wait! Get 3 Free Roof Reports';
+    : 'Wait! Get 4 Free Roof Reports';
   var subtext = isSocial
-    ? 'Exclusive for Instagram & Facebook followers — 3 free professional satellite roof reports. No credit card.'
-    : 'Get 3 free professional roof measurement reports — satellite-powered, insurance-ready. No credit card required.';
+    ? 'Exclusive for Instagram & Facebook followers — 4 free professional satellite roof reports. No credit card.'
+    : 'Get 4 free professional roof measurement reports — satellite-powered, insurance-ready. No credit card required.';
   var sourcePage = isSocial ? 'exit-popup-social' : 'exit-popup-global';
   var accentColor = isSocial ? '#E1306C' : '#00FF88';
   var accentBg = isSocial ? 'rgba(225,48,108,0.1)' : 'rgba(0,255,136,0.1)';
@@ -58,7 +58,7 @@
     '</div>' +
     '<div style="padding:24px">' +
       '<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px">' +
-        '<div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;background:' + accentBg + ';border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-file-alt" style="color:' + accentColor + ';font-size:12px"></i></div><span style="font-size:13px;color:#d1d5db"><strong style="color:#fff">3 Free Reports</strong> — PDF with 3D area, pitch, BOM</span></div>' +
+        '<div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;background:' + accentBg + ';border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-file-alt" style="color:' + accentColor + ';font-size:12px"></i></div><span style="font-size:13px;color:#d1d5db"><strong style="color:#fff">4 Free Reports</strong> — PDF with 3D area, pitch, BOM</span></div>' +
         '<div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;background:' + accentBg + ';border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-bolt" style="color:' + accentColor + ';font-size:12px"></i></div><span style="font-size:13px;color:#d1d5db"><strong style="color:#fff">60-Second Delivery</strong> — satellite-powered, no site visit</span></div>' +
         '<div style="display:flex;align-items:center;gap:10px"><div style="width:32px;height:32px;background:' + accentBg + ';border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-th-large" style="color:' + accentColor + ';font-size:12px"></i></div><span style="font-size:13px;color:#d1d5db"><strong style="color:#fff">Full CRM Access</strong> — customers, invoices, proposals</span></div>' +
       '</div>' +
@@ -67,7 +67,7 @@
         '<input name="e" type="email" required placeholder="Enter your email" style="width:100%;padding:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#fff;font-size:14px;outline:none;margin-bottom:10px;box-sizing:border-box">' +
         '<input name="a" placeholder="Property address (optional)" style="width:100%;padding:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#fff;font-size:14px;outline:none;margin-bottom:10px;box-sizing:border-box">' +
         '<button type="submit" style="width:100%;background:' + btnBg + ';color:' + btnColor + ';font-weight:800;padding:13px;border:none;border-radius:10px;font-size:14px;cursor:pointer;min-height:46px">' +
-          (isSocial ? '<i class="fas fa-gift" style="margin-right:6px"></i>Claim My Free Reports' : '<i class="fas fa-gift" style="margin-right:6px"></i>Get My 3 Free Reports') +
+          (isSocial ? '<i class="fas fa-gift" style="margin-right:6px"></i>Claim My Free Reports' : '<i class="fas fa-gift" style="margin-right:6px"></i>Get My 4 Free Reports') +
         '</button>' +
       '</form>' +
       '<button id="exit-global-close" style="width:100%;margin-top:10px;background:none;border:none;color:#6b7280;font-size:11px;cursor:pointer;padding:8px">No thanks, I\'ll pass</button>' +

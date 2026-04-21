@@ -97,13 +97,13 @@ function stateDirectory(verticalSlug: string, label: string) {
 
 app.get('/insurance-claims', (c) => {
   const html = `<!DOCTYPE html><html lang="en-US"><head>
-  ${head('Roof Damage Insurance Claims by State | Roof Manager', 'How to document roof damage insurance claims in every US state. Satellite measurement reports accepted by adjusters. $8 USD/report after 3 free.')}</head>
+  ${head('Roof Damage Insurance Claims by State | Roof Manager', 'How to document roof damage insurance claims in every US state. Satellite measurement reports accepted by adjusters. $8 USD/report after 4 free.')}</head>
   <body class="min-h-screen" style="background:#0A0A0A;color:#fff">${nav()}
   <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
     <div class="max-w-4xl mx-auto px-4">
       <h1 class="text-4xl font-black mb-6">Roof Damage Insurance Claims — All 50 States</h1>
       <p class="text-xl text-blue-200 mb-8">Roof Manager generates satellite measurement reports accepted by insurance adjusters across all 50 US states. As of 2026, the platform has supported documentation for storm, hail, hurricane, and wind damage claims. Reports include pitch-corrected area, edge breakdowns, and material BOMs — all in under 60 seconds.</p>
-      <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg inline-block">Get 3 Free Reports (USD)</a>
+      <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg inline-block">Get 4 Free Reports (USD)</a>
     </div>
   </section>
   <section class="py-16" style="background:#111">
@@ -172,7 +172,7 @@ app.get('/insurance-claims/:state', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Document ${state.name} Claims Faster</h2>
-      <p class="text-blue-200 mb-8">Generate an insurance-ready satellite report for any ${state.name} property in under 60 seconds. $8 USD/report after 3 free.</p>
+      <p class="text-blue-200 mb-8">Generate an insurance-ready satellite report for any ${state.name} property in under 60 seconds. $8 USD/report after 4 free.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
@@ -184,7 +184,7 @@ app.get('/insurance-claims/:state', (c) => {
 
 app.get('/storm-damage', (c) => {
   const html = `<!DOCTYPE html><html lang="en-US"><head>
-  ${head('Storm Damage Roof Assessment by State | Roof Manager', 'Satellite roof measurement for storm damage assessment in all 50 US states. Insurance-ready reports. $8 USD after 3 free.')}</head>
+  ${head('Storm Damage Roof Assessment by State | Roof Manager', 'Satellite roof measurement for storm damage assessment in all 50 US states. Insurance-ready reports. $8 USD after 4 free.')}</head>
   <body class="min-h-screen" style="background:#0A0A0A;color:#fff">${nav()}
   <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
     <div class="max-w-4xl mx-auto px-4">
@@ -239,7 +239,7 @@ app.get('/storm-damage/:state', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Document ${state.name} Storm Damage Fast</h2>
-      <p class="text-blue-200 mb-8">Generate a satellite measurement report for any ${state.name} storm-damaged property in under 60 seconds. $8 USD/report after 3 free.</p>
+      <p class="text-blue-200 mb-8">Generate a satellite measurement report for any ${state.name} storm-damaged property in under 60 seconds. $8 USD/report after 4 free.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
@@ -267,7 +267,7 @@ app.get('/hail-damage', (c) => {
   }).join('')
 
   const html = `<!DOCTYPE html><html lang="en-US"><head>
-  ${head('Hail Damage Roof Assessment by State | Roof Manager', 'Satellite roof measurement for hail damage documentation in the US hail belt. CO, TX, OK, KS, NE and all 50 states. $8 USD after 3 free.')}</head>
+  ${head('Hail Damage Roof Assessment by State | Roof Manager', 'Satellite roof measurement for hail damage documentation in the US hail belt. CO, TX, OK, KS, NE and all 50 states. $8 USD after 4 free.')}</head>
   <body class="min-h-screen" style="background:#0A0A0A;color:#fff">${nav()}
   <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
     <div class="max-w-4xl mx-auto px-4">
@@ -328,7 +328,7 @@ app.get('/hail-damage/:state', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Start Documenting ${state.name} Hail Claims</h2>
-      <p class="text-blue-200 mb-8">$8 USD per report after 3 free. Insurance-ready satellite measurements in under 60 seconds.</p>
+      <p class="text-blue-200 mb-8">$8 USD per report after 4 free. Insurance-ready satellite measurements in under 60 seconds.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
@@ -426,7 +426,7 @@ app.get('/hurricane-damage/:state', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Ready for ${state.name} Storm Season?</h2>
-      <p class="text-blue-200 mb-8">$8 USD per report after 3 free. Generate satellite reports for any ${state.name} address in under 60 seconds.</p>
+      <p class="text-blue-200 mb-8">$8 USD per report after 4 free. Generate satellite reports for any ${state.name} address in under 60 seconds.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
@@ -675,7 +675,7 @@ app.get('/roofing-contractors/:state', (c) => {
       <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="border-b border-white/10"><th class="text-left py-3 pr-4 text-gray-400 font-semibold">Feature</th><th class="text-center py-3 px-4 text-sky-400 font-bold">Roof Manager</th><th class="text-center py-3 px-4 text-gray-400">EagleView</th><th class="text-center py-3 px-4 text-gray-400">Hover</th><th class="text-center py-3 px-4 text-gray-400">Roofr</th></tr></thead>
       <tbody class="divide-y divide-white/5">
         <tr><td class="py-3 pr-4 text-gray-300">Report Price (USD)</td><td class="text-center px-4 text-sky-400 font-bold">$8</td><td class="text-center px-4 text-gray-400">$49–$95</td><td class="text-center px-4 text-gray-400">$33–$55</td><td class="text-center px-4 text-gray-400">$15–$35</td></tr>
-        <tr><td class="py-3 pr-4 text-gray-300">Free Reports</td><td class="text-center px-4 text-sky-400 font-bold">3 Free</td><td class="text-center px-4 text-gray-400">None</td><td class="text-center px-4 text-gray-400">None</td><td class="text-center px-4 text-gray-400">Limited</td></tr>
+        <tr><td class="py-3 pr-4 text-gray-300">Free Reports</td><td class="text-center px-4 text-sky-400 font-bold">4 Free</td><td class="text-center px-4 text-gray-400">None</td><td class="text-center px-4 text-gray-400">None</td><td class="text-center px-4 text-gray-400">Limited</td></tr>
         <tr><td class="py-3 pr-4 text-gray-300">Full CRM Included</td><td class="text-center px-4 text-sky-400 font-bold">✓</td><td class="text-center px-4 text-gray-400">✗</td><td class="text-center px-4 text-gray-400">✗</td><td class="text-center px-4 text-gray-400">Partial</td></tr>
         <tr><td class="py-3 pr-4 text-gray-300">Invoicing &amp; Proposals</td><td class="text-center px-4 text-sky-400 font-bold">✓</td><td class="text-center px-4 text-gray-400">✗</td><td class="text-center px-4 text-gray-400">✗</td><td class="text-center px-4 text-gray-400">✓</td></tr>
         <tr><td class="py-3 pr-4 text-gray-300">AI Phone Secretary</td><td class="text-center px-4 text-sky-400 font-bold">✓</td><td class="text-center px-4 text-gray-400">✗</td><td class="text-center px-4 text-gray-400">✗</td><td class="text-center px-4 text-gray-400">✗</td></tr>

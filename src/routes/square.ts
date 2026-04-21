@@ -430,7 +430,7 @@ squareRoutes.post('/checkout/report', async (c) => {
 
 // ============================================================
 // USE CREDITS — Free trial first, then paid credits
-// New users get 3 free trial reports. After that, paid credits.
+// New users get 4 free trial reports. After that, paid credits.
 // ============================================================
 squareRoutes.post('/use-credit', async (c) => {
   try {

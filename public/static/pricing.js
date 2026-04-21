@@ -1,6 +1,6 @@
 // ============================================================
 // Pricing Page — Public, fetches packages and renders cards
-// Pricing: 3 free → $7 USD individual → 25-pack ($150) → 100-pack ($500)
+// Pricing: 4 free → $7 USD individual → 25-pack ($150) → 100-pack ($500)
 // Membership: $49.99/mo — 5 team members + ad-free
 // ============================================================
 
@@ -16,7 +16,7 @@ function renderPricing(root, packages) {
     <div class="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-8 mb-12 text-white text-center shadow-lg">
       <div class="flex items-center justify-center gap-3 mb-3">
         <i class="fas fa-gift text-3xl"></i>
-        <h2 class="text-3xl font-extrabold">3 Free Reports When You Sign Up</h2>
+        <h2 class="text-3xl font-extrabold">4 Free Reports When You Sign Up</h2>
       </div>
       <p class="text-green-100 text-lg mb-6">No credit card required. Create an account and get 3 professional roof measurement reports — completely free.</p>
       <a href="/customer/login" class="inline-flex items-center gap-2 bg-white text-green-700 font-bold py-3 px-8 rounded-xl text-lg shadow-lg transition-all hover:scale-105 hover:bg-green-50">
@@ -27,7 +27,7 @@ function renderPricing(root, packages) {
 
     <div class="text-center mb-12">
       <h1 class="text-4xl font-bold text-gray-900 mb-4">Simple, Transparent Pricing</h1>
-      <p class="text-lg text-gray-600 max-w-2xl mx-auto">Start with 3 free reports. After that, buy individual reports or save with credit packs.</p>
+      <p class="text-lg text-gray-600 max-w-2xl mx-auto">Start with 4 free reports. After that, buy individual reports or save with credit packs.</p>
     </div>
 
     <!-- How it works -->
@@ -46,7 +46,7 @@ function renderPricing(root, packages) {
             <span class="text-green-700 font-bold text-lg">2</span>
           </div>
           <h3 class="font-semibold text-gray-800 mb-1">Use Free Reports</h3>
-          <p class="text-sm text-gray-500">3 free reports included with every account</p>
+          <p class="text-sm text-gray-500">4 free reports included with every account</p>
         </div>
         <div class="text-center">
           <div class="w-14 h-14 bg-brand-100 rounded-xl flex items-center justify-center mx-auto mb-3">
@@ -168,7 +168,7 @@ function renderPricing(root, packages) {
         </div>
       </div>
       <a href="/customer/login" class="inline-block mt-8 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-xl text-lg transition-all hover:scale-105 shadow-lg">
-        <i class="fas fa-gift mr-2"></i>Sign Up — 3 Free Reports
+        <i class="fas fa-gift mr-2"></i>Sign Up — 4 Free Reports
       </a>
     </div>
 

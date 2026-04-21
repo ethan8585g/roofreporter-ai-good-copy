@@ -286,9 +286,10 @@ fbq('init','${metaPixelId}');
 fbq('track','PageView');
 ${url.pathname === '/pricing' ? "fbq('track','ViewContent',{content_name:'Pricing Page',content_category:'pricing'});" : ''}
 window.fireMetaLeadEvent=function(d){if(typeof fbq==='function')fbq('track','Lead',d||{});};
+window.fireMetaContactEvent=function(d){if(typeof fbq==='function')fbq('track','Contact',d||{});};
 </script>
 <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${metaPixelId}&ev=PageView&noscript=1"/></noscript>
-` : `<script>window.fireMetaLeadEvent=function(){};</script>`
+` : `<script>window.fireMetaLeadEvent=function(){};window.fireMetaContactEvent=function(){};</script>`
 
       // RC#1: Translate widget — moved out of <head> (invalid HTML) and injected at top of <body>
       // Safari's strict parser closed <head> early when it saw the <div>, reparenting following scripts
@@ -6626,7 +6627,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   }
   </script>
   <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://www.roofmanager.ca/static/logo.png","description":"AI-powered satellite roof measurement reports for roofing professionals across the US and Canada","address":[{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},{"@type":"PostalAddress","addressCountry":"US","areaServed":"United States"}],"areaServed":["US","CA"],"contactPoint":{"@type":"ContactPoint","email":"sales@roofmanager.ca","contactType":"sales"},"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager","https://www.crunchbase.com/organization/roof-manager","https://www.trustpilot.com/review/roofmanager.ca"]}
+{"@context":"https://schema.org","@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://www.roofmanager.ca/static/logo.png","description":"AI-powered satellite roof measurement reports for roofing professionals across the US and Canada","address":[{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},{"@type":"PostalAddress","addressCountry":"US","areaServed":"United States"}],"areaServed":["US","CA"],"contactPoint":{"@type":"ContactPoint","telephone":"+1-780-983-3335","email":"sales@roofmanager.ca","contactType":"sales","areaServed":["US","CA"],"availableLanguage":"en"},"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager","https://www.crunchbase.com/organization/roof-manager","https://www.trustpilot.com/review/roofmanager.ca"]}
   </script>
   <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebSite","name":"Roof Manager","url":"https://www.roofmanager.ca","potentialAction":{"@type":"SearchAction","target":"https://www.roofmanager.ca/blog?q={search_term_string}","query-input":"required name=search_term_string"}}
@@ -6788,9 +6789,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <a href="/blog" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Blog</a>
         <a href="/coverage" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Coverage</a>
         <a href="/faq" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">FAQ</a>
-        <!-- TODO(Ethan): Replace +1XXXXXXXXXX with your real sales phone number before going live -->
-        <!-- TODO(Ethan): confirm sales phone number and replace placeholder below -->
-        <a href="tel:+17809833335" class="hidden md:inline-flex items-center gap-1.5 text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200" aria-label="Call sales"><i class="fas fa-phone text-[10px] text-[#00FF88]"></i>(780) 983-3335</a>
+        <a href="tel:+17809833335" onclick="try{rrTrack&amp;&amp;rrTrack('phone_click',{location:'nav_desktop'});gtag&amp;&amp;gtag('event','phone_click',{location:'nav_desktop'});window.fireMetaContactEvent&amp;&amp;window.fireMetaContactEvent()}catch(e){}" class="hidden md:inline-flex items-center gap-1.5 text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200" aria-label="Call sales at (780) 983-3335"><i class="fas fa-phone text-[10px] text-[#00FF88]" aria-hidden="true"></i>(780) 983-3335</a> <!-- conv-v5: removed TODO placeholders, wired phone_click tracking -->
         <a href="/contact" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Contact</a>
         <a href="/customer/login" onclick="rrTrack('cta_click',{location:'nav_login'})" class="border border-white/20 hover:border-white/40 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-all duration-200 hover:bg-white/5 whitespace-nowrap">
           <i class="fas fa-sign-in-alt mr-1.5 text-gray-400"></i>Log In</a>
@@ -8161,11 +8160,10 @@ function getContactPageHTML() {
           <div style="background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:28px;margin-bottom:20px">
             <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 18px">Other ways to reach us</h3>
             <div style="display:flex;flex-direction:column;gap:14px">
-              <!-- TODO(Ethan): confirm sales phone number and replace placeholder below -->
-              <a href="tel:+17809833335" style="display:flex;align-items:center;gap:12px;color:#d1d5db;text-decoration:none;font-size:14px;font-weight:500" aria-label="Call sales">
-                <span style="width:36px;height:36px;border-radius:10px;background:rgba(0,255,136,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-phone" style="color:#00FF88;font-size:15px"></i></span>
+              <a href="tel:+17809833335" onclick="try{rrTrack&amp;&amp;rrTrack('phone_click',{location:'contact_page'});gtag&amp;&amp;gtag('event','phone_click',{location:'contact_page'});window.fireMetaContactEvent&amp;&amp;window.fireMetaContactEvent()}catch(e){}" style="display:flex;align-items:center;gap:12px;color:#d1d5db;text-decoration:none;font-size:14px;font-weight:500" aria-label="Call sales at (780) 983-3335">
+                <span style="width:36px;height:36px;border-radius:10px;background:rgba(0,255,136,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-phone" style="color:#00FF88;font-size:15px" aria-hidden="true"></i></span>
                 <span>(780) 983-3335<span style="display:block;font-size:11px;color:#6b7280;font-weight:400">Mon–Fri, 7am–6pm MT</span></span>
-              </a>
+              </a> <!-- conv-v5: removed TODO placeholder, wired phone_click tracking -->
               <a href="mailto:sales@roofmanager.ca" style="display:flex;align-items:center;gap:12px;color:#d1d5db;text-decoration:none;font-size:14px;font-weight:500">
                 <span style="width:36px;height:36px;border-radius:10px;background:rgba(0,255,136,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-envelope" style="color:#00FF88;font-size:15px"></i></span>
                 <span>sales@roofmanager.ca<span style="display:block;font-size:11px;color:#6b7280;font-weight:400">Average first reply: 1h 42m</span></span>
@@ -11669,7 +11667,7 @@ function getFeatureStateHubPageHTML(
   const stateFaqs =
     featureSlug === 'measurements'
       ? [
-          { q: `How accurate are satellite roof measurements in ${state.name}?`, a: `For ${state.name} properties with high-quality imagery (most urban and suburban addresses), accuracy is within 2–5% of manual measurement. Reports cost $8 USD after 3 free. ${state.roofingNotes}` },
+          { q: `How accurate are satellite roof measurements in ${state.name}?`, a: `For ${state.name} properties with high-quality imagery (most urban and suburban addresses), accuracy is within 2–5% of manual measurement. Reports cost $8 USD after 4 free. ${state.roofingNotes}` },
           { q: `Are Roof Manager reports accepted by ${state.name} insurance adjusters?`, a: `Yes. Reports include pitch-corrected area, edge breakdowns, and material BOMs accepted by ${state.topInsurers.slice(0, 3).join(', ')}, and other major ${state.name} carriers for ${state.stormProfile.primaryPeril.toLowerCase()} claims.` },
         ]
       : featureSlug === 'crm'
@@ -11809,7 +11807,7 @@ function getFeatureStateHubPageHTML(
   <section class="py-16 border-t border-white/5" style="background:#0A0A0A">
     <div class="max-w-3xl mx-auto px-4 text-center">
       <h2 class="text-2xl font-black text-white mb-4">Ready to serve ${state.name} faster?</h2>
-      <p class="text-gray-400 mb-8 text-sm">${featureSlug === 'measurements' ? '3 free reports on signup, no credit card.' : featureSlug === 'crm' ? 'Free forever. 4 free measurement reports included.' : '$149/month flat, unlimited minutes.'}</p>
+      <p class="text-gray-400 mb-8 text-sm">${featureSlug === 'measurements' ? '4 free reports on signup, no credit card.' : featureSlug === 'crm' ? 'Free forever. 4 free measurement reports included.' : '$149/month flat, unlimited minutes.'}</p>
       <a href="/register" onclick="rrTrack('cta_click',{location:'feature_state_${featureSlug}_${stateSlug}_footer'})" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.03]"><i class="fas fa-rocket"></i> Start Free &mdash; ${state.name}</a>
     </div>
   </section>

@@ -369,11 +369,11 @@ US MARKET REQUIREMENTS (this article targets US contractors):
 - Mention at least one US building code by name (IRC 2021, Florida Building Code, Texas Windstorm requirements, etc.).
 - Mention at least one major US insurer by name (State Farm, Allstate, USAA, Farmers, Travelers, Nationwide, etc.).
 - Include at least one US-specific climate/weather fact with a number (e.g., "Texas averages 30 hail days per year").
-- Never write "$X CAD". Write "$X" or "$X USD". Roof Manager reports cost $8 USD per report after 3 free.
+- Never write "$X CAD". Write "$X" or "$X USD". Roof Manager reports cost $8 USD per report after 4 free.
 - Write "As of 2026" in the first paragraph to establish freshness.` : `
 CANADIAN MARKET REQUIREMENTS:
 - Use Canadian English.
-- Mention CAD pricing where relevant: Roof Manager reports cost $8 CAD after 3 free.
+- Mention CAD pricing where relevant: Roof Manager reports cost $8 CAD after 4 free.
 - Reference relevant Canadian building codes (NBC, provincial codes) where applicable.`
 
   return `You are an expert SEO/GEO content writer AND satellite roof-measurement keyword strategist for ${brand}${stateBlock}${recentPostsBlock}${geoHubHint}

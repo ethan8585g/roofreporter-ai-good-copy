@@ -462,7 +462,7 @@ function renderPinStep(root, progressBar) {
             <div class="flex items-center gap-4">
               <div class="w-12 h-12 bg-blue-500/15/100 rounded-xl flex items-center justify-center shadow"><i class="fas fa-crown text-white text-xl"></i></div>
               <div>
-                <p class="font-bold text-white text-base">Your 3 Free Trials Are Used Up!</p>
+                <p class="font-bold text-white text-base">Your 4 Free Trials Are Used Up!</p>
                 <p class="text-sm text-brand-200 mt-0.5">Subscribe to <strong class="text-emerald-300">Roof Manager Pro</strong> for just <strong class="text-white">$49/month</strong></p>
               </div>
             </div>
@@ -2327,7 +2327,7 @@ function showSubscriptionRequiredOverlay() {
           <i class="fas fa-crown" style="color:white;font-size:28px"></i>
         </div>
         <h2 style="font-size:22px;font-weight:800;color:#111;margin-bottom:6px">Choose Your Membership</h2>
-        <p style="color:#6b7280;font-size:14px">Your 3 free trial reports have been used. Subscribe to continue generating reports.</p>
+        <p style="color:#6b7280;font-size:14px">Your 4 free trial reports have been used. Subscribe to continue generating reports.</p>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">

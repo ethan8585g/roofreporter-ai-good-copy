@@ -534,7 +534,7 @@ function renderOverview() {
         <div class="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center"><i class="fas fa-gift text-white"></i></div>
         <div>
           <h3 class="font-bold text-blue-900 text-sm">Free Trial Program</h3>
-          <p class="text-xs text-blue-600">Every new user gets 3 free reports. Trial orders are $0 and excluded from revenue.</p>
+          <p class="text-xs text-blue-600">Every new user gets 4 free reports. Trial orders are $0 and excluded from revenue.</p>
         </div>
       </div>
       <div class="grid grid-cols-2 md:grid-cols-5 gap-3">

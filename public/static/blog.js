@@ -546,7 +546,7 @@
       name: 'AI Measurement Reports',
       headline: 'Get the measurement — quote from your truck',
       sub: '99% accuracy in under 60 seconds · No credit card needed',
-      cta: 'Start 3 Free Reports'
+      cta: 'Start 4 Free Reports'
     };
   }
 
@@ -696,7 +696,7 @@
           '<textarea id="bc-message" rows="3" placeholder="Tell us about your roofing business..." class="w-full px-4 py-3 bg-white/10 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88] focus:border-transparent outline-none resize-none"></textarea>' +
           '<div id="bc-msg" class="hidden text-sm font-medium px-4 py-3 rounded-lg"></div>' +
           '<button type="submit" id="bc-submit" class="w-full py-4 font-extrabold rounded-xl text-lg transition-all shadow-xl" style="background:#00FF88;color:#0A0A0A"><i class="fas fa-rocket mr-2"></i>Get My Free Reports</button>' +
-          '<p class="text-center text-xs text-gray-600 mt-1"><i class="fas fa-lock mr-1" style="color:#00FF88"></i>No credit card required &middot; 3 free reports included</p>' +
+          '<p class="text-center text-xs text-gray-600 mt-1"><i class="fas fa-lock mr-1" style="color:#00FF88"></i>No credit card required &middot; 4 free reports included</p>' +
           '<div class="text-center my-3"><span class="text-gray-600 text-xs">— or skip the form —</span></div>' +
           '<a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="block w-full py-4 font-bold rounded-xl text-sm transition-all text-center border border-white/10 hover:border-white/20" style="background:rgba(255,255,255,0.05);color:#fff"><i class="fas fa-calendar-check mr-2" style="color:#00FF88"></i>Book a Free 15-Min Demo Instead</a>' +
         '</form>' +

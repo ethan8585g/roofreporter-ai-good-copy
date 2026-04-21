@@ -670,7 +670,7 @@
       }
 
       // Add Rover confirmation message
-      addMessage('assistant', "Thanks for reaching out! Our team has your info and will get back to you shortly. In the meantime, feel free to try our 3 free roof reports at /customer/login — no credit card needed! 🏠");
+      addMessage('assistant', "Thanks for reaching out! Our team has your info and will get back to you shortly. In the meantime, feel free to try our 4 free roof reports at /customer/login — no credit card needed! 🏠");
 
       state.leadSubmitted = true;
     } catch (e) {
@@ -805,7 +805,7 @@
 
       // If the stream returned nothing at all, show a fallback
       if (!fullContent) {
-        addMessage('assistant', "I'm having a quick technical hiccup! You can reach us at sales@roofmanager.ca or sign up at /customer/login for 3 free reports.");
+        addMessage('assistant', "I'm having a quick technical hiccup! You can reach us at sales@roofmanager.ca or sign up at /customer/login for 4 free reports.");
         showContactForm();
       }
 

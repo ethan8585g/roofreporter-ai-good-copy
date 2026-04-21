@@ -33,7 +33,7 @@ YOUR PERSONALITY:
 YOUR PRIMARY GOALS (in order):
 1. Answer the visitor's question accurately and helpfully
 2. Qualify the lead — understand their business, volume, and needs
-3. Move them toward signing up at /customer/login (3 FREE reports, no credit card)
+3. Move them toward signing up at /customer/login (4 FREE reports, no credit card)
 4. ACTIVELY collect their name, email, and company — this is CRITICAL. Do NOT let a conversation go more than 3-4 exchanges without asking for their contact info. Use natural transitions like: "By the way, what's your name and email? I can have our team send you more info!" or "So we can follow up with the best options for you, could I grab your name and email?" If they dodge the question, circle back to it within 2 more messages. Frame it as helping THEM — "So I can make sure you get the most relevant info..." Always push for at least name + email.
 5. If you truly cannot help, guide them to the contact form or email sales@roofmanager.ca
 
@@ -54,7 +54,7 @@ PRICING — BE EXACT, NO GUESSING
 ═══════════════════════════════════════════════════
 
 FREE TRIAL:
-- 3 FREE roof measurement reports when you sign up
+- 4 FREE roof measurement reports when you sign up
 - No credit card required — just name and email
 - Full-featured reports, same as paid version
 - Sign up at: /customer/login
@@ -219,7 +219,7 @@ Q: "Can I try it for free?"
 A: Absolutely! Sign up at /customer/login — you get 3 completely free roof reports, no credit card required. Same full-featured reports that paid customers get.
 
 Q: "What if I need a lot of reports?"
-A: We offer credit packs for volume users at discounted rates. After your 3 free reports, each additional report is $8 CAD. If you're doing 50+ reports a month, reach out to sales@roofmanager.ca and we can discuss volume pricing.
+A: We offer credit packs for volume users at discounted rates. After your 4 free reports, each additional report is $8 CAD. If you're doing 50+ reports a month, reach out to sales@roofmanager.ca and we can discuss volume pricing.
 
 Q: "Can I brand the reports with my company logo?"
 A: Yes! Through your customer portal, you can add your company logo, name, and contact info to every report. Your clients will see YOUR brand, not ours.
@@ -242,13 +242,13 @@ RESPONSE GUIDELINES
 
 1. ALWAYS answer the visitor's question FIRST, then add your sales angle
 2. Keep responses 2-4 sentences unless the question needs more detail
-3. Use specific numbers and facts — $8 per report, < 60 seconds, 3 free reports
+3. Use specific numbers and facts — $8 per report, < 60 seconds, 4 free reports
 4. NEVER make up features, pricing, or capabilities not listed above
 5. If you genuinely don't know something, say: "That's a great question! I'd recommend reaching out to our team at sales@roofmanager.ca or filling out the contact form so we can get you the right answer."
 6. Always try to understand what brought them to the site and what their business does
 7. If they mention company size, estimate volume, or specific needs, note this — they're a qualified lead
 8. End responses with a question or clear next step when natural
-9. If they seem ready to try, push them to sign up: "Want to give it a spin? Head to /customer/login — your 3 free reports are waiting!"
+9. If they seem ready to try, push them to sign up: "Want to give it a spin? Head to /customer/login — your 4 free reports are waiting!"
 10. Be honest — if a feature doesn't exist yet, say "we're working on that" rather than making promises
 11. PHONE NUMBER REQUESTS: If someone asks for a phone number or wants to call us, give them our number: 780-983-3335. Example: "Absolutely! You can reach us at 780-983-3335. We'd love to chat! 📞" Also try to collect their name and email while you're at it.
 12. LEAD FORM PUSH: After answering any substantive question, try to steer toward collecting their name and email. Use the built-in lead form — tell them: "Want me to have our team reach out? Just drop your name and email below!" or "Fill out the quick form below so we can send you more details!" Be persistent but not annoying — if they haven't given contact info after 3-4 messages, make it a direct ask.`
@@ -593,7 +593,7 @@ roverRoutes.post('/chat', async (c) => {
     console.error('Rover chat error:', err)
     return c.json({ 
       error: 'Chat service temporarily unavailable', 
-      reply: "I'm having a quick technical hiccup! You can reach our team at sales@roofmanager.ca or sign up at /customer/login for 3 free reports. We'll be back in just a moment!",
+      reply: "I'm having a quick technical hiccup! You can reach our team at sales@roofmanager.ca or sign up at /customer/login for 4 free reports. We'll be back in just a moment!",
       show_contact_form: true,
       session_id: (await c.req.json().catch(() => ({}))).session_id
     }, 200) // Return 200 so frontend can display the message
@@ -607,7 +607,7 @@ function getFallbackResponse(message: string): string {
   const msg = message.toLowerCase()
 
   if (msg.includes('price') || msg.includes('cost') || msg.includes('how much') || msg.includes('pricing')) {
-    return "Great question! Our roof reports are just $8 CAD each — and you get 3 FREE reports when you sign up (no credit card needed)! We also offer credit packs for volume discounts. Want to try it out? Head to /customer/login to claim your free reports! 🏠"
+    return "Great question! Our roof reports are just $8 CAD each — and you get 4 FREE reports when you sign up (no credit card needed)! We also offer credit packs for volume discounts. Want to try it out? Head to /customer/login to claim your free reports! 🏠"
   }
   
   if (msg.includes('free') || msg.includes('trial') || msg.includes('try')) {
@@ -615,11 +615,11 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('report') && (msg.includes('what') || msg.includes('include') || msg.includes('in a'))) {
-    return "Our reports are packed with data! You get true 3D roof area, pitch analysis, segment breakdown, edge measurements (ridge, hip, valley, eave, rake), a full material Bill of Materials with Alberta pricing, solar potential, and satellite imagery — all in a downloadable PDF. Ready to see one? Sign up at /customer/login for 3 free reports! 📊"
+    return "Our reports are packed with data! You get true 3D roof area, pitch analysis, segment breakdown, edge measurements (ridge, hip, valley, eave, rake), a full material Bill of Materials with Alberta pricing, solar potential, and satellite imagery — all in a downloadable PDF. Ready to see one? Sign up at /customer/login for 4 free reports! 📊"
   }
 
   if (msg.includes('accurate') || msg.includes('accuracy') || msg.includes('reliable')) {
-    return "Our reports are typically within 2-5% of manual measurements! We use Google's Solar API with real satellite imagery — not estimates. Each report includes a confidence score too. Want to test it against one of your manually measured properties? Get 3 free reports at /customer/login! 🎯"
+    return "Our reports are typically within 2-5% of manual measurements! We use Google's Solar API with real satellite imagery — not estimates. Each report includes a confidence score too. Want to test it against one of your manually measured properties? Get 4 free reports at /customer/login! 🎯"
   }
 
   if (msg.includes('cover') || msg.includes('area') || msg.includes('where') || msg.includes('location') || msg.includes('canada')) {
@@ -627,7 +627,7 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('fast') || msg.includes('quick') || msg.includes('how long') || msg.includes('delivery') || msg.includes('time')) {
-    return "Lightning fast! Reports arrive in under 60 seconds, guaranteed. Enter the address, confirm, and download your PDF — that's it. No waiting hours or days like some competitors. Try it now at /customer/login with 3 free reports! ⚡"
+    return "Lightning fast! Reports arrive in under 60 seconds, guaranteed. Enter the address, confirm, and download your PDF — that's it. No waiting hours or days like some competitors. Try it now at /customer/login with 4 free reports! ⚡"
   }
 
   if (msg.includes('brand') || msg.includes('logo') || msg.includes('custom')) {
@@ -655,7 +655,7 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('eagleview') || msg.includes('hover') || msg.includes('competitor') || msg.includes('compare') || msg.includes('vs') || msg.includes('versus')) {
-    return "Great comparison question! Roof Manager is $8/report vs. $15-$50+ with competitors, with instant delivery (< 60 seconds vs. 24-72 hours), and includes built-in CRM, invoicing, and D2D tools that others don't offer. Plus 3 free reports to test it out at /customer/login! 🏆"
+    return "Great comparison question! Roof Manager is $8/report vs. $15-$50+ with competitors, with instant delivery (< 60 seconds vs. 24-72 hours), and includes built-in CRM, invoicing, and D2D tools that others don't offer. Plus 4 free reports to test it out at /customer/login! 🏆"
   }
 
   if (msg.includes('drone')) {
@@ -671,7 +671,7 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('insurance') || msg.includes('claim') || msg.includes('adjuster')) {
-    return "Many insurance adjusters find our reports extremely useful! We provide detailed measurements, edge breakdowns, material BOMs, and confidence scores — exactly the kind of data claims require. Try it with 3 free reports at /customer/login to see if it fits your workflow! 🏥"
+    return "Many insurance adjusters find our reports extremely useful! We provide detailed measurements, edge breakdowns, material BOMs, and confidence scores — exactly the kind of data claims require. Try it with 4 free reports at /customer/login to see if it fits your workflow! 🏥"
   }
 
   if (msg.includes('solar') || msg.includes('panel') || msg.includes('energy')) {
@@ -679,7 +679,7 @@ function getFallbackResponse(message: string): string {
   }
 
   // Default fallback — prompt contact form
-  return "That's a great question! I want to make sure you get the most accurate answer. You can reach our team directly at sales@roofmanager.ca, or fill out the contact form below and we'll get back to you quickly. In the meantime, you can try 3 free roof reports at /customer/login — no credit card needed! 😊"
+  return "That's a great question! I want to make sure you get the most accurate answer. You can reach our team directly at sales@roofmanager.ca, or fill out the contact form below and we'll get back to you quickly. In the meantime, you can try 4 free roof reports at /customer/login — no credit card needed! 😊"
 }
 
 // POST /api/rover/end — End a conversation
