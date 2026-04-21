@@ -209,10 +209,21 @@
           field('System Size (kW)', 'system_kw', 'number', d.system_kw) +
           field('Contract Value (CAD)', 'contract_value_cad', 'number', d.contract_value_cad) +
         '</div>' +
+
+        '<details class="pt-2"><summary class="cursor-pointer text-[11px] font-bold text-amber-400 uppercase">Utility Info (for savings math)</summary>' +
+        '<div class="grid grid-cols-2 gap-3 mt-3">' +
+          field('Annual Consumption (kWh)', 'annual_consumption_kwh', 'number', d.annual_consumption_kwh) +
+          field('Utility Rate ($/kWh)', 'utility_rate_per_kwh', 'number', d.utility_rate_per_kwh) +
+          field('Rate Escalator (%/yr)', 'utility_escalator_pct', 'number', d.utility_escalator_pct) +
+          field('Utility Provider', 'utility_provider', 'text', d.utility_provider) +
+        '</div>' +
+        '</details>' +
+
         '<div><label class="block text-[11px] font-bold text-gray-400 uppercase mb-1">Notes</label><textarea name="notes" rows="3" class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white">' + esc(d.notes || '') + '</textarea></div>' +
 
         (isNew ? '' :
           '<div class="pt-4 border-t border-gray-700 flex flex-wrap gap-2">' +
+            '<button type="button" onclick="window._spGenerateProposal(' + d.id + ')" class="inline-flex items-center px-3 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-bold text-white"><i class="fas fa-bolt mr-2"></i>Generate Proposal</button>' +
             '<a href="/customer/solar-documents?deal=' + d.id + '" class="inline-flex items-center px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-amber-300"><i class="fas fa-folder mr-2"></i>Contracts & Paperwork</a>' +
             '<a href="/customer/solar-permits?deal=' + d.id + '" class="inline-flex items-center px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-amber-300"><i class="fas fa-file-signature mr-2"></i>Permits</a>' +
           '</div>') +
@@ -262,6 +273,51 @@
     if (!confirm('Delete this deal?')) return;
     fetch('/api/customer/solar-pipeline/' + id, { method: 'DELETE', headers: authHeaders() })
       .then(function() { window._spCloseModal(); load(); });
+  };
+
+  // Generate an interactive web proposal for this deal, then immediately
+  // mark it sent and hand the rep a shareable link to text to the homeowner.
+  window._spGenerateProposal = function(dealId) {
+    var btn = event && event.target;
+    if (btn && btn.tagName === 'I') btn = btn.parentElement;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating…'; }
+    // Pull the latest deal row for system_kw + utility fields so the snapshot is correct.
+    var d = state.deals.find(function(x) { return x.id === dealId; }) || {};
+    var payload = {
+      deal_id: dealId,
+      system_kw: Number(d.system_kw) || 0,
+      panel_count: Math.max(1, Math.round((Number(d.system_kw) || 0) * 1000 / 400)),
+      annual_kwh: Math.round((Number(d.system_kw) || 0) * 1200),
+    };
+    fetch('/api/customer/solar-proposals', {
+      method: 'POST', headers: authHeaders(), body: JSON.stringify(payload),
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(created) {
+        if (!created || !created.id) throw new Error('create failed');
+        return fetch('/api/customer/solar-proposals/' + created.id + '/send', {
+          method: 'POST', headers: authHeaders(),
+        }).then(function(r) { return r.json(); }).then(function(sent) {
+          return Object.assign({}, created, sent);
+        });
+      })
+      .then(function(out) {
+        var url = window.location.origin + out.public_url;
+        var ok = false;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url);
+            ok = true;
+          }
+        } catch (e) { /* fall through to prompt */ }
+        alert((ok ? 'Proposal link copied to clipboard:\n\n' : 'Proposal link:\n\n') + url + '\n\nText this to the homeowner. Deal moved to Proposal Sent.');
+        window._spCloseModal();
+        load();
+      })
+      .catch(function(err) {
+        alert('Could not generate proposal: ' + (err && err.message ? err.message : 'unknown error'));
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-bolt mr-2"></i>Generate Proposal'; }
+      });
   };
 
   // Drag & drop between stage columns

@@ -114,6 +114,11 @@ solarPipelineRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id')
   const b = await c.req.json().catch(() => ({}))
 
+  // Pre-read for stage-change detection (used after the update to fire emails).
+  const before = await c.env.DB.prepare(
+    `SELECT * FROM solar_deals WHERE customer_id = ? AND id = ?`
+  ).bind(auth.ownerId, id).first<any>()
+
   const allowed = [
     'homeowner_name','homeowner_email','homeowner_phone','property_address','property_city','property_province',
     'lead_source','lead_source_detail','stage','lost_reason',
@@ -121,6 +126,8 @@ solarPipelineRoutes.patch('/:id', async (c) => {
     'setter_commission_pct','closer_commission_pct','installer_commission_pct','override_commission_pct',
     'system_kw','contract_value_cad','notes',
     'appointment_at','proposal_sent_at','signed_at','install_scheduled_at','installed_at','paid_at',
+    // Utility-bill inputs (migration 0179) — drives savings math on the homeowner proposal.
+    'annual_consumption_kwh','utility_rate_per_kwh','utility_escalator_pct','utility_provider','utility_bill_r2_key',
   ]
   const sets: string[] = []
   const vals: any[] = []
@@ -138,6 +145,21 @@ solarPipelineRoutes.patch('/:id', async (c) => {
   await c.env.DB.prepare(
     `UPDATE solar_deals SET ${sets.join(', ')} WHERE customer_id = ? AND id = ?`
   ).bind(...vals).run()
+
+  // Fire stage-change automations (email homeowner on install_scheduled /
+  // installed). Fire-and-forget so the rep's PATCH never blocks on email.
+  if (before && b.stage && b.stage !== before.stage) {
+    try {
+      const after = await c.env.DB.prepare(
+        `SELECT * FROM solar_deals WHERE customer_id = ? AND id = ?`
+      ).bind(auth.ownerId, id).first<any>()
+      if (after) {
+        const { onDealStageChange } = await import('../services/solar-automations')
+        c.executionCtx.waitUntil(onDealStageChange(c.env as any, after, before.stage, after.stage).catch(() => {}))
+      }
+    } catch {}
+  }
+
   return c.json({ success: true })
 })
 

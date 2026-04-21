@@ -409,3 +409,59 @@ export function generatePanelLayout(
     warnings,
   }
 }
+
+// ─── PVWatts upgrade ────────────────────────────────────────
+// Takes the Liu-Jordan result from generatePanelLayout and asks NREL PVWatts
+// V8 for a real 8,760-hr simulation per segment. On any failure we leave the
+// original estimate in place. Caller is expected to stash `production_simulation`
+// on the report row so we don't re-run NREL for every proposal page load.
+export interface LayoutWithPVWatts extends PanelLayoutResult {
+  annual_kwh_pvwatts?: number
+  annual_kwh_source: 'pvwatts_v8' | 'liu_jordan'
+  monthly_kwh?: number[]           // length 12, only set when source = pvwatts
+  production_simulation?: unknown  // raw batch result for storage
+}
+
+export async function upgradeLayoutWithPVWatts(
+  env: { NREL_API_KEY?: string },
+  layout: PanelLayoutResult,
+  site: LatLng,
+  logger?: (msg: string) => void,
+): Promise<LayoutWithPVWatts> {
+  const { runPVWattsForSegments } = await import('./pvwatts')
+  try {
+    const perSegCapacity = new Map<number, number>()
+    for (const p of layout.suggested_panels) {
+      perSegCapacity.set(
+        p.segment_index,
+        (perSegCapacity.get(p.segment_index) || 0) + layout.panel_capacity_watts / 1000,
+      )
+    }
+    const segInputs = layout.segments_placed
+      .filter((s) => s.panel_count > 0 && (perSegCapacity.get(s.segment_index) || 0) > 0.05)
+      .map((s) => ({
+        segment_index: s.segment_index,
+        system_capacity_kw: perSegCapacity.get(s.segment_index) || 0,
+        tilt_deg: s.pitch_deg,
+        azimuth_deg: s.azimuth_deg,
+        array_type: 1 as const,
+      }))
+    if (segInputs.length === 0) {
+      return { ...layout, annual_kwh_source: 'liu_jordan' }
+    }
+    const batch = await runPVWattsForSegments(env, site, segInputs)
+    if (batch.failures >= segInputs.length) {
+      return { ...layout, annual_kwh_source: 'liu_jordan' }
+    }
+    return {
+      ...layout,
+      annual_kwh_pvwatts: batch.total_annual_kwh,
+      monthly_kwh: batch.total_monthly_kwh,
+      annual_kwh_source: 'pvwatts_v8',
+      production_simulation: batch,
+    }
+  } catch (e: any) {
+    logger?.(`[pvwatts] fell back to liu_jordan: ${e?.message || e}`)
+    return { ...layout, annual_kwh_source: 'liu_jordan' }
+  }
+}

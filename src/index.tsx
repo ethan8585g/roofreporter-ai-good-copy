@@ -71,7 +71,7 @@ import usStatesRoutes from './routes/us-states'
 import usVerticalsRoutes from './routes/us-verticals'
 import usComparisonsRoutes from './routes/us-comparisons'
 import caProvincesRoutes from './routes/ca-provinces'
-import { ALL_STATE_SLUGS as US_ALL_STATE_SLUGS, US_CITIES as US_CITIES_DATA, US_STATES, type USStateData } from './data/us-states'
+import { ALL_STATE_SLUGS as US_ALL_STATE_SLUGS, US_CITIES as US_CITIES_DATA, US_STATES, type USStateData, type USCityData } from './data/us-states'
 import { ALL_PROVINCE_SLUGS as CA_ALL_PROVINCE_SLUGS } from './data/ca-provinces'
 import { processOrderQueue } from './services/ai-agent'
 import { runContentAgent } from './services/content-agent'
@@ -79,6 +79,7 @@ import { runLeadAgent } from './services/lead-agent'
 import { runEmailAgent } from './services/email-agent'
 import { runMonitorAgent } from './services/monitor-agent'
 import { runTrafficAgent } from './services/traffic-agent'
+import { renderSolarWebProposal } from './templates/solar-web-proposal'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -1603,6 +1604,8 @@ app.get('/features/measurements/:slug', (c) => {
   const slug = c.req.param('slug').toLowerCase()
   const city = seoCities[slug]
   if (city) return c.html(getFeatureCityPageHTML(slug, city))
+  const usCity = US_CITIES_DATA.find(u => u.slug === slug)
+  if (usCity) return c.html(getFeatureUSCityPageHTML('measurements', usCity))
   const state = US_STATES[slug]
   if (state) return c.html(getFeatureStateHubPageHTML('measurements', slug, state))
   return c.redirect('/features/measurements')
@@ -1611,6 +1614,8 @@ app.get('/features/crm/:slug', (c) => {
   const slug = c.req.param('slug').toLowerCase()
   const city = seoCities[slug]
   if (city) return c.html(getFeatureCityHubPageHTML('crm', slug, city))
+  const usCity = US_CITIES_DATA.find(u => u.slug === slug)
+  if (usCity) return c.html(getFeatureUSCityPageHTML('crm', usCity))
   const state = US_STATES[slug]
   if (state) return c.html(getFeatureStateHubPageHTML('crm', slug, state))
   return c.redirect('/features/crm')
@@ -1619,6 +1624,8 @@ app.get('/features/ai-secretary/:slug', (c) => {
   const slug = c.req.param('slug').toLowerCase()
   const city = seoCities[slug]
   if (city) return c.html(getFeatureCityHubPageHTML('ai-secretary', slug, city))
+  const usCity = US_CITIES_DATA.find(u => u.slug === slug)
+  if (usCity) return c.html(getFeatureUSCityPageHTML('ai-secretary', usCity))
   const state = US_STATES[slug]
   if (state) return c.html(getFeatureStateHubPageHTML('ai-secretary', slug, state))
   return c.redirect('/features/ai-secretary')
@@ -1629,6 +1636,17 @@ app.get('/roofr-alternative', (c) => { return c.html(getComparisonPageHTML('roof
 app.get('/roofsnap-vs-roofmanager', (c) => { return c.html(getComparisonPageHTML('roofsnap')) })
 app.get('/roofr-pricing-complaints', (c) => { return c.html(getComparisonPageHTML('roofr-pricing')) })
 app.get('/cheaper-alternative-to-eagleview', (c) => { return c.html(getComparisonPageHTML('eagleview')) })
+// Category-level comparison hub + Xactimate alternative (US-primary commercial intent)
+app.get('/roofing-software-comparison', (c) => c.html(getRoofingSoftwareComparisonHubHTML()))
+app.get('/xactimate-alternative', (c) => c.html(getXactimateAlternativeHTML()))
+// Help / knowledge base
+app.get('/help', (c) => c.html(getHelpHubHTML()))
+app.get('/help/:slug', (c) => {
+  const slug = c.req.param('slug').toLowerCase()
+  const article = HELP_ARTICLES[slug]
+  if (!article) return c.redirect('/help')
+  return c.html(getHelpArticleHTML(slug, article))
+})
 
 // Coverage Map Page (public, SEO)
 app.get('/coverage', (c) => {
@@ -2853,6 +2871,158 @@ app.get('/report/share/:token', async (c) => {
     console.error('[ShareReport]', err.message)
     return c.html(`<!DOCTYPE html><html><body><p>Error loading report.</p></body></html>`, 500)
   }
+})
+
+// ── Public solar proposal view (token-gated, no auth) ────────
+// Mobile-first homeowner HTML. Increments view_count, stamps first_viewed_at,
+// logs a funnel event. Voided / expired tokens return 410.
+app.get('/p/solar/:token', async (c) => {
+  try {
+    const token = String(c.req.param('token') || '').replace(/[^a-f0-9]/gi, '').slice(0, 64)
+    if (!token) return c.text('Not found', 404)
+    const row = await c.env.DB.prepare(
+      `SELECT sp.*,
+              COALESCE(cu.brand_business_name, cu.company_name, cu.name) AS cu_company,
+              COALESCE(cu.brand_email, cu.email) AS cu_email,
+              COALESCE(cu.brand_phone, cu.phone) AS cu_phone,
+              cu.brand_logo_url AS cu_logo,
+              cu.brand_primary_color AS cu_color,
+              cu.name AS cu_rep
+       FROM solar_proposals sp
+       LEFT JOIN customers cu ON cu.id = sp.customer_id
+       WHERE sp.share_token = ?`
+    ).bind(token).first<any>()
+    if (!row) return c.html('<h1>Proposal not found</h1>', 404)
+    if (row.status === 'draft') return c.html('<h1>This proposal has not been sent yet</h1>', 404)
+    if (row.status === 'voided') return c.html('<h1>This proposal has been withdrawn</h1>', 410)
+    if (row.expires_at && new Date(row.expires_at) < new Date()) {
+      return c.html('<h1>This proposal has expired</h1>', 410)
+    }
+
+    // Stamp first_viewed_at + increment view count. Also mark status='viewed'
+    // if still 'sent' so the rep's dashboard lights up.
+    const firstView = !row.first_viewed_at
+    await c.env.DB.prepare(
+      `UPDATE solar_proposals
+         SET view_count = COALESCE(view_count, 0) + 1,
+             first_viewed_at = COALESCE(first_viewed_at, datetime('now')),
+             last_viewed_at = datetime('now'),
+             status = CASE WHEN status = 'sent' THEN 'viewed' ELSE status END,
+             updated_at = datetime('now')
+       WHERE share_token = ?`
+    ).bind(token).run().catch(() => {})
+
+    if (firstView) {
+      c.env.DB.prepare(
+        `INSERT INTO solar_proposal_events (proposal_id, event_type, user_agent)
+         VALUES (?, 'proposal_viewed', ?)`
+      ).bind(row.id, c.req.header('user-agent') || '').run().catch(() => {})
+    }
+
+    const html = renderSolarWebProposal(row, {
+      name: row.cu_company,
+      email: row.cu_email,
+      phone: row.cu_phone,
+      logo_url: row.cu_logo,
+      primary_color: row.cu_color,
+      rep_name: row.cu_rep,
+    }, { mapsKey: c.env.GOOGLE_MAPS_API_KEY })
+    return c.html(html)
+  } catch (err: any) {
+    console.error('[SolarProposal]', err?.message || err)
+    return c.html('<h1>Error loading proposal</h1>', 500)
+  }
+})
+
+// ── Homeowner signs the proposal ─────────────────────────────
+// Accepts { signer_name, signature_png_base64 }. We store the PNG in the
+// D1 row directly (it's ~5-30 KB, well under the 2 MB limit) so there's no
+// R2 dependency. `signature_image_r2_key` was planned for large R2 assets;
+// we reuse it as the data URL field to stay schema-additive.
+app.post('/p/solar/:token/sign', async (c) => {
+  try {
+    const token = String(c.req.param('token') || '').replace(/[^a-f0-9]/gi, '').slice(0, 64)
+    if (!token) return c.json({ error: 'bad token' }, 400)
+    const body = await c.req.json().catch(() => ({}))
+    const signerName = String(body.signer_name || '').slice(0, 200).trim()
+    const png = String(body.signature_png_base64 || '')
+    if (!signerName) return c.json({ error: 'signer_name required' }, 400)
+    if (!png.startsWith('data:image/png;base64,') || png.length > 500_000) {
+      return c.json({ error: 'signature image missing or too large' }, 400)
+    }
+
+    const row = await c.env.DB.prepare(
+      `SELECT id, customer_id, deal_id, status FROM solar_proposals WHERE share_token = ?`
+    ).bind(token).first<any>()
+    if (!row) return c.json({ error: 'not found' }, 404)
+    if (row.status === 'signed') return c.json({ success: true, already_signed: true })
+    if (row.status === 'voided' || row.status === 'rejected') {
+      return c.json({ error: 'this proposal cannot be signed' }, 409)
+    }
+
+    const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || null
+    await c.env.DB.prepare(
+      `UPDATE solar_proposals
+         SET status = 'signed',
+             signed_at = datetime('now'),
+             signer_name = ?,
+             signer_ip = ?,
+             signature_image_r2_key = ?,
+             updated_at = datetime('now')
+       WHERE share_token = ? AND status != 'signed'`
+    ).bind(signerName, ip, png, token).run()
+
+    // Auto-advance linked deal to 'signed'.
+    if (row.deal_id) {
+      await c.env.DB.prepare(
+        `UPDATE solar_deals
+           SET stage = 'signed',
+               signed_at = COALESCE(signed_at, datetime('now')),
+               updated_at = datetime('now')
+         WHERE customer_id = ? AND id = ?
+           AND stage IN ('new_lead','appointment_set','proposal_sent')`
+      ).bind(row.customer_id, row.deal_id).run().catch(() => {})
+    }
+
+    await c.env.DB.prepare(
+      `INSERT INTO solar_proposal_events (proposal_id, event_type, event_data_json, ip, user_agent)
+       VALUES (?, 'signed', ?, ?, ?)`
+    ).bind(row.id, JSON.stringify({ signer_name: signerName }), ip, c.req.header('user-agent') || '').run().catch(() => {})
+
+    // Fire rep notification email (best-effort — don't block signing on it).
+    try {
+      const { onProposalSigned } = await import('./services/solar-automations')
+      c.executionCtx.waitUntil(onProposalSigned(c.env, row.id).catch(() => {}))
+    } catch {}
+
+    return c.json({ success: true })
+  } catch (err: any) {
+    console.error('[SolarProposalSign]', err?.message || err)
+    return c.json({ error: 'server error' }, 500)
+  }
+})
+
+// ── Funnel analytics event (scroll depth, CTA click) ─────────
+app.post('/p/solar/:token/event', async (c) => {
+  try {
+    const token = String(c.req.param('token') || '').replace(/[^a-f0-9]/gi, '').slice(0, 64)
+    if (!token) return c.json({ error: 'bad token' }, 400)
+    const body = await c.req.json().catch(() => ({}))
+    const type = String(body.event_type || '').slice(0, 64)
+    if (!type || !/^[a-z0-9_]+$/.test(type)) return c.json({ error: 'bad event_type' }, 400)
+    const row = await c.env.DB.prepare(`SELECT id FROM solar_proposals WHERE share_token = ?`).bind(token).first<any>()
+    if (!row) return c.json({ error: 'not found' }, 404)
+    await c.env.DB.prepare(
+      `INSERT INTO solar_proposal_events (proposal_id, event_type, event_data_json, ip, user_agent)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind(
+      row.id, type,
+      JSON.stringify(body.data || {}),
+      c.req.header('cf-connecting-ip') || null,
+      c.req.header('user-agent') || '',
+    ).run()
+    return c.json({ success: true })
+  } catch { return c.json({ error: 'server error' }, 500) }
 })
 
 // Public proposal view page — tracks views when customer opens shared link
@@ -10901,6 +11071,215 @@ function getFeatureCityHubPageHTML(
         <a href="/features/measurements/${slug}" class="hover:text-[#00FF88] transition-colors">${city.name} Reports</a>
         <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a>
         <a href="/about" class="hover:text-[#00FF88] transition-colors">About</a>
+      </div>
+      <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
+    </div>
+  </footer>
+</body>
+</html>`
+}
+
+// ============================================================
+// FEATURE × US CITY — city-level US spokes using US_CITIES data.
+// Reuses the rich stormNarrative + insuranceNote from us-verticals data so
+// pages carry real local context instead of template boilerplate.
+// ============================================================
+function getFeatureUSCityPageHTML(
+  featureSlug: 'measurements' | 'crm' | 'ai-secretary',
+  city: USCityData
+): string {
+  const f = featureHubConfig[featureSlug]
+  if (!f) return '<html><body>Not found</body></html>'
+  const base = 'https://www.roofmanager.ca'
+  const today = new Date().toISOString().substring(0, 10)
+
+  const featureLabel =
+    featureSlug === 'measurements' ? 'Roof Measurement Software' :
+    featureSlug === 'crm' ? 'Roofing CRM' : 'AI Phone Receptionist'
+  const title = `${featureLabel} for ${city.name}, ${city.stateCode} Roofing Contractors — 2026`
+  const descRaw =
+    featureSlug === 'measurements'
+      ? `Satellite roof measurement reports for ${city.name}, ${city.state} contractors. $8 USD per report after 3 free. Insurance-ready documentation accepted by ${city.state} adjusters.`
+      : featureSlug === 'crm'
+      ? `Roofing CRM software for ${city.name}, ${city.state} contractors. Pipeline, proposals, invoicing, job scheduling. Free with every Roof Manager account. Built for ${city.state} storm-response workflows.`
+      : `24/7 AI phone receptionist for ${city.name}, ${city.state} roofing contractors. Local ${city.stateCode} area code numbers, automated storm-surge call handling, $149/month flat.`
+  const desc = descRaw
+
+  const breadcrumbSchema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: base },
+      { '@type': 'ListItem', position: 2, name: 'Features', item: `${base}/services` },
+      { '@type': 'ListItem', position: 3, name: f.title, item: `${base}/features/${featureSlug}` },
+      { '@type': 'ListItem', position: 4, name: `${city.name}, ${city.stateCode}`, item: `${base}/features/${featureSlug}/${city.slug}` },
+    ],
+  })
+  const softwareSchema = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': ['SoftwareApplication', 'LocalBusiness'],
+    name: `${f.schemaName} — ${city.name}, ${city.stateCode}`,
+    applicationCategory: f.schemaCategory,
+    operatingSystem: 'Web, iOS, Android',
+    url: `${base}/features/${featureSlug}/${city.slug}`,
+    image: `${base}/static/logo.png`,
+    description: desc,
+    geo: { '@type': 'GeoCoordinates', latitude: city.lat, longitude: city.lng },
+    areaServed: { '@type': 'City', name: city.name },
+    address: { '@type': 'PostalAddress', addressLocality: city.name, addressRegion: city.stateCode, addressCountry: 'US' },
+    offers: featureSlug === 'measurements'
+      ? { '@type': 'Offer', price: '8.00', priceCurrency: 'USD', description: 'Per report after 3 free' }
+      : featureSlug === 'crm'
+      ? { '@type': 'Offer', price: '0.00', priceCurrency: 'USD' }
+      : { '@type': 'Offer', price: '149.00', priceCurrency: 'USD', description: 'Flat monthly rate, unlimited minutes' },
+    aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.9', ratingCount: '200', bestRating: '5' },
+    provider: { '@type': 'Organization', name: 'Roof Manager', url: base },
+    dateModified: today,
+  })
+
+  const cityFaqs =
+    featureSlug === 'measurements'
+      ? [
+          { q: `How accurate are satellite roof measurements for ${city.name} properties?`, a: `For ${city.name}, ${city.stateCode} addresses with high-quality imagery, accuracy is within 2–5% of manual measurement. Every report includes a confidence score and imagery quality indicator.` },
+          { q: `Are Roof Manager reports accepted for ${city.name} insurance claims?`, a: city.insuranceNote + ' Reports include pitch-corrected area, edge breakdowns, and material BOMs that align with Xactimate line items.' },
+        ]
+      : featureSlug === 'crm'
+      ? [
+          { q: `Does Roof Manager CRM work for ${city.name} roofing contractors?`, a: `Yes. ${city.name}-area contractors use Roof Manager to manage leads, pipeline, invoices, and proposals. The CRM is included free with every account and integrates directly with measurement reports.` },
+          { q: `Can I track ${city.state} insurance claims separately from retail jobs?`, a: city.insuranceNote + ' Most ' + city.name + ' contractors create dedicated pipeline stages for insurance claims to track adjuster status and supplement requests.' },
+        ]
+      : [
+          { q: `Can the AI receptionist handle ${city.name} storm-surge call volume?`, a: city.stormNarrative + ' The AI answers every simultaneous call with zero hold times — critical during the first 48 hours after a ' + city.state + ' storm event.' },
+          { q: `Does the AI know ${city.name} insurance carriers?`, a: `Yes. ${city.insuranceNote} The AI captures claim numbers, carrier names, adjuster info, and deductibles automatically during intake.` },
+        ]
+  const combinedFaqs = [...cityFaqs, ...f.faq.slice(0, 3)]
+  const faqSchema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'FAQPage',
+    mainEntity: combinedFaqs.map(item => ({
+      '@type': 'Question', name: item.q,
+      acceptedAnswer: { '@type': 'Answer', text: item.a },
+    })),
+  })
+
+  const siblingCities = US_CITIES_DATA
+    .filter(c2 => c2.stateSlug === city.stateSlug && c2.slug !== city.slug)
+    .slice(0, 5)
+    .map(c2 => `<a href="/features/${featureSlug}/${c2.slug}" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-gray-400 hover:text-white transition-all"><i class="fas fa-map-marker-alt text-[${f.accentColor}] text-[10px]"></i>${c2.name}</a>`)
+    .join('')
+
+  const capabilities = f.capabilities.slice(0, 6).map(cap =>
+    `<li class="flex items-start gap-3 text-sm text-gray-300 leading-relaxed"><i class="fas fa-check-circle text-[${f.accentColor}] mt-0.5 flex-shrink-0"></i><span>${cap}</span></li>`
+  ).join('')
+
+  const faqHTML = combinedFaqs.map(item =>
+    `<div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="font-bold text-white text-sm mb-2">${item.q}</h3><p class="text-gray-400 text-sm leading-relaxed">${item.a}</p></div>`
+  ).join('')
+
+  return `<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  ${getHeadTags(`/features/${featureSlug}/${city.slug}`)}
+  <title>${title} | Roof Manager</title>
+  <meta name="description" content="${desc.replace(/"/g, '&quot;')}">
+  <link rel="canonical" href="${base}/features/${featureSlug}/${city.slug}">
+  <meta property="og:title" content="${title} | Roof Manager">
+  <meta property="og:description" content="${desc.replace(/"/g, '&quot;')}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${base}/features/${featureSlug}/${city.slug}">
+  <meta property="og:image" content="${f.ogImage}">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="${f.ogImage}">
+  <meta name="geo.region" content="US-${city.stateCode}">
+  <meta name="geo.placename" content="${city.name}, ${city.state}">
+  <meta name="geo.position" content="${city.lat};${city.lng}">
+  <script type="application/ld+json">${breadcrumbSchema}</script>
+  <script type="application/ld+json">${softwareSchema}</script>
+  <script type="application/ld+json">${faqSchema}</script>
+</head>
+<body style="background:#0A0A0A">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10"><span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span></a>
+      <div class="flex items-center gap-5">
+        <a href="/features/measurements" class="${featureSlug === 'measurements' ? `text-[${f.accentColor}]` : 'text-gray-400 hover:text-white'} text-sm font-medium transition-colors">Measurements</a>
+        <a href="/features/crm" class="${featureSlug === 'crm' ? `text-[${f.accentColor}]` : 'text-gray-400 hover:text-white'} text-sm font-medium transition-colors">CRM</a>
+        <a href="/features/ai-secretary" class="${featureSlug === 'ai-secretary' ? `text-[${f.accentColor}]` : 'text-gray-400 hover:text-white'} text-sm font-medium transition-colors">AI Secretary</a>
+        <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm transition-all">Start Free</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-7xl mx-auto px-4 pt-6 pb-2">
+    <nav class="flex items-center gap-2 text-xs text-gray-500">
+      <a href="/" class="hover:text-gray-300 transition-colors">Home</a><span>/</span>
+      <a href="/services" class="hover:text-gray-300 transition-colors">Features</a><span>/</span>
+      <a href="/features/${featureSlug}" class="hover:text-gray-300 transition-colors">${f.title}</a><span>/</span>
+      <a href="/us/${city.stateSlug}" class="hover:text-gray-300 transition-colors">${city.state}</a><span>/</span>
+      <span class="text-gray-300">${city.name}</span>
+    </nav>
+  </div>
+
+  <section class="py-20 lg:py-24" style="background:#0A0A0A">
+    <div class="max-w-5xl mx-auto px-4">
+      <div class="inline-flex items-center gap-2 bg-[${f.accentColor}]/10 text-[${f.accentColor}] rounded-full px-4 py-1.5 text-sm font-semibold mb-6"><i class="${f.icon}"></i> ${featureLabel} &middot; ${city.name}, ${city.stateCode}</div>
+      <h1 class="text-4xl lg:text-5xl font-black text-white mb-6 leading-tight tracking-tight">${title}</h1>
+      <p class="text-lg text-gray-400 mb-8 leading-relaxed max-w-3xl">${desc}</p>
+      <div class="bg-[#111] border border-white/10 rounded-xl p-5 mb-8 max-w-3xl"><p class="text-sm text-gray-300 leading-relaxed"><i class="fas fa-cloud-bolt text-[${f.accentColor}] mr-2"></i><strong>${city.name} storm context:</strong> ${city.stormNarrative}</p></div>
+      <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <a href="/register" onclick="rrTrack('cta_click',{location:'feature_us_city_${featureSlug}_${city.slug}_hero'})" class="inline-flex items-center justify-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-8 rounded-xl text-base shadow-xl shadow-[#00FF88]/20 transition-all hover:scale-[1.02]"><i class="fas fa-rocket"></i> Start Free in ${city.name}</a>
+        <a href="/us/${city.stateSlug}" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-3.5 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-map-marker-alt text-[${f.accentColor}]"></i> ${city.state} Hub</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-16 border-t border-white/5" style="background:#0d0d0d">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-2xl lg:text-3xl font-black text-white mb-8 text-center">What ${city.name} Contractors Get</h2>
+      <div class="bg-[#111] border border-white/10 rounded-2xl p-8"><ul class="space-y-4">${capabilities}</ul></div>
+    </div>
+  </section>
+
+  <section class="py-16 border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-4xl mx-auto px-4">
+      <h2 class="text-2xl font-black text-white mb-6 text-center">${city.name} Insurance &amp; Claims Context</h2>
+      <div class="bg-[#111] border border-white/10 rounded-xl p-6"><p class="text-gray-300 text-sm leading-relaxed">${city.insuranceNote}</p></div>
+    </div>
+  </section>
+
+  <section class="py-16 border-t border-white/5" style="background:#0d0d0d">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="text-2xl font-black text-white mb-8 text-center">FAQ &mdash; ${featureLabel} in ${city.name}</h2>
+      <div class="space-y-3">${faqHTML}</div>
+    </div>
+  </section>
+
+  ${siblingCities ? `
+  <section class="py-12 border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-lg font-bold text-white mb-4 text-center">Also in ${city.state}</h2>
+      <div class="flex flex-wrap justify-center gap-2">${siblingCities}</div>
+    </div>
+  </section>` : ''}
+
+  <section class="py-16 border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-3xl mx-auto px-4 text-center">
+      <h2 class="text-2xl font-black text-white mb-4">Ready to serve ${city.name} faster?</h2>
+      <p class="text-gray-400 mb-8 text-sm">${featureSlug === 'measurements' ? '3 free reports, no credit card.' : featureSlug === 'crm' ? 'CRM free forever. 4 free measurement reports included.' : '$149/month flat, unlimited minutes.'}</p>
+      <a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.03]"><i class="fas fa-rocket"></i> Start Free &mdash; ${city.name}</a>
+    </div>
+  </section>
+
+  <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+      <span class="font-bold text-gray-400">Roof Manager</span>
+      <div class="flex flex-wrap items-center gap-4">
+        <a href="/features/measurements" class="hover:text-[#00FF88]">Measurements</a>
+        <a href="/features/crm" class="hover:text-[#00FF88]">CRM</a>
+        <a href="/features/ai-secretary" class="hover:text-[#00FF88]">AI Secretary</a>
+        <a href="/us/${city.stateSlug}" class="hover:text-[#00FF88]">${city.state}</a>
+        <a href="/us" class="hover:text-[#00FF88]">All 50 States</a>
+        <a href="/pricing" class="hover:text-[#00FF88]">Pricing</a>
+        <a href="/about" class="hover:text-[#00FF88]">About</a>
       </div>
       <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
     </div>

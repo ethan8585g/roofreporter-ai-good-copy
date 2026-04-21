@@ -24,6 +24,11 @@ export type Bindings = {
   GOOGLE_SOLAR_API_KEY: string
   GOOGLE_MAPS_API_KEY: string
 
+  // NREL PVWatts V8 — hourly solar production simulation for proposal pages.
+  // Free key: https://developer.nrel.gov/signup/ (1000 req/hr). Falls back to
+  // rate-limited DEMO_KEY when unset, then to Liu-Jordan when the API errors.
+  NREL_API_KEY?: string
+
   // Storm Scout — R2 bucket for daily snapshots and shared secret for the
   // external cron job (GitHub Actions) that triggers ingestion.
   STORM_R2?: R2Bucket
