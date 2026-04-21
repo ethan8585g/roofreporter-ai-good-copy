@@ -35,6 +35,8 @@ const certState = {
   logoUploading: false,
   dirty: false,
   previewLoading: false,
+  // Whether the certificate setup section is expanded
+  certExpanded: false,
   // Invoicing automation
   invoicingSettings: {
     auto_invoice_enabled: false,
@@ -54,9 +56,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   await Promise.all([loadDesigns(), loadAutomationSettings(), loadSendLog(), loadInvoicingSettings(), loadCurrentLogo()]);
   certState.loading = false;
   render();
-  // Auto-load preview after first render
-  setTimeout(() => refreshPreview(), 300);
 });
+
+function toggleCertExpanded() {
+  certState.certExpanded = !certState.certExpanded;
+  render();
+  if (certState.certExpanded) {
+    setTimeout(() => refreshPreview(), 300);
+  }
+}
 
 async function loadDesigns() {
   try {
@@ -367,15 +375,25 @@ function render() {
   const activeTemplate = s.template_style || 'classic';
 
   root.innerHTML = `
-    <!-- Page Title -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px">
-      <div>
-        <h2 style="font-size:24px;font-weight:800;color:#111;margin:0">Auto-Send Certificate of Installation</h2>
-        <p style="font-size:14px;color:#6b7280;margin-top:4px">Design professional certificates and automate delivery to your customers</p>
+    <!-- Page Title / Collapsible Header -->
+    <div style="background:white;border-radius:16px;border:1px solid #e5e7eb;padding:20px 24px;margin-bottom:${certState.certExpanded ? '20px' : '0'};box-shadow:0 1px 3px rgba(0,0,0,0.04);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="width:44px;height:44px;border-radius:12px;background:#dcfce7;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="fas fa-certificate" style="color:#16a34a;font-size:20px"></i>
+        </div>
+        <div>
+          <h2 style="font-size:20px;font-weight:800;color:#111;margin:0">Auto-Send Certificate of Installation</h2>
+          <p style="font-size:13px;color:#6b7280;margin-top:2px">Design professional certificates and automate delivery to your customers</p>
+        </div>
       </div>
-      <button onclick="window.open('/api/crm/certificate-preview','_blank',JSON.stringify(certState.design))" style="display:none">hidden</button>
+      <button onclick="toggleCertExpanded()"
+        style="padding:10px 18px;border-radius:10px;border:1px solid ${certState.certExpanded ? '#e5e7eb' : '#16a34a'};background:${certState.certExpanded ? 'white' : '#16a34a'};color:${certState.certExpanded ? '#374151' : 'white'};font-size:13px;font-weight:700;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:8px">
+        <i class="fas fa-chevron-${certState.certExpanded ? 'up' : 'down'}"></i>
+        ${certState.certExpanded ? 'Collapse' : 'Expand'}
+      </button>
     </div>
 
+    ${certState.certExpanded ? `
     <!-- Template Strip -->
     <div style="background:white;border-radius:16px;border:1px solid #e5e7eb;padding:20px 24px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
@@ -786,6 +804,7 @@ function render() {
         <p style="font-size:12px;color:#16a34a;margin-top:2px">Each automated certificate saves ~10 minutes of manual work</p>
       </div>
     </div>
+    ` : ''}
     ` : ''}
 
     <!-- ════════════════════════════════════════════════════════ -->
