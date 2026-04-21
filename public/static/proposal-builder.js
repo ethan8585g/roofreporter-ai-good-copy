@@ -2009,8 +2009,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ============================================================
   // PROPOSAL TEMPLATES
+  // Two template sets — roofing vs solar — picked by the company's
+  // `company_type` field (see customer-dashboard.js line 144).
   // ============================================================
-  const PROPOSAL_TEMPLATES = [
+  const ROOFING_PROPOSAL_TEMPLATES = [
     {
       id: 'standard_replacement',
       label: 'Standard Replacement',
@@ -2062,6 +2064,77 @@ document.addEventListener('DOMContentLoaded', () => {
       payment: 'Inspection fee due upon delivery of written report. Payment accepted via cheque, e-transfer, or credit card.'
     }
   ];
+
+  const SOLAR_PROPOSAL_TEMPLATES = [
+    {
+      id: 'residential_solar',
+      label: 'Residential Solar',
+      icon: 'fa-solar-panel',
+      title: 'Residential Solar PV System Proposal',
+      description: 'Thank you for the opportunity to design a custom solar energy system for your home. This proposal outlines a grid-tied photovoltaic system sized to offset your annual electricity consumption and deliver long-term energy savings.',
+      scope: 'Design and engineering of a grid-tied solar PV system sized to target annual production based on your 12-month utility history.\nSupply and installation of Tier-1 monocrystalline solar panels, string or microinverters (per design), racking and mounting hardware rated for local wind and snow loads, DC/AC wiring, rapid-shutdown devices, and production monitoring.\nStructural and electrical engineering stamps where required.\nPermit application, utility interconnection application, and net-metering enrollment.\nFinal commissioning, inspection coordination, and homeowner walkthrough of the monitoring app.',
+      warranty: '25-year manufacturer warranty on solar panels (product and linear performance). 12-year warranty on microinverters (extendable to 25 years). 10-year workmanship warranty on installation, racking, flashings, and roof penetrations — any leak caused by our installation will be repaired at no cost during this period.',
+      payment: 'A 10% deposit is required at contract signing to begin engineering and permitting. 50% due upon equipment delivery to site. Remaining 40% due upon Permission to Operate (PTO) from the utility. Financing options (solar loan, lease, PPA) available on request. All prices are in Canadian Dollars (CAD) and include applicable rebates where noted.'
+    },
+    {
+      id: 'solar_plus_battery',
+      label: 'Solar + Battery',
+      icon: 'fa-battery-full',
+      title: 'Solar + Battery Storage Proposal',
+      description: 'This proposal pairs a grid-tied solar PV system with battery energy storage to provide backup power during outages and optimize self-consumption of the energy you produce.',
+      scope: 'Design and installation of a solar PV system plus AC- or DC-coupled battery storage system.\nIncludes: solar panels, inverter(s), lithium iron phosphate (LFP) battery, critical-loads sub-panel, automatic transfer switch, rapid-shutdown, and monitoring.\nProgramming of battery for self-consumption, time-of-use arbitrage, or backup priority per homeowner preference.\nAll electrical work performed by licensed electricians to NEC/CEC code.\nPermit, inspection, and utility interconnection coordination included.',
+      warranty: '25-year panel warranty, 10-year battery warranty (with guaranteed capacity retention per manufacturer spec sheet), 10-year inverter warranty, and 10-year workmanship warranty covering installation and roof penetrations.',
+      payment: '15% deposit at signing. 55% due at equipment delivery. 30% due upon commissioning and PTO. Eligible for federal and provincial clean-energy incentives where applicable — we will assist with rebate applications. All prices in CAD.'
+    },
+    {
+      id: 'commercial_solar',
+      label: 'Commercial Solar',
+      icon: 'fa-industry',
+      title: 'Commercial Solar PV System Proposal',
+      description: 'We are pleased to provide this proposal for a commercial-scale grid-tied solar PV installation on your facility. System design targets maximum kWh production within roof or ground-mount constraints and utility interconnection limits.',
+      scope: 'Site assessment, shade analysis, and production modeling (PVsyst or equivalent).\nStructural and electrical engineering, permitting, and utility interconnection applications (including any required impact studies).\nSupply and installation of commercial-grade PV modules, string inverters or central inverter with DC optimizers, ballasted or mechanically-attached racking per roof type, medium-voltage step-up where required, SCADA monitoring, and revenue-grade metering.\nCommissioning to IEEE 1547 standards.\nO&M handoff package including as-built drawings, warranty documents, and monitoring portal access.',
+      warranty: '25-year linear performance warranty on modules. 10-year standard inverter warranty (extensions available). 10-year workmanship warranty. Roof penetration warranty coordinated with existing roof manufacturer to preserve any active roof warranty.',
+      payment: '20% deposit to begin engineering. Progress payments tied to milestones: engineering complete, equipment delivery, mechanical completion, PTO. Net 30 on final invoice. Financing, PPA, and tax-equity structures available. All prices in CAD.'
+    },
+    {
+      id: 'solar_service_repair',
+      label: 'Service & Repair',
+      icon: 'fa-wrench',
+      title: 'Solar System Service & Repair Proposal',
+      description: 'We have assessed the performance issue with your existing solar PV system and prepared this proposal for the service, diagnostics, and repair work required to restore full production.',
+      scope: 'On-site diagnostics including IV-curve tracing, thermal imaging, and monitoring-data review to isolate fault.\nReplacement of failed components (panels, microinverters, optimizers, rapid-shutdown devices, or DC/AC wiring) as identified.\nRe-commissioning, production verification, and updated monitoring configuration.\nDocumentation of work performed for manufacturer warranty claims where applicable.',
+      warranty: 'Replacement parts carry the manufacturer\'s remaining or new warranty as issued. Service workmanship warranted for 2 years from completion date. Existing system components outside the repaired scope are not covered under this warranty.',
+      payment: 'Diagnostic fee due upon completion of site assessment and written report. Repair work: 50% deposit to order parts, balance due on completion. Payment accepted via cheque, e-transfer, or credit card.'
+    },
+    {
+      id: 'solar_site_assessment',
+      label: 'Site Assessment',
+      icon: 'fa-search',
+      title: 'Solar Site Assessment & Design Proposal',
+      description: 'This proposal covers a professional solar site assessment, shade analysis, and preliminary system design for your property. Deliverable is a written report you can use to make an informed decision about proceeding to installation.',
+      scope: 'On-site evaluation of roof orientation, tilt, structural condition, and available usable area — or ground-mount siting where applicable.\nShade analysis using Solar Pathfinder or equivalent tool, with TSRF (Total Solar Resource Fraction) calculations.\nReview of 12 months of utility bills to size system against actual consumption.\nPreliminary single-line electrical design and panel layout.\nWritten report with system-size recommendation, estimated annual production, preliminary pricing, and applicable rebates and tax credits.',
+      warranty: 'Assessment findings represent conditions at the time of the site visit. Production estimates are modeled projections — actual output varies with weather and system performance.',
+      payment: 'Assessment fee due upon delivery of the written report. If you proceed to a full installation contract with us, the assessment fee is credited against your deposit.'
+    }
+  ];
+
+  // Pick the right template set based on the customer's company_type.
+  // The customer profile is cached in localStorage as `rc_customer` by
+  // customer-dashboard.js after login.
+  function pbDetectCompanyType() {
+    try {
+      var raw = localStorage.getItem('rc_customer');
+      if (!raw) return 'roofing';
+      var obj = JSON.parse(raw);
+      return (obj && obj.company_type === 'solar') ? 'solar' : 'roofing';
+    } catch (e) {
+      return 'roofing';
+    }
+  }
+
+  const PROPOSAL_TEMPLATES = pbDetectCompanyType() === 'solar'
+    ? SOLAR_PROPOSAL_TEMPLATES
+    : ROOFING_PROPOSAL_TEMPLATES;
 
   // ============================================================
   // PUBLIC API
