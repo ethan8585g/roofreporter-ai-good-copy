@@ -237,18 +237,19 @@
     try { d = await res.json() } catch { main.innerHTML = errorHTML('Invalid response'); return }
 
     const ov = d.overview || {}
-    const prev = d.previous_period || {}
+    const prev = d.prev_overview || {}
 
     const hourlyBars = (d.hourly_traffic || []).map((h, i) => {
-      const maxV = Math.max(...(d.hourly_traffic || []).map(x => x.count || 0), 1)
-      return `<div class="flex-1 flex flex-col items-center group relative" title="${h.hour}: ${h.count}">
-        <div class="w-full rounded-t bg-indigo-500/50 hover:bg-indigo-500 transition-colors" style="height:${Math.max((h.count / maxV) * 60, 1)}px"></div>
+      const maxV = Math.max(...(d.hourly_traffic || []).map(x => x.pageviews || x.events || 0), 1)
+      const v = h.pageviews || h.events || 0
+      return `<div class="flex-1 flex flex-col items-center group relative" title="${h.hour}: ${v} pageviews">
+        <div class="w-full rounded-t bg-indigo-500/50 hover:bg-indigo-500 transition-colors" style="height:${Math.max((v / maxV) * 60, 1)}px"></div>
       </div>`
     }).join('')
 
     const topPagesRows = (d.top_pages || []).slice(0, 15).map(p => `
       <tr class="border-t border-slate-700 hover:bg-slate-750">
-        <td class="py-2 px-3 text-xs text-gray-300 truncate max-w-xs" title="${p.page}">${p.page || '/'}</td>
+        <td class="py-2 px-3 text-xs text-gray-300 truncate max-w-xs" title="${p.page_url}">${p.page_url || '/'}</td>
         <td class="py-2 px-3 text-xs text-white text-right font-semibold">${(p.views || 0).toLocaleString()}</td>
         <td class="py-2 px-3 text-xs text-gray-400 text-right">${p.unique_visitors || 0}</td>
         <td class="py-2 px-3 text-xs text-gray-400 text-right">${p.bounce_rate != null ? Math.round(p.bounce_rate) + '%' : '—'}</td>
@@ -263,14 +264,22 @@
     const referrerRows = (d.top_referrers || []).slice(0, 10).map(r => `
       <div class="flex items-center justify-between py-1.5">
         <span class="text-xs text-gray-400 truncate max-w-[140px]">${r.referrer || 'Direct'}</span>
-        <span class="text-xs font-semibold text-white">${r.count || 0}</span>
+        <span class="text-xs font-semibold text-white">${r.hits || 0}</span>
       </div>`).join('')
 
-    const devices = d.devices || {}
-    const totalDevices = (devices.desktop || 0) + (devices.mobile || 0) + (devices.tablet || 0) || 1
-    const deskPct = Math.round((devices.desktop || 0) / totalDevices * 100)
-    const mobPct = Math.round((devices.mobile || 0) / totalDevices * 100)
-    const tabPct = 100 - deskPct - mobPct
+    const devArr = Array.isArray(d.device_breakdown) ? d.device_breakdown : []
+    const devLookup = devArr.reduce((acc, row) => {
+      const k = String(row.device_type || '').toLowerCase()
+      acc[k] = (acc[k] || 0) + (row.count || 0)
+      return acc
+    }, {})
+    const deskCount = devLookup.desktop || 0
+    const mobCount = devLookup.mobile || 0
+    const tabCount = devLookup.tablet || 0
+    const totalDevices = deskCount + mobCount + tabCount || 1
+    const deskPct = Math.round(deskCount / totalDevices * 100)
+    const mobPct = Math.round(mobCount / totalDevices * 100)
+    const tabPct = Math.max(0, 100 - deskPct - mobPct)
 
     main.innerHTML = `
       <div class="space-y-6">

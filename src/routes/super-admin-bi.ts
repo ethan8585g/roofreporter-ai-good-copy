@@ -199,8 +199,8 @@ superAdminBi.get('/live-visitors', async (c) => {
   try {
     const db = c.env.DB
     const [activeRow, eventsRow] = await db.batch([
-      db.prepare(`SELECT COUNT(DISTINCT session_id) as active_sessions, COUNT(DISTINCT visitor_id) as active_visitors FROM site_analytics WHERE created_at >= datetime('now','-5 minutes') AND page_url NOT LIKE '/admin%' AND page_url NOT LIKE '/super-admin%'`),
-      db.prepare(`SELECT id, event_type, page_url, page_title, country, city, device_type, referrer, created_at FROM site_analytics WHERE page_url NOT LIKE '/admin%' AND page_url NOT LIKE '/super-admin%' ORDER BY created_at DESC LIMIT 20`)
+      db.prepare(`SELECT COUNT(DISTINCT session_id) as active_sessions, COUNT(DISTINCT visitor_id) as active_visitors FROM site_analytics WHERE created_at >= datetime('now','-5 minutes') AND page_url NOT LIKE '/admin%' AND page_url NOT LIKE '/super-admin%' AND page_url NOT LIKE '/login%' AND page_url NOT LIKE '/api/%'`),
+      db.prepare(`SELECT id, event_type, page_url, page_title, country, city, device_type, referrer, created_at FROM site_analytics WHERE created_at >= datetime('now','-30 minutes') AND page_url NOT LIKE '/admin%' AND page_url NOT LIKE '/super-admin%' AND page_url NOT LIKE '/login%' AND page_url NOT LIKE '/api/%' ORDER BY created_at DESC LIMIT 20`)
     ]) as any[]
 
     return c.json({
@@ -393,18 +393,32 @@ superAdminBi.get('/blog-analytics', async (c) => {
         ORDER BY unique_visitors DESC
         LIMIT 10
       `).bind(period),
-      // Blog-to-signup conversion: visitors who hit a blog page AND became customers in window
+      // Blog-to-signup conversion: blog visitors whose visitor_id later appears
+      // tagged to a logged-in customer (via user_id set by tracker.js on login).
+      // Requires real attribution — visitor_id must be linked to a customer row.
       db.prepare(`
-        SELECT COUNT(DISTINCT sa.visitor_id) as blog_visitors,
-               COUNT(DISTINCT CASE WHEN cust.id IS NOT NULL THEN sa.visitor_id END) as converted
-        FROM site_analytics sa
-        LEFT JOIN customers cust ON cust.email IS NOT NULL
-          AND cust.created_at >= sa.created_at
-          AND cust.created_at <= datetime(sa.created_at,'+7 days')
-        WHERE sa.event_type='pageview'
-          AND sa.page_url LIKE '/blog/%'
-          AND sa.created_at >= datetime('now',?)
-      `).bind(period),
+        SELECT
+          (SELECT COUNT(DISTINCT visitor_id)
+             FROM site_analytics
+             WHERE event_type='pageview'
+               AND page_url LIKE '/blog/%'
+               AND visitor_id IS NOT NULL
+               AND created_at >= datetime('now',?)
+          ) as blog_visitors,
+          (SELECT COUNT(DISTINCT bv.visitor_id)
+             FROM site_analytics bv
+             JOIN site_analytics sig
+               ON sig.visitor_id = bv.visitor_id
+              AND sig.user_id IS NOT NULL
+              AND sig.user_id NOT LIKE 'admin_%'
+              AND sig.created_at >= bv.created_at
+              AND sig.created_at <= datetime(bv.created_at,'+7 days')
+             WHERE bv.event_type='pageview'
+               AND bv.page_url LIKE '/blog/%'
+               AND bv.visitor_id IS NOT NULL
+               AND bv.created_at >= datetime('now',?)
+          ) as converted
+      `).bind(period, period),
       // Orphan detection: posts published but with zero lifetime views
       db.prepare(`
         SELECT COUNT(*) as zero_view_posts

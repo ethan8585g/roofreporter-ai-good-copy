@@ -237,32 +237,20 @@ analyticsRoutes.get('/dashboard', async (c) => {
     `).bind(prevSince, since).first(),
 
     // Top pages with bounce rate
-    // bounce_rate = % of sessions that only visited this one page
+    // bounce_rate = % of this page's sessions where the session visited only this one page
     db.prepare(`
       SELECT
-        p.page_url,
-        p.views,
-        p.unique_visitors,
-        p.avg_time,
+        sa.page_url,
+        COUNT(*) as views,
+        COUNT(DISTINCT sa.visitor_id) as unique_visitors,
+        ROUND(AVG(CASE WHEN sa.time_on_page > 0 THEN sa.time_on_page END), 1) as avg_time,
         ROUND(
-          100.0 * SUM(CASE WHEN sess.page_count = 1 THEN 1 ELSE 0 END) / COUNT(*),
+          100.0 * COUNT(DISTINCT CASE WHEN sess.page_count = 1 THEN sa.session_id END)
+          / NULLIF(COUNT(DISTINCT sa.session_id), 0),
           0
         ) as bounce_rate
-      FROM (
-        SELECT page_url,
-               COUNT(*) as views,
-               COUNT(DISTINCT visitor_id) as unique_visitors,
-               ROUND(AVG(CASE WHEN time_on_page > 0 THEN time_on_page END), 1) as avg_time,
-               session_id
-        FROM site_analytics
-        WHERE event_type = 'pageview' AND created_at >= ?
-          AND page_url NOT LIKE '/super-admin%'
-          AND page_url NOT LIKE '/admin%'
-          AND page_url NOT LIKE '/login%'
-          AND page_url NOT LIKE '/api/%'
-        GROUP BY page_url, session_id
-      ) p
-      JOIN (
+      FROM site_analytics sa
+      LEFT JOIN (
         SELECT session_id, COUNT(DISTINCT page_url) as page_count
         FROM site_analytics
         WHERE event_type = 'pageview' AND created_at >= ?
@@ -271,8 +259,13 @@ analyticsRoutes.get('/dashboard', async (c) => {
           AND page_url NOT LIKE '/login%'
           AND page_url NOT LIKE '/api/%'
         GROUP BY session_id
-      ) sess ON sess.session_id = p.session_id
-      GROUP BY p.page_url
+      ) sess ON sess.session_id = sa.session_id
+      WHERE sa.event_type = 'pageview' AND sa.created_at >= ?
+        AND sa.page_url NOT LIKE '/super-admin%'
+        AND sa.page_url NOT LIKE '/admin%'
+        AND sa.page_url NOT LIKE '/login%'
+        AND sa.page_url NOT LIKE '/api/%'
+      GROUP BY sa.page_url
       ORDER BY views DESC LIMIT 20
     `).bind(since, since).all(),
 
@@ -439,6 +432,10 @@ analyticsRoutes.get('/live', async (c) => {
            scroll_depth, time_on_page,
            created_at
     FROM site_analytics
+    WHERE page_url NOT LIKE '/super-admin%'
+      AND page_url NOT LIKE '/admin%'
+      AND page_url NOT LIKE '/login%'
+      AND page_url NOT LIKE '/api/%'
     ORDER BY created_at DESC LIMIT ?
   `).bind(limit).all()
 
@@ -450,22 +447,30 @@ analyticsRoutes.get('/live', async (c) => {
 // ============================================================
 analyticsRoutes.get('/visitor/:visitorId', async (c) => {
   const vid = c.req.param('visitorId')
-  const [events, summary] = await Promise.all([
+  const [events, aggregates, latest] = await Promise.all([
     c.env.DB.prepare(`
       SELECT * FROM site_analytics WHERE visitor_id = ? ORDER BY created_at DESC LIMIT 200
     `).bind(vid).all(),
     c.env.DB.prepare(`
-      SELECT 
+      SELECT
         COUNT(*) as total_events,
         COUNT(DISTINCT session_id) as sessions,
         COUNT(CASE WHEN event_type = 'pageview' THEN 1 END) as pageviews,
         COUNT(CASE WHEN event_type = 'click' THEN 1 END) as clicks,
         MIN(created_at) as first_seen,
-        MAX(created_at) as last_seen,
-        ip_address, country, city, browser, os, device_type
+        MAX(created_at) as last_seen
       FROM site_analytics WHERE visitor_id = ?
+    `).bind(vid).first(),
+    // Most recent row wins for device/geo context (deterministic)
+    c.env.DB.prepare(`
+      SELECT ip_address, country, city, browser, os, device_type
+      FROM site_analytics
+      WHERE visitor_id = ?
+      ORDER BY created_at DESC
+      LIMIT 1
     `).bind(vid).first()
   ])
+  const summary = { ...(aggregates || {}), ...(latest || {}) }
   return c.json({ visitor_id: vid, summary, events: events.results })
 })
 
