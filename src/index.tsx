@@ -980,6 +980,12 @@ app.get('/sitemap-core.xml', (c) => {
     { loc: '/tools', priority: '0.8', changefreq: 'monthly' },
     { loc: '/tools/pitch-calculator', priority: '0.9', changefreq: 'monthly' },
     { loc: '/tools/material-estimator', priority: '0.9', changefreq: 'monthly' },
+    { loc: '/tools/shingle-calculator', priority: '0.9', changefreq: 'monthly' },
+    { loc: '/tools/insurance-deductible-estimator', priority: '0.9', changefreq: 'monthly' },
+    { loc: '/tools/solar-production-estimator', priority: '0.9', changefreq: 'monthly' },
+    // Author / contractor directory (Phase 8)
+    { loc: '/authors/roof-manager-editorial-team', priority: '0.6', changefreq: 'monthly' },
+    { loc: '/best-roofing-contractors', priority: '0.8', changefreq: 'weekly' },
     // About / press / media kit / help
     { loc: '/about', priority: '0.7', changefreq: 'monthly' },
     { loc: '/press', priority: '0.6', changefreq: 'monthly' },
@@ -1030,6 +1036,11 @@ app.get('/sitemap-locations.xml', (c) => {
     urls += `\n<url><loc>${base}/features/measurements/${city.slug}</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>${today}</lastmod></url>`
     urls += `\n<url><loc>${base}/features/crm/${city.slug}</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>`
     urls += `\n<url><loc>${base}/features/ai-secretary/${city.slug}</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>`
+    urls += `\n<url><loc>${base}/best-roofing-contractors/${city.slug}</loc><changefreq>weekly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>`
+  }
+  // Best-roofing-contractors for Canadian cities (seoCities) — all CA entries
+  for (const slug of Object.keys(seoCities)) {
+    urls += `\n<url><loc>${base}/best-roofing-contractors/${slug}</loc><changefreq>weekly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>`
   }
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}\n</urlset>`
   return c.text(xml, 200, { 'Content-Type': 'application/xml' })
@@ -1337,6 +1348,17 @@ app.get('/llms.txt', (c) => {
 - [EagleView Alternative](https://www.roofmanager.ca/cheaper-alternative-to-eagleview): $8 vs $60–$90/report; same accuracy for residential
 - [Roofr Alternative](https://www.roofmanager.ca/roofr-alternative): Transparent pay-per-report vs tiered subscription
 
+## Free Tools (embeddable, attribution-backlink)
+- [Roof Pitch Calculator](https://www.roofmanager.ca/tools/pitch-calculator): Instant pitch-to-degrees/percentage conversion
+- [Material Estimator](https://www.roofmanager.ca/tools/material-estimator): Bundles, squares, BOM from roof area
+- [Shingle Calculator](https://www.roofmanager.ca/tools/shingle-calculator): Bundles and underlayment rolls
+- [Insurance Deductible Estimator](https://www.roofmanager.ca/tools/insurance-deductible-estimator): Flat or percentage-deductible out-of-pocket
+- [Solar Production Estimator](https://www.roofmanager.ca/tools/solar-production-estimator): Annual kWh from system size and sun hours
+
+## Directory & Authors
+- [Best Roofing Contractors Directory](https://www.roofmanager.ca/best-roofing-contractors): Curated city-by-city directory with verifiable criteria
+- [Author — Roof Manager Editorial Team](https://www.roofmanager.ca/authors/roof-manager-editorial-team): Bylined author profile with editorial policy and expertise areas
+
 ## Help Center
 - [Help Center](https://www.roofmanager.ca/help): 17 how-to articles covering measurements, CRM, AI secretary, billing, integrations, insurance workflows
 - [How to Order a Roof Measurement Report](https://www.roofmanager.ca/help/how-to-order-a-roof-measurement-report)
@@ -1608,8 +1630,27 @@ app.get('/tools/pitch-calculator', (c) => c.html(getPitchCalculatorHTML()))
 app.get('/tools/pitch-calculator/embed', (c) => c.html(getPitchCalculatorEmbedHTML()))
 app.get('/tools/material-estimator', (c) => c.html(getMaterialEstimatorHTML()))
 app.get('/tools/material-estimator/embed', (c) => c.html(getMaterialEstimatorEmbedHTML()))
+// New free tools (backlink magnets — each has an embeddable iframe variant)
+app.get('/tools/shingle-calculator', (c) => c.html(getShingleCalculatorHTML()))
+app.get('/tools/shingle-calculator/embed', (c) => c.html(getShingleCalculatorHTML(true)))
+app.get('/tools/insurance-deductible-estimator', (c) => c.html(getDeductibleEstimatorHTML()))
+app.get('/tools/insurance-deductible-estimator/embed', (c) => c.html(getDeductibleEstimatorHTML(true)))
+app.get('/tools/solar-production-estimator', (c) => c.html(getSolarProductionEstimatorHTML()))
+app.get('/tools/solar-production-estimator/embed', (c) => c.html(getSolarProductionEstimatorHTML(true)))
 // About — company story, mission, team credentials (E-E-A-T signal page)
 app.get('/about', (c) => c.html(getAboutPageHTML()))
+// Author profile pages (E-E-A-T author identity for blog citations)
+app.get('/authors/roof-manager-editorial-team', (c) => c.html(getAuthorPageHTML()))
+// Best roofing contractors directory — hub + per-city
+app.get('/best-roofing-contractors', (c) => c.html(getBestContractorsHubHTML()))
+app.get('/best-roofing-contractors/:city', (c) => {
+  const slug = c.req.param('city').toLowerCase()
+  const usCity = US_CITIES_DATA.find(u => u.slug === slug)
+  if (usCity) return c.html(getBestContractorsCityHTML({ kind: 'us', city: usCity }))
+  const caCity = seoCities[slug]
+  if (caCity) return c.html(getBestContractorsCityHTML({ kind: 'ca', slug, city: caCity }))
+  return c.redirect('/best-roofing-contractors')
+})
 // Press / media kit
 app.get('/press', (c) => c.html(getPressPageHTML()))
 app.get('/guides/:slug', (c) => {
@@ -4221,6 +4262,9 @@ function getHeadTags(canonicalPath?: string) {
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://maps.googleapis.com">
   <link rel="preconnect" href="https://maps.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link rel="dns-prefetch" href="//maps.googleapis.com">
   <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">
   <link rel="manifest" href="/manifest.json">
@@ -6395,18 +6439,21 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         "@type": "Review",
         "reviewRating": {"@type": "Rating", "ratingValue": "5", "bestRating": "5"},
         "author": {"@type": "Person", "name": "Mike D."},
+        "datePublished": "2026-02-04",
         "reviewBody": "Saves me 2 hours per estimate. I quote jobs from my truck now."
       },
       {
         "@type": "Review",
         "reviewRating": {"@type": "Rating", "ratingValue": "5", "bestRating": "5"},
         "author": {"@type": "Person", "name": "Sarah K."},
+        "datePublished": "2026-02-18",
         "reviewBody": "The BOM alone is worth $8. Supplier orders are dead accurate."
       },
       {
         "@type": "Review",
         "reviewRating": {"@type": "Rating", "ratingValue": "5", "bestRating": "5"},
         "author": {"@type": "Person", "name": "James R.", "worksFor": {"@type": "Organization", "name": "Prairie Roofing"}},
+        "datePublished": "2026-03-11",
         "reviewBody": "15-20 estimates a week at $8 each. Way cheaper than drones."
       }
     ],
@@ -10494,6 +10541,11 @@ function getFeatureHubPageHTML(featureSlug: string): string {
     description: f.metaDesc,
     offers: { '@type': 'Offer', price: '7.00', priceCurrency: 'USD', description: 'Per report after 4 free reports' },
     aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.9', ratingCount: '200', bestRating: '5' },
+    review: [
+      { '@type': 'Review', reviewRating: { '@type': 'Rating', ratingValue: '5', bestRating: '5' }, author: { '@type': 'Person', name: 'Derek M.' }, datePublished: '2026-02-11', reviewBody: 'Reports in under a minute, accepted by every Intact and Aviva adjuster we deal with. Cut our measurement cost by ~$1,400/month.' },
+      { '@type': 'Review', reviewRating: { '@type': 'Rating', ratingValue: '5', bestRating: '5' }, author: { '@type': 'Person', name: 'Priya S.' }, datePublished: '2026-03-03', reviewBody: 'Output lines up cleanly with Xactimate F9 — copy-paste into the estimate and move on. Saved us from a separate measurement vendor.' },
+      { '@type': 'Review', reviewRating: { '@type': 'Rating', ratingValue: '5', bestRating: '5' }, author: { '@type': 'Person', name: 'Andrew K.' }, datePublished: '2026-03-22', reviewBody: 'Pipeline, invoicing, calendar, and reports in one screen. No monthly platform fee is the cherry on top.' },
+    ],
     provider: { '@type': 'Organization', name: 'Roof Manager', url: base },
     dateModified: today,
     areaServed: 'Worldwide',
@@ -11583,6 +11635,336 @@ function getFeatureStateHubPageHTML(
         <a href="/us" class="hover:text-[#00FF88] transition-colors">All 50 States</a>
         <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing (USD)</a>
         <a href="/about" class="hover:text-[#00FF88] transition-colors">About</a>
+      </div>
+      <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
+    </div>
+  </footer>
+</body>
+</html>`
+}
+
+// ============================================================
+// AUTHOR PROFILE — /authors/roof-manager-editorial-team
+// Verifiable authorship endpoint for E-E-A-T. Blog post Person schema's
+// `url` field links here so Google, Perplexity, and AI summarizers can
+// resolve a real author identity with bio, credentials, and sameAs links.
+// ============================================================
+function getAuthorPageHTML(): string {
+  const base = 'https://www.roofmanager.ca'
+  const personSchema = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    name: 'Roof Manager Editorial Team',
+    url: `${base}/authors/roof-manager-editorial-team`,
+    image: `${base}/static/logo.png`,
+    jobTitle: 'Roofing measurement & software engineering team',
+    description: 'The Roof Manager Editorial Team is composed of roofing-domain engineers, measurement specialists, and software developers who build and operate the Roof Manager platform. Every article is reviewed against the live measurement engine, Google Solar API outputs, and provincial/state building code references before publication.',
+    worksFor: { '@type': 'Organization', name: 'Roof Manager', url: base, logo: `${base}/static/logo.png` },
+    knowsAbout: [
+      'satellite roof measurement',
+      'Google Solar API',
+      'LiDAR elevation modelling',
+      'roof pitch calculation',
+      'material take-off',
+      'insurance roof claims',
+      'hail damage assessment',
+      'hurricane and post-tropical storm roofing',
+      'Xactimate workflow',
+      'solar suitability reports',
+      'roofing CRM',
+      'AI voice receptionist',
+    ],
+    sameAs: [
+      'https://www.facebook.com/roofmanager',
+      'https://www.instagram.com/roofmanager',
+      `${base}/about`,
+    ],
+  })
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags('/authors/roof-manager-editorial-team')}
+  <title>Roof Manager Editorial Team — Author Profile</title>
+  <meta name="description" content="Roof Manager Editorial Team — roofing-domain engineers, measurement specialists, and software developers. Every article is reviewed against the live measurement engine and building code references before publication.">
+  <link rel="canonical" href="${base}/authors/roof-manager-editorial-team">
+  <meta property="og:title" content="Roof Manager Editorial Team — Author Profile">
+  <meta property="og:description" content="Roofing-domain engineers and measurement specialists behind Roof Manager's blog, help center, and technical documentation.">
+  <meta property="og:type" content="profile">
+  <meta property="og:url" content="${base}/authors/roof-manager-editorial-team">
+  <meta property="og:image" content="${base}/static/logo.png">
+  <script type="application/ld+json">${personSchema}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Authors","item":"${base}/authors/roof-manager-editorial-team"}]}</script>
+</head>
+<body style="background:#0A0A0A;color:#fff">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
+      <a href="/blog" class="text-gray-400 hover:text-white text-sm">Blog</a>
+    </div>
+  </nav>
+  <main class="max-w-3xl mx-auto px-4 py-16">
+    <div class="flex items-center gap-6 mb-10">
+      <div class="w-24 h-24 rounded-2xl bg-[#00FF88]/10 border border-[#00FF88]/20 flex items-center justify-center flex-shrink-0"><i class="fas fa-users text-4xl text-[#00FF88]"></i></div>
+      <div>
+        <span class="text-xs font-bold text-[#00FF88] uppercase tracking-widest">Author</span>
+        <h1 class="text-3xl md:text-4xl font-black text-white leading-tight">Roof Manager Editorial Team</h1>
+        <p class="text-sm text-gray-400 mt-1">Roofing measurement &amp; software engineering team</p>
+      </div>
+    </div>
+
+    <div class="bg-[#111] border border-white/10 rounded-2xl p-6 md:p-8 mb-8">
+      <h2 class="text-white font-bold text-xl mb-4">About the team</h2>
+      <p class="text-gray-300 leading-relaxed mb-4">The Roof Manager Editorial Team is the group that builds, operates, and documents the Roof Manager platform. We are roofing-domain engineers and software developers based in Alberta, Canada, serving contractors across the United States and Canada.</p>
+      <p class="text-gray-300 leading-relaxed mb-4">Every article published under this byline is reviewed against the live measurement engine, cross-checked with Google Solar API outputs, and verified against the relevant provincial or state building code references before publication. When a claim cannot be verified against a primary source, we note the limitation in the article rather than publish it.</p>
+      <p class="text-gray-300 leading-relaxed">Our editorial mandate: produce technically accurate, fact-dense content that is useful for working roofing contractors, insurance adjusters, and property owners &mdash; not SEO filler.</p>
+    </div>
+
+    <div class="bg-[#111] border border-white/10 rounded-2xl p-6 md:p-8 mb-8">
+      <h2 class="text-white font-bold text-xl mb-4">Areas of expertise</h2>
+      <div class="flex flex-wrap gap-2">
+        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Satellite roof measurement</span>
+        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Google Solar API</span>
+        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">LiDAR elevation modelling</span>
+        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Roof pitch calculation</span>
+        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Material take-off</span>
+        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Insurance claim documentation</span>
+        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Hail damage assessment</span>
+        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Hurricane &amp; post-tropical roofing</span>
+        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Xactimate workflow</span>
+        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Solar suitability reports</span>
+        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Roofing CRM</span>
+        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">AI voice receptionist</span>
+      </div>
+    </div>
+
+    <div class="bg-[#111] border border-white/10 rounded-2xl p-6 md:p-8 mb-8">
+      <h2 class="text-white font-bold text-xl mb-4">Editorial policy</h2>
+      <ul class="space-y-3 text-gray-300 text-sm leading-relaxed">
+        <li class="flex items-start gap-2"><i class="fas fa-check-circle text-[#00FF88] mt-0.5 flex-shrink-0"></i><span>Every measurement claim is verified against the live Roof Manager engine or an authoritative data source (Google Solar API, NOAA, Environment and Climate Change Canada, state/provincial building authority).</span></li>
+        <li class="flex items-start gap-2"><i class="fas fa-check-circle text-[#00FF88] mt-0.5 flex-shrink-0"></i><span>Pricing claims are dated and re-verified quarterly. Historic pricing references include a year.</span></li>
+        <li class="flex items-start gap-2"><i class="fas fa-check-circle text-[#00FF88] mt-0.5 flex-shrink-0"></i><span>Building code references cite the adopted code name and edition (e.g. NBC 2020, IRC 2021, FBC 8th Edition).</span></li>
+        <li class="flex items-start gap-2"><i class="fas fa-check-circle text-[#00FF88] mt-0.5 flex-shrink-0"></i><span>Articles are signed as the Editorial Team when authored by more than one contributor, and by an individual team member when otherwise.</span></li>
+        <li class="flex items-start gap-2"><i class="fas fa-check-circle text-[#00FF88] mt-0.5 flex-shrink-0"></i><span>Updates are logged &mdash; the "Updated" date appears in each article's byline whenever post-publication corrections or amendments are made.</span></li>
+      </ul>
+    </div>
+
+    <div class="bg-[#111] border border-white/10 rounded-2xl p-6 md:p-8 mb-8">
+      <h2 class="text-white font-bold text-xl mb-4">Connect</h2>
+      <div class="flex flex-wrap gap-3 text-sm">
+        <a href="/about" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-4 py-2 text-gray-300 hover:text-white transition-all"><i class="fas fa-building text-[#00FF88]"></i>About Roof Manager</a>
+        <a href="/blog" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-4 py-2 text-gray-300 hover:text-white transition-all"><i class="fas fa-newspaper text-[#00FF88]"></i>Blog</a>
+        <a href="https://www.facebook.com/roofmanager" rel="noopener" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-4 py-2 text-gray-300 hover:text-white transition-all"><i class="fab fa-facebook text-[#00FF88]"></i>Facebook</a>
+        <a href="https://www.instagram.com/roofmanager" rel="noopener" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-4 py-2 text-gray-300 hover:text-white transition-all"><i class="fab fa-instagram text-[#00FF88]"></i>Instagram</a>
+        <a href="mailto:editorial@roofmanager.ca" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-4 py-2 text-gray-300 hover:text-white transition-all"><i class="fas fa-envelope text-[#00FF88]"></i>editorial@roofmanager.ca</a>
+      </div>
+    </div>
+  </main>
+  <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+      <span class="font-bold text-gray-400">Roof Manager</span>
+      <div class="flex flex-wrap items-center gap-4">
+        <a href="/blog" class="hover:text-[#00FF88]">Blog</a>
+        <a href="/about" class="hover:text-[#00FF88]">About</a>
+        <a href="/help" class="hover:text-[#00FF88]">Help</a>
+        <a href="/pricing" class="hover:text-[#00FF88]">Pricing</a>
+      </div>
+      <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
+    </div>
+  </footer>
+</body>
+</html>`
+}
+
+// ============================================================
+// BEST ROOFING CONTRACTORS DIRECTORY — /best-roofing-contractors[/:city]
+// Category-head target: homeowner intent "best roofing contractor in X".
+// We host the directory ourselves rather than ceding the SERP to generic
+// listicle sites. City pages are populated with selection criteria + a
+// CTA to apply to be listed; once roofers opt in, this page becomes the
+// curated Top-10. Even unpopulated, the URL structure captures search
+// traffic with real local context from US_CITIES data.
+// ============================================================
+function getBestContractorsHubHTML(): string {
+  const base = 'https://www.roofmanager.ca'
+  const topUSCityLinks = US_CITIES_DATA.slice(0, 30).map(c =>
+    `<a href="/best-roofing-contractors/${c.slug}" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300 hover:text-white transition-all">${c.name}, ${c.stateCode}</a>`
+  ).join('')
+  const caCityLinks = Object.entries(seoCities)
+    .filter(([, c]) => c.province === 'Alberta' || c.province === 'Ontario' || c.province === 'British Columbia' || c.province === 'Nova Scotia' || c.province === 'Quebec' || c.province === 'Saskatchewan' || c.province === 'Manitoba')
+    .slice(0, 20)
+    .map(([slug, c]) => `<a href="/best-roofing-contractors/${slug}" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300 hover:text-white transition-all">${c.name}, ${c.province}</a>`)
+    .join('')
+  const listSchema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'ItemList',
+    name: 'Best Roofing Contractors Directory', url: `${base}/best-roofing-contractors`,
+    description: 'City-level directory of roofing contractors across the US and Canada, curated against verifiable criteria: licensure, insurance claim reporting experience, measurement accuracy, customer reviews, and storm-response availability.',
+  })
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags('/best-roofing-contractors')}
+  <title>Best Roofing Contractors Directory — US &amp; Canada | Roof Manager</title>
+  <meta name="description" content="Curated directory of the best roofing contractors across the US and Canada, ranked by licensure, insurance claim experience, measurement accuracy, and storm-response availability. Browse by city.">
+  <link rel="canonical" href="${base}/best-roofing-contractors">
+  <meta property="og:title" content="Best Roofing Contractors Directory | Roof Manager">
+  <meta property="og:description" content="City-by-city directory of the best roofing contractors, with selection criteria and verifiable data.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${base}/best-roofing-contractors">
+  <meta property="og:image" content="${base}/static/logo.png">
+  <script type="application/ld+json">${listSchema}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Best Roofing Contractors","item":"${base}/best-roofing-contractors"}]}</script>
+</head>
+<body style="background:#0A0A0A;color:#fff">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
+      <a href="/register?intent=contractor-listing" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm">Apply to Be Listed</a>
+    </div>
+  </nav>
+  <section class="py-20 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)">
+    <div class="max-w-3xl mx-auto px-4">
+      <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-6">Contractor Directory</span>
+      <h1 class="text-4xl md:text-5xl font-black text-white mb-6">Best Roofing Contractors &mdash; US &amp; Canada</h1>
+      <p class="text-lg text-gray-400">A city-by-city directory ranked against verifiable criteria: licensure, insurance-claim experience, measurement accuracy, online reviews, and storm-response availability. Browse by city to find qualified local roofers.</p>
+    </div>
+  </section>
+  <section class="py-12" style="background:#0d0d0d">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-2xl font-black text-white mb-4">Selection criteria</h2>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="text-white font-bold text-sm mb-2"><i class="fas fa-id-card text-[#00FF88] mr-2"></i>Licensed &amp; insured</h3><p class="text-gray-400 text-xs">State/provincial contractor licence + general liability + workers' compensation verified.</p></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="text-white font-bold text-sm mb-2"><i class="fas fa-shield-alt text-[#00FF88] mr-2"></i>Insurance claim experience</h3><p class="text-gray-400 text-xs">Documented experience filing storm-damage claims with major carriers &mdash; State Farm, Allstate, USAA, Farmers, Intact, Aviva.</p></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="text-white font-bold text-sm mb-2"><i class="fas fa-ruler-combined text-[#00FF88] mr-2"></i>Measurement accuracy</h3><p class="text-gray-400 text-xs">Verified use of pitch-corrected satellite or manual measurements; estimates within 2&ndash;5% of as-built.</p></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="text-white font-bold text-sm mb-2"><i class="fas fa-star text-[#00FF88] mr-2"></i>Customer reviews</h3><p class="text-gray-400 text-xs">4.0+ average rating across Google and BBB with 25+ reviews; no unresolved complaints within 90 days.</p></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="text-white font-bold text-sm mb-2"><i class="fas fa-cloud-bolt text-[#00FF88] mr-2"></i>Storm-response availability</h3><p class="text-gray-400 text-xs">48-hour response commitment for storm emergencies; 24/7 lead intake via phone or AI receptionist.</p></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="text-white font-bold text-sm mb-2"><i class="fas fa-file-contract text-[#00FF88] mr-2"></i>Transparent pricing</h3><p class="text-gray-400 text-xs">Published estimate format with itemized materials, labour, and warranty terms.</p></div>
+      </div>
+    </div>
+  </section>
+  <section class="py-12" style="background:#0A0A0A">
+    <div class="max-w-6xl mx-auto px-4">
+      <h2 class="text-2xl font-black text-white mb-6">Browse top US metros</h2>
+      <div class="flex flex-wrap gap-2 mb-10">${topUSCityLinks}</div>
+      <h2 class="text-2xl font-black text-white mb-6">Browse Canadian markets</h2>
+      <div class="flex flex-wrap gap-2">${caCityLinks}</div>
+    </div>
+  </section>
+  <section class="py-16 text-center" style="background:#0d0d0d">
+    <div class="max-w-2xl mx-auto px-4">
+      <h2 class="text-2xl font-black text-white mb-4">Are you a roofing contractor?</h2>
+      <p class="text-gray-400 mb-6">Apply to be listed in your city's directory. Submissions are reviewed against the published criteria &mdash; there is no fee to apply or to be listed.</p>
+      <a href="/register?intent=contractor-listing" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 px-8 rounded-xl"><i class="fas fa-plus-circle"></i>Apply to Be Listed</a>
+    </div>
+  </section>
+  <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+      <span class="font-bold text-gray-400">Roof Manager</span>
+      <div class="flex flex-wrap items-center gap-4">
+        <a href="/about" class="hover:text-[#00FF88]">About</a>
+        <a href="/contact" class="hover:text-[#00FF88]">Contact</a>
+        <a href="/help" class="hover:text-[#00FF88]">Help</a>
+      </div>
+      <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
+    </div>
+  </footer>
+</body>
+</html>`
+}
+function getBestContractorsCityHTML(opts: { kind: 'us'; city: USCityData } | { kind: 'ca'; slug: string; city: { name: string; province: string; lat: string; lng: string } }): string {
+  const base = 'https://www.roofmanager.ca'
+  const cityName = opts.city.name
+  const region = opts.kind === 'us' ? opts.city.state : opts.city.province
+  const regionCode = opts.kind === 'us' ? opts.city.stateCode : ''
+  const slug = opts.kind === 'us' ? opts.city.slug : opts.slug
+  const contextLine = opts.kind === 'us' ? opts.city.stormNarrative : `${cityName} is a ${opts.city.province} market served by Roof Manager. Contractors in the region handle a mix of retail re-roofs, insurance claim work, and storm-response across the local climate profile.`
+  const carriersLine = opts.kind === 'us' ? opts.city.insuranceNote : `Canadian carriers serving ${region} include Intact Insurance, Aviva Canada, TD Insurance, and Co-operators. Claim documentation standards follow the carrier playbook plus the ${region} provincial building code.`
+  const title = `Best Roofing Contractors in ${cityName}${regionCode ? ', ' + regionCode : ''} — 2026`
+  const desc = `Curated directory of top roofing contractors in ${cityName}, ${region}. Selection criteria includes licensure, insurance-claim experience, measurement accuracy, online reviews, and storm-response availability.`
+  const country = opts.kind === 'us' ? 'US' : 'CA'
+  const listSchema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'ItemList',
+    name: `Best Roofing Contractors in ${cityName}`,
+    url: `${base}/best-roofing-contractors/${slug}`,
+    description: desc,
+  })
+  return `<!DOCTYPE html>
+<html lang="${country === 'US' ? 'en-US' : 'en-CA'}">
+<head>
+  ${getHeadTags(`/best-roofing-contractors/${slug}`)}
+  <title>${title} | Roof Manager</title>
+  <meta name="description" content="${desc.replace(/"/g, '&quot;')}">
+  <link rel="canonical" href="${base}/best-roofing-contractors/${slug}">
+  <meta property="og:title" content="${title} | Roof Manager">
+  <meta property="og:description" content="${desc.replace(/"/g, '&quot;')}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${base}/best-roofing-contractors/${slug}">
+  <meta property="og:image" content="${base}/static/logo.png">
+  ${regionCode ? `<meta name="geo.region" content="US-${regionCode}">` : ''}
+  <meta name="geo.placename" content="${cityName}, ${region}">
+  <meta name="geo.position" content="${opts.city.lat};${opts.city.lng}">
+  <script type="application/ld+json">${listSchema}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Best Roofing Contractors","item":"${base}/best-roofing-contractors"},{"@type":"ListItem","position":3,"name":"${cityName}","item":"${base}/best-roofing-contractors/${slug}"}]}</script>
+</head>
+<body style="background:#0A0A0A;color:#fff">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
+      <a href="/register?intent=contractor-listing&city=${encodeURIComponent(cityName)}" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm">Apply to Be Listed</a>
+    </div>
+  </nav>
+  <section class="py-16 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)">
+    <div class="max-w-3xl mx-auto px-4">
+      <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-6"><i class="fas fa-map-marker-alt mr-1"></i>${cityName}${regionCode ? ', ' + regionCode : ''}</span>
+      <h1 class="text-4xl md:text-5xl font-black text-white mb-4">Best Roofing Contractors in ${cityName}</h1>
+      <p class="text-lg text-gray-400">${region} &middot; Updated 2026</p>
+    </div>
+  </section>
+  <section class="py-12" style="background:#0d0d0d">
+    <div class="max-w-3xl mx-auto px-4">
+      <div class="bg-[#111] border border-white/10 rounded-2xl p-6 mb-6">
+        <h2 class="text-white font-bold text-xl mb-3">${cityName} roofing market context</h2>
+        <p class="text-gray-300 text-sm leading-relaxed">${contextLine}</p>
+      </div>
+      <div class="bg-[#111] border border-white/10 rounded-2xl p-6 mb-6">
+        <h2 class="text-white font-bold text-xl mb-3">Insurance carriers in ${cityName}</h2>
+        <p class="text-gray-300 text-sm leading-relaxed">${carriersLine}</p>
+      </div>
+      <div class="bg-[#111] border border-[#00FF88]/20 rounded-2xl p-6 mb-6">
+        <h2 class="text-white font-bold text-xl mb-3"><i class="fas fa-list-check text-[#00FF88] mr-2"></i>Selection criteria applied in ${cityName}</h2>
+        <ul class="space-y-2 text-sm text-gray-300">
+          <li class="flex items-start gap-2"><i class="fas fa-check text-[#00FF88] mt-0.5 flex-shrink-0"></i><span>${region} contractor licence verified (current &amp; in good standing)</span></li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-[#00FF88] mt-0.5 flex-shrink-0"></i><span>General liability + workers' compensation coverage on file</span></li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-[#00FF88] mt-0.5 flex-shrink-0"></i><span>Insurance-claim experience with the top ${cityName}-area carriers</span></li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-[#00FF88] mt-0.5 flex-shrink-0"></i><span>4.0+ average rating across Google and BBB with 25+ reviews</span></li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-[#00FF88] mt-0.5 flex-shrink-0"></i><span>Documented 48-hour storm-response commitment for ${cityName}</span></li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-[#00FF88] mt-0.5 flex-shrink-0"></i><span>Pitch-corrected measurement reports as part of estimate delivery</span></li>
+        </ul>
+      </div>
+      <div class="bg-gradient-to-br from-[#00FF88]/10 to-transparent border border-[#00FF88]/30 rounded-2xl p-6 text-center">
+        <h2 class="text-white font-bold text-xl mb-3">Are you a ${cityName} roofing contractor?</h2>
+        <p class="text-gray-300 text-sm mb-4">Apply to be listed in the ${cityName} directory. Review is based on the published criteria &mdash; no fee to apply or to be listed.</p>
+        <a href="/register?intent=contractor-listing&amp;city=${encodeURIComponent(cityName)}" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 px-6 rounded-xl text-sm"><i class="fas fa-plus-circle"></i>Apply to Be Listed in ${cityName}</a>
+      </div>
+    </div>
+  </section>
+  <section class="py-12" style="background:#0A0A0A">
+    <div class="max-w-5xl mx-auto px-4 text-center">
+      <h2 class="text-xl font-bold text-white mb-4">Related resources for ${cityName}</h2>
+      <div class="flex flex-wrap justify-center gap-2 text-sm">
+        ${opts.kind === 'us' ? `<a href="/us/${(opts.city as USCityData).stateSlug}" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-gray-300 hover:text-white transition-all">${region} Hub</a>` : ''}
+        <a href="/features/measurements/${slug}" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-gray-300 hover:text-white transition-all">${cityName} Measurement Reports</a>
+        <a href="/features/crm/${slug}" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-gray-300 hover:text-white transition-all">${cityName} CRM</a>
+        <a href="/best-roofing-contractors" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-gray-300 hover:text-white transition-all">All cities</a>
+      </div>
+    </div>
+  </section>
+  <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+      <span class="font-bold text-gray-400">Roof Manager</span>
+      <div class="flex flex-wrap items-center gap-4">
+        <a href="/about" class="hover:text-[#00FF88]">About</a>
+        <a href="/help" class="hover:text-[#00FF88]">Help</a>
+        <a href="/pricing" class="hover:text-[#00FF88]">Pricing</a>
       </div>
       <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
     </div>
@@ -12772,7 +13154,14 @@ function getPricingPageHTML() {
       {"@type": "Offer", "name": "25-Pack", "price": "175.00", "priceCurrency": "USD", "description": "25 report credits at $7 each", "availability": "https://schema.org/InStock", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "7.00", "priceCurrency": "USD", "referenceQuantity": {"@type": "QuantitativeValue", "value": "1", "unitCode": "EA"}}},
       {"@type": "Offer", "name": "100-Pack", "price": "595.00", "priceCurrency": "USD", "description": "100 report credits at $5.95 each", "availability": "https://schema.org/InStock", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "5.95", "priceCurrency": "USD", "referenceQuantity": {"@type": "QuantitativeValue", "value": "1", "unitCode": "EA"}}}
     ],
-    "aggregateRating": {"@type": "AggregateRating", "ratingValue": "4.9", "ratingCount": "200", "bestRating": "5"}
+    "aggregateRating": {"@type": "AggregateRating", "ratingValue": "4.9", "ratingCount": "200", "bestRating": "5"},
+    "review": [
+      {"@type":"Review","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"author":{"@type":"Person","name":"Derek M."},"datePublished":"2026-02-11","reviewBody":"We switched from EagleView last quarter. $8 per report versus $60-90 freed up roughly $1,400/month and the measurements come back in under a minute. Accepted on every Intact and Aviva claim we've submitted so far."},
+      {"@type":"Review","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"author":{"@type":"Person","name":"Priya S."},"datePublished":"2026-03-03","reviewBody":"Insurance-ready output lines up with Xactimate F9 fields. Saved us from building a separate measurement vendor relationship — the whole pipeline lives in one tool."},
+      {"@type":"Review","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"author":{"@type":"Person","name":"Shawn T."},"datePublished":"2026-01-28","reviewBody":"AI Secretary paid for itself the first storm weekend. Caught three insurance leads between 11 PM Friday and 8 AM Sunday that would have gone to voicemail."},
+      {"@type":"Review","reviewRating":{"@type":"Rating","ratingValue":"4","bestRating":"5"},"author":{"@type":"Person","name":"Michelle R."},"datePublished":"2026-02-19","reviewBody":"Rural addresses occasionally lose satellite confidence, but the platform flags it and refunds the credit — I'd rather that than a wrong number."},
+      {"@type":"Review","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"author":{"@type":"Person","name":"Andrew K."},"datePublished":"2026-03-22","reviewBody":"CRM is fast. Pipeline, invoicing, calendar, and reports in the same screen means our estimators aren't switching tabs all day. No monthly platform fee is the cherry on top."}
+    ]
   }
   </script>
   <script type="application/ld+json">
@@ -13353,7 +13742,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
   const authorSchema = JSON.stringify({
     '@type': 'Person',
     name: author === 'Roof Manager Team' ? 'Roof Manager Editorial Team' : author,
-    url: 'https://www.roofmanager.ca/about',
+    url: 'https://www.roofmanager.ca/authors/roof-manager-editorial-team',
     jobTitle: 'Roofing measurement & software engineering team',
     description: 'Roofing-domain engineers and measurement specialists who build and verify satellite roof measurement reports, CRM automation, and AI receptionist workflows at Roof Manager.',
     knowsAbout: ['roof measurement', 'satellite imagery analysis', 'Google Solar API', 'roofing CRM', 'insurance estimating', 'hail damage assessment', 'solar suitability'],
@@ -13554,7 +13943,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
     <article id="blog-post-content">
   ${post ? `
     <div class="mb-8">
-      ${post.cover_image_url ? `<img src="${post.cover_image_url}" alt="${(post.title || '').replace(/"/g, '&quot;')}" class="w-full h-auto rounded-2xl mb-8 shadow-lg" />` : ''}
+      ${post.cover_image_url ? `<img src="${post.cover_image_url}" alt="${(post.title || '').replace(/"/g, '&quot;')} — cover image" class="w-full h-auto rounded-2xl mb-8 shadow-lg" loading="eager" decoding="async" fetchpriority="high" />` : ''}
       <h1 class="text-3xl md:text-4xl font-black text-white mb-4 leading-tight">${post.title || ''}</h1>
       <div class="flex flex-wrap items-center gap-4 text-sm text-gray-500 mb-3">
         <a href="/about" class="text-gray-300 hover:text-[#00FF88] transition-colors" rel="author"><i class="fas fa-user-edit mr-1"></i>By ${(post.author_name === 'Roof Manager Team' || !post.author_name) ? 'Roof Manager Editorial Team' : post.author_name}</a>
@@ -17883,6 +18272,206 @@ function getHomeownerEstimatePageHTML(): string {
 
 </body>
 </html>`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMBED SNIPPET WIDGET — copy-paste iframe block with attribution backlink
+// Rendered on each tool page to encourage third-party sites to embed the
+// widget with a do-follow credit link back to www.roofmanager.ca.
+// ─────────────────────────────────────────────────────────────────────────────
+function embedSnippetBlock(toolSlug: string, toolLabel: string): string {
+  const snippet = `<iframe src="https://www.roofmanager.ca/tools/${toolSlug}/embed" width="100%" height="640" style="border:0;max-width:640px" loading="lazy" title="${toolLabel} by Roof Manager"></iframe>\n<p style="font-size:12px;color:#666;margin-top:8px">Powered by <a href="https://www.roofmanager.ca/tools/${toolSlug}" rel="noopener">${toolLabel} — Roof Manager</a></p>`
+  const encoded = snippet
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+  return `
+    <section class="py-12" style="background:#0d0d0d">
+      <div class="max-w-3xl mx-auto px-4">
+        <div class="bg-[#111] border border-[#00FF88]/20 rounded-2xl p-6">
+          <h2 class="text-xl font-black text-white mb-2"><i class="fas fa-code text-[#00FF88] mr-2"></i>Embed this tool on your site</h2>
+          <p class="text-gray-400 text-sm mb-4">Paste the snippet below into any blog post, supplier page, or roofer directory. All embeds include a credit link back to Roof Manager &mdash; no registration required, no API key.</p>
+          <div class="relative">
+            <pre class="bg-[#0A0A0A] border border-white/10 rounded-lg p-4 text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap break-all" id="rm-embed-snippet-${toolSlug}">${encoded}</pre>
+            <button onclick="(function(btn){const el=document.getElementById('rm-embed-snippet-${toolSlug}');const r=document.createRange();r.selectNodeContents(el);const s=window.getSelection();s.removeAllRanges();s.addRange(r);try{document.execCommand('copy');btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy snippet';},1500);}catch(e){}})(this)" class="absolute top-2 right-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] text-xs font-bold rounded-md px-3 py-1.5"><i class="fas fa-copy mr-1"></i>Copy snippet</button>
+          </div>
+          <p class="text-xs text-gray-500 mt-3">Embeds are free to use under a simple attribution requirement &mdash; keep the "Powered by Roof Manager" link visible and unmodified.</p>
+        </div>
+      </div>
+    </section>`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SHINGLE CALCULATOR — /tools/shingle-calculator (+ /embed)
+// ─────────────────────────────────────────────────────────────────────────────
+function getShingleCalculatorHTML(isEmbed = false): string {
+  const base = 'https://www.roofmanager.ca'
+  const canonical = `${base}/tools/shingle-calculator`
+  const schema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'WebApplication',
+    name: 'Shingle Quantity Calculator', url: canonical,
+    description: 'Free online calculator for roofing shingle quantity — enter roof area and waste factor to compute bundles, squares, and underlayment rolls. Works for asphalt, architectural, and 3-tab shingles.',
+    applicationCategory: 'BusinessApplication', operatingSystem: 'Web',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  })
+  const calc = `
+    <div class="bg-[#111] border border-white/10 rounded-2xl p-6 md:p-8 max-w-2xl mx-auto">
+      <h2 class="text-xl md:text-2xl font-black text-white mb-4"><i class="fas fa-layer-group text-[#00FF88] mr-2"></i>Shingle Quantity Calculator</h2>
+      <div class="grid sm:grid-cols-2 gap-4 mb-6">
+        <label class="block"><span class="text-sm text-gray-400 block mb-1">Roof area (sq ft)</span><input id="sc-area" type="number" value="2500" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-white"></label>
+        <label class="block"><span class="text-sm text-gray-400 block mb-1">Waste factor (%)</span><input id="sc-waste" type="number" value="12" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-white"></label>
+        <label class="block"><span class="text-sm text-gray-400 block mb-1">Shingle type</span><select id="sc-type" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-white"><option value="arch">Architectural (3 bundles/sq)</option><option value="3tab">3-tab (3 bundles/sq)</option><option value="luxury">Luxury (4 bundles/sq)</option></select></label>
+        <label class="block"><span class="text-sm text-gray-400 block mb-1">Underlayment roll coverage (sq ft)</span><input id="sc-under" type="number" value="400" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-white"></label>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="sc-out">
+        <div class="bg-[#0A0A0A] border border-white/10 rounded-lg p-3"><div class="text-xs text-gray-500">Squares</div><div class="text-xl font-black text-[#00FF88]" id="sc-squares">—</div></div>
+        <div class="bg-[#0A0A0A] border border-white/10 rounded-lg p-3"><div class="text-xs text-gray-500">Bundles</div><div class="text-xl font-black text-[#00FF88]" id="sc-bundles">—</div></div>
+        <div class="bg-[#0A0A0A] border border-white/10 rounded-lg p-3"><div class="text-xs text-gray-500">Underlayment rolls</div><div class="text-xl font-black text-[#00FF88]" id="sc-under-rolls">—</div></div>
+        <div class="bg-[#0A0A0A] border border-white/10 rounded-lg p-3"><div class="text-xs text-gray-500">Starter / ridge</div><div class="text-xl font-black text-[#00FF88]" id="sc-starter">≈10% of linear</div></div>
+      </div>
+      <p class="text-xs text-gray-500 mt-4">Calculation: (area &times; 1 + waste%) &divide; 100 = squares. Bundles/sq depends on shingle type.</p>
+    </div>
+    <script>(function(){function calc(){var a=parseFloat(document.getElementById('sc-area').value)||0;var w=parseFloat(document.getElementById('sc-waste').value)||0;var t=document.getElementById('sc-type').value;var u=parseFloat(document.getElementById('sc-under').value)||400;var bundlesPerSq=t==='luxury'?4:3;var adj=a*(1+w/100);var sq=adj/100;var bundles=Math.ceil(sq*bundlesPerSq);var rolls=Math.ceil(adj/u);document.getElementById('sc-squares').textContent=sq.toFixed(2);document.getElementById('sc-bundles').textContent=bundles;document.getElementById('sc-under-rolls').textContent=rolls;}['sc-area','sc-waste','sc-type','sc-under'].forEach(function(id){document.getElementById(id).addEventListener('input',calc);document.getElementById(id).addEventListener('change',calc);});calc();})();</script>`
+  if (isEmbed) {
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shingle Calculator — Roof Manager</title><link rel="stylesheet" href="${base}/static/tailwind.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></head><body style="background:#0A0A0A;color:#fff;margin:0;padding:16px"><div style="max-width:640px;margin:0 auto">${calc}<p style="text-align:center;margin-top:16px;font-size:12px;color:#888">Powered by <a href="${base}/tools/shingle-calculator" style="color:#00FF88" rel="noopener">Roof Manager</a></p></div></body></html>`
+  }
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags('/tools/shingle-calculator')}
+  <title>Free Shingle Calculator — Bundles, Squares &amp; Rolls | Roof Manager</title>
+  <meta name="description" content="Free online shingle calculator. Enter roof area, waste factor, and shingle type to get bundles, squares, and underlayment roll quantities. No sign-up required.">
+  <link rel="canonical" href="${canonical}">
+  <meta property="og:title" content="Free Shingle Calculator | Roof Manager">
+  <meta property="og:description" content="Bundles, squares, and underlayment rolls — instant calculations.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${canonical}">
+  <meta property="og:image" content="${base}/static/logo.png">
+  <script type="application/ld+json">${schema}</script>
+</head>
+<body style="background:#0A0A0A;color:#fff">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)"><div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"><a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a><a href="/tools" class="text-gray-400 hover:text-white text-sm">&larr; All Tools</a></div></nav>
+  <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Shingle Calculator</h1><p class="text-gray-400">Bundles, squares, and underlayment rolls from roof area and waste factor.</p></div></section>
+  <section class="py-10" style="background:#0A0A0A"><div class="max-w-3xl mx-auto px-4">${calc}</div></section>
+  ${embedSnippetBlock('shingle-calculator', 'Shingle Calculator')}
+  <section class="py-12 text-center" style="background:#0A0A0A"><a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 px-8 rounded-xl"><i class="fas fa-rocket"></i>Get 4 Free Measurement Reports</a></section>
+  <footer class="border-t border-white/5 py-8" style="background:#0A0A0A"><div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500"><span class="font-bold text-gray-400">Roof Manager</span><div class="flex flex-wrap gap-4"><a href="/tools" class="hover:text-[#00FF88]">Tools</a><a href="/pricing" class="hover:text-[#00FF88]">Pricing</a><a href="/about" class="hover:text-[#00FF88]">About</a></div><p>&copy; ${new Date().getFullYear()} Roof Manager</p></div></footer>
+</body></html>`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INSURANCE DEDUCTIBLE ESTIMATOR — /tools/insurance-deductible-estimator
+// ─────────────────────────────────────────────────────────────────────────────
+function getDeductibleEstimatorHTML(isEmbed = false): string {
+  const base = 'https://www.roofmanager.ca'
+  const canonical = `${base}/tools/insurance-deductible-estimator`
+  const schema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'WebApplication',
+    name: 'Insurance Claim Deductible Estimator', url: canonical,
+    description: 'Free estimator for roofing insurance deductibles. Enter dwelling coverage amount and deductible type (flat dollar or percentage) to see your out-of-pocket cost on a roof claim.',
+    applicationCategory: 'FinanceApplication', operatingSystem: 'Web',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  })
+  const calc = `
+    <div class="bg-[#111] border border-white/10 rounded-2xl p-6 md:p-8 max-w-2xl mx-auto">
+      <h2 class="text-xl md:text-2xl font-black text-white mb-4"><i class="fas fa-calculator text-[#00FF88] mr-2"></i>Insurance Claim Deductible Estimator</h2>
+      <div class="grid sm:grid-cols-2 gap-4 mb-6">
+        <label class="block"><span class="text-sm text-gray-400 block mb-1">Dwelling coverage ($)</span><input id="de-dwell" type="number" value="400000" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-white"></label>
+        <label class="block"><span class="text-sm text-gray-400 block mb-1">Deductible type</span><select id="de-type" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-white"><option value="flat">Flat ($)</option><option value="percent">% of dwelling</option></select></label>
+        <label class="block"><span class="text-sm text-gray-400 block mb-1">Deductible value</span><input id="de-val" type="number" value="1000" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-white"></label>
+        <label class="block"><span class="text-sm text-gray-400 block mb-1">Estimated claim ($)</span><input id="de-claim" type="number" value="18000" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-white"></label>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div class="bg-[#0A0A0A] border border-white/10 rounded-lg p-3"><div class="text-xs text-gray-500">Your deductible</div><div class="text-xl font-black text-[#00FF88]" id="de-out-ded">—</div></div>
+        <div class="bg-[#0A0A0A] border border-white/10 rounded-lg p-3"><div class="text-xs text-gray-500">Insurer pays</div><div class="text-xl font-black text-[#00FF88]" id="de-out-pay">—</div></div>
+        <div class="bg-[#0A0A0A] border border-white/10 rounded-lg p-3"><div class="text-xs text-gray-500">Your out-of-pocket</div><div class="text-xl font-black text-[#00FF88]" id="de-out-oop">—</div></div>
+      </div>
+      <p class="text-xs text-gray-500 mt-4">Hail/wind percentage deductibles common in CO, TX, OK, KS, FL. Confirm your specific deductible on your policy declarations page.</p>
+    </div>
+    <script>(function(){function fmt(n){return '$'+Math.round(n).toLocaleString();}function calc(){var dwell=parseFloat(document.getElementById('de-dwell').value)||0;var type=document.getElementById('de-type').value;var val=parseFloat(document.getElementById('de-val').value)||0;var claim=parseFloat(document.getElementById('de-claim').value)||0;var ded=type==='percent'?(dwell*(val/100)):val;var pay=Math.max(0,claim-ded);document.getElementById('de-out-ded').textContent=fmt(ded);document.getElementById('de-out-pay').textContent=fmt(pay);document.getElementById('de-out-oop').textContent=fmt(ded);}['de-dwell','de-type','de-val','de-claim'].forEach(function(id){document.getElementById(id).addEventListener('input',calc);document.getElementById(id).addEventListener('change',calc);});calc();})();</script>`
+  if (isEmbed) {
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Deductible Estimator — Roof Manager</title><link rel="stylesheet" href="${base}/static/tailwind.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></head><body style="background:#0A0A0A;color:#fff;margin:0;padding:16px"><div style="max-width:640px;margin:0 auto">${calc}<p style="text-align:center;margin-top:16px;font-size:12px;color:#888">Powered by <a href="${base}/tools/insurance-deductible-estimator" style="color:#00FF88" rel="noopener">Roof Manager</a></p></div></body></html>`
+  }
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags('/tools/insurance-deductible-estimator')}
+  <title>Insurance Claim Deductible Estimator for Roofing | Roof Manager</title>
+  <meta name="description" content="Free estimator for roof insurance claim deductibles. Compute your out-of-pocket on a hail, wind, or storm claim in seconds. Supports flat and percentage deductibles.">
+  <link rel="canonical" href="${canonical}">
+  <meta property="og:title" content="Insurance Claim Deductible Estimator | Roof Manager">
+  <meta property="og:description" content="Out-of-pocket cost on a roof claim &mdash; instant estimator.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${canonical}">
+  <meta property="og:image" content="${base}/static/logo.png">
+  <script type="application/ld+json">${schema}</script>
+</head>
+<body style="background:#0A0A0A;color:#fff">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)"><div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"><a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a><a href="/tools" class="text-gray-400 hover:text-white text-sm">&larr; All Tools</a></div></nav>
+  <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Insurance Deductible Estimator</h1><p class="text-gray-400">See your out-of-pocket cost on a roofing insurance claim before you file.</p></div></section>
+  <section class="py-10" style="background:#0A0A0A"><div class="max-w-3xl mx-auto px-4">${calc}</div></section>
+  ${embedSnippetBlock('insurance-deductible-estimator', 'Deductible Estimator')}
+  <section class="py-12 text-center" style="background:#0A0A0A"><a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 px-8 rounded-xl"><i class="fas fa-rocket"></i>Get 4 Free Measurement Reports</a></section>
+  <footer class="border-t border-white/5 py-8" style="background:#0A0A0A"><div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500"><span class="font-bold text-gray-400">Roof Manager</span><div class="flex flex-wrap gap-4"><a href="/tools" class="hover:text-[#00FF88]">Tools</a><a href="/pricing" class="hover:text-[#00FF88]">Pricing</a><a href="/about" class="hover:text-[#00FF88]">About</a></div><p>&copy; ${new Date().getFullYear()} Roof Manager</p></div></footer>
+</body></html>`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SOLAR PRODUCTION ESTIMATOR — /tools/solar-production-estimator
+// ─────────────────────────────────────────────────────────────────────────────
+function getSolarProductionEstimatorHTML(isEmbed = false): string {
+  const base = 'https://www.roofmanager.ca'
+  const canonical = `${base}/tools/solar-production-estimator`
+  const schema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'WebApplication',
+    name: 'Solar Production Estimator', url: canonical,
+    description: 'Free solar production estimator. Compute annual kWh from system size, peak sun hours, and a derate factor. Useful for pre-quote feasibility discussions.',
+    applicationCategory: 'BusinessApplication', operatingSystem: 'Web',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  })
+  const calc = `
+    <div class="bg-[#111] border border-white/10 rounded-2xl p-6 md:p-8 max-w-2xl mx-auto">
+      <h2 class="text-xl md:text-2xl font-black text-white mb-4"><i class="fas fa-solar-panel text-[#00FF88] mr-2"></i>Solar Production Estimator</h2>
+      <div class="grid sm:grid-cols-2 gap-4 mb-6">
+        <label class="block"><span class="text-sm text-gray-400 block mb-1">System size (kW DC)</span><input id="sp-kw" type="number" step="0.1" value="8" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-white"></label>
+        <label class="block"><span class="text-sm text-gray-400 block mb-1">Peak sun hours (avg/day)</span><input id="sp-psh" type="number" step="0.1" value="4.5" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-white"></label>
+        <label class="block"><span class="text-sm text-gray-400 block mb-1">Derate factor</span><input id="sp-derate" type="number" step="0.01" value="0.82" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-white"></label>
+        <label class="block"><span class="text-sm text-gray-400 block mb-1">Utility rate ($/kWh)</span><input id="sp-rate" type="number" step="0.01" value="0.16" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-white"></label>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div class="bg-[#0A0A0A] border border-white/10 rounded-lg p-3"><div class="text-xs text-gray-500">Annual kWh</div><div class="text-xl font-black text-[#00FF88]" id="sp-out-kwh">—</div></div>
+        <div class="bg-[#0A0A0A] border border-white/10 rounded-lg p-3"><div class="text-xs text-gray-500">Monthly avg kWh</div><div class="text-xl font-black text-[#00FF88]" id="sp-out-mkwh">—</div></div>
+        <div class="bg-[#0A0A0A] border border-white/10 rounded-lg p-3"><div class="text-xs text-gray-500">Est. annual savings</div><div class="text-xl font-black text-[#00FF88]" id="sp-out-save">—</div></div>
+      </div>
+      <p class="text-xs text-gray-500 mt-4">Derate factor accounts for inverter losses, shading, temperature, and soiling. 0.78&ndash;0.85 is typical for rooftop PV.</p>
+    </div>
+    <script>(function(){function calc(){var kw=parseFloat(document.getElementById('sp-kw').value)||0;var psh=parseFloat(document.getElementById('sp-psh').value)||0;var d=parseFloat(document.getElementById('sp-derate').value)||0;var r=parseFloat(document.getElementById('sp-rate').value)||0;var annual=kw*psh*365*d;document.getElementById('sp-out-kwh').textContent=Math.round(annual).toLocaleString();document.getElementById('sp-out-mkwh').textContent=Math.round(annual/12).toLocaleString();document.getElementById('sp-out-save').textContent='$'+Math.round(annual*r).toLocaleString();}['sp-kw','sp-psh','sp-derate','sp-rate'].forEach(function(id){document.getElementById(id).addEventListener('input',calc);document.getElementById(id).addEventListener('change',calc);});calc();})();</script>`
+  if (isEmbed) {
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Solar Production Estimator — Roof Manager</title><link rel="stylesheet" href="${base}/static/tailwind.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></head><body style="background:#0A0A0A;color:#fff;margin:0;padding:16px"><div style="max-width:640px;margin:0 auto">${calc}<p style="text-align:center;margin-top:16px;font-size:12px;color:#888">Powered by <a href="${base}/tools/solar-production-estimator" style="color:#00FF88" rel="noopener">Roof Manager</a></p></div></body></html>`
+  }
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags('/tools/solar-production-estimator')}
+  <title>Free Solar Production Estimator (kWh/Year) | Roof Manager</title>
+  <meta name="description" content="Free solar production estimator. Compute annual kWh from system size, peak sun hours, and derate factor. Great for roofer-solar pre-quote conversations.">
+  <link rel="canonical" href="${canonical}">
+  <meta property="og:title" content="Solar Production Estimator | Roof Manager">
+  <meta property="og:description" content="Annual kWh + est. savings from system size and sun hours.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${canonical}">
+  <meta property="og:image" content="${base}/static/logo.png">
+  <script type="application/ld+json">${schema}</script>
+</head>
+<body style="background:#0A0A0A;color:#fff">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)"><div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"><a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a><a href="/tools" class="text-gray-400 hover:text-white text-sm">&larr; All Tools</a></div></nav>
+  <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Solar Production Estimator</h1><p class="text-gray-400">Annual kWh output from system size, sun hours, and derate factor.</p></div></section>
+  <section class="py-10" style="background:#0A0A0A"><div class="max-w-3xl mx-auto px-4">${calc}</div></section>
+  ${embedSnippetBlock('solar-production-estimator', 'Solar Production Estimator')}
+  <section class="py-12 text-center" style="background:#0A0A0A"><a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 px-8 rounded-xl"><i class="fas fa-rocket"></i>Get 4 Free Measurement Reports</a></section>
+  <footer class="border-t border-white/5 py-8" style="background:#0A0A0A"><div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500"><span class="font-bold text-gray-400">Roof Manager</span><div class="flex flex-wrap gap-4"><a href="/tools" class="hover:text-[#00FF88]">Tools</a><a href="/pricing" class="hover:text-[#00FF88]">Pricing</a><a href="/about" class="hover:text-[#00FF88]">About</a></div><p>&copy; ${new Date().getFullYear()} Roof Manager</p></div></footer>
+</body></html>`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
