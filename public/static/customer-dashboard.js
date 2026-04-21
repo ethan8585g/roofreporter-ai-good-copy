@@ -285,6 +285,7 @@ function renderDashboard() {
     '<div class="lg:hidden overflow-x-auto" style="background:var(--bg-card);border-bottom:1px solid var(--border-color)">' +
       '<div class="flex gap-1 px-3 py-2 whitespace-nowrap">' +
         '<a href="/customer/dashboard" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-th-large"></i>Home</a>' +
+        '<a href="/customer/reports" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-file-alt"></i>Report History</a>' +
         '<a href="/customer/leads" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold flex-shrink-0"><i class="fas fa-inbox"></i>Leads<span id="mobile-leads-badge" class="ml-1"></span></a>' +
         '<a href="/customer/jobs" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-hard-hat"></i>Jobs</a>' +
         '<a href="/customer/order" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-plus-circle"></i>Order</a>' +
