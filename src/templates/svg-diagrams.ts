@@ -62,9 +62,17 @@ export function generateArchitecturalDiagramSVG(
   }
 
   // BOUNDING BOX & SCALE
+  // Must include perimeter, facets, AND any ridge/valley/hip line endpoints so all
+  // geometry gets scaled into the same canvas region. Omitting lines caused ridges
+  // whose endpoints extend past the footprint bbox to render outside the drawing area.
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
-  if (hasPerimeter) aiGeometry!.perimeter.forEach(p => { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y) })
-  if (hasFacets) aiGeometry!.facets.forEach(f => f.points?.forEach(p => { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y) }))
+  const expandBbox = (p: { x: number; y: number }) => {
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y)
+  }
+  if (hasPerimeter) aiGeometry!.perimeter.forEach(expandBbox)
+  if (hasFacets) aiGeometry!.facets.forEach(f => f.points?.forEach(expandBbox))
+  if (aiGeometry!.lines) aiGeometry!.lines.forEach(l => { expandBbox(l.start); expandBbox(l.end) })
 
   const geoW = maxX - minX || 1
   const geoH = maxY - minY || 1
@@ -1172,13 +1180,15 @@ export function generateProfessionalDiagramSVG(
   }
 
   // ── 1. BOUNDING BOX & SCALE ──
+  // Include ridge/valley/hip line endpoints so they scale into the same canvas as the perimeter.
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
-  if (hasPerimeter) {
-    aiGeometry.perimeter.forEach(p => { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y) })
+  const expandBbox = (p: { x: number; y: number }) => {
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y)
   }
-  if (hasFacets) {
-    aiGeometry.facets.forEach(f => f.points?.forEach(p => { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y) }))
-  }
+  if (hasPerimeter) aiGeometry.perimeter.forEach(expandBbox)
+  if (hasFacets) aiGeometry.facets.forEach(f => f.points?.forEach(expandBbox))
+  if (aiGeometry.lines) aiGeometry.lines.forEach(l => { expandBbox(l.start); expandBbox(l.end) })
 
   const geoW = maxX - minX || 1
   const geoH = maxY - minY || 1
@@ -1535,13 +1545,13 @@ export function generateBlueprintSVG(
   // 1. COMPUTE BOUNDING BOX & SCALE to fit 500x500 canvas
   // ====================================================================
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
-
-  if (hasPerimeter) {
-    aiGeometry.perimeter.forEach(p => { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y) })
+  const expandBbox = (p: { x: number; y: number }) => {
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y)
   }
-  if (hasFacets) {
-    aiGeometry.facets.forEach(f => f.points?.forEach(p => { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y) }))
-  }
+  if (hasPerimeter) aiGeometry.perimeter.forEach(expandBbox)
+  if (hasFacets) aiGeometry.facets.forEach(f => f.points?.forEach(expandBbox))
+  if (aiGeometry.lines) aiGeometry.lines.forEach(l => { expandBbox(l.start); expandBbox(l.end) })
 
   const geoW = maxX - minX || 1
   const geoH = maxY - minY || 1
