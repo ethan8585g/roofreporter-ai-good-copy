@@ -555,7 +555,7 @@ function initAutocomplete() {
   state.autocomplete = new google.maps.places.Autocomplete(input, {
     fields: ['address_components', 'geometry', 'name', 'formatted_address'],
     types: ['address'],
-    componentRestrictions: { country: 'ca' }
+    componentRestrictions: { country: ['ca', 'us'] }
   });
 
   state.autocomplete.addListener('place_changed', () => {

@@ -224,7 +224,7 @@ function initPlacesAutocomplete() {
 
   try {
     const autocomplete = new google.maps.places.Autocomplete(searchInput, {
-      componentRestrictions: { country: 'ca' },
+      componentRestrictions: { country: ['ca', 'us'] },
       fields: ['geometry', 'formatted_address', 'address_components']
     });
     if (orderState.map) autocomplete.bindTo('bounds', orderState.map);
