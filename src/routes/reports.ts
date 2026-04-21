@@ -2429,12 +2429,10 @@ reportsRoutes.post('/recovery/stuck', async (c) => {
       await repo.markOrderStatus(c.env.DB, row.order_id, 'completed')
       recovered.push(row.order_id as number)
       console.log(`[Recovery] Auto-recovered stuck report: order ${row.order_id} (was ${row.status})`)
-      // Terminal transition for recovered orders — fire auto-invoice hook so
-      // any missed proposals get drafted. Idempotent; no-op if one already exists.
-      ;(c as any).executionCtx?.waitUntil?.(
-        createAutoInvoiceForOrder(c.env, Number(row.order_id))
-          .catch((e) => console.warn('[auto-invoice] recovery hook error:', e?.message))
-      )
+      // Intentionally NOT firing the auto-invoice hook here. Recovery is an
+      // admin cleanup for orders stuck in generating/enhancing — the homeowner
+      // auto-proposal should only fire when the user actually places an order
+      // and its trace-driven generation completes, not retroactively on cleanup.
     } catch (e: any) {
       console.error(`[Recovery] Failed to recover order ${row.order_id}:`, e.message)
     }

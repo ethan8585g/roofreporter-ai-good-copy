@@ -78,7 +78,9 @@ function seedSchema(db: Database.Database) {
       auto_invoice_enabled INTEGER DEFAULT 0,
       invoice_pricing_mode TEXT DEFAULT 'per_square',
       invoice_price_per_square REAL DEFAULT 350,
-      invoice_price_per_bundle REAL DEFAULT 125
+      invoice_price_per_bundle REAL DEFAULT 125,
+      gmail_refresh_token TEXT,
+      gmail_connected_email TEXT
     );
 
     CREATE TABLE orders (
@@ -168,6 +170,8 @@ function seedFixtures(
     pricingMode?: 'per_square' | 'per_bundle'
     pricePerSquare?: number
     pricePerBundle?: number
+    customerGmailToken?: string | null
+    customerGmailEmail?: string | null
   } = {}
 ): { customerId: number; orderId: number } {
   const {
@@ -181,12 +185,14 @@ function seedFixtures(
     pricingMode = 'per_square',
     pricePerSquare = 350,
     pricePerBundle = 125,
+    customerGmailToken = null,
+    customerGmailEmail = null,
   } = opts
 
   const custRes = db.prepare(
-    `INSERT INTO customers (email, name, auto_invoice_enabled, invoice_pricing_mode, invoice_price_per_square, invoice_price_per_bundle)
-     VALUES (?, ?, ?, ?, ?, ?)`
-  ).run('roofer@example.com', 'Roofer Co', autoEnabled ? 1 : 0, pricingMode, pricePerSquare, pricePerBundle)
+    `INSERT INTO customers (email, name, auto_invoice_enabled, invoice_pricing_mode, invoice_price_per_square, invoice_price_per_bundle, gmail_refresh_token, gmail_connected_email)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run('roofer@example.com', 'Roofer Co', autoEnabled ? 1 : 0, pricingMode, pricePerSquare, pricePerBundle, customerGmailToken, customerGmailEmail)
   const customerId = Number(custRes.lastInsertRowid)
 
   const orderRes = db.prepare(
@@ -416,6 +422,34 @@ describe('createAutoInvoiceForOrder', () => {
     expect(item.quantity).toBe(125)
     expect(item.unit).toBe('bundle')
     expect(item.unit_price).toBe(100)
+  })
+
+  // ── Case 11: per-customer Gmail is preferred over the platform refresh
+  // Proof: when customers.gmail_refresh_token is set AND the platform token
+  // is also set, the service sends using the customer's token (so the
+  // homeowner sees the roofer's brand, not a platform address).
+  it('prefers per-customer Gmail refresh token over platform env var', async () => {
+    const env = makeEnv(db, { withGmail: true })
+    const { orderId } = seedFixtures(db, {
+      customerGmailToken: 'roofer-refresh-tok',
+      customerGmailEmail: 'roofer@branded.com',
+    })
+
+    const res = await createAutoInvoiceForOrder(env, orderId)
+    expect(res.status).toBe('created')
+
+    expect(sendCalls.length).toBe(1)
+    expect(sendCalls[0].to).toBe('home@owner.com')
+
+    // Audit trail should name the customer-gmail path so support can
+    // reason about which identity actually sent each email.
+    const auditRow = db.prepare(
+      `SELECT new_value FROM invoice_audit_log
+       WHERE order_id = ? AND action = 'auto_invoice_proposal_emailed'
+       ORDER BY id DESC LIMIT 1`
+    ).get(orderId) as any
+    expect(auditRow?.new_value).toContain('customer-gmail')
+    expect(auditRow?.new_value).toContain('roofer@branded.com')
   })
 
   // ── Case 9: Gmail send throws ─────────────────────────────────

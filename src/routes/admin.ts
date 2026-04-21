@@ -3901,7 +3901,18 @@ adminRoutes.get('/auto-proposal/health', async (c) => {
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   const env: any = c.env
-  const gmailConfigured = !!(env.GMAIL_CLIENT_ID && env.GMAIL_CLIENT_SECRET && env.GMAIL_REFRESH_TOKEN)
+  const platformGmail = !!(env.GMAIL_CLIENT_ID && env.GMAIL_CLIENT_SECRET && env.GMAIL_REFRESH_TOKEN)
+  // Per-customer Gmail only works if GMAIL_CLIENT_ID + _SECRET are set
+  // (the refresh token comes from customers.gmail_refresh_token).
+  const perCustomerPossible = !!(env.GMAIL_CLIENT_ID && env.GMAIL_CLIENT_SECRET)
+  const connected = await c.env.DB.prepare(
+    `SELECT COUNT(*) as n FROM customers
+     WHERE gmail_refresh_token IS NOT NULL AND gmail_refresh_token != ''`
+  ).first<{ n: number }>()
+  const customersWithGmail = connected?.n ?? 0
+  // Auto-proposal can send when: platform Gmail exists OR at least one
+  // customer has connected their own Gmail.
+  const gmailConfigured = platformGmail || (perCustomerPossible && customersWithGmail > 0)
 
   const [lastSent, pendingDrafts, recent, counts24h] = await Promise.all([
     c.env.DB.prepare(
@@ -3929,6 +3940,8 @@ adminRoutes.get('/auto-proposal/health', async (c) => {
 
   return c.json({
     gmail_configured: gmailConfigured,
+    gmail_platform_configured: platformGmail,
+    customers_with_gmail_connected: customersWithGmail,
     last_successful_send_at: lastSent?.created_at ?? null,
     pending_drafts_count: pendingDrafts?.n ?? 0,
     last_10_audit_log_entries: recent.results || [],

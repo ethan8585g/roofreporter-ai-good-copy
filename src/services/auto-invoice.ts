@@ -235,13 +235,29 @@ export async function createAutoInvoiceForOrder(
       reason: `proposal_number=${proposalNumber} total=$${total.toFixed(2)} gross_squares=${grossSquares} bundles=${bundles}`
     })
 
-    // Auto-send the proposal email to the homeowner. If this fails, the proposal
-    // remains in 'draft' so the roofer can retry manually from the dashboard.
+    // Auto-send the proposal email to the homeowner. Prefers the roofer's
+    // connected Gmail (customers.gmail_refresh_token) so the homeowner sees
+    // it coming from the actual contractor. Falls back to the platform
+    // GMAIL_REFRESH_TOKEN env var. If neither is available, the proposal
+    // remains in 'draft' and the roofer can retry from the dashboard.
     let emailSent = false
     let emailError = ''
     const clientId = (env as any).GMAIL_CLIENT_ID
     const clientSecret = (env as any).GMAIL_CLIENT_SECRET
-    const refreshToken = (env as any).GMAIL_REFRESH_TOKEN
+    const platformRefresh = (env as any).GMAIL_REFRESH_TOKEN
+    const platformSender = (env as any).GMAIL_SENDER_EMAIL
+
+    // Per-customer Gmail (populated when the roofer connected their account
+    // via Settings → Gmail integration).
+    const roofer = await env.DB.prepare(
+      `SELECT gmail_refresh_token, gmail_connected_email FROM customers WHERE id = ?`
+    ).bind(order.customer_id).first<{ gmail_refresh_token: string | null, gmail_connected_email: string | null }>()
+
+    const useCustomerGmail = !!(roofer?.gmail_refresh_token && clientId && clientSecret)
+    const refreshToken = useCustomerGmail ? roofer!.gmail_refresh_token! : platformRefresh
+    const senderEmail = useCustomerGmail ? roofer!.gmail_connected_email : platformSender
+    const gmailSource = useCustomerGmail ? 'customer' : (platformRefresh ? 'platform' : 'none')
+
     if (!clientId || !clientSecret || !refreshToken) {
       emailError = 'gmail_not_configured'
     } else if (measurementMissing) {
@@ -276,7 +292,8 @@ export async function createAutoInvoiceForOrder(
           clientId, clientSecret, refreshToken,
           recipientEmail,
           `Proposal ${proposalNumber} — $${total.toFixed(2)}`,
-          emailHtml
+          emailHtml,
+          senderEmail
         )
         emailSent = true
       } catch (e: any) {
@@ -291,12 +308,12 @@ export async function createAutoInvoiceForOrder(
       ).bind(invoiceId).run()
       await logAutoInvoiceStep(env, {
         order_id: orderId, invoice_id: invoiceId, step: 'proposal_emailed',
-        reason: `sent to ${recipientEmail}`
+        reason: `sent to ${recipientEmail} via ${gmailSource}-gmail${senderEmail ? ' as ' + senderEmail : ''}`
       })
     } else {
       await logAutoInvoiceStep(env, {
         order_id: orderId, invoice_id: invoiceId, step: 'proposal_email_skipped',
-        reason: emailError
+        reason: `${emailError} (gmail_source=${gmailSource})`
       })
     }
 
@@ -310,33 +327,3 @@ export async function createAutoInvoiceForOrder(
   }
 }
 
-/**
- * Cron-mode sweep: find recently-completed reports for orders that are
- * configured for auto-invoice but have no draft yet. Catches races where
- * the inline hook didn't fire (worker was killed, deploy boundary, etc).
- */
-export async function sweepAutoInvoices(env: Bindings, lookbackMinutes = 60): Promise<number> {
-  const rows = await env.DB.prepare(`
-    SELECT r.order_id
-    FROM reports r
-    JOIN orders o ON o.id = r.order_id
-    JOIN customers c ON c.id = o.customer_id
-    WHERE r.status = 'completed'
-      AND c.auto_invoice_enabled = 1
-      AND o.invoice_customer_email IS NOT NULL
-      AND o.invoice_customer_email != ''
-      AND r.updated_at >= datetime('now', '-' || ? || ' minutes')
-      AND NOT EXISTS (
-        SELECT 1 FROM invoices i
-        WHERE i.order_id = r.order_id AND i.created_by = 'auto-invoice'
-      )
-    LIMIT 50
-  `).bind(lookbackMinutes).all<{ order_id: number }>()
-
-  let created = 0
-  for (const row of (rows.results || [])) {
-    const res = await createAutoInvoiceForOrder(env, row.order_id)
-    if (res.status === 'created') created++
-  }
-  return created
-}
