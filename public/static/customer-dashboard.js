@@ -121,7 +121,7 @@ function buildOrderBadgesHTML() {
   var processingReports = custState.orders.filter(function(o) { return o.status === 'processing'; }).length;
   return (freeTrialRemaining > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-gift mr-1"></i>' + freeTrialRemaining + ' Free Trial</div>' : '') +
     (paidCredits > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-coins mr-1"></i>' + paidCredits + ' Credits</div>' : '') +
-    '<div class="px-3 py-1.5 rounded-full text-xs font-bold" style="background:var(--bg-elevated);border:1px solid var(--border-color);color:var(--text-secondary)"><i class="fas fa-file-alt mr-1"></i>' + completedReports + ' Reports</div>' +
+    '<a href="/customer/reports" class="px-3 py-1.5 rounded-full text-xs font-bold inline-flex items-center hover:opacity-80 transition-opacity" style="background:var(--bg-elevated);border:1px solid var(--border-color);color:var(--text-secondary);text-decoration:none"><i class="fas fa-file-alt mr-1"></i>' + completedReports + ' Reports</a>' +
     (processingReports > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700 animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i>' + processingReports + ' Generating</div>' : '');
 }
 
