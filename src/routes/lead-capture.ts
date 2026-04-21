@@ -5,6 +5,65 @@ import { sendMetaConversion } from './meta-connect'
 
 export const leadCaptureRoutes = new Hono<{ Bindings: Bindings }>()
 
+// conv-v5: hardened per V5 Section 7
+// Per-isolate soft rate limiter: 20 submissions / 10 minutes per IP+endpoint.
+// Intentionally in-memory only — a soft throttle, not a security control.
+// Edge isolates get recycled, so an attacker determined to bypass this can, but
+// it blocks the common "rapid-fire bot" case without needing migrations.
+type RLEntry = { count: number; first: number }
+const RL_WINDOW_MS = 10 * 60 * 1000
+const RL_MAX = 20
+const rateLimitMap: Map<string, RLEntry> = (globalThis as any).__rmLeadRL__ || new Map()
+;(globalThis as any).__rmLeadRL__ = rateLimitMap
+
+function getClientIP(c: any): string {
+  try {
+    return (
+      c.req.header('cf-connecting-ip') ||
+      c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+      c.req.header('x-real-ip') ||
+      'unknown'
+    )
+  } catch { return 'unknown' }
+}
+
+/**
+ * Returns true if the request should be throttled. Caller should respond 429.
+ * Safe to call on every submission — self-prunes expired entries lazily.
+ */
+function rateLimited(c: any, endpoint: string): boolean {
+  const ip = getClientIP(c)
+  const key = `${ip}:${endpoint}`
+  const now = Date.now()
+  // Lazy prune: once every ~64 calls, drop anything expired.
+  if ((rateLimitMap.size > 1024) && (Math.random() < 0.015)) {
+    for (const [k, v] of rateLimitMap.entries()) {
+      if (now - v.first > RL_WINDOW_MS) rateLimitMap.delete(k)
+    }
+  }
+  const entry = rateLimitMap.get(key)
+  if (!entry || (now - entry.first) > RL_WINDOW_MS) {
+    rateLimitMap.set(key, { count: 1, first: now })
+    return false
+  }
+  entry.count += 1
+  if (entry.count > RL_MAX) {
+    console.warn('[lead-capture:rate-limited]', { ip, endpoint, count: entry.count, windowStart: entry.first })
+    return true
+  }
+  return false
+}
+
+/** Log UA + Referer (+ IP) on every submission. Low-signal but useful for abuse forensics. */
+function logSubmission(c: any, endpoint: string, extra: Record<string, any> = {}) {
+  try {
+    const ua = c.req.header('user-agent') || ''
+    const ref = c.req.header('referer') || c.req.header('referrer') || ''
+    const ip = getClientIP(c)
+    console.log('[lead-capture:submit]', { endpoint, ip, ua: ua.slice(0, 240), referer: ref.slice(0, 240), ...extra })
+  } catch (e: any) { /* best-effort only */ }
+}
+
 export const VALID_LEAD_SOURCES = ['homepage_cta', 'demo_portal', 'condo_cheat_sheet', 'other'] as const
 export type LeadSource = typeof VALID_LEAD_SOURCES[number]
 
@@ -74,7 +133,15 @@ async function ensureContactLeadsTable(db: any) {
 
 // Free Asset Report lead (homepage hero + demo portal)
 leadCaptureRoutes.post('/asset-report/lead', async (c) => {
+  // conv-v5: rate-limit + UA log
+  if (rateLimited(c, 'asset-report')) return c.json({ error: 'Too many submissions. Please wait a few minutes and try again.' }, 429)
   const body = await c.req.json().catch((e) => { console.warn('[lead-capture] invalid JSON body:', (e && e.message) || e); return {} })
+  logSubmission(c, 'asset-report', { email: body?.email, source: body?.source })
+  // Honeypot: any value in `website` field → silent 200, no record, no email.
+  if (body && typeof body.website === 'string' && body.website.trim()) {
+    console.warn('[lead-capture:honeypot]', { endpoint: 'asset-report', ip: getClientIP(c) })
+    return c.json({ success: true })
+  }
   const v = validateLeadInput(body)
   if (!v.ok) return c.json({ error: v.error }, 400)
   await ensureLeadTable(c.env.DB)
@@ -89,22 +156,52 @@ leadCaptureRoutes.post('/asset-report/lead', async (c) => {
   const escapeHtml = (v: string | null) => v == null ? '' : String(v).replace(/[&<>"'`=\/]/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#x60;','=':'&#x3D;','/':'&#x2F;'}[ch] || ch))
   const addressForHtml = escapeHtml(address)
 
-  await c.env.DB.prepare(
-    `INSERT INTO asset_report_leads (email, address, building_count, source) VALUES (?, ?, ?, ?)`
-  ).bind(String(body.email).toLowerCase().trim(), address, buildings, source).run()
+  // Attribution fields (blog slug / UTM / referrer / landing page) — sent by blogLeadMagnetHTML submit JS
+  const s100 = (v: any) => v ? String(v).trim().slice(0, 100) : null
+  const s500 = (v: any) => v ? String(v).trim().slice(0, 500) : null
+  const landingPage = s500(body.landing_page)
+  const refUrl = s500(body.referrer)
+  const utmSource = s100(body.utm_source)
+  const utmMedium = s100(body.utm_medium)
+  const utmCampaign = s100(body.utm_campaign)
+
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO asset_report_leads (email, address, building_count, source, landing_page, referrer, utm_source, utm_medium, utm_campaign) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(String(body.email).toLowerCase().trim(), address, buildings, source, landingPage, refUrl, utmSource, utmMedium, utmCampaign).run()
+  } catch (e: any) {
+    if (/no such column/i.test(String(e?.message || ''))) {
+      await c.env.DB.prepare(
+        `INSERT INTO asset_report_leads (email, address, building_count, source) VALUES (?, ?, ?, ?)`
+      ).bind(String(body.email).toLowerCase().trim(), address, buildings, source).run()
+    } else { throw e }
+  }
 
   // Mirror into unified `leads` table so super-admin leads inbox surfaces it.
   try {
     await c.env.DB.prepare(
-      `INSERT INTO leads (name, email, address, source_page, message) VALUES (?, ?, ?, ?, ?)`
+      `INSERT INTO leads (name, email, address, source_page, message, utm_source, utm_medium, utm_campaign, referrer, landing_page) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       body.email ? String(body.email).split('@')[0].slice(0, 60) : 'Blog visitor',
       String(body.email).toLowerCase().trim(),
       address,
       `blog:${source}`,
       `Free sample/measurement report request from blog${address ? ` — ${address}` : ''}${buildings ? ` (${buildings} buildings)` : ''}`,
+      utmSource, utmMedium, utmCampaign, refUrl, landingPage
     ).run()
-  } catch (e: any) { console.warn('[asset-report/lead] leads mirror insert skipped:', e?.message) }
+  } catch (e: any) {
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO leads (name, email, address, source_page, message) VALUES (?, ?, ?, ?, ?)`
+      ).bind(
+        body.email ? String(body.email).split('@')[0].slice(0, 60) : 'Blog visitor',
+        String(body.email).toLowerCase().trim(),
+        address,
+        `blog:${source}`,
+        `Free sample/measurement report request from blog${address ? ` — ${address}` : ''}${buildings ? ` (${buildings} buildings)` : ''}`,
+      ).run()
+    } catch (e2: any) { console.warn('[asset-report/lead] leads mirror insert skipped:', e2?.message) }
+  }
 
   // Fire email with sample report link
   try {
@@ -163,7 +260,7 @@ leadCaptureRoutes.post('/contact/lead', async (c) => {
   const company = body.company ? String(body.company).trim().slice(0, 200) : null
   const validEmployees = ['1-5', '6-25', '26-100', '100+']
   const employees = validEmployees.includes(body.employees) ? body.employees : null
-  const validInterests = ['measurements', 'crm', 'solar', 'pricing', 'api', 'other']
+  const validInterests = ['use', 'wholesale', 'integrate', 'press', 'other', 'measurements', 'crm', 'solar', 'pricing', 'api'] // conv-v5: widened for /contact select values
   const interest = validInterests.includes(body.interest) ? body.interest : null
   const utm_source = body.utm_source ? String(body.utm_source).slice(0, 100) : null
   const utm_medium = body.utm_medium ? String(body.utm_medium).slice(0, 100) : null

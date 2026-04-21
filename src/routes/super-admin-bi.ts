@@ -564,4 +564,137 @@ superAdminBi.get('/api-performance', async (c) => {
   }
 })
 
+// ── LEAD SOURCE ATTRIBUTION ───────────────────────────────────
+// Buckets every lead into { blog, ai, facebook, instagram, google, direct, other }
+// by combining utm_source + referrer + landing_page. Also returns per-blog-slug
+// lead counts pulled from the `leads.landing_page` column.
+superAdminBi.get('/lead-sources', async (c) => {
+  try {
+    const db = c.env.DB
+    const period = c.req.query('period') || '30d'
+    const daysBack = period === '90d' ? 90 : period === '7d' ? 7 : period === '24h' ? 1 : 30
+    const since = new Date(Date.now() - daysBack * 86400000).toISOString()
+
+    // Pull all leads in window with attribution fields; be resilient if
+    // migration 0181 hasn't been applied yet (landing_page may be missing).
+    let rows: any[] = []
+    try {
+      const r = await db.prepare(`
+        SELECT id, email, utm_source, utm_medium, utm_campaign, referrer, landing_page, source_page, created_at
+        FROM leads
+        WHERE created_at >= ?
+      `).bind(since).all()
+      rows = (r.results as any[]) || []
+    } catch (e: any) {
+      // Fallback: no landing_page column yet
+      const r = await db.prepare(`
+        SELECT id, email, utm_source, utm_medium, utm_campaign, referrer, source_page, created_at
+        FROM leads
+        WHERE created_at >= ?
+      `).bind(since).all()
+      rows = ((r.results as any[]) || []).map(x => ({ ...x, landing_page: null }))
+    }
+
+    const AI_HOSTS = ['chat.openai.com','chatgpt.com','openai.com','claude.ai','perplexity.ai','gemini.google.com','bard.google.com','copilot.microsoft.com','bing.com/chat','you.com','phind.com','poe.com']
+    const FB_HOSTS = ['facebook.com','l.facebook.com','m.facebook.com','lm.facebook.com','fb.com','fb.me']
+    const IG_HOSTS = ['instagram.com','l.instagram.com','m.instagram.com']
+    const GOOGLE_HOSTS = ['google.com','google.ca','google.co.uk','google.co.in','google.com.au','bing.com','duckduckgo.com','search.yahoo.com','yahoo.com','yandex.com','baidu.com']
+
+    function hostOf(url: string): string {
+      if (!url) return ''
+      try {
+        const u = url.startsWith('http') ? new URL(url) : new URL('https://' + url)
+        return u.hostname.toLowerCase().replace(/^www\./, '')
+      } catch { return String(url).toLowerCase() }
+    }
+    function matchesAny(host: string, list: string[]): boolean {
+      if (!host) return false
+      return list.some(h => host === h || host.endsWith('.' + h) || host.includes(h))
+    }
+    function classify(row: any): string {
+      const utm = String(row.utm_source || '').toLowerCase().trim()
+      const srcPage = String(row.source_page || '').toLowerCase()
+      const landing = String(row.landing_page || '').toLowerCase()
+      const refHost = hostOf(row.referrer || '')
+
+      // Blog takes priority — if they landed on /blog/* or submitted from a blog form
+      if (landing.includes('/blog/') || srcPage.startsWith('blog:') || srcPage.includes('blog_lead_magnet') || utm === 'blog') return 'blog'
+
+      // UTM-explicit mappings
+      if (utm === 'chatgpt' || utm === 'openai' || utm === 'claude' || utm === 'perplexity' || utm === 'gemini' || utm === 'bing' || utm === 'copilot' || utm === 'ai') return 'ai'
+      if (utm === 'facebook' || utm === 'fb' || utm === 'meta') return 'facebook'
+      if (utm === 'instagram' || utm === 'ig') return 'instagram'
+      if (utm === 'google' || utm === 'google_cpc' || utm === 'google-ads' || utm === 'adwords') return 'google'
+
+      // Referrer-based classification
+      if (matchesAny(refHost, AI_HOSTS)) return 'ai'
+      if (matchesAny(refHost, FB_HOSTS)) return 'facebook'
+      if (matchesAny(refHost, IG_HOSTS)) return 'instagram'
+      if (matchesAny(refHost, GOOGLE_HOSTS)) return 'google'
+
+      if (!refHost && !utm) return 'direct'
+      return 'other'
+    }
+
+    const buckets: Record<string, number> = { blog: 0, ai: 0, facebook: 0, instagram: 0, google: 0, direct: 0, other: 0 }
+    const blogCounts: Record<string, number> = {}
+
+    for (const row of rows) {
+      const b = classify(row)
+      buckets[b] = (buckets[b] || 0) + 1
+      if (b === 'blog') {
+        // Extract blog slug from landing_page (e.g., "/blog/ai-vs-eagleview-accuracy?utm_source=...")
+        let slug = ''
+        const landing = String(row.landing_page || '')
+        const m = landing.match(/\/blog\/([^/?#]+)/i)
+        if (m) slug = m[1]
+        // Fallback: use utm_campaign if present (blogLeadMagnet sets it to slug)
+        if (!slug && row.utm_campaign) slug = String(row.utm_campaign).trim().slice(0, 120)
+        // Fallback: parse blog:<source> from source_page
+        if (!slug) {
+          const sm = String(row.source_page || '').match(/^blog:(.+)$/i)
+          if (sm) slug = sm[1]
+        }
+        if (!slug) slug = '(unknown blog)'
+        blogCounts[slug] = (blogCounts[slug] || 0) + 1
+      }
+    }
+
+    const bucketsArr = Object.entries(buckets)
+      .map(([source, count]) => ({ source, count }))
+      .sort((a, b) => b.count - a.count)
+
+    const blogs = Object.entries(blogCounts)
+      .map(([slug, count]) => ({ slug, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 25)
+
+    // Pull session totals in the same window for a rough conversion-rate reference
+    let totalSessions = 0
+    try {
+      const sRow = await db.prepare(`
+        SELECT COUNT(DISTINCT session_id) as sessions
+        FROM site_analytics
+        WHERE created_at >= ?
+          AND page_url NOT LIKE '/super-admin%'
+          AND page_url NOT LIKE '/admin%'
+          AND page_url NOT LIKE '/login%'
+          AND page_url NOT LIKE '/api/%'
+      `).bind(since).first() as any
+      totalSessions = (sRow && sRow.sessions) || 0
+    } catch {}
+
+    return c.json({
+      period,
+      days: daysBack,
+      total_leads: rows.length,
+      total_sessions: totalSessions,
+      buckets: bucketsArr,
+      blogs
+    })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
 export { superAdminBi }

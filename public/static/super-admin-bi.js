@@ -230,11 +230,16 @@
   // ── SITE TRAFFIC ─────────────────────────────────────────────
   async function loadTraffic() {
     const period = BI.period || '7d'
-    const res = await biFetch('/api/analytics/dashboard?period=' + period)
+    const [res, lsRes] = await Promise.all([
+      biFetch('/api/analytics/dashboard?period=' + period),
+      biFetch('/api/admin/bi/lead-sources?period=' + period)
+    ])
     const main = document.getElementById('bi-main')
     if (!res || !main) { main && (main.innerHTML = errorHTML('Failed')); return }
     let d
     try { d = await res.json() } catch { main.innerHTML = errorHTML('Invalid response'); return }
+    let leadSrc = { buckets: [], blogs: [], total_leads: 0, total_sessions: 0 }
+    try { if (lsRes) leadSrc = await lsRes.json() } catch {}
 
     const ov = d.overview || {}
     const prev = d.prev_overview || {}
@@ -351,6 +356,110 @@
             </div>
           </div>
         </div>
+
+        ${leadSourcesCardHTML(leadSrc)}
+        ${blogPerformanceCardHTML(leadSrc)}
+      </div>`
+  }
+
+  // ── LEAD SOURCE ATTRIBUTION (Traffic tab) ────────────────────
+  function leadSourcesCardHTML(ls) {
+    const buckets = Array.isArray(ls.buckets) ? ls.buckets : []
+    const total = buckets.reduce((s, b) => s + (b.count || 0), 0) || 1
+    const totalSessions = ls.total_sessions || 0
+    const convRate = totalSessions > 0 ? ((ls.total_leads || 0) / totalSessions * 100) : 0
+    const iconFor = {
+      blog: 'fas fa-blog text-emerald-400',
+      ai: 'fas fa-robot text-purple-400',
+      facebook: 'fab fa-facebook-f text-blue-500',
+      instagram: 'fab fa-instagram text-pink-400',
+      google: 'fab fa-google text-yellow-400',
+      direct: 'fas fa-link text-gray-400',
+      other: 'fas fa-question text-gray-500'
+    }
+    const labelFor = { blog:'Blog', ai:'AI Assistants', facebook:'Facebook', instagram:'Instagram', google:'Google Search', direct:'Direct', other:'Other' }
+    const order = ['blog','ai','facebook','instagram','google','direct','other']
+    const map = {}
+    buckets.forEach(b => { map[b.source] = b.count || 0 })
+    const rows = order.map(k => {
+      const count = map[k] || 0
+      const pct = Math.round((count / total) * 100)
+      return `<div class="flex items-center gap-3 py-2">
+        <div class="w-7 text-center"><i class="${iconFor[k] || iconFor.other}"></i></div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-semibold text-gray-200">${labelFor[k]}</span>
+            <span class="text-xs text-gray-400">${count} ${count === 1 ? 'lead' : 'leads'} &middot; ${pct}%</span>
+          </div>
+          <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full" style="width:${pct}%"></div>
+          </div>
+        </div>
+      </div>`
+    }).join('')
+    return `
+      <div class="bg-slate-800 rounded-xl p-5 border border-slate-700">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-sm font-semibold text-gray-300 flex items-center gap-2">
+            <i class="fas fa-funnel-dollar text-indigo-400"></i> Lead Sources
+            <span class="ml-2 text-xs text-gray-500 font-normal">where your leads came from (${ls.period || '7d'})</span>
+          </h3>
+          <div class="flex gap-4 text-right">
+            <div><div class="text-lg font-bold text-white">${(ls.total_leads || 0).toLocaleString()}</div><div class="text-[10px] text-gray-500 uppercase">Leads</div></div>
+            <div><div class="text-lg font-bold text-white">${totalSessions.toLocaleString()}</div><div class="text-[10px] text-gray-500 uppercase">Sessions</div></div>
+            <div><div class="text-lg font-bold text-emerald-400">${convRate.toFixed(2)}%</div><div class="text-[10px] text-gray-500 uppercase">Conv</div></div>
+          </div>
+        </div>
+        ${rows || '<p class="text-xs text-gray-600">No leads in period</p>'}
+      </div>`
+  }
+
+  function blogPerformanceCardHTML(ls) {
+    const blogs = Array.isArray(ls.blogs) ? ls.blogs : []
+    if (!blogs.length) {
+      return `
+      <div class="bg-slate-800 rounded-xl p-5 border border-slate-700">
+        <h3 class="text-sm font-semibold text-gray-300 flex items-center gap-2 mb-3">
+          <i class="fas fa-blog text-emerald-400"></i> Blog Performance
+          <span class="ml-2 text-xs text-gray-500 font-normal">leads generated per blog post</span>
+        </h3>
+        <p class="text-xs text-gray-600">No blog-attributed leads in this period yet.</p>
+      </div>`
+    }
+    const max = Math.max(...blogs.map(b => b.count || 0), 1)
+    const rows = blogs.map(b => {
+      const pct = Math.round(((b.count || 0) / max) * 100)
+      const href = (b.slug && b.slug !== '(unknown blog)') ? `/blog/${b.slug}` : null
+      const slugCell = href
+        ? `<a href="${href}" target="_blank" rel="noopener" class="text-xs text-emerald-300 hover:text-emerald-200 truncate block max-w-full" title="${b.slug}">/blog/${b.slug}</a>`
+        : `<span class="text-xs text-gray-400 italic">${b.slug}</span>`
+      return `<tr class="border-t border-slate-700 hover:bg-slate-750">
+        <td class="py-2 px-3 max-w-xs truncate">${slugCell}</td>
+        <td class="py-2 px-3 text-right"><span class="text-xs text-white font-semibold">${b.count}</span></td>
+        <td class="py-2 px-3 w-1/2">
+          <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-500" style="width:${pct}%"></div>
+          </div>
+        </td>
+      </tr>`
+    }).join('')
+    return `
+      <div class="bg-slate-800 rounded-xl border border-slate-700">
+        <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-gray-300 flex items-center gap-2">
+            <i class="fas fa-blog text-emerald-400"></i> Blog Performance
+            <span class="ml-2 text-xs text-gray-500 font-normal">leads generated per blog post</span>
+          </h3>
+          <span class="text-xs text-gray-500">${blogs.length} ${blogs.length === 1 ? 'post' : 'posts'}</span>
+        </div>
+        <table class="w-full">
+          <thead><tr class="text-xs text-gray-600 uppercase">
+            <th class="py-2 px-3 text-left">Blog Post</th>
+            <th class="py-2 px-3 text-right">Leads</th>
+            <th class="py-2 px-3 text-left">Share</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
       </div>`
   }
 

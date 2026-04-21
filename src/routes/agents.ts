@@ -25,7 +25,12 @@ async function getCustomer(c: any): Promise<{ id: number; email: string; ownerId
 // ============================================================
 agentsRoutes.post('/leads', async (c) => {
   try {
-    const { name, company_name, phone, email, source_page, message, address, utm_source, website } = await c.req.json()
+    const body = await c.req.json()
+    const {
+      name, company_name, phone, email, source_page, message, address,
+      utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer,
+      landing_page, lead_type, priority, website
+    } = body
     // Honeypot anti-spam: if hidden "website" field is filled, silently accept but don't save
     if (website) return c.json({ success: true })
     if (!email) return c.json({ error: 'Email is required' }, 400)
@@ -33,12 +38,21 @@ agentsRoutes.post('/leads', async (c) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean)) return c.json({ error: 'Invalid email' }, 400)
     const cleanName = name ? String(name).trim().slice(0, 200) : 'Website Visitor'
 
-    // Resilient insert — fall back to pre-0156 schema if address/utm_source columns
-    // haven't been migrated yet. Without this, the whole endpoint 500s on old DBs
-    // and blog/how-to contact forms show "something went wrong" to the user.
+    const LEAD_TYPES = ['free_measurement_report', 'contact', 'demo', 'comparison', 'storm', 'hail', 'hurricane', 'other']
+    const PRIORITIES = ['low', 'normal', 'high', 'urgent']
+    const leadTypeClean = LEAD_TYPES.includes(String(lead_type || '').trim()) ? String(lead_type).trim() : 'other'
+    const defaultPriority = leadTypeClean === 'free_measurement_report' ? 'high' : 'normal'
+    const priorityClean = PRIORITIES.includes(String(priority || '').trim()) ? String(priority).trim() : defaultPriority
+    const s100 = (v: any) => v ? String(v).trim().slice(0, 100) : ''
+    const s500 = (v: any) => v ? String(v).trim().slice(0, 500) : ''
+
+    // Resilient insert — fall back through schema versions. Migration 0163 adds
+    // lead_type/priority + more UTMs; 0156 added address/utm_source. Keep both
+    // fallbacks so the endpoint never 500s on an un-migrated DB.
+    let leadId: number | null = null
     try {
-      await c.env.DB.prepare(
-        `INSERT INTO leads (name, company_name, phone, email, source_page, message, address, utm_source) VALUES (?,?,?,?,?,?,?,?)`
+      const r = await c.env.DB.prepare(
+        `INSERT INTO leads (name, company_name, phone, email, source_page, message, address, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer, landing_page, lead_type, priority) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       ).bind(
         cleanName,
         company_name ? String(company_name).trim().slice(0, 200) : '',
@@ -46,14 +60,58 @@ agentsRoutes.post('/leads', async (c) => {
         emailClean,
         source_page || 'unknown',
         message ? String(message).trim().slice(0, 2000) : '',
-        address ? String(address).trim().slice(0, 500) : '',
-        utm_source ? String(utm_source).trim().slice(0, 100) : ''
+        s500(address),
+        s100(utm_source),
+        s100(utm_medium),
+        s100(utm_campaign),
+        s100(utm_content),
+        s100(utm_term),
+        s500(referrer),
+        s500(landing_page),
+        leadTypeClean,
+        priorityClean
       ).run()
+      leadId = (r as any)?.meta?.last_row_id || null
     } catch (insertErr: any) {
       const msg = String(insertErr?.message || insertErr || '')
-      if (/no such column/i.test(msg) && /(address|utm_source)/i.test(msg)) {
-        console.warn('[leads] falling back to pre-0156 schema — run migration 0156 to capture address/utm_source')
-        await c.env.DB.prepare(
+      if (/no such column/i.test(msg) && /(lead_type|priority|utm_medium|utm_campaign|utm_content|utm_term|referrer|landing_page)/i.test(msg)) {
+        console.warn('[leads] falling back to 0156 schema — run migration 0163 to capture lead_type/priority/full UTMs')
+        try {
+          const r = await c.env.DB.prepare(
+            `INSERT INTO leads (name, company_name, phone, email, source_page, message, address, utm_source) VALUES (?,?,?,?,?,?,?,?)`
+          ).bind(
+            cleanName,
+            company_name ? String(company_name).trim().slice(0, 200) : '',
+            phone ? String(phone).trim().slice(0, 30) : '',
+            emailClean,
+            source_page || 'unknown',
+            message ? String(message).trim().slice(0, 2000) : '',
+            s500(address),
+            s100(utm_source)
+          ).run()
+          leadId = (r as any)?.meta?.last_row_id || null
+        } catch (err2: any) {
+          const msg2 = String(err2?.message || err2 || '')
+          if (/no such column/i.test(msg2) && /(address|utm_source)/i.test(msg2)) {
+            console.warn('[leads] falling back to pre-0156 schema — run migration 0156')
+            const r = await c.env.DB.prepare(
+              `INSERT INTO leads (name, company_name, phone, email, source_page, message) VALUES (?,?,?,?,?,?)`
+            ).bind(
+              cleanName,
+              company_name ? String(company_name).trim().slice(0, 200) : '',
+              phone ? String(phone).trim().slice(0, 30) : '',
+              emailClean,
+              source_page || 'unknown',
+              message ? String(message).trim().slice(0, 2000) : ''
+            ).run()
+            leadId = (r as any)?.meta?.last_row_id || null
+          } else {
+            throw err2
+          }
+        }
+      } else if (/no such column/i.test(msg) && /(address|utm_source)/i.test(msg)) {
+        console.warn('[leads] falling back to pre-0156 schema — run migration 0156')
+        const r = await c.env.DB.prepare(
           `INSERT INTO leads (name, company_name, phone, email, source_page, message) VALUES (?,?,?,?,?,?)`
         ).bind(
           cleanName,
@@ -63,6 +121,7 @@ agentsRoutes.post('/leads', async (c) => {
           source_page || 'unknown',
           message ? String(message).trim().slice(0, 2000) : ''
         ).run()
+        leadId = (r as any)?.meta?.last_row_id || null
       } else {
         throw insertErr
       }
@@ -82,16 +141,86 @@ agentsRoutes.post('/leads', async (c) => {
       phone: phone ? String(phone).trim() : undefined,
       sourcePage: source_page || 'unknown',
       sourceUrl: `https://www.roofmanager.ca/${source_page || ''}`,
-      customData: { content_name: source_page || 'website', lead_type: 'contact_form' },
+      customData: { content_name: leadTypeClean, lead_type: leadTypeClean },
     }).catch((e) => console.warn('[Meta CAPI lead]', (e && e.message) || e))
 
+    // ── Auto-acknowledgment email to the lead (non-blocking, 3-tier fallback) ──
+    // Sent BEFORE the sales@ notification so the lead hears back quickly even if
+    // the sales notification later fails.
+    const firstName = cleanName.split(' ')[0] || 'there'
+    const isReportLead = leadTypeClean === 'free_measurement_report'
+    const ackWindow = isReportLead ? 'within 2 business hours' : 'within 1 business day'
+    const ackSubject = isReportLead
+      ? '✅ Your free roof measurement report is being prepared'
+      : 'We got your message — Roof Manager'
+    const addressLine = address ? String(address).trim() : ''
+    const ackHtml = `
+<div style="max-width:560px;margin:0 auto;font-family:Inter,system-ui,sans-serif;color:#0f172a">
+  <div style="background:linear-gradient(135deg,#0f172a,#1e3a5f);padding:28px 28px 24px;border-radius:12px 12px 0 0;text-align:center">
+    <div style="color:#00FF88;font-size:12px;font-weight:800;letter-spacing:1.5px">ROOF MANAGER</div>
+    <h1 style="color:#fff;font-size:22px;margin:8px 0 0;font-weight:800">${isReportLead ? 'Your report is on the way' : 'Thanks for reaching out'}</h1>
+  </div>
+  <div style="background:#fff;padding:28px;border:1px solid #e2e8f0;border-top:none">
+    <p style="font-size:15px;margin:0 0 14px">Hi ${firstName.replace(/[<>"']/g, '')},</p>
+    <p style="font-size:14px;line-height:1.6;margin:0 0 14px;color:#334155">${isReportLead
+      ? `Thanks for requesting a free roof measurement report${addressLine ? ` for <strong>${addressLine.replace(/[<>"']/g, '')}</strong>` : ''}. Our team is preparing your satellite-accurate report now.`
+      : `Thanks for getting in touch${addressLine ? ` about <strong>${addressLine.replace(/[<>"']/g, '')}</strong>` : ''}. We\u2019ve received your message and will follow up shortly.`}</p>
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px 16px;margin:18px 0">
+      <p style="margin:0;font-size:13px;color:#065f46"><strong>Expected delivery:</strong> ${ackWindow}.</p>
+    </div>
+    <p style="font-size:13px;line-height:1.6;color:#475569;margin:14px 0 0">Questions? Just reply to this email — it goes straight to our team.</p>
+  </div>
+  <div style="background:#f8fafc;padding:16px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;border-top:none;text-align:center;color:#64748b;font-size:11px">
+    Roof Manager &middot; <a href="https://www.roofmanager.ca" style="color:#0ea5e9;text-decoration:none">roofmanager.ca</a>
+  </div>
+</div>`
+    ;(async () => {
+      try {
+        let sent = false
+        const cid = (c.env as any).GMAIL_CLIENT_ID
+        let csec = (c.env as any).GMAIL_CLIENT_SECRET || ''
+        let rtok = (c.env as any).GMAIL_REFRESH_TOKEN || ''
+        if (!csec || !rtok) {
+          try {
+            const r = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
+            if (r?.setting_value) rtok = r.setting_value
+            const s = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
+            if (s?.setting_value) csec = s.setting_value
+          } catch {}
+        }
+        if (cid && csec && rtok) {
+          try {
+            await sendGmailOAuth2(cid, csec, rtok, emailClean, ackSubject, ackHtml, 'sales@roofmanager.ca')
+            sent = true
+          } catch (e: any) { console.warn('[Lead ack] Gmail OAuth2 failed:', e?.message || e) }
+        }
+        if (!sent && (c.env as any).RESEND_API_KEY) {
+          try {
+            await sendViaResend((c.env as any).RESEND_API_KEY, emailClean, ackSubject, ackHtml, 'sales@roofmanager.ca')
+            sent = true
+          } catch (e: any) { console.warn('[Lead ack] Resend failed:', e?.message || e) }
+        }
+        if (!sent && (c.env as any).GCP_SERVICE_ACCOUNT_JSON) {
+          try {
+            await sendGmailEmail((c.env as any).GCP_SERVICE_ACCOUNT_JSON, emailClean, ackSubject, ackHtml, 'sales@roofmanager.ca')
+            sent = true
+          } catch (e: any) { console.warn('[Lead ack] GCP SA failed:', e?.message || e) }
+        }
+        if (!sent) console.warn('[Lead ack] ALL methods failed for', emailClean)
+      } catch (e: any) { console.warn('[Lead ack] unexpected error:', e?.message || e) }
+    })().catch(() => {})
+
     // Email notification to sales@roofmanager.ca — 3-tier fallback
-    const leadSubject = `🔔 New Lead: ${cleanName} — ${source_page || 'website'}`
+    const priorityBadge = priorityClean === 'urgent' ? '🚨 URGENT' : priorityClean === 'high' ? '⚡ HIGH' : ''
+    const leadSubject = `${priorityBadge ? priorityBadge + ' — ' : '🔔 '}New Lead: ${cleanName} — ${leadTypeClean}`
+    const deepLink = leadId
+      ? `https://www.roofmanager.ca/super-admin/leads?id=${leadId}`
+      : 'https://www.roofmanager.ca/super-admin/leads'
     const leadHtml = `
 <div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
   <div style="background:#0f172a;padding:24px;border-radius:12px 12px 0 0">
-    <h1 style="color:#38bdf8;font-size:18px;margin:0">🔔 New Lead from Roof Manager</h1>
-    <p style="color:#94a3b8;font-size:13px;margin:4px 0 0">Source: ${source_page || 'website'}</p>
+    <h1 style="color:#38bdf8;font-size:18px;margin:0">${priorityBadge ? priorityBadge + ' — ' : '🔔 '}New Lead from Roof Manager</h1>
+    <p style="color:#94a3b8;font-size:13px;margin:4px 0 0">Source: ${source_page || 'website'} &middot; Type: <strong style="color:#e2e8f0">${leadTypeClean}</strong> &middot; Priority: <strong style="color:#e2e8f0">${priorityClean}</strong></p>
   </div>
   <div style="background:white;padding:24px;border:1px solid #e2e8f0;border-top:none">
     <table style="width:100%;border-collapse:collapse">
@@ -101,11 +230,14 @@ agentsRoutes.post('/leads', async (c) => {
       ${company_name ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Company</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${String(company_name).trim()}</td></tr>` : ''}
       ${address ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Address</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${String(address).trim()}</td></tr>` : ''}
       ${message ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px;vertical-align:top"><strong>Message</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${String(message).trim()}</td></tr>` : ''}
-      ${utm_source ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Source</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${String(utm_source).trim()}</td></tr>` : ''}
+      ${utm_source ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>utm_source</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${String(utm_source).trim()}</td></tr>` : ''}
+      ${utm_medium ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>utm_medium</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${String(utm_medium).trim()}</td></tr>` : ''}
+      ${utm_campaign ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>utm_campaign</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${String(utm_campaign).trim()}</td></tr>` : ''}
+      ${referrer ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Referrer</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${String(referrer).trim().slice(0,200)}</td></tr>` : ''}
     </table>
   </div>
   <div style="background:#f8fafc;padding:16px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;border-top:none;text-align:center">
-    <a href="https://www.roofmanager.ca/super-admin" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Super Admin Dashboard</a>
+    <a href="${deepLink}" style="display:inline-block;background:#0ea5e9;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">Open in Super Admin &rarr;</a>
   </div>
 </div>`
 
@@ -160,7 +292,7 @@ agentsRoutes.post('/leads', async (c) => {
       console.error('[Lead Email] ALL methods failed — lead notification for', emailClean, 'was NOT delivered')
     }
 
-    return c.json({ success: true, message: 'Thank you! We will be in touch shortly.' })
+    return c.json({ success: true, message: 'Thank you! We will be in touch shortly.', lead_id: leadId })
   } catch (e: any) {
     return c.json({ error: 'Failed to submit', details: e.message }, 500)
   }
