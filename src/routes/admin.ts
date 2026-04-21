@@ -1041,6 +1041,13 @@ adminRoutes.get('/superadmin/users', async (c) => {
   try {
     const users = await c.env.DB.prepare(`
       SELECT c.*,
+        'owner' as user_type,
+        NULL as team_member_id,
+        NULL as team_role,
+        NULL as team_owner_id,
+        NULL as team_owner_name,
+        NULL as team_owner_email,
+        NULL as team_owner_company,
         (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.id) as order_count,
         (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.id AND o.is_trial = 1) as trial_orders,
         (SELECT COALESCE(SUM(o.price), 0) FROM orders o WHERE o.customer_id = c.id AND o.payment_status = 'paid' AND (o.is_trial IS NULL OR o.is_trial = 0)) as total_spent,
@@ -1049,6 +1056,42 @@ adminRoutes.get('/superadmin/users', async (c) => {
       FROM customers c
       ORDER BY c.created_at DESC
     `).all()
+
+    // Team members added via /team/accept live in a separate table. Pull them
+    // in so Desiree-style "I added a team member but they don't show up"
+    // reports stop happening — each team member surfaces as its own row,
+    // tagged with the owning account so super admin can see the attribution.
+    const teamMembers = await c.env.DB.prepare(`
+      SELECT
+        tm.id as team_member_id,
+        tm.member_customer_id as id,
+        tm.email,
+        tm.name,
+        tm.role as team_role,
+        tm.status,
+        tm.joined_at as created_at,
+        tm.owner_id as team_owner_id,
+        'team_member' as user_type,
+        owner.name as team_owner_name,
+        owner.email as team_owner_email,
+        owner.company_name as team_owner_company,
+        mc.company_name,
+        mc.phone,
+        mc.google_id,
+        mc.google_avatar,
+        mc.last_login,
+        mc.is_active,
+        mc.free_trial_used,
+        mc.free_trial_total,
+        mc.report_credits,
+        mc.credits_used
+      FROM team_members tm
+      LEFT JOIN customers owner ON owner.id = tm.owner_id
+      LEFT JOIN customers mc ON mc.id = tm.member_customer_id
+      ORDER BY tm.joined_at DESC
+    `).all()
+
+    const combinedUsers = [...(users.results || []), ...(teamMembers.results || [])]
 
     const summary = await c.env.DB.prepare(`
       SELECT
@@ -1065,7 +1108,14 @@ adminRoutes.get('/superadmin/users', async (c) => {
       FROM customers
     `).first()
 
-    return c.json({ users: users.results, summary })
+    const teamMemberCount = (teamMembers.results || []).length
+    const enrichedSummary = {
+      ...(summary as any || {}),
+      total_users: ((summary as any)?.total_users || 0) + teamMemberCount,
+      team_members: teamMemberCount,
+    }
+
+    return c.json({ users: combinedUsers, summary: enrichedSummary })
   } catch (err: any) {
     return c.json({ error: 'Failed to load users', details: err.message }, 500)
   }
