@@ -3618,7 +3618,7 @@ adminRoutes.post('/superadmin/orders/:id/preview-trace', async (c) => {
 // SUBMIT TRACE — Admin saves trace + triggers report generation
 // ============================================================
 adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const orderId = parseInt(c.req.param('id'))
   if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
