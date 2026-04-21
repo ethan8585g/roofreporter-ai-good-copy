@@ -224,6 +224,7 @@ function renderDashboard() {
         '<p class="px-3 mt-4 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Marketing</p>' +
         navLink('/customer/website-builder', 'fa-globe', 'Website Builder', null, '') +
         navLink('/customer/storm-scout', 'fa-cloud-bolt', 'Storm Alerts', null, '') +
+        navLink('/customer/d2d', 'fa-door-open', 'D2D Manager', null, '') +
         navLink('/customer/referrals', 'fa-gift', 'Referrals', null, '') +
       '</nav>' +
       // Settings gear button
