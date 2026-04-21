@@ -706,6 +706,7 @@ function renderTraceStep(root, progressBar) {
         <div class="flex items-center gap-4 text-xs text-gray-500">
           <span><i class="fas fa-mouse-pointer mr-1"></i>Click = Add point</span>
           <span><i class="fas fa-draw-polygon mr-1" style="color:#22c55e"></i>Click 1st point to close a section</span>
+          <span><i class="fas fa-arrows-alt mr-1" style="color:#22c55e"></i>Drag any corner to fine-tune after placing</span>
           <span><i class="fas fa-layer-group mr-1" style="color:#22c55e"></i>2-story? After closing lower eaves, click inside it to start the upper eaves layer</span>
           <span><i class="fas fa-expand-arrows-alt mr-1 text-blue-400"></i>Trace the outermost roof edge (drip line), not the walls</span>
         </div>
@@ -1021,7 +1022,8 @@ function closeEavesPolygon() {
     orderState.traceEavesPolygon = null;
   }
 
-  // Create closed section polygon (non-editable, faded when not in eaves mode)
+  // Create closed section polygon. Editable so the user can drag any vertex after
+  // placement to fix tiny mis-clicks without restarting the section.
   const polygon = new google.maps.Polygon({
     paths: orderState.traceEavesPoints.map(p => new google.maps.LatLng(p.lat, p.lng)),
     map: orderState.traceMap,
@@ -1030,15 +1032,16 @@ function closeEavesPolygon() {
     strokeOpacity: 0.9,
     fillColor: '#22c55e',
     fillOpacity: 0.15,
-    editable: false,
+    editable: true,
     draggable: false,
-    clickable: false,
+    clickable: false,  // Keep interior clicks passing through (lets users click inside to start an upper-layer section)
     zIndex: 1
   });
 
   const sectionIdx = orderState.traceEavesSections.length;
   orderState.traceEavesSections.push({ points: [...orderState.traceEavesPoints] });
   orderState.traceEavesSectionPolygons.push(polygon);
+  attachSectionPolygonEditListeners(polygon, sectionIdx);
 
   // Add section label at centroid
   const pts = orderState.traceEavesPoints;
@@ -1072,6 +1075,27 @@ function updateEavesFromPolygon() {
   }
 }
 
+// Wire a closed section polygon so vertex drags (and midpoint-adds) update state + area.
+// This is the sensitivity fix: a tiny mis-click no longer costs hundreds of sqft — just drag the vertex.
+function attachSectionPolygonEditListeners(polygon, sectionIdx) {
+  const path = polygon.getPath();
+  const syncPath = () => {
+    const section = orderState.traceEavesSections[sectionIdx];
+    if (!section) return;
+    const pts = [];
+    for (let i = 0; i < path.getLength(); i++) {
+      const ll = path.getAt(i);
+      pts.push({ lat: ll.lat(), lng: ll.lng() });
+    }
+    if (pts.length < 3) return;  // guard — a 2-vertex polygon has no area
+    section.points = pts;
+    updateTraceUI();
+  };
+  google.maps.event.addListener(path, 'set_at', syncPath);
+  google.maps.event.addListener(path, 'insert_at', syncPath);
+  google.maps.event.addListener(path, 'remove_at', syncPath);
+}
+
 function finishCurrentLine() {
   if (orderState.traceCurrentLine.length < 2) {
     orderState.traceCurrentLine = [];
@@ -1089,6 +1113,12 @@ function finishCurrentLine() {
 }
 
 function addTraceMarker(pt, color, label) {
+  // Labeled markers (numbered eaves points, section "S1" labels) stay a bit larger so text is readable.
+  // Unlabeled markers (ridge/hip/valley endpoints) are smaller so they don't obscure the roof edge beneath.
+  const size = label ? 12 : 9;
+  const r = label ? 5.5 : 4;
+  const stroke = 1.2;
+  const fontSize = 7;
   const marker = new google.maps.Marker({
     position: { lat: pt.lat, lng: pt.lng },
     map: orderState.traceMap,
@@ -1096,13 +1126,13 @@ function addTraceMarker(pt, color, label) {
     zIndex: 10,        // Draw markers above polygon fill
     icon: {
       url: 'data:image/svg+xml,' + encodeURIComponent(
-        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="16" height="16">
-          <circle cx="10" cy="10" r="8" fill="${color}" stroke="white" stroke-width="2" opacity="0.9"/>
-          ${label ? `<text x="10" y="14" text-anchor="middle" fill="white" font-size="9" font-weight="bold" font-family="Arial">${label}</text>` : ''}
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="${size}" height="${size}">
+          <circle cx="8" cy="8" r="${r}" fill="${color}" stroke="white" stroke-width="${stroke}" opacity="0.9"/>
+          ${label ? `<text x="8" y="10.5" text-anchor="middle" fill="white" font-size="${fontSize}" font-weight="bold" font-family="Arial">${label}</text>` : ''}
         </svg>`
       ),
-      scaledSize: new google.maps.Size(16, 16),
-      anchor: new google.maps.Point(8, 8),
+      scaledSize: new google.maps.Size(size, size),
+      anchor: new google.maps.Point(size / 2, size / 2),
     }
   });
   orderState.traceMarkers.push(marker);
@@ -1140,8 +1170,8 @@ function addAnnotationMarker(pt, type) {
     zIndex: 15,
     icon: {
       url: 'data:image/svg+xml,' + encodeURIComponent(defs[type].svg),
-      scaledSize: new google.maps.Size(16, 16),
-      anchor: new google.maps.Point(8, 8),
+      scaledSize: new google.maps.Size(12, 12),
+      anchor: new google.maps.Point(6, 6),
     }
   });
   orderState.traceAnnotationMarkers.push({ marker, type });
@@ -1205,12 +1235,13 @@ function restoreTraceOverlays() {
       strokeOpacity: strokeOp,
       fillColor: '#22c55e',
       fillOpacity: fillOp,
-      editable: false,
+      editable: inEaves,  // only editable while in eaves mode, avoids accidental drags
       draggable: false,
       clickable: false,
       zIndex: 1
     });
     orderState.traceEavesSectionPolygons.push(polygon);
+    attachSectionPolygonEditListeners(polygon, idx);
     // Section label at centroid
     const cx = section.points.reduce((s, p) => s + p.lat, 0) / section.points.length;
     const cy = section.points.reduce((s, p) => s + p.lng, 0) / section.points.length;
@@ -1240,7 +1271,7 @@ function setTraceMode(mode) {
   const fillOp = inEaves ? 0.15 : 0.04;
   const strokeOp = inEaves ? 0.9 : 0.2;
   orderState.traceEavesSectionPolygons.forEach(p => {
-    if (p) p.setOptions({ fillOpacity: fillOp, strokeOpacity: strokeOp });
+    if (p) p.setOptions({ fillOpacity: fillOp, strokeOpacity: strokeOp, editable: inEaves });
   });
   if (orderState.traceEavesPolygon) {
     orderState.traceEavesPolygon.setOptions({ fillOpacity: fillOp, strokeOpacity: strokeOp });
