@@ -85,7 +85,7 @@ async function importPrivateKey(pem: string): Promise<CryptoKey> {
 // ============================================================
 // Create signed JWT assertion
 // ============================================================
-async function createJWT(sa: ServiceAccountKey, scopes: string[]): Promise<string> {
+export async function createJWT(sa: ServiceAccountKey, scopes: string[]): Promise<string> {
   const now = Math.floor(Date.now() / 1000)
 
   const header = {
@@ -120,7 +120,7 @@ async function createJWT(sa: ServiceAccountKey, scopes: string[]): Promise<strin
 // ============================================================
 // Exchange JWT for OAuth2 access token
 // ============================================================
-async function exchangeJWTForToken(jwt: string): Promise<{ access_token: string; expires_in: number }> {
+export async function exchangeJWTForToken(jwt: string): Promise<{ access_token: string; expires_in: number }> {
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

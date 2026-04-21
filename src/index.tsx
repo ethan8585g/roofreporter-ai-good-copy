@@ -1068,18 +1068,24 @@ app.get('/feed.xml', async (c) => {
     const posts = await c.env.DB.prepare("SELECT slug, title, excerpt, content, cover_image_url, author_name, published_at, updated_at, category FROM blog_posts WHERE status = 'published' ORDER BY published_at DESC LIMIT 50").all()
     const xmlText = (s: any) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     const xmlAttr = (s: any) => xmlText(s).replace(/"/g,'&quot;').replace(/'/g,'&apos;')
+    // Wrap arbitrary HTML in a CDATA block safely (neutralize any stray ']]>')
+    const cdata = (s: any) => `<![CDATA[${String(s ?? '').replace(/\]\]>/g, ']]]]><![CDATA[>')}]]>`
     for (const p of (posts.results || []) as any[]) {
       const pubDate = p.published_at ? new Date(p.published_at).toUTCString() : new Date().toUTCString()
+      const modDate = p.updated_at ? new Date(p.updated_at).toUTCString() : pubDate
       const desc = xmlText(p.excerpt || '')
       const title = xmlText(p.title || '')
       const author = xmlText(p.author_name || 'Roof Manager Team')
       const category = xmlText(p.category || 'roofing')
       const slug = xmlText(p.slug || '')
-      items += `<item><title>${title}</title><link>${base}/blog/${slug}</link><guid isPermaLink="true">${base}/blog/${slug}</guid><pubDate>${pubDate}</pubDate><description>${desc}</description><category>${category}</category><author>sales@roofmanager.ca (${author})</author>${p.cover_image_url ? `<enclosure url="${xmlAttr(p.cover_image_url)}" type="image/jpeg"/>` : ''}</item>\n`
+      // Full HTML body for AI crawlers + feed readers that honour content:encoded.
+      // Prepend cover image so feed readers without image support still see it.
+      const fullHtml = (p.cover_image_url ? `<p><img src="${xmlAttr(p.cover_image_url)}" alt="${xmlAttr(p.title || '')} cover" /></p>` : '') + String(p.content || '')
+      items += `<item><title>${title}</title><link>${base}/blog/${slug}</link><guid isPermaLink="true">${base}/blog/${slug}</guid><pubDate>${pubDate}</pubDate><atom:updated>${new Date(p.updated_at || p.published_at || Date.now()).toISOString()}</atom:updated><dc:creator>${cdata(author)}</dc:creator><description>${desc}</description><content:encoded>${cdata(fullHtml)}</content:encoded><category>${category}</category><author>sales@roofmanager.ca (${author})</author>${p.cover_image_url ? `<enclosure url="${xmlAttr(p.cover_image_url)}" type="image/jpeg"/>` : ''}</item>\n`
     }
   } catch {}
   const rss = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/">
 <channel>
 <title>Roof Manager Blog</title>
 <link>${base}/blog</link>
@@ -10299,6 +10305,7 @@ function getHowItWorksPageHTML(): string {
   <meta property="og:description" content="Address to report in 4 steps. No ladders, no drones.">
   <meta property="og:url" content="${base}/how-it-works">
   <script type="application/ld+json">${howToSchema}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"How It Works","item":"${base}/how-it-works"}]}</script>
 </head>
 <body style="background:#0A0A0A">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
@@ -10375,10 +10382,17 @@ function getFAQPageHTML(): string {
     '@context': 'https://schema.org', '@type': 'FAQPage',
     mainEntity: faqs.map(f => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
   })
+  const breadcrumbSchema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: base },
+      { '@type': 'ListItem', position: 2, name: 'FAQ', item: `${base}/faq` },
+    ],
+  })
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  ${getHeadTags()}
+  ${getHeadTags('/faq')}
   <title>Frequently Asked Questions | Roof Manager</title>
   <meta name="description" content="Answers to the most common questions about Roof Manager — accuracy, data sources, pricing, security, and cancellation.">
   <link rel="canonical" href="${base}/faq">
@@ -10386,6 +10400,7 @@ function getFAQPageHTML(): string {
   <meta property="og:description" content="Accuracy, pricing, security, cancellation — all the answers.">
   <meta property="og:url" content="${base}/faq">
   <script type="application/ld+json">${faqSchema}</script>
+  <script type="application/ld+json">${breadcrumbSchema}</script>
 </head>
 <body style="background:#0A0A0A">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
@@ -10480,6 +10495,7 @@ function getGuidesIndexHTML(): string {
   <meta property="og:title" content="How-To Guides | Roof Manager">
   <meta property="og:description" content="Step-by-step guides for running your roofing company on Roof Manager.">
   <meta property="og:url" content="${base}/guides">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Guides","item":"${base}/guides"}]}</script>
 </head>
 <body style="background:#0A0A0A">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
@@ -12218,12 +12234,22 @@ function getHelpHubHTML(): string {
     (byCategory[article.category] ||= []).push([slug, article])
   }
   const sections = Object.entries(byCategory).map(([cat, articles]) => `
-    <div class="mb-10">
+    <div class="mb-10 rm-help-category" data-category="${cat}">
       <h2 class="text-xl font-black text-white mb-4">${cat}</h2>
       <div class="grid md:grid-cols-2 gap-3">
-        ${articles.map(([slug, a]) => `<a href="/help/${slug}" class="block bg-[#111] border border-white/10 hover:border-[#00FF88]/30 rounded-xl p-4 transition-all"><h3 class="text-white font-bold text-sm mb-1">${a.title}</h3><p class="text-gray-500 text-xs">${cat}</p></a>`).join('')}
+        ${articles.map(([slug, a]) => `<a href="/help/${slug}" class="rm-help-card block bg-[#111] border border-white/10 hover:border-[#00FF88]/30 rounded-xl p-4 transition-all" data-title="${a.title.replace(/"/g, '&quot;')}" data-body="${a.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().replace(/"/g, '&quot;').substring(0, 400)}"><h3 class="text-white font-bold text-sm mb-1">${a.title}</h3><p class="text-gray-500 text-xs">${cat}</p></a>`).join('')}
       </div>
     </div>`).join('')
+  // Serialize search index: help articles + guides + (blog posts fetched client-side)
+  const helpIndex = Object.entries(HELP_ARTICLES).map(([slug, a]) => ({
+    t: 'help', u: `/help/${slug}`, title: a.title, cat: a.category,
+    body: a.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 400),
+  }))
+  const guidesIndex = (typeof guidesOrder !== 'undefined' ? guidesOrder : []).map(slug => {
+    const g = (guidesConfig as any)[slug]
+    return { t: 'guide', u: `/guides/${g.slug}`, title: g.title, cat: 'Guide', body: g.subtitle || '' }
+  })
+  const searchIndexJson = JSON.stringify([...helpIndex, ...guidesIndex])
   const qaForSchema = Object.values(HELP_ARTICLES).slice(0, 10).map(a => ({
     '@type': 'Question', name: a.title,
     acceptedAnswer: { '@type': 'Answer', text: a.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 600) },
@@ -12254,12 +12280,90 @@ function getHelpHubHTML(): string {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)">
     <div class="max-w-3xl mx-auto px-4">
       <h1 class="text-4xl md:text-5xl font-black text-white mb-4">Help Center</h1>
-      <p class="text-gray-400">Step-by-step guides for measurements, CRM, AI secretary, billing, integrations, and insurance workflows.</p>
+      <p class="text-gray-400 mb-8">Step-by-step guides for measurements, CRM, AI secretary, billing, integrations, and insurance workflows.</p>
+      <div class="relative max-w-xl mx-auto">
+        <input id="rm-help-search" type="search" placeholder="Search articles, guides, and blog posts&hellip;" autocomplete="off" class="w-full bg-[#111] border border-white/10 focus:border-[#00FF88] rounded-xl pl-11 pr-4 py-3.5 text-white text-sm outline-none transition-colors" style="box-sizing:border-box">
+        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"></i>
+      </div>
+      <p class="text-xs text-gray-600 mt-3"><i class="fas fa-bolt text-[#00FF88]"></i> Searches help articles, how-to guides, and the latest blog posts.</p>
     </div>
   </section>
-  <section class="py-12" style="background:#0A0A0A">
-    <div class="max-w-5xl mx-auto px-4">${sections}</div>
+  <section class="py-10" style="background:#0A0A0A">
+    <div class="max-w-5xl mx-auto px-4">
+      <div id="rm-help-results" class="hidden mb-8"></div>
+      <div id="rm-help-default">${sections}</div>
+    </div>
   </section>
+  <script id="rm-help-search-index" type="application/json">${searchIndexJson.replace(/</g, '\\u003c')}</script>
+  <script>(function(){
+    var defaultPane=document.getElementById('rm-help-default');
+    var resultsPane=document.getElementById('rm-help-results');
+    var input=document.getElementById('rm-help-search');
+    if(!input||!defaultPane||!resultsPane)return;
+    var indexEl=document.getElementById('rm-help-search-index');
+    var localIndex=[];try{localIndex=JSON.parse(indexEl.textContent||'[]');}catch(e){localIndex=[];}
+    var blogIndex=[];
+    // Lazy-fetch latest blog posts once on first focus so the initial help
+    // page load stays fast; results merge in on the next keystroke.
+    function loadBlog(){if(blogIndex.length)return;fetch('/api/blog/posts?limit=50').then(function(r){return r.json()}).then(function(d){(d.posts||[]).forEach(function(p){blogIndex.push({t:'blog',u:'/blog/'+p.slug,title:p.title,cat:p.category||'Blog',body:p.excerpt||''});});}).catch(function(){});}
+    input.addEventListener('focus', loadBlog, { once: true });
+
+    function score(item, terms){
+      var hay=(item.title+' '+(item.cat||'')+' '+(item.body||'')).toLowerCase();
+      var titleLower=item.title.toLowerCase();
+      var total=0;
+      for(var i=0;i<terms.length;i++){
+        var t=terms[i];if(!t)continue;
+        var titleMatch=titleLower.indexOf(t)>-1;
+        var bodyMatch=hay.indexOf(t)>-1;
+        if(titleMatch) total += 5;
+        if(bodyMatch) total += 1;
+        // Fuzzy: tolerate one missing char
+        if(!titleMatch && !bodyMatch && t.length > 3){
+          for(var j=0;j<t.length;j++){
+            var variant=t.slice(0,j)+t.slice(j+1);
+            if(hay.indexOf(variant)>-1){ total += 0.5; break; }
+          }
+        }
+      }
+      return total;
+    }
+    function render(results){
+      if(!results.length){
+        resultsPane.innerHTML='<p class="text-gray-500 text-sm text-center py-6">No matches — try another keyword.</p>';
+        return;
+      }
+      resultsPane.innerHTML=results.slice(0,20).map(function(r){
+        var icon = r.t==='help'?'fa-book':(r.t==='guide'?'fa-graduation-cap':'fa-newspaper');
+        var label = r.t==='help'?'Help':(r.t==='guide'?'Guide':'Blog');
+        return '<a href="'+r.u+'" class="block bg-[#111] border border-white/10 hover:border-[#00FF88]/30 rounded-xl p-4 mb-3 transition-all"><div class="flex items-start gap-3"><i class="fas '+icon+' text-[#00FF88] mt-1"></i><div class="flex-1 min-w-0"><div class="flex items-center gap-2 mb-1"><span class="text-[10px] uppercase tracking-widest text-[#00FF88] font-bold">'+label+'</span><span class="text-xs text-gray-500">'+(r.cat||'')+'</span></div><h3 class="text-white font-bold text-sm truncate">'+r.title+'</h3><p class="text-gray-500 text-xs mt-0.5 line-clamp-2">'+(r.body||'').slice(0,160)+'</p></div></div></a>';
+      }).join('');
+    }
+    function run(){
+      var q=input.value.trim().toLowerCase();
+      if(!q){
+        defaultPane.classList.remove('hidden');
+        resultsPane.classList.add('hidden');
+        return;
+      }
+      defaultPane.classList.add('hidden');
+      resultsPane.classList.remove('hidden');
+      var terms=q.split(/\\s+/).filter(Boolean);
+      var all=localIndex.concat(blogIndex);
+      var scored=[];
+      for(var i=0;i<all.length;i++){
+        var s=score(all[i],terms);
+        if(s>0) scored.push({item:all[i],s:s});
+      }
+      scored.sort(function(a,b){return b.s-a.s;});
+      render(scored.map(function(x){return x.item;}));
+    }
+    var t;
+    input.addEventListener('input',function(){clearTimeout(t);t=setTimeout(run,80);});
+    // Permit ?q=term to deep-link from other pages
+    var urlQ=new URLSearchParams(window.location.search).get('q');
+    if(urlQ){input.value=urlQ;loadBlog();run();}
+  })();</script>
   <section class="py-12 text-center" style="background:#0d0d0d">
     <div class="max-w-2xl mx-auto px-4">
       <h2 class="text-xl font-bold text-white mb-3">Can't find what you need?</h2>
@@ -12935,6 +13039,7 @@ function getCoveragePageHTML() {
   <link rel="canonical" href="https://www.roofmanager.ca/coverage">
   <meta name="keywords" content="roof measurement ${allCountries.slice(0, 15).map(c => c.toLowerCase()).join(', roof measurement ')}, satellite roof reports, international roof measurement, global roofing software">
   <meta name="geo.region" content="CA-AB">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Coverage","item":"https://www.roofmanager.ca/coverage"}]}</script>
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"WebPage","name":"Roof Manager Global Coverage","description":"AI-powered satellite roof measurement reports available in 40+ countries worldwide","url":"https://www.roofmanager.ca/coverage","publisher":{"@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca"},"areaServed":[${allCountries.map(c => `{"@type":"Country","name":"${c}"}`).join(',')}]}
   </script>
@@ -18494,6 +18599,7 @@ function getToolsHubHTML(): string {
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://www.roofmanager.ca/tools">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"CollectionPage","name":"Free Roofing Tools","description":"Free roofing calculators and tools for contractors and homeowners","url":"https://www.roofmanager.ca/tools","publisher":{"@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca"}}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Free Tools","item":"https://www.roofmanager.ca/tools"}]}</script>
   <link rel="stylesheet" href="/static/tailwind.css">
   <style>
     body { background:#0a0f1a; color:#e2e8f0; font-family: system-ui, sans-serif; }

@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { runOnce, seedDefaultKeywords } from '../services/blog-agent'
+import { pingGoogleIndexing, pingGoogleIndexingBatch } from '../services/indexing-api'
 import { sanitizeHtml } from '../utils/sanitize-html'
 
 export const blogRoutes = new Hono<{ Bindings: Bindings }>()
@@ -361,6 +362,46 @@ blogRoutes.post('/admin/agent/run', async (c) => {
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
   const result = await runOnce(c.env)
   return c.json(result, result.ok ? 200 : 200)
+})
+
+// Admin: manually ping Google Indexing API for a single URL or a list of URLs
+// POST body: { url: "https://..." } OR { urls: ["https://...", ...] }
+// Useful for (1) re-indexing after a mass content edit, (2) testing the
+// service-account + Search Console ownership setup.
+blogRoutes.post('/admin/indexing/ping', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Unauthorized' }, 401)
+  try {
+    const body = await c.req.json().catch(() => ({})) as { url?: string; urls?: string[]; type?: 'URL_UPDATED' | 'URL_DELETED' }
+    const type = body.type || 'URL_UPDATED'
+    if (body.urls && Array.isArray(body.urls)) {
+      const results = await pingGoogleIndexingBatch(c.env as any, body.urls, type)
+      return c.json({ count: results.length, results })
+    }
+    if (!body.url) return c.json({ error: 'url or urls required' }, 400)
+    const result = await pingGoogleIndexing(c.env as any, body.url, type)
+    return c.json(result)
+  } catch (e: any) {
+    return c.json({ error: e.message || String(e) }, 500)
+  }
+})
+
+// Admin: ping every published blog post (useful for initial bulk submission)
+blogRoutes.post('/admin/indexing/ping-all', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Unauthorized' }, 401)
+  try {
+    const posts = await c.env.DB.prepare(
+      `SELECT slug FROM blog_posts WHERE status = 'published' ORDER BY published_at DESC LIMIT 200`
+    ).all()
+    const urls = (posts.results || []).map((p: any) => `https://www.roofmanager.ca/blog/${p.slug}`)
+    const results = await pingGoogleIndexingBatch(c.env as any, urls, 'URL_UPDATED')
+    const ok = results.filter(r => r.ok).length
+    const skipped = results.filter(r => r.skipped).length
+    return c.json({ total: results.length, ok, skipped, failed: results.length - ok - skipped, results })
+  } catch (e: any) {
+    return c.json({ error: e.message || String(e) }, 500)
+  }
 })
 
 // Cron: external scheduler hits this. Protect with BLOG_AGENT_CRON_SECRET.

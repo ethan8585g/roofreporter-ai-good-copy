@@ -8,6 +8,7 @@
  */
 
 import type { Bindings } from '../types'
+import { pingGoogleIndexing } from './indexing-api'
 
 const MODEL_DRAFT = 'gemini-2.5-flash'
 const MODEL_GATE = 'gemini-2.5-flash'
@@ -565,6 +566,21 @@ export async function runOnce(env: Bindings): Promise<RunResult> {
       `UPDATE blog_keyword_queue SET status = 'published', post_id = ?, locked_until = NULL, updated_at = datetime('now') WHERE id = ?`
     ).bind(postId, row.id).run()
     await logEvent(db, { queue_id: row.id, post_id: postId, stage: 'publish', quality_score: score.overall, passed_gate: true })
+
+    // Ping Google Indexing API — fire-and-forget. If the service account
+    // isn't configured or lacks Search Console ownership, pingGoogleIndexing
+    // no-ops instead of throwing, so publishing is never blocked by this.
+    try {
+      const postUrl = `https://www.roofmanager.ca/blog/${draft.slug}`
+      const ping = await pingGoogleIndexing(env as any, postUrl, 'URL_UPDATED')
+      await logEvent(db, {
+        queue_id: row.id, post_id: postId,
+        stage: ping.ok ? 'indexing_ping_ok' : (ping.skipped ? 'indexing_ping_skipped' : 'indexing_ping_failed'),
+        error: ping.error,
+      })
+    } catch (_e) {
+      // never let indexing ping failure corrupt the publish
+    }
 
     return { ok: true, queue_id: row.id, post_id: postId, keyword: row.keyword, quality: score }
   } catch (e: any) {
