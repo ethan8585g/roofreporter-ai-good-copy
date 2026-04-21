@@ -2187,13 +2187,15 @@ reportsRoutes.post('/:orderId/share', async (c) => {
   const orderId = c.req.param('orderId')
   const body = await c.req.json().catch(() => ({} as any))
 
-  // Verify the report belongs to this customer
-  const report = await c.env.DB.prepare(`
+  // Admins can share any report; customers are scoped to their own orders.
+  const baseSql = `
     SELECT r.id, r.share_token, r.status, o.property_address, c.name as contractor_name, c.email as contractor_email
     FROM reports r JOIN orders o ON o.id = r.order_id
     JOIN customers c ON c.id = o.customer_id
-    WHERE r.order_id = ? AND o.customer_id = ?
-  `).bind(orderId, user.id).first<any>()
+    WHERE r.order_id = ?`
+  const report = user.role === 'admin'
+    ? await c.env.DB.prepare(baseSql).bind(orderId).first<any>()
+    : await c.env.DB.prepare(baseSql + ' AND o.customer_id = ?').bind(orderId, user.id).first<any>()
 
   if (!report) return c.json({ error: 'Report not found' }, 404)
   if (report.status !== 'completed' && report.status !== 'enhanced') {
