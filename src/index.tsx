@@ -4766,11 +4766,7 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
         <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="block w-full bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl text-center text-lg transition-all border border-white/10 hover:border-[#00FF88]/30">
           <i class="fas fa-calendar-check mr-2 text-[#00FF88]"></i>Book a Free 15-Min Demo Instead
         </a>
-        <div class="mt-5 pt-5 border-t border-white/10 grid sm:grid-cols-3 gap-4 text-center">
-          <a href="tel:+17809833335" class="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
-            <i class="fas fa-phone text-[#00FF88] text-lg"></i>
-            <span class="text-xs font-semibold">(780) 983-3335</span>
-          </a>
+        <div class="mt-5 pt-5 border-t border-white/10 grid sm:grid-cols-2 gap-4 text-center">
           <a href="mailto:sales@roofmanager.ca" class="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
             <i class="fas fa-envelope text-[#00FF88] text-lg"></i>
             <span class="text-xs font-semibold">sales@roofmanager.ca</span>
@@ -6906,7 +6902,6 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <a href="/blog" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Blog</a>
         <a href="/coverage" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Coverage</a>
         <a href="/faq" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">FAQ</a>
-        <a href="tel:+17809833335" onclick="try{rrTrack&amp;&amp;rrTrack('phone_click',{location:'nav_desktop'});gtag&amp;&amp;gtag('event','phone_click',{location:'nav_desktop'});window.fireMetaContactEvent&amp;&amp;window.fireMetaContactEvent()}catch(e){}" class="hidden md:inline-flex items-center gap-1.5 text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200" aria-label="Call sales at (780) 983-3335"><i class="fas fa-phone text-[10px] text-[#00FF88]" aria-hidden="true"></i>(780) 983-3335</a> <!-- conv-v5: removed TODO placeholders, wired phone_click tracking -->
         <a href="/contact" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Contact</a>
         <a href="/customer/login" onclick="rrTrack('cta_click',{location:'nav_login'})" class="border border-white/20 hover:border-white/40 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-all duration-200 hover:bg-white/5 whitespace-nowrap">
           <i class="fas fa-sign-in-alt mr-1.5 text-gray-400"></i>Log In</a>
