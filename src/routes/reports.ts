@@ -1803,8 +1803,8 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
         trackReportEnhanced(c.env, String(orderId), { version: enhVer, enhanced: true }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
         // Send email with polished report — try customer Gmail first, then platform
-        if (email_report || autoEmailEnabled) {
-          const recipient = to_email || (autoEmailEnabled ? autoEmailRecipient : '') || order.homeowner_email || order.requester_email
+        if (email_report || autoEmailEnabled || order.send_report_to_email) {
+          const recipient = to_email || order.send_report_to_email || (autoEmailEnabled ? autoEmailRecipient : '') || order.homeowner_email || order.requester_email
           if (recipient) {
             try {
               const emailHtml = buildEmailWrapper(enhHtml, order.property_address, `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`, recipient)
@@ -1855,8 +1855,8 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
   }
 
   // Send email with base report (no enhancement or enhancement failed)
-  if (email_report || autoEmailEnabled) {
-    const recipient = to_email || (autoEmailEnabled ? autoEmailRecipient : '') || order.homeowner_email || order.requester_email
+  if (email_report || autoEmailEnabled || order.send_report_to_email) {
+    const recipient = to_email || order.send_report_to_email || (autoEmailEnabled ? autoEmailRecipient : '') || order.homeowner_email || order.requester_email
     if (recipient) {
       try {
         const emailHtml = buildEmailWrapper(baseHtml, order.property_address, `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`, recipient)
@@ -3118,6 +3118,36 @@ async function _generateReportForOrderInner(
     await repo.saveCompletedReport(env.DB, orderId, finalReportData, html, baseVersion)
     await repo.markOrderStatus(env.DB, orderId, 'completed')
     console.log(`[Generate] Order ${orderId}: ✅ Report saved as COMPLETED (v${baseVersion}, provider=${finalReportData.metadata?.provider || 'unknown'})`)
+
+    // Auto-send report to the email captured on the order form (optional field
+    // under the address). Fire-and-forget via waitUntil so the worker response
+    // isn't blocked by Gmail send latency.
+    if (order.send_report_to_email) {
+      const autoSendP = (async () => {
+        try {
+          const recipient = String(order.send_report_to_email).trim()
+          const reportNum = `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`
+          const emailHtml = buildEmailWrapper(html, order.property_address || 'Property', reportNum, recipient)
+          const ci = (env as any).GMAIL_CLIENT_ID
+          let cs = (env as any).GMAIL_CLIENT_SECRET
+          let rt = (env as any).GMAIL_REFRESH_TOKEN
+          if (!cs) { try { cs = (await repo.getSettingValue(env.DB, 'gmail_client_secret')) || '' } catch {} }
+          if (!rt) { try { rt = (await repo.getSettingValue(env.DB, 'gmail_refresh_token')) || '' } catch {} }
+          if (ci && cs && rt) {
+            await sendGmailOAuth2(ci, cs, rt, recipient, `Roof Report - ${order.property_address || 'Property'}`, emailHtml, (env as any).GMAIL_SENDER_EMAIL)
+            console.log(`[AutoSendEmail] Order ${orderId}: report auto-sent to ${recipient}`)
+          } else if ((env as any).RESEND_API_KEY) {
+            await sendViaResend((env as any).RESEND_API_KEY, recipient, `Roof Report - ${order.property_address || 'Property'}`, emailHtml, (env as any).GMAIL_SENDER_EMAIL || null)
+            console.log(`[AutoSendEmail] Order ${orderId}: report auto-sent via Resend to ${recipient}`)
+          } else {
+            console.warn(`[AutoSendEmail] Order ${orderId}: no email provider configured — auto-send skipped`)
+          }
+        } catch (e: any) {
+          console.warn(`[AutoSendEmail] Order ${orderId}: send failed — ${e?.message || e}`)
+        }
+      })()
+      if (ctx?.waitUntil) ctx.waitUntil(autoSendP)
+    }
 
     // Auto-invoice hook — fire-and-forget, idempotent. Must be wrapped in
     // waitUntil so Cloudflare doesn't kill the worker before Gmail send

@@ -52,7 +52,8 @@ ordersRoutes.post('/', async (c) => {
       homeowner_name, homeowner_phone, homeowner_email,
       requester_name, requester_company, requester_email, requester_phone,
       service_tier, customer_company_id, notes,
-      roof_trace_json, price_per_bundle, needs_admin_trace
+      roof_trace_json, price_per_bundle, needs_admin_trace,
+      send_report_to_email
     } = body
 
     // Validate required fields
@@ -77,8 +78,9 @@ ordersRoutes.post('/', async (c) => {
         homeowner_name, homeowner_phone, homeowner_email,
         requester_name, requester_company, requester_email, requester_phone,
         service_tier, price, status, payment_status, estimated_delivery, notes,
-        roof_trace_json, price_per_bundle, needs_admin_trace
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', 'unpaid', ?, ?, ?, ?, ?)
+        roof_trace_json, price_per_bundle, needs_admin_trace,
+        send_report_to_email
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', 'unpaid', ?, ?, ?, ?, ?, ?)
     `).bind(
       orderNumber, masterCompanyId, customer_company_id || null,
       property_address, property_city || null, property_province || null, property_postal_code || null,
@@ -88,7 +90,8 @@ ordersRoutes.post('/', async (c) => {
       service_tier, price, estimatedDelivery, notes || null,
       roof_trace_json ? (typeof roof_trace_json === 'string' ? roof_trace_json : JSON.stringify(roof_trace_json)) : null,
       price_per_bundle || null,
-      needs_admin_trace ? 1 : 0
+      needs_admin_trace ? 1 : 0,
+      (typeof send_report_to_email === 'string' && send_report_to_email.trim()) ? send_report_to_email.trim() : null
     ).run()
 
     // Log the activity
