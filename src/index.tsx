@@ -338,6 +338,7 @@ window.fireMetaContactEvent=function(d){if(typeof fbq==='function')fbq('track','
 <script src="/static/toast.js"></script>
 <script src="/static/tracker.js" defer></script>
 <script src="/static/exit-intent.js" defer></script>
+<script src="/static/ios-install-banner.js" defer></script>
 <!-- rm-analytics-widgets-injected -->
 </body>`)
       c.res = new Response(injected, {
@@ -4498,6 +4499,7 @@ function getHeadTags(canonicalPath?: string) {
   <link rel="dns-prefetch" href="//maps.googleapis.com">
   <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">
   <link rel="manifest" href="/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Roof Manager">
   <meta name="mobile-web-app-capable" content="yes">
