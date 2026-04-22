@@ -191,6 +191,8 @@ analyticsRoutes.get('/dashboard', async (c) => {
   const since = new Date(Date.now() - daysBack * 86400000).toISOString()
   // Prior period window — same length, immediately before current period
   const prevSince = new Date(Date.now() - daysBack * 2 * 86400000).toISOString()
+  // api_accounts / api_jobs / api_credit_ledger use unix-epoch ints for created_at
+  const sinceEpoch = Math.floor((Date.now() - daysBack * 86400000) / 1000)
 
   const [
     overview, prevOverview,
@@ -393,6 +395,70 @@ analyticsRoutes.get('/dashboard', async (c) => {
     `).bind(since).first()
   ])
 
+  // API key users / usage — pulled separately so a missing table (older DBs) or
+  // a single bad query can't wipe out the whole analytics response.
+  let apiUsage: any = null
+  try {
+    const [apiAccounts, apiJobs, apiCredits, apiTopAccounts, apiRecentJobs] = await Promise.all([
+      db.prepare(`
+        SELECT
+          COUNT(*) as total_accounts,
+          SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_accounts,
+          SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) as new_accounts,
+          COALESCE(SUM(credit_balance), 0) as total_credit_balance
+        FROM api_accounts
+      `).bind(sinceEpoch).first(),
+      db.prepare(`
+        SELECT
+          COUNT(*) as total_jobs,
+          SUM(CASE WHEN status = 'ready' THEN 1 ELSE 0 END) as ready_jobs,
+          SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_jobs,
+          SUM(CASE WHEN status = 'queued' THEN 1 ELSE 0 END) as queued_jobs,
+          SUM(CASE WHEN status IN ('tracing','generating') THEN 1 ELSE 0 END) as in_progress_jobs,
+          SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled_jobs
+        FROM api_jobs
+        WHERE created_at >= ?
+      `).bind(sinceEpoch).first(),
+      db.prepare(`
+        SELECT COALESCE(SUM(CASE WHEN delta < 0 THEN -delta ELSE 0 END), 0) as credits_consumed,
+               COALESCE(SUM(CASE WHEN delta > 0 AND reason = 'purchase' THEN delta ELSE 0 END), 0) as credits_purchased
+        FROM api_credit_ledger
+        WHERE created_at >= ?
+      `).bind(sinceEpoch).first(),
+      db.prepare(`
+        SELECT
+          a.id, a.company_name, a.contact_email, a.status, a.credit_balance,
+          COUNT(j.id) as jobs,
+          SUM(CASE WHEN j.status = 'ready' THEN 1 ELSE 0 END) as ready,
+          SUM(CASE WHEN j.status = 'failed' THEN 1 ELSE 0 END) as failed
+        FROM api_accounts a
+        LEFT JOIN api_jobs j ON j.account_id = a.id AND j.created_at >= ?
+        GROUP BY a.id
+        ORDER BY jobs DESC, a.created_at DESC
+        LIMIT 10
+      `).bind(sinceEpoch).all(),
+      db.prepare(`
+        SELECT
+          j.id, j.status, j.address, j.client_reference,
+          j.credits_held, j.error_code, j.created_at, j.finalized_at,
+          a.company_name, a.contact_email
+        FROM api_jobs j
+        LEFT JOIN api_accounts a ON a.id = j.account_id
+        ORDER BY j.created_at DESC
+        LIMIT 20
+      `).all()
+    ])
+    apiUsage = {
+      accounts: apiAccounts,
+      jobs: apiJobs,
+      credits: apiCredits,
+      top_accounts: apiTopAccounts.results || [],
+      recent_jobs: apiRecentJobs.results || []
+    }
+  } catch (err: any) {
+    apiUsage = { error: err?.message || 'api usage unavailable' }
+  }
+
   return c.json({
     period,
     overview,
@@ -412,7 +478,8 @@ analyticsRoutes.get('/dashboard', async (c) => {
       const total = g?.total_pageviews || 0
       const geo = g?.geo_pageviews || 0
       return { total_pageviews: total, geo_pageviews: geo, pct: total > 0 ? Math.round((geo / total) * 100) : 0 }
-    })()
+    })(),
+    api_usage: apiUsage
   })
 })
 

@@ -1116,10 +1116,10 @@ adminRoutes.get('/superadmin/users', async (c) => {
   const admin = c.get('admin' as any)
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
-    // D1 rejects result sets with too many columns, so we explicitly select
-    // only the customer fields the super-admin User Registry renders. Using
-    // `c.*` on the now ~80-column `customers` table returned
-    // "D1_ERROR: too many columns in result set" and left the dashboard empty.
+    // Each customer gets one row, labeled `team_member` when an active
+    // team_members membership exists — prevents the previous duplicate
+    // (owner + team_member) rows and ensures the team badge actually shows.
+    // D1 rejects result sets with too many columns, so we select explicitly.
     const users = await c.env.DB.prepare(`
       SELECT
         c.id, c.email, c.name, c.phone, c.company_name,
@@ -1127,57 +1127,66 @@ adminRoutes.get('/superadmin/users', async (c) => {
         c.is_active, c.last_login, c.created_at,
         c.free_trial_used, c.free_trial_total,
         c.report_credits, c.credits_used,
-        'owner' as user_type,
-        NULL as team_member_id,
-        NULL as team_role,
-        NULL as team_owner_id,
-        NULL as team_owner_name,
-        NULL as team_owner_email,
-        NULL as team_owner_company,
+        CASE WHEN tm.id IS NOT NULL THEN 'team_member' ELSE 'owner' END as user_type,
+        tm.id as team_member_id,
+        tm.role as team_role,
+        tm.owner_id as team_owner_id,
+        owner.name as team_owner_name,
+        owner.email as team_owner_email,
+        owner.company_name as team_owner_company,
         (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.id) as order_count,
         (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.id AND o.is_trial = 1) as trial_orders,
         (SELECT COALESCE(SUM(o.price), 0) FROM orders o WHERE o.customer_id = c.id AND o.payment_status = 'paid' AND (o.is_trial IS NULL OR o.is_trial = 0)) as total_spent,
         (SELECT MAX(o.created_at) FROM orders o WHERE o.customer_id = c.id) as last_order_date,
         (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.id AND o.status = 'completed') as completed_reports
       FROM customers c
+      LEFT JOIN team_members tm ON tm.member_customer_id = c.id AND tm.status = 'active'
+      LEFT JOIN customers owner ON owner.id = tm.owner_id
       ORDER BY c.created_at DESC
     `).all()
 
-    // Team members added via /team/accept live in a separate table. Pull them
-    // in so Desiree-style "I added a team member but they don't show up"
-    // reports stop happening — each team member surfaces as its own row,
-    // tagged with the owning account so super admin can see the attribution.
-    const teamMembers = await c.env.DB.prepare(`
-      SELECT
-        tm.id as team_member_id,
-        tm.member_customer_id as id,
-        tm.email,
-        tm.name,
-        tm.role as team_role,
-        tm.status,
-        tm.joined_at as created_at,
-        tm.owner_id as team_owner_id,
-        'team_member' as user_type,
-        owner.name as team_owner_name,
-        owner.email as team_owner_email,
-        owner.company_name as team_owner_company,
-        mc.company_name,
-        mc.phone,
-        mc.google_id,
-        mc.google_avatar,
-        mc.last_login,
-        mc.is_active,
-        mc.free_trial_used,
-        mc.free_trial_total,
-        mc.report_credits,
-        mc.credits_used
-      FROM team_members tm
-      LEFT JOIN customers owner ON owner.id = tm.owner_id
-      LEFT JOIN customers mc ON mc.id = tm.member_customer_id
-      ORDER BY tm.joined_at DESC
-    `).all()
+    // API key users live in api_accounts (separate from customers). Surface
+    // them in the same list so super admin has a single pane to see every
+    // paying/consuming entity on the platform.
+    let apiAccounts: any = { results: [] }
+    try {
+      apiAccounts = await c.env.DB.prepare(`
+        SELECT
+          a.id,
+          a.contact_email as email,
+          a.company_name as name,
+          NULL as phone,
+          a.company_name,
+          NULL as google_id,
+          NULL as google_avatar,
+          CASE WHEN a.status = 'active' THEN 1 ELSE 0 END as is_active,
+          NULL as last_login,
+          datetime(a.created_at, 'unixepoch') as created_at,
+          0 as free_trial_used,
+          0 as free_trial_total,
+          a.credit_balance as report_credits,
+          (SELECT COALESCE(SUM(CASE WHEN delta < 0 THEN -delta ELSE 0 END), 0)
+           FROM api_credit_ledger l WHERE l.account_id = a.id) as credits_used,
+          'api_account' as user_type,
+          NULL as team_member_id,
+          NULL as team_role,
+          NULL as team_owner_id,
+          NULL as team_owner_name,
+          NULL as team_owner_email,
+          NULL as team_owner_company,
+          (SELECT COUNT(*) FROM api_jobs j WHERE j.account_id = a.id) as order_count,
+          0 as trial_orders,
+          0 as total_spent,
+          (SELECT MAX(datetime(j.created_at, 'unixepoch')) FROM api_jobs j WHERE j.account_id = a.id) as last_order_date,
+          (SELECT COUNT(*) FROM api_jobs j WHERE j.account_id = a.id AND j.status = 'ready') as completed_reports
+        FROM api_accounts a
+        ORDER BY a.created_at DESC
+      `).all()
+    } catch (e: any) {
+      console.warn('[superadmin/users] api_accounts query failed:', e?.message || e)
+    }
 
-    const combinedUsers = [...(users.results || []), ...(teamMembers.results || [])]
+    const combinedUsers = [...(users.results || []), ...(apiAccounts.results || [])]
 
     const summary = await c.env.DB.prepare(`
       SELECT
@@ -1196,11 +1205,13 @@ adminRoutes.get('/superadmin/users', async (c) => {
       FROM customers
     `).first()
 
-    const teamMemberCount = (teamMembers.results || []).length
+    const teamMemberCount = (users.results || []).filter((u: any) => u.user_type === 'team_member').length
+    const apiAccountCount = (apiAccounts.results || []).length
     const enrichedSummary = {
       ...(summary as any || {}),
-      total_users: ((summary as any)?.total_users || 0) + teamMemberCount,
+      total_users: ((summary as any)?.total_users || 0) + apiAccountCount,
       team_members: teamMemberCount,
+      api_accounts: apiAccountCount,
     }
 
     return c.json({ users: combinedUsers, summary: enrichedSummary })

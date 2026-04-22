@@ -915,8 +915,8 @@ function renderUsersView() {
                   <div class="flex items-center gap-2">
                     ${u.google_avatar ? `<img src="${u.google_avatar}" class="w-8 h-8 rounded-full border-2 border-white shadow-sm">` : `<div class="w-8 h-8 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold">${(u.name||'?')[0].toUpperCase()}</div>`}
                     <div>
-                      <p class="font-semibold text-gray-800 text-sm">${u.name || '-'} ${new Date(u.created_at) > new Date(Date.now() - 7*86400000) ? '<span class="ml-1 px-1.5 py-0.5 bg-green-100 text-green-700 text-[9px] font-bold rounded-full uppercase">New</span>' : ''} ${u.user_type === 'team_member' ? `<span class="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[9px] font-bold rounded-full uppercase" title="Team member of ${(u.team_owner_name || u.team_owner_email || 'owner').replace(/"/g,'&quot;')}">Team${u.team_role === 'admin' ? ' Admin' : ''}</span>` : ''}</p>
-                      <p class="text-[10px] text-gray-400">${u.email}${u.user_type === 'team_member' ? ` <span class="text-purple-500">· under ${u.team_owner_name || u.team_owner_company || u.team_owner_email || '#'+u.team_owner_id}</span>` : ''}</p>
+                      <p class="font-semibold text-gray-800 text-sm">${u.name || '-'} ${new Date(u.created_at) > new Date(Date.now() - 7*86400000) ? '<span class="ml-1 px-1.5 py-0.5 bg-green-100 text-green-700 text-[9px] font-bold rounded-full uppercase">New</span>' : ''} ${u.user_type === 'team_member' ? `<span class="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[9px] font-bold rounded-full uppercase" title="Team member of ${(u.team_owner_name || u.team_owner_email || 'owner').replace(/"/g,'&quot;')}">Team${u.team_role === 'admin' ? ' Admin' : ''}</span>` : ''}${u.user_type === 'api_account' ? '<span class="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-bold rounded-full uppercase" title="API key account"><i class="fas fa-key mr-0.5"></i>API</span>' : ''}</p>
+                      <p class="text-[10px] text-gray-400">${u.email}${u.user_type === 'team_member' ? ` <span class="text-purple-500">· under ${u.team_owner_name || u.team_owner_company || u.team_owner_email || '#'+u.team_owner_id}</span>` : ''}${u.user_type === 'api_account' ? ' <span class="text-amber-600">· developer API</span>' : ''}</p>
                     </div>
                   </div>
                 </td>
@@ -2321,6 +2321,33 @@ function renderAnalyticsView() {
 
   const periodLabels = { '24h': 'Last 24 Hours', '7d': 'Last 7 Days', '30d': 'Last 30 Days', '90d': 'Last 90 Days' };
 
+  // API key users / developer API usage (same period filter)
+  const api = d.api_usage || {};
+  const apiAcc = api.accounts || {};
+  const apiJobs = api.jobs || {};
+  const apiCredits = api.credits || {};
+  const apiTop = api.top_accounts || [];
+  const apiRecent = api.recent_jobs || [];
+  const apiJobTotal = apiJobs.total_jobs || 0;
+  const apiSuccessRate = apiJobTotal > 0
+    ? Math.round(((apiJobs.ready_jobs || 0) / apiJobTotal) * 100) + '%'
+    : '—';
+  const apiStatusPill = function(status) {
+    const m = {
+      ready: 'bg-green-100 text-green-700',
+      failed: 'bg-red-100 text-red-700',
+      queued: 'bg-gray-100 text-gray-600',
+      tracing: 'bg-indigo-100 text-indigo-700',
+      generating: 'bg-blue-100 text-blue-700',
+      cancelled: 'bg-amber-100 text-amber-700'
+    };
+    return '<span class="px-1.5 py-0.5 rounded-full text-[10px] font-medium ' + (m[status] || 'bg-gray-100 text-gray-600') + '">' + (status || '-') + '</span>';
+  };
+  const apiFmtEpoch = function(e) {
+    if (!e) return '-';
+    try { return new Date(e * 1000).toLocaleString(); } catch (err) { return '-'; }
+  };
+
   // UTM table builder
   function utmTable(rows, label) {
     if (!rows.length) return '<p class="text-gray-400 text-xs py-2">No ' + label + ' data yet</p>';
@@ -2415,6 +2442,115 @@ function renderAnalyticsView() {
         <p class="text-[10px] text-gray-400 mt-1">${signupsInPeriod} new signups this period</p>
       </div>
     </div>
+
+    <!-- API Key Users / Developer API Usage -->
+    ${saSection('API Key Users — Developer API', 'fa-key', (api.error
+      ? '<p class="text-red-500 text-xs">API usage data unavailable: ' + api.error + '</p>'
+      : (
+        '<div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">' +
+          '<div class="bg-white border border-amber-100 rounded-2xl p-4 shadow-sm">' +
+            '<div class="flex items-center justify-between mb-1">' +
+              '<span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Active Accounts</span>' +
+              '<i class="fas fa-id-badge text-amber-400 text-sm"></i>' +
+            '</div>' +
+            '<div class="flex items-baseline gap-1">' +
+              '<span class="text-2xl font-black text-gray-900">' + (apiAcc.active_accounts || 0) + '</span>' +
+              '<span class="text-[10px] text-gray-400 ml-1">/ ' + (apiAcc.total_accounts || 0) + ' total</span>' +
+            '</div>' +
+            '<p class="text-[10px] text-gray-400 mt-1">' + (apiAcc.new_accounts || 0) + ' new this period</p>' +
+          '</div>' +
+          '<div class="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">' +
+            '<div class="flex items-center justify-between mb-1">' +
+              '<span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">API Jobs</span>' +
+              '<i class="fas fa-tasks text-blue-400 text-sm"></i>' +
+            '</div>' +
+            '<div class="flex items-baseline gap-1">' +
+              '<span class="text-2xl font-black text-gray-900">' + apiJobTotal.toLocaleString() + '</span>' +
+            '</div>' +
+            '<p class="text-[10px] text-gray-400 mt-1">' + (apiJobs.in_progress_jobs || 0) + ' in progress · ' + (apiJobs.queued_jobs || 0) + ' queued</p>' +
+          '</div>' +
+          '<div class="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">' +
+            '<div class="flex items-center justify-between mb-1">' +
+              '<span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Success Rate</span>' +
+              '<i class="fas fa-check-circle text-green-400 text-sm"></i>' +
+            '</div>' +
+            '<div class="flex items-baseline gap-1">' +
+              '<span class="text-2xl font-black text-gray-900">' + apiSuccessRate + '</span>' +
+            '</div>' +
+            '<p class="text-[10px] text-gray-400 mt-1">' + (apiJobs.ready_jobs || 0) + ' ready · ' + (apiJobs.failed_jobs || 0) + ' failed</p>' +
+          '</div>' +
+          '<div class="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">' +
+            '<div class="flex items-center justify-between mb-1">' +
+              '<span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Credits Consumed</span>' +
+              '<i class="fas fa-coins text-indigo-400 text-sm"></i>' +
+            '</div>' +
+            '<div class="flex items-baseline gap-1">' +
+              '<span class="text-2xl font-black text-gray-900">' + (apiCredits.credits_consumed || 0).toLocaleString() + '</span>' +
+            '</div>' +
+            '<p class="text-[10px] text-gray-400 mt-1">' + (apiCredits.credits_purchased || 0).toLocaleString() + ' purchased this period</p>' +
+          '</div>' +
+          '<div class="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">' +
+            '<div class="flex items-center justify-between mb-1">' +
+              '<span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Balance on Hand</span>' +
+              '<i class="fas fa-wallet text-teal-400 text-sm"></i>' +
+            '</div>' +
+            '<div class="flex items-baseline gap-1">' +
+              '<span class="text-2xl font-black text-gray-900">' + (apiAcc.total_credit_balance || 0).toLocaleString() + '</span>' +
+            '</div>' +
+            '<p class="text-[10px] text-gray-400 mt-1">sum of all account balances</p>' +
+          '</div>' +
+        '</div>' +
+        '<div class="grid lg:grid-cols-2 gap-6">' +
+          '<div>' +
+            '<p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2"><i class="fas fa-trophy mr-1 text-amber-400"></i>Top API Accounts (this period)</p>' +
+            (apiTop.length === 0
+              ? '<p class="text-gray-400 text-xs py-2">No API accounts yet</p>'
+              : '<div class="overflow-x-auto"><table class="w-full text-xs"><thead><tr class="text-[10px] text-gray-400 uppercase border-b border-gray-100">' +
+                  '<th class="pb-1.5 text-left font-semibold">Company</th>' +
+                  '<th class="pb-1.5 text-right font-semibold">Jobs</th>' +
+                  '<th class="pb-1.5 text-right font-semibold">Ready</th>' +
+                  '<th class="pb-1.5 text-right font-semibold">Failed</th>' +
+                  '<th class="pb-1.5 text-right font-semibold">Balance</th>' +
+                '</tr></thead><tbody class="divide-y divide-gray-50">' +
+                apiTop.map(function(a) {
+                  return '<tr class="hover:bg-amber-50/30">' +
+                    '<td class="py-1.5 pr-2">' +
+                      '<div class="font-semibold text-gray-800 truncate max-w-[180px]" title="' + (a.company_name || '') + '">' + (a.company_name || '-') + '</div>' +
+                      '<div class="text-[10px] text-gray-400 truncate max-w-[180px]">' + (a.contact_email || '') + '</div>' +
+                    '</td>' +
+                    '<td class="py-1.5 text-right font-bold text-gray-800">' + (a.jobs || 0) + '</td>' +
+                    '<td class="py-1.5 text-right text-green-600">' + (a.ready || 0) + '</td>' +
+                    '<td class="py-1.5 text-right ' + ((a.failed || 0) > 0 ? 'text-red-500' : 'text-gray-400') + '">' + (a.failed || 0) + '</td>' +
+                    '<td class="py-1.5 text-right text-gray-600">' + (a.credit_balance || 0) + '</td>' +
+                  '</tr>';
+                }).join('') +
+                '</tbody></table></div>'
+            ) +
+          '</div>' +
+          '<div>' +
+            '<p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2"><i class="fas fa-history mr-1 text-blue-400"></i>Recent API Jobs</p>' +
+            (apiRecent.length === 0
+              ? '<p class="text-gray-400 text-xs py-2">No API jobs yet</p>'
+              : '<div class="overflow-x-auto max-h-80 overflow-y-auto"><table class="w-full text-xs"><thead class="bg-gray-50 sticky top-0"><tr class="text-[10px] text-gray-400 uppercase">' +
+                  '<th class="px-2 py-1.5 text-left font-semibold">Time</th>' +
+                  '<th class="px-2 py-1.5 text-left font-semibold">Account</th>' +
+                  '<th class="px-2 py-1.5 text-left font-semibold">Address</th>' +
+                  '<th class="px-2 py-1.5 text-left font-semibold">Status</th>' +
+                '</tr></thead><tbody class="divide-y divide-gray-50">' +
+                apiRecent.map(function(j) {
+                  return '<tr class="hover:bg-gray-50">' +
+                    '<td class="px-2 py-1.5 text-[10px] text-gray-500 whitespace-nowrap">' + apiFmtEpoch(j.created_at) + '</td>' +
+                    '<td class="px-2 py-1.5 text-xs text-gray-700 truncate max-w-[140px]" title="' + (j.company_name || '') + '">' + (j.company_name || '-') + '</td>' +
+                    '<td class="px-2 py-1.5 text-[10px] text-gray-500 truncate max-w-[200px]" title="' + (j.address || '') + '">' + (j.address || '-') + '</td>' +
+                    '<td class="px-2 py-1.5">' + apiStatusPill(j.status) + (j.error_code ? ' <span class="text-[9px] text-red-500 ml-1">' + j.error_code + '</span>' : '') + '</td>' +
+                  '</tr>';
+                }).join('') +
+                '</tbody></table></div>'
+            ) +
+          '</div>' +
+        '</div>'
+      )
+    ))}
 
     <!-- Hourly Traffic -->
     ${saSection('Traffic (Last 24 Hours)', 'fa-chart-bar', hourly.length === 0
