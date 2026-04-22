@@ -232,7 +232,9 @@ d2dRoutes.get('/team', async (c) => {
   return c.json({ members: members.results })
 })
 
-// TEAM ACTIVITY — per-member summary for admin tracking
+// TEAM ACTIVITY — per-member summary for admin tracking.
+// Includes the owner themselves so their own door-knocking activity
+// (pins with knocked_by IS NULL) shows up on the leaderboard.
 d2dRoutes.get('/team/activity', async (c) => {
   const user = await getUser(c)
   if (!user) return c.json({ error: 'Not authenticated' }, 401)
@@ -251,10 +253,39 @@ d2dRoutes.get('/team/activity', async (c) => {
     LEFT JOIN d2d_pins p ON p.knocked_by = tm.id AND p.owner_id = ?
     WHERE tm.owner_id = ? AND tm.is_active = 1
     GROUP BY tm.id
-    ORDER BY total_knocks DESC
   `).bind(user.id, user.id, user.id).all()
 
-  return c.json({ activity: activity.results })
+  const ownerRow = await c.env.DB.prepare(`
+    SELECT c.name, c.email,
+      (SELECT COUNT(*) FROM d2d_pins WHERE owner_id = ? AND knocked_by IS NULL AND status IN ('yes','no','no_answer')) as total_knocks,
+      (SELECT COUNT(*) FROM d2d_pins WHERE owner_id = ? AND knocked_by IS NULL AND status = 'yes') as yes_count,
+      (SELECT COUNT(*) FROM d2d_pins WHERE owner_id = ? AND knocked_by IS NULL AND status = 'no') as no_count,
+      (SELECT COUNT(*) FROM d2d_pins WHERE owner_id = ? AND knocked_by IS NULL AND status = 'no_answer') as no_answer_count,
+      (SELECT COUNT(*) FROM d2d_turfs WHERE owner_id = ? AND assigned_to IS NULL) as turf_count,
+      (SELECT MAX(knocked_at) FROM d2d_pins WHERE owner_id = ? AND knocked_by IS NULL) as last_activity
+    FROM customers c WHERE c.id = ?
+  `).bind(user.id, user.id, user.id, user.id, user.id, user.id, user.id).first<any>()
+
+  const rows: any[] = []
+  if (ownerRow) {
+    rows.push({
+      id: null,
+      name: (ownerRow.name || 'Owner') + ' (You)',
+      color: '#6366f1',
+      email: ownerRow.email,
+      role: 'owner',
+      total_knocks: ownerRow.total_knocks || 0,
+      yes_count: ownerRow.yes_count || 0,
+      no_count: ownerRow.no_count || 0,
+      no_answer_count: ownerRow.no_answer_count || 0,
+      turf_count: ownerRow.turf_count || 0,
+      last_activity: ownerRow.last_activity
+    })
+  }
+  for (const m of (activity.results as any[])) rows.push(m)
+  rows.sort((a, b) => (b.total_knocks || 0) - (a.total_knocks || 0))
+
+  return c.json({ activity: rows })
 })
 
 // CREATE team member — also creates a customer login account when password is provided
