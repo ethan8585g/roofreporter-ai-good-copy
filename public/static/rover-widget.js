@@ -138,6 +138,7 @@
       opacity: 1;
       transform: translateY(0) scale(1);
       pointer-events: auto;
+      cursor: pointer;
     }
     #rover-greeting .rover-g-name {
       font-weight: 700;
@@ -365,6 +366,84 @@
       border-color: #0ea5e9;
     }
 
+    /* CTA buttons emitted after each Rover reply */
+    .rover-cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 6px 0 10px;
+      align-self: flex-start;
+      max-width: 92%;
+    }
+    .rover-cta-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 7px 12px;
+      background: linear-gradient(135deg, #00FF88, #00cc6a);
+      color: #052e19;
+      border: none;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      box-shadow: 0 2px 8px rgba(0, 204, 106, 0.25);
+      text-decoration: none;
+    }
+    .rover-cta-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 204, 106, 0.35);
+    }
+
+    /* Inline email-capture chip below first Rover reply */
+    .rover-email-chip {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 10px;
+      padding: 8px 10px;
+      margin: 4px 0 10px;
+      align-self: stretch;
+      max-width: 100%;
+      animation: roverMsgIn 0.3s ease-out;
+    }
+    .rover-email-chip input {
+      flex: 1;
+      padding: 6px 10px;
+      border: 1px solid #fdba74;
+      border-radius: 8px;
+      font-size: 12px;
+      outline: none;
+      background: #fff;
+      min-width: 0;
+    }
+    .rover-email-chip input:focus { border-color: #f97316; box-shadow: 0 0 0 2px rgba(249,115,22,0.15); }
+    .rover-email-chip button {
+      padding: 6px 10px;
+      background: #f97316;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .rover-email-chip button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .rover-email-chip .chip-label { font-size: 11px; color: #9a3412; font-weight: 600; white-space: nowrap; }
+    .rover-email-chip .chip-dismiss {
+      background: transparent;
+      color: #9a3412;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 6px 6px;
+      cursor: pointer;
+      border: none;
+    }
+
     /* Contact form inside chat */
     .rover-contact-form {
       background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
@@ -504,7 +583,7 @@
     <div id="rover-greeting">
       <span class="rover-g-close" onclick="window.__roverCloseGreeting()">&times;</span>
       <span class="rover-g-name">Rover</span> here! 👋<br>
-      Need help with roof measurement reports? I'm here to help!
+      <span class="rover-greeting-text">Need help with roof measurement reports? I'm here to help!</span>
     </div>
 
     <!-- Chat window -->
@@ -594,6 +673,69 @@
     }
 
     messagesEl.appendChild(msg);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  // Render CTA buttons below the latest assistant bubble
+  function renderCtas(ctas) {
+    if (!ctas || !ctas.length) return;
+    var row = document.createElement('div');
+    row.className = 'rover-cta-row';
+    ctas.forEach(function(cta) {
+      var btn;
+      if (cta.action === 'link') {
+        btn = document.createElement('a');
+        btn.href = cta.value || '#';
+        btn.target = '_blank';
+        btn.rel = 'noopener';
+      } else {
+        btn = document.createElement('button');
+        btn.type = 'button';
+      }
+      btn.className = 'rover-cta-btn';
+      btn.textContent = cta.label;
+      btn.addEventListener('click', function() {
+        fireRoverEvent('cta_clicked');
+        if (cta.action === 'contact_form') showContactForm();
+      });
+      row.appendChild(btn);
+    });
+    messagesEl.appendChild(row);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  // Render a compact inline email-capture chip right after the first reply.
+  // Only shows once per session and only if we haven't already captured email.
+  function renderEmailChip() {
+    if (state.leadSubmitted) return;
+    if (sessionStorage.getItem('rover_email_chip_shown')) return;
+    sessionStorage.setItem('rover_email_chip_shown', '1');
+    var chip = document.createElement('div');
+    chip.className = 'rover-email-chip';
+    chip.innerHTML =
+      '<span class="chip-label">📬 Get a sample + follow-ups:</span>' +
+      '<input type="email" placeholder="you@company.com" aria-label="email" />' +
+      '<button type="button">Send</button>' +
+      '<button type="button" class="chip-dismiss" aria-label="dismiss">✕</button>';
+    var input = chip.querySelector('input');
+    var sendBtn = chip.querySelectorAll('button')[0];
+    var dismissBtn = chip.querySelector('.chip-dismiss');
+    sendBtn.addEventListener('click', function() {
+      var email = (input.value || '').trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { input.focus(); return; }
+      sendBtn.disabled = true;
+      fetch('/api/rover/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: state.sessionId, email: email, source: 'inline_chip' })
+      }).catch(function(){}).finally(function() {
+        fireRoverEvent('email_captured');
+        state.leadSubmitted = true;
+        chip.innerHTML = '<span class="chip-label">✅ Got it — we\'ll be in touch!</span>';
+      });
+    });
+    dismissBtn.addEventListener('click', function() { chip.remove(); });
+    messagesEl.appendChild(chip);
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
@@ -750,6 +892,7 @@
 
     inputEl.value = '';
     addMessage('user', msg);
+    fireRoverEvent('first_message_sent');
     state.loading = true;
     inputEl.disabled = true;
     document.getElementById('rover-send').disabled = true;
@@ -820,6 +963,8 @@
               if (data.show_contact_form) showContactForm();
               // Final re-render with full formatting
               if (msgEl) msgEl.innerHTML = formatRoverContent(fullContent);
+              if (data.ctas && data.ctas.length) renderCtas(data.ctas);
+              if (data.ask_email) renderEmailChip();
             }
           } catch (e) { /* malformed SSE chunk — skip */ }
         }
@@ -852,6 +997,8 @@
           var fd = await fallback.json();
           if (fd.reply) addMessage('assistant', fd.reply);
           if (fd.show_contact_form) showContactForm();
+          if (fd.ctas && fd.ctas.length) renderCtas(fd.ctas);
+          if (fd.ask_email) renderEmailChip();
         } else {
           addMessage('assistant', "Oops, connection issue! You can email us at sales@roofmanager.ca or try again in a moment.");
           showContactForm();
@@ -905,19 +1052,52 @@
   if (sendBtn) sendBtn.disabled = false;
 
   // ============================================================
-  // AUTO-SHOW GREETING AFTER DELAY
+  // AUTO-SHOW GREETING — page-tailored hook after dwell
+  // Writes into the existing greeting bubble so visitors see a relevant
+  // nudge instead of a generic "click to chat" prompt.
   // ============================================================
+  function pageHook() {
+    var p = (location.pathname || '').toLowerCase();
+    if (p.indexOf('/pricing') === 0) return "Looking at pricing? Ask me how to get 4 free reports 👀";
+    if (p.indexOf('/coverage') === 0) return "Checking coverage? Tell me your city — I can confirm instantly 🌍";
+    if (p.indexOf('/customer/login') === 0 || p.indexOf('/register') === 0) return "Need help signing up? I'll walk you through — 4 free reports, no card 🎁";
+    if (p.indexOf('/blog') === 0 || p.indexOf('/help') === 0) return "Want a shortcut? I can explain it in 30 seconds 💡";
+    if (p.indexOf('/secretary') === 0 || p.indexOf('receptionist') >= 0) return "Curious about the AI Secretary? Ask me how it catches every call 📞";
+    if (p.indexOf('/solar') === 0) return "Solar question? I've got pitch, area & yield info 🌞";
+    if (p === '/' || p === '') return "Hey! Want to see how Roof Manager saves you 20+ min per report? 🐕";
+    return "Hey! Got a roofing question? I can help 🐕";
+  }
   var greetingDismissed = sessionStorage.getItem('rover_greeting_dismissed');
-  if (!greetingDismissed) {
+  if (!greetingDismissed && greetingEl) {
+    try {
+      var textEl = greetingEl.querySelector('.rover-greeting-text');
+      if (textEl) textEl.textContent = pageHook();
+    } catch (e) {}
+    // Click the bubble body (not the X) to open the chat
+    greetingEl.addEventListener('click', function(e) {
+      if (e.target && e.target.classList && e.target.classList.contains('rover-g-close')) return;
+      if (!state.open) window.__roverToggle();
+    });
     setTimeout(function() {
       if (!state.open) {
         greetingEl.classList.add('show');
         setTimeout(function() {
           if (!state.open) greetingEl.classList.remove('show');
-        }, 10000);
+        }, 12000);
       }
-    }, 5000);
+    }, 8000);
   }
+
+  // Exit-intent (desktop) — open widget when the cursor darts toward top.
+  // Fires at most once per session.
+  document.addEventListener('mouseout', function(e) {
+    if (state.open) return;
+    if (sessionStorage.getItem('rover_exit_intent_fired')) return;
+    if (e.clientY > 10) return;
+    if (e.relatedTarget || e.toElement) return;
+    sessionStorage.setItem('rover_exit_intent_fired', '1');
+    window.__roverToggle();
+  });
 
   // ============================================================
   // END CONVERSATION ON PAGE UNLOAD

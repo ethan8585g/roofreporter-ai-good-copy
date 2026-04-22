@@ -478,6 +478,55 @@ async function executeAssistantTool(
 // PUBLIC ENDPOINTS — No auth required (visitor-facing)
 // ============================================================
 
+// Build a page-aware system prompt from the visitor's current URL so Rover
+// can tailor examples, pricing, and CTAs to what they're actually looking at.
+function buildPageContext(pageUrl?: string | null): string {
+  const url = (pageUrl || '').toLowerCase()
+  let hint = 'The visitor is browsing the Roof Manager website.'
+  if (url.includes('/pricing')) hint = 'The visitor is on the PRICING page — they are actively comparing cost. Lead with the 4 free reports and the $8 CAD/report figure. Ask if they want to start free.'
+  else if (url.includes('/coverage')) hint = 'The visitor is on the COVERAGE page — they care about whether we serve their region. Confirm coverage and funnel to /customer/login.'
+  else if (url.includes('/customer/login') || url.includes('/customer/register') || url.includes('/register')) hint = 'The visitor is on the SIGNUP/LOGIN page — they are near the goal line. Help them complete signup, emphasize "no credit card required, 4 free reports".'
+  else if (url.includes('/customer/dashboard') || url.includes('/customer/order')) hint = 'The visitor is INSIDE their customer dashboard (existing user). Help with orders, billing, branding, CRM.'
+  else if (url.includes('/blog') || url.includes('/help') || url.includes('/docs')) hint = 'The visitor is reading educational content. They are researching — offer to show them a live sample or 4 free reports.'
+  else if (url.includes('/secretary') || url.includes('/ai-secretary') || url.includes('receptionist')) hint = 'The visitor is on a SECRETARY/AI receptionist page. Lead with the $249/month 24/7 call-answering pitch and trial signup.'
+  else if (url.includes('/d2d')) hint = 'The visitor is looking at D2D tools — roofing door-to-door sales. Emphasize map-based canvassing included free with the account.'
+  else if (url.includes('/solar')) hint = 'The visitor is looking at SOLAR features. Emphasize solar potential analysis inside every report + solar-design features.'
+  else if (url.includes('/proposal') || url.includes('/invoice')) hint = 'The visitor is looking at CRM / proposals / invoicing features. Emphasize built-in CRM suite included free.'
+  else if (url.includes('/sample') || url.includes('/demo')) hint = 'The visitor wants to see a sample or demo. Offer the sample report link and then ask for their email to send the PDF.'
+  else if (url === '/' || url === '') hint = 'The visitor is on the HOMEPAGE. Assume they are early-funnel; lead with the problem we solve (slow/expensive roof measurements) and the 4 free reports hook.'
+  return `\nPAGE CONTEXT: ${hint}\nAlways end with ONE concrete next step and a question — never a dead-end statement.\n`
+}
+
+// Parse Rover's reply for suggested CTAs so the widget can render them as
+// tappable buttons (much higher click-through than inline text links).
+function extractCtaSuggestions(reply: string): Array<{ label: string; action: string; value: string }> {
+  const ctas: Array<{ label: string; action: string; value: string }> = []
+  const lower = reply.toLowerCase()
+  const seen = new Set<string>()
+  const push = (cta: { label: string; action: string; value: string }) => {
+    const key = cta.action + '|' + cta.value
+    if (seen.has(key)) return
+    seen.add(key)
+    ctas.push(cta)
+  }
+  if (lower.includes('/customer/login') || lower.includes('sign up') || lower.includes('free report')) {
+    push({ label: '🎁 Start 4 free reports', action: 'link', value: '/customer/login' })
+  }
+  if (lower.includes('/pricing') || lower.includes('$8') || lower.includes('cost')) {
+    push({ label: '💰 See pricing', action: 'link', value: '/pricing' })
+  }
+  if (lower.includes('sample') || lower.includes('example report') || lower.includes('/customer/sample')) {
+    push({ label: '📄 View sample report', action: 'link', value: '/customer/sample' })
+  }
+  if (lower.includes('secretary') || lower.includes('answering') || lower.includes('receptionist')) {
+    push({ label: '📞 Try Roofer Secretary', action: 'link', value: '/ai-secretary' })
+  }
+  if (lower.includes('contact') || lower.includes('sales@') || lower.includes('talk to') || lower.includes('human')) {
+    push({ label: '✉️ Talk to a human', action: 'contact_form', value: '' })
+  }
+  return ctas.slice(0, 3)
+}
+
 // POST /api/rover/event — Top-of-funnel widget engagement beacon
 // Records widget_impression (page load) and widget_opened (bubble click).
 // UNIQUE(session_id, event_type) dedupes refreshes so counts are per-session.
@@ -486,7 +535,8 @@ roverRoutes.post('/event', async (c) => {
     const body = await c.req.json().catch(() => ({})) as any
     const { session_id, event_type, page_url, referrer } = body || {}
     if (!session_id || !event_type) return c.json({ ok: false }, 200)
-    if (event_type !== 'widget_impression' && event_type !== 'widget_opened') {
+    const allowed = new Set(['widget_impression', 'widget_opened', 'first_message_sent', 'cta_clicked', 'email_captured'])
+    if (!allowed.has(event_type)) {
       return c.json({ ok: false }, 200)
     }
     const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'unknown'
@@ -551,9 +601,10 @@ roverRoutes.post('/chat', async (c) => {
       LIMIT 20
     `).bind(conversationId).all()
 
-    // Build messages array for AI
+    // Build messages array for AI — include page-aware context
+    const pageCtx = buildPageContext(page_url)
     const messages: any[] = [
-      { role: 'system', content: ROVER_SYSTEM_PROMPT }
+      { role: 'system', content: ROVER_SYSTEM_PROMPT + pageCtx }
     ]
 
     // Check if this is the first user message (greeting context)
@@ -593,7 +644,9 @@ roverRoutes.post('/chat', async (c) => {
       // Extract lead info from the message
       await extractLeadInfo(c.env.DB, conversationId, message)
 
-      return c.json({ reply: result.content, session_id })
+      const ctas = extractCtaSuggestions(result.content)
+      const askEmail = isFirstMessage  // ask for email after the very first reply (before fallbacks)
+      return c.json({ reply: result.content, session_id, ctas, ask_email: askEmail })
 
     } catch (aiError: any) {
       // All AI models failed — use intelligent fallback
@@ -934,7 +987,8 @@ roverRoutes.post('/chat/stream', async (c) => {
       'SELECT role, content FROM rover_messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT 20'
     ).bind(conversationId).all()
 
-    const messages: any[] = [{ role: 'system', content: ROVER_SYSTEM_PROMPT }]
+    const pageCtx = buildPageContext(page_url)
+    const messages: any[] = [{ role: 'system', content: ROVER_SYSTEM_PROMPT + pageCtx }]
     const isFirstMessage = (history.results || []).filter((m: any) => m.role === 'user').length <= 1
     if (isFirstMessage) {
       messages.push({ role: 'assistant', content: "Hey there! 🐕 I'm Rover, your Roof Manager expert helper! How can I help you today?" })
@@ -1008,7 +1062,9 @@ roverRoutes.post('/chat/stream', async (c) => {
         fullContent.includes('fill out the contact form') ||
         fullContent.includes('contact form below')
 
-      await writer.write(encoder.encode(`data: ${JSON.stringify({ done: true, show_contact_form: showContactForm })}\n\n`))
+      const ctas = extractCtaSuggestions(fullContent)
+      const askEmail = isFirstMessage
+      await writer.write(encoder.encode(`data: ${JSON.stringify({ done: true, show_contact_form: showContactForm, ctas, ask_email: askEmail })}\n\n`))
       await writer.close()
     })()
 
