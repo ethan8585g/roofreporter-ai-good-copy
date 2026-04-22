@@ -70,7 +70,20 @@ function classifyNWSSeverity(severity: string, event: string): StormSeverity {
 // ------------------------------------------------------------
 export async function fetchNWSAlerts(): Promise<StormEvent[]> {
   const url = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert'
-  const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/geo+json' } })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 15000)
+  let res: Response
+  try {
+    res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': UA, Accept: 'application/geo+json' }
+    })
+  } catch (err: any) {
+    if (err?.name === 'AbortError') throw new Error('NWS alerts timeout after 15s')
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
   if (!res.ok) throw new Error(`NWS alerts HTTP ${res.status}`)
   const json: any = await res.json()
   const features: any[] = Array.isArray(json?.features) ? json.features : []
@@ -137,7 +150,23 @@ export async function fetchIEMLocalStormReports(daysBack: number): Promise<HailR
   // IEM LSR endpoint accepts sts/ets (start/end) in UTC as YYYYMMDDHHMM
   const utc = (d: Date) => d.toISOString().replace(/[-:T]/g, '').slice(0, 12)
   const url = `https://mesonet.agron.iastate.edu/geojson/lsr.geojson?sts=${utc(start)}&ets=${utc(now)}`
-  const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json' } })
+  // IEM LSR regularly takes 30s+ for a 7-day window. Cap the fetch at 25s so we
+  // fail cleanly (and let getHailReports serve stale cache) rather than running
+  // out the Workers wall-clock budget and returning an empty response.
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 25000)
+  let res: Response
+  try {
+    res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': UA, Accept: 'application/json' }
+    })
+  } catch (err: any) {
+    if (err?.name === 'AbortError') throw new Error('IEM LSR timeout after 25s')
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
   if (!res.ok) throw new Error(`IEM LSR HTTP ${res.status}`)
   const json: any = await res.json()
   const features: any[] = Array.isArray(json?.features) ? json.features : []
