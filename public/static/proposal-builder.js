@@ -2654,7 +2654,34 @@ document.addEventListener('DOMContentLoaded', () => {
               pbToast('Auto-added ' + state.form.items.length + ' materials from report', 'success');
             }
           }
-        } catch (e) { /* non-fatal — user can still add items manually */ }
+        } catch (e) { /* non-fatal — fallback below handles it */ }
+
+        // Fallback: if from-report-bundle didn't populate items (older reports
+        // may have empty trace_measurement.materials_estimate), build items
+        // directly from the report's own materials.line_items — same source
+        // the Material Calculator and the customer-facing proposal view use.
+        var itemsWerePopulated = state.form.items && state.form.items.length > 0 &&
+          state.form.items.some(function(it) { return it.description; });
+        if (!itemsWerePopulated && state.selectedReport && state.selectedReport.materials &&
+            Array.isArray(state.selectedReport.materials.line_items) &&
+            state.selectedReport.materials.line_items.length) {
+          var fallbackItems = state.selectedReport.materials.line_items
+            .filter(function(li) { return li && (li.description || li.category); })
+            .map(function(li) {
+              return {
+                description: li.description || li.category || '',
+                quantity: parseFloat(li.order_quantity) || 1,
+                unit: li.order_unit || 'each',
+                unit_price: parseFloat(li.unit_price_cad) || 0,
+                is_taxable: true,
+                category: 'material'
+              };
+            });
+          if (fallbackItems.length) {
+            state.form.items = fallbackItems;
+            pbToast('Loaded ' + fallbackItems.length + ' materials from report', 'success');
+          }
+        }
       }
 
       // Auto-apply pricing presets from settings when a report is selected
