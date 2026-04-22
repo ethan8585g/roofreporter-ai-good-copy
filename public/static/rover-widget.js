@@ -37,6 +37,27 @@
   }
   state.sessionId = getSessionId();
 
+  // Funnel beacon — fires once per session per event_type (server also dedupes)
+  function fireRoverEvent(eventType) {
+    try {
+      var key = 'rover_evt_' + eventType;
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, '1');
+      var payload = JSON.stringify({
+        session_id: state.sessionId,
+        event_type: eventType,
+        page_url: location.pathname + location.search,
+        referrer: document.referrer || ''
+      });
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/api/rover/event', new Blob([payload], { type: 'application/json' }));
+      } else {
+        fetch('/api/rover/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(function(){});
+      }
+    } catch (e) { /* best-effort */ }
+  }
+  fireRoverEvent('widget_impression');
+
   // ============================================================
   // INJECT STYLES
   // ============================================================
@@ -702,6 +723,7 @@
     greetingEl.classList.remove('show');
 
     if (state.open) {
+      fireRoverEvent('widget_opened');
       state.unread = 0;
       badgeEl.classList.remove('show');
 

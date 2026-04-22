@@ -478,6 +478,30 @@ async function executeAssistantTool(
 // PUBLIC ENDPOINTS — No auth required (visitor-facing)
 // ============================================================
 
+// POST /api/rover/event — Top-of-funnel widget engagement beacon
+// Records widget_impression (page load) and widget_opened (bubble click).
+// UNIQUE(session_id, event_type) dedupes refreshes so counts are per-session.
+roverRoutes.post('/event', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({})) as any
+    const { session_id, event_type, page_url, referrer } = body || {}
+    if (!session_id || !event_type) return c.json({ ok: false }, 200)
+    if (event_type !== 'widget_impression' && event_type !== 'widget_opened') {
+      return c.json({ ok: false }, 200)
+    }
+    const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'unknown'
+    const ua = c.req.header('user-agent') || 'unknown'
+    await c.env.DB.prepare(
+      `INSERT OR IGNORE INTO rover_widget_events (session_id, event_type, page_url, referrer, visitor_ip, user_agent)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).bind(session_id, event_type, page_url || null, referrer || null, ip, ua).run()
+    return c.json({ ok: true })
+  } catch (err: any) {
+    console.error('[Rover] /event error:', err?.message)
+    return c.json({ ok: false }, 200)
+  }
+})
+
 // POST /api/rover/chat — Send a message to Rover
 roverRoutes.post('/chat', async (c) => {
   try {

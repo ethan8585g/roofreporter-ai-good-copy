@@ -1884,13 +1884,30 @@ adminRoutes.get('/superadmin/inbox', async (c) => {
 
     const totalUnread = (unreadCounts.web_chat || 0) + (unreadCounts.sms || 0) + (unreadCounts.voicemail || 0)
 
+    // Web chat funnel — impressions → opens → conversations (rv_* sessions only, last 7d)
+    const webChatFunnel = { impressions_7d: 0, opens_7d: 0, conversations_7d: 0, conversion_rate: 0 }
+    try {
+      const [imp, opn, conv] = await Promise.all([
+        c.env.DB.prepare(`SELECT COUNT(*) as c FROM rover_widget_events WHERE event_type = 'widget_impression' AND created_at >= datetime('now', '-7 days')`).first<any>(),
+        c.env.DB.prepare(`SELECT COUNT(*) as c FROM rover_widget_events WHERE event_type = 'widget_opened' AND created_at >= datetime('now', '-7 days')`).first<any>(),
+        c.env.DB.prepare(`SELECT COUNT(*) as c FROM rover_conversations WHERE session_id LIKE 'rv_%' AND created_at >= datetime('now', '-7 days')`).first<any>(),
+      ])
+      webChatFunnel.impressions_7d = imp?.c || 0
+      webChatFunnel.opens_7d = opn?.c || 0
+      webChatFunnel.conversations_7d = conv?.c || 0
+      webChatFunnel.conversion_rate = webChatFunnel.impressions_7d > 0
+        ? Math.round((webChatFunnel.conversations_7d / webChatFunnel.impressions_7d) * 10000) / 100
+        : 0
+    } catch (e) { /* best-effort; table may not exist pre-migration */ }
+
     return c.json({
       conversations: paginated,
       total,
       offset,
       limit,
       unread: unreadCounts,
-      total_unread: totalUnread
+      total_unread: totalUnread,
+      web_chat_funnel: webChatFunnel
     })
   } catch (err: any) {
     return c.json({ error: err.message }, 500)

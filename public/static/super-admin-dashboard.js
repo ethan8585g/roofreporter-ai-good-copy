@@ -10655,6 +10655,38 @@ function renderInboxView() {
     listHtml += '</div>';
   }
 
+  // Web chat funnel (last 7 days) — impressions → opens → conversations
+  var fn = d.web_chat_funnel || { impressions_7d: 0, opens_7d: 0, conversations_7d: 0, conversion_rate: 0 };
+  var openRate = fn.impressions_7d > 0 ? Math.round((fn.opens_7d / fn.impressions_7d) * 1000) / 10 : 0;
+  var msgRate = fn.opens_7d > 0 ? Math.round((fn.conversations_7d / fn.opens_7d) * 1000) / 10 : 0;
+  var funnelHtml =
+    '<div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-4">' +
+      '<div class="flex items-center justify-between mb-3">' +
+        '<div>' +
+          '<h3 class="text-sm font-bold text-gray-900"><i class="fas fa-chart-line mr-1.5 text-blue-500"></i>Web Chat Funnel <span class="text-[10px] text-gray-400 font-normal">(last 7 days)</span></h3>' +
+          '<p class="text-[11px] text-gray-500 mt-0.5">Rover widget engagement across the site</p>' +
+        '</div>' +
+        '<span class="text-[11px] text-gray-500">Overall conversion: <strong class="text-gray-900">' + fn.conversion_rate + '%</strong></span>' +
+      '</div>' +
+      '<div class="grid grid-cols-3 gap-3">' +
+        '<div class="p-3 rounded-lg bg-blue-50 border border-blue-100">' +
+          '<div class="text-[10px] uppercase tracking-wide text-blue-700 font-bold">Impressions</div>' +
+          '<div class="text-2xl font-black text-blue-900 mt-0.5">' + (fn.impressions_7d || 0).toLocaleString() + '</div>' +
+          '<div class="text-[10px] text-blue-700 mt-0.5">visitors who saw the widget</div>' +
+        '</div>' +
+        '<div class="p-3 rounded-lg bg-indigo-50 border border-indigo-100">' +
+          '<div class="text-[10px] uppercase tracking-wide text-indigo-700 font-bold">Opens <span class="float-right">' + openRate + '%</span></div>' +
+          '<div class="text-2xl font-black text-indigo-900 mt-0.5">' + (fn.opens_7d || 0).toLocaleString() + '</div>' +
+          '<div class="text-[10px] text-indigo-700 mt-0.5">clicked the chat bubble</div>' +
+        '</div>' +
+        '<div class="p-3 rounded-lg bg-emerald-50 border border-emerald-100">' +
+          '<div class="text-[10px] uppercase tracking-wide text-emerald-700 font-bold">Conversations <span class="float-right">' + msgRate + '%</span></div>' +
+          '<div class="text-2xl font-black text-emerald-900 mt-0.5">' + (fn.conversations_7d || 0).toLocaleString() + '</div>' +
+          '<div class="text-[10px] text-emerald-700 mt-0.5">sent at least one message</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
   return '<div class="mb-5">' +
     '<div class="flex items-center justify-between mb-1">' +
       '<h2 class="text-2xl font-black text-gray-900"><i class="fas fa-inbox mr-2 text-slate-600"></i>Inbox</h2>' +
@@ -10662,6 +10694,7 @@ function renderInboxView() {
     '</div>' +
     '<p class="text-sm text-gray-500">All conversations across web chat, calls, messages, callbacks, and leads</p>' +
   '</div>' +
+  funnelHtml +
   // Unread summary cards
   '<div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">' +
     samc('Active Chats', unread.web_chat || 0, 'fa-comments', 'blue') +
