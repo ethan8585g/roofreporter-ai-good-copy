@@ -261,7 +261,7 @@
       html += '<div class="bg-[#111111] rounded-xl border overflow-hidden overflow-x-auto"><table class="w-full text-sm"><thead class="bg-[#0A0A0A]"><tr><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Name</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Company</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden lg:table-cell">Phone</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden lg:table-cell">Email</th><th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">Status</th><th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">Revenue</th><th class="px-4 py-3"></th></tr></thead><tbody class="divide-y divide-gray-50">';
       for (var i = 0; i < customers.length; i++) {
         var c = customers[i];
-        html += '<tr class="hover:bg-[#111111]/5 cursor-pointer" onclick="window._crmViewCustomer(' + c.id + ')"><td class="px-4 py-3 font-medium" style="color:var(--text-primary)">' + c.name + '</td><td class="px-4 py-3 text-gray-500 hidden md:table-cell">' + (c.company || '-') + '</td><td class="px-4 py-3 text-gray-500 hidden lg:table-cell">' + (c.phone || '-') + '</td><td class="px-4 py-3 text-gray-500 hidden lg:table-cell">' + (c.email || '-') + '</td><td class="px-4 py-3 text-center">' + badge(c.status) + '</td><td class="px-4 py-3 text-right font-semibold text-gray-300">' + money(c.lifetime_value) + '</td><td class="px-4 py-3 text-right"><button onclick="event.stopPropagation();window._crmEditCustomer(' + c.id + ')" class="text-gray-400 hover:text-brand-600"><i class="fas fa-pencil-alt"></i></button></td></tr>';
+        html += '<tr class="hover:bg-[#111111]/5 cursor-pointer" onclick="window._crmViewCustomer(' + c.id + ')"><td class="px-4 py-3 font-medium" style="color:#f3f4f6">' + c.name + '</td><td class="px-4 py-3 hidden md:table-cell" style="color:#d1d5db">' + (c.company || '-') + '</td><td class="px-4 py-3 hidden lg:table-cell" style="color:#d1d5db">' + (c.phone || '-') + '</td><td class="px-4 py-3 hidden lg:table-cell" style="color:#d1d5db">' + (c.email || '-') + '</td><td class="px-4 py-3 text-center">' + badge(c.status) + '</td><td class="px-4 py-3 text-right font-semibold" style="color:#f3f4f6">' + money(c.lifetime_value) + '</td><td class="px-4 py-3 text-right"><button onclick="event.stopPropagation();window._crmEditCustomer(' + c.id + ')" style="color:#d1d5db" class="hover:text-brand-600"><i class="fas fa-pencil-alt"></i></button></td></tr>';
       }
       html += '</tbody></table></div>';
     }
@@ -2090,13 +2090,13 @@
         html += '<div class="flex items-start gap-4 px-5 py-4 hover:bg-white/5 cursor-pointer" onclick="window._crmViewJob(' + j.id + ')">';
         html += '<div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ' + jobTypeColor(j.job_type) + '"><i class="fas ' + jobTypeIcon(j.job_type) + ' text-sm"></i></div>';
         html += '<div class="flex-1 min-w-0">';
-        html += '<p class="text-sm font-semibold text-gray-100 truncate">' + (j.title || 'Untitled') + '</p>';
-        if (j.customer_name) html += '<p class="text-xs text-gray-400 mt-0.5"><i class="fas fa-user mr-1"></i>' + j.customer_name + '</p>';
-        if (j.property_address) html += '<p class="text-xs text-gray-500 mt-0.5 truncate"><i class="fas fa-map-marker-alt mr-1"></i>' + j.property_address + '</p>';
+        html += '<p class="text-sm font-semibold truncate" style="color:#f3f4f6">' + (j.title || 'Untitled') + '</p>';
+        if (j.customer_name) html += '<p class="text-xs mt-0.5" style="color:#e5e7eb"><i class="fas fa-user mr-1"></i>' + j.customer_name + '</p>';
+        if (j.property_address) html += '<p class="text-xs mt-0.5 truncate" style="color:#d1d5db"><i class="fas fa-map-marker-alt mr-1"></i>' + j.property_address + '</p>';
         html += '</div>';
         html += '<div class="text-right flex-shrink-0">';
-        if (j.scheduled_date) html += '<p class="text-xs text-gray-400">' + j.scheduled_date + '</p>';
-        if (j.scheduled_time) html += '<p class="text-xs text-gray-500">' + j.scheduled_time.substring(0, 5) + '</p>';
+        if (j.scheduled_date) html += '<p class="text-xs" style="color:#e5e7eb">' + j.scheduled_date + '</p>';
+        if (j.scheduled_time) html += '<p class="text-xs" style="color:#d1d5db">' + j.scheduled_time.substring(0, 5) + '</p>';
         html += '</div>';
         html += '</div>';
       }
