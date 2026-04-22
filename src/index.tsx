@@ -33,6 +33,7 @@ import { pushRoutes as stormPushRoutes } from './routes/push'
 import { leadCaptureRoutes } from './routes/lead-capture'
 import { secretaryRoutes } from './routes/secretary'
 import { roverRoutes } from './routes/rover'
+import { fieldLogRoutes } from './routes/field-log'
 import { emailOutreachRoutes } from './routes/email-outreach'
 import { notifySalesNewLead } from './services/email'
 import { analyticsRoutes } from './routes/analytics'
@@ -406,6 +407,7 @@ app.route('/api/storm-push', stormPushRoutes)
 app.route('/api', leadCaptureRoutes)
 app.route('/api/secretary', secretaryRoutes)
 app.route('/api/rover', roverRoutes)
+app.route('/', fieldLogRoutes)
 app.route('/api/email-outreach', emailOutreachRoutes)
 app.route('/api/analytics', analyticsRoutes)
 app.route('/api/virtual-tryon', virtualTryonRoutes)
