@@ -142,11 +142,22 @@
         '</div>';
       if (window.innerWidth >= 900) classes.push('rm-desktop');
     } else if (variant === 'ios') {
-      // iPhone/iPad: show arrow pointing to Share button; instructions are obvious from position
+      // iPhone/iPad: arrow points at Share button + numbered steps + Got it button
       classes.push(isIPad ? 'rm-anchor-top' : 'rm-anchor-bottom-arrow');
-      subHtml = 'Tap <b>⬆︎ Share</b>' +
-        (isIPad ? ' at the top' : ' below') +
-        ', then <b>Add to Home Screen</b>.';
+      var sharePosition = isIPad ? 'at the top' : 'at the bottom';
+      subHtml = 'Install Roof Manager to your Home Screen — no App Store needed.';
+      stepsHtml =
+        '<div class="rm-steps">' +
+          '<ol>' +
+            '<li>Tap the <b>Share</b> button ' + sharePosition + ' of Safari (square with ↑).</li>' +
+            '<li>Scroll down and tap <b>Add to Home Screen</b>.</li>' +
+            '<li>Tap <b>Add</b> in the top-right corner.</li>' +
+          '</ol>' +
+        '</div>';
+      actionsHtml =
+        '<div class="rm-actions">' +
+          '<button class="rm-btn-secondary" type="button" data-action="later" style="flex:1">Got it</button>' +
+        '</div>';
     } else if (variant === 'mac-safari') {
       // macOS Safari has NO JS install API — instructions only, rendered inline
       classes.push('rm-desktop');
@@ -212,11 +223,31 @@
   }
 
   function triggerNativeInstall() {
-    if (!deferredPrompt) { dismiss(); return; }
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.then(function () {
-      dismiss();
+    if (!deferredPrompt) { swapToFallback(); return; }
+    try {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(function () {
+        dismiss();
+        deferredPrompt = null;
+      }, function () {
+        deferredPrompt = null;
+      });
+    } catch (err) {
       deferredPrompt = null;
+      swapToFallback();
+    }
+  }
+
+  function swapToFallback() {
+    if (!bannerEl || !bannerEl.parentNode) return;
+    var newEl = buildBanner('desktop-chromium-fallback');
+    bannerEl.parentNode.replaceChild(newEl, bannerEl);
+    bannerEl = newEl;
+    void bannerEl.offsetHeight;
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        if (bannerEl) bannerEl.classList.add('show');
+      });
     });
   }
 
