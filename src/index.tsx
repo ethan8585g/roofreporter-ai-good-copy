@@ -725,7 +725,7 @@ app.get('/dashboard', (c) => c.redirect('/customer/dashboard'))
 // /register — standalone signup page (first-class funnel entry)
 app.get('/register', (c) => {
   const email = c.req.query('email') || ''
-  const googleClientId = (c.env as any).GOOGLE_OAUTH_CLIENT_ID || ''
+  const googleClientId = (c.env as any).GOOGLE_OAUTH_CLIENT_ID || (c.env as any).GMAIL_CLIENT_ID || ''
   const previewId = c.req.query('preview_id') || ''
   const refCode = c.req.query('ref') || ''
   return c.html(getCustomerRegisterPageHTML(email, googleClientId, previewId, refCode))
@@ -908,7 +908,7 @@ app.get('/reset-password', (c) => {
 
 // Customer Login/Register Page (email/password)
 app.get('/customer/login', (c) => {
-  const googleClientId = (c.env as any).GOOGLE_OAUTH_CLIENT_ID || ''
+  const googleClientId = (c.env as any).GOOGLE_OAUTH_CLIENT_ID || (c.env as any).GMAIL_CLIENT_ID || ''
   return c.html(getCustomerLoginHTML(googleClientId))
 })
 
