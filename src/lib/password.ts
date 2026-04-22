@@ -5,8 +5,15 @@
 //   - <saltUuid>:<hashHex>                    (SHA-256 + salt concat)
 //   - <sha256Hex>                             (SHA-256 + hardcoded 'roofreporter_salt_2024')
 
-const NEW_PREFIX = 'pbkdf2$sha512$600000$'
-const NEW_ITERATIONS = 600_000
+// Cloudflare Workers' Web Crypto caps PBKDF2 iterations at 100,000. Anything
+// higher throws "iteration counts above 100000 are not supported" at runtime,
+// which silently breaks hashPassword() (and verifyPassword() for any hash
+// stored at the old cap). Keep iterations at the Workers ceiling.
+const NEW_PREFIX = 'pbkdf2$sha512$100000$'
+const NEW_ITERATIONS = 100_000
+// Accept hashes written under the previous (broken) 600k prefix so anyone who
+// somehow has one stored can still verify — we'll never issue one going forward.
+const LEGACY_NEW_PREFIX_600K = 'pbkdf2$sha512$600000$'
 const LEGACY_HARDCODED_SALT = 'roofreporter_salt_2024'
 
 function b64encode(bytes: Uint8Array): string {
@@ -66,15 +73,22 @@ export async function hashPassword(plain: string): Promise<string> {
 export async function verifyPassword(plain: string, stored: string): Promise<boolean> {
   if (!stored) return false
 
-  // New format: pbkdf2$sha512$600000$<saltB64>$<hashB64>
-  if (stored.startsWith(NEW_PREFIX)) {
-    const rest = stored.slice(NEW_PREFIX.length)
+  // New format: pbkdf2$sha512$100000$<saltB64>$<hashB64>
+  // Also accept legacy 600k-prefix hashes (which never actually verified on
+  // Workers, but tolerate them defensively).
+  const matchedPrefix = stored.startsWith(NEW_PREFIX)
+    ? { prefix: NEW_PREFIX, iterations: NEW_ITERATIONS }
+    : stored.startsWith(LEGACY_NEW_PREFIX_600K)
+      ? { prefix: LEGACY_NEW_PREFIX_600K, iterations: 600_000 }
+      : null
+  if (matchedPrefix) {
+    const rest = stored.slice(matchedPrefix.prefix.length)
     const idx = rest.indexOf('$')
     if (idx < 0) return false
     try {
       const salt = b64decode(rest.slice(0, idx))
       const expected = b64decode(rest.slice(idx + 1))
-      const derived = await pbkdf2Sha512(plain, salt, NEW_ITERATIONS, expected.length * 8)
+      const derived = await pbkdf2Sha512(plain, salt, matchedPrefix.iterations, expected.length * 8)
       return timingSafeEq(b64encode(derived), b64encode(expected))
     } catch {
       return false
