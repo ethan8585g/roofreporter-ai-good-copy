@@ -1,5 +1,5 @@
-// RC#4: Bumped from v2 to v3 to force-purge stale landing page cache in Safari
-const CACHE_NAME = 'roofmanager-v3';
+// RC#5: Bumped to v4 to force-refresh cached install banner script
+const CACHE_NAME = 'roofmanager-v4';
 
 // RC#4: Removed '/' from precache — always serve fresh HTML for navigation requests
 const PRECACHE_URLS = [

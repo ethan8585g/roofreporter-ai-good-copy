@@ -338,7 +338,7 @@ window.fireMetaContactEvent=function(d){if(typeof fbq==='function')fbq('track','
 <script src="/static/toast.js"></script>
 <script src="/static/tracker.js" defer></script>
 <script src="/static/exit-intent.js" defer></script>
-<script src="/static/ios-install-banner.js" defer></script>
+<script src="/static/ios-install-banner.js?v=2" defer></script>
 <!-- rm-analytics-widgets-injected -->
 </body>`)
       c.res = new Response(injected, {
