@@ -28,20 +28,19 @@ async function getOwnerId(c: any): Promise<number | null> {
 // Returns owner id AND whether financial fields should be hidden for this caller.
 // Admin sessions never hide; customer sessions hide when the user lacks view_financials.
 async function getOwnerAndPerms(c: any): Promise<{ ownerId: number; hideMoney: boolean } | null> {
-  const auth = c.req.header('Authorization')
-  if (!auth || !auth.startsWith('Bearer ')) return null
-  const token = auth.slice(7)
-
-  const session = await c.env.DB.prepare(
-    "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
-  ).bind(token).first<any>()
-  if (session) {
-    const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
-    const perms = await loadPermissionContext(c.env.DB, session.customer_id)
-    return { ownerId, hideMoney: !can(perms, 'view_financials') }
+  const token = getCustomerSessionToken(c)
+  if (token) {
+    const session = await c.env.DB.prepare(
+      "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+    ).bind(token).first<any>()
+    if (session) {
+      const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
+      const perms = await loadPermissionContext(c.env.DB, session.customer_id)
+      return { ownerId, hideMoney: !can(perms, 'view_financials') }
+    }
   }
 
-  const admin = await validateAdminSession(c.env.DB, auth)
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (admin) return { ownerId: 1000000 + admin.id, hideMoney: false }
 
   return null
