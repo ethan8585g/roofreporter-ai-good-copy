@@ -6857,7 +6857,14 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     #announcement-bar .close-bar { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 18px; color: #0A0A0A; opacity: 0.6; padding: 4px 6px; line-height: 1; }
     .landing-nav { top: 40px; }
     .landing-nav.bar-hidden { top: 0; }
-  </style>
+    /* Features nav dropdown (scoped, replaces Tailwind named-group classes not in compiled CSS) */
+    .rm-features-dd > .rm-features-panel { opacity: 0; visibility: hidden; transition: opacity 0.2s ease, visibility 0.2s ease; }
+    .rm-features-dd:hover > .rm-features-panel,
+    .rm-features-dd:focus-within > .rm-features-panel { opacity: 1; visibility: visible; }
+    .rm-features-dd .rm-features-chevron { transition: transform 0.2s ease; }
+    .rm-features-dd:hover .rm-features-chevron,
+    .rm-features-dd:focus-within .rm-features-chevron { transform: rotate(180deg); }
+</style>
   <noscript><style>.scroll-animate { opacity: 1 !important; transform: none !important; }</style></noscript>
 </head>
 <body class="min-h-screen" style="background:var(--bg-page)">
@@ -6884,9 +6891,9 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <a href="/how-it-works" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">How It Works</a>
         <a href="/guides" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Tutorials</a>
         <!-- Features dropdown -->
-        <div class="relative group/nav">
-          <button class="flex items-center gap-1 text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Features <i class="fas fa-chevron-down text-[10px] group-hover/nav:rotate-180 transition-transform duration-200"></i></button>
-          <div class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 bg-[#111111] border border-white/10 rounded-xl shadow-2xl opacity-0 invisible group-hover/nav:opacity-100 group-hover/nav:visible transition-all duration-200 z-50 py-2">
+        <div class="relative rm-features-dd">
+          <button class="flex items-center gap-1 text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Features <i class="fas fa-chevron-down text-[10px] rm-features-chevron"></i></button>
+          <div class="rm-features-panel absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 bg-[#111111] border border-white/10 rounded-xl shadow-2xl z-50 py-2">
             <div class="px-4 pt-2 pb-1 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">For Roofing Companies</div>
             <a href="/features/measurements" class="flex items-start gap-2.5 px-4 py-2.5 text-gray-400 hover:text-white hover:bg-white/5 text-sm transition-colors"><i class="fas fa-satellite text-[#00FF88] w-4 text-xs mt-1"></i><span><span class="block font-medium">Xactimate Measurement Reports</span><span class="block text-[11px] text-gray-500">Satellite roof reports for roofers</span></span></a>
             <a href="/features/crm" class="flex items-start gap-2.5 px-4 py-2.5 text-gray-400 hover:text-white hover:bg-white/5 text-sm transition-colors"><i class="fas fa-users text-[#22d3ee] w-4 text-xs mt-1"></i><span><span class="block font-medium">Roofing Company CRM</span><span class="block text-[11px] text-gray-500">Full pipeline, jobs &amp; invoicing</span></span></a>
