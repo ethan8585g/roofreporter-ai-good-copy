@@ -75,6 +75,7 @@ const SA_SECTIONS = {
     tabs: [
       { id: 'aiops-overview', label: 'Overview', icon: 'fa-tachometer-alt' },
       { id: 'secretary-admin', label: 'Secretary', icon: 'fa-phone-volume' },
+      { id: 'secretary-billing', label: 'Secretary Billing', icon: 'fa-dollar-sign' },
       { id: 'call-center', label: 'Call Center', icon: 'fa-headset' },
       { id: 'aiops-agents', label: 'Agents', icon: 'fa-brain' },
       { id: 'aiops-voice', label: 'Voice & Avatars', icon: 'fa-video' }
@@ -577,6 +578,20 @@ async function loadView(view) {
           console.warn('Secretary admin load error:', secErr);
         }
         break;
+      case 'secretary-billing':
+        try {
+          const [sbStatsRes, sbSubsRes, sbEventsRes] = await Promise.all([
+            saFetch('/api/admin/superadmin/secretary/stats'),
+            saFetch('/api/admin/superadmin/secretary/subscriptions?limit=200'),
+            saFetch('/api/admin/superadmin/secretary/billing-events?limit=200'),
+          ]);
+          if (sbStatsRes) SA.data.sb_stats = await sbStatsRes.json();
+          if (sbSubsRes) SA.data.sb_subs = await sbSubsRes.json();
+          if (sbEventsRes) SA.data.sb_events = await sbEventsRes.json();
+        } catch(sbErr) {
+          console.warn('Secretary billing load error:', sbErr);
+        }
+        break;
       case 'secretary-manager':
         // Reset sub-view to list when navigating from sidebar (not from internal navigation)
         if (!SA.smView || SA.smView === 'list') SA.smView = 'list';
@@ -815,6 +830,7 @@ function renderContent() {
     case 'call-center': root.innerHTML = tabBar; break; // Handled by call-center.js
     case 'meta-connect': root.innerHTML = tabBar; break; // Handled by meta-connect.js
     case 'secretary-admin': root.innerHTML = tabBar + renderSecretaryAdminView(); break;
+    case 'secretary-billing': root.innerHTML = tabBar + renderSecretaryBillingView(); break;
     case 'secretary-manager': root.innerHTML = tabBar + renderSecretaryManagerView(); break;
     case 'secretary-monitor': root.innerHTML = tabBar + renderSecretaryMonitorView(); break;
     case 'secretary-revenue': root.innerHTML = tabBar + renderSecretaryRevenueView(); break;
@@ -3743,6 +3759,104 @@ async function activatePackage(id) {
   }
 }
 window.activatePackage = activatePackage;
+
+// ============================================================
+// VIEW: SECRETARY BILLING — Trial/Subscription/Phone tracking
+// ============================================================
+function renderSecretaryBillingView() {
+  const stats = SA.data.sb_stats || {};
+  const subs = (SA.data.sb_subs || {}).subscriptions || [];
+  const events = (SA.data.sb_events || {}).events || [];
+
+  const byStatus = {};
+  (stats.by_status || []).forEach(function(r) { byStatus[r.status] = Number(r.count || 0); });
+  const phoneByProvider = {};
+  (stats.phone_numbers || []).forEach(function(r) { phoneByProvider[r.provider] = Number(r.count || 0); });
+
+  function fmtMoney(cents) { return '$' + (Number(cents || 0) / 100).toFixed(2); }
+  function fmtDate(d) { if (!d) return '—'; try { return new Date(d).toISOString().slice(0, 10); } catch { return String(d); } }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
+  function statusPill(s) {
+    const map = {
+      trialing: 'bg-sky-100 text-sky-700',
+      active: 'bg-emerald-100 text-emerald-700',
+      past_due: 'bg-amber-100 text-amber-700',
+      cancelled: 'bg-gray-100 text-gray-500',
+      paused: 'bg-violet-100 text-violet-700',
+      pending: 'bg-gray-100 text-gray-500',
+    };
+    return '<span class="px-2 py-0.5 rounded-full text-xs font-semibold ' + (map[s] || 'bg-gray-100 text-gray-500') + '">' + esc(s || 'unknown') + '</span>';
+  }
+
+  const statCard = function(label, value, icon, tint) {
+    return '<div class="bg-white border border-gray-200 rounded-xl p-4">' +
+      '<div class="flex items-center gap-2 text-xs text-gray-500"><i class="fas ' + icon + ' ' + (tint || 'text-gray-500') + '"></i>' + esc(label) + '</div>' +
+      '<div class="text-2xl font-extrabold text-gray-900 mt-1">' + esc(String(value)) + '</div></div>';
+  };
+
+  const statsRow =
+    '<div class="grid grid-cols-2 md:grid-cols-5 gap-3">' +
+      statCard('MRR', fmtMoney((stats.mrr_cents || 0)), 'fa-dollar-sign', 'text-emerald-500') +
+      statCard('Trialing', byStatus.trialing || 0, 'fa-gift', 'text-sky-500') +
+      statCard('Active', byStatus.active || 0, 'fa-check-circle', 'text-emerald-500') +
+      statCard('Past Due', byStatus.past_due || 0, 'fa-exclamation-triangle', 'text-amber-500') +
+      statCard('Conversion', ((stats.conversion_rate || 0) * 100).toFixed(1) + '%', 'fa-arrow-up', 'text-indigo-500') +
+    '</div>';
+
+  const phoneRow =
+    '<div class="grid grid-cols-2 md:grid-cols-3 gap-3">' +
+      statCard('Telnyx #s assigned', phoneByProvider.telnyx || 0, 'fa-phone-alt', 'text-sky-500') +
+      statCard('Twilio #s assigned', phoneByProvider.twilio || 0, 'fa-phone-alt', 'text-red-500') +
+      statCard('LiveKit direct', phoneByProvider.livekit || 0, 'fa-phone-alt', 'text-violet-500') +
+    '</div>';
+
+  const tableRows = subs.map(function(s) {
+    const phone = s.phone_number ? s.phone_number + (s.phone_provider ? ' (' + s.phone_provider + ')' : '') : '—';
+    const card = s.card_last4 ? (s.card_brand || '') + ' •••• ' + s.card_last4 : '—';
+    return '<tr class="border-b border-gray-100 hover:bg-gray-50">' +
+      '<td class="px-3 py-2 text-xs">' + esc(s.email || '') + '<div class="text-gray-400">' + esc(s.company_name || s.name || '') + '</div></td>' +
+      '<td class="px-3 py-2">' + statusPill(s.status) + '</td>' +
+      '<td class="px-3 py-2 text-xs text-gray-700">' + fmtDate(s.trial_ends_at) + '</td>' +
+      '<td class="px-3 py-2 text-xs text-gray-700">' + fmtMoney(s.monthly_price_cents) + '/mo</td>' +
+      '<td class="px-3 py-2 text-xs text-gray-700">' + esc(card) + '</td>' +
+      '<td class="px-3 py-2 text-xs text-gray-700">' + esc(phone) + '</td>' +
+      '<td class="px-3 py-2 text-xs text-gray-500 text-right">' + (Number(s.call_count || 0)) + '</td>' +
+    '</tr>';
+  }).join('');
+
+  const subsTable = subs.length
+    ? '<div class="bg-white border border-gray-200 rounded-xl overflow-hidden"><div class="overflow-x-auto"><table class="w-full text-sm">' +
+        '<thead class="bg-gray-50 text-xs uppercase text-gray-500"><tr>' +
+          '<th class="px-3 py-2 text-left">Customer</th>' +
+          '<th class="px-3 py-2 text-left">Status</th>' +
+          '<th class="px-3 py-2 text-left">Trial ends</th>' +
+          '<th class="px-3 py-2 text-left">Price</th>' +
+          '<th class="px-3 py-2 text-left">Card</th>' +
+          '<th class="px-3 py-2 text-left">Phone #</th>' +
+          '<th class="px-3 py-2 text-right">Calls</th>' +
+        '</tr></thead>' +
+        '<tbody>' + tableRows + '</tbody>' +
+      '</table></div></div>'
+    : '<div class="bg-white border border-gray-200 rounded-xl p-8 text-center text-gray-400 text-sm">No subscriptions yet.</div>';
+
+  const eventsList = events.slice(0, 50).map(function(e) {
+    var meta = '';
+    try { meta = JSON.stringify(JSON.parse(e.metadata || '{}')); } catch { meta = ''; }
+    return '<div class="flex items-center justify-between py-2 text-xs border-b border-gray-100">' +
+      '<div><span class="font-semibold text-gray-800">' + esc(e.event_type) + '</span>' +
+      '<span class="text-gray-400 ml-2">customer #' + e.customer_id + '</span></div>' +
+      '<div class="text-gray-500">' + fmtDate(e.created_at) + '</div></div>';
+  }).join('');
+
+  return '<div class="slide-in space-y-6">' +
+    '<div><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-dollar-sign mr-2 text-emerald-600"></i>Secretary Billing</h2>' +
+    '<p class="text-sm text-gray-500 mt-1">Every trial, subscription, card, and phone number purchase — audit-ready.</p></div>' +
+    statsRow + phoneRow +
+    '<div><div class="text-xs text-gray-500 uppercase font-semibold mb-2">All subscriptions</div>' + subsTable + '</div>' +
+    '<div><div class="text-xs text-gray-500 uppercase font-semibold mb-2">Recent billing events</div>' +
+      '<div class="bg-white border border-gray-200 rounded-xl p-4">' + (eventsList || '<div class="text-gray-400 text-sm text-center py-4">No events yet.</div>') + '</div></div>' +
+  '</div>';
+}
 
 // ============================================================
 // VIEW: ROOFER SECRETARY AI — Admin Management Dashboard

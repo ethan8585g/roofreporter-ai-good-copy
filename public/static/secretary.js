@@ -124,6 +124,12 @@
       }
     } catch(e) {}
 
+    // Load trial / subscription billing status
+    try {
+      var resT = await fetch('/api/secretary/trial-status', { headers: authOnly() });
+      if (resT.ok) state.trial = await resT.json();
+    } catch(e) {}
+
     // Load leads count
     try {
       var res4 = await fetch('/api/secretary/leads?limit=1', { headers: authOnly() });
@@ -160,7 +166,22 @@
     }
     if (!state.hasActive) { renderSubscriptionPage(); return; }
 
-    root.innerHTML =
+    var trial = state.trial || {};
+    var banner = '';
+    if (trial.status === 'trialing' && trial.trial_days_remaining != null) {
+      var daysLeft = trial.trial_days_remaining;
+      banner = '<div class="bg-gradient-to-r from-[#0e1d34] to-[#0b1628] border border-sky-500/40 rounded-xl p-4 mb-4 flex items-center justify-between gap-3">' +
+        '<div class="flex items-center gap-3"><i class="fas fa-gift text-sky-400 text-xl"></i>' +
+        '<div><div class="text-sm font-bold text-sky-200">Free trial active — ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' left</div>' +
+        '<div class="text-xs text-gray-400">Your card ending in ' + (trial.card_last4 || '••••') + ' will be charged $149 on ' + (trial.next_charge_date || trial.trial_ends_at) + '.</div></div></div>' +
+        '<button onclick="secCancelSubscription()" class="text-xs text-red-300 hover:text-red-200 underline">Cancel before renewal</button></div>';
+    } else if (trial.status === 'past_due') {
+      banner = '<div class="bg-red-500/10 border border-red-500/40 rounded-xl p-4 mb-4 text-red-200 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Your last payment failed. Please update your card to avoid cancellation.</div>';
+    } else if (trial.status === 'active' && trial.card_last4) {
+      banner = '<div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 mb-4 text-emerald-200 text-xs"><i class="fas fa-check-circle mr-2"></i>Subscribed &bull; $149/mo &bull; Card ••• ' + trial.card_last4 + '</div>';
+    }
+
+    root.innerHTML = banner +
       '<div class="flex flex-wrap gap-2 mb-6">' +
         tabBtn('setup', 'fa-cog', 'Setup & Config') +
         tabBtn('connect', 'fa-phone-alt', 'Connect Phone') +
@@ -196,10 +217,9 @@
   window.secSetTab = function(t) { state.activeTab = t; render(); if (t === 'calls') loadCalls(); if (t === 'leads') loadLeads(); if (t === 'messages') loadAndRenderMessages(); if (t === 'appointments') loadAndRenderAppointments(); if (t === 'callbacks') loadAndRenderCallbacks(); };
 
   // ============================================================
-  // SUBSCRIPTION PAGE — Contact Us for Enrolment
+  // TRIAL SIGNUP PAGE — 1-month free trial, card on file, then $149/mo
   // ============================================================
   function renderSubscriptionPage() {
-    // Pre-fill from customer data if available
     var custData = {};
     try { custData = JSON.parse(localStorage.getItem('rc_customer') || '{}'); } catch(e) {}
 
@@ -209,16 +229,16 @@
           '<div class="w-20 h-20 bg-[#111111]/20 rounded-2xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-headset text-4xl"></i></div>' +
           '<h2 class="text-2xl sm:text-3xl font-extrabold mb-2">Roofer Secretary</h2>' +
           '<p class="text-sky-100 text-base sm:text-lg">AI-Powered Phone Answering Service</p>' +
-          '<p class="text-sky-200 text-sm mt-2">Never miss a customer call again. AI answers <strong>only when you can\'t</strong> — your phone rings first. Works with your existing business number.</p>' +
+          '<p class="text-sky-200 text-sm mt-2">Never miss a customer call again. Start with a <strong>1-month free trial</strong> — cancel anytime before renewal.</p>' +
         '</div>' +
 
         '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-4 sm:p-6 mb-6">' +
           '<h3 class="font-bold text-gray-100 text-lg mb-4"><i class="fas fa-check-circle text-green-500 mr-2"></i>What You Get</h3>' +
           '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
-            feature('fa-phone-alt', 'Keep Your Number', 'Connects to your existing business phone — no new number needed') +
-            feature('fa-user-clock', 'Answers Only If You Can\'t', 'Your phone rings first. AI only picks up when you miss or are busy — like a real secretary') +
-            feature('fa-sms', 'SMS Call Summary', 'Get a text with a full transcript and summary after every AI-handled call') +
-            feature('fa-route', 'Smart Routing', 'Route callers to Parts, Sales, Service, etc.') +
+            feature('fa-phone-alt', 'Keep Your Number', 'Or pick a new one from our inventory ($1/mo add-on)') +
+            feature('fa-user-clock', 'Answers When You Can\'t', 'Your phone rings first. AI picks up only when you miss the call') +
+            feature('fa-sms', 'SMS Call Summary', 'Full transcript and summary texted after every AI-handled call') +
+            feature('fa-route', 'Smart Routing', 'Route callers to Parts, Sales, Service, or any custom department') +
             feature('fa-comment-dots', 'Custom Greeting', 'Your business, your script, your personality') +
             feature('fa-question-circle', 'FAQ Handling', 'AI answers common questions automatically') +
           '</div>' +
@@ -227,43 +247,117 @@
         '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-4 sm:p-6 mb-6">' +
           '<h3 class="font-bold text-gray-100 text-lg mb-4"><i class="fas fa-plug text-sky-500 mr-2"></i>How It Works</h3>' +
           '<div class="space-y-4">' +
-            howStep(1, 'Request Enrolment', 'Fill out the form below and our team will contact you to get started.') +
-            howStep(2, 'Personalized Setup', 'We\'ll configure your AI secretary with your greeting script, FAQ answers, and call routing departments.') +
-            howStep(3, 'Connect Your Phone', 'Enter your business phone number and verify. Your AI secretary goes live instantly.') +
-            howStep(4, 'AI Answers When You Can\'t', 'Your phone rings first. If you don\'t answer, the AI picks up, greets the caller, answers questions, routes to departments, and takes messages.') +
+            howStep(1, 'Add Your Card', 'We need a card on file to start the free trial. You won\'t be charged until day 31.') +
+            howStep(2, 'Configure Your Agent', 'Set your greeting, agent voice, FAQ answers, and routing directly in your dashboard.') +
+            howStep(3, 'Pick a Phone Number', 'Get a new number from our inventory for $1/mo, or use your existing business line.') +
+            howStep(4, 'Go Live', 'Forward unanswered calls to your Secretary. AI handles them with your voice and brand.') +
           '</div>' +
         '</div>' +
 
-        // ── Contact Us for Enrolment Form ──
+        // ── Start Free Trial form ──
         '<div class="bg-[#111111] rounded-2xl border-2 border-sky-500 shadow-lg p-4 sm:p-6 mb-6">' +
           '<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">' +
-            '<div><h3 class="font-bold text-gray-100 text-xl"><i class="fas fa-paper-plane text-sky-500 mr-2"></i>Contact Us for Enrolment</h3><p class="text-gray-500 text-sm mt-1">Our team will personally set up your AI Secretary</p></div>' +
-            '<div class="text-right"><div class="text-2xl sm:text-3xl font-extrabold text-sky-600">$249<span class="text-sm font-normal text-gray-500">/mo CAD</span></div></div>' +
+            '<div><h3 class="font-bold text-gray-100 text-xl"><i class="fas fa-gift text-sky-500 mr-2"></i>Start Your Free Trial</h3>' +
+              '<p class="text-gray-500 text-sm mt-1">1 month free &bull; Card on file required &bull; Then $149/mo &bull; Cancel anytime</p></div>' +
+            '<div class="text-right"><div class="text-2xl sm:text-3xl font-extrabold text-sky-400">$0<span class="text-sm font-normal text-gray-500"> for 30 days</span></div>' +
+              '<div class="text-xs text-gray-400">then $149/mo</div></div>' +
           '</div>' +
-          '<div id="enrollFormContainer">' +
-            '<div class="space-y-4">' +
-              '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">' +
-                '<div><label class="block text-sm font-medium text-gray-300 mb-1">Full Name *</label>' +
-                  '<input type="text" id="enrollName" value="' + (custData.name || '') + '" class="w-full px-4 py-3 border border-white/15 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none" placeholder="John Smith"></div>' +
-                '<div><label class="block text-sm font-medium text-gray-300 mb-1">Email *</label>' +
-                  '<input type="email" id="enrollEmail" value="' + (custData.email || '') + '" class="w-full px-4 py-3 border border-white/15 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none" placeholder="john@roofingco.com"></div>' +
-              '</div>' +
-              '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">' +
-                '<div><label class="block text-sm font-medium text-gray-300 mb-1">Phone Number</label>' +
-                  '<input type="tel" id="enrollPhone" value="' + (custData.phone || '') + '" class="w-full px-4 py-3 border border-white/15 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none" placeholder="(780) 555-0123"></div>' +
-                '<div><label class="block text-sm font-medium text-gray-300 mb-1">Company Name</label>' +
-                  '<input type="text" id="enrollCompany" value="' + (custData.company_name || custData.brand_business_name || '') + '" class="w-full px-4 py-3 border border-white/15 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none" placeholder="ABC Roofing Ltd."></div>' +
-              '</div>' +
-              '<div><label class="block text-sm font-medium text-gray-300 mb-1">Message (optional)</label>' +
-                '<textarea id="enrollMessage" rows="3" class="w-full px-4 py-3 border border-white/15 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none resize-none" placeholder="Tell us about your business and how many calls you typically receive..."></textarea></div>' +
-            '</div>' +
-            '<button onclick="secSubmitEnrollment()" id="enrollBtn" class="w-full mt-4 py-4 bg-gradient-to-r from-[#111111] to-[#1a1a1a] text-white rounded-xl font-bold text-lg hover:from-sky-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl">' +
-              '<i class="fas fa-paper-plane mr-2"></i>Request Enrolment</button>' +
+          '<div class="space-y-3 mb-4">' +
+            '<div class="flex items-start gap-2 text-sm text-gray-300"><i class="fas fa-shield-alt text-emerald-400 mt-1"></i><div><strong>Secure card entry.</strong> Card is tokenized by Square. We never see your card number.</div></div>' +
+            '<div class="flex items-start gap-2 text-sm text-gray-300"><i class="fas fa-calendar-alt text-emerald-400 mt-1"></i><div><strong>Auto-reminder.</strong> We email you 3 days before the trial ends.</div></div>' +
+            '<div class="flex items-start gap-2 text-sm text-gray-300"><i class="fas fa-times-circle text-emerald-400 mt-1"></i><div><strong>Cancel anytime</strong> from your dashboard — no charge if you cancel before day 31.</div></div>' +
           '</div>' +
+          '<div id="squareCardContainer" class="mb-3 p-3 bg-[#0A0A0A] border border-white/10 rounded-xl min-h-[60px]"></div>' +
+          '<div id="trialError" class="text-red-400 text-sm mb-3 hidden"></div>' +
+          '<input type="text" id="trialCardholder" placeholder="Cardholder name" value="' + (custData.name || '') + '" class="w-full px-4 py-3 mb-3 border border-white/15 bg-[#0A0A0A] rounded-xl text-sm text-gray-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none">' +
+          '<button onclick="secStartTrial()" id="trialBtn" disabled class="w-full py-4 bg-gradient-to-r from-[#111111] to-[#1a1a1a] text-white rounded-xl font-bold text-lg hover:from-sky-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed">' +
+            '<i class="fas fa-spinner fa-spin mr-2"></i>Loading secure card form…</button>' +
         '</div>' +
-        '<p class="text-center text-xs text-gray-400 mb-8"><i class="fas fa-shield-alt mr-1"></i>Our team will contact you within 24 hours &bull; Powered by LiveKit AI</p>' +
+        '<p class="text-center text-xs text-gray-400 mb-8"><i class="fas fa-lock mr-1"></i>PCI-secure payments by Square &bull; Powered by LiveKit AI</p>' +
       '</div>';
+
+    // Mount Square Web Payments SDK card element.
+    mountSquareCardForm();
   }
+
+  // ── Square Web Payments SDK loader + card mount ──
+  var _sqCard = null;
+  var _sqPayments = null;
+  function loadSquareSDK() {
+    return new Promise(function(resolve, reject) {
+      if (window.Square) return resolve(window.Square);
+      var script = document.createElement('script');
+      script.src = 'https://web.squarecdn.com/v1/square.js';
+      script.onload = function() { resolve(window.Square); };
+      script.onerror = function() { reject(new Error('Failed to load Square SDK')); };
+      document.head.appendChild(script);
+    });
+  }
+
+  async function mountSquareCardForm() {
+    var container = document.getElementById('squareCardContainer');
+    var btn = document.getElementById('trialBtn');
+    var err = document.getElementById('trialError');
+    if (!container) return;
+    try {
+      // Fetch the (public) Square Application ID + Location ID from backend-rendered window globals.
+      var appId = window.SQUARE_APPLICATION_ID || '';
+      var locationId = window.SQUARE_LOCATION_ID || '';
+      if (!appId || !locationId) {
+        try {
+          var cfg = await fetch('/api/config/client').then(function(r) { return r.json(); });
+          appId = cfg.square_application_id; locationId = cfg.square_location_id;
+        } catch (_) {}
+      }
+      if (!appId || !locationId) {
+        if (err) { err.textContent = 'Payments temporarily unavailable. Please contact support.'; err.classList.remove('hidden'); }
+        return;
+      }
+      var Square = await loadSquareSDK();
+      _sqPayments = Square.payments(appId, locationId);
+      _sqCard = await _sqPayments.card();
+      await _sqCard.attach('#squareCardContainer');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-gift mr-2"></i>Start 1-Month Free Trial';
+      }
+    } catch (e) {
+      if (err) { err.textContent = 'Card form failed to load: ' + (e.message || e); err.classList.remove('hidden'); }
+    }
+  }
+
+  window.secStartTrial = async function() {
+    var btn = document.getElementById('trialBtn');
+    var err = document.getElementById('trialError');
+    var cardholderEl = document.getElementById('trialCardholder');
+    if (!_sqCard) { if (err) { err.textContent = 'Card form not ready yet'; err.classList.remove('hidden'); } return; }
+    if (!cardholderEl || !cardholderEl.value.trim()) {
+      if (err) { err.textContent = 'Enter the cardholder name'; err.classList.remove('hidden'); } return;
+    }
+    if (err) err.classList.add('hidden');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing…';
+    try {
+      var result = await _sqCard.tokenize();
+      if (result.status !== 'OK') throw new Error(result.errors && result.errors[0] && result.errors[0].message || 'Card tokenization failed');
+      var res = await fetch('/api/secretary/start-trial', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({
+          cardNonce: result.token,
+          cardholderName: cardholderEl.value.trim(),
+          verificationToken: result.verificationToken,
+        }),
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Trial signup failed');
+      showToast('Free trial started! Your trial ends ' + (data.trial_ends_at || 'in 30 days'), 'success');
+      await loadStatus();
+    } catch (e) {
+      if (err) { err.textContent = e.message || String(e); err.classList.remove('hidden'); }
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-gift mr-2"></i>Start 1-Month Free Trial';
+    }
+  };
 
   function feature(icon, title, desc) {
     return '<div class="flex items-start gap-3 p-3 bg-[#0A0A0A] rounded-xl">' +
@@ -718,7 +812,22 @@
             '<div class="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
               '<i class="fas fa-mobile-alt text-sky-500 text-2xl"></i></div>' +
             '<h4 class="text-xl font-extrabold text-gray-100 mb-2">Set Up Your Phone Numbers</h4>' +
-            '<p class="text-gray-500 text-sm">Enter your regular business cell number and the AI phone number you purchased from Twilio, Vonage, or Telnyx.</p>' +
+            '<p class="text-gray-500 text-sm">Get a new number from our inventory for $1/mo, or bring your own from Twilio / Vonage / Telnyx.</p>' +
+          '</div>' +
+
+          // Self-serve number picker (Telnyx)
+          '<div class="mb-5 bg-gradient-to-br from-[#0b2237] to-[#0a1525] border border-sky-500/30 rounded-2xl p-4">' +
+            '<div class="flex items-center justify-between mb-2">' +
+              '<div><div class="text-sm font-bold text-sky-200"><i class="fas fa-bolt mr-1"></i>Get a new number — $1/mo</div>' +
+              '<div class="text-xs text-gray-400">We handle the provider, routing, and LiveKit wiring. Just pick one.</div></div>' +
+              '<button onclick="secOpenNumberPicker()" class="text-xs bg-sky-500 hover:bg-sky-600 text-white rounded-lg px-3 py-2 font-semibold"><i class="fas fa-search mr-1"></i>Browse Numbers</button>' +
+            '</div>' +
+            '<details class="mt-2"><summary class="text-xs text-gray-400 cursor-pointer hover:text-gray-200">How does this work?</summary>' +
+              '<div class="text-xs text-gray-400 mt-2 space-y-1">' +
+                '<p>1. Pick a number in any area code.</p>' +
+                '<p>2. We buy it from our provider and attach it to your AI agent automatically — no SIP config needed on your end.</p>' +
+                '<p>3. The $1/mo number fee is added to your Secretary subscription. First month is covered by your free trial.</p>' +
+              '</div></details>' +
           '</div>' +
 
           // Business Phone Number
@@ -2221,6 +2330,93 @@
     }
     testState.processing = false;
   }
+
+  // ============================================================
+  // TELNYX NUMBER PICKER MODAL + SUBSCRIPTION CANCEL
+  // ============================================================
+  window.secOpenNumberPicker = function() {
+    var existing = document.getElementById('numberPickerModal');
+    if (existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = 'numberPickerModal';
+    modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4';
+    modal.innerHTML =
+      '<div class="bg-[#0A0A0A] border border-white/10 rounded-2xl max-w-xl w-full p-6 max-h-[85vh] overflow-y-auto">' +
+        '<div class="flex items-center justify-between mb-4">' +
+          '<div><h3 class="text-lg font-bold text-gray-100"><i class="fas fa-phone-alt text-sky-400 mr-2"></i>Pick a Phone Number</h3>' +
+          '<p class="text-xs text-gray-400">$1/mo &bull; wired to your AI agent automatically</p></div>' +
+          '<button onclick="document.getElementById(\'numberPickerModal\').remove()" class="text-gray-400 hover:text-gray-200"><i class="fas fa-times text-xl"></i></button>' +
+        '</div>' +
+        '<div class="flex gap-2 mb-3">' +
+          '<select id="npCountry" class="px-3 py-2 bg-[#111111] border border-white/15 rounded-lg text-sm text-gray-100">' +
+            '<option value="US">United States</option><option value="CA">Canada</option>' +
+          '</select>' +
+          '<input id="npAreaCode" type="text" maxlength="3" placeholder="Area code (optional)" class="flex-1 px-3 py-2 bg-[#111111] border border-white/15 rounded-lg text-sm text-gray-100">' +
+          '<button onclick="secSearchNumbers()" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-sm font-semibold"><i class="fas fa-search mr-1"></i>Search</button>' +
+        '</div>' +
+        '<div id="npResults" class="space-y-2"><div class="text-xs text-gray-400 text-center py-6">Choose a country and optional area code, then search.</div></div>' +
+      '</div>';
+    document.body.appendChild(modal);
+  };
+
+  window.secSearchNumbers = async function() {
+    var resultsEl = document.getElementById('npResults');
+    if (!resultsEl) return;
+    var country = (document.getElementById('npCountry') || {}).value || 'US';
+    var areaCode = ((document.getElementById('npAreaCode') || {}).value || '').replace(/\D/g, '').slice(0, 3);
+    resultsEl.innerHTML = '<div class="text-center py-6"><i class="fas fa-spinner fa-spin text-sky-400"></i></div>';
+    try {
+      var qs = 'country=' + country + (areaCode ? '&areaCode=' + areaCode : '') + '&limit=20';
+      var res = await fetch('/api/secretary/numbers/search?' + qs, { headers: authOnly() });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Search failed');
+      if (!data.items || !data.items.length) {
+        resultsEl.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm">No numbers available for that area. Try another area code.</div>';
+        return;
+      }
+      resultsEl.innerHTML = data.items.map(function(n) {
+        var pretty = n.phone_number.replace(/^\+?1?(\d{3})(\d{3})(\d{4})$/, '+1 ($1) $2-$3');
+        return '<div class="flex items-center justify-between bg-[#111111] border border-white/10 rounded-xl px-4 py-3">' +
+          '<div><div class="font-mono text-gray-100">' + pretty + '</div>' +
+          '<div class="text-xs text-gray-400">' + (n.locality || '') + (n.region ? (n.locality ? ', ' : '') + n.region : '') + ' &bull; $1/mo</div></div>' +
+          '<button onclick="secBuyNumber(\'' + n.phone_number + '\')" class="text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-3 py-1.5 font-semibold">Buy & attach</button>' +
+        '</div>';
+      }).join('');
+    } catch (e) {
+      resultsEl.innerHTML = '<div class="text-center py-6 text-red-400 text-sm">' + (e.message || String(e)) + '</div>';
+    }
+  };
+
+  window.secBuyNumber = async function(phoneNumber) {
+    if (!confirm('Purchase ' + phoneNumber + ' for $1/mo? This number will become your Secretary\'s AI phone number and attach to LiveKit automatically.')) return;
+    try {
+      var res = await fetch('/api/secretary/numbers/purchase', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ phone_number: phoneNumber }),
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Purchase failed');
+      showToast('Number purchased and wired to your AI agent!', 'success');
+      var modal = document.getElementById('numberPickerModal');
+      if (modal) modal.remove();
+      await loadStatus();
+    } catch (e) {
+      showToast(e.message || 'Purchase failed', 'error');
+    }
+  };
+
+  window.secCancelSubscription = async function() {
+    if (!confirm('Cancel your Roofer Secretary subscription? You can keep using it until the end of your current trial/billing period, then it will stop.')) return;
+    try {
+      var res = await fetch('/api/secretary/cancel', { method: 'POST', headers: authHeaders() });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Cancel failed');
+      showToast('Subscription cancelled. Service will continue until the period ends.', 'info');
+      await loadStatus();
+    } catch (e) {
+      showToast(e.message || 'Cancel failed', 'error');
+    }
+  };
 
   init();
 })();

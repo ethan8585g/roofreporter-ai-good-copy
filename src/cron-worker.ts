@@ -87,6 +87,110 @@ async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number
   return { sent, skipped }
 }
 
+// ── Roofer Secretary trial management ─────────────────────────────────────────
+// Sends a day-25 reminder email via Resend and auto-cancels past_due subscriptions
+// that have been stuck for more than 7 days. Square handles the actual day-31
+// charge automatically via the subscription start_date; the webhook flips status.
+async function runSecretaryTrialManagement(env: Bindings): Promise<{ remindersSent: number; pastDueCancelled: number }> {
+  const db = (env as any).DB
+  const resendKey = (env as any).RESEND_API_KEY
+  let remindersSent = 0
+  let pastDueCancelled = 0
+
+  // 1. Trial ending in 2–3 days → reminder email (idempotent via billing event log).
+  try {
+    const rows = await db.prepare(`
+      SELECT ss.id, ss.customer_id, ss.trial_ends_at, ss.card_last4, c.email, c.name
+      FROM secretary_subscriptions ss
+      JOIN customers c ON c.id = ss.customer_id
+      WHERE ss.status = 'trialing'
+        AND ss.trial_ends_at IS NOT NULL
+        AND datetime(ss.trial_ends_at) BETWEEN datetime('now','+2 days') AND datetime('now','+3 days')
+        AND NOT EXISTS (
+          SELECT 1 FROM secretary_billing_events sbe
+          WHERE sbe.customer_id = ss.customer_id AND sbe.event_type = 'trial_ending_soon'
+            AND sbe.created_at > datetime('now','-7 days')
+        )
+      LIMIT 100
+    `).all<any>()
+
+    for (const row of (rows.results || [])) {
+      if (!resendKey || !row.email) continue
+      const html = `
+        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
+          <h2 style="color:#0A0A0A">Your Roofer Secretary trial ends in 3 days</h2>
+          <p style="color:#374151">Hi ${row.name || 'there'},</p>
+          <p style="color:#374151">
+            Your 1-month free trial of Roofer Secretary ends on <strong>${row.trial_ends_at}</strong>.
+            On that date we'll charge the card ending in ${row.card_last4 || '••••'} <strong>$149</strong> for your first monthly subscription.
+          </p>
+          <p style="color:#374151">
+            Want to keep answering every call with AI? There's nothing to do — service continues automatically.
+            Want to cancel? Just visit your Secretary dashboard and hit Cancel before ${row.trial_ends_at}.
+          </p>
+          <a href="https://www.roofmanager.ca/customer/secretary" style="display:inline-block;background:#00FF88;color:#0A0A0A;font-weight:700;padding:14px 28px;border-radius:10px;text-decoration:none">Open Secretary Dashboard →</a>
+          <p style="color:#9ca3af;font-size:12px;margin-top:24px">Roof Manager · roofmanager.ca</p>
+        </div>`
+      try {
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: 'Roof Manager <noreply@roofmanager.ca>',
+            to: [row.email],
+            subject: 'Your Roofer Secretary trial ends in 3 days',
+            html,
+          }),
+        })
+        if (res.ok) {
+          await db.prepare(
+            `INSERT INTO secretary_billing_events (customer_id, event_type, metadata) VALUES (?, 'trial_ending_soon', ?)`
+          ).bind(row.customer_id, JSON.stringify({ trial_ends_at: row.trial_ends_at })).run()
+          remindersSent++
+        }
+      } catch (err: any) {
+        console.warn('[secretary-cron] reminder send failed:', err?.message)
+      }
+    }
+  } catch (err: any) {
+    console.warn('[secretary-cron] reminder sweep failed:', err?.message)
+  }
+
+  // 2. Past-due > 7 days → auto-cancel.
+  try {
+    const stale = await db.prepare(`
+      SELECT ss.id, ss.customer_id, ss.square_subscription_id
+      FROM secretary_subscriptions ss
+      WHERE ss.status = 'past_due'
+        AND datetime(ss.updated_at) < datetime('now','-7 days')
+      LIMIT 50
+    `).all<any>()
+
+    for (const row of (stale.results || [])) {
+      try {
+        // Cancel in Square (lazy-import to avoid top-level deps).
+        if (row.square_subscription_id) {
+          const mod = await import('./services/square-subscriptions')
+          await mod.cancelSubscription(env as any, row.square_subscription_id)
+        }
+        await db.prepare(
+          `UPDATE secretary_subscriptions SET status='cancelled', cancelled_at=datetime('now'), updated_at=datetime('now') WHERE id = ?`
+        ).bind(row.id).run()
+        await db.prepare(
+          `INSERT INTO secretary_billing_events (customer_id, event_type, metadata) VALUES (?, 'auto_cancelled_past_due', ?)`
+        ).bind(row.customer_id, JSON.stringify({ square_subscription_id: row.square_subscription_id })).run()
+        pastDueCancelled++
+      } catch (err: any) {
+        console.warn(`[secretary-cron] past-due cancel failed for sub ${row.id}:`, err?.message)
+      }
+    }
+  } catch (err: any) {
+    console.warn('[secretary-cron] past-due sweep failed:', err?.message)
+  }
+
+  return { remindersSent, pastDueCancelled }
+}
+
 export default {
   // No-op fetch handler — this worker only exists for cron
   async fetch(): Promise<Response> {
@@ -212,6 +316,19 @@ export default {
           console.log(`[CRON:signup-recovery] Sent ${result.sent}, skipped ${result.skipped}`)
         } catch (err: any) {
           console.error('[CRON:signup-recovery] Error:', err.message)
+        }
+      })())
+    }
+
+    // ── Roofer Secretary trial management (daily at 15:00 UTC = 8am Mountain) ──
+    // Fires a reminder 3 days before trial end + cancels past_due subs >7 days old.
+    if (hour === 15 && minute < 10) {
+      ctx.waitUntil((async () => {
+        try {
+          const result = await runSecretaryTrialManagement(env)
+          console.log(`[CRON:secretary] Reminders: ${result.remindersSent}, past-due cancelled: ${result.pastDueCancelled}`)
+        } catch (err: any) {
+          console.error('[CRON:secretary] Error:', err.message)
         }
       })())
     }

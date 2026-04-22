@@ -2,15 +2,25 @@
 // Roof Manager — Roofer Secretary AI Phone Answering Service
 // Powered by LiveKit.io
 // ============================================================
-// POST /api/secretary/subscribe        — Create $249/mo Square subscription
-// GET  /api/secretary/status           — Get subscription + config status
-// POST /api/secretary/config           — Save/update phone config
-// GET  /api/secretary/config           — Get current config
-// PUT  /api/secretary/directories      — Save directories (2-4)
-// GET  /api/secretary/directories      — Get directories
-// GET  /api/secretary/calls            — Get call log history
-// POST /api/secretary/toggle           — Activate/deactivate service
-// POST /api/secretary/livekit-token    — Generate LiveKit agent token
+// Self-serve signup (1-month free trial + card on file, then $149/mo):
+//   POST /api/secretary/start-trial      — Save card + create Square subscription
+//   GET  /api/secretary/trial-status     — Days remaining, next charge date
+//   POST /api/secretary/cancel           — Cancel subscription (stays active to period end)
+//
+// Per-customer Telnyx phone number ($1/mo) wired into shared LiveKit SIP trunk:
+//   GET  /api/secretary/numbers/search   — List Telnyx available numbers
+//   POST /api/secretary/numbers/purchase — Buy + attach to LiveKit
+//   POST /api/secretary/numbers/release  — Release back to Telnyx
+//
+// Existing routes (unchanged):
+//   GET  /api/secretary/status           — Get subscription + config status
+//   POST /api/secretary/config           — Save/update phone config
+//   GET  /api/secretary/config           — Get current config
+//   PUT  /api/secretary/directories      — Save directories (2-4)
+//   GET  /api/secretary/directories      — Get directories
+//   GET  /api/secretary/calls            — Get call log history
+//   POST /api/secretary/toggle           — Activate/deactivate service
+//   POST /api/secretary/livekit-token    — Generate LiveKit agent token
 // ============================================================
 
 import { Hono } from 'hono'
@@ -18,6 +28,8 @@ import { getCustomerSessionToken } from '../lib/session-tokens'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 import { isDevAccount } from './customer-auth'
+import * as SquareSubs from '../services/square-subscriptions'
+import * as Telnyx from '../services/telnyx'
 
 export const secretaryRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -123,113 +135,229 @@ async function generateLiveKitToken(apiKey: string, apiSecret: string, identity:
 }
 
 // ============================================================
-// POST /subscribe — Create Square Checkout for $249/mo subscription
-// Square doesn't have native recurring billing via payment links,
-// so we create a one-time $249 payment and manage renewal internally
-// Currency: CAD for Canadian visitors, USD for American visitors (same $249 amount)
+// Helper: log a secretary billing event (used by trial/subscription flows)
 // ============================================================
-secretaryRoutes.post('/subscribe', async (c) => {
+async function logBillingEvent(
+  db: any,
+  customerId: number,
+  eventType: string,
+  opts?: { amountCents?: number; squareEventId?: string; metadata?: any },
+) {
+  try {
+    await db.prepare(
+      `INSERT INTO secretary_billing_events (customer_id, event_type, square_event_id, amount_cents, metadata)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind(
+      customerId,
+      eventType,
+      opts?.squareEventId || null,
+      opts?.amountCents ?? null,
+      opts?.metadata ? JSON.stringify(opts.metadata) : null,
+    ).run()
+  } catch (err: any) {
+    console.error('[secretary] logBillingEvent failed:', err?.message)
+  }
+}
+
+// ============================================================
+// POST /start-trial — Card-on-file + Square Subscription with 30-day free trial
+// Body: { cardNonce: string, cardholderName?: string, verificationToken?: string }
+//   cardNonce comes from the Square Web Payments SDK running in the browser.
+// Result: subscription row with status='trialing', trial_ends_at=today+30d,
+//   Square subscription scheduled to auto-charge on day 31 at $149/mo.
+// ============================================================
+secretaryRoutes.post('/start-trial', async (c) => {
   const customerId = c.get('customerId' as any) as number
+  const customerEmail = c.get('customerEmail' as any) as string
   const accessToken = c.env.SQUARE_ACCESS_TOKEN
   const locationId = c.env.SQUARE_LOCATION_ID
   if (!accessToken || !locationId) return c.json({ error: 'Square not configured' }, 500)
 
-  try {
-    // Check if already subscribed
-    const existing = await c.env.DB.prepare(
-      `SELECT id, status, stripe_subscription_id FROM secretary_subscriptions WHERE customer_id = ? AND status IN ('active', 'pending') ORDER BY id DESC LIMIT 1`
-    ).bind(customerId).first<any>()
+  let body: any = {}
+  try { body = await c.req.json() } catch {}
+  const cardNonce = (body.cardNonce || '').toString().trim()
+  const cardholderName = (body.cardholderName || '').toString().trim() || undefined
+  const verificationToken = (body.verificationToken || '').toString().trim() || undefined
+  if (!cardNonce) return c.json({ error: 'cardNonce is required (tokenize the card via Square Web SDK)' }, 400)
 
-    if (existing?.status === 'active') {
-      return c.json({ error: 'You already have an active Roofer Secretary subscription', subscription: existing }, 400)
+  try {
+    // Reject duplicate active/trialing subscriptions.
+    const existing = await c.env.DB.prepare(
+      `SELECT id, status, square_subscription_id, trial_ends_at FROM secretary_subscriptions
+       WHERE customer_id = ? AND status IN ('active','trialing','pending','past_due')
+       ORDER BY id DESC LIMIT 1`
+    ).bind(customerId).first<any>()
+    if (existing && existing.status !== 'pending') {
+      return c.json({ error: `You already have a ${existing.status} Roofer Secretary subscription.`, subscription: existing }, 400)
     }
 
-    // Get customer info
+    // Load customer details for Square record.
     const customer = await c.env.DB.prepare(
-      `SELECT email, name, square_customer_id FROM customers WHERE id = ?`
+      `SELECT email, name, company_name, phone, square_customer_id FROM customers WHERE id = ?`
     ).bind(customerId).first<any>()
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
 
-    // Get the origin for success/cancel URLs
-    const origin = new URL(c.req.url).origin
+    const email = customer.email || customerEmail
+    const [givenName, ...rest] = (customer.name || '').split(' ')
+    const familyName = rest.join(' ') || undefined
 
-    // Detect country from Cloudflare headers for currency selection
-    // Same $249 price — CAD for Canadians, USD for Americans
-    const cfCountry = (c.req.header('cf-ipcountry') || 'CA').toUpperCase()
-    const currency = cfCountry === 'US' ? 'USD' : 'CAD'
-    const currencyLabel = currency === 'USD' ? 'USD' : 'CAD'
-
-    // Create Square Payment Link for secretary subscription ($249/mo)
-    const idempotencyKey = `secretary-${customerId}-${Date.now()}`
-    const paymentLink = await squareAPI(accessToken, 'POST', '/online-checkout/payment-links', {
-      idempotency_key: idempotencyKey,
-      quick_pay: {
-        name: `Roofer Secretary — AI Phone Answering Service (Monthly, ${currencyLabel})`,
-        price_money: {
-          amount: 24900, // $249.00
-          currency: currency,
-        },
-        location_id: locationId,
-      },
-      checkout_options: {
-        redirect_url: `${origin}/customer/secretary?setup=true&session_id=square`,
-        ask_for_shipping_address: false,
-      },
-      payment_note: `Roofer Secretary subscription for ${customer.email} (Customer #${customerId}) — $249/${currencyLabel}`,
+    // 1. Ensure Square customer.
+    const sqCustomerId = await SquareSubs.createCustomer(c.env, {
+      emailAddress: email,
+      givenName: givenName || undefined,
+      familyName,
+      companyName: customer.company_name || undefined,
+      phoneNumber: customer.phone || undefined,
     })
 
-    if (paymentLink.errors) {
-      return c.json({ error: paymentLink.errors[0]?.detail || 'Square payment link failed' }, 400)
+    // Persist square_customer_id on customers table for reuse.
+    if (!customer.square_customer_id) {
+      try {
+        await c.env.DB.prepare(`UPDATE customers SET square_customer_id = ? WHERE id = ?`)
+          .bind(sqCustomerId, customerId).run()
+      } catch {}
     }
 
-    const link = paymentLink.payment_link
-
-    // Record pending subscription
-    await c.env.DB.prepare(
-      `INSERT INTO secretary_subscriptions (customer_id, status, stripe_subscription_id) VALUES (?, 'pending', ?)`
-    ).bind(customerId, link?.order_id || link?.id || '').run()
-
-    return c.json({
-      checkout_url: link?.url || link?.long_url,
-      session_id: link?.id,
+    // 2. Save card.
+    const card = await SquareSubs.saveCard(c.env, {
+      customerId: sqCustomerId,
+      sourceId: cardNonce,
+      cardholderName,
+      verificationToken,
     })
-  } catch (err: any) {
-    console.error('[Secretary Subscribe]', err)
-    return c.json({ error: 'Failed to create subscription', details: err.message }, 500)
-  }
-})
 
-// ============================================================
-// POST /verify-session — Verify Square Checkout completed
-// ============================================================
-secretaryRoutes.post('/verify-session', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-  const { session_id } = await c.req.json()
-  if (!session_id) return c.json({ error: 'Missing data' }, 400)
+    // 3. Ensure the $149/mo plan variation exists.
+    const planVariationId = await SquareSubs.ensurePlan(c.env)
 
-  try {
-    // For Square, we activate the pending subscription on redirect
-    // The webhook will confirm the payment separately
+    // 4. Create subscription with start_date = today + 30 days (= free trial).
+    const trialEndDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const sub = await SquareSubs.createSubscription(c.env, {
+      customerId: sqCustomerId,
+      cardId: card.cardId,
+      planVariationId,
+      startDate: trialEndDate,
+    })
+
+    // 5. Persist trial state.
+    const nowIso = new Date().toISOString()
     await c.env.DB.prepare(
-      `UPDATE secretary_subscriptions SET status = 'active', current_period_start = datetime('now'), current_period_end = datetime('now', '+30 days'), updated_at = datetime('now') WHERE customer_id = ? AND status = 'pending'`
-    ).bind(customerId).run()
+      `INSERT INTO secretary_subscriptions (
+         customer_id, status, monthly_price_cents,
+         trial_started_at, trial_ends_at,
+         square_customer_id, square_subscription_id, square_card_id,
+         card_brand, card_last4,
+         current_period_start, current_period_end
+       ) VALUES (?, 'trialing', 14900, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      customerId,
+      nowIso,
+      trialEndDate,
+      sqCustomerId,
+      sub.subscriptionId,
+      card.cardId,
+      card.brand,
+      card.last4,
+      nowIso,
+      trialEndDate,
+    ).run()
 
-    // Create default config if none exists
-    const existingConfig = await c.env.DB.prepare(
-      `SELECT id FROM secretary_config WHERE customer_id = ?`
-    ).bind(customerId).first<any>()
-
+    // Create default config if missing so the rest of the Secretary UI works immediately.
+    const existingConfig = await c.env.DB.prepare(`SELECT id FROM secretary_config WHERE customer_id = ?`).bind(customerId).first<any>()
     if (!existingConfig) {
       await c.env.DB.prepare(
         `INSERT INTO secretary_config (customer_id, business_phone, greeting_script) VALUES (?, '', '')`
       ).bind(customerId).run()
     }
 
-    return c.json({ status: 'active', message: 'Subscription activated!' })
+    await logBillingEvent(c.env.DB, customerId, 'trial_started', {
+      metadata: { square_subscription_id: sub.subscriptionId, trial_ends_at: trialEndDate, card_last4: card.last4 },
+    })
+    await logBillingEvent(c.env.DB, customerId, 'card_saved', {
+      metadata: { card_brand: card.brand, last4: card.last4 },
+    })
+
+    return c.json({
+      status: 'trialing',
+      trial_ends_at: trialEndDate,
+      next_charge_date: trialEndDate,
+      card_last4: card.last4,
+      card_brand: card.brand,
+      square_subscription_id: sub.subscriptionId,
+    })
   } catch (err: any) {
-    console.error('[Secretary Verify]', err)
-    return c.json({ error: 'Verification failed', details: err.message }, 500)
+    console.error('[Secretary StartTrial]', err)
+    return c.json({ error: err?.message || 'Failed to start trial' }, 500)
   }
+})
+
+// ============================================================
+// GET /trial-status — Days remaining, next charge date, card on file
+// ============================================================
+secretaryRoutes.get('/trial-status', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const row = await c.env.DB.prepare(
+    `SELECT status, trial_ends_at, current_period_end, card_last4, card_brand, square_subscription_id, comp_until
+     FROM secretary_subscriptions
+     WHERE customer_id = ?
+     ORDER BY id DESC LIMIT 1`
+  ).bind(customerId).first<any>()
+
+  if (!row) return c.json({ status: 'none' })
+
+  let daysRemaining: number | null = null
+  const now = Date.now()
+  if (row.status === 'trialing' && row.trial_ends_at) {
+    const endMs = new Date(row.trial_ends_at).getTime()
+    daysRemaining = Math.max(0, Math.ceil((endMs - now) / (24 * 60 * 60 * 1000)))
+  }
+
+  return c.json({
+    status: row.status,
+    trial_ends_at: row.trial_ends_at,
+    trial_days_remaining: daysRemaining,
+    next_charge_date: row.trial_ends_at || row.current_period_end,
+    card_brand: row.card_brand,
+    card_last4: row.card_last4,
+    comp_until: row.comp_until,
+  })
+})
+
+// ============================================================
+// POST /cancel — Cancel the Square subscription (stays active to period end)
+// ============================================================
+secretaryRoutes.post('/cancel', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const row = await c.env.DB.prepare(
+    `SELECT id, square_subscription_id FROM secretary_subscriptions
+     WHERE customer_id = ? AND status IN ('trialing','active','past_due')
+     ORDER BY id DESC LIMIT 1`
+  ).bind(customerId).first<any>()
+  if (!row?.square_subscription_id) return c.json({ error: 'No active subscription to cancel' }, 400)
+
+  try {
+    await SquareSubs.cancelSubscription(c.env, row.square_subscription_id)
+    await c.env.DB.prepare(
+      `UPDATE secretary_subscriptions SET status='cancelled', cancelled_at=datetime('now'), updated_at=datetime('now') WHERE id = ?`
+    ).bind(row.id).run()
+    await logBillingEvent(c.env.DB, customerId, 'cancelled', { metadata: { square_subscription_id: row.square_subscription_id } })
+    return c.json({ status: 'cancelled' })
+  } catch (err: any) {
+    console.error('[Secretary Cancel]', err)
+    return c.json({ error: err?.message || 'Failed to cancel' }, 500)
+  }
+})
+
+// ============================================================
+// POST /verify-session — Back-compat shim for legacy Square payment-link flow.
+// The new /start-trial flow doesn't need a post-redirect verify; this route
+// stays so old bookmarks don't 404.
+// ============================================================
+secretaryRoutes.post('/verify-session', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const row = await c.env.DB.prepare(
+    `SELECT status FROM secretary_subscriptions WHERE customer_id = ? ORDER BY id DESC LIMIT 1`
+  ).bind(customerId).first<any>()
+  return c.json({ status: row?.status || 'none' })
 })
 
 // ============================================================
@@ -2966,4 +3094,177 @@ secretaryRoutes.get('/quick-connect/status', async (c) => {
     forwarding_code: aiDigits ? `*72${aiDigits}` : '',
     disable_forwarding_code: '*73',
   })
+})
+
+// ============================================================
+// TELNYX NUMBER PROVISIONING — Self-serve phone number picker ($1/mo)
+// ============================================================
+// Gated by: caller must have an active or trialing Secretary subscription.
+// Flow: search Telnyx inventory → customer picks one → we purchase it →
+//       attach to shared Telnyx credential connection → register with LiveKit
+//       inbound trunk + dispatch rule → save to secretary_phone_pool +
+//       secretary_config so the existing agent dispatch logic picks it up.
+// ============================================================
+
+async function requireSubscription(c: any, customerId: number): Promise<{ ok: boolean; status?: string }> {
+  const row = await c.env.DB.prepare(
+    `SELECT status, trial_ends_at, comp_until FROM secretary_subscriptions
+     WHERE customer_id = ? AND status IN ('trialing','active','past_due')
+     ORDER BY id DESC LIMIT 1`
+  ).bind(customerId).first<any>()
+  if (!row) return { ok: false }
+  return { ok: true, status: row.status }
+}
+
+// GET /numbers/search?country=US&areaCode=780&limit=20
+secretaryRoutes.get('/numbers/search', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const gate = await requireSubscription(c, customerId)
+  if (!gate.ok) return c.json({ error: 'Start a Roofer Secretary trial before picking a phone number.' }, 403)
+
+  const country = (c.req.query('country') || 'US').toUpperCase()
+  const areaCode = (c.req.query('areaCode') || '').replace(/\D/g, '') || undefined
+  const locality = c.req.query('locality') || undefined
+  const limit = Math.min(50, parseInt(c.req.query('limit') || '20', 10))
+
+  try {
+    const items = await Telnyx.searchNumbers(c.env, { countryCode: country, areaCode, locality, limit })
+    return c.json({
+      items: items.map(n => ({
+        phone_number: n.phone_number,
+        region: n.region_information?.find(r => r.region_type === 'state')?.region_name
+             || n.region_information?.[0]?.region_name || '',
+        locality: n.region_information?.find(r => r.region_type === 'city')?.region_name || '',
+        monthly_cost_cents_to_customer: 100,
+      })),
+    })
+  } catch (err: any) {
+    console.error('[Secretary Numbers Search]', err)
+    return c.json({ error: err?.message || 'Telnyx search failed' }, 500)
+  }
+})
+
+// POST /numbers/purchase { phone_number }
+secretaryRoutes.post('/numbers/purchase', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const gate = await requireSubscription(c, customerId)
+  if (!gate.ok) return c.json({ error: 'Start a Roofer Secretary trial before picking a phone number.' }, 403)
+
+  let body: any = {}
+  try { body = await c.req.json() } catch {}
+  const phoneNumber = (body.phone_number || '').toString().trim()
+  if (!phoneNumber) return c.json({ error: 'phone_number is required' }, 400)
+
+  const apiKey = c.env.LIVEKIT_API_KEY
+  const apiSecret = c.env.LIVEKIT_API_SECRET
+  const livekitUrl = c.env.LIVEKIT_URL
+  if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit is not configured' }, 500)
+
+  try {
+    // 1. Purchase from Telnyx + attach to shared Secretary connection.
+    const bought = await Telnyx.purchaseNumber(c.env, phoneNumber)
+
+    // 2. Register the number with a LiveKit inbound trunk.
+    const trunkResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+      '/twirp/livekit.SIP/CreateSIPInboundTrunk', {
+        trunk: {
+          name: `secretary-${customerId}`,
+          numbers: [bought.phoneNumber],
+          krisp_enabled: true,
+          metadata: JSON.stringify({ customer_id: customerId, provider: 'telnyx', service: 'roofer_secretary' }),
+        },
+      })
+    const trunkId = trunkResult?.sip_trunk_id || trunkResult?.trunk?.sip_trunk_id || ''
+    if (!trunkId) throw new Error('LiveKit did not return a trunk id')
+
+    // 3. Create per-customer dispatch rule.
+    const dispatchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+      '/twirp/livekit.SIP/CreateSIPDispatchRule', {
+        trunk_ids: [trunkId],
+        rule: { dispatchRuleIndividual: { roomPrefix: `secretary-${customerId}-` } },
+        name: `secretary-dispatch-${customerId}`,
+        metadata: JSON.stringify({ customer_id: customerId, provider: 'telnyx' }),
+      })
+    const dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
+
+    // 4. Save into phone pool + config.
+    await c.env.DB.prepare(
+      `INSERT INTO secretary_phone_pool
+       (phone_number, phone_sid, region, status, assigned_to_customer_id, assigned_at,
+        sip_trunk_id, dispatch_rule_id, provider, telnyx_phone_number_id, telnyx_connection_id,
+        purchased_at, monthly_cost_cents_billed)
+       VALUES (?, ?, '', 'assigned', ?, datetime('now'), ?, ?, 'telnyx', ?, ?, datetime('now'), 100)`
+    ).bind(
+      bought.phoneNumber,
+      bought.telnyxPhoneNumberId,
+      customerId,
+      trunkId,
+      dispatchId,
+      bought.telnyxPhoneNumberId,
+      bought.connectionId,
+    ).run()
+
+    await c.env.DB.prepare(
+      `UPDATE secretary_config
+       SET assigned_phone_number = ?,
+           livekit_inbound_trunk_id = ?,
+           livekit_dispatch_rule_id = ?,
+           connection_status = 'connected',
+           updated_at = datetime('now')
+       WHERE customer_id = ?`
+    ).bind(bought.phoneNumber, trunkId, dispatchId, customerId).run()
+
+    await logBillingEvent(c.env.DB, customerId, 'phone_purchased', {
+      amountCents: 100,
+      metadata: { phone_number: bought.phoneNumber, provider: 'telnyx', trunk_id: trunkId },
+    })
+
+    return c.json({
+      phone_number: bought.phoneNumber,
+      provider: 'telnyx',
+      monthly_cost_cents: 100,
+      trunk_id: trunkId,
+      dispatch_rule_id: dispatchId,
+      setup_instructions: {
+        title: 'Your new phone number is live!',
+        steps: [
+          'Share this number with customers, or set your existing business line to forward to it.',
+          'Carrier call-forwarding code: dial *72 then the number from your business phone, wait for the tone, hang up.',
+          'To disable forwarding later: dial *73 from your business phone.',
+        ],
+        disable_forwarding_code: '*73',
+      },
+    })
+  } catch (err: any) {
+    console.error('[Secretary Numbers Purchase]', err)
+    return c.json({ error: err?.message || 'Number purchase failed' }, 500)
+  }
+})
+
+// POST /numbers/release — Release the currently-assigned Telnyx number
+secretaryRoutes.post('/numbers/release', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const row = await c.env.DB.prepare(
+    `SELECT id, phone_number, telnyx_phone_number_id FROM secretary_phone_pool
+     WHERE assigned_to_customer_id = ? AND provider = 'telnyx' AND status = 'assigned'
+     ORDER BY id DESC LIMIT 1`
+  ).bind(customerId).first<any>()
+  if (!row?.telnyx_phone_number_id) return c.json({ error: 'No Telnyx number to release' }, 400)
+
+  try {
+    await Telnyx.releaseNumber(c.env, row.telnyx_phone_number_id)
+    await c.env.DB.prepare(
+      `UPDATE secretary_phone_pool SET status='released', assigned_to_customer_id=NULL WHERE id = ?`
+    ).bind(row.id).run()
+    await c.env.DB.prepare(
+      `UPDATE secretary_config SET assigned_phone_number = '', connection_status = 'not_connected' WHERE customer_id = ?`
+    ).bind(customerId).run()
+    await logBillingEvent(c.env.DB, customerId, 'phone_released', {
+      metadata: { phone_number: row.phone_number },
+    })
+    return c.json({ released: true, phone_number: row.phone_number })
+  } catch (err: any) {
+    console.error('[Secretary Numbers Release]', err)
+    return c.json({ error: err?.message || 'Release failed' }, 500)
+  }
 })

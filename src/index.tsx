@@ -11059,10 +11059,14 @@ function getFeatureHubPageHTML(featureSlug: string): string {
           <h1 class="text-4xl lg:text-5xl font-black text-white mb-6 leading-tight tracking-tight">${f.headline}</h1>
           <p class="text-lg text-gray-400 mb-8 leading-relaxed">${f.subhead}</p>
           <div class="flex flex-col sm:flex-row gap-3 mb-4">
+            ${f.slug === 'ai-secretary' ? `
+            <a href="/register?next=${encodeURIComponent('/customer/secretary?start_trial=1')}" onclick="rrTrack('cta_click',{location:'feature_hub_ai-secretary_hero_trial'})" class="inline-flex items-center justify-center gap-2 font-extrabold py-3.5 px-8 rounded-xl text-base shadow-2xl transition-all hover:scale-[1.03]" style="background:${f.accentColor};color:#0A0A0A"><i class="fas fa-gift"></i> Start 1-Month Free Trial</a>
+            ` : `
             <a href="/register" onclick="rrTrack('cta_click',{location:'feature_hub_${f.slug}_hero'})" class="inline-flex items-center justify-center gap-2 font-extrabold py-3.5 px-8 rounded-xl text-base shadow-2xl transition-all hover:scale-[1.03]" style="background:${f.accentColor};color:#0A0A0A"><i class="fas fa-rocket"></i> Start Free — 4 Reports On Us</a>
+            `}
             <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-3.5 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-calendar-check" style="color:${f.accentColor}"></i> Book a Demo</a>
           </div>
-          <p class="text-xs text-gray-600"><i class="fas fa-lock mr-1" style="color:${f.accentColor}"></i>No credit card required &middot; 4 free reports included</p>
+          <p class="text-xs text-gray-600"><i class="fas fa-lock mr-1" style="color:${f.accentColor}"></i>${f.slug === 'ai-secretary' ? '1-month free trial &middot; card required &middot; $149/mo after &middot; cancel anytime' : 'No credit card required &middot; 4 free reports included'}</p>
         </div>
         <!-- Product UI Mockup -->
         <div class="hidden lg:block">

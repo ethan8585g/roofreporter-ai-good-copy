@@ -1,0 +1,242 @@
+// ============================================================
+// Square Subscriptions service — card-on-file + trial + auto-renewal
+// ============================================================
+// Thin fetch-based client over Square REST API v2 (no SDK). Mirrors the
+// pattern of squareAPI() in routes/secretary.ts for consistency.
+//
+// Used by the Secretary self-serve trial flow:
+//   1. Customer tokenizes card via Square Web Payments SDK (browser)
+//   2. We call createCustomer() + saveCard() with the nonce
+//   3. We call createSubscription() with start_date = trialEnd (today+30d)
+//
+// Square's "start_date in the future" behavior = no charge until that date,
+// which cleanly models the 1-month free trial without needing a separate
+// billing state machine.
+// ============================================================
+
+const SQUARE_API_VERSION = '2025-01-23'
+
+export interface SquareSubsBindings {
+  SQUARE_ACCESS_TOKEN: string
+  SQUARE_LOCATION_ID: string
+  SQUARE_SECRETARY_PLAN_VARIATION_ID?: string
+}
+
+function squareBase(env: SquareSubsBindings): string {
+  const token = env.SQUARE_ACCESS_TOKEN || ''
+  return token.startsWith('EAAA') || token.startsWith('sandbox-')
+    ? 'https://connect.squareupsandbox.com/v2'
+    : 'https://connect.squareup.com/v2'
+}
+
+async function squareFetch(env: SquareSubsBindings, method: string, path: string, body?: any) {
+  const res = await fetch(`${squareBase(env)}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${env.SQUARE_ACCESS_TOKEN}`,
+      'Content-Type': 'application/json',
+      'Square-Version': SQUARE_API_VERSION,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  const text = await res.text()
+  let json: any = null
+  try { json = text ? JSON.parse(text) : null } catch { /* keep raw */ }
+  if (!res.ok) {
+    const detail = json?.errors?.[0]?.detail || json?.errors?.[0]?.code || text || `HTTP ${res.status}`
+    throw new Error(`Square ${method} ${path} failed: ${detail}`)
+  }
+  return json
+}
+
+/**
+ * Create (or reuse) a Square customer record.
+ * Returns the customer_id. If a customer with this email exists, returns that one.
+ */
+export async function createCustomer(
+  env: SquareSubsBindings,
+  opts: { emailAddress: string; givenName?: string; familyName?: string; companyName?: string; phoneNumber?: string },
+): Promise<string> {
+  // Try to find existing first — Square idempotency key isn't enough since we want dedupe by email.
+  try {
+    const search = await squareFetch(env, 'POST', '/customers/search', {
+      query: { filter: { email_address: { exact: opts.emailAddress } } },
+      limit: 1,
+    })
+    const existing = search?.customers?.[0]?.id
+    if (existing) return String(existing)
+  } catch { /* fall through to create */ }
+
+  const created = await squareFetch(env, 'POST', '/customers', {
+    idempotency_key: `secretary-cust-${opts.emailAddress}-${Date.now()}`,
+    email_address: opts.emailAddress,
+    given_name: opts.givenName,
+    family_name: opts.familyName,
+    company_name: opts.companyName,
+    phone_number: opts.phoneNumber,
+  })
+  const id = created?.customer?.id
+  if (!id) throw new Error('Square create customer returned no id')
+  return String(id)
+}
+
+export interface SavedCardInfo {
+  cardId: string
+  brand: string
+  last4: string
+  expMonth: number
+  expYear: number
+}
+
+/**
+ * Save a tokenized card (nonce from Web Payments SDK) onto the Square customer.
+ */
+export async function saveCard(
+  env: SquareSubsBindings,
+  opts: { customerId: string; sourceId: string; cardholderName?: string; verificationToken?: string },
+): Promise<SavedCardInfo> {
+  const created = await squareFetch(env, 'POST', '/cards', {
+    idempotency_key: `secretary-card-${opts.customerId}-${Date.now()}`,
+    source_id: opts.sourceId,
+    verification_token: opts.verificationToken,
+    card: {
+      customer_id: opts.customerId,
+      cardholder_name: opts.cardholderName,
+    },
+  })
+  const card = created?.card
+  if (!card?.id) throw new Error('Square save card returned no id')
+  return {
+    cardId: String(card.id),
+    brand: String(card.card_brand || ''),
+    last4: String(card.last_4 || ''),
+    expMonth: Number(card.exp_month || 0),
+    expYear: Number(card.exp_year || 0),
+  }
+}
+
+/**
+ * Ensure a $149/mo "Roofer Secretary" subscription plan + variation exist in
+ * Square's catalog. Returns the plan_variation_id that is passed to
+ * /v2/subscriptions.
+ *
+ * Cache the return value in env.SQUARE_SECRETARY_PLAN_VARIATION_ID so this
+ * list+create path only runs once per deployment.
+ */
+export async function ensurePlan(env: SquareSubsBindings): Promise<string> {
+  if (env.SQUARE_SECRETARY_PLAN_VARIATION_ID) return env.SQUARE_SECRETARY_PLAN_VARIATION_ID
+
+  // Search for an existing plan variation named "Roofer Secretary Monthly".
+  const search = await squareFetch(env, 'POST', '/catalog/search', {
+    object_types: ['SUBSCRIPTION_PLAN_VARIATION'],
+    query: { exact_query: { attribute_name: 'name', attribute_value: 'Roofer Secretary Monthly' } },
+    limit: 1,
+  })
+  const existingVariation = search?.objects?.[0]
+  if (existingVariation?.id) return String(existingVariation.id)
+
+  // Create plan + variation in one batch upsert.
+  const planId = `#roofer-secretary-plan`
+  const variationId = `#roofer-secretary-plan-variation-monthly`
+  const batch = await squareFetch(env, 'POST', '/catalog/batch-upsert', {
+    idempotency_key: `plan-upsert-${Date.now()}`,
+    batches: [{
+      objects: [
+        {
+          type: 'SUBSCRIPTION_PLAN',
+          id: planId,
+          subscription_plan_data: {
+            name: 'Roofer Secretary',
+          },
+        },
+        {
+          type: 'SUBSCRIPTION_PLAN_VARIATION',
+          id: variationId,
+          subscription_plan_variation_data: {
+            name: 'Roofer Secretary Monthly',
+            phases: [{
+              cadence: 'MONTHLY',
+              periods: null,
+              pricing: {
+                type: 'STATIC',
+                price: { amount: 14900, currency: 'USD' },
+              },
+            }],
+            subscription_plan_id: planId,
+          },
+        },
+      ],
+    }],
+  })
+  const mapping = batch?.id_mappings || []
+  const realVariationId = mapping.find((m: any) => m.client_object_id === variationId)?.object_id
+  if (!realVariationId) throw new Error('Square plan upsert: variation id missing from id_mappings')
+  console.log(`[square-subs] Created plan variation ${realVariationId}. Set SQUARE_SECRETARY_PLAN_VARIATION_ID=${realVariationId} in wrangler secrets.`)
+  return String(realVariationId)
+}
+
+export interface CreatedSubscription {
+  subscriptionId: string
+  status: string
+  startDate: string
+}
+
+/**
+ * Create a Square Subscription with start_date in the future = free trial.
+ * On start_date Square automatically charges the saved card.
+ */
+export async function createSubscription(
+  env: SquareSubsBindings,
+  opts: { customerId: string; cardId: string; planVariationId: string; startDate: string; timezone?: string },
+): Promise<CreatedSubscription> {
+  const created = await squareFetch(env, 'POST', '/subscriptions', {
+    idempotency_key: `sub-${opts.customerId}-${Date.now()}`,
+    location_id: env.SQUARE_LOCATION_ID,
+    customer_id: opts.customerId,
+    card_id: opts.cardId,
+    plan_variation_id: opts.planVariationId,
+    start_date: opts.startDate,
+    timezone: opts.timezone || 'America/Edmonton',
+  })
+  const sub = created?.subscription
+  if (!sub?.id) throw new Error('Square create subscription returned no id')
+  return {
+    subscriptionId: String(sub.id),
+    status: String(sub.status || 'PENDING'),
+    startDate: String(sub.start_date || opts.startDate),
+  }
+}
+
+/**
+ * Cancel a Square subscription. Takes effect at the end of the current paid period.
+ */
+export async function cancelSubscription(env: SquareSubsBindings, subscriptionId: string): Promise<void> {
+  await squareFetch(env, 'POST', `/subscriptions/${subscriptionId}/cancel`, {})
+}
+
+/**
+ * Pause a Square subscription at the end of the current paid period.
+ */
+export async function pauseSubscription(
+  env: SquareSubsBindings,
+  subscriptionId: string,
+  opts?: { pauseEffectiveDate?: string; pauseCycles?: number },
+): Promise<void> {
+  await squareFetch(env, 'POST', `/subscriptions/${subscriptionId}/pause`, {
+    pause_effective_date: opts?.pauseEffectiveDate,
+    pause_cycles: opts?.pauseCycles,
+  })
+}
+
+/**
+ * Resume a paused Square subscription.
+ */
+export async function resumeSubscription(
+  env: SquareSubsBindings,
+  subscriptionId: string,
+  opts?: { resumeEffectiveDate?: string },
+): Promise<void> {
+  await squareFetch(env, 'POST', `/subscriptions/${subscriptionId}/resume`, {
+    resume_effective_date: opts?.resumeEffectiveDate,
+  })
+}

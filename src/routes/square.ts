@@ -1010,6 +1010,107 @@ squareRoutes.post('/webhook', async (c) => {
         ).bind(eventId).run()
         break
       }
+
+      // ============================================================
+      // Roofer Secretary subscription lifecycle
+      // Square fires these on trial conversion, renewal, and payment failure.
+      // We sync status into secretary_subscriptions + append to the audit log.
+      // ============================================================
+      case 'subscription.created':
+      case 'subscription.updated': {
+        const sub = event.data?.object?.subscription
+        const subId = sub?.id
+        if (!subId) break
+        const row = await c.env.DB.prepare(
+          `SELECT id, customer_id, status FROM secretary_subscriptions WHERE square_subscription_id = ? LIMIT 1`
+        ).bind(subId).first<any>()
+        if (!row) break
+
+        const sqStatus = String(sub?.status || '').toUpperCase()
+        let newStatus = row.status as string
+        if (sqStatus === 'ACTIVE') newStatus = 'active'
+        else if (sqStatus === 'PAUSED') newStatus = 'paused'
+        else if (sqStatus === 'CANCELED' || sqStatus === 'DEACTIVATED') newStatus = 'cancelled'
+        else if (sqStatus === 'PENDING') newStatus = (row.status === 'trialing' ? 'trialing' : 'pending')
+        else if (sqStatus === 'DELINQUENT') newStatus = 'past_due'
+
+        if (newStatus !== row.status) {
+          await c.env.DB.prepare(
+            `UPDATE secretary_subscriptions SET status = ?, updated_at = datetime('now') WHERE id = ?`
+          ).bind(newStatus, row.id).run()
+        }
+        await c.env.DB.prepare(
+          `INSERT INTO secretary_billing_events (customer_id, event_type, square_event_id, metadata)
+           VALUES (?, ?, ?, ?)`
+        ).bind(
+          row.customer_id,
+          newStatus === 'active' && row.status === 'trialing' ? 'converted' : 'subscription_updated',
+          eventId,
+          JSON.stringify({ square_status: sqStatus, square_subscription_id: subId }),
+        ).run()
+
+        await c.env.DB.prepare(
+          'UPDATE square_webhook_events SET processed = 1 WHERE square_event_id = ?'
+        ).bind(eventId).run()
+        break
+      }
+
+      case 'invoice.payment_made': {
+        const invoice = event.data?.object?.invoice
+        const subId = invoice?.subscription_id
+        const amountCents = invoice?.payment_requests?.[0]?.computed_amount_money?.amount
+                         || invoice?.next_payment_amount_money?.amount
+                         || null
+        if (!subId) break
+        const row = await c.env.DB.prepare(
+          `SELECT id, customer_id FROM secretary_subscriptions WHERE square_subscription_id = ? LIMIT 1`
+        ).bind(subId).first<any>()
+        if (!row) break
+
+        await c.env.DB.prepare(
+          `UPDATE secretary_subscriptions
+           SET status = 'active',
+               current_period_start = datetime('now'),
+               current_period_end = datetime('now', '+30 days'),
+               updated_at = datetime('now')
+           WHERE id = ?`
+        ).bind(row.id).run()
+
+        await c.env.DB.prepare(
+          `INSERT INTO secretary_billing_events (customer_id, event_type, square_event_id, amount_cents, metadata)
+           VALUES (?, 'renewed', ?, ?, ?)`
+        ).bind(row.customer_id, eventId, amountCents, JSON.stringify({ square_subscription_id: subId })).run()
+
+        await c.env.DB.prepare(
+          'UPDATE square_webhook_events SET processed = 1 WHERE square_event_id = ?'
+        ).bind(eventId).run()
+        break
+      }
+
+      case 'invoice.failed':
+      case 'invoice.canceled': {
+        const invoice = event.data?.object?.invoice
+        const subId = invoice?.subscription_id
+        if (!subId) break
+        const row = await c.env.DB.prepare(
+          `SELECT id, customer_id FROM secretary_subscriptions WHERE square_subscription_id = ? LIMIT 1`
+        ).bind(subId).first<any>()
+        if (!row) break
+
+        await c.env.DB.prepare(
+          `UPDATE secretary_subscriptions SET status = 'past_due', updated_at = datetime('now') WHERE id = ?`
+        ).bind(row.id).run()
+
+        await c.env.DB.prepare(
+          `INSERT INTO secretary_billing_events (customer_id, event_type, square_event_id, metadata)
+           VALUES (?, 'payment_failed', ?, ?)`
+        ).bind(row.customer_id, eventId, JSON.stringify({ square_subscription_id: subId, invoice_status: invoice?.status })).run()
+
+        await c.env.DB.prepare(
+          'UPDATE square_webhook_events SET processed = 1 WHERE square_event_id = ?'
+        ).bind(eventId).run()
+        break
+      }
     }
 
     return c.json({ received: true })

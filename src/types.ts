@@ -91,6 +91,17 @@ export type Bindings = {
   TWILIO_ACCOUNT_SID: string    // e.g. "AC..."
   TWILIO_AUTH_TOKEN: string     // Account auth token
 
+  // Telnyx — Self-serve phone number provisioning for Roofer Secretary ($1/mo resale)
+  // Get from: portal.telnyx.com → API Keys. A single shared Credential Connection
+  // named "roof-manager-secretary" bridges Telnyx inbound calls to LIVEKIT_SIP_URI;
+  // per-customer routing happens via LiveKit dispatch rules.
+  TELNYX_API_KEY?: string
+  TELNYX_SECRETARY_CONNECTION_ID?: string  // Cached after first ensureSecretaryConnection() call
+
+  // Square Subscriptions — Cached plan variation id for the Roofer Secretary $149/mo plan.
+  // Set after first ensurePlan() call logs it.
+  SQUARE_SECRETARY_PLAN_VARIATION_ID?: string
+
   // Cloud Run Custom AI — Your Colab-trained roof analysis model
   // Hosted on: collab-581996238660.europe-west1.run.app
   // Falls back to Gemini when unavailable

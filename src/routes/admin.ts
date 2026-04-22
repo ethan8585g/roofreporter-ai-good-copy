@@ -2360,11 +2360,12 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
     const agentPhone = agent_phone_number || secretary_phone_number || ''
 
     if (enable_secretary !== false) {
-      // Create secretary subscription (active, bypassing payment)
-      await c.env.DB.prepare(`
-        INSERT OR IGNORE INTO secretary_subscriptions (customer_id, status, monthly_price_cents, created_at, updated_at)
-        VALUES (?, 'active', 14900, datetime('now'), datetime('now'))
-      `).bind(customerId).run()
+      // NOTE: Previously this block auto-activated a free secretary_subscriptions row.
+      // That path is removed — all Secretary activation now flows through
+      // POST /api/secretary/start-trial (1-month free trial + card on file, then $149/mo).
+      // To comp an account for free, use POST /superadmin/secretary/:customerId/comp
+      // which sets secretary_subscriptions.comp_until. This keeps every account visible
+      // in the new Secretary subscriptions tracking dashboard.
 
       // Create secretary config
       const fwdMethod = ['livekit_number', 'call_forwarding', 'sip_trunk'].includes(forwarding_method)
@@ -2789,6 +2790,154 @@ adminRoutes.post('/superadmin/onboarding/:id/toggle-secretary', async (c) => {
   } catch (err: any) {
     return c.json({ error: 'Failed to toggle secretary', details: err.message }, 500)
   }
+})
+
+// ============================================================
+// SUPERADMIN: ROOFER SECRETARY SUBSCRIPTION TRACKING
+// ============================================================
+// Read-only dashboards so every trial, conversion, renewal, cancellation
+// and phone-number purchase is visible in super-admin.
+// ============================================================
+
+// GET /superadmin/secretary/subscriptions?status=trialing&limit=100
+adminRoutes.get('/superadmin/secretary/subscriptions', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const statusFilter = (c.req.query('status') || '').trim()
+  const limit = Math.min(500, parseInt(c.req.query('limit') || '100', 10))
+
+  const where = statusFilter ? `WHERE ss.status = ?` : ''
+  const binds = statusFilter ? [statusFilter, limit] : [limit]
+
+  const rows = await c.env.DB.prepare(`
+    SELECT
+      ss.id, ss.customer_id, ss.status, ss.monthly_price_cents,
+      ss.trial_started_at, ss.trial_ends_at,
+      ss.current_period_start, ss.current_period_end,
+      ss.square_subscription_id, ss.card_brand, ss.card_last4,
+      ss.comp_until, ss.cancelled_at, ss.created_at,
+      c.email, c.name, c.company_name, c.phone,
+      (SELECT COUNT(*) FROM secretary_call_logs scl WHERE scl.customer_id = ss.customer_id) AS call_count,
+      (SELECT phone_number FROM secretary_phone_pool spp
+         WHERE spp.assigned_to_customer_id = ss.customer_id AND spp.status = 'assigned'
+         ORDER BY spp.id DESC LIMIT 1) AS phone_number,
+      (SELECT provider FROM secretary_phone_pool spp
+         WHERE spp.assigned_to_customer_id = ss.customer_id AND spp.status = 'assigned'
+         ORDER BY spp.id DESC LIMIT 1) AS phone_provider
+    FROM secretary_subscriptions ss
+    JOIN customers c ON c.id = ss.customer_id
+    ${where}
+    ORDER BY ss.id DESC
+    LIMIT ?
+  `).bind(...binds).all<any>()
+
+  return c.json({ subscriptions: rows.results || [] })
+})
+
+// GET /superadmin/secretary/billing-events?customer_id=123&limit=100
+adminRoutes.get('/superadmin/secretary/billing-events', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const customerId = c.req.query('customer_id')
+  const limit = Math.min(500, parseInt(c.req.query('limit') || '100', 10))
+
+  const sql = customerId
+    ? `SELECT * FROM secretary_billing_events WHERE customer_id = ? ORDER BY id DESC LIMIT ?`
+    : `SELECT * FROM secretary_billing_events ORDER BY id DESC LIMIT ?`
+  const stmt = customerId
+    ? c.env.DB.prepare(sql).bind(customerId, limit)
+    : c.env.DB.prepare(sql).bind(limit)
+
+  const rows = await stmt.all<any>()
+  return c.json({ events: rows.results || [] })
+})
+
+// GET /superadmin/secretary/stats — counts + MRR + conversion rate
+adminRoutes.get('/superadmin/secretary/stats', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const counts = await c.env.DB.prepare(`
+    SELECT status, COUNT(*) AS count, SUM(monthly_price_cents) AS total_cents
+    FROM secretary_subscriptions
+    GROUP BY status
+  `).all<any>()
+
+  const phoneNumbers = await c.env.DB.prepare(`
+    SELECT provider, COUNT(*) AS count, SUM(monthly_cost_cents_billed) AS total_cents
+    FROM secretary_phone_pool
+    WHERE status = 'assigned'
+    GROUP BY provider
+  `).all<any>()
+
+  const convHistory = await c.env.DB.prepare(`
+    SELECT COUNT(*) AS converted
+    FROM secretary_billing_events
+    WHERE event_type = 'converted'
+  `).first<any>()
+
+  const trialHistory = await c.env.DB.prepare(`
+    SELECT COUNT(*) AS started
+    FROM secretary_billing_events
+    WHERE event_type = 'trial_started'
+  `).first<any>()
+
+  let mrrCents = 0
+  for (const r of (counts.results || [])) {
+    if (r.status === 'active') mrrCents += Number(r.total_cents || 0)
+  }
+  for (const r of (phoneNumbers.results || [])) {
+    mrrCents += Number(r.total_cents || 0)
+  }
+
+  const startedN = Number(trialHistory?.started || 0)
+  const convertedN = Number(convHistory?.converted || 0)
+  const conversionRate = startedN > 0 ? (convertedN / startedN) : 0
+
+  return c.json({
+    by_status: counts.results || [],
+    phone_numbers: phoneNumbers.results || [],
+    mrr_cents: mrrCents,
+    mrr_dollars: mrrCents / 100,
+    trials_started: startedN,
+    trials_converted: convertedN,
+    conversion_rate: conversionRate,
+  })
+})
+
+// POST /superadmin/secretary/:customerId/comp — Set comp_until to grant free access
+// Body: { until: "YYYY-MM-DD" }  (omit or null to clear)
+adminRoutes.post('/superadmin/secretary/:customerId/comp', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const customerId = parseInt(c.req.param('customerId'))
+  let body: any = {}
+  try { body = await c.req.json() } catch {}
+  const until: string | null = body.until || null
+
+  const existing = await c.env.DB.prepare(
+    `SELECT id FROM secretary_subscriptions WHERE customer_id = ? ORDER BY id DESC LIMIT 1`
+  ).bind(customerId).first<any>()
+
+  if (existing) {
+    await c.env.DB.prepare(
+      `UPDATE secretary_subscriptions SET comp_until = ?, status = CASE WHEN ? IS NOT NULL THEN 'active' ELSE status END, updated_at = datetime('now') WHERE id = ?`
+    ).bind(until, until, existing.id).run()
+  } else {
+    await c.env.DB.prepare(
+      `INSERT INTO secretary_subscriptions (customer_id, status, monthly_price_cents, comp_until, created_at, updated_at)
+       VALUES (?, ?, 0, ?, datetime('now'), datetime('now'))`
+    ).bind(customerId, until ? 'active' : 'pending', until).run()
+  }
+
+  await c.env.DB.prepare(
+    `INSERT INTO secretary_billing_events (customer_id, event_type, metadata) VALUES (?, 'comp_set', ?)`
+  ).bind(customerId, JSON.stringify({ until, admin_id: admin.id })).run()
+
+  return c.json({ success: true, comp_until: until })
 })
 
 // ============================================================
