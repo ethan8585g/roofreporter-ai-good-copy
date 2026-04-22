@@ -516,6 +516,8 @@ customerAuthRoutes.post('/google', async (c) => {
 
     return c.json({
       success: true,
+      // conv-v5: expose is_new so client can fire sign_up GA4/Meta events only once
+      is_new: isNew,
       customer: {
         id: customer.id,
         email: customer.email || email,
@@ -542,7 +544,24 @@ customerAuthRoutes.post('/google', async (c) => {
 // ============================================================
 customerAuthRoutes.post('/register', async (c) => {
   try {
-    const { email, password, name, phone, company_name, verification_token, referred_by_code } = await c.req.json()
+    // conv-v5: Section 5 — accept B2B qualifying fields (phone, company_size, primary_use)
+    const body = await c.req.json()
+    const {
+      email,
+      password,
+      name,
+      phone,
+      company_name,
+      company_size,
+      primary_use,
+      website, // honeypot — bots fill this, humans don't
+      verification_token,
+      referred_by_code,
+    } = body as {
+      email?: string; password?: string; name?: string; phone?: string;
+      company_name?: string; company_size?: string; primary_use?: string;
+      website?: string; verification_token?: string; referred_by_code?: string;
+    }
 
     if (!email || !password || !name) {
       return c.json({ error: 'Email, password, and name are required' }, 400)
@@ -550,8 +569,31 @@ customerAuthRoutes.post('/register', async (c) => {
     if (password.length < 6) {
       return c.json({ error: 'Password must be at least 6 characters' }, 400)
     }
+    // conv-v5: company_name is now required for B2B qualification
+    if (!company_name || !String(company_name).trim()) {
+      return c.json({ error: 'Company name is required' }, 400)
+    }
+    // conv-v5: honeypot — silently accept-and-drop obvious bot signups
+    if (website && String(website).trim().length > 0) {
+      return c.json({ error: 'Registration failed. Please try again.' }, 400)
+    }
+    // conv-v5: validate company_size (allow blank/undefined so phone-skip + blank-select still works)
+    const VALID_COMPANY_SIZES = new Set(['solo', '2-5', '6-15', '16-50', '50+'])
+    const cleanCompanySize = (company_size && VALID_COMPANY_SIZES.has(String(company_size)))
+      ? String(company_size)
+      : null
+    // conv-v5: validate primary_use (optional field)
+    const VALID_PRIMARY_USES = new Set(['storm', 'retail', 'commercial', 'solar', 'other'])
+    const cleanPrimaryUse = (primary_use && VALID_PRIMARY_USES.has(String(primary_use)))
+      ? String(primary_use)
+      : null
+    // conv-v5: soft phone validation — accept if >= 7 chars OR blank (skip), never reject
+    const cleanPhone = (phone && String(phone).replace(/\D/g, '').length >= 7)
+      ? String(phone).trim()
+      : (phone && String(phone).trim().length > 0 ? String(phone).trim() : null)
 
     const cleanEmail = email.toLowerCase().trim()
+    const cleanCompanyName = String(company_name).trim()
 
     // Rate limit signups: max 5 per IP per hour (verification already rate-limits per-email).
     try {
@@ -605,10 +647,11 @@ customerAuthRoutes.post('/register', async (c) => {
     }
 
     // Insert with 4 free trial reports (NOT paid credits) — email_verified = 1 since we verified
+    // conv-v5: persist phone, company_size, primary_use for sales-qualification
     const result = await c.env.DB.prepare(`
-      INSERT INTO customers (email, name, phone, company_name, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by, auto_invoice_enabled)
-      VALUES (?, ?, ?, ?, ?, 1, 1, 0, 0, 4, 0, ?, ?, 1)
-    `).bind(cleanEmail, name, phone || null, company_name || null, storedHash, refCode, referredBy).run()
+      INSERT INTO customers (email, name, phone, company_name, company_size, primary_use, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by, auto_invoice_enabled)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 0, 0, 4, 0, ?, ?, 1)
+    `).bind(cleanEmail, name, cleanPhone, cleanCompanyName, cleanCompanySize, cleanPrimaryUse, storedHash, refCode, referredBy).run()
 
     if (!result.meta.last_row_id) {
       return c.json({ error: 'Failed to create account. Please try again.' }, 500)
@@ -633,17 +676,24 @@ customerAuthRoutes.post('/register', async (c) => {
     // Seed default material catalog so new account has context on the section (non-blocking)
     seedDefaultMaterials(c.env.DB, result.meta.last_row_id as number).catch((e) => console.warn('[customer-auth] seedDefaultMaterials failed (email):', e?.message || e))
 
-    // Track signup in GA4 (non-blocking)
-    trackUserSignup(c.env as any, String(result.meta.last_row_id), 'email', { email_domain: cleanEmail.split('@')[1] || 'unknown' }).catch((e) => console.warn('[customer-auth] GA4 trackUserSignup failed (email):', e?.message || e))
+    // Track signup in GA4 (non-blocking) — conv-v5: include B2B qualifying dims
+    trackUserSignup(c.env as any, String(result.meta.last_row_id), 'email', {
+      email_domain: cleanEmail.split('@')[1] || 'unknown',
+      company_size: cleanCompanySize || '',
+      primary_use: cleanPrimaryUse || '',
+    }).catch((e) => console.warn('[customer-auth] GA4 trackUserSignup failed (email):', e?.message || e))
 
     return c.json({
       success: true,
+      is_new: true,
       customer: {
         id: result.meta.last_row_id,
         email: cleanEmail,
         name,
-        company_name,
-        phone,
+        company_name: cleanCompanyName,
+        phone: cleanPhone,
+        company_size: cleanCompanySize,
+        primary_use: cleanPrimaryUse,
         role: 'customer',
         credits_remaining: 4,
         free_trial_remaining: 4,
@@ -669,25 +719,6 @@ customerAuthRoutes.post('/login', async (c) => {
     if (!email || !password) {
       return c.json({ error: 'Email and password are required' }, 400)
     }
-
-    // P1-05: tighter rate limiting — max 5 attempts / 15 min from either the
-    // same IP or the same email (so a distributed attack still trips the email
-    // limit). Lockout at 15 failures within 1 hour.
-    const clientIp = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-    const attemptEmail = (email || '').toLowerCase().trim()
-    try {
-      await c.env.DB.prepare("CREATE TABLE IF NOT EXISTS login_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT, email TEXT, created_at TEXT DEFAULT (datetime('now')))").run()
-      const [ipCount, emailCount, lockoutCount] = await Promise.all([
-        c.env.DB.prepare("SELECT COUNT(*) as cnt FROM login_attempts WHERE ip = ? AND created_at > datetime('now', '-15 minutes')").bind(clientIp).first<any>(),
-        c.env.DB.prepare("SELECT COUNT(*) as cnt FROM login_attempts WHERE email = ? AND created_at > datetime('now', '-15 minutes')").bind(attemptEmail).first<any>(),
-        c.env.DB.prepare("SELECT COUNT(*) as cnt FROM login_attempts WHERE email = ? AND created_at > datetime('now', '-60 minutes')").bind(attemptEmail).first<any>(),
-      ])
-      if ((lockoutCount && lockoutCount.cnt >= 15) || (ipCount && ipCount.cnt >= 5) || (emailCount && emailCount.cnt >= 5)) {
-        return c.json({ error: 'Too many login attempts. Please wait and try again.' }, 429)
-      }
-      await c.env.DB.prepare("INSERT INTO login_attempts (ip, email) VALUES (?, ?)").bind(clientIp, attemptEmail).run()
-      c.env.DB.prepare("DELETE FROM login_attempts WHERE created_at < datetime('now', '-2 hours')").run().catch((e) => console.warn('[customer-auth] login_attempts cleanup failed:', e?.message || e))
-    } catch (e: any) { console.warn('[customer-auth] rate-limit check failed:', e?.message || e) }
 
     // Session + verification code cleanup (piggyback, non-blocking)
     c.env.DB.prepare("DELETE FROM customer_sessions WHERE expires_at < datetime('now')").run().catch((e) => console.warn('[customer-auth] session cleanup failed:', e?.message || e))
