@@ -370,7 +370,7 @@ async function loadView(view) {
         try {
           const [siteRes, ga4SRes, ga4RRes, ga4RtRes, leadSrcRes] = await Promise.all([
             saFetch('/api/analytics/dashboard?period=' + (SA.analyticsPeriod || '7d')),
-            saFetch('/api/analytics/ga4/status'),
+            saFetch('/api/analytics/ga4/status?probe=1'),
             saFetch('/api/analytics/ga4/report?period=' + (SA.ga4Period || '7d')),
             saFetch('/api/analytics/ga4/realtime'),
             saFetch('/api/admin/bi/lead-sources?period=' + (SA.analyticsPeriod || '7d'))
@@ -2945,8 +2945,13 @@ function renderGA4View() {
       samc('Bounce Rate', ((totals.bounceRate || 0) * 100).toFixed(1) + '%', 'fa-sign-out-alt', 'amber', (totals.engagedSessions || 0).toLocaleString() + ' engaged') +
     '</div>';
 
-    // Acquisition source/medium table
-    const acqRows = ga4Rows(acq);
+    // Acquisition source/medium table — fall back to site_analytics if GA4 empty
+    let acqRows = ga4Rows(acq);
+    let acqFallback = false;
+    if (acqRows.length === 0) {
+      const fb = buildFallbackAcquisition(SA.data.analytics);
+      if (fb.length > 0) { acqRows = fb; acqFallback = true; }
+    }
     const acqTable = acqRows.length === 0 ? '<p class="text-gray-400 text-sm py-4">No acquisition data available.</p>'
       : '<div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50"><tr>' +
           '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Source</th>' +
@@ -2966,9 +2971,14 @@ function renderGA4View() {
         '</tr>').join('') +
         '</tbody></table></div>';
 
-    // Device breakdown from GA4
+    // Device breakdown from GA4 — fall back to site_analytics
     const devData = report.devices || {};
-    const devRows = ga4Rows(devData);
+    let devRows = ga4Rows(devData);
+    let devFallback = false;
+    if (devRows.length === 0) {
+      const fb = buildFallbackDevices(SA.data.analytics);
+      if (fb.length > 0) { devRows = fb; devFallback = true; }
+    }
     const totalDevUsers = devRows.reduce((s, r) => s + (r[1] || 0), 0) || 1;
     const deviceBars = devRows.length === 0 ? '<p class="text-gray-400 text-sm">No device data</p>'
       : '<div class="space-y-3">' + devRows.map(r => {
@@ -2984,20 +2994,25 @@ function renderGA4View() {
             '</div></div>';
         }).join('') + '</div>';
 
-    return header + tabNav + kpiCards +
+    return header + tabNav + ga4ProbeBanner(status) + kpiCards +
       '<div class="grid lg:grid-cols-2 gap-6 mb-6">' +
-        saSection('User Acquisition (Source/Medium)', 'fa-route', acqTable) +
-        saSection('Devices (GA4)', 'fa-laptop', deviceBars) +
+        saSection('User Acquisition (Source/Medium)' + (acqFallback ? ' — site_analytics' : ''), 'fa-route', acqTable) +
+        saSection('Devices' + (devFallback ? ' (site_analytics)' : ' (GA4)'), 'fa-laptop', deviceBars) +
       '</div>';
   }
 
   // ── PAGES TAB ──
   if (tab === 'pages') {
     const topPages = report.top_pages || {};
-    const pgRows = ga4Rows(topPages);
+    let pgRows = ga4Rows(topPages);
+    let pgFallback = false;
+    if (pgRows.length === 0) {
+      const fb = buildFallbackTopPages(SA.data.analytics);
+      if (fb.length > 0) { pgRows = fb; pgFallback = true; }
+    }
     const maxPV = pgRows.length > 0 ? Math.max(...pgRows.map(r => r[1] || 0), 1) : 1;
 
-    const pagesContent = pgRows.length === 0 ? '<p class="text-gray-400 text-sm py-4">No page data from GA4 for this period.</p>'
+    const pagesContent = pgRows.length === 0 ? '<p class="text-gray-400 text-sm py-4">No page data available for this period.</p>'
       : '<div class="space-y-1.5 max-h-[500px] overflow-y-auto">' + pgRows.map(r => {
           const path = r[0] || '/';
           const views = r[1] || 0;
@@ -3021,7 +3036,7 @@ function renderGA4View() {
           '</div>';
         }).join('') + '</div>';
 
-    return header + tabNav + saSection('Top Pages (GA4 Data API)', 'fa-file-alt', pagesContent);
+    return header + tabNav + ga4ProbeBanner(status) + saSection('Top Pages' + (pgFallback ? ' (site_analytics)' : ' (GA4 Data API)'), 'fa-file-alt', pagesContent);
   }
 
   // ── TRAFFIC SOURCES TAB ──
@@ -3099,7 +3114,12 @@ function renderGA4View() {
   // ── GEOGRAPHY TAB ──
   if (tab === 'geo') {
     const geoData = report.geography || {};
-    const geoRows = ga4Rows(geoData);
+    let geoRows = ga4Rows(geoData);
+    let geoFallback = false;
+    if (geoRows.length === 0) {
+      const fb = buildFallbackGeo(SA.data.analytics);
+      if (fb.length > 0) { geoRows = fb; geoFallback = true; }
+    }
     const maxGeoUsers = geoRows.length > 0 ? Math.max(...geoRows.map(r => r[2] || 0), 1) : 1;
 
     function countryFlag(code) {
@@ -3108,7 +3128,7 @@ function renderGA4View() {
       return '';
     }
 
-    const geoContent = geoRows.length === 0 ? '<p class="text-gray-400 text-sm py-4">No geography data from GA4.</p>'
+    const geoContent = geoRows.length === 0 ? '<p class="text-gray-400 text-sm py-4">No geography data available.</p>'
       : '<div class="space-y-1.5 max-h-[500px] overflow-y-auto">' + geoRows.map(r => {
           const country = r[0] || 'Unknown';
           const city = r[1] || '';
@@ -3132,7 +3152,7 @@ function renderGA4View() {
           '</div>';
         }).join('') + '</div>';
 
-    return header + tabNav + saSection('Geography (GA4 Data API)', 'fa-globe-americas', geoContent);
+    return header + tabNav + ga4ProbeBanner(status) + saSection('Geography' + (geoFallback ? ' (site_analytics)' : ' (GA4 Data API)'), 'fa-globe-americas', geoContent);
   }
 
   // ── REALTIME TAB ──
@@ -3250,7 +3270,7 @@ function renderGA4View() {
       ? '<div class="mt-4"><button onclick="saTestGA4Event()" class="px-4 py-2 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700"><i class="fas fa-paper-plane mr-1"></i>Send Test Event to GA4</button><span class="text-xs text-gray-400 ml-2">Sends an admin_test_ping event via Measurement Protocol</span></div>'
       : '';
 
-    return header + tabNav +
+    return header + tabNav + ga4ProbeBanner(status) +
       saSection('Environment Variables', 'fa-key', envContent) +
       saSection('GA4 Capabilities', 'fa-check-double', capContent + testSection) +
       '<div class="mb-6">' + setupGuide + '</div>';
@@ -10723,7 +10743,10 @@ function renderGrowthTrafficView() {
   var leadSourcesHtml = renderLeadSourcesCard();
   var blogPerfHtml = renderBlogPerformanceCard();
 
+  var topProbe = ga4ProbeBanner(SA.data.ga4_status);
+
   return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-chart-area mr-2 text-blue-500"></i>Traffic</h2><p class="text-sm text-gray-500 mt-1">Site analytics and Google Analytics combined</p></div>' +
+    topProbe +
     liveBanner +
     '<div class="space-y-8">' +
       '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">' +
@@ -10805,6 +10828,60 @@ function buildFallbackAcquisition(analytics) {
   });
   rows.sort(function(a, b) { return b[2] - a[2]; });
   return rows.slice(0, 25);
+}
+function buildFallbackTopPages(analytics) {
+  if (!analytics || !Array.isArray(analytics.top_pages)) return [];
+  // GA4 rows: [pagePath, screenPageViews, totalUsers, averageSessionDuration, bounceRate]
+  return analytics.top_pages.slice(0, 30).map(function(p) {
+    return [p.page_url || '/', p.views || 0, p.unique_visitors || 0, p.avg_time || 0, (p.bounce_rate || 0) / 100];
+  });
+}
+function buildFallbackDevices(analytics) {
+  if (!analytics || !Array.isArray(analytics.device_breakdown)) return [];
+  // GA4 rows: [deviceCategory, totalUsers, sessions, screenPageViews]
+  return analytics.device_breakdown.map(function(d) {
+    return [String(d.device_type || 'unknown'), d.visitors || 0, d.count || 0, d.count || 0];
+  });
+}
+function buildFallbackGeo(analytics) {
+  if (!analytics || !Array.isArray(analytics.top_countries)) return [];
+  // GA4 rows: [country, city, totalUsers, sessions, screenPageViews]
+  return analytics.top_countries.slice(0, 30).map(function(c) {
+    return [c.country || 'Unknown', '', c.visitors || 0, c.sessions || 0, c.hits || 0];
+  });
+}
+
+// Banner surfaced at top of GA4 tabs when /ga4/status probe returned a concrete failure.
+function ga4ProbeBanner(status) {
+  if (!status || !status.probe) return '';
+  var p = status.probe;
+  if (p.ok) return '';
+  var hint = '';
+  var err = String(p.error || '').toLowerCase();
+  if (err.indexOf('permission') >= 0 || err.indexOf('does not have sufficient') >= 0) {
+    hint = 'Add the service account (client_email from GCP_SERVICE_ACCOUNT_KEY) as a Viewer on your GA4 property: GA4 Admin → Property Access Management → Add user.';
+  } else if (err.indexOf('has not been used') >= 0 || err.indexOf('api is not enabled') >= 0 || err.indexOf('analyticsdata') >= 0) {
+    hint = 'Enable the Google Analytics Data API in your GCP project: console.cloud.google.com → APIs & Services → Enable APIs → search "Google Analytics Data API".';
+  } else if (err.indexOf('property') >= 0 && err.indexOf('not') >= 0) {
+    hint = 'GA4_PROPERTY_ID is wrong. It must be the numeric Property ID (not the G-XXXXXXXXXX Measurement ID). Find it at GA4 Admin → Property Settings.';
+  } else if (p.property_id_format && p.property_id_format !== 'ok') {
+    hint = 'GA4_PROPERTY_ID format is invalid. Must be numeric (e.g. 395521234) or "properties/395521234".';
+  } else if (err.indexOf('token') >= 0 || err.indexOf('invalid_grant') >= 0) {
+    hint = 'GCP_SERVICE_ACCOUNT_KEY is malformed. Ensure it is the full JSON key (with "private_key" and "client_email") pasted as a single secret.';
+  }
+  return '<div class="mb-4 bg-red-50 border border-red-200 rounded-xl p-4">' +
+    '<div class="flex items-start gap-3">' +
+      '<i class="fas fa-exclamation-triangle text-red-500 text-lg mt-0.5"></i>' +
+      '<div class="flex-1">' +
+        '<p class="text-sm font-bold text-red-800">GA4 API is not returning data</p>' +
+        '<p class="text-xs text-red-700 mt-1">Stage: <code class="bg-red-100 px-1 rounded">' + (p.stage || 'unknown') + '</code>' +
+          (p.http_status ? ' · HTTP ' + p.http_status : '') + '</p>' +
+        (p.error ? '<p class="text-xs text-red-700 mt-1 font-mono break-all">' + String(p.error).slice(0, 400) + '</p>' : '') +
+        (hint ? '<p class="text-xs text-red-900 mt-2"><strong>Fix:</strong> ' + hint + '</p>' : '') +
+        '<p class="text-[11px] text-gray-500 mt-2">While GA4 is broken, tabs below display data from our own site_analytics as a fallback.</p>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
 }
 
 // ── LEAD SOURCE ATTRIBUTION CARDS (Growth → Traffic) ─────────

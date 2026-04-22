@@ -880,15 +880,67 @@ analyticsRoutes.post('/ga4/event', async (c) => {
 // GET /ga4/status — Check GA4 configuration status
 // ============================================================
 analyticsRoutes.get('/ga4/status', async (c) => {
+  const propertyId = c.env.GA4_PROPERTY_ID || null
+  const saKey = c.env.GCP_SERVICE_ACCOUNT_KEY || null
+  const measurementId = c.env.GA4_MEASUREMENT_ID || null
+  const apiSecret = !!c.env.GA4_API_SECRET
+  const hasSA = !!saKey
+
+  // Optional live probe — only when ?probe=1 — actually hits GA4 Data API to
+  // surface why rows are empty (bad SA key, missing Viewer on property, wrong
+  // property ID, GA4 Data API not enabled on GCP project, etc.)
+  let probe: any = null
+  if (c.req.query('probe') === '1' && propertyId && saKey) {
+    probe = { stage: '', ok: false, http_status: 0, error: null as string | null, row_count: 0, property_id_format: '' }
+    try {
+      probe.property_id_format = /^(properties\/)?\d+$/.test(String(propertyId)) ? 'ok' : 'bad (must be numeric or properties/<id>)'
+      probe.stage = 'token'
+      const token = await getAccessTokenFromSA(saKey)
+      if (!token) {
+        probe.error = 'Failed to mint access token from service account. Check GCP_SERVICE_ACCOUNT_KEY is valid JSON with private_key + client_email.'
+      } else {
+        probe.stage = 'runReport'
+        const propId = String(propertyId).startsWith('properties/') ? String(propertyId) : `properties/${propertyId}`
+        const res = await fetch(`https://analyticsdata.googleapis.com/v1beta/${propId}:runReport`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dateRanges: [{ startDate: '30daysAgo', endDate: 'today' }],
+            metrics: [{ name: 'sessions' }]
+          })
+        })
+        probe.http_status = res.status
+        const body = await res.text()
+        if (!res.ok) {
+          // Surface the GA4 error message so admin knows exactly what's wrong
+          let parsed: any = null
+          try { parsed = JSON.parse(body) } catch {}
+          probe.error = parsed?.error?.message || body.slice(0, 400)
+          // Common errors:
+          // - 403 "User does not have sufficient permissions" → SA not added to GA4 property as Viewer
+          // - 403 "Google Analytics Data API has not been used in project ..." → API not enabled in GCP
+          // - 404 "Property ... does not exist" → wrong property ID
+        } else {
+          const json: any = JSON.parse(body)
+          probe.row_count = (json.rows || []).length
+          probe.ok = true
+        }
+      }
+    } catch (e: any) {
+      probe.error = e?.message || String(e)
+    }
+  }
+
   return c.json({
-    ga4_measurement_id: c.env.GA4_MEASUREMENT_ID || null,
-    ga4_api_secret: !!c.env.GA4_API_SECRET,
-    ga4_property_id: c.env.GA4_PROPERTY_ID || null,
-    gcp_service_account: !!c.env.GCP_SERVICE_ACCOUNT_KEY,
-    frontend_tracking: !!c.env.GA4_MEASUREMENT_ID,
-    server_side_events: !!(c.env.GA4_MEASUREMENT_ID && c.env.GA4_API_SECRET),
-    data_api: !!(c.env.GA4_PROPERTY_ID && c.env.GCP_SERVICE_ACCOUNT_KEY),
-    realtime_api: !!(c.env.GA4_PROPERTY_ID && c.env.GCP_SERVICE_ACCOUNT_KEY)
+    ga4_measurement_id: measurementId,
+    ga4_api_secret: apiSecret,
+    ga4_property_id: propertyId,
+    gcp_service_account: hasSA,
+    frontend_tracking: !!measurementId,
+    server_side_events: !!(measurementId && apiSecret),
+    data_api: !!(propertyId && hasSA),
+    realtime_api: !!(propertyId && hasSA),
+    probe
   })
 })
 
