@@ -15896,7 +15896,13 @@ function getD2DPageHTML(mapsApiKey: string) {
   <script>
     (function() {
       var c = localStorage.getItem('rc_customer');
-      if (!c) { window.location.href = '/customer/login'; return; }
+      var t = localStorage.getItem('rc_customer_token');
+      if (!c || !t) {
+        localStorage.removeItem('rc_customer');
+        localStorage.removeItem('rc_customer_token');
+        window.location.href = '/customer/login';
+        return;
+      }
       try {
         var u = JSON.parse(c);
         var g = document.getElementById('custGreeting');

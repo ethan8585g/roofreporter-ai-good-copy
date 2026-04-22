@@ -48,6 +48,13 @@
     var opts = { method: method, headers: authHeaders() };
     if (body) opts.body = JSON.stringify(body);
     return fetch('/api/d2d' + path, opts).then(function(r) {
+      if (r.status === 401) {
+        console.warn('[D2D] 401 — session expired, redirecting to login');
+        localStorage.removeItem('rc_customer');
+        localStorage.removeItem('rc_customer_token');
+        window.location.href = '/customer/login';
+        return { error: 'Session expired. Redirecting to login...' };
+      }
       if (!r.ok) {
         console.error('[D2D] API error:', method, path, 'status:', r.status);
         return r.text().then(function(txt) {
