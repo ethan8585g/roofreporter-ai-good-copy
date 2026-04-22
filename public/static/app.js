@@ -26,6 +26,8 @@ const state = {
     longitude: null,
     pinPlaced: false,
     addressConfirmed: false,
+    // Optional: auto-send completed report to this email
+    send_report_to_email: '',
     // Step 2 Phase C: Roof Tracing
     roof_trace_json: null,
     // Step 3: Homeowner
@@ -368,6 +370,20 @@ function renderStep2AddressPhase() {
                 class="w-full px-4 py-2.5 border-b-2 border-gray-200 focus:border-brand-500 outline-none text-sm transition-colors"
                 value="${state.formData.property_country}"
                 oninput="state.formData.property_country=this.value" />
+            </div>
+
+            <!-- Auto-Send Report Email (Optional) -->
+            <div class="pt-3 mt-2 border-t border-gray-100">
+              <div class="flex items-center gap-2 mb-2">
+                <i class="fas fa-paper-plane text-brand-500 text-xs"></i>
+                <span class="text-xs font-semibold text-gray-700 uppercase tracking-wide">Auto-Send Report (Optional)</span>
+              </div>
+              <label class="block text-xs font-medium text-gray-500 mb-1">Email to send completed report to</label>
+              <input type="email" id="auto-send-email-input" placeholder="name@example.com"
+                class="w-full px-4 py-2.5 border-b-2 border-gray-200 focus:border-brand-500 outline-none text-sm transition-colors"
+                value="${state.formData.send_report_to_email}"
+                oninput="state.formData.send_report_to_email=this.value" />
+              <p class="text-[11px] text-gray-400 mt-1">Leave blank to skip. If filled, the finished report will be emailed here automatically.</p>
             </div>
 
             <!-- Coordinates display -->
