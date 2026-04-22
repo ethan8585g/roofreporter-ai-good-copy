@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 import { sendGmailEmail } from '../services/email'
+import { getCustomerSessionToken } from '../lib/session-tokens'
 
 export const d2dRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -60,9 +61,11 @@ interface D2DUser {
 }
 
 async function getUser(c: any): Promise<D2DUser | null> {
-  const auth = c.req.header('Authorization')
-  if (!auth || !auth.startsWith('Bearer ')) return null
-  const token = auth.slice(7)
+  // Accept either Authorization: Bearer (legacy localStorage) or the
+  // rm_customer_session HttpOnly cookie. Cookie-only users (e.g. Google OAuth
+  // sign-in that didn't seed localStorage) were previously rejected with 401.
+  const token = getCustomerSessionToken(c)
+  if (!token) return null
   const session = await c.env.DB.prepare(
     "SELECT cs.customer_id FROM customer_sessions cs JOIN customers cu ON cu.id = cs.customer_id WHERE cs.session_token = ? AND cs.expires_at > datetime('now')"
   ).bind(token).first<any>()
