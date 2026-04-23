@@ -312,20 +312,59 @@
       border-radius: 16px;
       background: linear-gradient(135deg, #0ea5e9, #2563eb);
       border: none;
-      cursor: pointer;
+      cursor: grab;
       display: flex;
       align-items: center;
       justify-content: center;
       box-shadow: 0 8px 30px rgba(14,165,233,0.4);
-      transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+      transition: box-shadow 0.3s cubic-bezier(0.4,0,0.2,1), transform 0.2s;
       color: white;
       font-size: 24px;
+      touch-action: none;
+      user-select: none;
     }
     #rover-assistant-fab:hover {
       transform: scale(1.08);
       box-shadow: 0 12px 40px rgba(14,165,233,0.5);
     }
+    #rover-assistant-fab.dragging {
+      cursor: grabbing;
+      transition: none;
+      transform: scale(1.05);
+    }
     #rover-assistant-fab.hidden { display: none; }
+    .ra-fab-close {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #ef4444;
+      color: white;
+      border: 2px solid white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+      padding: 0;
+      opacity: 0;
+      transform: scale(0.8);
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      z-index: 2;
+    }
+    #rover-assistant-fab:hover .ra-fab-close {
+      opacity: 1;
+      transform: scale(1);
+    }
+    .ra-fab-close:hover {
+      background: #dc2626;
+      transform: scale(1.15) !important;
+    }
     .ra-fab-label {
       position: absolute;
       bottom: 68px;
@@ -398,12 +437,123 @@
   ].join('');
   document.body.appendChild(panel);
 
-  // FAB
+  // FAB — hidden-for-session check
   var fab = document.createElement('button');
   fab.id = 'rover-assistant-fab';
-  fab.onclick = function() { window.__roverAssistantToggle(); };
-  fab.innerHTML = '<span>🐕</span><div class="ra-fab-label">Ask Rover AI</div>';
+  fab.innerHTML = '<button class="ra-fab-close" id="ra-fab-close" title="Hide Rover" aria-label="Hide Rover">×</button><span>🐕</span><div class="ra-fab-label">Ask Rover AI (drag to move)</div>';
+  if (sessionStorage.getItem('rover_fab_hidden') === '1') {
+    fab.classList.add('hidden');
+  }
   document.body.appendChild(fab);
+
+  // Restore saved FAB position (per-browser)
+  (function restoreFabPosition() {
+    try {
+      var saved = JSON.parse(localStorage.getItem('rover_fab_pos') || 'null');
+      if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
+        var maxLeft = window.innerWidth - 60;
+        var maxTop = window.innerHeight - 60;
+        var left = Math.max(0, Math.min(saved.left, maxLeft));
+        var top = Math.max(0, Math.min(saved.top, maxTop));
+        fab.style.left = left + 'px';
+        fab.style.top = top + 'px';
+        fab.style.right = 'auto';
+        fab.style.bottom = 'auto';
+      }
+    } catch(e) { /* ignore */ }
+  })();
+
+  // ============================================================
+  // DRAG + CLOSE behavior for FAB
+  // ============================================================
+  var dragState = { active: false, moved: false, startX: 0, startY: 0, offsetX: 0, offsetY: 0 };
+  var DRAG_THRESHOLD = 5; // px before click becomes drag
+
+  function onPointerDown(e) {
+    // Ignore close-button clicks
+    if (e.target && e.target.closest && e.target.closest('.ra-fab-close')) return;
+    var point = e.touches ? e.touches[0] : e;
+    var rect = fab.getBoundingClientRect();
+    dragState.active = true;
+    dragState.moved = false;
+    dragState.startX = point.clientX;
+    dragState.startY = point.clientY;
+    dragState.offsetX = point.clientX - rect.left;
+    dragState.offsetY = point.clientY - rect.top;
+    document.addEventListener('mousemove', onPointerMove);
+    document.addEventListener('mouseup', onPointerUp);
+    document.addEventListener('touchmove', onPointerMove, { passive: false });
+    document.addEventListener('touchend', onPointerUp);
+  }
+
+  function onPointerMove(e) {
+    if (!dragState.active) return;
+    var point = e.touches ? e.touches[0] : e;
+    var dx = point.clientX - dragState.startX;
+    var dy = point.clientY - dragState.startY;
+    if (!dragState.moved && Math.sqrt(dx*dx + dy*dy) < DRAG_THRESHOLD) return;
+    dragState.moved = true;
+    fab.classList.add('dragging');
+    if (e.cancelable) e.preventDefault();
+    var left = point.clientX - dragState.offsetX;
+    var top = point.clientY - dragState.offsetY;
+    var maxLeft = window.innerWidth - fab.offsetWidth;
+    var maxTop = window.innerHeight - fab.offsetHeight;
+    left = Math.max(0, Math.min(left, maxLeft));
+    top = Math.max(0, Math.min(top, maxTop));
+    fab.style.left = left + 'px';
+    fab.style.top = top + 'px';
+    fab.style.right = 'auto';
+    fab.style.bottom = 'auto';
+  }
+
+  function onPointerUp() {
+    document.removeEventListener('mousemove', onPointerMove);
+    document.removeEventListener('mouseup', onPointerUp);
+    document.removeEventListener('touchmove', onPointerMove);
+    document.removeEventListener('touchend', onPointerUp);
+    if (!dragState.active) return;
+    var wasMoved = dragState.moved;
+    dragState.active = false;
+    fab.classList.remove('dragging');
+    if (wasMoved) {
+      // Save position
+      try {
+        var rect = fab.getBoundingClientRect();
+        localStorage.setItem('rover_fab_pos', JSON.stringify({ left: rect.left, top: rect.top }));
+      } catch(e) { /* ignore */ }
+    } else {
+      // Treat as click — open the assistant
+      window.__roverAssistantToggle();
+    }
+  }
+
+  fab.addEventListener('mousedown', onPointerDown);
+  fab.addEventListener('touchstart', onPointerDown, { passive: true });
+
+  // Close button — hide FAB for this session
+  var fabCloseBtn = document.getElementById('ra-fab-close');
+  if (fabCloseBtn) {
+    fabCloseBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      e.preventDefault();
+      fab.classList.add('hidden');
+      try { sessionStorage.setItem('rover_fab_hidden', '1'); } catch(err) {}
+    });
+    fabCloseBtn.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+    fabCloseBtn.addEventListener('touchstart', function(e) { e.stopPropagation(); });
+  }
+
+  // Keep FAB on-screen if window resizes
+  window.addEventListener('resize', function() {
+    if (!fab.style.left) return;
+    var left = parseFloat(fab.style.left) || 0;
+    var top = parseFloat(fab.style.top) || 0;
+    var maxLeft = window.innerWidth - fab.offsetWidth;
+    var maxTop = window.innerHeight - fab.offsetHeight;
+    fab.style.left = Math.max(0, Math.min(left, maxLeft)) + 'px';
+    fab.style.top = Math.max(0, Math.min(top, maxTop)) + 'px';
+  });
 
   // ============================================================
   // ELEMENT REFS
