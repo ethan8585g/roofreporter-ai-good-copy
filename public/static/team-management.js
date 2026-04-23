@@ -365,7 +365,7 @@ function renderInviteModal() {
   return '<div id="inviteModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">' +
     '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden max-h-screen overflow-y-auto">' +
       '<div class="bg-gradient-to-r from-emerald-500 to-emerald-600 px-6 py-4 text-white">' +
-        '<h3 class="text-lg font-bold"><i class="fas fa-user-plus mr-2"></i>Invite Team Member</h3>' +
+        '<h3 class="text-lg font-bold"><i class="fas fa-user-plus mr-2"></i>Add Team Member</h3>' +
         '<p class="text-emerald-400 text-sm">Free — add unlimited sales &amp; crew members</p>' +
       '</div>' +
       '<form onsubmit="sendInvite(event)" class="p-6 space-y-4">' +
@@ -378,6 +378,15 @@ function renderInviteModal() {
           '<input type="email" id="invEmail" required placeholder="john@company.com" class="w-full border border-white/15 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">' +
         '</div>' +
         '<div>' +
+          '<label class="block text-sm font-semibold text-gray-300 mb-1">Password *</label>' +
+          '<input type="password" id="invPassword" required minlength="8" placeholder="At least 8 characters" autocomplete="new-password" class="w-full border border-white/15 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">' +
+          '<p class="text-[11px] text-gray-500 mt-1">Share these credentials with your team member so they can log in.</p>' +
+        '</div>' +
+        '<div>' +
+          '<label class="block text-sm font-semibold text-gray-300 mb-1">Confirm Password *</label>' +
+          '<input type="password" id="invPasswordConfirm" required minlength="8" placeholder="Re-enter password" autocomplete="new-password" class="w-full border border-white/15 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">' +
+        '</div>' +
+        '<div>' +
           '<label class="block text-sm font-semibold text-gray-300 mb-1">Role</label>' +
           '<select id="invRole" class="w-full border border-white/15 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500">' +
             '<option value="member">Team Member — no team management</option>' +
@@ -388,7 +397,7 @@ function renderInviteModal() {
         '<div id="invMsg"></div>' +
         '<div class="flex gap-3 pt-2">' +
           '<button type="button" onclick="hideInviteModal()" class="flex-1 border border-white/15 rounded-lg py-2.5 text-sm font-semibold text-gray-300 hover:bg-[#111111]/5 transition-colors">Cancel</button>' +
-          '<button type="submit" id="invBtn" class="flex-1 bg-emerald-500/15 hover:bg-emerald-500/15 text-white rounded-lg py-2.5 text-sm font-semibold transition-all"><i class="fas fa-paper-plane mr-1"></i>Send Invite</button>' +
+          '<button type="submit" id="invBtn" class="flex-1 bg-emerald-500/15 hover:bg-emerald-500/15 text-white rounded-lg py-2.5 text-sm font-semibold transition-all"><i class="fas fa-user-plus mr-1"></i>Create Team Member</button>' +
         '</div>' +
       '</form>' +
     '</div>' +
@@ -400,6 +409,8 @@ function showInviteModal() {
   document.getElementById('inviteModal').classList.remove('hidden');
   document.getElementById('invName').value = '';
   document.getElementById('invEmail').value = '';
+  var pw = document.getElementById('invPassword'); if (pw) pw.value = '';
+  var pwc = document.getElementById('invPasswordConfirm'); if (pwc) pwc.value = '';
   document.getElementById('invMsg').innerHTML = '';
 }
 function hideInviteModal() {
@@ -413,29 +424,41 @@ async function sendInvite(e) {
   var msg = document.getElementById('invMsg');
   var name = document.getElementById('invName').value.trim();
   var email = document.getElementById('invEmail').value.trim();
+  var password = document.getElementById('invPassword').value;
+  var passwordConfirm = document.getElementById('invPasswordConfirm').value;
   var role = document.getElementById('invRole').value;
 
-  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Sending...';
   msg.innerHTML = '';
+
+  if (password.length < 8) {
+    msg.innerHTML = '<div class="bg-red-500/10 border border-red-200 rounded-lg p-3 text-red-700 text-sm">Password must be at least 8 characters.</div>';
+    return;
+  }
+  if (password !== passwordConfirm) {
+    msg.innerHTML = '<div class="bg-red-500/10 border border-red-200 rounded-lg p-3 text-red-700 text-sm">Passwords do not match.</div>';
+    return;
+  }
+
+  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Creating...';
 
   var permissions = collectPerms('inv');
 
   try {
     var res = await fetch('/api/team/invite', {
       method: 'POST', headers: authHeaders(),
-      body: JSON.stringify({ name: name, email: email, role: role, permissions: permissions })
+      body: JSON.stringify({ name: name, email: email, password: password, role: role, permissions: permissions })
     });
     var data = await res.json();
     if (res.ok && data.success) {
       msg.innerHTML = '<div class="bg-emerald-500/10 border border-green-200 rounded-lg p-3 text-green-700 text-sm"><i class="fas fa-check-circle mr-1"></i>' + data.message + '</div>';
       setTimeout(async function() { hideInviteModal(); await loadTeamData(); renderTeam(); }, 1500);
     } else {
-      msg.innerHTML = '<div class="bg-red-500/10 border border-red-200 rounded-lg p-3 text-red-700 text-sm">' + (data.error || 'Failed to send invite') + '</div>';
+      msg.innerHTML = '<div class="bg-red-500/10 border border-red-200 rounded-lg p-3 text-red-700 text-sm">' + (data.error || 'Failed to create team member') + '</div>';
     }
   } catch(err) {
     msg.innerHTML = '<div class="bg-red-500/10 border border-red-200 rounded-lg p-3 text-red-700 text-sm">Network error</div>';
   }
-  btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1"></i>Send Invite';
+  btn.disabled = false; btn.innerHTML = '<i class="fas fa-user-plus mr-1"></i>Create Team Member';
 }
 
 // ── Actions ──

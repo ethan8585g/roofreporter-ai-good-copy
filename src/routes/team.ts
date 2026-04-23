@@ -3,6 +3,7 @@ import { getCustomerSessionToken } from '../lib/session-tokens'
 import type { Bindings } from '../types'
 import { getActivityFeed, logFromContext } from '../lib/team-activity'
 import { sanitizePermissions } from '../lib/permissions'
+import { hashPassword } from '../lib/password'
 
 // Returns the keys whose value changed between two sanitized permission blobs.
 function diffPermissionKeys(before: Record<string, boolean>, after: Record<string, boolean>): string[] {
@@ -168,20 +169,11 @@ teamRoutes.post('/invite', async (c) => {
     return c.json({ error: 'Only account owners or team admins can invite members' }, 403)
   }
 
-  // Rate limit: max 5 invites per owner per hour — blocks spammy blast-invite abuse.
-  try {
-    const recent = await c.env.DB.prepare(
-      "SELECT COUNT(*) as cnt FROM team_invitations WHERE owner_id = ? AND created_at > datetime('now', '-1 hour')"
-    ).bind(ownerId).first<any>()
-    if (recent && recent.cnt >= 5) {
-      return c.json({ error: 'Too many invitations sent in the last hour. Please wait before sending more.' }, 429)
-    }
-  } catch (e: any) { console.warn('[team/invite] rate-limit check failed:', e?.message || e) }
-
   const body = await c.req.json()
   const email = (body.email || '').toLowerCase().trim()
   const name = (body.name || '').trim()
   const role = body.role === 'admin' ? 'admin' : 'member'
+  const password = typeof body.password === 'string' ? body.password : ''
 
   // Validate and sanitize permissions — unified key list lives in lib/permissions.
   // Prior bug: invite stored 5 keys, accept stored 13, so members silently got
@@ -200,6 +192,73 @@ teamRoutes.post('/invite', async (c) => {
   if (existing && existing.status === 'active') {
     return c.json({ error: 'This person is already on your team' }, 409)
   }
+
+  // ──────────────────────────────────────────────────────────────
+  // Direct-provision branch: owner supplied a password, so we
+  // create the login immediately instead of sending an email invite.
+  // ──────────────────────────────────────────────────────────────
+  if (password) {
+    if (password.length < 8) {
+      return c.json({ error: 'Password must be at least 8 characters' }, 400)
+    }
+
+    // Block re-using an email that already has a customers row — that row
+    // could belong to an unrelated account; we don't want to silently take it over.
+    const existingCustomer = await c.env.DB.prepare(
+      'SELECT id FROM customers WHERE email = ?'
+    ).bind(email).first<any>()
+    if (existingCustomer) {
+      return c.json({ error: 'A user with this email already exists. Ask them to log in, then use the email-invite flow to add them.' }, 409)
+    }
+
+    const passwordHash = await hashPassword(password)
+    const now = new Date().toISOString()
+
+    // Mirror the shape used by /api/customer/register so login queries
+    // (which filter on is_active = 1) succeed immediately. Trial counters
+    // are zeroed so team members don't get a second free trial allowance.
+    const insertCustomer = await c.env.DB.prepare(`
+      INSERT INTO customers (email, name, phone, company_name, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used)
+      VALUES (?, ?, '', ?, ?, 1, 1, 0, 0, 0, 0)
+    `).bind(email, name, customer.company_name || '', passwordHash).run()
+
+    const newCustomerId = insertCustomer.meta.last_row_id
+
+    const memberResult = await c.env.DB.prepare(`
+      INSERT INTO team_members (owner_id, member_customer_id, email, name, role, status, permissions, billing_started_at, joined_at)
+      VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)
+    `).bind(ownerId, newCustomerId, email, name, role, JSON.stringify(permissions), now, now).run()
+
+    const teamMemberId = memberResult.meta.last_row_id
+
+    await logFromContext(c, {
+      entity_type: 'team_member',
+      entity_id: Number(teamMemberId),
+      action: 'created',
+      metadata: { email, name, role, permissions, mode: 'direct' },
+    })
+
+    return c.json({
+      success: true,
+      message: `Team member created — ${email} can now log in.`,
+      team_member_id: teamMemberId,
+      member_customer_id: newCustomerId,
+    })
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Email-invitation branch (unchanged legacy flow).
+  // ──────────────────────────────────────────────────────────────
+
+  // Rate limit: max 5 invites per owner per hour — blocks spammy blast-invite abuse.
+  try {
+    const recent = await c.env.DB.prepare(
+      "SELECT COUNT(*) as cnt FROM team_invitations WHERE owner_id = ? AND created_at > datetime('now', '-1 hour')"
+    ).bind(ownerId).first<any>()
+    if (recent && recent.cnt >= 5) {
+      return c.json({ error: 'Too many invitations sent in the last hour. Please wait before sending more.' }, 429)
+    }
+  } catch (e: any) { console.warn('[team/invite] rate-limit check failed:', e?.message || e) }
 
   // Check for pending invitation
   const pendingInvite = await c.env.DB.prepare(`
