@@ -5,18 +5,9 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import type { ServiceArea, Ring } from '../services/storm-matcher'
+import { requireCustomerId as requireCustomer } from '../lib/session-tokens'
 
 export const stormAlertsRoutes = new Hono<{ Bindings: Bindings }>()
-
-async function requireCustomer(c: any): Promise<number | null> {
-  const auth = c.req.header('Authorization')
-  if (!auth || !auth.startsWith('Bearer ')) return null
-  const token = auth.slice(7)
-  const session = await c.env.DB.prepare(
-    "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
-  ).bind(token).first<any>()
-  return session?.customer_id ?? null
-}
 
 function parsePolygon(raw: any): Ring | null {
   if (!Array.isArray(raw) || raw.length < 3) return null

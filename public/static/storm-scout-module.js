@@ -31,12 +31,20 @@
   var historyMode = false;
   var historyDate = null;
 
+  // Perf: individual clickable hail markers are expensive when there are
+  // hundreds/thousands of reports. The HeatmapLayer alone is enough at
+  // continental view; markers only add value once the user is zoomed in
+  // enough to distinguish individual storm cells.
+  var MARKER_MIN_ZOOM = 9;
+  var MARKER_CAP = 300; // hard cap even at high zoom, to keep pan smooth
+
   // Territory (Phase 3) state
   var territories = [];
   var territoryPolygons = {};   // id -> google.maps.Polygon
   var drawingManager = null;
   var drawingActive = false;
   var pendingEditAreaId = null;
+  var territoriesFitDone = false;
 
   // Playback state
   var playback = {
@@ -358,20 +366,38 @@
     var el = document.getElementById('ssMap');
     if (!el || !window.google || !google.maps) return;
     map = new google.maps.Map(el, {
-      center: { lat: 45.0, lng: -90.0 },
-      zoom: 4,
+      center: { lat: 39.8, lng: -98.5 },
+      zoom: 5,
       mapTypeId: 'hybrid',
       streetViewControl: false,
       mapTypeControl: true,
       fullscreenControl: true,
+      // Scroll-to-zoom without requiring Ctrl — faster to drill down.
+      gestureHandling: 'greedy',
       mapTypeControlOptions: {
         style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
         mapTypeIds: ['roadmap', 'hybrid', 'satellite', 'terrain']
       }
     });
     infoWindow = new google.maps.InfoWindow();
+
+    // Re-render hail markers when the viewport changes. `idle` fires once
+    // after pan/zoom settles — much cheaper than re-rendering on every
+    // bounds_changed tick. Only markers are rebuilt; the HeatmapLayer
+    // itself stays put, so this is near-free at low zooms.
+    var scheduled = false;
+    map.addListener('idle', function () {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(function () {
+        scheduled = false;
+        renderHeatmap();
+      });
+    });
+
     ssTrack('map_open');
-    loadBasemapProviders();
+    // Defer non-critical network calls so the map paints first.
+    requestAnimationFrame(function () { loadBasemapProviders(); });
     loadAll(false);
   }
 
@@ -543,11 +569,27 @@
       heatmapLayer.setMap(map);
     }
 
-    // Clickable markers (small) for individual hail reports — so user can see size/timestamp
-    hail.forEach(function (r) {
+    // Clickable markers only when the user is zoomed in enough to care.
+    // At continental view, the HeatmapLayer tells the story; rendering
+    // thousands of Marker objects there makes pan/zoom crawl.
+    var z = map.getZoom() || 0;
+    if (z < MARKER_MIN_ZOOM) return;
+
+    // Viewport-gate so we never render off-screen markers. Also cap at
+    // MARKER_CAP by largest hail size so dense storm days stay smooth.
+    var bounds = map.getBounds();
+    var visibleHail = bounds
+      ? hail.filter(function (r) { return bounds.contains({ lat: r.lat, lng: r.lng }); })
+      : hail;
+    if (visibleHail.length > MARKER_CAP) {
+      visibleHail = visibleHail.slice().sort(function (a, b) { return (b.sizeInches || 0) - (a.sizeInches || 0); }).slice(0, MARKER_CAP);
+    }
+
+    visibleHail.forEach(function (r) {
       var m = new google.maps.Marker({
         position: { lat: r.lat, lng: r.lng }, map: map,
         title: r.sizeInches.toFixed(2) + '" hail',
+        optimized: true,
         icon: {
           path: google.maps.SymbolPath.CIRCLE, scale: Math.max(4, Math.min(12, 3 + r.sizeInches * 2)),
           fillColor: colorForHailSize(r.sizeInches), fillOpacity: 0.85, strokeColor: '#fff', strokeWeight: 1
@@ -925,6 +967,19 @@
     return alertsApi('GET', '/areas').then(function (res) {
       territories = res.areas || [];
       renderTerritories();
+      // First-time zoom to the user's territories so they aren't stuck
+      // panning in from continental view. Only on initial load — if the
+      // user has already interacted with the map, don't yank them around.
+      if (!territoriesFitDone && map && territories.length) {
+        territoriesFitDone = true;
+        var bounds = new google.maps.LatLngBounds();
+        var n = 0;
+        territories.forEach(function (t) {
+          if (!Array.isArray(t.polygon)) return;
+          t.polygon.forEach(function (p) { bounds.extend({ lat: p.lat, lng: p.lng }); n++; });
+        });
+        if (n >= 2) map.fitBounds(bounds, 40);
+      }
     }).catch(function (err) {
       console.error('[StormScout] territories', err);
       var listEl = document.getElementById('ssTerrList');

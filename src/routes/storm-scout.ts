@@ -3,18 +3,9 @@ import type { Bindings } from '../types'
 import { getActiveAlerts, getHailReports, stormCacheClear } from '../services/storm-data'
 import { buildDailySnapshot, writeSnapshot, readSnapshot, listSnapshotDates, pruneOldSnapshots, matchSnapshotAndNotify } from '../services/storm-ingest'
 import { GIBS_LAYERS, getGibsTileUrl, getGibsMaxZoom, buildGoogleStaticMapUrl, BASEMAP_PROVIDERS } from '../services/satellite-imagery'
+import { requireCustomerId as requireCustomer } from '../lib/session-tokens'
 
 export const stormScoutRoutes = new Hono<{ Bindings: Bindings }>()
-
-async function requireCustomer(c: any): Promise<number | null> {
-  const auth = c.req.header('Authorization')
-  if (!auth || !auth.startsWith('Bearer ')) return null
-  const token = auth.slice(7)
-  const session = await c.env.DB.prepare(
-    "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
-  ).bind(token).first<any>()
-  return session?.customer_id ?? null
-}
 
 stormScoutRoutes.get('/alerts', async (c) => {
   const customerId = await requireCustomer(c)

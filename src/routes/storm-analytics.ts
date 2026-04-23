@@ -3,6 +3,7 @@
 // ============================================================
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
+import { requireCustomerId as requireCustomer } from '../lib/session-tokens'
 
 export const stormAnalyticsRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -11,16 +12,6 @@ const ALLOWED_EVENTS = new Set([
   'territory_create', 'match_sent', 'lead_created_from_storm',
   'layer_toggle', 'history_load'
 ])
-
-async function requireCustomer(c: any): Promise<number | null> {
-  const auth = c.req.header('Authorization')
-  if (!auth || !auth.startsWith('Bearer ')) return null
-  const token = auth.slice(7)
-  const session = await c.env.DB.prepare(
-    "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
-  ).bind(token).first<any>()
-  return session?.customer_id ?? null
-}
 
 stormAnalyticsRoutes.post('/event', async (c) => {
   const customerId = await requireCustomer(c)
