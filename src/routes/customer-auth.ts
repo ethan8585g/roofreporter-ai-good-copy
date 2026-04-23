@@ -585,7 +585,7 @@ customerAuthRoutes.post('/register', async (c) => {
       await c.env.DB.prepare("INSERT INTO register_attempts (ip, email) VALUES (?, ?)").bind(clientIp, cleanEmail).run()
     } catch (e: any) { console.warn('[register] log insert failed:', e?.message || e) }
 
-    // Verify the email verification token (unless email config is not set up)
+    // If a verification_token was supplied, validate it. If not, skip — email verification is optional.
     if (verification_token) {
       const verified = await c.env.DB.prepare(
         "SELECT * FROM email_verification_codes WHERE email = ? AND verification_token = ? AND verified_at IS NOT NULL AND created_at > datetime('now', '-30 minutes')"
@@ -594,15 +594,6 @@ customerAuthRoutes.post('/register', async (c) => {
       if (!verified) {
         return c.json({ error: 'Email verification expired or invalid. Please verify your email again.' }, 400)
       }
-    } else {
-      // Check if email verification is configured — if ANY email service is available, require verification
-      const hasResend = !!(c.env as any).RESEND_API_KEY
-      const hasGmail = !!((c.env as any).GMAIL_REFRESH_TOKEN && (c.env as any).GMAIL_CLIENT_ID)
-      const hasGCP = !!(c.env as any).GCP_SERVICE_ACCOUNT_KEY
-      if (hasResend || hasGmail || hasGCP) {
-        return c.json({ error: 'Email verification is required. Please verify your email first.' }, 400)
-      }
-      // If no email service configured, allow registration without verification (graceful degradation)
     }
 
     const existing = await c.env.DB.prepare(

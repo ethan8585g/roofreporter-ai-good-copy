@@ -8778,8 +8778,8 @@ ${previewId ? `
               <input id="reg-website" type="text" name="website" tabindex="-1" autocomplete="off">
             </div>
 
-            <!-- Email verification code entry (required before details/submit) -->
-            <div id="reg-verify-block" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:14px;margin-bottom:16px">
+            <!-- Email verification code entry (optional; hidden by default) -->
+            <div id="reg-verify-block" style="display:none;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:14px;margin-bottom:16px">
               <div style="font-size:13px;color:#0c4a6e;margin-bottom:8px"><i class="fas fa-envelope-open-text" style="margin-right:6px"></i>We sent a 6-digit code to your email. Enter it below to continue.</div>
               <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                 <input id="reg-code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
@@ -8868,11 +8868,10 @@ ${previewId ? `
               }
             </style>
             <div id="reg-submit-wrap">
-              <button type="button" id="reg-submit-btn" onclick="submitRegForm()" disabled
-                style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:16px;cursor:pointer;opacity:0.5">
+              <button type="button" id="reg-submit-btn" onclick="submitRegForm()"
+                style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:16px;cursor:pointer">
                 Create Account &#x2192;
               </button>
-              <p id="reg-submit-hint" style="text-align:center;margin:8px 0 0;font-size:12px;color:#9ca3af">Verify your email above to enable this button.</p>
             </div>
           </div>
         </form>
@@ -8925,12 +8924,86 @@ ${previewId ? `
   </main>
 
   <script>
+    var verificationToken = '';
+
+    function setRegError(msg) {
+      var el = document.getElementById('reg-error');
+      if (!el) return;
+      if (msg) { el.textContent = msg; el.style.display = 'block'; }
+      else { el.textContent = ''; el.style.display = 'none'; }
+    }
+
+    function setSubmitEnabled(enabled) {
+      var btn = document.getElementById('reg-submit-btn');
+      var hint = document.getElementById('reg-submit-hint');
+      if (btn) { btn.disabled = !enabled; btn.style.opacity = enabled ? '1' : '0.5'; btn.style.cursor = enabled ? 'pointer' : 'not-allowed'; }
+      if (hint) hint.style.display = enabled ? 'none' : 'block';
+    }
+
+    async function verifyCodeEntry() {
+      setRegError('');
+      var email = document.getElementById('reg-email').value.trim();
+      var code = (document.getElementById('reg-code').value || '').trim();
+      if (!code || code.length !== 6) {
+        setRegError('Enter the 6-digit code from your email.');
+        return;
+      }
+      var btn = document.getElementById('reg-verify-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Verifying...'; }
+      try {
+        var r = await fetch('/api/customer-auth/verify-code', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({email: email, code: code})
+        });
+        var j = await r.json().catch(function(){ return {}; });
+        if (!r.ok || !j.success || !j.verification_token) {
+          setRegError(j.error || 'Invalid or expired code. Please try again.');
+          if (btn) { btn.disabled = false; btn.textContent = 'Verify'; }
+          return;
+        }
+        verificationToken = j.verification_token;
+        var vb = document.getElementById('reg-verify-block'); if (vb) vb.style.display = 'none';
+        var vd = document.getElementById('reg-verified-block'); if (vd) vd.style.display = 'block';
+        setSubmitEnabled(true);
+        try { rrTrack('signup_email_verified', {}); } catch(_){}
+        var nameEl = document.getElementById('reg-name'); if (nameEl) nameEl.focus();
+      } catch (e) {
+        setRegError('Network error. Please try again.');
+        if (btn) { btn.disabled = false; btn.textContent = 'Verify'; }
+      }
+    }
+
+    async function resendVerificationCode(ev) {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      setRegError('');
+      var email = document.getElementById('reg-email').value.trim();
+      var link = document.getElementById('reg-resend-link');
+      if (link) { link.textContent = 'Sending...'; link.style.pointerEvents = 'none'; }
+      try {
+        var r = await fetch('/api/customer-auth/send-verification', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({email: email})
+        });
+        var j = await r.json().catch(function(){ return {}; });
+        if (!r.ok || !j.success) {
+          setRegError(j.error || 'Could not resend code. Please try again.');
+        } else {
+          try { rrTrack('signup_code_resent', {}); } catch(_){}
+        }
+      } catch (e) {
+        setRegError('Network error. Please try again.');
+      }
+      if (link) { link.textContent = 'Resend code'; link.style.pointerEvents = 'auto'; }
+      return false;
+    }
+
     function goToStep2(silent) {
       var email = document.getElementById('reg-email').value.trim();
       if (!silent && (!email || !email.includes('@'))) {
         document.getElementById('reg-email').focus();
         return;
       }
+      setRegError('');
       document.getElementById('step1').style.display = 'none';
       document.getElementById('step2').style.display = 'block';
       document.getElementById('prog2').style.background = '#00FF88';
@@ -8972,12 +9045,12 @@ ${previewId ? `
       bar.style.width = pct + '%';
       bar.style.background = colors[score];
     }
-    // On page load: rehydrate draft
+    // On page load: rehydrate draft (email only; user clicks Continue to receive a new verification code)
     (function() {
       var draft = JSON.parse(localStorage.getItem('rr_signup_draft') || '{}');
       if (draft.email) {
         var el = document.getElementById('reg-email');
-        if (el) { el.value = draft.email; goToStep2(true); }
+        if (el) el.value = draft.email;
       }
       var params = new URLSearchParams(window.location.search);
       if (params.get('resume') === '1') {
@@ -8985,7 +9058,6 @@ ${previewId ? `
         if (em) {
           var el2 = document.getElementById('reg-email');
           if (el2) el2.value = em;
-          goToStep2(true);
           rrTrack('signup_resumed', {});
         }
       }
@@ -9038,6 +9110,11 @@ ${previewId ? `
         var ce = document.getElementById('reg-company'); if (ce) ce.focus();
         return;
       }
+      if (password.length < 6) {
+        setRegError('Password must be at least 6 characters.');
+        var pwEl = document.getElementById('reg-password'); if (pwEl) pwEl.focus();
+        return;
+      }
 
       rrTrack('signup_submit_attempt', { company_size: companySize, primary_use: primaryUse });
       var refCode = localStorage.getItem('rr_ref_code') || new URLSearchParams(window.location.search).get('ref') || '';
@@ -9053,6 +9130,7 @@ ${previewId ? `
           company_size: companySize,
           primary_use: primaryUse,
           website: honeypot,
+          verification_token: verificationToken,
           referred_by_code: refCode
         })
       });
