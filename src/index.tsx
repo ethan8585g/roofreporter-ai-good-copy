@@ -8778,6 +8778,25 @@ ${previewId ? `
               <input id="reg-website" type="text" name="website" tabindex="-1" autocomplete="off">
             </div>
 
+            <!-- Email verification code entry (required before details/submit) -->
+            <div id="reg-verify-block" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:14px;margin-bottom:16px">
+              <div style="font-size:13px;color:#0c4a6e;margin-bottom:8px"><i class="fas fa-envelope-open-text" style="margin-right:6px"></i>We sent a 6-digit code to your email. Enter it below to continue.</div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <input id="reg-code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
+                  placeholder="123456"
+                  oninput="this.value=this.value.replace(/[^0-9]/g,'')"
+                  style="flex:1;min-width:140px;padding:12px 14px;border:1.5px solid #d1d5db;border-radius:10px;font-size:18px;letter-spacing:6px;text-align:center;font-family:monospace;outline:none;box-sizing:border-box">
+                <button type="button" id="reg-verify-btn" onclick="verifyCodeEntry()"
+                  style="padding:12px 18px;background:#0ea5e9;color:#fff;font-weight:700;border:none;border-radius:10px;font-size:14px;cursor:pointer">Verify</button>
+              </div>
+              <div style="text-align:right;margin-top:8px">
+                <a href="#" id="reg-resend-link" onclick="resendVerificationCode(event)" style="font-size:12px;color:#0ea5e9;text-decoration:underline">Resend code</a>
+              </div>
+            </div>
+            <div id="reg-verified-block" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:14px;color:#15803d">
+              <i class="fas fa-check-circle" style="margin-right:6px"></i>Email verified &mdash; complete the form below.
+            </div>
+
             <label for="reg-name" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Full Name</label>
             <input id="reg-name" type="text" name="name" autocomplete="name" required
               placeholder="Jane Smith"
@@ -8849,10 +8868,11 @@ ${previewId ? `
               }
             </style>
             <div id="reg-submit-wrap">
-              <button type="button" onclick="submitRegForm()"
-                style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:16px;cursor:pointer">
+              <button type="button" id="reg-submit-btn" onclick="submitRegForm()" disabled
+                style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:16px;cursor:pointer;opacity:0.5">
                 Create Account &#x2192;
               </button>
+              <p id="reg-submit-hint" style="text-align:center;margin:8px 0 0;font-size:12px;color:#9ca3af">Verify your email above to enable this button.</p>
             </div>
           </div>
         </form>
@@ -15955,7 +15975,7 @@ function getStormScoutPageHTML(mapsApiKey: string) {
         if (typeof initStormScoutMap === 'function') initStormScoutMap();
       }
     </script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=geometry,drawing,visualization&callback=onStormScoutMapsReady" async defer></script>`
+    <script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=geometry,drawing,visualization,places&callback=onStormScoutMapsReady" async defer></script>`
     : '<!-- Google Maps: No API key configured. -->'
 
   return `<!DOCTYPE html>

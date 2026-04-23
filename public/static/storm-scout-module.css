@@ -168,3 +168,55 @@
   .ss-timebar { bottom:10px; padding:6px 10px; font-size:11px; }
   .ss-sat-attr { bottom:110px; }
 }
+
+/* ============================================================
+   Search bar + trace drawing tools (overlay, top-center of map)
+   ============================================================ */
+.ss-searchbar {
+  position:absolute; left:50%; top:12px; transform:translateX(-50%);
+  background:rgba(17,17,17,0.92); border:1px solid rgba(255,255,255,0.1);
+  border-radius:10px; padding:6px; z-index:6;
+  display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+  box-shadow:0 8px 24px rgba(0,0,0,0.35);
+  max-width:calc(100% - 24px);
+}
+.ss-search-input-wrap {
+  position:relative; display:flex; align-items:center;
+  background:#1f2937; border:1px solid rgba(255,255,255,0.1); border-radius:8px;
+  min-width:260px;
+}
+.ss-search-icon { color:#9ca3af; font-size:12px; padding:0 8px 0 10px; }
+.ss-search-input {
+  flex:1; background:transparent; color:#e5e7eb; border:0; outline:none;
+  padding:7px 4px; font-size:13px; min-width:180px;
+}
+.ss-search-input::placeholder { color:#6b7280; }
+.ss-search-clear {
+  background:transparent; border:0; color:#9ca3af; cursor:pointer;
+  padding:4px 10px; font-size:12px;
+}
+.ss-search-clear:hover { color:#fff; }
+.ss-tracebar { display:flex; align-items:center; gap:4px; padding-left:4px; border-left:1px solid rgba(255,255,255,0.1); }
+.ss-trace-btn {
+  background:#1f2937; color:#e5e7eb; border:1px solid rgba(255,255,255,0.08);
+  padding:7px 10px; border-radius:6px; cursor:pointer; font-size:13px; line-height:1;
+  min-width:34px;
+}
+.ss-trace-btn:hover { background:#374151; color:#fff; }
+.ss-trace-btn.active { background:#10b981; color:#fff; border-color:#10b981; }
+.ss-trace-clear { color:#fca5a5; }
+.ss-trace-clear:hover { background:#7f1d1d; color:#fff; }
+.ss-trace-stats {
+  display:none; align-items:center; gap:8px; width:100%;
+  padding:6px 8px 2px; font-size:12px; color:#cbd5e1;
+  border-top:1px solid rgba(255,255,255,0.08); margin-top:2px;
+}
+.ss-trace-stats i { color:#10b981; margin-right:4px; }
+.ss-trace-count { margin-left:auto; color:#9ca3af; font-size:11px; }
+.pac-container { z-index:9999; }
+
+@media (max-width: 768px) {
+  .ss-searchbar { left:64px; right:12px; top:12px; transform:none; max-width:none; }
+  .ss-search-input-wrap { min-width:0; flex:1 1 100%; }
+  .ss-tracebar { flex:1 1 100%; justify-content:flex-start; padding-left:0; border-left:0; }
+}

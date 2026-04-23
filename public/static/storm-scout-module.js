@@ -177,6 +177,21 @@
         '</aside>' +
         '<div class="ss-map-wrap">' +
           '<div id="ssMap" class="ss-map"></div>' +
+          '<div class="ss-searchbar">' +
+            '<div class="ss-search-input-wrap">' +
+              '<i class="fas fa-magnifying-glass ss-search-icon"></i>' +
+              '<input id="ssSearchInput" class="ss-search-input" type="text" placeholder="Search address or place…" autocomplete="off">' +
+              '<button id="ssSearchClear" class="ss-search-clear" title="Clear" aria-label="Clear search"><i class="fas fa-xmark"></i></button>' +
+            '</div>' +
+            '<div class="ss-tracebar">' +
+              '<button id="ssTracePoly" class="ss-trace-btn" title="Trace polygon"><i class="fas fa-draw-polygon"></i></button>' +
+              '<button id="ssTraceLine" class="ss-trace-btn" title="Trace line"><i class="fas fa-pen-nib"></i></button>' +
+              '<button id="ssTraceRect" class="ss-trace-btn" title="Trace rectangle"><i class="far fa-square"></i></button>' +
+              '<button id="ssTraceCircle" class="ss-trace-btn" title="Trace circle"><i class="far fa-circle"></i></button>' +
+              '<button id="ssTraceClear" class="ss-trace-btn ss-trace-clear" title="Clear drawings"><i class="fas fa-trash"></i></button>' +
+            '</div>' +
+            '<div id="ssTraceStats" class="ss-trace-stats"></div>' +
+          '</div>' +
           '<div class="ss-timebar">' +
             '<span class="ss-timebar-label">Hail history:</span>' +
             '<div class="ss-timebar-btns">' +
@@ -1082,11 +1097,217 @@
       .catch(function () { el.innerHTML = '<div class="ss-empty">ROI unavailable.</div>'; });
   }
 
+  // ============================================================
+  // SEARCH + TRACE — address search and standalone drawing tools.
+  // This is independent of the territory-save flow above; shapes
+  // drawn here stay on the map until cleared.
+  // ============================================================
+  var searchAutocomplete = null;
+  var searchMarker = null;
+  var traceDrawingManager = null;
+  var tracedShapes = [];
+
+  function setupSearchBar() {
+    if (!map || !window.google || !google.maps || !google.maps.places) return;
+    var input = document.getElementById('ssSearchInput');
+    var clearBtn = document.getElementById('ssSearchClear');
+    if (!input || searchAutocomplete) return;
+
+    searchAutocomplete = new google.maps.places.Autocomplete(input, {
+      fields: ['geometry', 'formatted_address', 'name'],
+      types: ['geocode']
+    });
+    searchAutocomplete.bindTo('bounds', map);
+
+    searchAutocomplete.addListener('place_changed', function () {
+      var place = searchAutocomplete.getPlace();
+      if (!place || !place.geometry) { toast('No location found for that search', 'info'); return; }
+      if (searchMarker) { searchMarker.setMap(null); searchMarker = null; }
+      if (place.geometry.viewport) {
+        map.fitBounds(place.geometry.viewport);
+      } else if (place.geometry.location) {
+        map.setCenter(place.geometry.location);
+        map.setZoom(17);
+      }
+      if (place.geometry.location) {
+        searchMarker = new google.maps.Marker({
+          position: place.geometry.location,
+          map: map,
+          title: place.formatted_address || place.name || '',
+          animation: google.maps.Animation.DROP
+        });
+      }
+      ssTrack('search_place', { query: input.value });
+    });
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function () {
+        input.value = '';
+        if (searchMarker) { searchMarker.setMap(null); searchMarker = null; }
+        input.focus();
+      });
+    }
+  }
+
+  function formatArea(sqMeters) {
+    var sqFt = sqMeters * 10.7639;
+    var acres = sqMeters / 4046.8564224;
+    if (acres >= 0.1) return acres.toFixed(2) + ' acres (' + Math.round(sqFt).toLocaleString() + ' ft²)';
+    return Math.round(sqFt).toLocaleString() + ' ft²';
+  }
+  function formatLength(meters) {
+    var ft = meters * 3.28084;
+    if (ft >= 5280) return (ft / 5280).toFixed(2) + ' mi';
+    return Math.round(ft).toLocaleString() + ' ft';
+  }
+
+  function updateTraceStats() {
+    var el = document.getElementById('ssTraceStats');
+    if (!el) return;
+    if (!tracedShapes.length) { el.textContent = ''; el.style.display = 'none'; return; }
+    var totalArea = 0, totalLen = 0, nArea = 0, nLen = 0;
+    tracedShapes.forEach(function (s) {
+      try {
+        if (s.type === 'polygon') {
+          totalArea += google.maps.geometry.spherical.computeArea(s.shape.getPath());
+          totalLen += google.maps.geometry.spherical.computeLength(s.shape.getPath()); nArea++;
+        } else if (s.type === 'rectangle') {
+          var b = s.shape.getBounds();
+          var ne = b.getNorthEast(), sw = b.getSouthWest();
+          var nw = new google.maps.LatLng(ne.lat(), sw.lng());
+          var se = new google.maps.LatLng(sw.lat(), ne.lng());
+          var path = [nw, ne, se, sw];
+          totalArea += google.maps.geometry.spherical.computeArea(path);
+          totalLen += google.maps.geometry.spherical.computeLength(path.concat([nw])); nArea++;
+        } else if (s.type === 'circle') {
+          var r = s.shape.getRadius();
+          totalArea += Math.PI * r * r;
+          totalLen += 2 * Math.PI * r; nArea++;
+        } else if (s.type === 'polyline') {
+          totalLen += google.maps.geometry.spherical.computeLength(s.shape.getPath()); nLen++;
+        }
+      } catch (e) {}
+    });
+    var parts = [];
+    if (nArea) parts.push('<i class="fas fa-ruler-combined"></i> ' + formatArea(totalArea));
+    if (totalLen) parts.push('<i class="fas fa-ruler"></i> ' + formatLength(totalLen));
+    parts.push('<span class="ss-trace-count">' + tracedShapes.length + ' shape' + (tracedShapes.length > 1 ? 's' : '') + '</span>');
+    el.innerHTML = parts.join(' • ');
+    el.style.display = 'flex';
+  }
+
+  function registerTracedShape(type, shape) {
+    var entry = { type: type, shape: shape };
+    tracedShapes.push(entry);
+    // Live-update stats while user edits the shape
+    if (type === 'polygon' || type === 'polyline') {
+      var path = shape.getPath();
+      google.maps.event.addListener(path, 'set_at', updateTraceStats);
+      google.maps.event.addListener(path, 'insert_at', updateTraceStats);
+      google.maps.event.addListener(path, 'remove_at', updateTraceStats);
+    } else if (type === 'rectangle') {
+      google.maps.event.addListener(shape, 'bounds_changed', updateTraceStats);
+    } else if (type === 'circle') {
+      google.maps.event.addListener(shape, 'radius_changed', updateTraceStats);
+      google.maps.event.addListener(shape, 'center_changed', updateTraceStats);
+    }
+    // Right-click a shape to delete it
+    google.maps.event.addListener(shape, 'rightclick', function () {
+      shape.setMap(null);
+      tracedShapes = tracedShapes.filter(function (s) { return s !== entry; });
+      updateTraceStats();
+    });
+    updateTraceStats();
+  }
+
+  function setupTraceDrawing() {
+    if (!map || !google.maps.drawing || traceDrawingManager) return;
+    traceDrawingManager = new google.maps.drawing.DrawingManager({
+      drawingMode: null,
+      drawingControl: false,
+      polygonOptions: {
+        strokeColor: '#10b981', strokeWeight: 2, fillColor: '#10b981', fillOpacity: 0.18,
+        editable: true, zIndex: 6
+      },
+      polylineOptions: {
+        strokeColor: '#10b981', strokeWeight: 3, editable: true, zIndex: 6
+      },
+      rectangleOptions: {
+        strokeColor: '#10b981', strokeWeight: 2, fillColor: '#10b981', fillOpacity: 0.18,
+        editable: true, zIndex: 6
+      },
+      circleOptions: {
+        strokeColor: '#10b981', strokeWeight: 2, fillColor: '#10b981', fillOpacity: 0.18,
+        editable: true, zIndex: 6
+      }
+    });
+    traceDrawingManager.setMap(map);
+
+    google.maps.event.addListener(traceDrawingManager, 'polygoncomplete', function (p) {
+      traceDrawingManager.setDrawingMode(null); clearActiveTraceBtn();
+      registerTracedShape('polygon', p);
+    });
+    google.maps.event.addListener(traceDrawingManager, 'polylinecomplete', function (p) {
+      traceDrawingManager.setDrawingMode(null); clearActiveTraceBtn();
+      registerTracedShape('polyline', p);
+    });
+    google.maps.event.addListener(traceDrawingManager, 'rectanglecomplete', function (r) {
+      traceDrawingManager.setDrawingMode(null); clearActiveTraceBtn();
+      registerTracedShape('rectangle', r);
+    });
+    google.maps.event.addListener(traceDrawingManager, 'circlecomplete', function (c) {
+      traceDrawingManager.setDrawingMode(null); clearActiveTraceBtn();
+      registerTracedShape('circle', c);
+    });
+  }
+
+  function clearActiveTraceBtn() {
+    ['ssTracePoly', 'ssTraceLine', 'ssTraceRect', 'ssTraceCircle'].forEach(function (id) {
+      var b = document.getElementById(id); if (b) b.classList.remove('active');
+    });
+  }
+
+  function setTraceMode(mode, btnId) {
+    if (!traceDrawingManager) { toast('Drawing library not ready yet', 'info'); return; }
+    var btn = document.getElementById(btnId);
+    var isActive = btn && btn.classList.contains('active');
+    clearActiveTraceBtn();
+    if (isActive) {
+      traceDrawingManager.setDrawingMode(null);
+      return;
+    }
+    traceDrawingManager.setDrawingMode(mode);
+    if (btn) btn.classList.add('active');
+    toast('Click the map to start drawing. Right-click a shape to delete it.', 'info');
+  }
+
+  function wireTraceControls() {
+    var poly = document.getElementById('ssTracePoly');
+    var line = document.getElementById('ssTraceLine');
+    var rect = document.getElementById('ssTraceRect');
+    var circ = document.getElementById('ssTraceCircle');
+    var clr = document.getElementById('ssTraceClear');
+    if (poly) poly.addEventListener('click', function () { setTraceMode(google.maps.drawing.OverlayType.POLYGON, 'ssTracePoly'); });
+    if (line) line.addEventListener('click', function () { setTraceMode(google.maps.drawing.OverlayType.POLYLINE, 'ssTraceLine'); });
+    if (rect) rect.addEventListener('click', function () { setTraceMode(google.maps.drawing.OverlayType.RECTANGLE, 'ssTraceRect'); });
+    if (circ) circ.addEventListener('click', function () { setTraceMode(google.maps.drawing.OverlayType.CIRCLE, 'ssTraceCircle'); });
+    if (clr) clr.addEventListener('click', function () {
+      tracedShapes.forEach(function (s) { try { s.shape.setMap(null); } catch (e) {} });
+      tracedShapes = [];
+      clearActiveTraceBtn();
+      if (traceDrawingManager) traceDrawingManager.setDrawingMode(null);
+      updateTraceStats();
+    });
+  }
+
   renderLayout();
   wireTerritoryControls();
+  wireTraceControls();
   window.initStormScoutMap = function () {
     initMap();
     setupDrawingManager();
+    setupTraceDrawing();
+    setupSearchBar();
     loadTerritories();
     loadMatches();
     renderRoi();
