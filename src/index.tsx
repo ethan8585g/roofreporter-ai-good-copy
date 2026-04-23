@@ -2191,9 +2191,9 @@ app.get('/roof-measurement/:city', (c) => {
   <meta name="geo.placename" content="${city.name}, ${city.province}${countryLabel ? ', ' + countryLabel : ''}">
   <meta name="geo.position" content="${city.lat};${city.lng}">
   <link rel="alternate" hreflang="en-US" href="https://www.roofmanager.ca/roof-measurement/${citySlug}">
-  <link rel="alternate" hreflang="en-CA" href="https://www.roofmanager.ca/">
-  <link rel="alternate" hreflang="en" href="https://www.roofmanager.ca/">
-  <link rel="alternate" hreflang="x-default" href="https://www.roofmanager.ca/">
+  <link rel="alternate" hreflang="en-CA" href="https://www.roofmanager.ca/roof-measurement/${citySlug}">
+  <link rel="alternate" hreflang="en" href="https://www.roofmanager.ca/roof-measurement/${citySlug}">
+  <link rel="alternate" hreflang="x-default" href="https://www.roofmanager.ca/roof-measurement/${citySlug}">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -4481,21 +4481,25 @@ function getTailwindConfig() {
 }
 
 function getHeadTags(canonicalPath?: string) {
-  // Per-page hreflang when a canonical path is supplied; defaults to the
-  // homepage for backward compatibility with callers that haven't been
-  // updated yet. The site is a single English property targeting en-US and
-  // en-CA, so all locale tags point to the same URL.
-  const hreflangTarget = canonicalPath
-    ? `https://www.roofmanager.ca${canonicalPath.startsWith('/') ? canonicalPath : '/' + canonicalPath}`
-    : 'https://www.roofmanager.ca/'
+  // Per-page hreflang only when a canonical path is supplied. When omitted we
+  // emit no hreflang at all — emitting a homepage-target hreflang on every
+  // page told Google "the canonical version of this page is /", which caused
+  // Search Console to flag pages as "Alternate page with proper canonical tag"
+  // and exclude them from the index.
+  const hreflangBlock = canonicalPath
+    ? (() => {
+        const target = `https://www.roofmanager.ca${canonicalPath.startsWith('/') ? canonicalPath : '/' + canonicalPath}`
+        return `<link rel="alternate" hreflang="en-US" href="${target}">
+  <link rel="alternate" hreflang="en-CA" href="${target}">
+  <link rel="alternate" hreflang="en" href="${target}">
+  <link rel="alternate" hreflang="x-default" href="${target}">`
+      })()
+    : ''
   return `<meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="google-site-verification" content="CvzH14V1vTrop4cCx2z90ZUFnt4GJJNr1KkgiywoO2g" />
   <meta name="theme-color" content="#00FF88">
-  <link rel="alternate" hreflang="en-US" href="${hreflangTarget}">
-  <link rel="alternate" hreflang="en-CA" href="${hreflangTarget}">
-  <link rel="alternate" hreflang="en" href="${hreflangTarget}">
-  <link rel="alternate" hreflang="x-default" href="${hreflangTarget}">
+  ${hreflangBlock}
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://maps.googleapis.com">
   <link rel="preconnect" href="https://maps.gstatic.com" crossorigin>
@@ -14339,7 +14343,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
       for (const [pattern, lang] of Object.entries(langMap)) {
         if (slug.includes(pattern)) {
           hreflangs += `<link rel="alternate" hreflang="${lang}" href="https://www.roofmanager.ca/blog/${slug}">\n`
-          hreflangs += `<link rel="alternate" hreflang="x-default" href="https://www.roofmanager.ca/blog">\n`
+          hreflangs += `<link rel="alternate" hreflang="x-default" href="https://www.roofmanager.ca/blog/${slug}">\n`
           break
         }
       }
