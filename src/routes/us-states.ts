@@ -5,6 +5,47 @@ import { inlineQuoteFormHTML } from '../lib/lead-forms'
 
 const app = new Hono<{ Bindings: Env }>()
 
+// Storm-risk clusters for cross-linking related state pages (SEO T-17).
+// State slugs follow the lowercase-name convention used in US_STATES.
+const STORM_CLUSTERS: Record<string, { label: string; blurb: string; states: string[] }> = {
+  tornadoAlley: {
+    label: 'Tornado Alley',
+    blurb: 'High tornado frequency and hail concentration — Class 4 impact-resistant shingles common.',
+    states: ['texas', 'oklahoma', 'kansas', 'nebraska', 'iowa', 'missouri', 'arkansas', 'louisiana'],
+  },
+  hailBelt: {
+    label: 'Hail Belt',
+    blurb: 'Peak hail-loss region — insurance carriers require measurement reports for claims.',
+    states: ['colorado', 'wyoming', 'nebraska', 'kansas', 'texas', 'oklahoma'],
+  },
+  hurricaneCoast: {
+    label: 'Hurricane Coast',
+    blurb: 'Named-storm wind uplift drives re-roofing cycles and permitting rigor.',
+    states: ['florida', 'georgia', 'south-carolina', 'north-carolina', 'virginia', 'mississippi', 'alabama', 'louisiana', 'texas'],
+  },
+  wildfireWest: {
+    label: 'Wildfire West',
+    blurb: 'Ember-resistant roof assemblies and Class A coverings drive replacement volume.',
+    states: ['california', 'oregon', 'washington', 'nevada', 'arizona', 'new-mexico', 'colorado', 'idaho', 'montana'],
+  },
+  greatLakesIce: {
+    label: 'Great Lakes Ice',
+    blurb: 'Ice-dam formation and freeze-thaw cycles drive ventilation and underlayment spec.',
+    states: ['minnesota', 'wisconsin', 'michigan', 'illinois', 'indiana', 'ohio', 'new-york', 'pennsylvania'],
+  },
+}
+
+function getStormClustersForState(stateSlug: string): Array<{ label: string; blurb: string; peers: string[] }> {
+  const out: Array<{ label: string; blurb: string; peers: string[] }> = []
+  for (const cluster of Object.values(STORM_CLUSTERS)) {
+    if (cluster.states.includes(stateSlug)) {
+      const peers = cluster.states.filter(s => s !== stateSlug && US_STATES[s]).slice(0, 6)
+      if (peers.length > 0) out.push({ label: cluster.label, blurb: cluster.blurb, peers })
+    }
+  }
+  return out
+}
+
 function getHeadTagsMinimal() {
   return `<meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -178,6 +219,29 @@ app.get('/:state', (c) => {
     .map(s => `<a href="/us/${s}" class="text-xs text-sky-400 hover:text-sky-300 bg-sky-400/10 border border-sky-400/20 rounded-full px-3 py-1">${US_STATES[s].name}</a>`)
     .join('')
 
+  const stormClusters = getStormClustersForState(stateSlug)
+  const stormClusterSection = stormClusters.length === 0 ? '' : `
+  <section class="py-12" style="background:#0d0d0d">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-xl font-black text-center mb-2">Nearby Storm-Risk States</h2>
+      <p class="text-center text-gray-500 text-sm mb-8">${state.name} shares these regional perils with neighbouring states.</p>
+      <div class="space-y-5">
+        ${stormClusters.map(cluster => `
+          <div class="bg-white/5 border border-white/10 rounded-xl p-5">
+            <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+              <h3 class="text-sky-400 font-bold text-sm uppercase tracking-wide">${cluster.label}</h3>
+              <span class="text-[11px] text-gray-500">${cluster.peers.length} peer states</span>
+            </div>
+            <p class="text-gray-400 text-sm mb-3">${cluster.blurb}</p>
+            <div class="flex flex-wrap gap-2">
+              ${cluster.peers.map(s => `<a href="/us/${s}" class="text-xs text-white bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 rounded-full px-3 py-1">${US_STATES[s].name}</a>`).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  </section>`
+
   const faqSchema = JSON.stringify({
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -308,6 +372,8 @@ app.get('/:state', (c) => {
       </div>
     </div>
   </section>
+
+  ${stormClusterSection}
 
   <!-- Sibling states -->
   <section class="py-10" style="background:#0d0d0d">

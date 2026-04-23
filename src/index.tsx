@@ -1281,6 +1281,10 @@ app.get('/sitemap-comparisons.xml', (c) => {
     '/roofsnap-vs-roofmanager-us',
     '/pitchgauge-vs-roofmanager',
     '/roofr-pricing-complaints',
+    '/rooflink-vs-roofmanager',
+    '/iroofing-vs-roofmanager',
+    '/companycam-vs-roofmanager',
+    '/jobnimbus-vs-roofmanager',
   ]
   const urls = comparisons.map(p => `<url><loc>${base}${p}</loc><changefreq>monthly</changefreq><priority>0.9</priority><lastmod>${today}</lastmod></url>`).join('\n')
   return c.text(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>`, 200, { 'Content-Type': 'application/xml' })
@@ -6254,8 +6258,8 @@ function getSampleReportHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Sample Roof Measurement Report — Roof Manager</title>
-  <meta name="description" content="See a real example of a Roof Manager measurement report — 3D area, pitch, edge breakdown, and full material BOM. Create your free account to generate your own in 60 seconds.">
+  <title>Sample Roof Measurement Report — See What Roof Manager Delivers</title>
+  <meta name="description" content="See a real roof measurement report from our roof measurement report software — 3D area, pitch, edge breakdown, full material BOM. Generate your own in 60 seconds.">
   <link rel="canonical" href="https://www.roofmanager.ca/sample-report">
   <style>
     body { background:#0A0A0A; color:#e5e7eb; font-family:Inter,system-ui,sans-serif; margin:0; }
@@ -6645,10 +6649,10 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Roof Manager | CRM, Satellite Roof Reports &amp; Solar Design Software for Roofing &amp; Solar Companies</title>
-  <meta name="description" content="The all-in-one CRM built for roofing and solar companies — satellite roof measurement reports, solar design tools, workflow automations, invoicing, and pipeline management. Trusted by roofing and solar contractors across the US and Canada.">
-  <meta property="og:title" content="Roof Manager — Precision Roof Measurement Reports">
-  <meta property="og:description" content="Professional satellite-powered roof measurement reports in under 60 seconds. Full CRM, AI phone secretary, and team management for roofing businesses.">
+  <title>Roof Measurement Report Software | AI Satellite Reports — Roof Manager</title>
+  <meta name="description" content="Generate a roof measurement report in under 60 seconds — satellite-grade accuracy for roofing, solar, and insurance pros. Free sample report, no credit card.">
+  <meta property="og:title" content="Roof Measurement Report Software — Roof Manager">
+  <meta property="og:description" content="Contractor-grade roof measurement reports from satellite imagery in under 60 seconds. Full CRM, AI condition analysis, instant PDF delivery.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca">
   <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
@@ -6658,8 +6662,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   <meta property="og:locale" content="en_US">
   <meta property="og:locale:alternate" content="en_CA">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Roof Manager — Satellite Roof Measurements in 60 Seconds">
-  <meta name="twitter:description" content="AI-powered roof measurement reports, full CRM & team management for roofing companies. 4 free reports, no credit card.">
+  <meta name="twitter:title" content="Roof Measurement Report Software — Roof Manager">
+  <meta name="twitter:description" content="Satellite roof measurement reports in 60 seconds. Full CRM & AI condition analysis. 4 free reports, no credit card.">
   <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
   <meta name="keywords" content="roof measurement software, roofing CRM, satellite roof reports, roof area calculator, roofing estimate tool, roof pitch analysis, material takeoff, roofing contractor software, AI roof measurement, Canadian roofing software">
   <link rel="canonical" href="https://www.roofmanager.ca/">
@@ -6749,6 +6753,9 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   </script>
   <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebPage","name":"Roof Manager","speakable":{"@type":"SpeakableSpecification","xPath":["/html/head/meta[@name='description']/@content"]},"url":"https://www.roofmanager.ca"}
+  </script>
+  <script type="application/ld+json">
+{"@context":"https://schema.org","@type":"VideoObject","name":"Roof Manager — Product Tutorial","description":"Walkthrough of how Roof Manager generates a contractor-grade roof measurement report in under 60 seconds using satellite imagery and AI.","thumbnailUrl":["https://img.youtube.com/vi/NQW3EgEhldA/maxresdefault.jpg","https://www.roofmanager.ca/static/logo.png"],"uploadDate":"2026-01-15T08:00:00-07:00","contentUrl":"https://www.youtube.com/watch?v=NQW3EgEhldA","embedUrl":"https://www.youtube.com/embed/NQW3EgEhldA","publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://www.roofmanager.ca/static/logo.png"}},"potentialAction":{"@type":"SeekToAction","target":"https://www.youtube.com/watch?v=NQW3EgEhldA&t={seek_to_second_number}","startOffset-input":"required name=seek_to_second_number"}}
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -6972,8 +6979,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <span class="relative flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00FF88]"></span></span>
               <span class="text-sm font-semibold text-[#00FF88] tracking-wide">Trusted by 200+ Contractors — US &amp; Canada</span>
             </div>
-            <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] text-white mb-6 tracking-tight">Satellite Roof Reports + CRM <span class="neon-text">Built for Roofing &amp; Solar Contractors</span></h1>
-            <h2 class="text-lg lg:text-xl text-gray-300 mb-8 max-w-xl leading-relaxed font-normal">Accurate roof measurements in 60 seconds, a full CRM, and an AI phone secretary — for less than the cost of a single EagleView.</h2>
+            <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] text-white mb-6 tracking-tight">The Roof Measurement Report Platform <span class="neon-text">Roofers Actually Trust</span></h1>
+            <h2 class="text-lg lg:text-xl text-gray-300 mb-8 max-w-xl leading-relaxed font-normal">Get a contractor-grade roof measurement report in 60 seconds. Satellite precision, AI condition analysis, and instant PDF delivery — from any laptop or phone.</h2>
 
             <!-- Primary CTA (ONE) -->
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 mb-4">
@@ -10154,12 +10161,12 @@ const featureHubConfig: Record<string, {
   schemaName: string; schemaCategory: string;
 }> = {
   'measurements': {
-    slug: 'measurements', title: 'AI Roof Measurement Reports', icon: 'fas fa-satellite', accentColor: '#00FF88',
+    slug: 'measurements', title: 'Roof Measurement Report Software', icon: 'fas fa-satellite', accentColor: '#00FF88',
     heroImage: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1920&q=80&auto=format&fit=crop',
     ogImage: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1200&q=80&auto=format&fit=crop',
-    headline: 'Professional Roof Measurement Reports in Under 60 Seconds',
+    headline: 'Roof Measurement Report Software — Contractor-Grade Reports in Under 60 Seconds',
     subhead: 'Satellite-powered 3D analysis with 99% accuracy. Stop climbing roofs — measure from your truck.',
-    metaDesc: 'AI-powered satellite roof measurement reports for roofing contractors. Full 3D area, pitch, edges, and material BOM in under 60 seconds. 99% accuracy. Try free.',
+    metaDesc: 'Roof measurement report software for roofing contractors. Satellite 3D area, pitch, edges, and material BOM in under 60 seconds. 99% accuracy. Try free.',
     capabilities: [
       'Full 3D roof area with per-segment pitch adjustment',
       'Complete edge breakdown: ridge, hip, valley, eave, and rake lengths',
@@ -12569,6 +12576,12 @@ function getRoofingSoftwareComparisonHubHTML(): string {
     { name: 'Roofr', slug: 'roofr', href: '/roofr-alternative', blurb: 'Transparent $8/report pricing vs tiered subscription. Includes CRM and AI secretary at no extra cost.' },
     { name: 'Roofr (pricing complaints)', slug: 'roofr-pricing', href: '/roofr-pricing-complaints', blurb: 'Why roofers switch away from Roofr — subscription creep, report caps, and hidden fees.' },
     { name: 'RoofSnap', slug: 'roofsnap', href: '/roofsnap-vs-roofmanager', blurb: '60-second satellite reports vs manual sketching workflow. No drawing required.' },
+    { name: 'Hover', slug: 'hover', href: '/hover-alternative-us', blurb: '$8/report vs $33–$55/report plus monthly subscription. No photo-walk required — pure satellite.' },
+    { name: 'PitchGauge', slug: 'pitchgauge', href: '/pitchgauge-vs-roofmanager', blurb: 'Full satellite reports instead of just pitch readings. No physical roof access needed.' },
+    { name: 'RoofLink', slug: 'rooflink', href: '/rooflink-vs-roofmanager', blurb: 'Bundled measurement + CRM + AI secretary vs per-user CRM subscription.' },
+    { name: 'iRoofing', slug: 'iroofing', href: '/iroofing-vs-roofmanager', blurb: '$8/report flat vs $29–$59/report plus subscription. Same satellite accuracy.' },
+    { name: 'CompanyCam', slug: 'companycam', href: '/companycam-vs-roofmanager', blurb: 'Complementary — CompanyCam for photos, Roof Manager for the measurement report and CRM.' },
+    { name: 'JobNimbus', slug: 'jobnimbus', href: '/jobnimbus-vs-roofmanager', blurb: 'Includes measurement at $8 instead of JobNimbus + EagleView add-on at $49–$95/report.' },
   ]
   const itemList = JSON.stringify({
     '@context': 'https://schema.org', '@type': 'ItemList',
@@ -13664,8 +13677,8 @@ function getPricingPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags('/pricing')}
-  <title>Roof Report Pricing — From $5.95 | Roof Manager</title>
-  <meta name="description" content="Simple roof report pricing. 4 free reports to start, then $8/report. Save with credit packs: 10-pack at $7.50/ea, 25-pack at $7.00/ea, 100-pack at $5.95/ea. Includes CRM, proposals, invoicing, and AI secretary.">
+  <title>Roof Measurement Report Software Pricing — From $5.95 | Roof Manager</title>
+  <meta name="description" content="Roof measurement report software pricing. 4 free reports to start, then $8/report. Credit packs: 10-pack at $7.50/ea, 25-pack at $7.00/ea, 100-pack at $5.95/ea. CRM included.">
   <link rel="canonical" href="https://www.roofmanager.ca/pricing">
   <meta property="og:title" content="Roof Report Pricing — From $5.95/Report (100-Pack)"> <!-- conv-v5: $5 was a lie; cheapest is $5.95 -->
   <meta property="og:description" content="AI-powered roof measurement reports with full CRM. 4 free reports, then pay per report or buy credit packs.">

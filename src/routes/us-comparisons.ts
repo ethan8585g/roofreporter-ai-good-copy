@@ -387,4 +387,227 @@ app.get('/roofsnap-vs-roofmanager-us', (c) => {
   return c.html(html)
 })
 
+// ─── ROOFLINK vs ROOF MANAGER ─────────────────────────────────────────────────
+
+app.get('/rooflink-vs-roofmanager', (c) => {
+  const rows: Array<[string, string, string]> = [
+    ['Primary function', 'Full CRM + satellite measurement + AI secretary', 'Roofing CRM + sales pipeline'],
+    ['Satellite roof measurement', '✓ Built-in, $8/report', '✗ Not included — requires separate tool'],
+    ['Material BOM', '✓ Generated from measurement', '✗ Not included'],
+    ['Monthly subscription (USD)', 'No subscription', '$99–$349/month'],
+    ['Per-user pricing', 'Flat pricing', '$99+/user/month'],
+    ['Free Reports', '4 free measurement reports', 'Limited trial'],
+    ['Invoicing & Proposals', '✓ Full, built-in', '✓ Full'],
+    ['AI Phone Secretary', '✓ 24/7', '✗'],
+    ['Insurance workflow', '✓ Adjuster-ready PDF', 'Partial — via integrations'],
+    ['Turn-around time (measurement)', '< 60 seconds', 'N/A — external'],
+    ['Mobile app', '✓ PWA', '✓ iOS/Android native'],
+  ]
+  const html = `<!DOCTYPE html><html lang="en-US"><head>
+  ${head('RoofLink vs Roof Manager 2026 — US Contractor Comparison', 'RoofLink vs Roof Manager for US roofing contractors. RoofLink is a CRM at $99–$349/month per user. Roof Manager includes CRM, satellite measurement, invoicing, and AI secretary.')}
+  <link rel="canonical" href="https://www.roofmanager.ca/rooflink-vs-roofmanager">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+    {"@type":"Question","name":"Does RoofLink include satellite roof measurement?","acceptedAnswer":{"@type":"Answer","text":"RoofLink is primarily a roofing CRM and sales pipeline tool. It does not generate satellite roof measurement reports natively. Contractors typically pair RoofLink with a separate measurement provider like EagleView or Hover. Roof Manager combines CRM, measurement, invoicing, and AI secretary in one platform."}},
+    {"@type":"Question","name":"Which is cheaper: RoofLink or Roof Manager?","acceptedAnswer":{"@type":"Answer","text":"RoofLink charges $99–$349 per user per month. A 5-user team on RoofLink plus separate measurement software can exceed $1,000/month. Roof Manager has flat pricing with $8 per measurement report and no per-user seat fees — typically a fraction of the combined RoofLink + measurement cost."}}
+  ]}</script>
+  </head>
+  <body class="min-h-screen" style="background:#0A0A0A;color:#fff">${nav()}
+  <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
+    <div class="max-w-4xl mx-auto px-4">
+      <span class="inline-block px-3 py-1 bg-sky-500/20 border border-sky-400/30 rounded-full text-xs text-sky-300 mb-4">US Contractor Comparison — 2026</span>
+      <h1 class="text-4xl font-black mb-6">RoofLink vs Roof Manager</h1>
+      <p class="text-xl text-blue-200 mb-8">RoofLink is a roofing CRM priced at <strong>$99–$349/user/month</strong>. Most RoofLink users still pay separately for measurement software. Roof Manager combines the roof measurement report, CRM, invoicing, proposals, and AI phone secretary in one platform with no per-user fees.</p>
+      <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg inline-block">Try Free — 4 Reports (No Card)</a>
+    </div>
+  </section>
+  <section class="py-16" style="background:#111"><div class="max-w-5xl mx-auto px-4"><h2 class="text-2xl font-black mb-8">RoofLink vs Roof Manager</h2>${comparisonTable(rows)}</div></section>
+  <section class="py-16" style="background:#0d0d0d">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-2xl font-black mb-8">When Each Tool Makes Sense</h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6">
+          <h3 class="font-bold text-sky-400 mb-3 text-lg">Use RoofLink when...</h3>
+          <ul class="space-y-2 text-gray-300 text-sm">
+            <li class="flex items-start gap-2"><i class="fas fa-check text-sky-400 mt-0.5 text-xs"></i>Your team is 10+ sales reps with complex door-knocking workflows</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check text-sky-400 mt-0.5 text-xs"></i>You already have a measurement vendor and want a best-in-class CRM</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check text-sky-400 mt-0.5 text-xs"></i>You need deep D2D canvassing + territory management features</li>
+          </ul>
+        </div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6">
+          <h3 class="font-bold text-sky-400 mb-3 text-lg">Use Roof Manager when...</h3>
+          <ul class="space-y-2 text-gray-300 text-sm">
+            <li class="flex items-start gap-2"><i class="fas fa-check text-sky-400 mt-0.5 text-xs"></i>You want measurement, CRM, invoicing, and AI secretary in one tool</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check text-sky-400 mt-0.5 text-xs"></i>You want flat pricing with no per-user seat fees</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check text-sky-400 mt-0.5 text-xs"></i>You generate more than 10 roof measurement reports per month</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+  <div class="max-w-5xl mx-auto px-4 py-8">${comparisonLeadFormHTML('comparison-rooflink')}</div>
+  <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
+    <div class="max-w-3xl mx-auto px-4"><h2 class="text-3xl font-black mb-4">One Platform Instead of Three</h2>
+    <p class="text-blue-200 mb-8">Roof Manager bundles measurement, CRM, invoicing, and AI secretary. No per-user fees. 4 free reports to try.</p>
+    <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 4 Reports on Us</a></div>
+  </section>
+  ${footer()}</body></html>`
+  return c.html(html)
+})
+
+// ─── iROOFING vs ROOF MANAGER ─────────────────────────────────────────────────
+
+app.get('/iroofing-vs-roofmanager', (c) => {
+  const rows: Array<[string, string, string]> = [
+    ['Report Price (USD)', '$8 per report', '$29–$59 per report'],
+    ['Free Reports', '4 free on signup', 'Limited trial'],
+    ['Monthly subscription', 'No subscription', '$99–$199/month'],
+    ['Satellite data source', 'Google Solar API + LiDAR', 'Nearmap + proprietary'],
+    ['Accuracy', '~99% vs manual', '~99% vs manual'],
+    ['Turn-around time', '< 60 seconds', '1–2 hours'],
+    ['Full CRM Included', '✓ Built-in', '✗ Measurement only'],
+    ['Invoicing & Proposals', '✓ Built-in', '✗ Add-on'],
+    ['AI Phone Secretary', '✓ 24/7', '✗'],
+    ['3D roof visualization', '✓ 3D viewer', '✓ 3D viewer'],
+    ['Mobile app', '✓ PWA', '✓ Native iOS/Android'],
+  ]
+  const html = `<!DOCTYPE html><html lang="en-US"><head>
+  ${head('iRoofing vs Roof Manager 2026 — US Comparison', 'iRoofing vs Roof Manager for US contractors. iRoofing: $29–$59/report + $99–$199/month. Roof Manager: $8/report, no subscription, full CRM included.')}
+  <link rel="canonical" href="https://www.roofmanager.ca/iroofing-vs-roofmanager">
+  </head>
+  <body class="min-h-screen" style="background:#0A0A0A;color:#fff">${nav()}
+  <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
+    <div class="max-w-4xl mx-auto px-4">
+      <h1 class="text-4xl font-black mb-6">iRoofing vs Roof Manager — US Contractors</h1>
+      <p class="text-xl text-blue-200 mb-8">iRoofing charges $29–$59 per report plus $99–$199/month subscription. Roof Manager charges <strong>$8 USD per report with no subscription</strong> and includes a full CRM, invoicing, proposals, and 24/7 AI phone secretary.</p>
+      <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg inline-block">Try Free — 4 Reports</a>
+    </div>
+  </section>
+  <section class="py-16" style="background:#111"><div class="max-w-5xl mx-auto px-4"><h2 class="text-2xl font-black mb-8">iRoofing vs Roof Manager</h2>${comparisonTable(rows)}</div></section>
+  <div class="max-w-5xl mx-auto px-4 py-8">${comparisonLeadFormHTML('comparison-iroofing')}</div>
+  <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
+    <div class="max-w-3xl mx-auto px-4"><h2 class="text-3xl font-black mb-4">Same Satellite Accuracy for a Quarter of the Price</h2>
+    <p class="text-blue-200 mb-8">$8/report. No subscription. Full CRM. 4 free reports to start.</p>
+    <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 4 Reports on Us</a></div>
+  </section>
+  ${footer()}</body></html>`
+  return c.html(html)
+})
+
+// ─── COMPANYCAM vs ROOF MANAGER ───────────────────────────────────────────────
+
+app.get('/companycam-vs-roofmanager', (c) => {
+  const rows: Array<[string, string, string]> = [
+    ['Primary function', 'Roof measurement + CRM + secretary', 'Photo documentation + job tracking'],
+    ['Satellite roof measurement', '✓ $8/report', '✗ Not included'],
+    ['Material BOM', '✓ Generated from measurement', '✗ Not included'],
+    ['Per-user subscription', 'No per-user fee', '$24–$59/user/month'],
+    ['Photo documentation', 'Report attachments only', '✓ Unlimited photos, GPS tagged'],
+    ['Time-stamped photos for insurance', 'Limited', '✓ Industry-leading'],
+    ['Full CRM / pipeline', '✓ Built-in', '✓ Project-level'],
+    ['Invoicing & Proposals', '✓ Built-in', '✗'],
+    ['AI Phone Secretary', '✓ 24/7', '✗'],
+    ['Xactimate integration', 'Pitch-corrected output aligns with F9', 'Photo reports exportable'],
+  ]
+  const html = `<!DOCTYPE html><html lang="en-US"><head>
+  ${head('CompanyCam vs Roof Manager 2026 — Which Tool for US Roofers?', 'CompanyCam vs Roof Manager comparison. CompanyCam is photo documentation ($24–$59/user). Roof Manager is measurement + CRM ($8/report, flat). Many contractors use both.')}
+  <link rel="canonical" href="https://www.roofmanager.ca/companycam-vs-roofmanager">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+    {"@type":"Question","name":"Is CompanyCam a competitor to Roof Manager?","acceptedAnswer":{"@type":"Answer","text":"Not directly. CompanyCam is a photo-documentation platform: GPS-tagged, time-stamped photos for insurance and project documentation. Roof Manager generates satellite-powered roof measurement reports and includes CRM, invoicing, and an AI phone secretary. Many roofing contractors use both: CompanyCam for on-site photos and Roof Manager for the measurement report and back-office workflow."}},
+    {"@type":"Question","name":"Can I replace CompanyCam with Roof Manager?","acceptedAnswer":{"@type":"Answer","text":"Only if your primary need is measurement reports and back-office workflow. If you rely on CompanyCam for extensive on-site photo documentation with GPS and time-stamping for insurance, that is CompanyCam\\'s core strength and Roof Manager is not a direct replacement for it."}}
+  ]}</script>
+  </head>
+  <body class="min-h-screen" style="background:#0A0A0A;color:#fff">${nav()}
+  <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
+    <div class="max-w-4xl mx-auto px-4">
+      <h1 class="text-4xl font-black mb-6">CompanyCam vs Roof Manager</h1>
+      <p class="text-xl text-blue-200 mb-8">Different tools for different problems. CompanyCam is the gold standard for GPS-tagged, time-stamped on-site photo documentation ($24–$59/user/month). Roof Manager generates satellite roof measurement reports and runs your back office ($8/report, no per-user fees). Many US contractors use both.</p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg">Try Roof Manager Free</a>
+      </div>
+    </div>
+  </section>
+  <section class="py-16" style="background:#111"><div class="max-w-5xl mx-auto px-4"><h2 class="text-2xl font-black mb-8">CompanyCam vs Roof Manager — What Each Does Best</h2>${comparisonTable(rows)}</div></section>
+  <section class="py-16" style="background:#0d0d0d">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-2xl font-black mb-8">Should You Use Both?</h2>
+      <p class="text-gray-300 leading-relaxed max-w-3xl">Many US roofing contractors do. CompanyCam handles field photo documentation — ladder shots, damage close-ups, completion photos — all GPS-tagged and time-stamped for adjusters. Roof Manager handles the measurement report, material BOM, customer CRM, invoicing, proposals, and inbound phone calls. The two tools do not overlap meaningfully and together cover the full field-to-office workflow for roofing claims and retail estimates.</p>
+    </div>
+  </section>
+  <div class="max-w-5xl mx-auto px-4 py-8">${comparisonLeadFormHTML('comparison-companycam')}</div>
+  <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
+    <div class="max-w-3xl mx-auto px-4"><h2 class="text-3xl font-black mb-4">Add Roof Manager to Your Stack</h2>
+    <p class="text-blue-200 mb-8">4 free measurement reports. No credit card. Pairs cleanly with CompanyCam workflows.</p>
+    <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 4 Reports on Us</a></div>
+  </section>
+  ${footer()}</body></html>`
+  return c.html(html)
+})
+
+// ─── JOBNIMBUS vs ROOF MANAGER ────────────────────────────────────────────────
+
+app.get('/jobnimbus-vs-roofmanager', (c) => {
+  const rows: Array<[string, string, string]> = [
+    ['Primary function', 'Roof measurement + CRM + secretary', 'Contractor CRM + project management'],
+    ['Satellite roof measurement', '✓ Built-in, $8/report', '✗ Via EagleView integration only'],
+    ['Measurement add-on cost', 'Included', 'EagleView: $49–$95/report extra'],
+    ['Monthly subscription (USD)', 'No subscription', '$25–$75/user/month'],
+    ['Free trial', '4 free measurement reports', '14-day trial'],
+    ['Pipeline / Kanban boards', '✓ Built-in', '✓ Industry-leading Kanban'],
+    ['Work orders & scheduling', '✓ Built-in', '✓ Strong field-ops features'],
+    ['Invoicing & Proposals', '✓ Built-in', '✓ Built-in'],
+    ['AI Phone Secretary', '✓ 24/7', '✗'],
+    ['QuickBooks integration', 'Export supported', '✓ Native two-way sync'],
+    ['Mobile app', '✓ PWA', '✓ Native iOS/Android'],
+  ]
+  const html = `<!DOCTYPE html><html lang="en-US"><head>
+  ${head('JobNimbus vs Roof Manager 2026 — US Contractor Comparison', 'JobNimbus vs Roof Manager for US roofing contractors. JobNimbus is a contractor CRM ($25–$75/user). Roof Manager includes measurement + CRM + AI secretary for flat pricing.')}
+  <link rel="canonical" href="https://www.roofmanager.ca/jobnimbus-vs-roofmanager">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+    {"@type":"Question","name":"Does JobNimbus include roof measurement?","acceptedAnswer":{"@type":"Answer","text":"JobNimbus does not generate satellite roof measurement reports natively. It integrates with EagleView, where contractors pay $49–$95 per report on top of JobNimbus subscription fees. Roof Manager includes satellite measurement at $8 per report with no per-user fees."}},
+    {"@type":"Question","name":"Which is better for a 3-person roofing company: JobNimbus or Roof Manager?","acceptedAnswer":{"@type":"Answer","text":"For a 3-person shop, JobNimbus runs roughly $75–$225/month plus $49–$95/measurement (10 reports = $490–$950). Roof Manager costs ~$80/month for the same 10 reports with no per-user fees and includes an AI phone secretary. JobNimbus wins on native QuickBooks sync and Kanban depth; Roof Manager wins on total cost and bundled AI secretary."}}
+  ]}</script>
+  </head>
+  <body class="min-h-screen" style="background:#0A0A0A;color:#fff">${nav()}
+  <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
+    <div class="max-w-4xl mx-auto px-4">
+      <span class="inline-block px-3 py-1 bg-sky-500/20 border border-sky-400/30 rounded-full text-xs text-sky-300 mb-4">US Contractor Comparison — 2026</span>
+      <h1 class="text-4xl font-black mb-6">JobNimbus vs Roof Manager</h1>
+      <p class="text-xl text-blue-200 mb-8">JobNimbus is a contractor CRM at <strong>$25–$75 per user per month</strong>, with measurement reports sold separately via EagleView ($49–$95 each). Roof Manager includes the roof measurement report, CRM, invoicing, proposals, and AI phone secretary at flat pricing — $8 per report with no per-user fees.</p>
+      <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg inline-block">Try Free — 4 Reports</a>
+    </div>
+  </section>
+  <section class="py-16" style="background:#111"><div class="max-w-5xl mx-auto px-4"><h2 class="text-2xl font-black mb-8">JobNimbus vs Roof Manager</h2>${comparisonTable(rows)}</div></section>
+  <section class="py-16" style="background:#0d0d0d">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-2xl font-black mb-8">When Each Tool Is the Right Choice</h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6">
+          <h3 class="font-bold text-sky-400 mb-3 text-lg">Use JobNimbus when...</h3>
+          <ul class="space-y-2 text-gray-300 text-sm">
+            <li class="flex items-start gap-2"><i class="fas fa-check text-sky-400 mt-0.5 text-xs"></i>You rely heavily on native QuickBooks two-way sync</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check text-sky-400 mt-0.5 text-xs"></i>You have complex multi-phase production workflows</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check text-sky-400 mt-0.5 text-xs"></i>You have dedicated office staff who can absorb the higher cost</li>
+          </ul>
+        </div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6">
+          <h3 class="font-bold text-sky-400 mb-3 text-lg">Use Roof Manager when...</h3>
+          <ul class="space-y-2 text-gray-300 text-sm">
+            <li class="flex items-start gap-2"><i class="fas fa-check text-sky-400 mt-0.5 text-xs"></i>You want measurement bundled at $8/report instead of $49–$95</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check text-sky-400 mt-0.5 text-xs"></i>You want to eliminate per-user subscription fees</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check text-sky-400 mt-0.5 text-xs"></i>You want an AI phone secretary handling missed calls 24/7</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+  <div class="max-w-5xl mx-auto px-4 py-8">${comparisonLeadFormHTML('comparison-jobnimbus')}</div>
+  <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
+    <div class="max-w-3xl mx-auto px-4"><h2 class="text-3xl font-black mb-4">Stop Paying $49–$95 for Measurement Reports</h2>
+    <p class="text-blue-200 mb-8">Get the same accuracy for $8 USD — plus CRM, invoicing, and AI secretary included.</p>
+    <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 4 Reports on Us</a></div>
+  </section>
+  ${footer()}</body></html>`
+  return c.html(html)
+})
+
 export default app

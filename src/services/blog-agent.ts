@@ -20,6 +20,9 @@ const BANNED_PHRASES = [
   'revolutionize', 'revolutionary', 'game-changer', 'game changer',
   'unlock', 'empower', 'cutting-edge', 'next-generation', 'next generation',
   'in today\'s world', 'in the modern era',
+  'delve', 'in the realm of', 'tapestry', 'navigate the complex',
+  'stand as a testament', 'leverage cutting-edge', 'ever-evolving',
+  'unparalleled', 'bespoke', 'harness the power of', 'paradigm shift',
 ]
 const ALLOWED_INTERNAL_PATHS = [
   '/features/measurements', '/features/crm', '/features/ai-secretary', '/features/virtual-try-on',
@@ -27,7 +30,7 @@ const ALLOWED_INTERNAL_PATHS = [
   '/tools/insurance-deductible-estimator', '/tools/solar-production-estimator',
   '/pricing', '/services', '/help', '/blog', '/contact', '/sample-report', '/get-started',
 ]
-const QUALITY_THRESHOLD = 74      // 0-100, raised from 72. GEO-optimized articles require higher baseline.
+const QUALITY_THRESHOLD = 82      // 0-100, raised from 74. Helpful Content / E-E-A-T baseline.
 const MAX_ATTEMPTS = 2
 const LOCK_MINUTES = 10
 
