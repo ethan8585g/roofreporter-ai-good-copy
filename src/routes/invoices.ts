@@ -5,6 +5,7 @@ import { sendGmailOAuth2 } from '../services/email'
 import { logFromContext } from '../lib/team-activity'
 import { resolveTeamOwner } from './team'
 import { loadPermissionContext, can, redactFinancials, type PermissionContext } from '../lib/permissions'
+import { getCustomerSessionToken } from '../lib/session-tokens'
 
 export const invoiceRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -19,9 +20,8 @@ invoiceRoutes.use('/*', async (c, next) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
   if (admin) { c.set('admin' as any, admin); return next() }
 
-  // Fallback: try customer auth
-  const authHeader = c.req.header('Authorization')
-  const token = authHeader?.replace('Bearer ', '')
+  // Fallback: try customer auth (Bearer header OR rm_customer_session cookie)
+  const token = getCustomerSessionToken(c)
   if (token) {
     const session = await c.env.DB.prepare(`
       SELECT cs.customer_id, c.email, c.name FROM customer_sessions cs
