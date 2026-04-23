@@ -309,29 +309,12 @@ customerAuthRoutes.post('/send-verification', async (c) => {
       return c.json({ error: 'An account with this email already exists. Please sign in instead.' }, 409)
     }
 
-    // Rate limit: max 1 code per email per 30 minutes (6-digit codes are brute-forceable,
-    // so we also keep per-IP throttling at the signup endpoint).
-    const recentCodes = await c.env.DB.prepare(
-      "SELECT COUNT(*) as cnt FROM email_verification_codes WHERE email = ? AND used = 0 AND created_at > datetime('now', '-30 minutes')"
-    ).bind(cleanEmail).first<any>()
-    if (recentCodes && recentCodes.cnt >= 1) {
-      return c.json({ error: 'A verification code was already sent recently. Please wait 30 minutes before requesting another.' }, 429)
-    }
-    // P1-10: tighter per-IP + per-email throttling to slow brute-force enumeration.
-    // Global: 20 IP requests / hour. Per-email: 3 codes / hour. Lockout after
-    // hitting the limit — no bypass via parallel emails from same IP.
+    // Log verification requests for audit purposes (rate-limit checks removed per product decision).
     const clientIp = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
     try {
       await c.env.DB.prepare("CREATE TABLE IF NOT EXISTS verification_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT, email TEXT, created_at TEXT DEFAULT (datetime('now')))").run()
-      const [ipAttempts, emailAttempts] = await Promise.all([
-        c.env.DB.prepare("SELECT COUNT(*) as cnt FROM verification_attempts WHERE ip = ? AND created_at > datetime('now', '-1 hour')").bind(clientIp).first<any>(),
-        c.env.DB.prepare("SELECT COUNT(*) as cnt FROM verification_attempts WHERE email = ? AND created_at > datetime('now', '-1 hour')").bind(cleanEmail).first<any>(),
-      ])
-      if ((ipAttempts && ipAttempts.cnt >= 20) || (emailAttempts && emailAttempts.cnt >= 3)) {
-        return c.json({ error: 'Too many verification requests. Please wait an hour and try again.' }, 429)
-      }
       await c.env.DB.prepare("INSERT INTO verification_attempts (ip, email) VALUES (?, ?)").bind(clientIp, cleanEmail).run()
-    } catch (e: any) { console.warn('[verification] rate-limit check failed:', e?.message || e) }
+    } catch (e: any) { console.warn('[verification] log insert failed:', e?.message || e) }
 
     // Generate code
     const code = generateVerificationCode()
@@ -595,16 +578,12 @@ customerAuthRoutes.post('/register', async (c) => {
     const cleanEmail = email.toLowerCase().trim()
     const cleanCompanyName = String(company_name).trim()
 
-    // Rate limit signups: max 5 per IP per hour (verification already rate-limits per-email).
+    // Log signup attempts for audit purposes (rate-limit check removed per product decision).
     try {
       const clientIp = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
       await c.env.DB.prepare("CREATE TABLE IF NOT EXISTS register_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT, email TEXT, created_at TEXT DEFAULT (datetime('now')))").run()
-      const attempts = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM register_attempts WHERE ip = ? AND created_at > datetime('now', '-1 hour')").bind(clientIp).first<any>()
-      if (attempts && attempts.cnt >= 5) {
-        return c.json({ error: 'Too many signup attempts from this network. Please wait and try again.' }, 429)
-      }
       await c.env.DB.prepare("INSERT INTO register_attempts (ip, email) VALUES (?, ?)").bind(clientIp, cleanEmail).run()
-    } catch (e: any) { console.warn('[register] rate-limit check failed:', e?.message || e) }
+    } catch (e: any) { console.warn('[register] log insert failed:', e?.message || e) }
 
     // Verify the email verification token (unless email config is not set up)
     if (verification_token) {
