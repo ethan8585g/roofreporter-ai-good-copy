@@ -795,16 +795,16 @@ adminRoutes.post('/init-db', async (c) => {
     `).run()
 
     // Seed default credit packages — only if table is empty (never delete existing data)
-    // Pricing: Single=$10, 10=$9/ea, 25=$8/ea, 50=$7/ea, 100=$6/ea
+    // Pricing v5 (CAD): 10=$7.50/ea, 25=$7.00/ea, 50=$6.50/ea, 100=$5.95/ea
     const pkgCount = await c.env.DB.prepare('SELECT COUNT(*) as cnt FROM credit_packages').first<any>()
     if (!pkgCount?.cnt || pkgCount.cnt === 0) {
       await c.env.DB.prepare(`
         INSERT INTO credit_packages (id, name, description, credits, price_cents, sort_order)
         VALUES
-          (1, '10 Pack', '10 reports — $9.00/ea — Save 10%', 10, 9000, 1),
-          (2, '25 Pack', '25 reports — $8.00/ea — Save 20%', 25, 20000, 2),
-          (3, '50 Pack', '50 reports — $7.00/ea — Save 30%', 50, 35000, 3),
-          (4, '100 Pack', '100 reports — best value — $6.00/ea — Save 40%', 100, 60000, 4)
+          (1, '10-Pack', '10 reports — $7.50/each (save 6%)', 10, 7500, 1),
+          (2, '25-Pack', '25 reports — $7.00/each (save 13%)', 25, 17500, 2),
+          (3, '50-Pack', '50 reports — $6.50/each (save 19%)', 50, 32500, 3),
+          (4, '100-Pack', '100 reports — $5.95/each (save 26%)', 100, 59500, 4)
       `).run()
     }
 
