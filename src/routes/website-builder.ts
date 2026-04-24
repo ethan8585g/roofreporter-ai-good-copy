@@ -3,17 +3,17 @@ import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 import { generateSiteCopy } from '../services/site-generator'
 import { buildPageHTML } from '../services/site-templates'
+import { getCustomerSessionToken } from '../lib/session-tokens'
 import type { WBIntakeFormData, WBBrandColors } from '../types'
 
 export const websiteBuilderRoutes = new Hono<{ Bindings: Bindings }>()
 
 // ============================================================
-// AUTH HELPER — same pattern as crm.ts
+// AUTH HELPER — accepts Bearer header OR rm_customer_session cookie
 // ============================================================
 async function getOwnerId(c: any): Promise<number | null> {
-  const auth = c.req.header('Authorization')
-  if (!auth || !auth.startsWith('Bearer ')) return null
-  const token = auth.slice(7)
+  const token = getCustomerSessionToken(c)
+  if (!token) return null
   const session = await c.env.DB.prepare(
     "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
   ).bind(token).first<any>()
