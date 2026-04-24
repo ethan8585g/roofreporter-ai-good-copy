@@ -9,6 +9,7 @@ import { geocodeAddress, optimizeRoute, type LatLng } from '../services/geocodin
 import { autoCreateCommission } from './commissions'
 import { calculateFromMaterials, DEFAULT_MATERIAL_UNIT_PRICES, type MaterialUnitPrices } from '../services/pricing-engine'
 import { getMerchantSquareCreds } from '../services/square-token'
+import { maybeAutoSendProposal, maybeAutoSyncJobToCalendar } from '../services/crm-automation'
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -695,14 +696,22 @@ crmRoutes.get('/proposals/automation/settings', async (c) => {
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   const owner = await c.env.DB.prepare(
     `SELECT auto_send_certificate, cert_trigger_type, cert_delay_days,
-            cert_require_approval, cert_default_design_id FROM customers WHERE id = ?`
+            cert_require_approval, cert_default_design_id,
+            gmail_refresh_token, gmail_connected_email FROM customers WHERE id = ?`
   ).bind(ownerId).first<any>()
+  const auto = await c.env.DB.prepare(
+    'SELECT auto_send_proposal, auto_sync_calendar FROM user_automation_settings WHERE owner_id = ?'
+  ).bind(ownerId).first<any>().catch(() => null)
   return c.json({
     auto_send_certificate: owner?.auto_send_certificate === 1,
     cert_trigger_type: owner?.cert_trigger_type || 'proposal_signed',
     cert_delay_days: owner?.cert_delay_days || 0,
     cert_require_approval: owner?.cert_require_approval === 1,
     cert_default_design_id: owner?.cert_default_design_id || null,
+    auto_send_proposal: auto ? auto.auto_send_proposal === 1 : true,
+    auto_sync_calendar: auto ? auto.auto_sync_calendar === 1 : true,
+    gmail_connected: !!owner?.gmail_refresh_token,
+    gmail_email: owner?.gmail_connected_email || null,
   })
 })
 
@@ -710,17 +719,41 @@ crmRoutes.put('/proposals/automation/settings', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   const body = await c.req.json()
-  const fields: string[] = []
-  const values: any[] = []
-  if (body.auto_send_certificate !== undefined) { fields.push('auto_send_certificate = ?'); values.push(body.auto_send_certificate ? 1 : 0) }
-  if (body.cert_trigger_type !== undefined) { fields.push('cert_trigger_type = ?'); values.push(body.cert_trigger_type) }
-  if (body.cert_delay_days !== undefined) { fields.push('cert_delay_days = ?'); values.push(body.cert_delay_days) }
-  if (body.cert_require_approval !== undefined) { fields.push('cert_require_approval = ?'); values.push(body.cert_require_approval ? 1 : 0) }
-  if (body.cert_default_design_id !== undefined) { fields.push('cert_default_design_id = ?'); values.push(body.cert_default_design_id) }
-  if (fields.length > 0) {
-    values.push(ownerId)
-    await c.env.DB.prepare(`UPDATE customers SET ${fields.join(', ')} WHERE id = ?`).bind(...values).run()
+
+  // Update certificate fields on customers
+  const certFields: string[] = []
+  const certValues: any[] = []
+  if (body.auto_send_certificate !== undefined) { certFields.push('auto_send_certificate = ?'); certValues.push(body.auto_send_certificate ? 1 : 0) }
+  if (body.cert_trigger_type !== undefined) { certFields.push('cert_trigger_type = ?'); certValues.push(body.cert_trigger_type) }
+  if (body.cert_delay_days !== undefined) { certFields.push('cert_delay_days = ?'); certValues.push(body.cert_delay_days) }
+  if (body.cert_require_approval !== undefined) { certFields.push('cert_require_approval = ?'); certValues.push(body.cert_require_approval ? 1 : 0) }
+  if (body.cert_default_design_id !== undefined) { certFields.push('cert_default_design_id = ?'); certValues.push(body.cert_default_design_id) }
+  if (certFields.length > 0) {
+    certValues.push(ownerId)
+    await c.env.DB.prepare(`UPDATE customers SET ${certFields.join(', ')} WHERE id = ?`).bind(...certValues).run()
   }
+
+  // Upsert auto-send/auto-sync toggles in user_automation_settings
+  if (body.auto_send_proposal !== undefined || body.auto_sync_calendar !== undefined) {
+    const current = await c.env.DB.prepare(
+      'SELECT auto_send_proposal, auto_sync_calendar FROM user_automation_settings WHERE owner_id = ?'
+    ).bind(ownerId).first<any>().catch(() => null)
+    const newSend = body.auto_send_proposal !== undefined
+      ? (body.auto_send_proposal ? 1 : 0)
+      : (current ? current.auto_send_proposal : 1)
+    const newSync = body.auto_sync_calendar !== undefined
+      ? (body.auto_sync_calendar ? 1 : 0)
+      : (current ? current.auto_sync_calendar : 1)
+    await c.env.DB.prepare(
+      `INSERT INTO user_automation_settings (owner_id, auto_send_proposal, auto_sync_calendar, updated_at)
+       VALUES (?, ?, ?, datetime('now'))
+       ON CONFLICT(owner_id) DO UPDATE SET
+         auto_send_proposal = excluded.auto_send_proposal,
+         auto_sync_calendar = excluded.auto_sync_calendar,
+         updated_at = datetime('now')`
+    ).bind(ownerId, newSend, newSync).run()
+  }
+
   return c.json({ success: true })
 })
 
@@ -1271,7 +1304,16 @@ crmRoutes.post('/proposals', async (c) => {
       })
       await c.env.DB.batch(itemStmts)
     }
-    return c.json({ success: true, id: proposalId, proposal_number: propNum })
+
+    // Auto-send: if owner has Gmail connected + customer has email, fire-and-forget
+    const autoSend = await maybeAutoSendProposal(c, proposalId, ownerId)
+    return c.json({
+      success: true,
+      id: proposalId,
+      proposal_number: propNum,
+      auto_sent: autoSend.attempted ? autoSend.sent : false,
+      auto_send_reason: autoSend.reason || null
+    })
   } catch (err: any) {
     console.error('[CRM] Proposal create failed:', err.message)
     return c.json({ error: 'Failed to save proposal: ' + err.message }, 500)
@@ -1338,7 +1380,15 @@ crmRoutes.put('/proposals/:id', async (c) => {
       }
       await c.env.DB.batch(stmts)
     }
-    return c.json({ success: true })
+
+    // Auto-send: maybeAutoSendProposal already guards on status='draft'
+    // and sent_at IS NULL, so editing a sent proposal won't re-send.
+    const autoSend = await maybeAutoSendProposal(c, id, ownerId)
+    return c.json({
+      success: true,
+      auto_sent: autoSend.attempted ? autoSend.sent : false,
+      auto_send_reason: autoSend.reason || null
+    })
   } catch (err: any) {
     console.error('[CRM] Proposal update failed:', err.message)
     return c.json({ error: 'Failed to update proposal: ' + err.message }, 500)
@@ -1533,7 +1583,10 @@ crmRoutes.post('/jobs/schedule', async (c) => {
   if (crewMemberId) {
     await c.env.DB.prepare('INSERT OR IGNORE INTO job_crew_assignments (job_id, crew_member_id, role) VALUES (?, ?, ?)').bind(jobId, crewMemberId, 'crew').run()
   }
-  return c.json({ success: true })
+
+  // Auto-sync to Google Calendar on schedule (fire-and-forget, no-op if disabled)
+  const calSync = await maybeAutoSyncJobToCalendar(c, jobId, ownerId)
+  return c.json({ success: true, calendar_synced: calSync.attempted ? calSync.synced : false })
 })
 
 crmRoutes.get('/jobs/:id', async (c) => {
@@ -1575,7 +1628,15 @@ crmRoutes.post('/jobs', async (c) => {
       'INSERT INTO crm_job_checklist (job_id, item_type, label, sort_order) VALUES (?,?,?,?)'
     ).bind(jobId, item.item_type, item.label, item.sort_order).run()
   }
-  return c.json({ success: true, id: jobId, job_number: jobNum })
+
+  // Auto-sync to Google Calendar on create (fire-and-forget, no-op if disabled)
+  const calSync = await maybeAutoSyncJobToCalendar(c, jobId as number, ownerId)
+  return c.json({
+    success: true,
+    id: jobId,
+    job_number: jobNum,
+    calendar_synced: calSync.attempted ? calSync.synced : false
+  })
 })
 
 crmRoutes.put('/jobs/:id', async (c) => {
@@ -1657,7 +1718,10 @@ crmRoutes.put('/jobs/:id', async (c) => {
     UPDATE crm_jobs SET crm_customer_id=?, title=?, property_address=?, job_type=?, scheduled_date=?, scheduled_time=?, estimated_duration=?, crew_size=?, notes=?, material_delivery_date=?, status=?, updated_at=datetime('now')
     WHERE id=? AND owner_id=?
   `).bind(body.crm_customer_id || null, body.title, body.property_address || null, body.job_type || 'install', body.scheduled_date, body.scheduled_time || null, body.estimated_duration || null, body.crew_size || null, body.notes || null, body.material_delivery_date || null, body.status || 'scheduled', id, ownerId).run()
-  return c.json({ success: true })
+
+  // Auto-sync (will UPDATE the existing event if already linked, or CREATE new)
+  const calSync = await maybeAutoSyncJobToCalendar(c, id, ownerId)
+  return c.json({ success: true, calendar_synced: calSync.attempted ? calSync.synced : false })
 })
 
 // Toggle checklist item
