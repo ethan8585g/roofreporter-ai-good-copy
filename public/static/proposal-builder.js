@@ -1422,6 +1422,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const tax = calcTax();
     const total = calcTotal();
 
+    // Per-bundle pricing: mirror the widget's bundles × $/bundle calc so the
+    // preview total matches what the user saw when selecting $/Bundle.
+    var perBundleData = null;
+    if (state.pricingEngineMode === 'per_bundle') {
+      var pbCount = 0;
+      var pbMats = state.selectedReportMaterials;
+      if (pbMats && pbMats.items && Array.isArray(pbMats.items)) {
+        for (var pbi = 0; pbi < pbMats.items.length; pbi++) {
+          if (pbMats.items[pbi].unit === 'bundles' && /shingle/i.test(pbMats.items[pbi].description || '')) {
+            pbCount += (parseFloat(pbMats.items[pbi].quantity) || 0);
+          }
+        }
+      }
+      var pbSquares = state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 0;
+      if (pbCount === 0 && pbSquares > 0) pbCount = pbSquares * 3;
+      var pbPrice = state.pricePerBundle || (state.pricingPresets && state.pricingPresets.price_per_bundle) || 125;
+      perBundleData = { count: pbCount, price: pbPrice, total: pbCount * pbPrice };
+    }
+
     return `
     <div class="mb-4 flex items-center justify-between print:hidden">
       <button onclick="window._pb.backToEditor()" class="text-gray-500 hover:text-gray-700 text-sm"><i class="fas fa-arrow-left mr-1"></i>Back to Editor</button>
@@ -1436,8 +1455,8 @@ document.addEventListener('DOMContentLoaded', () => {
       <div style="display:flex;align-items:center;gap:8px"><i class="fas fa-lock" style="color:#2563eb"></i><span style="color:#2563eb;font-weight:700;font-size:13px">For Your Eyes Only — Not shown to customer</span></div>
       <div style="display:flex;gap:20px;font-size:13px">
         <span style="color:#6b7280">Your Cost: <strong style="color:#dc2626">$${(state.form.items||[]).reduce(function(s,i){return s+Number(i.quantity||0)*Number(i.unit_price||0)},0).toFixed(2)}</strong></span>
-        <span style="color:#6b7280">Customer Price: <strong style="color:#1a1a2e">$${(function(){ var tc=(state.form.items||[]).reduce(function(s,i){return s+Number(i.quantity||0)*Number(i.unit_price||0)},0); return state.pricingEngineMode==="per_square_customer"&&state.selectedReport ? (Math.ceil((state.selectedReport.roof_area_sqft||0)/100)*(state.customerPricePerSquare||0)).toFixed(2) : (tc*(1+(state.markupPercent||30)/100)).toFixed(2); })()}</strong></span>
-        <span style="color:#16a34a;font-weight:700">Profit: $${(function(){ var tc=(state.form.items||[]).reduce(function(s,i){return s+Number(i.quantity||0)*Number(i.unit_price||0)},0); var cp=state.pricingEngineMode==="per_square_customer"&&state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft||0)/100)*(state.customerPricePerSquare||0) : tc*(1+(state.markupPercent||30)/100); return (cp-tc).toFixed(2); })()}</span>
+        <span style="color:#6b7280">Customer Price: <strong style="color:#1a1a2e">$${(function(){ var tc=(state.form.items||[]).reduce(function(s,i){return s+Number(i.quantity||0)*Number(i.unit_price||0)},0); if (perBundleData) return perBundleData.total.toFixed(2); return state.pricingEngineMode==="per_square_customer"&&state.selectedReport ? (Math.ceil((state.selectedReport.roof_area_sqft||0)/100)*(state.customerPricePerSquare||0)).toFixed(2) : (tc*(1+(state.markupPercent||30)/100)).toFixed(2); })()}</strong></span>
+        <span style="color:#16a34a;font-weight:700">Profit: $${(function(){ var tc=(state.form.items||[]).reduce(function(s,i){return s+Number(i.quantity||0)*Number(i.unit_price||0)},0); var cp; if (perBundleData) cp = perBundleData.total; else cp = state.pricingEngineMode==="per_square_customer"&&state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft||0)/100)*(state.customerPricePerSquare||0) : tc*(1+(state.markupPercent||30)/100); return (cp-tc).toFixed(2); })()}</span>
       </div>
     </div>
 
@@ -1572,6 +1591,17 @@ document.addEventListener('DOMContentLoaded', () => {
               if (item._isHeader) {
                 return `<tr style="background:#f8fafc"><td colspan="5" style="padding:10px 16px;font-size:11px;font-weight:700;color:#6b7280;letter-spacing:0.08em;text-transform:uppercase;border-bottom:1px solid #e5e7eb">${item.description || ''}</td></tr>`;
               }
+              // Per-bundle mode: show only the material list (no per-item prices).
+              // Final price is the single bundles × $/bundle total shown in the summary.
+              if (perBundleData) {
+                return `<tr class="border-b border-gray-100">
+                  <td class="px-4 py-2">${item.description || ''}</td>
+                  <td class="px-4 py-2 text-center">${item.quantity || ''}</td>
+                  <td class="px-4 py-2 text-center">${item.unit || ''}</td>
+                  <td class="px-4 py-2 text-right text-gray-400">—</td>
+                  <td class="px-4 py-2 text-right text-gray-400">—</td>
+                </tr>`;
+              }
               var markupPct = state.markupPercent || 30;
               var custUnitPrice, custAmount;
               if (state.pricingEngineMode === 'per_square_customer') {
@@ -1601,7 +1631,9 @@ document.addEventListener('DOMContentLoaded', () => {
           var markupPct = state.markupPercent || 30;
           var costTotal = (state.form.items || []).reduce((s, i) => s + Number(i.quantity || 0) * Number(i.unit_price || 0), 0);
           var custSubtotal;
-          if (state.pricingEngineMode === 'per_square_customer' && state.selectedReport) {
+          if (perBundleData) {
+            custSubtotal = perBundleData.total;
+          } else if (state.pricingEngineMode === 'per_square_customer' && state.selectedReport) {
             custSubtotal = Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) * (state.customerPricePerSquare || 0);
           } else {
             custSubtotal = costTotal * (1 + markupPct / 100);
