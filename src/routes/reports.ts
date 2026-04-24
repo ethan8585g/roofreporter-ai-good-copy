@@ -927,7 +927,7 @@ reportsRoutes.post('/:orderId/trace-remeasure', async (c) => {
     ).bind(
       JSON.stringify(reportData),
       html,
-      traceReport.key_measurements.total_roof_area_sloped_ft2,
+      traceReport.key_measurements.total_projected_footprint_ft2,
       traceReport.key_measurements.total_projected_footprint_ft2,
       traceReport.linear_measurements.ridges_total_ft,
       traceReport.linear_measurements.hips_total_ft,

@@ -155,8 +155,11 @@ export async function saveCompletedReport(
   const s = (v: any): string | null => (v === undefined || v === null) ? null : String(v)
 
   // Pre-save validation log — if any bind is still undefined, this helps diagnose
+  // roof_area_sqft stores the PROJECTED footprint (matches the PDF report's
+  // displayed "roof area" per the e5a94c5 fix). Material estimation keeps using
+  // total_true_area_sqft internally via reportData.materials for shingle counts.
   const bindValues = [
-    n(reportData.total_true_area_sqft), n(reportData.total_true_area_sqm),
+    n(reportData.total_footprint_sqft || reportData.total_true_area_sqft), n(reportData.total_footprint_sqm || reportData.total_true_area_sqm),
     n(reportData.total_footprint_sqft), n(reportData.total_footprint_sqm),
     n(reportData.area_multiplier),
     n(reportData.roof_pitch_degrees), s(reportData.roof_pitch_ratio),
