@@ -240,7 +240,6 @@ export async function notifyNewReportRequest(
     is_trial: boolean
   }
 ): Promise<void> {
-  const recipient = 'sales@roofmanager.ca'
   const typeLabel = order.is_trial ? 'Free Trial' : `Paid — $${order.price.toFixed(2)}`
   const subject = `New Report Request — ${order.order_number}`
   const html = `
@@ -256,34 +255,74 @@ export async function notifyNewReportRequest(
   <a href="https://www.roofmanager.ca/admin/superadmin" style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">View in Super Admin →</a>
 </div>`
 
-  try {
+  const recipients = new Set<string>(['sales@roofmanager.ca'])
+  if (env?.DB) {
+    try {
+      const rows = await env.DB.prepare(
+        "SELECT email FROM admin_users WHERE role='superadmin' AND is_active=1 AND email IS NOT NULL AND email != ''"
+      ).all<{ email: string }>()
+      for (const r of (rows?.results || [])) {
+        if (r?.email) recipients.add(r.email.trim().toLowerCase())
+      }
+    } catch {}
+  }
+
+  const clientId = env?.GMAIL_CLIENT_ID
+  let clientSecret = env?.GMAIL_CLIENT_SECRET || ''
+  let refreshToken = env?.GMAIL_REFRESH_TOKEN || ''
+  if (env?.DB && (!clientSecret || !refreshToken)) {
+    try {
+      const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
+      if (r?.setting_value) refreshToken = r.setting_value
+      const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
+      if (s?.setting_value) clientSecret = s.setting_value
+    } catch {}
+  }
+
+  const logAudit = async (action: string, detail: string) => {
+    if (!env?.DB) return
+    try {
+      await env.DB.prepare(
+        "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, ?, ?)"
+      ).bind(action, `[${order.order_number}] ${detail}`.slice(0, 500)).run()
+    } catch {}
+  }
+
+  let delivered = 0
+  const errors: string[] = []
+
+  for (const to of recipients) {
+    let sent = false
+
     if (env?.RESEND_API_KEY) {
-      await sendViaResend(env.RESEND_API_KEY, recipient, subject, html)
-      return
-    }
-
-    const clientId = env?.GMAIL_CLIENT_ID
-    let clientSecret = env?.GMAIL_CLIENT_SECRET || ''
-    let refreshToken = env?.GMAIL_REFRESH_TOKEN || ''
-
-    // DB fallback for Gmail credentials
-    if (env?.DB && (!clientSecret || !refreshToken)) {
       try {
-        const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
-        if (r?.setting_value) refreshToken = r.setting_value
-        const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
-        if (s?.setting_value) clientSecret = s.setting_value
-      } catch {}
+        await sendViaResend(env.RESEND_API_KEY, to, subject, html)
+        sent = true
+      } catch (e: any) {
+        errors.push(`resend→${to}: ${e?.message || e}`)
+      }
     }
 
-    if (clientId && clientSecret && refreshToken) {
-      await sendGmailOAuth2(clientId, clientSecret, refreshToken, recipient, subject, html, env?.GMAIL_SENDER_EMAIL || null)
-      return
+    if (!sent && clientId && clientSecret && refreshToken) {
+      try {
+        await sendGmailOAuth2(clientId, clientSecret, refreshToken, to, subject, html, env?.GMAIL_SENDER_EMAIL || null)
+        sent = true
+      } catch (e: any) {
+        errors.push(`gmail→${to}: ${e?.message || e}`)
+      }
     }
 
-    console.warn('[notifyNewReportRequest] No email provider configured (RESEND_API_KEY or Gmail OAuth)')
-  } catch (e: any) {
-    console.warn('[notifyNewReportRequest] Failed to send notification:', e?.message || e)
+    if (sent) delivered++
+  }
+
+  if (delivered === 0) {
+    const reason = errors.length ? errors.join(' | ') : 'no email provider configured'
+    console.warn('[notifyNewReportRequest] Failed to send notification:', reason)
+    await logAudit('report_request_notify_failed', reason)
+  } else if (errors.length) {
+    await logAudit('report_request_notify_partial', `delivered=${delivered} errors=${errors.join(' | ')}`)
+  } else {
+    await logAudit('report_request_notify_sent', `delivered=${delivered} to=${[...recipients].join(',')}`)
   }
 }
 
@@ -376,6 +415,116 @@ export async function sendGmailOAuth2(
   if (!sendResp.ok) {
     const err = await sendResp.text()
     throw new Error(`Gmail send failed (${sendResp.status}): ${err}`)
+  }
+  const data: any = await sendResp.json().catch(() => ({}))
+  return { id: data?.id || '' }
+}
+
+// ============================================================
+// GMAIL OAUTH2 WITH ATTACHMENT — multipart/mixed send with one binary attachment.
+// Used by the super-admin "Send Report Email" action. Attachment is fetched
+// server-side from a pre-validated URL, then base64-encoded inline.
+// ============================================================
+export async function sendGmailOAuth2WithAttachment(
+  clientId: string, clientSecret: string, refreshToken: string,
+  to: string, subject: string, htmlBody: string,
+  attachment: { filename: string; mimeType: string; bytes: Uint8Array },
+  senderEmail?: string | null,
+  replyTo?: string | null
+): Promise<{ id: string }> {
+  const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken
+    }).toString(),
+    signal: AbortSignal.timeout(10000)
+  })
+  if (!tokenResp.ok) {
+    const err = await tokenResp.text()
+    throw new Error(`Gmail OAuth2 token refresh failed (${tokenResp.status}): ${err}`)
+  }
+  const tokenData: any = await tokenResp.json()
+  const accessToken = tokenData.access_token
+
+  const outer = 'outer_' + Date.now()
+  const inner = 'inner_' + Date.now()
+  const fromAddr = senderEmail || 'me'
+
+  const encChunked = (bytes: Uint8Array): string => {
+    let out = ''
+    const chunk = 3 * 1024
+    for (let i = 0; i < bytes.length; i += chunk) {
+      const slice = bytes.slice(i, i + chunk)
+      let bin = ''
+      for (let j = 0; j < slice.length; j++) bin += String.fromCharCode(slice[j])
+      out += btoa(bin)
+    }
+    // wrap to 76-char lines (RFC 2045)
+    return out.match(/.{1,76}/g)?.join('\r\n') || out
+  }
+
+  const htmlBase64 = encChunked(new TextEncoder().encode(htmlBody))
+  const attachmentBase64 = encChunked(attachment.bytes)
+  const safeFilename = attachment.filename.replace(/[^\w.\-]/g, '_').slice(0, 200)
+
+  const subjectEnc = (() => {
+    const b = new TextEncoder().encode(subject); let s = ''
+    for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i])
+    return btoa(s)
+  })()
+
+  const rawMessage = [
+    `From: Roof Manager <${fromAddr}>`,
+    `To: ${to}`,
+    replyTo ? `Reply-To: ${replyTo}` : '',
+    `Subject: =?UTF-8?B?${subjectEnc}?=`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/mixed; boundary="${outer}"`,
+    '',
+    `--${outer}`,
+    `Content-Type: multipart/alternative; boundary="${inner}"`,
+    '',
+    `--${inner}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: 7bit',
+    '',
+    'Your roof measurement report is attached. View this email in an HTML-capable client for the full message.',
+    '',
+    `--${inner}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    htmlBase64,
+    '',
+    `--${inner}--`,
+    '',
+    `--${outer}`,
+    `Content-Type: ${attachment.mimeType}; name="${safeFilename}"`,
+    `Content-Disposition: attachment; filename="${safeFilename}"`,
+    'Content-Transfer-Encoding: base64',
+    '',
+    attachmentBase64,
+    '',
+    `--${outer}--`
+  ].filter((l) => l !== '' || true).join('\r\n')
+
+  const messageBytes = new TextEncoder().encode(rawMessage)
+  let messageBinary = ''
+  for (let i = 0; i < messageBytes.length; i++) messageBinary += String.fromCharCode(messageBytes[i])
+  const encodedMessage = btoa(messageBinary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+
+  const sendResp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ raw: encodedMessage })
+  })
+  if (!sendResp.ok) {
+    const err = await sendResp.text()
+    throw new Error(`Gmail send (with attachment) failed (${sendResp.status}): ${err}`)
   }
   const data: any = await sendResp.json().catch(() => ({}))
   return { id: data?.id || '' }
