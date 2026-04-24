@@ -270,12 +270,17 @@ export async function notifyNewReportRequest(
   const clientId = env?.GMAIL_CLIENT_ID
   let clientSecret = env?.GMAIL_CLIENT_SECRET || ''
   let refreshToken = env?.GMAIL_REFRESH_TOKEN || ''
-  if (env?.DB && (!clientSecret || !refreshToken)) {
+  let senderEmail = env?.GMAIL_SENDER_EMAIL || ''
+  if (env?.DB && (!clientSecret || !refreshToken || !senderEmail)) {
     try {
       const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
       if (r?.setting_value) refreshToken = r.setting_value
       const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
       if (s?.setting_value) clientSecret = s.setting_value
+      if (!senderEmail) {
+        const se = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_sender_email' AND master_company_id=1").first<any>()
+        if (se?.setting_value) senderEmail = se.setting_value
+      }
     } catch {}
   }
 
@@ -305,7 +310,7 @@ export async function notifyNewReportRequest(
 
     if (!sent && clientId && clientSecret && refreshToken) {
       try {
-        await sendGmailOAuth2(clientId, clientSecret, refreshToken, to, subject, html, env?.GMAIL_SENDER_EMAIL || null)
+        await sendGmailOAuth2(clientId, clientSecret, refreshToken, to, subject, html, senderEmail || null)
         sent = true
       } catch (e: any) {
         errors.push(`gmail→${to}: ${e?.message || e}`)
