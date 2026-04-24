@@ -1413,8 +1413,9 @@
               '<p class="font-semibold text-green-800">Proposal Emailed!</p>' +
               '<p class="text-sm text-emerald-400">Sent to ' + res.sent_to + '</p></div>';
           } else if (res.email_error) {
-            linkHtml += '<div class="bg-white/10 border border-white/15 rounded-xl p-3 text-sm text-gray-400">' +
-              '<i class="fas fa-exclamation-triangle mr-1"></i>' + res.email_error + '</div>';
+            linkHtml += '<div class="bg-red-50 border-2 border-red-400 rounded-xl p-4 text-sm text-red-800">' +
+              '<div class="font-bold mb-1"><i class="fas fa-exclamation-triangle mr-1"></i>Email NOT sent to customer</div>' +
+              '<div>' + res.email_error + '</div></div>';
           }
 
           linkHtml += '<p class="text-sm text-gray-400">Share this trackable link — every time your customer opens it, the view count updates.</p>' +

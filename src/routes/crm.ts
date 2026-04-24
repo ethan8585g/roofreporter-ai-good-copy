@@ -2588,14 +2588,32 @@ crmRoutes.post('/proposals/:id/send', async (c) => {
             emailSent = true
           } else {
             const errData: any = await sendResp.json().catch(() => ({}))
-            emailError = errData?.error?.message || `Gmail API error (${sendResp.status})`
+            const googleMsg = errData?.error?.message || errData?.error_description || errData?.error || ''
+            const googleStatus = errData?.error?.status ? ` [${errData.error.status}]` : ''
+            if (sendResp.status === 403 || /insufficient|scope/i.test(googleMsg)) {
+              emailError = `Gmail refused to send (insufficient scope). Please disconnect Gmail in Settings and reconnect — grant the "Send email" permission when Google prompts you. Google said: ${googleMsg || 'insufficient permissions'}`
+            } else if (sendResp.status === 401) {
+              emailError = `Gmail authentication expired. Please disconnect and reconnect Gmail in Settings. Google said: ${googleMsg || 'unauthorized'}`
+            } else {
+              emailError = `Gmail API error (HTTP ${sendResp.status}${googleStatus}): ${googleMsg || 'unknown error'}`
+            }
+            console.warn('[proposal-send] Gmail send failed', { status: sendResp.status, err: errData })
           }
         } else {
-          emailError = 'Could not refresh Gmail token. Please reconnect Gmail.'
+          const errMsg = tokenData.error_description || tokenData.error || 'unknown'
+          if (tokenData.error === 'invalid_grant') {
+            emailError = `Your stored Gmail connection is no longer valid (likely from a previous OAuth session). Please disconnect Gmail in Settings and reconnect. Google said: ${errMsg}`
+          } else {
+            emailError = `Could not refresh Gmail token: ${errMsg}. Please disconnect and reconnect Gmail in Settings.`
+          }
+          console.warn('[proposal-send] Token refresh failed', tokenData)
         }
       } catch(e: any) {
         emailError = e.message || 'Gmail send failed'
+        console.warn('[proposal-send] Exception during send', e)
       }
+    } else {
+      emailError = 'Gmail OAuth client credentials missing on the server. Contact support.'
     }
   } else if (!customer?.gmail_refresh_token) {
     emailError = 'Gmail not connected. Connect Gmail in settings to send proposals by email.'
