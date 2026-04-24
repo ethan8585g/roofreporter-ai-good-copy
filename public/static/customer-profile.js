@@ -117,6 +117,9 @@
         '</div>' +
       '</div>' +
 
+      // ── Payment Integrations ──────────────────────────────
+      squareIntegrationSection() +
+
       // ── 5. Security ───────────────────────────────────────
       section('Security', 'fa-lock', 'red',
         '<div class="mb-4">' +
@@ -157,7 +160,102 @@
       var el = document.getElementById(id);
       if (el) el.addEventListener('input', function () { markDirty('branding'); });
     });
+
+    // Load current Square connection status
+    refreshSquareStatus();
   }
+
+  // ── Payment Integrations Section (Square OAuth) ──────────
+  function squareIntegrationSection() {
+    return '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6" id="square-integration-section">' +
+      '<h2 class="text-base font-bold text-gray-800 mb-2"><i class="fas fa-credit-card text-emerald-500 mr-2"></i>Payment Integrations</h2>' +
+      '<p class="text-sm text-gray-500 mb-4">Connect your Square account so invoice and proposal payments go directly to your own Square merchant account. Without a connection, payment links cannot be generated.</p>' +
+      '<div id="square-integration-status" class="border border-gray-200 rounded-xl p-4 bg-gray-50">' +
+        '<div class="flex items-center gap-2 text-gray-500 text-sm"><i class="fas fa-spinner fa-spin"></i> Checking Square connection...</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  async function refreshSquareStatus() {
+    var wrap = document.getElementById('square-integration-status');
+    if (!wrap) return;
+    try {
+      var res = await fetch('/api/square/oauth/status', { headers: hdrs() });
+      var data = await res.json();
+      var connected = !!data.connected;
+      var appConfigured = data.app_configured !== false;
+      if (!appConfigured) {
+        wrap.innerHTML =
+          '<div class="flex items-start gap-3">' +
+            '<div class="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0"><i class="fas fa-exclamation-triangle text-amber-600"></i></div>' +
+            '<div><p class="font-semibold text-amber-800 text-sm">Square OAuth not configured on the server</p>' +
+            '<p class="text-xs text-amber-700 mt-1">Ask Roof Manager support to finish Square OAuth setup (SQUARE_APPLICATION_ID + SQUARE_CLIENT_SECRET).</p></div>' +
+          '</div>';
+        return;
+      }
+      if (connected) {
+        wrap.innerHTML =
+          '<div class="flex items-start justify-between gap-4">' +
+            '<div class="flex items-start gap-3">' +
+              '<div class="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0"><i class="fas fa-check-circle text-emerald-600"></i></div>' +
+              '<div>' +
+                '<p class="font-semibold text-emerald-800 text-sm">Square connected</p>' +
+                '<p class="text-xs text-gray-600 mt-1">' + esc(data.merchant_name || 'Merchant ID: ' + (data.merchant_id || '')) + '</p>' +
+                (data.location_id ? '<p class="text-[10px] text-gray-400 mt-0.5">Location ' + esc(data.location_id) + '</p>' : '') +
+              '</div>' +
+            '</div>' +
+            '<button onclick="disconnectSquare()" class="text-xs font-semibold text-red-600 hover:underline"><i class="fas fa-unlink mr-1"></i>Disconnect</button>' +
+          '</div>';
+      } else {
+        wrap.innerHTML =
+          '<div class="flex items-center justify-between gap-4">' +
+            '<div class="flex items-start gap-3">' +
+              '<div class="w-10 h-10 rounded-xl bg-gray-200 flex items-center justify-center flex-shrink-0"><i class="fas fa-plug text-gray-500"></i></div>' +
+              '<div>' +
+                '<p class="font-semibold text-gray-800 text-sm">Square not connected</p>' +
+                '<p class="text-xs text-gray-500 mt-1">Connect your own Square account to accept invoice payments.</p>' +
+              '</div>' +
+            '</div>' +
+            '<button onclick="connectSquare()" class="px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-lg hover:bg-black transition-colors"><i class="fab fa-square mr-1"></i>Connect Square</button>' +
+          '</div>';
+      }
+    } catch (e) {
+      wrap.innerHTML = '<p class="text-sm text-red-600">Failed to load Square status: ' + esc(e.message || 'unknown') + '</p>';
+    }
+  }
+
+  window.connectSquare = function () {
+    var token = tok();
+    var url = '/api/square/oauth/start?token=' + encodeURIComponent(token);
+    var popup = window.open(url, 'square_oauth', 'width=600,height=800');
+    function onMsg(ev) {
+      if (!ev.data || typeof ev.data !== 'object') return;
+      if (ev.data.type === 'square_oauth_success') {
+        window.removeEventListener('message', onMsg);
+        showToast('Square connected successfully!', 'success');
+        refreshSquareStatus();
+      } else if (ev.data.type === 'square_oauth_error') {
+        window.removeEventListener('message', onMsg);
+        showToast('Square connection failed: ' + (ev.data.error || 'unknown'), 'error');
+      }
+    }
+    window.addEventListener('message', onMsg);
+    var poll = setInterval(function () {
+      if (popup && popup.closed) { clearInterval(poll); refreshSquareStatus(); }
+    }, 1000);
+  };
+
+  window.disconnectSquare = async function () {
+    if (!confirm('Disconnect your Square account? You won’t be able to send payment links until you reconnect.')) return;
+    try {
+      var res = await fetch('/api/square/oauth/disconnect', { method: 'POST', headers: hdrs() });
+      if (!res.ok) throw new Error((await res.json()).error || 'Disconnect failed');
+      showToast('Square disconnected.', 'success');
+      refreshSquareStatus();
+    } catch (e) {
+      showToast(e.message || 'Disconnect failed', 'error');
+    }
+  };
 
   // ── Company Type Section ──────────────────────────────────
   function companyTypeSection() {

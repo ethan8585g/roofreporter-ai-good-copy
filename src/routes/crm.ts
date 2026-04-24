@@ -8,6 +8,7 @@ import { logFromContext } from '../lib/team-activity'
 import { geocodeAddress, optimizeRoute, type LatLng } from '../services/geocoding'
 import { autoCreateCommission } from './commissions'
 import { calculateFromMaterials, DEFAULT_MATERIAL_UNIT_PRICES, type MaterialUnitPrices } from '../services/pricing-engine'
+import { getMerchantSquareCreds } from '../services/square-token'
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -382,17 +383,11 @@ crmRoutes.post('/invoices/:id/payment-link', async (c) => {
   ).bind(id, ownerId).first<any>()
   if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
 
-  // Get owner's Square access token (per-user OAuth first, then master)
-  const owner = await c.env.DB.prepare(
-    'SELECT square_merchant_access_token, square_merchant_location_id FROM customers WHERE id = ?'
-  ).bind(ownerId).first<any>()
-
-  const accessToken = owner?.square_merchant_access_token || (c.env as any).SQUARE_ACCESS_TOKEN
-  const locationId = owner?.square_merchant_location_id || (c.env as any).SQUARE_LOCATION_ID
-
-  if (!accessToken || !locationId) {
-    return c.json({ error: 'Square is not connected. Go to Settings → Connect Square to enable payment links.' }, 503)
-  }
+  // Per-user Square OAuth: payment goes to this owner's own Square account.
+  const creds = await getMerchantSquareCreds(c.env, ownerId)
+  if ('error' in creds) return c.json({ error: creds.error }, creds.status as any)
+  const accessToken = creds.accessToken
+  const locationId = creds.locationId
 
   const amountCents = Math.round((invoice.total || 0) * 100)
   if (amountCents <= 0) return c.json({ error: 'Invoice total must be greater than $0' }, 400)
@@ -452,16 +447,11 @@ crmRoutes.post('/proposals/:id/payment-link', async (c) => {
   ).bind(id, ownerId).first<any>()
   if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
 
-  const owner = await c.env.DB.prepare(
-    'SELECT square_merchant_access_token, square_merchant_location_id FROM customers WHERE id = ?'
-  ).bind(ownerId).first<any>()
-
-  const accessToken = owner?.square_merchant_access_token || (c.env as any).SQUARE_ACCESS_TOKEN
-  const locationId = owner?.square_merchant_location_id || (c.env as any).SQUARE_LOCATION_ID
-
-  if (!accessToken || !locationId) {
-    return c.json({ error: 'Square is not connected. Go to Settings → Connect Square to enable payment links.' }, 503)
-  }
+  // Per-user Square OAuth: payment goes to this owner's own Square account.
+  const creds = await getMerchantSquareCreds(c.env, ownerId)
+  if ('error' in creds) return c.json({ error: creds.error }, creds.status as any)
+  const accessToken = creds.accessToken
+  const locationId = creds.locationId
 
   const amountCents = Math.round((proposal.total_amount || 0) * 100)
   if (amountCents <= 0) return c.json({ error: 'Proposal total must be greater than $0' }, 400)
