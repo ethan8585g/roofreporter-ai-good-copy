@@ -5301,6 +5301,9 @@ function getDispatchBoardHTML(mapsApiKey: string = '') {
     <div style="padding:14px 16px;">
       <div class="panel-title">Photos <span id="drawerPhotoCount" style="color:var(--accent)"></span></div>
       <div id="drawerPhotos" style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:16px;"></div>
+      <div class="panel-title">Checklist <span id="drawerChecklistCount" style="color:var(--accent)"></span></div>
+      <div id="drawerChecklist" style="margin-bottom:8px"></div>
+      <div style="display:flex; gap:6px; margin-bottom:16px"><input type="text" id="drawerChecklistInput" placeholder="Add checklist item..." onkeydown="if(event.key==='Enter'){event.preventDefault();dbAddChecklist();}" style="flex:1;background:var(--bg-card-2);border:1px solid var(--border);color:#fff;padding:8px 10px;border-radius:6px;font-size:12px"/><button class="btn primary" onclick="dbAddChecklist()"><i class="fas fa-plus"></i></button></div>
       <div class="panel-title">Notes <span id="drawerNoteCount" style="color:var(--accent)"></span></div>
       <div id="drawerNotes" style="margin-bottom:12px"></div>
       <div style="display:flex; gap:6px"><input type="text" id="drawerNoteInput" placeholder="Add a note..." style="flex:1;background:var(--bg-card-2);border:1px solid var(--border);color:#fff;padding:8px 10px;border-radius:6px;font-size:12px"/><button class="btn primary" onclick="dbDrawerSendNote()"><i class="fas fa-paper-plane"></i></button></div>
@@ -5554,7 +5557,7 @@ function getDispatchBoardHTML(mapsApiKey: string = '') {
       document.getElementById('drawerTitle').textContent = job.title;
       document.getElementById('drawerSub').textContent = (job.customer_name||'') + ' · ' + (job.property_address||'');
       document.getElementById('jobDrawer').style.transform = 'translateX(0)';
-      await Promise.all([dbLoadPhotos(jobId), dbLoadNotes(jobId)]);
+      await Promise.all([dbLoadPhotos(jobId), dbLoadNotes(jobId), dbLoadChecklist(jobId)]);
     }
     function dbCloseDrawer(){ drawerJobId = null; document.getElementById('jobDrawer').style.transform = 'translateX(100%)'; }
     async function dbLoadPhotos(jobId){
@@ -5599,6 +5602,45 @@ function getDispatchBoardHTML(mapsApiKey: string = '') {
       inp.value = '';
       dbLoadNotes(drawerJobId);
       dbLoad();
+    }
+    async function dbLoadChecklist(jobId){
+      var r = await fetch('/api/crm/jobs/'+jobId, { headers: authHeaders() });
+      if (!r.ok) return;
+      var d = await r.json();
+      var items = d.checklist || [];
+      document.getElementById('drawerChecklistCount').textContent = '('+items.length+')';
+      document.getElementById('drawerChecklist').innerHTML = items.length
+        ? items.map(function(it){
+            var done = !!it.is_completed;
+            return '<div data-cid="'+it.id+'" style="display:flex;align-items:center;gap:8px;background:var(--bg-card-2);padding:6px 10px;border-radius:6px;margin-bottom:6px;font-size:12px">'
+              + '<input type="checkbox" '+(done?'checked':'')+' onchange="dbToggleChecklist('+it.id+', this.checked)" style="cursor:pointer;width:14px;height:14px;accent-color:var(--accent);flex-shrink:0"/>'
+              + '<span style="flex:1;'+(done?'text-decoration:line-through;color:var(--text-muted)':'')+'">'+esc(it.label)+'</span>'
+              + '<button onclick="dbDeleteChecklist('+it.id+')" style="background:transparent;border:0;color:var(--text-muted);cursor:pointer;font-size:14px;padding:2px 6px" title="Delete">&times;</button>'
+              + '</div>';
+          }).join('')
+        : '<div style="color:var(--text-muted);font-size:11px;padding:6px 0">No checklist items yet</div>';
+    }
+    async function dbToggleChecklist(itemId, checked){
+      if (!drawerJobId) return;
+      var r = await fetch('/api/crm/jobs/'+drawerJobId+'/checklist/'+itemId, { method:'PUT', headers: authHeaders(), body: JSON.stringify({ is_completed: checked }) });
+      if (!r.ok) { alert('Failed to update'); return; }
+      dbLoadChecklist(drawerJobId);
+    }
+    async function dbAddChecklist(){
+      var inp = document.getElementById('drawerChecklistInput');
+      var label = (inp.value||'').trim();
+      if (!label || !drawerJobId) return;
+      var r = await fetch('/api/crm/jobs/'+drawerJobId+'/checklist', { method:'POST', headers: authHeaders(), body: JSON.stringify({ label: label, item_type: 'custom' }) });
+      if (!r.ok) { alert('Failed to add item'); return; }
+      inp.value = '';
+      dbLoadChecklist(drawerJobId);
+    }
+    async function dbDeleteChecklist(itemId){
+      if (!drawerJobId) return;
+      if (!confirm('Delete this checklist item?')) return;
+      var r = await fetch('/api/crm/jobs/'+drawerJobId+'/checklist/'+itemId, { method:'DELETE', headers: authHeaders() });
+      if (!r.ok) { alert('Failed to delete'); return; }
+      dbLoadChecklist(drawerJobId);
     }
 
     dbLoad();
@@ -13785,10 +13827,10 @@ function getPricingPageHTML() {
 <head>
   ${getHeadTags('/pricing')}
   <title>Roof Measurement Report Software Pricing — From $5.95 | Roof Manager</title>
-  <meta name="description" content="Roof measurement report software pricing. 4 free reports to start, then $8/report. Credit packs: 10-pack at $7.50/ea, 25-pack at $7.00/ea, 100-pack at $5.95/ea. CRM included.">
+  <meta name="description" content="Roof measurement report software pricing. 4 free reports to start, then buy credit packs: 10-pack at $7.50/ea, 25-pack at $7.00/ea, 50-pack at $6.50/ea, 100-pack at $5.95/ea. CRM included.">
   <link rel="canonical" href="https://www.roofmanager.ca/pricing">
   <meta property="og:title" content="Roof Report Pricing — From $5.95/Report (100-Pack)"> <!-- conv-v5: $5 was a lie; cheapest is $5.95 -->
-  <meta property="og:description" content="AI-powered roof measurement reports with full CRM. 4 free reports, then pay per report or buy credit packs.">
+  <meta property="og:description" content="AI-powered roof measurement reports with full CRM. 4 free reports, then save with 10, 25, 50, or 100 report credit packs.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/pricing">
   <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
@@ -13808,9 +13850,9 @@ function getPricingPageHTML() {
     "url": "https://www.roofmanager.ca/pricing",
     "offers": [
       {"@type": "Offer", "name": "Free Trial", "price": "0", "priceCurrency": "CAD", "description": "4 free professional roof measurement reports", "availability": "https://schema.org/InStock"},
-      {"@type": "Offer", "name": "Per Report", "price": "8.00", "priceCurrency": "CAD", "description": "Pay-per-report after free trial", "availability": "https://schema.org/InStock"},
       {"@type": "Offer", "name": "10-Pack", "price": "75.00", "priceCurrency": "CAD", "description": "10 report credits at $7.50 each", "availability": "https://schema.org/InStock", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "7.50", "priceCurrency": "CAD", "referenceQuantity": {"@type": "QuantitativeValue", "value": "1", "unitCode": "EA"}}},
       {"@type": "Offer", "name": "25-Pack", "price": "175.00", "priceCurrency": "CAD", "description": "25 report credits at $7 each", "availability": "https://schema.org/InStock", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "7.00", "priceCurrency": "CAD", "referenceQuantity": {"@type": "QuantitativeValue", "value": "1", "unitCode": "EA"}}},
+      {"@type": "Offer", "name": "50-Pack", "price": "325.00", "priceCurrency": "CAD", "description": "50 report credits at $6.50 each", "availability": "https://schema.org/InStock", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "6.50", "priceCurrency": "CAD", "referenceQuantity": {"@type": "QuantitativeValue", "value": "1", "unitCode": "EA"}}},
       {"@type": "Offer", "name": "100-Pack", "price": "595.00", "priceCurrency": "CAD", "description": "100 report credits at $5.95 each", "availability": "https://schema.org/InStock", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "5.95", "priceCurrency": "CAD", "referenceQuantity": {"@type": "QuantitativeValue", "value": "1", "unitCode": "EA"}}}
     ],
     "aggregateRating": {"@type": "AggregateRating", "ratingValue": "4.9", "ratingCount": "200", "bestRating": "5"},
@@ -13857,7 +13899,7 @@ function getPricingPageHTML() {
 
     <div class="text-center mb-12">
       <h1 class="text-4xl font-bold mb-4" style="color:var(--text-primary)">Simple, Transparent Pricing</h1>
-      <p class="text-lg max-w-2xl mx-auto" style="color:var(--text-secondary)">Start with 4 free reports. After that, buy individual reports or save with credit packs.</p>
+      <p class="text-lg max-w-2xl mx-auto" style="color:var(--text-secondary)">Start with 4 free reports. After that, save with 10, 25, 50, or 100 report credit packs.</p>
     </div>
 
     <!-- How it works -->
@@ -13887,46 +13929,17 @@ function getPricingPageHTML() {
       </div>
     </div>
 
-    <!-- Per-Report Pricing -->
-    <h2 class="text-2xl font-bold mb-6 text-center" style="color:var(--text-primary)">Individual Report</h2>
-    <div class="max-w-lg mx-auto mb-16">
-      <div class="rounded-2xl border p-6 hover:shadow-lg transition-shadow ring-2 ring-brand-500 relative" style="background:var(--bg-card);border-color:var(--border-color)">
-        <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white px-4 py-1 rounded-full text-xs font-bold">PAY PER REPORT</div>
-        <div class="text-center mb-6">
-          <div class="w-14 h-14 bg-brand-100 rounded-xl flex items-center justify-center mx-auto mb-3"><i class="fas fa-bolt text-brand-500 text-xl"></i></div>
-          <h3 class="text-xl font-bold" style="color:var(--text-primary)">Roof Measurement Report</h3>
-          <p class="text-sm mt-1" style="color:var(--text-muted)">Delivered instantly — no subscription required</p>
-        </div>
-        <div class="text-center mb-6">
-          <span class="text-5xl font-black" style="color:var(--text-primary)">$8</span>
-          <span class="text-sm ml-1" style="color:var(--text-muted)">CAD / report</span>
-        </div>
-        <ul class="space-y-3 mb-6 text-sm">
-          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>Satellite-based roof area &amp; perimeter</li>
-          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>Pitch &amp; azimuth analysis per facet</li>
-          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>Complete material takeoff with CAD pricing</li>
-          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>Edge breakdown (ridge, hip, valley, eave, rake)</li>
-          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>AI roof geometry overlay with SVG diagram</li>
-          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>14-image gallery (overhead, aerial, street-view)</li>
-          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>Perimeter side-by-side measurements in ft &amp; in</li>
-        </ul>
-        <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_signup'})" class="block w-full py-3 text-center font-bold rounded-xl transition-all hover:scale-[1.02] bg-brand-600 hover:bg-brand-700 text-white shadow-lg">
-          Get Started
-        </a>
-      </div>
-    </div>
-
-    <!-- conv-v5: How pricing works (removes ambiguity B2B buyers feel seeing 5 prices) -->
+    <!-- How pricing works -->
     <div class="rounded-2xl border p-6 mb-8 max-w-3xl mx-auto text-center" style="background:var(--bg-card);border-color:var(--border-color)">
       <h2 class="text-lg font-bold mb-3" style="color:var(--text-primary)"><i class="fas fa-info-circle text-[#00FF88] mr-2" aria-hidden="true"></i>How pricing works</h2>
       <p class="text-base mb-1" style="color:var(--text-primary)"><strong>Month 1:</strong> 4 reports free, no card.</p>
-      <p class="text-base" style="color:var(--text-primary)"><strong>After:</strong> $8 per report, or buy 100 credits for $5.95 each.</p>
+      <p class="text-base" style="color:var(--text-primary)"><strong>After:</strong> buy credit packs — from $7.50/report (10-pack) down to $5.95/report (100-pack).</p>
     </div>
 
     <!-- Credit Packs -->
     <h2 class="text-2xl font-bold mb-2 text-center" style="color:var(--text-primary)">Credit Packs — Save More</h2>
     <p class="text-center mb-8" style="color:var(--text-muted)">Buy credits in bulk and use them anytime. Credits never expire.</p>
-    <div class="grid md:grid-cols-3 gap-5 mb-16 max-w-4xl mx-auto">
+    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-5 mb-16 max-w-5xl mx-auto">
       <div class="rounded-xl border p-5 text-center hover:shadow-md transition-shadow relative" style="background:var(--bg-card);border-color:var(--border-color)">
         <h3 class="font-bold text-lg mb-1" style="color:var(--text-primary)">10-Pack</h3>
         <div class="text-xs mb-3" style="color:var(--text-muted)">10 reports</div>
@@ -13935,7 +13948,7 @@ function getPricingPageHTML() {
           <span class="text-xs ml-1" style="color:var(--text-muted)">CAD</span>
         </div>
         <p class="text-sm font-semibold text-brand-600 mb-1">$7.50/report</p>
-        <span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Save 6%</span>
+        <span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Starter</span>
         <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_signup'})" class="block w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-lg text-sm transition-all hover:scale-[1.02]">
           Buy 10 Credits
         </a>
@@ -13949,9 +13962,22 @@ function getPricingPageHTML() {
           <span class="text-xs ml-1" style="color:var(--text-muted)">CAD</span>
         </div>
         <p class="text-sm font-semibold text-brand-600 mb-1">$7.00/report</p>
-        <span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Save 13%</span>
+        <span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Save 7%</span>
         <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_signup'})" class="block w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-lg text-sm transition-all hover:scale-[1.02]">
           Buy 25 Credits
+        </a>
+      </div>
+      <div class="rounded-xl border p-5 text-center hover:shadow-md transition-shadow relative" style="background:var(--bg-card);border-color:var(--border-color)">
+        <h3 class="font-bold text-lg mb-1" style="color:var(--text-primary)">50-Pack</h3>
+        <div class="text-xs mb-3" style="color:var(--text-muted)">50 reports</div>
+        <div class="mb-2">
+          <span class="text-3xl font-black" style="color:var(--text-primary)">$325</span>
+          <span class="text-xs ml-1" style="color:var(--text-muted)">CAD</span>
+        </div>
+        <p class="text-sm font-semibold text-brand-600 mb-1">$6.50/report</p>
+        <span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Save 13%</span>
+        <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_signup'})" class="block w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-lg text-sm transition-all hover:scale-[1.02]">
+          Buy 50 Credits
         </a>
       </div>
       <div class="rounded-xl border border-brand-500 ring-2 ring-brand-200 p-5 text-center hover:shadow-md transition-shadow relative" style="background:var(--bg-card)">
@@ -13963,7 +13989,7 @@ function getPricingPageHTML() {
           <span class="text-xs ml-1" style="color:var(--text-muted)">CAD</span>
         </div>
         <p class="text-sm font-semibold text-brand-600 mb-1">$5.95/report</p>
-        <span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Save 26%</span>
+        <span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Save 21%</span>
         <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_signup'})" class="block w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-lg text-sm transition-all hover:scale-[1.02]">
           Buy 100 Credits
         </a>
