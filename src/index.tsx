@@ -7854,6 +7854,20 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   </section>
   ` : ''}
 
+  <!-- Contact Support Section -->
+  <section id="contact-support" class="py-16 border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 text-center">
+      <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-5" style="background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.25)">
+        <i class="fas fa-headset text-[#00FF88] text-xl"></i>
+      </div>
+      <h2 class="text-2xl sm:text-3xl font-bold text-white mb-3">Contact Support</h2>
+      <p class="text-gray-400 text-sm sm:text-base mb-6">Need help with your account, reports, or billing? Our support team is here for you.</p>
+      <a href="mailto:support@roofmanager.ca" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-3 px-6 rounded-xl text-sm transition-all shadow-lg shadow-[#00FF88]/10">
+        <i class="fas fa-envelope"></i> support@roofmanager.ca
+      </a>
+    </div>
+  </section>
+
   <!-- Footer — Dark premium style -->
   <footer class="text-gray-400" style="background:#0A0A0A">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-16">
@@ -8697,6 +8711,22 @@ function getSettingsPageHTML() {
   </header>
   <main class="max-w-4xl mx-auto px-4 py-8">
     <div id="settings-root"></div>
+
+    <!-- Contact Support -->
+    <section id="contact-support" class="mt-8 rounded-2xl p-6" style="background:var(--bg-card);border:1px solid rgba(255,255,255,0.08)">
+      <div class="flex items-start gap-4">
+        <div class="flex-shrink-0 inline-flex items-center justify-center w-12 h-12 rounded-xl" style="background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.25)">
+          <i class="fas fa-headset text-[#00FF88] text-lg"></i>
+        </div>
+        <div class="flex-1">
+          <h3 class="text-lg font-bold text-white mb-1">Contact Support</h3>
+          <p class="text-sm text-gray-400 mb-4">Questions about your account, reports, or billing? Email our support team and we'll get back to you.</p>
+          <a href="mailto:support@roofmanager.ca" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-5 rounded-xl text-sm transition-all">
+            <i class="fas fa-envelope"></i> support@roofmanager.ca
+          </a>
+        </div>
+      </div>
+    </section>
   </main>
   <script src="/static/settings.js"></script>
 </body>
