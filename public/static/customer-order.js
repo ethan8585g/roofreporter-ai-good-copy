@@ -41,6 +41,9 @@ const orderState = {
   // Optional CRM customer attachment
   attachedCrmCustomerId: null,
   attachedCrmCustomerName: '',
+  // Idempotency key — generated per "Use Credit" click, persists across retries
+  // within the same click, cleared on server response (any result).
+  idempotencyKey: null,
   // Tracing state
   traceMap: null,
   traceMode: 'eaves',
@@ -2077,6 +2080,7 @@ function buildOrderPayload() {
     price_per_bundle: orderState.pricePerBundle || null,
     house_sqft: orderState.houseSqft || null,
     crm_customer_id: orderState.attachedCrmCustomerId || null,
+    idempotency_key: orderState.idempotencyKey || null,
   };
   // Attach pre-calculated measurement data so the report engine can use it
   if (orderState.measurementResult) {
@@ -2208,6 +2212,15 @@ function selectTier(tier) {
   orderState.selectedTier = tier;
 }
 
+function generateIdempotencyKey() {
+  try {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return window.crypto.randomUUID();
+    }
+  } catch (e) {}
+  return 'idem-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+}
+
 async function useCredit() {
   const lat = parseFloat(orderState.lat);
   const lng = parseFloat(orderState.lng);
@@ -2225,6 +2238,12 @@ async function useCredit() {
     return;
   }
 
+  // Stable key for this click. Reused if useCredit() runs again after a network
+  // error so the server treats the retry as the same order — no double-charge.
+  if (!orderState.idempotencyKey) {
+    orderState.idempotencyKey = generateIdempotencyKey();
+  }
+
   const btn = document.getElementById('creditBtn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Placing Order...'; }
 
@@ -2236,23 +2255,29 @@ async function useCredit() {
     });
     const data = await res.json();
     if (res.ok && data.success) {
+      orderState.idempotencyKey = null;
       // Order placed! Backend generates report in background via waitUntil.
       // Redirect to dashboard IMMEDIATELY — polling will show the report when ready.
       showOrderSuccessOverlay(data.order);
     } else if (data.subscription_required) {
+      orderState.idempotencyKey = null;
       // Free trials exhausted — must subscribe (only for account owners, not team members)
       showSubscriptionRequiredOverlay();
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-coins mr-2"></i>Use Credit'; }
     } else if (data.no_credits) {
+      orderState.idempotencyKey = null;
       // Team member with no credits — ask admin to add credits
       showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>' + (data.error || 'No credits available.'));
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-coins mr-2"></i>Use Credit'; }
     } else {
+      orderState.idempotencyKey = null;
       showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>' + (data.error || 'Failed to use credit'));
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-coins mr-2"></i>Use Credit'; }
     }
   } catch (e) {
-    showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Network error.');
+    // Keep orderState.idempotencyKey so the next click reuses it — server will
+    // recognize the replay and return the original order instead of double-charging.
+    showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Network error — click again to retry safely.');
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-coins mr-2"></i>Use Credit'; }
   }
 }

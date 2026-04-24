@@ -470,7 +470,45 @@ squareRoutes.post('/use-credit', async (c) => {
     const { property_address, property_city, property_province, property_postal_code,
             service_tier, latitude, longitude, roof_trace_json, price_per_bundle, trace_measurement_json,
             needs_admin_trace, crm_customer_id,
-            invoice_customer_name, invoice_customer_email, invoice_customer_phone } = await c.req.json()
+            invoice_customer_name, invoice_customer_email, invoice_customer_phone,
+            idempotency_key } = await c.req.json()
+
+    // Idempotency: the client generates a UUID per "Use Credit" click. If the
+    // same (customer_id, idempotency_key) has already been processed (network
+    // retry, Worker CPU-limit retry, double-submit, etc.) we return the prior
+    // order WITHOUT creating a new order or deducting another credit.
+    const idemKey = typeof idempotency_key === 'string' && idempotency_key.trim().length >= 8
+      ? idempotency_key.trim().slice(0, 80)
+      : null
+    if (idemKey) {
+      const existing = await c.env.DB.prepare(
+        'SELECT id, order_number, property_address, service_tier, price, status, payment_status, is_trial, latitude, longitude FROM orders WHERE customer_id = ? AND idempotency_key = ? LIMIT 1'
+      ).bind(customer.customer_id, idemKey).first<any>()
+      if (existing) {
+        const trialRem = isDev ? 999999 : Math.max(0, (customer.free_trial_total || 0) - (customer.free_trial_used || 0))
+        const paidRem = isDev ? 999999 : Math.max(0, (customer.report_credits || 0) - (customer.credits_used || 0))
+        return c.json({
+          success: true,
+          idempotent_replay: true,
+          order: {
+            id: existing.id,
+            order_number: existing.order_number,
+            property_address: existing.property_address,
+            service_tier: existing.service_tier,
+            price: existing.price,
+            status: existing.status,
+            payment_status: existing.payment_status,
+            is_trial: !!existing.is_trial,
+            latitude: existing.latitude,
+            longitude: existing.longitude,
+            auto_proposal: { will_send: false, recipient: null }
+          },
+          credits_remaining: trialRem + paidRem,
+          free_trial_remaining: trialRem,
+          paid_credits_remaining: paidRem
+        })
+      }
+    }
 
     // If a CRM customer was selected, verify it belongs to this user
     let attachedCrmCustomerId: number | null = null
@@ -517,34 +555,68 @@ squareRoutes.post('/use-credit', async (c) => {
     const autoInvEmail = autoInvEmailRaw && isValidEmail(autoInvEmailRaw) ? autoInvEmailRaw : null
     const autoInvPhone = invoice_customer_phone ? String(invoice_customer_phone).trim().slice(0, 40) : null
 
-    // Create order
-    const result = await c.env.DB.prepare(`
-      INSERT INTO orders (
-        order_number, master_company_id, customer_id,
-        property_address, property_city, property_province, property_postal_code,
-        latitude, longitude,
-        homeowner_name, homeowner_email,
-        requester_name, requester_email,
-        service_tier, price, status, payment_status, estimated_delivery,
-        notes, is_trial, roof_trace_json, price_per_bundle, trace_measurement_json, needs_admin_trace,
-        crm_customer_id,
-        invoice_customer_name, invoice_customer_email, invoice_customer_phone
-      ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      orderNumber, customer.customer_id,
-      property_address, property_city || null, property_province || null, property_postal_code || null,
-      latitude || null, longitude || null,
-      customer.name, customer.email,
-      customer.name, customer.email,
-      tier, price, paymentStatus, estimatedDelivery,
-      notes, isTrial ? 1 : 0,
-      roof_trace_json ? (typeof roof_trace_json === 'string' ? roof_trace_json : JSON.stringify(roof_trace_json)) : null,
-      price_per_bundle || null,
-      trace_measurement_json ? (typeof trace_measurement_json === 'string' ? trace_measurement_json : JSON.stringify(trace_measurement_json)) : null,
-      needs_admin_trace ? 1 : 0,
-      attachedCrmCustomerId,
-      autoInvName, autoInvEmail, autoInvPhone
-    ).run()
+    // Create order. If two concurrent requests share the same idempotency_key,
+    // the unique index (customer_id, idempotency_key) will reject the second —
+    // we catch that and return the already-created order without deducting.
+    let result: any
+    try {
+      result = await c.env.DB.prepare(`
+        INSERT INTO orders (
+          order_number, master_company_id, customer_id,
+          property_address, property_city, property_province, property_postal_code,
+          latitude, longitude,
+          homeowner_name, homeowner_email,
+          requester_name, requester_email,
+          service_tier, price, status, payment_status, estimated_delivery,
+          notes, is_trial, roof_trace_json, price_per_bundle, trace_measurement_json, needs_admin_trace,
+          crm_customer_id,
+          invoice_customer_name, invoice_customer_email, invoice_customer_phone,
+          idempotency_key
+        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        orderNumber, customer.customer_id,
+        property_address, property_city || null, property_province || null, property_postal_code || null,
+        latitude || null, longitude || null,
+        customer.name, customer.email,
+        customer.name, customer.email,
+        tier, price, paymentStatus, estimatedDelivery,
+        notes, isTrial ? 1 : 0,
+        roof_trace_json ? (typeof roof_trace_json === 'string' ? roof_trace_json : JSON.stringify(roof_trace_json)) : null,
+        price_per_bundle || null,
+        trace_measurement_json ? (typeof trace_measurement_json === 'string' ? trace_measurement_json : JSON.stringify(trace_measurement_json)) : null,
+        needs_admin_trace ? 1 : 0,
+        attachedCrmCustomerId,
+        autoInvName, autoInvEmail, autoInvPhone,
+        idemKey
+      ).run()
+    } catch (insertErr: any) {
+      // Race with a concurrent request for the same idempotency_key — fetch
+      // and return that order. Do NOT deduct credits.
+      if (idemKey && /UNIQUE|constraint/i.test(String(insertErr?.message || ''))) {
+        const dup = await c.env.DB.prepare(
+          'SELECT id, order_number, property_address, service_tier, price, status, payment_status, is_trial, latitude, longitude FROM orders WHERE customer_id = ? AND idempotency_key = ? LIMIT 1'
+        ).bind(customer.customer_id, idemKey).first<any>()
+        if (dup) {
+          const trialRem = isDev ? 999999 : Math.max(0, (customer.free_trial_total || 0) - (customer.free_trial_used || 0))
+          const paidRem = isDev ? 999999 : Math.max(0, (customer.report_credits || 0) - (customer.credits_used || 0))
+          return c.json({
+            success: true,
+            idempotent_replay: true,
+            order: {
+              id: dup.id, order_number: dup.order_number,
+              property_address: dup.property_address, service_tier: dup.service_tier,
+              price: dup.price, status: dup.status, payment_status: dup.payment_status,
+              is_trial: !!dup.is_trial, latitude: dup.latitude, longitude: dup.longitude,
+              auto_proposal: { will_send: false, recipient: null }
+            },
+            credits_remaining: trialRem + paidRem,
+            free_trial_remaining: trialRem,
+            paid_credits_remaining: paidRem
+          })
+        }
+      }
+      throw insertErr
+    }
 
     // Notify sales@roofmanager.ca of new report request (fire-and-forget)
     notifyNewReportRequest(c.env, {
