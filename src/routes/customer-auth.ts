@@ -1460,7 +1460,7 @@ async function sendPasswordResetEmail(env: any, toEmail: string, name: string, r
       const resp = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: `Roof Manager <onboarding@resend.dev>`, to: [toEmail], subject, html })
+        body: JSON.stringify({ from: `Roof Manager <noreply@roofmanager.ca>`, to: [toEmail], subject, html })
       })
       if (resp.ok) return true
     } catch (e: any) { console.error('[PasswordReset] Resend error:', e.message) }

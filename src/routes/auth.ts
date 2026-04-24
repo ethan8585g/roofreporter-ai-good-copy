@@ -356,15 +356,19 @@ authRoutes.post('/forgot-password', async (c) => {
         const resendKey = (c.env as any).RESEND_API_KEY
         const html = `<div style="font-family:-apple-system,sans-serif;max-width:480px;margin:0 auto;padding:40px 20px"><div style="text-align:center;margin-bottom:32px"><h1 style="color:#1e3a5f;font-size:24px;margin:16px 0 4px">Roof Manager</h1><p style="color:#6b7280;font-size:14px;margin:0">Admin Password Reset</p></div><div style="background:#f8fafc;border-radius:16px;padding:32px;text-align:center"><p style="color:#374151;font-size:16px;margin:0 0 8px">Hi ${admin.name || 'Admin'},</p><p style="color:#6b7280;font-size:14px;margin:0 0 28px">Click below to reset your admin password. This link expires in 1 hour.</p><a href="${resetUrl}" style="display:inline-block;background:#0ea5e9;color:white;font-weight:700;font-size:15px;padding:14px 32px;border-radius:10px;text-decoration:none">Reset Admin Password</a><p style="color:#9ca3af;font-size:12px;margin:24px 0 0">If you didn't request this, your password remains unchanged.</p></div></div>`
 
+        let sent = false
         if (resendKey) {
           try {
-            await fetch('https://api.resend.com/emails', {
+            const resp = await fetch('https://api.resend.com/emails', {
               method: 'POST',
               headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ from: `Roof Manager <onboarding@resend.dev>`, to: [cleanEmail], subject: 'Reset your Roof Manager admin password', html })
+              body: JSON.stringify({ from: `Roof Manager <noreply@roofmanager.ca>`, to: [cleanEmail], subject: 'Reset your Roof Manager admin password', html })
             })
-          } catch {}
-        } else {
+            if (resp.ok) sent = true
+            else console.error('[AdminPasswordReset] Resend failed:', await resp.text())
+          } catch (e: any) { console.error('[AdminPasswordReset] Resend error:', e?.message || e) }
+        }
+        if (!sent) {
           // Fallback: Gmail OAuth2
           const gmailRefreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ''
           const gmailClientId = (c.env as any).GMAIL_CLIENT_ID || ''
@@ -378,15 +382,19 @@ authRoutes.post('/forgot-password', async (c) => {
               })
               const tokenData: any = await tokenResp.json()
               if (tokenData.access_token) {
-                const rawEmail = [`From: Roof Manager <noreply@reusecanada.ca>`, `To: ${cleanEmail}`, `Subject: Reset your Roof Manager admin password`, 'Content-Type: text/html; charset=UTF-8', '', html].join('\r\n')
+                const senderEmail = (c.env as any).GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca'
+                const rawEmail = [`From: Roof Manager <${senderEmail}>`, `To: ${cleanEmail}`, `Subject: Reset your Roof Manager admin password`, 'Content-Type: text/html; charset=UTF-8', '', html].join('\r\n')
                 const encoded = btoa(unescape(encodeURIComponent(rawEmail))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-                await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+                const sendResp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
                   method: 'POST',
                   headers: { 'Authorization': `Bearer ${tokenData.access_token}`, 'Content-Type': 'application/json' },
                   body: JSON.stringify({ raw: encoded })
                 })
+                if (!sendResp.ok) console.error('[AdminPasswordReset] Gmail send failed:', await sendResp.text())
               }
-            } catch {}
+            } catch (e: any) { console.error('[AdminPasswordReset] Gmail error:', e?.message || e) }
+          } else {
+            console.error('[AdminPasswordReset] No email transport configured for:', cleanEmail)
           }
         }
       }
