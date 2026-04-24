@@ -971,13 +971,9 @@ function renderReviewStep(root, progressBar) {
               <button onclick="useCredit()" id="creditBtn" class="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
                 <i class="fas fa-gift mr-2"></i>Use Free Trial (${freeTrialRemaining} left)
               </button>
-            ` : (b.status === 'active') && paidCredits > 0 ? `
+            ` : paidCredits > 0 ? `
               <button onclick="useCredit()" id="creditBtn" class="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
                 <i class="fas fa-coins mr-2"></i>Use Credit (${paidCredits} left)
-              </button>
-            ` : (b.status === 'active') ? `
-              <button onclick="useCredit()" id="creditBtn" class="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
-                <i class="fas fa-coins mr-2"></i>Generate Report
               </button>
             ` : b.is_team_member ? `
               <div class="flex-1 py-3 px-4 bg-gray-800 border border-white/10 rounded-xl text-center text-sm text-gray-400">
