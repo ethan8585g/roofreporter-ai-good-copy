@@ -2118,7 +2118,7 @@
     // Day headers
     html += '<div class="grid grid-cols-7 border-b bg-[#0A0A0A]">';
     for (var d = 0; d < 7; d++) {
-      html += '<div class="text-center text-[10px] font-semibold text-gray-500 uppercase py-2 px-1">' + dayNames[d] + '</div>';
+      html += '<div class="text-center text-[10px] font-semibold text-gray-300 uppercase py-2 px-1">' + dayNames[d] + '</div>';
     }
     html += '</div>';
     // Day cells
@@ -2131,12 +2131,12 @@
         dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(dayNum).padStart(2, '0');
       }
       var isToday = dateStr === todayStr;
-      var borderClass = isToday ? 'border border-brand-500 bg-brand-50/30' : 'border-r border-b border-white/5';
+      var borderClass = isToday ? 'border border-emerald-500 bg-emerald-500/10' : 'border-r border-b border-white/5';
 
-      html += '<div class="min-h-[110px] p-1.5 ' + borderClass + ' ' + (isCurrentMonth ? 'cursor-pointer hover:bg-blue-50/40' : 'bg-[#0A0A0A]/50') + '" onclick="' + (isCurrentMonth ? 'window._crmCalendarDayClick(\'' + dateStr + '\')' : '') + '">';
+      html += '<div class="min-h-[110px] p-1.5 ' + borderClass + ' ' + (isCurrentMonth ? 'cursor-pointer hover:bg-white/5' : 'bg-[#0A0A0A]/50') + '" onclick="' + (isCurrentMonth ? 'window._crmCalendarDayClick(\'' + dateStr + '\')' : '') + '">';
 
       if (isCurrentMonth) {
-        html += '<div class="flex items-center justify-between mb-1"><span class="text-xs font-semibold ' + (isToday ? 'bg-brand-600 text-white w-6 h-6 flex items-center justify-center rounded-full' : 'text-gray-500') + '">' + dayNum + '</span></div>';
+        html += '<div class="flex items-center justify-between mb-1"><span class="text-xs font-semibold ' + (isToday ? 'bg-brand-600 text-white w-6 h-6 flex items-center justify-center rounded-full' : 'text-gray-200') + '">' + dayNum + '</span></div>';
 
         // Jobs for this day
         var dayJobs = [];
@@ -2200,7 +2200,7 @@
         if (adjMonth < 0) { adjMonth = 11; adjYear--; }
         if (adjMonth > 11) { adjMonth = 0; adjYear++; }
         var adjDay = dayNum < 1 ? new Date(adjYear, adjMonth + 1, 0).getDate() + dayNum : dayNum - daysInMonth;
-        html += '<span class="text-xs text-gray-300">' + adjDay + '</span>';
+        html += '<span class="text-xs text-gray-600">' + adjDay + '</span>';
       }
       html += '</div>';
     }
@@ -2226,9 +2226,9 @@
       colDate.setDate(colDate.getDate() + d);
       var colStr = colDate.getFullYear() + '-' + String(colDate.getMonth() + 1).padStart(2, '0') + '-' + String(colDate.getDate()).padStart(2, '0');
       var isToday = colStr === todayStr;
-      html += '<div class="text-center py-2 px-1 ' + (isToday ? 'bg-brand-50' : '') + '">';
-      html += '<div class="text-[10px] font-semibold text-gray-500 uppercase">' + dayNames[d] + '</div>';
-      html += '<div class="text-sm font-bold ' + (isToday ? 'text-brand-600' : 'text-gray-300') + '">' + colDate.getDate() + '</div>';
+      html += '<div class="text-center py-2 px-1 ' + (isToday ? 'bg-emerald-500/10' : '') + '">';
+      html += '<div class="text-[10px] font-semibold text-gray-300 uppercase">' + dayNames[d] + '</div>';
+      html += '<div class="text-sm font-bold ' + (isToday ? 'text-emerald-400' : 'text-gray-100') + '">' + colDate.getDate() + '</div>';
       html += '</div>';
     }
     html += '</div>';
@@ -2240,7 +2240,7 @@
       var colStr = colDate.getFullYear() + '-' + String(colDate.getMonth() + 1).padStart(2, '0') + '-' + String(colDate.getDate()).padStart(2, '0');
       var isToday = colStr === todayStr;
 
-      html += '<div class="min-h-[250px] p-2 ' + (isToday ? 'bg-brand-50/20 border border-brand-200' : 'border-r border-b border-white/5') + ' cursor-pointer hover:bg-blue-50/30" onclick="window._crmCalendarDayClick(\'' + colStr + '\')">';
+      html += '<div class="min-h-[250px] p-2 ' + (isToday ? 'bg-emerald-500/5 border border-emerald-500/30' : 'border-r border-b border-white/5') + ' cursor-pointer hover:bg-white/5" onclick="window._crmCalendarDayClick(\'' + colStr + '\')">';
 
       // Jobs for this day
       var dayJobs = [];
