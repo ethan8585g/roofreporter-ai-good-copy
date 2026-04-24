@@ -10770,7 +10770,10 @@ function renderInboxDetail(conv) {
     (conv.call_duration_seconds ? '<div class="text-xs text-gray-500"><i class="fas fa-clock mr-1"></i>' + fmtSeconds(conv.call_duration_seconds) + '</div>' : '') +
     (conv.preferred_time ? '<div class="text-xs text-gray-500"><i class="fas fa-calendar mr-1"></i>Preferred: ' + conv.preferred_time + '</div>' : '') +
     '<div class="text-xs text-gray-400"><i class="fas fa-clock mr-1"></i>' + hubTimeAgo(conv.last_activity_at || conv.created_at) + '</div>' +
-    '<div class="mt-4 p-3 bg-gray-50 rounded-lg"><p class="text-sm text-gray-700 whitespace-pre-wrap">' + (conv.preview || 'No preview available') + '</p></div>' +
+    (conv.channel === 'web_chat'
+      ? '<div id="inbox-messages" class="mt-4 space-y-2 max-h-[55vh] overflow-y-auto"><div class="text-xs text-gray-400 text-center py-4"><i class="fas fa-spinner fa-spin mr-1"></i>Loading messages...</div></div>'
+      : '<div class="mt-4 p-3 bg-gray-50 rounded-lg"><p class="text-sm text-gray-700 whitespace-pre-wrap">' + (conv.preview || 'No preview available') + '</p></div>'
+    ) +
   '</div>';
 
   if (canReply) {
@@ -10790,6 +10793,41 @@ function renderInboxDetail(conv) {
   pane.className = 'fixed right-0 top-14 w-96 h-[calc(100vh-56px)] bg-white border-l border-gray-200 shadow-xl z-40 overflow-y-auto';
   pane.innerHTML = html;
   document.body.appendChild(pane);
+
+  if (conv.channel === 'web_chat') {
+    var convId = String(conv.source_id || '').replace(/^rover_/, '');
+    if (convId) {
+      saFetch('/api/rover/admin/conversations/' + encodeURIComponent(convId))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var container = document.getElementById('inbox-messages');
+          if (!container) return;
+          var msgs = (data && data.messages) || [];
+          if (!msgs.length) {
+            container.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">No messages in this conversation</div>';
+            return;
+          }
+          var esc = function(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+          container.innerHTML = msgs.map(function(m) {
+            var isUser = m.role === 'user';
+            var align = isUser ? 'justify-start' : 'justify-end';
+            var bubble = isUser ? 'bg-gray-100 text-gray-800' : 'bg-slate-800 text-white';
+            var when = m.created_at ? hubTimeAgo(m.created_at) : '';
+            return '<div class="flex ' + align + '">' +
+              '<div class="max-w-[80%] ' + bubble + ' rounded-lg px-3 py-2">' +
+                '<p class="text-sm whitespace-pre-wrap">' + esc(m.content) + '</p>' +
+                (when ? '<div class="text-[10px] opacity-70 mt-1">' + when + '</div>' : '') +
+              '</div>' +
+            '</div>';
+          }).join('');
+          container.scrollTop = container.scrollHeight;
+        })
+        .catch(function() {
+          var container = document.getElementById('inbox-messages');
+          if (container) container.innerHTML = '<div class="text-xs text-red-500 text-center py-4">Failed to load messages</div>';
+        });
+    }
+  }
 }
 
 function inboxCloseDetail() {
