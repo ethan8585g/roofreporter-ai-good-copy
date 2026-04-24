@@ -2779,10 +2779,11 @@ export function generateTraceBasedDiagramSVG(
     const p1 = eavesXY[i], p2 = eavesXY[(i + 1) % n]
     const sx = tx(p1.x), sy = ty(p1.y), ex = tx(p2.x), ey = ty(p2.y)
     const segPx = Math.sqrt((ex - sx) ** 2 + (ey - sy) ** 2)
-    if (segPx < 20) continue
+    // Raised from 20px → 28px to reduce the "wall of numbers" clutter on short segments
+    if (segPx < 28) continue
 
     const ftVal = haversineFt(a, b)
-    if (ftVal < 0.5) continue
+    if (ftVal < 1) continue
     const label = fmtFtUnit(ftVal)
     if (!label) continue
 
@@ -2837,10 +2838,11 @@ export function generateTraceBasedDiagramSVG(
 
   // ── INTERNAL LINE DIMENSION LABELS (Ridge/Hip/Valley — collision-aware) ──
   internalLines.forEach(l => {
-    if (l.ftLen < 1) return
+    if (l.ftLen < 1.5) return
     const sx = tx(l.start.x), sy = ty(l.start.y), ex = tx(l.end.x), ey = ty(l.end.y)
     const segPx = Math.sqrt((ex - sx) ** 2 + (ey - sy) ** 2)
-    if (segPx < 25) return
+    // Raised from 25px → 32px for cleaner internal labels
+    if (segPx < 32) return
 
     const ftLabel = fmtFtUnit(l.ftLen)
     if (!ftLabel) return
@@ -2901,28 +2903,94 @@ export function generateTraceBasedDiagramSVG(
     drawIfNew(l.end)
   })
 
-  // ── LEGEND (top-left, professional box with edge totals) ──
-  const legendItems: { label: string; color: string; dash?: boolean; totalFt?: number }[] = [
-    { label: 'Eave', color: '#1a1a1a', totalFt: Math.round(edgeSummary.total_eave_ft) },
-  ]
-  if (roofTrace.ridges?.length) legendItems.push({ label: 'Ridge', color: '#C62828', totalFt: Math.round(edgeSummary.total_ridge_ft) })
-  if (roofTrace.hips?.length) legendItems.push({ label: 'Hip', color: '#EA580C', totalFt: Math.round(edgeSummary.total_hip_ft) })
-  if (roofTrace.valleys?.length) legendItems.push({ label: 'Valley', color: '#1565C0', dash: true, totalFt: Math.round(edgeSummary.total_valley_ft) })
-  if (edgeSummary.total_rake_ft > 0) legendItems.push({ label: 'Rake', color: '#1a1a1a', totalFt: Math.round(edgeSummary.total_rake_ft) })
+  // ── LEGEND (top-left, SkyQuote-style with per-type counts + summary totals) ──
+  // Per-type segment counts (from trace input — authoritative)
+  const eaveSegCount = n
+  const ridgeSegCount = roofTrace.ridges?.length || 0
+  const hipSegCount = roofTrace.hips?.length || 0
+  const valleySegCount = roofTrace.valleys?.length || 0
+
+  const legendItems: { plural: string; color: string; dash?: boolean; totalFt: number; count: number }[] = []
+  if (eaveSegCount > 0 && edgeSummary.total_eave_ft > 0) {
+    legendItems.push({ plural: 'Eaves', color: '#1a1a1a', totalFt: Math.round(edgeSummary.total_eave_ft), count: eaveSegCount })
+  }
+  if (edgeSummary.total_rake_ft > 0) {
+    legendItems.push({ plural: 'Rakes', color: '#7c3aed', totalFt: Math.round(edgeSummary.total_rake_ft), count: 0 })
+  }
+  if (ridgeSegCount > 0) {
+    legendItems.push({ plural: 'Ridges', color: '#C62828', totalFt: Math.round(edgeSummary.total_ridge_ft), count: ridgeSegCount })
+  }
+  if (hipSegCount > 0) {
+    legendItems.push({ plural: 'Hips', color: '#EA580C', totalFt: Math.round(edgeSummary.total_hip_ft), count: hipSegCount })
+  }
+  if (valleySegCount > 0) {
+    legendItems.push({ plural: 'Valleys', color: '#1565C0', dash: true, totalFt: Math.round(edgeSummary.total_valley_ft), count: valleySegCount })
+  }
+
+  const totalLinFtLegend = legendItems.reduce((s, it) => s + it.totalFt, 0)
+  const totalSegCount = eaveSegCount + ridgeSegCount + hipSegCount + valleySegCount
+  const facetCount = facets.length + extraSections.length
 
   const lgX = 8, lgY = 8
-  const lgW = 120
-  const lgH = legendItems.length * 14 + 12
-  svg += `<rect x="${lgX}" y="${lgY}" width="${lgW}" height="${lgH}" rx="3" fill="#fff" fill-opacity="0.96" stroke="#ddd" stroke-width="0.5"/>`
+  const lgW = 168
+  const titleH = 16
+  const rowH = 13
+  const dividerH = 8
+  const summaryH = 14 * 3 + 4
+  const lgH = titleH + legendItems.length * rowH + dividerH + summaryH + 10
+  svg += `<rect x="${lgX}" y="${lgY}" width="${lgW}" height="${lgH}" rx="3" fill="#fff" fill-opacity="0.97" stroke="#c8c8c8" stroke-width="0.6"/>`
+  // Title bar
+  svg += `<rect x="${lgX}" y="${lgY}" width="${lgW}" height="${titleH}" rx="3" fill="#002244"/>`
+  svg += `<rect x="${lgX}" y="${lgY + titleH - 4}" width="${lgW}" height="4" fill="#002244"/>`
+  svg += `<text x="${lgX + lgW / 2}" y="${lgY + 11}" text-anchor="middle" font-size="7.5" font-weight="800" fill="#fff" ${FONT} letter-spacing="1.2">ROOF MEASUREMENTS</text>`
+  // Edge-type rows
   legendItems.forEach((item, i) => {
-    const iy = lgY + 13 + i * 14
+    const iy = lgY + titleH + 10 + i * rowH
     const dashAttr = item.dash ? ' stroke-dasharray="4,2"' : ''
-    svg += `<line x1="${lgX + 6}" y1="${iy}" x2="${lgX + 22}" y2="${iy}" stroke="${item.color}" stroke-width="2"${dashAttr} stroke-linecap="round"/>`
-    svg += `<text x="${lgX + 26}" y="${iy + 3.5}" font-size="7.5" font-weight="600" fill="#333" ${FONT}>${item.label}</text>`
-    if (item.totalFt) {
-      svg += `<text x="${lgX + lgW - 6}" y="${iy + 3.5}" text-anchor="end" font-size="7" font-weight="700" fill="${item.color}" ${FONT}>${item.totalFt} ft</text>`
-    }
+    svg += `<line x1="${lgX + 8}" y1="${iy}" x2="${lgX + 26}" y2="${iy}" stroke="${item.color}" stroke-width="2.4"${dashAttr} stroke-linecap="round"/>`
+    const countStr = item.count > 0 ? ` (${item.count})` : ''
+    svg += `<text x="${lgX + 32}" y="${iy + 3.2}" font-size="8" font-weight="600" fill="#333" ${FONT}>${item.plural}${countStr}</text>`
+    svg += `<text x="${lgX + lgW - 8}" y="${iy + 3.2}" text-anchor="end" font-size="7.5" font-weight="700" fill="${item.color}" ${FONT}>${item.totalFt.toLocaleString()} ft</text>`
   })
+  // Divider
+  const divY = lgY + titleH + 8 + legendItems.length * rowH + 3
+  svg += `<line x1="${lgX + 6}" y1="${divY}" x2="${lgX + lgW - 6}" y2="${divY}" stroke="#e0e0e0" stroke-width="0.6"/>`
+  // Summary totals (SkyQuote-style)
+  const sumStartY = divY + 10
+  const squaresVal = (trueAreaSqft / 100).toFixed(2)
+  const summaryRows: { label: string; value: string }[] = [
+    { label: 'Total', value: `${totalLinFtLegend.toLocaleString()} ft · ${totalSegCount} segs` },
+    { label: 'Area', value: `${Math.round(trueAreaSqft).toLocaleString()} ft² · ${squaresVal} sq` },
+    { label: 'Facets', value: `${facetCount}` },
+  ]
+  summaryRows.forEach((r, i) => {
+    const iy = sumStartY + i * 13
+    svg += `<text x="${lgX + 8}" y="${iy}" font-size="7.5" font-weight="700" fill="#666" ${FONT} letter-spacing="0.3">${r.label.toUpperCase()}</text>`
+    svg += `<text x="${lgX + lgW - 8}" y="${iy}" text-anchor="end" font-size="8" font-weight="800" fill="#1a1a1a" ${FONT}>${r.value}</text>`
+  })
+
+  // ── SCALE BAR (bottom-left, above footer) ──
+  // sc converts metres -> pixels; 1 ft = 0.3048 m
+  const pxPerFt = sc * 0.3048
+  const preferredBarPx = 90
+  const rawFt = preferredBarPx / Math.max(pxPerFt, 0.01)
+  let scaleBarFt = 20
+  if (rawFt < 8) scaleBarFt = 5
+  else if (rawFt < 15) scaleBarFt = 10
+  else if (rawFt < 35) scaleBarFt = 20
+  else if (rawFt < 75) scaleBarFt = 50
+  else scaleBarFt = 100
+  const scaleBarPx = scaleBarFt * pxPerFt
+  const sbX = 16
+  const sbY = H - FOOTER_H - 22
+  if (scaleBarPx > 18 && scaleBarPx < W * 0.5) {
+    const half = scaleBarPx / 2
+    svg += `<rect x="${sbX}" y="${sbY}" width="${half.toFixed(1)}" height="5" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="0.4"/>`
+    svg += `<rect x="${(sbX + half).toFixed(1)}" y="${sbY}" width="${half.toFixed(1)}" height="5" fill="#fff" stroke="#1a1a1a" stroke-width="0.4"/>`
+    svg += `<text x="${sbX}" y="${sbY + 14}" text-anchor="start" font-size="6.5" font-weight="700" fill="#333" ${FONT}>0</text>`
+    svg += `<text x="${(sbX + half).toFixed(1)}" y="${sbY + 14}" text-anchor="middle" font-size="6.5" font-weight="700" fill="#333" ${FONT}>${(scaleBarFt / 2).toFixed(0)}</text>`
+    svg += `<text x="${(sbX + scaleBarPx).toFixed(1)}" y="${sbY + 14}" text-anchor="middle" font-size="6.5" font-weight="700" fill="#333" ${FONT}>${scaleBarFt} ft</text>`
+  }
 
   // ── SOURCE BADGE ──
   svg += `<text x="${W / 2}" y="${H - FOOTER_H - 6}" text-anchor="middle" font-size="6.5" fill="#666" ${FONT} font-weight="500" letter-spacing="0.5">AI-GENERATED ROOF DIAGRAM \u2014 TRACED FROM GPS COORDINATES \u2014 All dimensions in feet. Pitch multiplier applied for true 3D area.</text>`
