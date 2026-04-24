@@ -6,6 +6,7 @@ import { logFromContext } from '../lib/team-activity'
 import { resolveTeamOwner } from './team'
 import { loadPermissionContext, can, redactFinancials, type PermissionContext } from '../lib/permissions'
 import { getCustomerSessionToken } from '../lib/session-tokens'
+import { getMerchantSquareCreds } from '../services/square-token'
 
 export const invoiceRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -730,7 +731,7 @@ invoiceRoutes.post('/:id/send', async (c) => {
     <p style="color:#94a3b8;font-size:11px;margin:0">Powered by Roof Manager — Canada's AI Roof Measurement Platform</p>
   </div>
 </div>`
-        await sendGmailOAuth2(clientId, clientSecret, refreshToken, invoice.customer_email, `${docLabel} ${invoice.invoice_number} — $${Number(invoice.total || 0).toFixed(2)}`, emailHtml)
+        await sendGmailOAuth2(clientId, clientSecret, refreshToken, invoice.customer_email, `${docLabel} ${invoice.invoice_number} — $${Number(invoice.total || 0).toFixed(2)}`, emailHtml, c.env.GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca')
         emailSent = true
       } catch (e: any) {
         emailError = e.message || 'Email send failed'
@@ -842,21 +843,15 @@ invoiceRoutes.post('/:id/payment-link', async (c) => {
     }
     if (invoice.status === 'paid') return c.json({ error: 'Invoice already paid' }, 400)
 
-    // Try per-user Square OAuth first (from admin/customer who created the invoice), then env fallback
-    let squareAccessToken = c.env.SQUARE_ACCESS_TOKEN
-    let locationId = (c.env as any).SQUARE_LOCATION_ID
-
-    const admin = (c as any).get('admin')
-    if (admin?.id) {
-      const owner = await c.env.DB.prepare(
-        'SELECT square_merchant_access_token, square_merchant_location_id FROM customers WHERE id = ?'
-      ).bind(admin.id).first<any>()
-      if (owner?.square_merchant_access_token) squareAccessToken = owner.square_merchant_access_token
-      if (owner?.square_merchant_location_id) locationId = owner.square_merchant_location_id
+    // Per-user Square OAuth: payment goes to the invoice owner's Square account.
+    // No fallback to admin global token — each user must connect their own Square.
+    if (!invoice.customer_id) {
+      return c.json({ error: 'Invoice has no customer assigned; cannot create a payment link.' }, 400)
     }
-
-    if (!squareAccessToken) return c.json({ error: 'Square not configured. Set SQUARE_ACCESS_TOKEN in Cloudflare secrets or connect Square in Settings.' }, 400)
-    if (!locationId) return c.json({ error: 'Square location ID not configured. Set SQUARE_LOCATION_ID in Cloudflare secrets or connect Square in Settings.' }, 400)
+    const creds = await getMerchantSquareCreds(c.env, invoice.customer_id)
+    if ('error' in creds) return c.json({ error: creds.error }, creds.status as any)
+    const squareAccessToken = creds.accessToken
+    const locationId = creds.locationId
 
     const baseUrl = 'https://connect.squareup.com'
 
@@ -1192,7 +1187,7 @@ invoiceRoutes.post('/:id/send-gmail', async (c) => {
     const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
     const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN
     if (clientId && clientSecret && refreshToken) {
-      await sendGmailOAuth2(clientId, clientSecret, refreshToken, invoice.customer_email, `${docLabel} ${invoice.invoice_number} — $${Number(invoice.total || 0).toFixed(2)}`, emailHtml)
+      await sendGmailOAuth2(clientId, clientSecret, refreshToken, invoice.customer_email, `${docLabel} ${invoice.invoice_number} — $${Number(invoice.total || 0).toFixed(2)}`, emailHtml, c.env.GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca')
     } else {
       return c.json({ error: 'Gmail not configured. Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN.' }, 503)
     }
