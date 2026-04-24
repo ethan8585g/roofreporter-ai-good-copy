@@ -61,8 +61,8 @@
     overlay.className = 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4';
     overlay.id = 'crmModal';
     overlay.innerHTML = '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4 sm:mx-auto">' +
-      '<div class="px-6 py-4 border-b border-white/5 flex items-center justify-between"><h3 style="font-weight:700;color:#ffffff">' + title + '</h3><button onclick="document.getElementById(\'crmModal\').remove()" class="text-gray-400 hover:text-gray-400 text-lg">&times;</button></div>' +
-      '<div class="p-6" id="modalBody" style="color:#e5e7eb">' + bodyHtml + '</div>' +
+      '<div class="px-6 py-4 border-b border-white/5 flex items-center justify-between"><h3 style="font-weight:700;color:var(--text-primary)">' + title + '</h3><button onclick="document.getElementById(\'crmModal\').remove()" class="text-gray-400 hover:text-gray-400 text-lg">&times;</button></div>' +
+      '<div class="p-6" id="modalBody" style="color:var(--text-secondary)">' + bodyHtml + '</div>' +
       (onSave ? '<div class="px-6 py-4 border-t border-white/5 flex justify-end gap-2"><button onclick="document.getElementById(\'crmModal\').remove()" class="px-4 py-2 text-gray-400 hover:bg-[#111111]/10 rounded-lg text-sm">Cancel</button><button id="modalSaveBtn" class="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700">' + (saveLabel || 'Save') + '</button></div>' : '') +
       '</div>';
     document.body.appendChild(overlay);
@@ -261,7 +261,7 @@
       html += '<div class="bg-[#111111] rounded-xl border overflow-hidden overflow-x-auto"><table class="w-full text-sm"><thead class="bg-[#0A0A0A]"><tr><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Name</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Company</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden lg:table-cell">Phone</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden lg:table-cell">Email</th><th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">Status</th><th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">Revenue</th><th class="px-4 py-3"></th></tr></thead><tbody class="divide-y divide-gray-50">';
       for (var i = 0; i < customers.length; i++) {
         var c = customers[i];
-        html += '<tr class="hover:bg-[#111111]/5 cursor-pointer" onclick="window._crmViewCustomer(' + c.id + ')"><td class="px-4 py-3 font-medium" style="color:#f3f4f6">' + c.name + '</td><td class="px-4 py-3 hidden md:table-cell" style="color:#d1d5db">' + (c.company || '-') + '</td><td class="px-4 py-3 hidden lg:table-cell" style="color:#d1d5db">' + (c.phone || '-') + '</td><td class="px-4 py-3 hidden lg:table-cell" style="color:#d1d5db">' + (c.email || '-') + '</td><td class="px-4 py-3 text-center">' + badge(c.status) + '</td><td class="px-4 py-3 text-right font-semibold" style="color:#f3f4f6">' + money(c.lifetime_value) + '</td><td class="px-4 py-3 text-right"><button onclick="event.stopPropagation();window._crmEditCustomer(' + c.id + ')" style="color:#d1d5db" class="hover:text-brand-600"><i class="fas fa-pencil-alt"></i></button></td></tr>';
+        html += '<tr class="hover:bg-[#111111]/5 cursor-pointer" onclick="window._crmViewCustomer(' + c.id + ')"><td class="px-4 py-3 font-medium" style="color:var(--text-primary)">' + c.name + '</td><td class="px-4 py-3 hidden md:table-cell" style="color:var(--text-secondary)">' + (c.company || '-') + '</td><td class="px-4 py-3 hidden lg:table-cell" style="color:var(--text-secondary)">' + (c.phone || '-') + '</td><td class="px-4 py-3 hidden lg:table-cell" style="color:var(--text-secondary)">' + (c.email || '-') + '</td><td class="px-4 py-3 text-center">' + badge(c.status) + '</td><td class="px-4 py-3 text-right font-semibold" style="color:var(--text-primary)">' + money(c.lifetime_value) + '</td><td class="px-4 py-3 text-right"><button onclick="event.stopPropagation();window._crmEditCustomer(' + c.id + ')" style="color:var(--text-secondary)" class="hover:text-brand-600"><i class="fas fa-pencil-alt"></i></button></td></tr>';
       }
       html += '</tbody></table></div>';
     }
@@ -520,7 +520,7 @@
     if (!container) return;
     var row = document.createElement('div');
     row.className = 'invItemRow grid grid-cols-12 gap-2 items-end mt-2';
-    row.innerHTML = '<div class="col-span-6"><input type="text" class="invDesc w-full px-2 py-2 border border-white/15 rounded-lg text-sm" placeholder="Description" style="color:#fff;background:#0A0A0A"></div><div class="col-span-2"><input type="number" class="invQty w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="1" style="color:#fff;background:#0A0A0A"></div><div class="col-span-3"><input type="number" class="invPrice w-full px-2 py-2 border border-white/15 rounded-lg text-sm" step="0.01" placeholder="0.00" style="color:#fff;background:#0A0A0A"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div>';
+    row.innerHTML = '<div class="col-span-6"><input type="text" class="invDesc w-full px-2 py-2 border border-white/15 rounded-lg text-sm" placeholder="Description" style="color:var(--text-primary);background:var(--bg-elevated)"></div><div class="col-span-2"><input type="number" class="invQty w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="1" style="color:var(--text-primary);background:var(--bg-elevated)"></div><div class="col-span-3"><input type="number" class="invPrice w-full px-2 py-2 border border-white/15 rounded-lg text-sm" step="0.01" placeholder="0.00" style="color:var(--text-primary);background:var(--bg-elevated)"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div>';
     container.appendChild(row);
   };
 
@@ -553,7 +553,7 @@
         var body = '<div class="space-y-4">';
         // Header with invoice number and status
         body += '<div class="flex items-center justify-between">';
-        body += '<div><span style="font-family:monospace;font-size:1.125rem;font-weight:700;color:#ffffff">' + inv.invoice_number + '</span></div>';
+        body += '<div><span style="font-family:monospace;font-size:1.125rem;font-weight:700;color:var(--text-primary)">' + inv.invoice_number + '</span></div>';
         body += '<div class="flex items-center gap-2">' + badge(inv.status);
         if (inv.status === 'draft') body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="text-xs px-3 py-1 rounded-lg" style="background:var(--bg-elevated);border:1px solid var(--border-color);color:var(--text-secondary)"><i class="fas fa-edit mr-1"></i>Edit</button>';
         body += '</div></div>';
@@ -2090,13 +2090,13 @@
         html += '<div class="flex items-start gap-4 px-5 py-4 hover:bg-white/5 cursor-pointer" onclick="window._crmViewJob(' + j.id + ')">';
         html += '<div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ' + jobTypeColor(j.job_type) + '"><i class="fas ' + jobTypeIcon(j.job_type) + ' text-sm"></i></div>';
         html += '<div class="flex-1 min-w-0">';
-        html += '<p class="text-sm font-semibold truncate" style="color:#f3f4f6">' + (j.title || 'Untitled') + '</p>';
-        if (j.customer_name) html += '<p class="text-xs mt-0.5" style="color:#e5e7eb"><i class="fas fa-user mr-1"></i>' + j.customer_name + '</p>';
-        if (j.property_address) html += '<p class="text-xs mt-0.5 truncate" style="color:#d1d5db"><i class="fas fa-map-marker-alt mr-1"></i>' + j.property_address + '</p>';
+        html += '<p class="text-sm font-semibold truncate" style="color:var(--text-primary)">' + (j.title || 'Untitled') + '</p>';
+        if (j.customer_name) html += '<p class="text-xs mt-0.5" style="color:var(--text-secondary)"><i class="fas fa-user mr-1"></i>' + j.customer_name + '</p>';
+        if (j.property_address) html += '<p class="text-xs mt-0.5 truncate" style="color:var(--text-secondary)"><i class="fas fa-map-marker-alt mr-1"></i>' + j.property_address + '</p>';
         html += '</div>';
         html += '<div class="text-right flex-shrink-0">';
-        if (j.scheduled_date) html += '<p class="text-xs" style="color:#e5e7eb">' + j.scheduled_date + '</p>';
-        if (j.scheduled_time) html += '<p class="text-xs" style="color:#d1d5db">' + j.scheduled_time.substring(0, 5) + '</p>';
+        if (j.scheduled_date) html += '<p class="text-xs" style="color:var(--text-secondary)">' + j.scheduled_date + '</p>';
+        if (j.scheduled_time) html += '<p class="text-xs" style="color:var(--text-secondary)">' + j.scheduled_time.substring(0, 5) + '</p>';
         html += '</div>';
         html += '</div>';
       }
@@ -4474,8 +4474,8 @@
       var displayCount = col._totalCount !== undefined ? col._totalCount : col.items.length;
       html += '<div class="flex flex-col">';
       html += '<div class="rounded-t-xl px-3 py-2.5 flex items-center justify-between" style="background:' + col.hdrBg + '">' +
-        '<div class="flex items-center gap-1.5"><i class="fas ' + col.icon + ' text-xs opacity-80" style="color:#fff"></i><span class="font-semibold text-xs text-white">' + col.title + '</span></div>' +
-        '<span class="text-white text-[11px] font-bold px-2 py-0.5 rounded-full" style="background:rgba(0,0,0,0.35)">' + displayCount + '</span></div>';
+        '<div class="flex items-center gap-1.5"><i class="fas ' + col.icon + ' text-xs opacity-80" style="color:#fff"></i><span class="font-semibold text-xs" style="color:#fff">' + col.title + '</span></div>' +
+        '<span class="text-[11px] font-bold px-2 py-0.5 rounded-full" style="background:rgba(0,0,0,0.35);color:#fff">' + displayCount + '</span></div>';
       if (colValue > 0) {
         html += '<div class="px-3 py-1 text-[11px] font-semibold text-emerald-400 border-x border-white/10" style="background:rgba(16,185,129,0.08)">' + money(colValue) + ' total</div>';
       }
@@ -4505,7 +4505,7 @@
         // --- New CRM Leads sub-section (draggable) ---
         html += renderPipeSubHeader('New Customers', 'fa-user', '#a78bfa', newCRMLeads.length);
         if (newCRMLeads.length === 0 && activeItems.length === 0) {
-          html += '<div class="text-center py-4"><i class="fas fa-user text-2xl mb-2 block opacity-10" style="color:#fff"></i><p class="text-[11px]" style="color:var(--text-muted)">Drop here</p></div>';
+          html += '<div class="text-center py-4"><i class="fas fa-user text-2xl mb-2 block opacity-10" style="color:var(--text-muted)"></i><p class="text-[11px]" style="color:var(--text-muted)">Drop here</p></div>';
         } else {
           // Show draggable cards for existing activeItems + newCRMLeads not already shown
           var shownIds = new Set(activeItems.map(function(c) { return String(c.id); }));
@@ -4515,7 +4515,7 @@
           });
         }
       } else if (col.items.length === 0) {
-        html += '<div class="text-center py-10"><i class="fas ' + col.icon + ' text-2xl mb-2 block opacity-10" style="color:#fff"></i><p class="text-[11px]" style="color:var(--text-muted)">Drop here</p></div>';
+        html += '<div class="text-center py-10"><i class="fas ' + col.icon + ' text-2xl mb-2 block opacity-10" style="color:var(--text-muted)"></i><p class="text-[11px]" style="color:var(--text-muted)">Drop here</p></div>';
       } else {
         col.items.forEach(function(item) {
           var cardType = item._lostCust ? 'customer' : (col.type === 'mixed' ? 'proposal' : col.type);
