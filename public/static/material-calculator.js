@@ -826,13 +826,155 @@ function mcSetViewMode(mode) {
   renderCalculator();
 }
 
-function mcSaveClientPDF() {
-  var prev = mcState.viewMode;
-  mcState.viewMode = 'client'; mcInjectPrintCSS(); renderCalculator();
-  setTimeout(function() {
-    window.print();
-    setTimeout(function() { mcState.viewMode = prev; mcInjectPrintCSS(); renderCalculator(); }, 500);
-  }, 300);
+function mcLoadScript(src) {
+  return new Promise(function(resolve, reject) {
+    var s = document.createElement('script');
+    s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+async function mcSaveClientPDF() {
+  if (!mcState.report) { mcToast('No report loaded', 'error'); return; }
+  try {
+    if (typeof window.jspdf === 'undefined') {
+      await mcLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js');
+    }
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+    var pageW = doc.internal.pageSize.getWidth();
+    var pageH = doc.internal.pageSize.getHeight();
+    var margin = 14;
+
+    var r = mcState.report;
+    var m = mcState.invoiceMeta || {};
+    var addr = m.address || (r.property && r.property.address) || '';
+    var jobName = m.jobName || '';
+    var estNum = m.invoiceNumber || '';
+    var dateStr = m.invoiceDate || new Date().toISOString().slice(0,10);
+
+    // Temporarily force client view for correct totals
+    var prev = mcState.viewMode;
+    mcState.viewMode = 'client';
+    var t = mcCalcTotals();
+    mcState.viewMode = prev;
+
+    // Header
+    doc.setFillColor(14, 165, 233);
+    doc.rect(0, 0, pageW, 26, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFont('helvetica','bold'); doc.setFontSize(18);
+    doc.text('Material Estimate', margin, 13);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    doc.text('Roof Manager', margin, 20);
+    doc.setFontSize(9);
+    doc.text(dateStr, pageW - margin, 13, { align: 'right' });
+    if (estNum) doc.text('Estimate #' + estNum, pageW - margin, 20, { align: 'right' });
+
+    // Property block
+    var y = 36;
+    doc.setTextColor(30,30,30);
+    doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.text(jobName || 'Property', margin, y); y += 5;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    if (addr) { doc.text(doc.splitTextToSize(addr, pageW - margin*2), margin, y); y += 6; }
+
+    doc.setDrawColor(220,220,220); doc.line(margin, y, pageW-margin, y); y += 6;
+
+    // Measurements summary
+    var es = r.edge_summary || {};
+    doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    doc.text('Roof Summary', margin, y); y += 5;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    var rows = [
+      ['True Area', Math.round(r.total_true_area_sqft||0) + ' sq ft'],
+      ['Pitch', String(r.roof_pitch_ratio || '—')],
+      ['Waste Factor', mcState.currentWastePct + '%'],
+      ['Ridge', Math.round(es.total_ridge_ft||0) + ' lf'],
+      ['Hip', Math.round(es.total_hip_ft||0) + ' lf'],
+      ['Valley', Math.round(es.total_valley_ft||0) + ' lf'],
+      ['Eave', Math.round(es.total_eave_ft||0) + ' lf'],
+      ['Rake', Math.round(es.total_rake_ft||0) + ' lf']
+    ];
+    rows.forEach(function(row) {
+      doc.text(row[0], margin, y);
+      doc.text(row[1], margin + 60, y);
+      y += 5;
+    });
+    y += 3;
+    doc.line(margin, y, pageW-margin, y); y += 6;
+
+    // Line items
+    doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    doc.text('Materials', margin, y); y += 5;
+    doc.setFontSize(9);
+    doc.text('Description', margin, y);
+    doc.text('Qty', margin + 95, y, { align: 'right' });
+    doc.text('Unit', margin + 100, y);
+    doc.text('Price', margin + 140, y, { align: 'right' });
+    doc.text('Total', pageW - margin, y, { align: 'right' });
+    y += 2;
+    doc.line(margin, y, pageW-margin, y); y += 4;
+    doc.setFont('helvetica','normal');
+
+    var items = (r.materials && r.materials.line_items) || [];
+    items.forEach(function(item) {
+      if (item.category === 'ice_shield' && !mcState.iceShieldEnabled) return;
+      if (item.category === 'ventilation' && !mcState.ventilationEnabled) return;
+      if (item._visible === false) return;
+      if (y > pageH - 40) { doc.addPage(); y = margin + 4; }
+      var sell = (item.unit_price_cad||0) * (1 + (item._markupPct||0)/100);
+      var lineTotal = (item.order_quantity||0) * sell;
+      var desc = String(item.description || item.category || '');
+      var descLines = doc.splitTextToSize(desc, 85);
+      doc.text(descLines, margin, y);
+      doc.text(String(item.order_quantity||0), margin + 95, y, { align: 'right' });
+      doc.text(String(item.order_unit||''), margin + 100, y);
+      doc.text('$' + sell.toFixed(2), margin + 140, y, { align: 'right' });
+      doc.text('$' + lineTotal.toFixed(2), pageW - margin, y, { align: 'right' });
+      y += Math.max(5, descLines.length * 4.5);
+    });
+    (mcState.customItems||[]).forEach(function(it) {
+      if (it.visible === false) return;
+      if (y > pageH - 40) { doc.addPage(); y = margin + 4; }
+      var sell = (it.costPrice||0) * (1 + (it.markupPct||0)/100);
+      var lineTotal = (it.qty||1) * sell;
+      var desc = String(it.description || 'Custom item');
+      var descLines = doc.splitTextToSize(desc, 85);
+      doc.text(descLines, margin, y);
+      doc.text(String(it.qty||1), margin + 95, y, { align: 'right' });
+      doc.text(String(it.unit||''), margin + 100, y);
+      doc.text('$' + sell.toFixed(2), margin + 140, y, { align: 'right' });
+      doc.text('$' + lineTotal.toFixed(2), pageW - margin, y, { align: 'right' });
+      y += Math.max(5, descLines.length * 4.5);
+    });
+
+    y += 2; doc.line(margin, y, pageW-margin, y); y += 6;
+
+    // Totals
+    if (y > pageH - 50) { doc.addPage(); y = margin + 4; }
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    var totX = pageW - margin;
+    var labelX = pageW - margin - 60;
+    doc.text('Materials', labelX, y); doc.text('$' + t.matTotal.toFixed(2), totX, y, { align: 'right' }); y += 5;
+    if (t.labourTotal > 0) { doc.text('Labour', labelX, y); doc.text('$' + t.labourTotal.toFixed(2), totX, y, { align: 'right' }); y += 5; }
+    doc.text('Subtotal', labelX, y); doc.text('$' + t.subtotal.toFixed(2), totX, y, { align: 'right' }); y += 5;
+    doc.text('Tax (' + t.taxRate + '%)', labelX, y); doc.text('$' + t.taxAmt.toFixed(2), totX, y, { align: 'right' }); y += 5;
+    doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.text('Total', labelX, y); doc.text('$' + t.total.toFixed(2), totX, y, { align: 'right' }); y += 6;
+    if (t.deposit > 0) {
+      doc.setFont('helvetica','normal'); doc.setFontSize(10);
+      doc.text('Deposit', labelX, y); doc.text('-$' + t.deposit.toFixed(2), totX, y, { align: 'right' }); y += 5;
+      doc.setFont('helvetica','bold'); doc.setFontSize(11);
+      doc.text('Balance Due', labelX, y); doc.text('$' + t.balanceDue.toFixed(2), totX, y, { align: 'right' });
+    }
+
+    var safeAddr = (addr || 'estimate').replace(/[^a-zA-Z0-9]/g,'_').substring(0,30);
+    doc.save('material-estimate-' + safeAddr + '.pdf');
+    mcToast('PDF saved!');
+  } catch (err) {
+    mcToast('PDF generation failed — ' + (err && err.message ? err.message : 'unknown error'), 'error');
+  }
 }
 
 function mcSaveInternalPDF() {
@@ -1000,21 +1142,30 @@ function mcExportCSV() {
 }
 
 // ---- Export Xactimate XML ----
+function mcXmlEscape(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
 function mcExportXactimate() {
   if (!mcState.report) return;
   var r = mcState.report, es = r.edge_summary||{};
   var items = (r.materials && r.materials.line_items) || [];
   var addr = mcState.invoiceMeta.address || (r.property && r.property.address) || '';
+  var xe = mcXmlEscape;
   var xml = '<?xml version="1.0" encoding="UTF-8"?>\n<RoofEstimate>\n' +
-    '  <ProjectInfo><Address>' + addr + '</Address><Date>' + new Date().toISOString().slice(0,10) + '</Date>' +
-    '<WasteFactor>' + mcState.currentWastePct + '</WasteFactor><TotalArea>' + Math.round(r.total_true_area_sqft||0) + '</TotalArea><Pitch>' + (r.roof_pitch_ratio||'') + '</Pitch></ProjectInfo>\n' +
+    '  <ProjectInfo><Address>' + xe(addr) + '</Address><Date>' + xe(new Date().toISOString().slice(0,10)) + '</Date>' +
+    '<WasteFactor>' + xe(mcState.currentWastePct) + '</WasteFactor><TotalArea>' + Math.round(r.total_true_area_sqft||0) + '</TotalArea><Pitch>' + xe(r.roof_pitch_ratio||'') + '</Pitch></ProjectInfo>\n' +
     '  <Measurements><RidgeLF>'+Math.round(es.total_ridge_ft||0)+'</RidgeLF><HipLF>'+Math.round(es.total_hip_ft||0)+'</HipLF><ValleyLF>'+Math.round(es.total_valley_ft||0)+'</ValleyLF><EaveLF>'+Math.round(es.total_eave_ft||0)+'</EaveLF><RakeLF>'+Math.round(es.total_rake_ft||0)+'</RakeLF></Measurements>\n' +
     '  <Materials>\n';
   items.forEach(function(item) {
     if (item.category==='ice_shield' && !mcState.iceShieldEnabled) return;
     if (item.category==='ventilation' && !mcState.ventilationEnabled) return;
     var sell = (item.unit_price_cad||0) * (1 + (item._markupPct||0)/100);
-    xml += '    <Item category="'+item.category+'"><Description>'+(item.description||'')+'</Description><Quantity>'+item.order_quantity+'</Quantity><Unit>'+(item.order_unit||'')+'</Unit><UnitPrice>'+sell.toFixed(2)+'</UnitPrice><Total>'+(item.order_quantity*sell).toFixed(2)+'</Total></Item>\n';
+    xml += '    <Item category="'+xe(item.category)+'"><Description>'+xe(item.description||'')+'</Description><Quantity>'+xe(item.order_quantity)+'</Quantity><Unit>'+xe(item.order_unit||'')+'</Unit><UnitPrice>'+sell.toFixed(2)+'</UnitPrice><Total>'+(item.order_quantity*sell).toFixed(2)+'</Total></Item>\n';
   });
   xml += '  </Materials>\n</RoofEstimate>';
   mcDownload(xml, 'application/xml', 'xactimate-estimate' + (addr ? '-' + addr.replace(/[^a-zA-Z0-9]/g,'_').substring(0,30) : '') + '.xml');
