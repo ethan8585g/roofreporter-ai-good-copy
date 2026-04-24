@@ -819,6 +819,9 @@ document.addEventListener('DOMContentLoaded', () => {
             '<div style="display:flex;flex-direction:column;gap:10px">' +
               '<div><label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:3px">Proposal Title</label><input id="dash-prop-title" value="' + (f.proposal_title || 'Roof Replacement Proposal').replace(/"/g, '&quot;') + '" placeholder="Roof Replacement Proposal" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:14px;font-weight:600"></div>' +
               '<div><label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:3px">Proposal Description / Intro</label><textarea id="dash-prop-desc" placeholder="Thank you for the opportunity to provide this estimate for your roofing project..." style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px;height:60px;resize:vertical">' + (f.proposal_description || '') + '</textarea></div>' +
+              '<div><label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:3px">Warranty Terms <span style="opacity:0.6">(workmanship & materials)</span></label><textarea id="dash-warranty-terms" placeholder="e.g. 10-year workmanship warranty on all labor. Manufacturer warranty on materials (typically 25-50 years). Warranty void if repairs are made by others..." style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px;height:70px;resize:vertical">' + (f.warranty_terms || '') + '</textarea></div>' +
+              '<div><label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:3px">Payment Terms</label><textarea id="dash-payment-terms" placeholder="e.g. 50% deposit on contract signing, balance due on completion. Payment by cheque, e-transfer, or credit card..." style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px;height:60px;resize:vertical">' + (f.payment_terms_text || '') + '</textarea></div>' +
+              '<div><label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:3px">Notes / Additional Terms <span style="opacity:0.6">(optional)</span></label><textarea id="dash-notes" placeholder="e.g. Valid for 30 days. Price includes all materials, labor, and dump fees. Permit costs not included unless stated..." style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px;height:60px;resize:vertical">' + (f.notes || '') + '</textarea></div>' +
               '<div><label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:3px">Company Logo URL <span style="opacity:0.5">(optional)</span></label>' +
                 '<div style="display:flex;gap:8px;align-items:center">' +
                   '<input id="dash-logo-url" value="' + (f.company_logo_url || '').replace(/"/g, '&quot;') + '" placeholder="https://yoursite.com/logo.png" style="flex:1;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:12px">' +
@@ -1507,6 +1510,20 @@ document.addEventListener('DOMContentLoaded', () => {
         var m = r.materials || {};
         var es = r.edge_summary || {};
         var accentColor = state.accentColor || '#0ea5e9';
+
+        // If all 5 report pages are toggled on, embed the full professional
+        // roof report HTML (same document the customer gets) via iframe so
+        // the preview shows every page, not just mini summary cards.
+        if (state.showAreaToCustomer && state.showPitchToCustomer && state.showMaterialsToCustomer && state.showEdgesToCustomer && state.showSolarToCustomer) {
+          var orderId = r.order_id || r.id || state.form.attached_report_id;
+          if (orderId) {
+            return '<div class="p-8 border-b border-gray-200">' +
+              '<h3 class="text-xs font-semibold text-gray-500 uppercase mb-4"><i class="fas fa-file-alt mr-1"></i>Full Roof Measurement Report</h3>' +
+              '<iframe src="/api/reports/' + orderId + '/html" style="width:100%;min-height:2400px;border:1px solid #e5e7eb;border-radius:12px;background:white" ' +
+                'onload="try{var h=this.contentDocument.body.scrollHeight;if(h>200)this.style.height=(h+40)+\'px\'}catch(e){}"></iframe>' +
+            '</div>';
+          }
+        }
 
         // Page 1: Project Summary & Satellite Image
         if (state.showAreaToCustomer) {
@@ -2828,6 +2845,9 @@ document.addEventListener('DOMContentLoaded', () => {
       el = document.getElementById('dash-prop-title'); if (el) state.form.proposal_title = el.value;
       el = document.getElementById('dash-prop-desc'); if (el) state.form.proposal_description = el.value;
       el = document.getElementById('dash-logo-url'); if (el) state.form.company_logo_url = el.value;
+      el = document.getElementById('dash-warranty-terms'); if (el) state.form.warranty_terms = el.value;
+      el = document.getElementById('dash-payment-terms'); if (el) state.form.payment_terms_text = el.value;
+      el = document.getElementById('dash-notes'); if (el) state.form.notes = el.value;
     },
     collectDashboardAndSend() {
       window._pb.collectDashboardData();
