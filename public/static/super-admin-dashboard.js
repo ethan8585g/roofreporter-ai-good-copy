@@ -1513,6 +1513,26 @@ function saInitTraceMap(lat, lng, address) {
   });
   s.map = map;
 
+  // Render the user-placed pin so admin can see where the customer marked their house
+  if (lat && lng) {
+    s.userPinMarker = new google.maps.Marker({
+      position: { lat: lat, lng: lng },
+      map: map,
+      clickable: false,
+      zIndex: 9999,
+      title: 'User-placed pin',
+      icon: {
+        path: 'M 0,0 C -2,-20 -10,-22 -10,-30 A 10,10 0 1,1 10,-30 C 10,-22 2,-20 0,0 z',
+        fillColor: '#ef4444',
+        fillOpacity: 1,
+        strokeColor: '#ffffff',
+        strokeWeight: 2,
+        scale: 1.1,
+        anchor: new google.maps.Point(0, 0)
+      }
+    });
+  }
+
   // Geocode address to ensure map is centered on the right property
   if (address) {
     var geocoder = new google.maps.Geocoder();
