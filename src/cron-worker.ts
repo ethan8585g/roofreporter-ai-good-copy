@@ -263,7 +263,8 @@ export default {
         const t0 = Date.now()
         try {
           const result = await runLeadAgent(env)
-          const summary = result.responded === 0 ? 'No new leads'
+          const summary = !result.ok ? `Failed: ${result.errors[0] || 'unknown error'}`
+            : result.responded === 0 ? 'No new leads'
             : `Responded to ${result.responded} lead(s)`
           console.log(`[CRON:lead] ${summary}`)
           await logRun('lead', result.ok ? 'success' : 'error', summary, result, Date.now() - t0)
@@ -298,7 +299,8 @@ export default {
         const t0 = Date.now()
         try {
           const result = await runMonitorAgent(env)
-          const summary = `Health ${result.health_score}/100 — ${result.issues_found} finding(s)${result.critical_count > 0 ? ` (${result.critical_count} critical!)` : ''}`
+          const summary = !result.ok ? `Failed: ${result.error || 'unknown error'}`
+            : `Health ${result.health_score}/100 — ${result.issues_found} finding(s)${result.critical_count > 0 ? ` (${result.critical_count} critical!)` : ''}`
           console.log(`[CRON:monitor] ${summary}`)
           await logRun('monitor', result.ok ? 'success' : 'error', summary, { health_score: result.health_score, issues_found: result.issues_found }, Date.now() - t0)
         } catch (err: any) {
@@ -360,7 +362,8 @@ export default {
 
           const t0 = Date.now()
           const result = await runTrafficAgent(env)
-          const summary = result.sessions_analyzed === 0
+          const summary = !result.ok ? `Failed: ${result.error || 'unknown error'}`
+            : result.sessions_analyzed === 0
             ? 'No visitor sessions to analyze yet'
             : `Analyzed ${result.sessions_analyzed} sessions — ${result.insights_found} UX finding(s), ${result.bounce_rate_pct}% bounce rate${result.top_exit_page ? `, top exit: ${result.top_exit_page}` : ''}`
           console.log(`[CRON:traffic] ${summary}`)

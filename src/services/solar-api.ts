@@ -1194,7 +1194,7 @@ Respond with ONLY valid JSON:
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5',
+        model: 'claude-haiku-4-5-20251001',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 4000,
         temperature: 0.2,
