@@ -733,23 +733,67 @@
       .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
   };
 
+  // Open Square OAuth popup, then run callback once connected.
+  // Lets users log in to Square or create a new Square account.
+  function _crmConnectSquare(onSuccess) {
+    var token = getToken();
+    var popup = window.open('/api/square/oauth/start?token=' + encodeURIComponent(token), 'square_oauth', 'width=700,height=750,scrollbars=yes');
+    if (!popup) {
+      toast('Popup blocked — please allow popups and try again', 'error');
+      return;
+    }
+    var handler = function(e) {
+      if (!e || !e.data) return;
+      if (e.data.type === 'square_oauth_success') {
+        window.removeEventListener('message', handler);
+        try { popup.close(); } catch(_) {}
+        toast('Square connected!', 'success');
+        if (typeof onSuccess === 'function') onSuccess();
+      } else if (e.data.type === 'square_oauth_error') {
+        window.removeEventListener('message', handler);
+        try { popup.close(); } catch(_) {}
+        toast('Square connection failed: ' + (e.data.error || 'Unknown error'), 'error');
+      }
+    };
+    window.addEventListener('message', handler);
+    // Fallback: if user closes popup manually, stop listening after a while.
+    var poll = setInterval(function() {
+      if (popup.closed) { clearInterval(poll); window.removeEventListener('message', handler); }
+    }, 800);
+  }
+
   // Generate Square payment link for proposal
   window._crmGenProposalPayLink = async function(id) {
     if (!(await window.rmConfirm('Generate a Square payment link for this proposal? The customer will be able to pay online.'))) return
+    _crmCreateProposalPayLink(id, true);
+  };
+
+  function _crmCreateProposalPayLink(id, allowOauthPrompt) {
     toast('Generating payment link...', 'info');
     fetch('/api/crm/proposals/' + id + '/payment-link', { method: 'POST', headers: authHeaders() })
-      .then(function(r) { return r.json(); })
+      .then(function(r) { return r.json().then(function(body) { return { ok: r.ok, status: r.status, body: body }; }); })
       .then(function(res) {
-        if (res.success && res.checkout_url) {
+        var data = res.body || {};
+        if (res.ok && data.success && data.checkout_url) {
           toast('Square payment link created!', 'success');
-          navigator.clipboard.writeText(res.checkout_url).catch(function(){});
+          navigator.clipboard.writeText(data.checkout_url).catch(function(){});
           loadProposals(window._propFilter);
-        } else {
-          toast(res.error || 'Failed to generate payment link', 'error');
+          return;
         }
+        var err = (data.error || '').toString();
+        var notConnected = /not connected/i.test(err) || /connect square/i.test(err) || res.status === 401 || res.status === 412;
+        if (notConnected && allowOauthPrompt) {
+          toast('Connect your Square account to enable payment links...', 'info');
+          _crmConnectSquare(function() {
+            // Retry once after successful OAuth — don't loop.
+            _crmCreateProposalPayLink(id, false);
+          });
+          return;
+        }
+        toast(err || 'Failed to generate payment link', 'error');
       })
       .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
-  };
+  }
 
   // Connect Gmail — open blank popup immediately (user click context), then redirect to auth URL
   window._crmConnectGmail = function() {
