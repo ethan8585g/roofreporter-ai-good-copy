@@ -641,17 +641,23 @@ document.addEventListener('DOMContentLoaded', () => {
       // Inline material take-off panel
       renderMaterialPanel() +
 
-      // Profit summary bar — with margin health color (red <15% / yellow 15-25% / green >25%)
+      // Profit summary bar — shows Markup% when in markup mode, Margin% when in margin mode
       (function() {
-        var mHealthColor = margin < 15 ? '#ef4444' : margin < 25 ? '#f59e0b' : '#22c55e';
-        var mHealthLabel = margin < 15 ? 'Low' : margin < 25 ? 'OK' : 'Healthy';
+        var isMarkupMode = state.pricingEngineMode !== 'margin';
+        var displayLabel = isMarkupMode ? 'Markup' : 'Margin';
+        var displayPct = isMarkupMode ? (state.markupPercent || 0) : margin;
+        var hHealthColor = displayPct < 15 ? '#ef4444' : displayPct < 25 ? '#f59e0b' : '#22c55e';
+        var hHealthLabel = displayPct < 15 ? 'Low' : displayPct < 25 ? 'OK' : 'Healthy';
+        var hHealthTitle = isMarkupMode
+          ? 'Markup health: Low (&lt;15%) / OK (15-25%) / Healthy (&gt;25%)'
+          : 'Margin health: Low (&lt;15%) / OK (15-25%) / Healthy (&gt;25%)';
         var profitColor = profit < 0 ? '#ef4444' : '#22c55e';
         return '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:12px;text-align:center">' +
           '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Line Item Cost</div><div style="color:var(--text-muted);font-size:18px;font-weight:700">$' + totalCost.toFixed(2) + '</div></div>' +
           '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px" title="Your true cost before markup. Click to edit — overrides line item sum.">My Cost <span style="font-size:8px;opacity:0.6">(editable)</span></div><div style="display:flex;align-items:center;justify-content:center;gap:2px"><span style="color:#ef4444;font-size:20px;font-weight:800">$</span><input type="number" value="' + (state.myCost !== null ? state.myCost : totalCost).toFixed(2) + '" onchange="window.__pbState.myCost=parseFloat(this.value)||null;window.__pbRender()" style="width:90px;background:transparent;border:none;border-bottom:2px solid #ef4444;color:#ef4444;font-size:20px;font-weight:800;text-align:center;padding:0"></div></div>' +
           '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px" title="What your customer pays. Edit to override the markup/margin calc.">Customer Price <span style="font-size:8px;opacity:0.6">(editable)</span></div><div style="display:flex;align-items:center;justify-content:center;gap:2px"><span style="color:var(--text-primary);font-size:20px;font-weight:800">$</span><input type="number" value="' + (state.customerPriceOverride !== null ? state.customerPriceOverride : customerTotal).toFixed(2) + '" onchange="window.__pbState.customerPriceOverride=parseFloat(this.value)||null;window.__pbRender()" style="width:90px;background:transparent;border:none;border-bottom:2px solid var(--accent);color:var(--text-primary);font-size:20px;font-weight:800;text-align:center;padding:0"></div></div>' +
           '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Your Profit</div><div style="color:' + profitColor + ';font-size:20px;font-weight:800">$' + profit.toFixed(2) + '</div></div>' +
-          '<div title="Margin health: Low (&lt;15%) / OK (15-25%) / Healthy (&gt;25%)"><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Margin</div><div style="color:' + mHealthColor + ';font-size:20px;font-weight:800">' + margin.toFixed(1) + '%</div><div style="font-size:9px;color:' + mHealthColor + ';font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;opacity:0.85">' + mHealthLabel + '</div></div>' +
+          '<div title="' + hHealthTitle + '"><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">' + displayLabel + '</div><div style="color:' + hHealthColor + ';font-size:20px;font-weight:800">' + displayPct.toFixed(1) + '%</div><div style="font-size:9px;color:' + hHealthColor + ';font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;opacity:0.85">' + hHealthLabel + '</div></div>' +
         '</div>';
       })() +
 
