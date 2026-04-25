@@ -67,6 +67,8 @@ const orderState = {
   invoiceCustomerPhone: '',
   invoiceCustomerEmail: '',
   invoicingAutoEnabled: false,
+  // Auto-send finished report to this email (optional)
+  sendReportToEmail: '',
   // Pricing
   pricePerBundle: null,
   roofTraceJson: null,
@@ -915,6 +917,18 @@ function renderReviewStep(root, progressBar) {
               </div>
               <p class="text-xs text-gray-400 mt-1">This will appear on your report as an estimated job cost</p>
             </div>
+          </div>
+
+          <!-- Auto-Send Finished Report (Optional) -->
+          <div class="bg-[#0A0A0A] rounded-xl border border-white/10 p-5">
+            <h4 class="font-semibold text-gray-300 mb-1 flex items-center">
+              <i class="fas fa-paper-plane text-emerald-400 mr-2"></i>Email Report To (Optional)
+            </h4>
+            <p class="text-xs text-gray-500 mb-3">If filled, the finished roof measurement report will be emailed to this address automatically when it's ready.</p>
+            <input type="email" id="sendReportToEmailInput" placeholder="name@example.com"
+              value="${orderState.sendReportToEmail}"
+              oninput="orderState.sendReportToEmail=this.value"
+              class="w-full px-4 py-2.5 bg-[#111111] border border-white/15 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" />
           </div>
 
           <div id="orderMsg" class="hidden p-4 rounded-xl text-sm"></div>
@@ -2052,6 +2066,7 @@ function buildOrderPayload() {
   if (orderState.invoiceCustomerName) payload.invoice_customer_name = orderState.invoiceCustomerName.trim();
   if (orderState.invoiceCustomerEmail) payload.invoice_customer_email = orderState.invoiceCustomerEmail.trim();
   if (orderState.invoiceCustomerPhone) payload.invoice_customer_phone = orderState.invoiceCustomerPhone.trim();
+  if (orderState.sendReportToEmail) payload.send_report_to_email = orderState.sendReportToEmail.trim();
   return payload;
 }
 
