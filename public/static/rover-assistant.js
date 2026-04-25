@@ -409,7 +409,7 @@
   panel.id = 'rover-assistant';
   panel.innerHTML = [
     '<div class="ra-header">',
-      '<div class="ra-header-avatar">🐕</div>',
+      '<div class="ra-header-avatar"><img src="/static/logo.png" alt="Roof Manager" style="width:32px;height:32px;object-fit:contain;display:block"></div>',
       '<div class="ra-header-info">',
         '<h3>Rover AI Assistant</h3>',
         '<p>Your business assistant</p>',
@@ -440,7 +440,7 @@
   // FAB — hidden-for-session check
   var fab = document.createElement('button');
   fab.id = 'rover-assistant-fab';
-  fab.innerHTML = '<button class="ra-fab-close" id="ra-fab-close" title="Hide Rover" aria-label="Hide Rover">×</button><span>🐕</span><div class="ra-fab-label">Ask Rover AI (drag to move)</div>';
+  fab.innerHTML = '<button class="ra-fab-close" id="ra-fab-close" title="Hide Rover" aria-label="Hide Rover">×</button><span><img src="/static/logo.png" alt="Roof Manager" style="width:34px;height:34px;object-fit:contain;display:block"></span><div class="ra-fab-label">Ask Rover AI (drag to move)</div>';
   if (sessionStorage.getItem('rover_fab_hidden') === '1') {
     fab.classList.add('hidden');
   }

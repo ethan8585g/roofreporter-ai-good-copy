@@ -589,7 +589,7 @@
     <!-- Chat window -->
     <div id="rover-chat">
       <div class="rover-header">
-        <div class="rover-header-avatar">🐕</div>
+        <div class="rover-header-avatar"><img src="/static/logo.png" alt="Roof Manager" style="width:28px;height:28px;object-fit:contain;display:block"></div>
         <div class="rover-header-info">
           <h3>Rover</h3>
           <p>Roof Manager Expert Helper</p>
@@ -612,7 +612,7 @@
 
     <!-- FAB Button -->
     <button id="rover-fab" onclick="window.__roverToggle()">
-      <span class="rover-icon">🐕</span>
+      <span class="rover-icon"><img src="/static/logo.png" alt="Roof Manager" style="width:34px;height:34px;object-fit:contain;display:block"></span>
       <span class="rover-badge" id="rover-badge">0</span>
     </button>
   `;
