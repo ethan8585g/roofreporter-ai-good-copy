@@ -55,7 +55,7 @@ export function roofZoomFor(footprintSqft: number = 1500): number {
   return m2 > 2000 ? 20 : m2 > 800 ? 20 : m2 > 400 ? 21 : m2 > 100 ? 21 : 21
 }
 
-export function generateEnhancedImagery(lat: number, lng: number, apiKey: string, footprintSqft: number = 1500) {
+export function generateEnhancedImagery(lat: number, lng: number, apiKey: string, footprintSqft: number = 1500, zoomOffset: number = 0) {
   // Calculate zoom based on roof size — ZOOMED IN but entire roof visible.
   // Google Maps zoom at scale=2 (1280px actual):
   //   Zoom 21 ≈ 15m across → excellent for small roofs (<150 m²)
@@ -77,12 +77,16 @@ export function generateEnhancedImagery(lat: number, lng: number, apiKey: string
   //   400-800 m² (large)  → Zoom 20 (tight, ~30m across)
   //   800-2000 m² (xlarge) → Zoom 19 (moderate, ~60m across)
   //   > 2000 m² (commercial) → Zoom 19 (moderate, ~60m across)
+  //
+  // zoomOffset: applied to all zoom levels (negative = zoom out). Used for
+  // multi-structure reports so both buildings fit comfortably in frame.
   const footprintM2 = footprintSqft / 10.7639
-  const roofZoom = footprintM2 > 2000 ? 20
+  const baseRoofZoom = footprintM2 > 2000 ? 20
     : footprintM2 > 800 ? 20
     : footprintM2 > 400 ? 21
     : footprintM2 > 100 ? 21
     : 21                               // ← TIGHT zoom, no offset — entire roof visible via larger canvas
+  const roofZoom = baseRoofZoom + zoomOffset
   const mediumZoom = roofZoom - 1     // Bridge: property + neighbors
   const contextZoom = roofZoom - 3    // Wide neighborhood context
   const closeupZoom = Math.min(roofZoom + 1, 21) // Close-ups one notch tighter
@@ -186,7 +190,8 @@ export interface SolarPitchAndImagery {
 export async function fetchSolarPitchAndImagery(
   lat: number, lng: number,
   solarApiKey: string, mapsApiKey: string,
-  footprintSqftHint: number = 1500
+  footprintSqftHint: number = 1500,
+  zoomOffset: number = 0
 ): Promise<SolarPitchAndImagery> {
   const startTime = Date.now()
   const preciseLat = parseFloat(lat.toFixed(7))
@@ -257,7 +262,7 @@ export async function fetchSolarPitchAndImagery(
     : undefined
 
   // Generate satellite imagery URLs (uses footprint hint for zoom calculation)
-  const imagery = generateEnhancedImagery(lat, lng, mapsApiKey, footprintSqftHint)
+  const imagery = generateEnhancedImagery(lat, lng, mapsApiKey, footprintSqftHint, zoomOffset)
 
   console.log(`[SolarPitch] Extracted pitch=${avgPitch.toFixed(1)}° (${pitchRatio}), ` +
     `${segmentPitches.length} segments, quality=${imageryQuality}, ` +

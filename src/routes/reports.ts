@@ -2698,10 +2698,15 @@ async function _generateReportForOrderInner(
     if (solarApiKey && order.latitude && order.longitude) {
       try {
         const footprintHint = traceResult?.key_measurements?.total_projected_footprint_ft2 || 1500
+        // Multi-structure reports zoom out one notch so both buildings fit clearly in frame.
+        const structureCount = Array.isArray(traceData?.eaves_sections)
+          ? traceData.eaves_sections.filter((s: any) => Array.isArray(s) && s.length >= 3).length
+          : 0
+        const imageryZoomOffset = structureCount >= 2 ? -1 : 0
         // Fetch pitch + the two extra report images (flux heatmap, mask overlay) in parallel.
         // Imagery failure is non-fatal and falls back to the single-image layout.
         const [pitchRes, imgRes] = await Promise.all([
-          fetchSolarPitchAndImagery(order.latitude, order.longitude, solarApiKey, mapsApiKey || solarApiKey, footprintHint),
+          fetchSolarPitchAndImagery(order.latitude, order.longitude, solarApiKey, mapsApiKey || solarApiKey, footprintHint, imageryZoomOffset),
           fetchSolarImageryOnly(order.latitude, order.longitude, solarApiKey).catch(() => null),
         ])
         solarPitch = pitchRes
@@ -2851,14 +2856,19 @@ async function _generateReportForOrderInner(
         complexity_class: km.num_hips > 2 || km.num_valleys > 1 ? 'complex' : (km.num_hips > 0 ? 'moderate' : 'simple'),
       }
 
-      // Imagery: prefer Solar API, fallback to basic Maps Static
+      // Imagery: prefer Solar API, fallback to basic Maps Static.
+      // Multi-structure reports zoom out one notch so both buildings fit clearly in frame.
+      const traceStructureCount = Array.isArray(traceData?.eaves_sections)
+        ? traceData.eaves_sections.filter((s: any) => Array.isArray(s) && s.length >= 3).length
+        : 0
+      const imageryZoomOffsetFallback = traceStructureCount >= 2 ? -1 : 0
       const imagery = {
         ...(solarPitch
           ? { ...solarPitch.imagery, dsm_url: null, mask_url: null }
           : {
               ...generateEnhancedImagery(
                 order.latitude || 0, order.longitude || 0,
-                mapsApiKey || '', km.total_projected_footprint_ft2
+                mapsApiKey || '', km.total_projected_footprint_ft2, imageryZoomOffsetFallback
               ),
               dsm_url: null, mask_url: null,
             }),

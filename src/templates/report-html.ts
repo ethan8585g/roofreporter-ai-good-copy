@@ -18,6 +18,58 @@ import {
   generateSquaresGridDiagramSVG
 } from './svg-diagrams'
 
+// ============================================================
+// Per-structure breakdown helper — derives footprint/true-area/
+// perimeter for each traced building from roof_trace.eaves_sections.
+// Returns [] for single-structure reports so callers can skip rendering.
+// ============================================================
+export interface StructureBreakdownRow {
+  label: string
+  footprint_sf: number
+  true_area_sf: number
+  perimeter_ft: number
+  squares: number
+}
+
+export function computeStructuresBreakdown(report: RoofReport): StructureBreakdownRow[] {
+  const rt: any = (report as any).roof_trace
+  const out: StructureBreakdownRow[] = []
+  if (!rt || !Array.isArray(rt.eaves_sections) || rt.eaves_sections.length < 1) return out
+  const allSections: { lat: number; lng: number }[][] = rt.eaves_sections.filter((s: any) => Array.isArray(s) && s.length >= 3)
+  if (allSections.length < 2) return out
+
+  const meanLat = allSections[0].reduce((s, p) => s + p.lat, 0) / allSections[0].length
+  const FT_PER_DEG_LAT = 364000
+  const ftPerDegLng = FT_PER_DEG_LAT * Math.cos(meanLat * Math.PI / 180)
+  const slopeMult = report.area_multiplier && report.area_multiplier > 0 ? report.area_multiplier : 1
+
+  const sorted = allSections
+    .map(pts => {
+      const xy = pts.map(p => ({ x: (p.lng - allSections[0][0].lng) * ftPerDegLng, y: (p.lat - meanLat) * FT_PER_DEG_LAT }))
+      let a = 0, perim = 0
+      for (let i = 0; i < xy.length; i++) {
+        const j = (i + 1) % xy.length
+        a += xy[i].x * xy[j].y - xy[j].x * xy[i].y
+        perim += Math.hypot(xy[j].x - xy[i].x, xy[j].y - xy[i].y)
+      }
+      return { footprint: Math.abs(a) / 2, perim }
+    })
+    .sort((a, b) => b.footprint - a.footprint)
+
+  const structureNames = ['Main House', 'Detached Structure', 'Additional Structure', 'Additional Structure', 'Additional Structure']
+  sorted.forEach((s, i) => {
+    const trueArea = s.footprint * slopeMult
+    out.push({
+      label: `Structure ${i + 1} — ${structureNames[i] || 'Additional Structure'}`,
+      footprint_sf: Math.round(s.footprint),
+      true_area_sf: Math.round(trueArea),
+      perimeter_ft: Math.round(s.perim * 10) / 10,
+      squares: Math.round(trueArea / 100 * 10) / 10,
+    })
+  })
+  return out
+}
+
 export function generateProfessionalReportHTML(report: RoofReport): string {
   // ── Safe defaults ──
   const prop = report.property || { address: 'Unknown' } as any
@@ -64,8 +116,17 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
     if ((seg.plane_height_meters || 0) > 3.5) slopeClasses.high_roof += sf
   })
 
-  // IWB (Ice & Water Barrier) — eave-line × 3ft depth
-  const iwbSqFt = Math.round(es.total_eave_ft * 3 * 10) / 10
+  // IWB (Ice & Water Barrier) — IRC R905.1.2 / NBC trigger:
+  // low-slope (rise < 2:12) → full sloped-area coverage,
+  // standard pitch → eave strip + 3ft each side of valleys.
+  const tmIwb = (report as any).trace_measurement?.materials_estimate?.ice_water_shield_sqft
+  const lowSlopeSqftPg1 = report.segments.reduce((sum, s) => {
+    const r = 12 * Math.tan(((s.pitch_degrees || 0) * Math.PI) / 180)
+    return r > 0 && r < 2.0 ? sum + (s.true_area_sqft || 0) : sum
+  }, 0)
+  const iwbSqFt = typeof tmIwb === 'number'
+    ? Math.round(tmIwb * 10) / 10
+    : Math.round((lowSlopeSqftPg1 + (es.total_eave_ft || 0) * 3 + (es.total_valley_ft || 0) * 3 * 2) * 10) / 10
 
   // Satellite image — prefer eagle-view if available, then enhanced satellite, then standard
   const eagleViewUrl = (report as any).eagle_view_image?.data_url
@@ -76,40 +137,7 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
 
   // ── Per-structure breakdown (house + detached garage/shed/etc.) ──
   // Computed from roof_trace GPS coordinates so each traced building gets its own measurement row.
-  const rt: any = (report as any).roof_trace
-  const structuresBreakdown: { label: string; footprint_sf: number; true_area_sf: number; perimeter_ft: number; squares: number }[] = []
-  if (rt && Array.isArray(rt.eaves_sections) && rt.eaves_sections.length >= 1) {
-    const allSections: { lat: number; lng: number }[][] = rt.eaves_sections.filter((s: any) => Array.isArray(s) && s.length >= 3)
-    if (allSections.length >= 2) {
-      const meanLat = allSections[0].reduce((s, p) => s + p.lat, 0) / allSections[0].length
-      const FT_PER_DEG_LAT = 364000
-      const ftPerDegLng = FT_PER_DEG_LAT * Math.cos(meanLat * Math.PI / 180)
-      const slopeMult = report.area_multiplier && report.area_multiplier > 0 ? report.area_multiplier : 1
-      const sorted = allSections
-        .map(pts => {
-          const xy = pts.map(p => ({ x: (p.lng - allSections[0][0].lng) * ftPerDegLng, y: (p.lat - meanLat) * FT_PER_DEG_LAT }))
-          let a = 0, perim = 0
-          for (let i = 0; i < xy.length; i++) {
-            const j = (i + 1) % xy.length
-            a += xy[i].x * xy[j].y - xy[j].x * xy[i].y
-            perim += Math.hypot(xy[j].x - xy[i].x, xy[j].y - xy[i].y)
-          }
-          return { footprint: Math.abs(a) / 2, perim }
-        })
-        .sort((a, b) => b.footprint - a.footprint)
-      const structureNames = ['Main House', 'Detached Structure', 'Additional Structure', 'Additional Structure', 'Additional Structure']
-      sorted.forEach((s, i) => {
-        const trueArea = s.footprint * slopeMult
-        structuresBreakdown.push({
-          label: `Structure ${i + 1} — ${structureNames[i] || 'Additional Structure'}`,
-          footprint_sf: Math.round(s.footprint),
-          true_area_sf: Math.round(trueArea),
-          perimeter_ft: Math.round(s.perim * 10) / 10,
-          squares: Math.round(trueArea / 100 * 10) / 10,
-        })
-      })
-    }
-  }
+  const structuresBreakdown = computeStructuresBreakdown(report)
 
   // ── Waste factor table (4% through 15%) — in square feet ──
   const wastePercentages = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
@@ -1069,6 +1097,18 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
   const netArea = Math.round(report.total_true_area_sqft || 0)
   const wastePct = mat.waste_pct || 5
   const grossArea = Math.round(netArea * (1 + wastePct / 100))
+  const structuresBreakdown = computeStructuresBreakdown(report)
+
+  // Fallback IWB calc (IRC R905.1.2 / NBC) when no trace materials.
+  // Low-slope segments (pitch < 2:12) get full sloped-area coverage; the
+  // rest get an eave strip (~3 ft) plus 3 ft on each side of valleys.
+  const fbLowSlopeSqft = (report.segments || []).reduce((sum: number, s: any) => {
+    const rise = 12 * Math.tan(((s?.pitch_degrees || 0) * Math.PI) / 180)
+    return rise > 0 && rise < 2.0 ? sum + (s?.true_area_sqft || 0) : sum
+  }, 0)
+  const fbEaveStripSqft = (report.edge_summary?.total_eave_ft || 0) * 3
+  const fbValleySqft = (report.edge_summary?.total_valley_ft || 0) * 3 * 2
+  const fbIwbTotalSqft = Math.round(fbLowSlopeSqft + fbEaveStripSqft + fbValleySqft)
 
   // Use trace materials if available, otherwise calculate from report.materials
   const m = traceMat || {
@@ -1076,8 +1116,21 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
     shingles_squares_gross: Math.round(grossArea / 100 * 10) / 10,
     shingles_bundles: Math.ceil(grossArea / 100 * 3),
     underlayment_rolls: Math.ceil(netArea / 400),
-    ice_water_shield_sqft: Math.round((report.edge_summary?.total_eave_ft || 0) * 3),
-    ice_water_shield_rolls_2sq: Math.ceil((report.edge_summary?.total_eave_ft || 0) * 3 / 200),
+    ice_water_shield_sqft: fbIwbTotalSqft,
+    ice_water_shield_rolls_2sq: Math.ceil(fbIwbTotalSqft / 200),
+    ice_water_breakdown: {
+      low_slope_full_coverage_sqft: Math.round(fbLowSlopeSqft),
+      low_slope_face_count: (report.segments || []).filter((s: any) => {
+        const rise = 12 * Math.tan(((s?.pitch_degrees || 0) * Math.PI) / 180)
+        return rise > 0 && rise < 2.0
+      }).length,
+      eave_strip_sqft: Math.round(fbEaveStripSqft),
+      eave_strip_depth_ft: 3,
+      valley_sqft: Math.round(fbValleySqft),
+      total_sqft: fbIwbTotalSqft,
+      total_rolls_2sq: Math.ceil(fbIwbTotalSqft / 200),
+      trigger_notes: [],
+    },
     ridge_cap_lf: Math.round((report.edge_summary?.total_ridge_ft || 0) + (report.edge_summary?.total_hip_ft || 0)),
     ridge_cap_bundles: Math.ceil(((report.edge_summary?.total_ridge_ft || 0) + (report.edge_summary?.total_hip_ft || 0)) / 20),
     starter_strip_lf: Math.round((report.edge_summary?.total_eave_ft || 0) + (report.edge_summary?.total_rake_ft || 0)),
@@ -1100,10 +1153,48 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
   const shingleWind = windMatch ? windMatch[1] + ' km/h' : ''
   const shingleSpec = [shingleWarranty ? shingleWarranty + ' warranty' : '', shingleWind ? 'Wind: ' + shingleWind : ''].filter(Boolean).join(' | ')
 
+  const iwb = (m as any).ice_water_breakdown
+  const iwbRows: any[] = []
+  if (iwb && iwb.low_slope_full_coverage_sqft > 0) {
+    const fullRolls = Math.ceil(iwb.low_slope_full_coverage_sqft / 200)
+    iwbRows.push({
+      cat: 'Ice &amp; Water — Full Coverage',
+      desc: `Low-slope segments (pitch &lt; 2:12) — IRC R905.1.2`,
+      qty: fullRolls,
+      unit: 'rolls (2 sq)',
+      note: `${Math.round(iwb.low_slope_full_coverage_sqft).toLocaleString()} SF across ${iwb.low_slope_face_count} face(s)`,
+      icon: '&#10052;',
+      color: '#1d4ed8',
+    })
+    const eaveValleySqft = (iwb.eave_strip_sqft || 0) + (iwb.valley_sqft || 0)
+    if (eaveValleySqft > 0) {
+      iwbRows.push({
+        cat: 'Ice &amp; Water — Eave &amp; Valley',
+        desc: `Eave + 24&quot; past heated wall, plus 3 ft each side of valleys`,
+        qty: Math.ceil(eaveValleySqft / 200),
+        unit: 'rolls (2 sq)',
+        note: `${Math.round(eaveValleySqft).toLocaleString()} SF (eave ${Math.round(iwb.eave_strip_sqft || 0)} + valley ${Math.round(iwb.valley_sqft || 0)})`,
+        icon: '&#10052;',
+        color: '#2563eb',
+      })
+    }
+  } else {
+    const stripDepth = iwb?.eave_strip_depth_ft || 3
+    iwbRows.push({
+      cat: 'Ice &amp; Water Shield',
+      desc: `Self-adhering membrane (eave + 24&quot; past wall, plus 3 ft each side of valleys)`,
+      qty: m.ice_water_shield_rolls_2sq,
+      unit: 'rolls (2 sq)',
+      note: `${m.ice_water_shield_sqft.toLocaleString()} SF total IWB area (strip ${stripDepth} ft)`,
+      icon: '&#10052;',
+      color: '#2563eb',
+    })
+  }
+
   const items = [
     { cat: 'Field Shingles', desc: shingleName + ' shingles', qty: m.shingles_bundles, unit: 'bundles', note: `${m.shingles_squares_gross} sq gross (${m.shingles_squares_net} net + ${wastePct}% waste)${shingleSpec ? ' | ' + shingleSpec : ''}`, icon: '&#9632;', color: '#0891b2' },
     { cat: 'Underlayment', desc: 'Synthetic roof underlayment (15 sq/roll)', qty: m.underlayment_rolls, unit: 'rolls', note: `Covers ${netArea.toLocaleString()} SF net roof area`, icon: '&#9632;', color: '#6366f1' },
-    { cat: 'Ice &amp; Water Shield', desc: 'Self-adhering membrane (eave line × 3ft)', qty: m.ice_water_shield_rolls_2sq, unit: 'rolls (2 sq)', note: `${m.ice_water_shield_sqft.toLocaleString()} SF total IWB area`, icon: '&#10052;', color: '#2563eb' },
+    ...iwbRows,
     { cat: 'Ridge Cap', desc: 'Hip &amp; ridge cap shingles', qty: m.ridge_cap_bundles, unit: 'bundles', note: `${m.ridge_cap_lf} LF total ridge + hip`, icon: '&#9650;', color: '#dc2626' },
     { cat: 'Starter Strip', desc: 'Starter shingles (eave + rake perimeter)', qty: Math.ceil(m.starter_strip_lf / 100), unit: 'rolls', note: `${m.starter_strip_lf} LF perimeter`, icon: '&#9644;', color: '#16a34a' },
     { cat: 'Drip Edge — Eave', desc: 'Metal drip edge, eave profile (10.5ft sticks)', qty: Math.ceil(m.drip_edge_eave_lf / 10.5), unit: 'sticks', note: `${m.drip_edge_eave_lf} LF`, icon: '&#9472;', color: '#16a34a' },
@@ -1168,10 +1259,90 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
 
   <!-- Waste factor table on Page 1 — not duplicated here -->
 
+  ${structuresBreakdown.length >= 2 ? (() => {
+    const totalSloped = structuresBreakdown.reduce((s, x) => s + x.true_area_sf, 0) || 1
+    const allocate = (qty: number, share: number) => Math.ceil(qty * share)
+    const rows = structuresBreakdown.map(st => {
+      const share = st.true_area_sf / totalSloped
+      const stEave = Math.round((report.edge_summary?.total_eave_ft || 0) * share * 10) / 10
+      const stRake = Math.round((report.edge_summary?.total_rake_ft || 0) * share * 10) / 10
+      const stRidgeHip = Math.round(((report.edge_summary?.total_ridge_ft || 0) + (report.edge_summary?.total_hip_ft || 0)) * share * 10) / 10
+      const stValley = Math.round((report.edge_summary?.total_valley_ft || 0) * share * 10) / 10
+      return {
+        label: st.label,
+        sloped_sf: st.true_area_sf,
+        squares: st.squares,
+        bundles: allocate(m.shingles_bundles, share),
+        underlayment: allocate(m.underlayment_rolls, share),
+        iwb_rolls: allocate(m.ice_water_shield_rolls_2sq || Math.ceil((m.ice_water_shield_sqft || 0) / 200), share),
+        ridge_cap_bundles: allocate(m.ridge_cap_bundles, share),
+        starter_rolls: allocate(Math.ceil((m.starter_strip_lf || 0) / 100), share),
+        drip_edge_sticks: allocate(Math.ceil(((m.drip_edge_total_lf) || 0) / 10.5), share),
+        valley_pcs: allocate(Math.ceil(((m.valley_flashing_lf) || 0) / 10), share),
+        nails_lbs: allocate(m.roofing_nails_lbs, share),
+        eave_lf: stEave,
+        rake_lf: stRake,
+        ridge_hip_lf: stRidgeHip,
+        valley_lf: stValley,
+      }
+    })
+    const sum = (k: keyof typeof rows[0]) => rows.reduce((s, r) => s + (typeof r[k] === 'number' ? r[k] as number : 0), 0)
+    return `
+  <!-- Per-Structure Material Allocation -->
+  <div style="padding:10px 28px 0">
+    <div style="font-size:10px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;border-bottom:1.5px solid ${TEAL};padding-bottom:3px">Per-Structure Material Allocation — ${structuresBreakdown.length} Buildings</div>
+    <table style="width:100%;border-collapse:collapse;font-size:7.5px">
+      <thead>
+        <tr style="background:#1a1a2e;color:#fff">
+          <th style="padding:4px 6px;text-align:left;font-size:7px;font-weight:700">Structure</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Roof Area (SF)</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Squares</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Shingle Bundles</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Underlayment</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">IWB Rolls</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Ridge Cap</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Starter</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Drip Edge</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Valley</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Nails (lbs)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((r, i) => `<tr style="${i % 2 === 0 ? 'background:#fafafa' : ''}">
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;font-weight:700">${r.label}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right;font-weight:700;color:${TEAL_DARK}">${r.sloped_sf.toLocaleString()}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right">${r.squares}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right;font-weight:700">${r.bundles}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right">${r.underlayment}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right">${r.iwb_rolls}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right">${r.ridge_cap_bundles}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right">${r.starter_rolls}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right">${r.drip_edge_sticks}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right">${r.valley_pcs}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right">${r.nails_lbs}</td>
+        </tr>`).join('')}
+        <tr style="background:#eee;font-weight:800">
+          <td style="padding:5px 6px;border-top:2px solid #333">Combined Total</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right;color:${TEAL_DARK}">${sum('sloped_sf' as any).toLocaleString()}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${Math.round(sum('squares' as any) * 10) / 10}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${sum('bundles' as any)}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${sum('underlayment' as any)}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${sum('iwb_rolls' as any)}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${sum('ridge_cap_bundles' as any)}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${sum('starter_rolls' as any)}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${sum('drip_edge_sticks' as any)}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${sum('valley_pcs' as any)}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${sum('nails_lbs' as any)}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="font-size:6.5px;color:#888;margin-top:3px;font-style:italic">Allocation derived from each structure's share of total sloped roof area; per-structure quantities rounded up so the field crew never runs short.</div>
+  </div>` })() : ''}
+
   <!-- Notes -->
   <div style="padding:10px 28px 0">
     <div style="padding:6px 10px;background:${TEAL_LIGHT};border:1px solid #b2dfdb;border-radius:4px;font-size:7px;color:${TEAL_DARK};line-height:1.5">
-      <strong>Material Notes:</strong> Quantities include standard waste factor. Verify quantities with your supplier before purchasing. Material availability and prices may vary by region. Bundle counts based on 3 bundles per roofing square for architectural shingles. Underlayment based on 15-square rolls. IWB (Ice &amp; Water Barrier) calculated at 3ft depth from eave edge per building code requirements.
+      <strong>Material Notes:</strong> Quantities include standard waste factor. Verify quantities with your supplier before purchasing. Material availability and prices may vary by region. Bundle counts based on 3 bundles per roofing square for architectural shingles. Underlayment based on 15-square rolls. IWB (Ice &amp; Water Barrier) per IRC R905.1.2 / NBC: full roof coverage on any segment with rise &lt; 2:12; otherwise the membrane extends from the eave edge to at least 24&quot; past the interior heated-wall line, plus 3 ft on each side of valleys.
     </div>
   </div>
 
@@ -1319,6 +1490,7 @@ function buildMeasurementSummaryPage(report: RoofReport, reportNum: string, repo
   const TEAL = '#00897B'
   const TEAL_DARK = '#00695C'
   const TEAL_LIGHT = '#E0F2F1'
+  const structuresBreakdown = computeStructuresBreakdown(report)
 
   const netArea = Math.round(report.total_true_area_sqft || 0)
   const footprint = Math.round(report.total_footprint_sqft || netArea)
@@ -1342,6 +1514,15 @@ function buildMeasurementSummaryPage(report: RoofReport, reportNum: string, repo
   const totalPerimeter = totalEave + totalRake
   const totalLinear = totalEave + totalRidge + totalHip + totalValley + totalRake
 
+  // IWB fallback (IRC R905.1.2 / NBC) — matches the take-off page logic
+  const sumLowSlopeSqft = (report.segments || []).reduce((sum: number, s: any) => {
+    const rise = 12 * Math.tan(((s?.pitch_degrees || 0) * Math.PI) / 180)
+    return rise > 0 && rise < 2.0 ? sum + (s?.true_area_sqft || 0) : sum
+  }, 0)
+  const fbEaveStripSqft = totalEave * 3
+  const fbValleySqft = totalValley * 3 * 2
+  const fbIwbSqFt = Math.round(sumLowSlopeSqft + fbEaveStripSqft + fbValleySqft)
+
   // Materials
   const traceMat = tm?.materials_estimate
   const m = traceMat || {
@@ -1349,7 +1530,7 @@ function buildMeasurementSummaryPage(report: RoofReport, reportNum: string, repo
     shingles_squares_net: netSquares,
     shingles_squares_gross: grossSquares,
     underlayment_rolls: Math.ceil(netArea / 400),
-    ice_water_shield_sqft: Math.round(totalEave * 3),
+    ice_water_shield_sqft: fbIwbSqFt,
     ridge_cap_lf: Math.round(totalRidge + totalHip),
     ridge_cap_bundles: Math.ceil((totalRidge + totalHip) / 20),
     starter_strip_lf: Math.round(totalEave + totalRake),
@@ -1359,8 +1540,8 @@ function buildMeasurementSummaryPage(report: RoofReport, reportNum: string, repo
     caulk_tubes: Math.max(2, Math.ceil(netArea / 1000))
   }
 
-  // IWB
-  const iwbSqFt = Math.round(totalEave * 3)
+  // IWB SF on the summary page reflects the trigger-aware total
+  const iwbSqFt = Math.round((m.ice_water_shield_sqft as number) || fbIwbSqFt)
 
   return `
 <!-- ==================== MEASUREMENT SUMMARY PAGE ==================== -->
@@ -1559,6 +1740,73 @@ function buildMeasurementSummaryPage(report: RoofReport, reportNum: string, repo
       </div>
     </div>
   </div>
+
+  ${structuresBreakdown.length >= 2 ? (() => {
+    const totalSloped = structuresBreakdown.reduce((s, x) => s + x.true_area_sf, 0) || 1
+    const rows = structuresBreakdown.map(st => {
+      const share = st.true_area_sf / totalSloped
+      return {
+        label: st.label,
+        footprint_sf: st.footprint_sf,
+        sloped_sf: st.true_area_sf,
+        squares: st.squares,
+        perimeter_ft: st.perimeter_ft,
+        eave_lf: Math.round((es.total_eave_ft || 0) * share * 10) / 10,
+        rake_lf: Math.round((es.total_rake_ft || 0) * share * 10) / 10,
+        ridge_lf: Math.round((es.total_ridge_ft || 0) * share * 10) / 10,
+        hip_lf: Math.round((es.total_hip_ft || 0) * share * 10) / 10,
+        valley_lf: Math.round((es.total_valley_ft || 0) * share * 10) / 10,
+      }
+    })
+    const sum = (k: keyof typeof rows[0]) => rows.reduce((s, r) => s + (typeof r[k] === 'number' ? r[k] as number : 0), 0)
+    return `
+  <!-- Per-Structure Measurement Breakdown -->
+  <div style="padding:0 28px;margin-bottom:8px">
+    <div style="font-size:10px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;border-bottom:1.5px solid ${TEAL};padding-bottom:3px">Per-Structure Measurement Breakdown — ${structuresBreakdown.length} Buildings</div>
+    <table style="width:100%;border-collapse:collapse;font-size:7.5px">
+      <thead>
+        <tr style="background:#1a1a2e;color:#fff">
+          <th style="padding:4px 6px;text-align:left;font-size:7px;font-weight:700">Structure</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Footprint (SF)</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Sloped (SF)</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Squares</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Perimeter (LF)</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Eave</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Rake</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Ridge</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Hip</th>
+          <th style="padding:4px 6px;text-align:right;font-size:7px;font-weight:700">Valley</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((r, i) => `<tr style="${i % 2 === 0 ? 'background:#fafafa' : ''}">
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;font-weight:700">${r.label}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right">${r.footprint_sf.toLocaleString()}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right;font-weight:700;color:${TEAL_DARK}">${r.sloped_sf.toLocaleString()}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right">${r.squares}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right">${r.perimeter_ft.toLocaleString()}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right">${r.eave_lf}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right">${r.rake_lf}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right">${r.ridge_lf}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right">${r.hip_lf}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:right">${r.valley_lf}</td>
+        </tr>`).join('')}
+        <tr style="background:#eee;font-weight:800">
+          <td style="padding:5px 6px;border-top:2px solid #333">Combined Total</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${sum('footprint_sf' as any).toLocaleString()}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right;color:${TEAL_DARK}">${sum('sloped_sf' as any).toLocaleString()}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${Math.round(sum('squares' as any) * 10) / 10}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${Math.round(sum('perimeter_ft' as any) * 10) / 10}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${Math.round(sum('eave_lf' as any) * 10) / 10}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${Math.round(sum('rake_lf' as any) * 10) / 10}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${Math.round(sum('ridge_lf' as any) * 10) / 10}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${Math.round(sum('hip_lf' as any) * 10) / 10}</td>
+          <td style="padding:5px 6px;border-top:2px solid #333;text-align:right">${Math.round(sum('valley_lf' as any) * 10) / 10}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="font-size:6.5px;color:#888;margin-top:3px;font-style:italic">Footprint and perimeter come from each traced eave polygon. Sloped area applies the dominant pitch multiplier; edge lengths split by area share.</div>
+  </div>` })() : ''}
 
   <!-- Notes -->
   <div style="padding:0 28px">
