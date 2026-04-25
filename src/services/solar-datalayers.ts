@@ -884,7 +884,7 @@ export async function executeRoofOrder(
   // Zoom 20 (~30m across at scale=2) is ideal for most residential roofs
   // Only zoom out to 19 for very large commercial (>2000 m²)
   const footprintM2 = areaCalc.flatAreaSqft / 10.7639
-  const roofZoom = footprintM2 > 2000 ? 19 : footprintM2 > 800 ? 20 : 20
+  const roofZoom = footprintM2 > 2000 ? 20 : footprintM2 > 800 ? 21 : 21
   const contextZoom = roofZoom - 3
   const mediumZoom = roofZoom - 1
 

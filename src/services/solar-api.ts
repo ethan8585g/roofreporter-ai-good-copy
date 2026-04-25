@@ -52,7 +52,7 @@ function computeGeoPolygonAreaSqft(points: { lat: number; lng: number }[]): numb
 // the designer to project lat/lng → pixel without parsing the URL.
 export function roofZoomFor(footprintSqft: number = 1500): number {
   const m2 = footprintSqft / 10.7639
-  return m2 > 2000 ? 19 : m2 > 800 ? 19 : m2 > 400 ? 20 : m2 > 100 ? 20 : 21
+  return m2 > 2000 ? 20 : m2 > 800 ? 20 : m2 > 400 ? 21 : m2 > 100 ? 21 : 21
 }
 
 export function generateEnhancedImagery(lat: number, lng: number, apiKey: string, footprintSqft: number = 1500) {
@@ -78,10 +78,10 @@ export function generateEnhancedImagery(lat: number, lng: number, apiKey: string
   //   800-2000 m² (xlarge) → Zoom 19 (moderate, ~60m across)
   //   > 2000 m² (commercial) → Zoom 19 (moderate, ~60m across)
   const footprintM2 = footprintSqft / 10.7639
-  const roofZoom = footprintM2 > 2000 ? 19
-    : footprintM2 > 800 ? 19
-    : footprintM2 > 400 ? 20
-    : footprintM2 > 100 ? 20
+  const roofZoom = footprintM2 > 2000 ? 20
+    : footprintM2 > 800 ? 20
+    : footprintM2 > 400 ? 21
+    : footprintM2 > 100 ? 21
     : 21                               // ← TIGHT zoom, no offset — entire roof visible via larger canvas
   const mediumZoom = roofZoom - 1     // Bridge: property + neighbors
   const contextZoom = roofZoom - 3    // Wide neighborhood context
