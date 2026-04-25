@@ -1290,7 +1290,7 @@ roverRoutes.post('/assistant/stream', async (c) => {
 
 // GET /api/rover/admin/conversations — List all conversations
 roverRoutes.get('/admin/conversations', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin auth required' }, 401)
 
   try {
@@ -1338,7 +1338,7 @@ roverRoutes.get('/admin/conversations', async (c) => {
 
 // GET /api/rover/admin/conversations/:id — Get full conversation
 roverRoutes.get('/admin/conversations/:id', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin auth required' }, 401)
 
   try {
@@ -1364,7 +1364,7 @@ roverRoutes.get('/admin/conversations/:id', async (c) => {
 
 // PATCH /api/rover/admin/conversations/:id — Update conversation
 roverRoutes.patch('/admin/conversations/:id', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin auth required' }, 401)
 
   try {
@@ -1394,7 +1394,7 @@ roverRoutes.patch('/admin/conversations/:id', async (c) => {
 
 // DELETE /api/rover/admin/conversations/:id — Delete a conversation
 roverRoutes.delete('/admin/conversations/:id', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin auth required' }, 401)
 
   try {
@@ -1409,7 +1409,7 @@ roverRoutes.delete('/admin/conversations/:id', async (c) => {
 
 // GET /api/rover/admin/stats — Dashboard stats
 roverRoutes.get('/admin/stats', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin auth required' }, 401)
 
   try {
