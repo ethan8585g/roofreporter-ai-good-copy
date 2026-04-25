@@ -497,45 +497,6 @@ function renderPinStep(root, progressBar) {
           <div id="coordDisplay" class="hidden bg-[#0A0A0A] border border-white/10 rounded-xl px-4 py-3"></div>
           <div id="resolvedAddress" class="hidden bg-blue-500/10 border border-blue-100 rounded-xl px-4 py-2.5"></div>
 
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-arrows-alt-v mr-1 text-emerald-400"></i>Latitude *</label>
-              <input type="number" step="any" id="orderLat" placeholder="e.g. 53.5461" value="${orderState.lat}"
-                class="w-full px-4 py-3 border border-white/15 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm font-mono"
-                oninput="handleManualCoordInput()">
-            </div>
-            <div>
-              <label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-arrows-alt-h mr-1 text-emerald-400"></i>Longitude *</label>
-              <input type="number" step="any" id="orderLng" placeholder="e.g. -113.4938" value="${orderState.lng}"
-                class="w-full px-4 py-3 border border-white/15 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm font-mono"
-                oninput="handleManualCoordInput()">
-            </div>
-          </div>
-          <button onclick="goToManualCoords()" class="text-xs bg-white/5 hover:bg-gray-200 text-gray-400 px-3 py-1.5 rounded-lg transition-colors -mt-2">
-            <i class="fas fa-location-arrow mr-1"></i>Go to Coords
-          </button>
-
-          <!-- Known House Size (optional cross-validation) -->
-          <div class="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl border border-blue-500/20 p-4">
-            <h4 class="font-semibold text-gray-300 mb-1 flex items-center text-sm">
-              <i class="fas fa-home text-blue-400 mr-2"></i>Known House Size (Optional)
-            </h4>
-            <p class="text-xs text-gray-500 mb-2">Enter your house living area so we can cross-check the roof trace. The roof footprint is typically 10-15% larger than house sq ft (eave overhangs).</p>
-            <div class="flex items-center gap-3">
-              <div class="relative flex-1">
-                <input type="number" step="1" min="0" max="99999" id="houseSqftInput"
-                  value="${orderState.houseSqft || ''}"
-                  oninput="orderState.houseSqft = parseInt(this.value) || null;"
-                  class="w-full px-4 py-2.5 border border-blue-500/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-medium"
-                  placeholder="e.g. 1750" />
-                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">sq ft</span>
-              </div>
-              <div class="text-xs text-blue-400 font-medium whitespace-nowrap">
-                ${orderState.houseSqft ? `Expected roof: ~${Math.round(orderState.houseSqft * 1.12)}–${Math.round(orderState.houseSqft * 1.18)} sq ft` : ''}
-              </div>
-            </div>
-          </div>
-
           <!-- Optional Customer Details for Proposal Automation -->
           <div style="background:linear-gradient(135deg,#1e3a5f,#1e40af);border-radius:16px;border:1px solid rgba(59,130,246,0.3);padding:20px;overflow:hidden">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:6px">
