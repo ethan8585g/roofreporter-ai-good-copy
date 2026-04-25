@@ -624,21 +624,16 @@ document.addEventListener('DOMContentLoaded', () => {
         '</div>' +
       '</div>' +
 
-      // Quick access: Report + Materials
+      // Quick access: Report + Supplier
       (state.selectedReport ?
         '<div style="display:flex;gap:12px;margin-bottom:16px">' +
           '<a href="/customer/reports" target="_blank" style="flex:1;display:flex;align-items:center;gap:10px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:12px 16px;text-decoration:none;transition:all 0.2s" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border-color)\'">' +
-            '<div style="width:36px;height:36px;background:rgba(37,99,235,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center"><i class="fas fa-file-alt" style="color:#3b82f6"></i></div>' +
-            '<div><div style="color:var(--text-primary);font-weight:600;font-size:13px">View Roof Report</div><div style="color:var(--text-muted);font-size:11px">' + (state.selectedReport.property_address || 'Attached report').substring(0, 35) + '</div></div>' +
+            '<div style="width:36px;height:36px;background:rgba(0,0,0,0.06);border-radius:8px;display:flex;align-items:center;justify-content:center"><i class="fas fa-file-alt" style="color:#000"></i></div>' +
+            '<div><div style="color:#000;font-weight:600;font-size:13px">View Roof Report</div><div style="color:#000;font-size:11px">' + (state.selectedReport.property_address || 'Attached report').substring(0, 35) + '</div></div>' +
           '</a>' +
-          '<button onclick="window._pb.toggleMaterials()" style="flex:1;display:flex;align-items:center;gap:10px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:12px 16px;cursor:pointer;transition:all 0.2s;text-align:left" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border-color)\'">' +
-            '<div style="width:36px;height:36px;background:rgba(16,185,129,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center"><i class="fas fa-calculator" style="color:#10b981"></i></div>' +
-            '<div style="flex:1"><div style="color:var(--text-primary);font-weight:600;font-size:13px">Material Take-Off</div><div style="color:var(--text-muted);font-size:11px">' + (state.selectedReportMaterials ? 'Materials loaded — click to expand' : 'Open calculator to load') + '</div></div>' +
-            '<i class="fas ' + (state.materialsExpanded ? 'fa-chevron-up' : 'fa-chevron-down') + '" style="color:var(--text-muted);font-size:11px"></i>' +
-          '</button>' +
           '<div style="flex:1;display:flex;align-items:center;gap:10px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:12px 16px">' +
-            '<div style="width:36px;height:36px;background:rgba(139,92,246,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center"><i class="fas fa-store" style="color:#8b5cf6"></i></div>' +
-            '<div><div style="color:var(--text-primary);font-weight:600;font-size:13px">Supplier</div><div style="color:var(--text-muted);font-size:11px">' + (state.suppliers.length > 0 ? state.suppliers[0].name : 'Not set') + '</div></div>' +
+            '<div style="width:36px;height:36px;background:rgba(0,0,0,0.06);border-radius:8px;display:flex;align-items:center;justify-content:center"><i class="fas fa-store" style="color:#000"></i></div>' +
+            '<div><div style="color:#000;font-weight:600;font-size:13px">Supplier</div><div style="color:#000;font-size:11px">' + (state.suppliers.length > 0 ? state.suppliers[0].name : 'Not set') + '</div></div>' +
           '</div>' +
         '</div>'
       : '') +
