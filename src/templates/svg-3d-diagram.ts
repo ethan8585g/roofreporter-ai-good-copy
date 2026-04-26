@@ -38,6 +38,12 @@ export interface StructurePartition {
   dominant_pitch_label: string
   /** Share of total true area (0..1) — used for material allocation */
   area_share: number
+  /** Per-structure linear feet for each edge type (haversine on the trace) */
+  eave_lf: number
+  ridge_lf: number
+  hip_lf: number
+  valley_lf: number
+  rake_lf: number
 }
 
 // ───────────────────────── CONSTANTS ─────────────────────────
@@ -198,6 +204,26 @@ export function splitStructures(report: RoofReport): StructurePartition[] {
   const totalFootprint = cands.reduce((s, c) => s + c.footprint_sqft, 0) || 1
   const labels = ['Main House', 'Detached Garage', 'Detached Structure', 'Additional Structure', 'Additional Structure', 'Additional Structure']
 
+  const haversineFt = (a: LatLng, b: LatLng) => {
+    const dLat = (b.lat - a.lat) * Math.PI / 180
+    const dLng = (b.lng - a.lng) * Math.PI / 180
+    const lat1 = a.lat * Math.PI / 180, lat2 = b.lat * Math.PI / 180
+    const k = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2
+    return 2 * 6371000 * Math.asin(Math.sqrt(k)) * (1 / 0.3048)
+  }
+  const polylineLF = (lines: LatLng[][]) => {
+    let total = 0
+    for (const line of lines) {
+      for (let i = 0; i < line.length - 1; i++) total += haversineFt(line[i], line[i + 1])
+    }
+    return total
+  }
+  const eaveLF = (poly: LatLng[]) => {
+    let total = 0
+    for (let i = 0; i < poly.length; i++) total += haversineFt(poly[i], poly[(i + 1) % poly.length])
+    return total
+  }
+
   return cands.map((c, i) => {
     const trueArea = c.footprint_sqft * slopeMult
     return {
@@ -214,6 +240,11 @@ export function splitStructures(report: RoofReport): StructurePartition[] {
       dominant_pitch_deg: dominantPitchDeg,
       dominant_pitch_label: dominantPitchLabel,
       area_share: c.footprint_sqft / totalFootprint,
+      eave_lf: Math.round(eaveLF(c.eaves) * 10) / 10,
+      ridge_lf: Math.round(polylineLF(ridges[i]) * 10) / 10,
+      hip_lf: Math.round(polylineLF(hips[i]) * 10) / 10,
+      valley_lf: Math.round(polylineLF(valleys[i]) * 10) / 10,
+      rake_lf: Math.round(polylineLF(rakes[i]) * 10) / 10,
     }
   })
 }
@@ -235,23 +266,23 @@ interface Face3 {
 }
 
 /**
- * Build a folded hip-roof mesh from a footprint polygon by extruding each
- * eave edge inward to a centroid raised by ridge height. This is an
- * approximation that looks correct for rectangular footprints (the most
- * common case) and degrades gracefully for L-shapes.
+ * Build a folded roof mesh.
+ *
+ *   - When user-traced ridges are provided, lift their endpoints to ridge
+ *     height and associate each eave edge with the closest ridge segment.
+ *     The result respects the actual roof shape the user drew.
+ *   - When no ridges are present, fall back to a hip-roof approximation
+ *     (longest-axis ridge for rectangles, pyramid for non-rectangles).
  */
-function buildHipMeshFromFootprint(
+function buildRoofMesh(
   eavesXY: { x: number; y: number }[],
   pitch_rise: number,
+  tracedRidgesXY: { x: number; y: number }[][],
 ): Face3[] {
   const n = eavesXY.length
   if (n < 3) return []
 
-  // Centroid (in metres)
-  const cx = eavesXY.reduce((s, p) => s + p.x, 0) / n
-  const cy = eavesXY.reduce((s, p) => s + p.y, 0) / n
-
-  // Ridge height: half the shorter side × pitch (standard hip-roof geometry).
+  // Bounding box → ridge height = (shorter span / 2) × (pitch_rise/12)
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
   for (const p of eavesXY) {
     minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
@@ -262,40 +293,90 @@ function buildHipMeshFromFootprint(
   const shortSideM = Math.min(w, h)
   const ridgeHeightM = (shortSideM / 2) * (pitch_rise / 12)
 
-  // For rectangular footprints, build a true hip roof: 2 trapezoidal long
-  // faces + 2 triangular short faces, all meeting at a ridge.
-  // For non-rectangular, fan-triangulate to apex.
+  // ── PATH A: traced ridges available ──
+  if (tracedRidgesXY && tracedRidgesXY.length > 0) {
+    // Collect ridge segments (endpoint pairs) lifted to z = ridgeHeight.
+    const ridgeSegs: { a: V3; b: V3 }[] = []
+    for (const ridge of tracedRidgesXY) {
+      if (!ridge || ridge.length < 2) continue
+      // Use first/last only; intermediate points are visual-only.
+      const a = ridge[0]
+      const b = ridge[ridge.length - 1]
+      ridgeSegs.push({
+        a: { x: a.x, y: a.y, z: ridgeHeightM },
+        b: { x: b.x, y: b.y, z: ridgeHeightM },
+      })
+    }
+    if (ridgeSegs.length > 0) {
+      // For each eave corner, find its nearest ridge endpoint (by 2D distance).
+      // Then for each eave edge (corner i → corner i+1), build a triangle or
+      // quad up to the ridge endpoint(s) the corners are closest to.
+      const corners: V3[] = eavesXY.map(p => ({ x: p.x, y: p.y, z: 0 }))
+      const ridgeEndpoints: V3[] = []
+      for (const seg of ridgeSegs) {
+        ridgeEndpoints.push(seg.a, seg.b)
+      }
+      // Snap-merge ridge endpoints that are within 2 m of each other so a
+      // shared corner doesn't get duplicated.
+      const SNAP_M = 2.0
+      const merged: V3[] = []
+      for (const ep of ridgeEndpoints) {
+        const found = merged.find(m => Math.hypot(m.x - ep.x, m.y - ep.y) < SNAP_M)
+        if (!found) merged.push(ep)
+      }
+      const closestRidgeIdx = (p: { x: number; y: number }): number => {
+        let best = 0, bestD = Infinity
+        for (let i = 0; i < merged.length; i++) {
+          const d = (merged[i].x - p.x) ** 2 + (merged[i].y - p.y) ** 2
+          if (d < bestD) { bestD = d; best = i }
+        }
+        return best
+      }
+      const cornerRidge = corners.map(c => closestRidgeIdx(c))
+
+      const faces: Face3[] = []
+      for (let i = 0; i < n; i++) {
+        const a = corners[i]
+        const b = corners[(i + 1) % n]
+        const ra = merged[cornerRidge[i]]
+        const rb = merged[cornerRidge[(i + 1) % n]]
+        if (ra === rb) {
+          // Both eave corners share the same ridge endpoint → triangle.
+          faces.push(makeFace([a, b, ra], pitch_rise))
+        } else {
+          // Two distinct ridge endpoints → trapezoid.
+          faces.push(makeFace([a, b, rb, ra], pitch_rise))
+        }
+      }
+      // Cap any unused ridge endpoints (e.g. valleys/hips not closing) by
+      // adding a pyramid-ish triangle to the centroid — usually unnecessary
+      // for clean traces.
+      return faces
+    }
+  }
+
+  // ── PATH B: no ridges → hip-roof from footprint ──
+  const cx = (minX + maxX) / 2
+  const cy = (minY + maxY) / 2
   const isRect = n === 4
   const faces: Face3[] = []
 
   if (isRect) {
-    // Sort corners CCW starting from bottom-left.
-    // Assume input order is already polygon order; build ridge endpoints
-    // along the longer axis.
     const longestAxisIsX = w >= h
-    const ridgeA = longestAxisIsX
+    const ridgeA: V3 = longestAxisIsX
       ? { x: cx - (w - shortSideM) / 2, y: cy, z: ridgeHeightM }
       : { x: cx, y: cy - (h - shortSideM) / 2, z: ridgeHeightM }
-    const ridgeB = longestAxisIsX
+    const ridgeB: V3 = longestAxisIsX
       ? { x: cx + (w - shortSideM) / 2, y: cy, z: ridgeHeightM }
       : { x: cx, y: cy + (h - shortSideM) / 2, z: ridgeHeightM }
-
-    // Identify which two eave corners are on each side of the ridge.
-    const corners = eavesXY.map(p => ({ x: p.x, y: p.y, z: 0 }))
-    // Group corners by which ridge endpoint they're closer to.
+    const corners: V3[] = eavesXY.map(p => ({ x: p.x, y: p.y, z: 0 }))
     const sideA: V3[] = [], sideB: V3[] = []
     for (const c of corners) {
       const dA = (c.x - ridgeA.x) ** 2 + (c.y - ridgeA.y) ** 2
       const dB = (c.x - ridgeB.x) ** 2 + (c.y - ridgeB.y) ** 2
       if (dA < dB) sideA.push(c); else sideB.push(c)
     }
-    // Hip-roof faces: 4 triangles or 2 trapezoids+2 triangles depending on grouping.
-    // We'll build 4 faces: two opposing trapezoids + two end triangles.
     if (sideA.length >= 2 && sideB.length >= 2) {
-      // Long-side faces (2 trapezoids), each sharing a ridge segment.
-      // Long side 1: sideA[0], sideB[0], ridgeB, ridgeA
-      // Long side 2: sideA[1], sideB[1], ridgeB, ridgeA
-      // End faces: hip triangles
       faces.push(
         makeFace([sideA[0], sideB[0], ridgeB, ridgeA], pitch_rise),
         makeFace([sideB[1], sideA[1], ridgeA, ridgeB], pitch_rise),
@@ -303,23 +384,18 @@ function buildHipMeshFromFootprint(
         makeFace([sideB[0], sideB[1], ridgeB], pitch_rise),
       )
     } else {
-      // Pyramid fallback.
-      const apex = { x: cx, y: cy, z: ridgeHeightM }
+      const apex: V3 = { x: cx, y: cy, z: ridgeHeightM }
       for (let i = 0; i < n; i++) {
-        const a = corners[i], b = corners[(i + 1) % n]
-        faces.push(makeFace([a, b, apex], pitch_rise))
+        faces.push(makeFace([corners[i], corners[(i + 1) % n], apex], pitch_rise))
       }
     }
   } else {
-    // Fan triangulate to a single apex (gives a hip-pyramid look).
-    const apex = { x: cx, y: cy, z: ridgeHeightM }
-    const corners = eavesXY.map(p => ({ x: p.x, y: p.y, z: 0 }))
+    const apex: V3 = { x: cx, y: cy, z: ridgeHeightM }
+    const corners: V3[] = eavesXY.map(p => ({ x: p.x, y: p.y, z: 0 }))
     for (let i = 0; i < n; i++) {
-      const a = corners[i], b = corners[(i + 1) % n]
-      faces.push(makeFace([a, b, apex], pitch_rise))
+      faces.push(makeFace([corners[i], corners[(i + 1) % n], apex], pitch_rise))
     }
   }
-
   return faces
 }
 
@@ -426,10 +502,12 @@ export function generateAxonometricRoofSVG(
   const refLng = structure.eaves.reduce((s, p) => s + p.lng, 0) / structure.eaves.length
   const cosLat = Math.cos(refLat * Math.PI / 180)
   const eavesXY = projectLatLngToMeters(structure.eaves, cosLat, refLat, refLng)
+  const tracedRidgesXY = (structure.ridges || []).map(r => projectLatLngToMeters(r, cosLat, refLat, refLng))
 
-  // Build mesh.
+  // Build mesh — uses traced ridges when available so the roof shape
+  // matches what the user actually drew (instead of guessing from the bbox).
   const pitchRise = 12 * Math.tan(structure.dominant_pitch_deg * Math.PI / 180)
-  const faces = buildHipMeshFromFootprint(eavesXY, pitchRise)
+  const faces = buildRoofMesh(eavesXY, pitchRise, tracedRidgesXY)
 
   // Project all vertices to screen plane.
   const projected: Face3[] = faces.map(f => ({
@@ -567,7 +645,8 @@ export function generateAxonometricRoofSVG(
     </g>`
   }
 
-  // Dimension callouts on the footprint (longest 2 edges only — keeps it readable)
+  // Dimension callouts on every eave edge (with collision avoidance for
+  // very short edges — e.g. dormer returns).
   if (showDimensions) {
     const haversineFt = (a: LatLng, b: LatLng) => {
       const dLat = (b.lat - a.lat) * Math.PI / 180
@@ -576,17 +655,33 @@ export function generateAxonometricRoofSVG(
       const k = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2
       return 2 * 6371000 * Math.asin(Math.sqrt(k)) * M_TO_FT
     }
-    const edgesWithLen = structure.eaves.map((p, i) => {
-      const next = structure.eaves[(i + 1) % structure.eaves.length]
-      return { i, len: haversineFt(p, next) }
-    }).sort((a, b) => b.len - a.len).slice(0, 2)
-    edgesWithLen.forEach(e => {
-      const a = groundOutline[e.i]
-      const b = groundOutline[(e.i + 1) % groundOutline.length]
-      const mx = (tx(a.x) + tx(b.x)) / 2
-      const my = (ty(a.y) + ty(b.y)) / 2
-      svg += `<text x="${mx.toFixed(1)}" y="${(my + 14).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0F172A" ${FONT}>${e.len.toFixed(1)} ft</text>`
-    })
+
+    for (let i = 0; i < structure.eaves.length; i++) {
+      const a = structure.eaves[i]
+      const b = structure.eaves[(i + 1) % structure.eaves.length]
+      const lenFt = haversineFt(a, b)
+      if (lenFt < 2) continue   // skip noise
+
+      const pa = groundOutline[i]
+      const pb = groundOutline[(i + 1) % groundOutline.length]
+      const x1 = tx(pa.x), y1 = ty(pa.y)
+      const x2 = tx(pb.x), y2 = ty(pb.y)
+      const segPx = Math.hypot(x2 - x1, y2 - y1)
+      if (segPx < 26) continue   // skip if too short to label cleanly
+
+      // Outward-pointing offset (perpendicular to the edge, away from the
+      // building centroid) so labels don't sit on top of the roof body.
+      const cx = groundOutline.reduce((s, p) => s + tx(p.x), 0) / groundOutline.length
+      const cy = groundOutline.reduce((s, p) => s + ty(p.y), 0) / groundOutline.length
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
+      const ex = mx - cx, ey = my - cy
+      const elen = Math.hypot(ex, ey) || 1
+      const offset = 14
+      const lx = mx + (ex / elen) * offset
+      const ly = my + (ey / elen) * offset
+
+      svg += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" font-size="9" font-weight="700" fill="#0F172A" ${FONT} stroke="#fff" stroke-width="2.5" paint-order="stroke">${lenFt.toFixed(1)} ft</text>`
+    }
   }
 
   // Bottom label strip

@@ -293,7 +293,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         </div>
         <div style="flex:1;padding:5px 10px;text-align:center">
           <div style="font-size:8px;color:#888;font-weight:600;text-transform:uppercase">Structures</div>
-          <div style="font-size:16px;font-weight:900;color:${TEAL_DARK}">1</div>
+          <div style="font-size:16px;font-weight:900;color:${TEAL_DARK}">${Math.max(1, structureDiagrams.length)}</div>
         </div>
       </div>
 
@@ -457,14 +457,47 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <!-- Main diagram area -->
   ${structureDiagrams.length >= 2 ? `
   <div style="padding:0 28px;margin-bottom:8px">
-    <div style="display:grid;grid-template-columns:repeat(${structureDiagrams.length === 2 ? 2 : Math.min(2, structureDiagrams.length)}, 1fr);gap:10px">
-      ${structureDiagrams.map(({ partition, svg }) => `
-        <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;overflow:hidden">
-          <div style="background:linear-gradient(90deg,${TEAL},${TEAL_DARK});color:#fff;padding:4px 10px;font-size:9px;font-weight:800;letter-spacing:0.5px">Structure ${partition.index} &mdash; ${partition.label}</div>
-          <div class="roof3d-frame" data-roof3d-mount="${partition.index}" style="position:relative;width:100%;aspect-ratio:5/3">${svg}</div>
+    ${structureDiagrams.map(({ partition, svg }) => {
+      const matRow = perStructureMaterials.find(m => m.index === partition.index)
+      return `
+      <div style="border:1.5px solid #cbd5e1;border-radius:6px;background:#fff;overflow:hidden;margin-bottom:10px">
+        <div style="background:linear-gradient(90deg,${TEAL},${TEAL_DARK});color:#fff;padding:6px 12px;display:flex;align-items:center;justify-content:space-between">
+          <div style="font-size:11px;font-weight:800;letter-spacing:0.5px">Structure ${partition.index} &mdash; ${partition.label}</div>
+          <div style="font-size:9px;font-weight:600;opacity:0.95">${partition.true_area_sqft.toLocaleString()} sqft @ ${partition.dominant_pitch_label} &bull; ${partition.perimeter_ft.toLocaleString()} LF perimeter</div>
         </div>
-      `).join('')}
-    </div>
+        <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:0">
+          <div class="roof3d-frame" data-roof3d-mount="${partition.index}" style="position:relative;width:100%;aspect-ratio:5/3;border-right:1px solid #e2e8f0">${svg}</div>
+          <div style="padding:8px 12px;font-size:8.5px">
+            <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Measurements</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 10px">
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Footprint</span><span style="font-weight:700">${partition.footprint_sqft.toLocaleString()} SF</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Roof Area</span><span style="font-weight:800;color:${TEAL_DARK}">${partition.true_area_sqft.toLocaleString()} SF</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Squares</span><span style="font-weight:700">${(partition.true_area_sqft / 100).toFixed(1)}</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Pitch</span><span style="font-weight:700">${partition.dominant_pitch_label}</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#16A34A">Eave</span><span style="font-weight:700">${partition.eave_lf.toLocaleString()} LF</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#DC2626">Ridge</span><span style="font-weight:700">${partition.ridge_lf.toLocaleString()} LF</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#EA580C">Hip</span><span style="font-weight:700">${partition.hip_lf.toLocaleString()} LF</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#2563EB">Valley</span><span style="font-weight:700">${partition.valley_lf.toLocaleString()} LF</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#7C3AED">Rake</span><span style="font-weight:700">${partition.rake_lf.toLocaleString()} LF</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Perimeter</span><span style="font-weight:700">${partition.perimeter_ft.toLocaleString()} LF</span></div>
+            </div>
+            ${matRow ? `
+            <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin:8px 0 4px">Materials (allocated)</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 10px">
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Squares</span><span style="font-weight:700">${matRow.squares}</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Bundles</span><span style="font-weight:800;color:${TEAL_DARK}">${matRow.bundles}</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Underlay</span><span style="font-weight:700">${matRow.underlayment_rolls} rolls</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">I&amp;W</span><span style="font-weight:700">${matRow.ice_water_sqft.toLocaleString()} SF</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Ridge Cap</span><span style="font-weight:700">${matRow.ridge_cap_lf} LF</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Drip Edge</span><span style="font-weight:700">${matRow.drip_edge_lf} LF</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Valley</span><span style="font-weight:700">${matRow.valley_flashing_lf} LF</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Nails</span><span style="font-weight:700">${matRow.nails_lbs} lbs</span></div>
+            </div>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+    `}).join('')}
     <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">3D Axonometric Diagrams &mdash; Each traced building rendered separately. Drag to rotate on screen; SVG fallback prints in PDF.</div>
   </div>` : `
   <div style="padding:0 28px;margin-bottom:8px">
@@ -487,7 +520,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   </div>
 
   <!-- Per-Structure Measurement Breakdown (house + detached garage, etc.) -->
-  ${structuresBreakdown.length >= 2 ? `
+  ${structuresBreakdown.length >= 2 && structureDiagrams.length < 2 ? `
   <div style="padding:6px 28px 0">
     <div style="font-size:10px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;border-bottom:1.5px solid ${TEAL};padding-bottom:3px">Per-Structure Breakdown — ${structuresBreakdown.length} Buildings</div>
     <table style="width:100%;border-collapse:collapse;font-size:8px">
@@ -782,6 +815,9 @@ export function generateSimpleTwoPageReport(report: RoofReport): string {
   if (!report.generated_at) report.generated_at = new Date().toISOString()
   if (!report.segments) report.segments = []
   if (!report.edges) report.edges = []
+
+  // Structure count derived from the same partitioner page 2 uses.
+  const structureCountSimple = Math.max(1, splitStructures(report).length)
 
   const fullAddress = [prop.address, prop.city, prop.province, prop.postal_code].filter(Boolean).join(', ')
   const reportDate = new Date(report.generated_at).toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -1081,7 +1117,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       <!-- Roof Planes & Structures -->
       <div style="border:1px solid #e5e5e5;border-radius:4px;overflow:hidden;margin-bottom:6px">
         <div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Roof Planes</span><span style="font-weight:700">${report.segments.length}</span></div>
-        <div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px"><span style="color:#555">Structures</span><span style="font-weight:700">1</span></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px"><span style="color:#555">Structures</span><span style="font-weight:700">${structureCountSimple}</span></div>
       </div>
 
       <!-- Perimeter measurements -->
