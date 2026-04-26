@@ -1509,9 +1509,72 @@ function saInitTraceMap(lat, lng, address) {
   var map = new google.maps.Map(mapEl, {
     center: center, zoom: 20,
     mapTypeId: 'satellite', tilt: 0, rotateControl: false,
-    mapTypeControl: false, streetViewControl: false, fullscreenControl: false
+    mapTypeControl: true,
+    mapTypeControlOptions: {
+      style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
+      mapTypeIds: ['satellite', 'hybrid']
+    },
+    streetViewControl: false, fullscreenControl: false
   });
   s.map = map;
+
+  // Register higher-resolution basemaps (Esri / Mapbox / Nearmap) as
+  // selectable map types — same pattern as Storm Scout. Tokens are
+  // resolved server-side; providers without a configured token are
+  // silently omitted by the endpoint.
+  saFetch('/api/admin/superadmin/basemaps').then(function(res) {
+    return res.ok ? res.json() : { providers: [] };
+  }).then(function(data) {
+    var providers = (data && data.providers) || [];
+    if (!providers.length) return;
+    var controlIds = ['satellite', 'hybrid'];
+    providers.forEach(function(p) {
+      var layer = new google.maps.ImageMapType({
+        name: p.name,
+        tileSize: new google.maps.Size(256, 256),
+        minZoom: 1,
+        maxZoom: p.maxZoom,
+        getTileUrl: function(coord, zoom) {
+          if (zoom > p.maxZoom) return null;
+          return p.urlTemplate
+            .replace('{z}', String(zoom))
+            .replace('{x}', String(coord.x))
+            .replace('{y}', String(coord.y));
+        }
+      });
+      map.mapTypes.set(p.id, layer);
+      controlIds.push(p.id);
+    });
+    map.setOptions({
+      mapTypeControlOptions: {
+        style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
+        mapTypeIds: controlIds
+      }
+    });
+    var priority = ['nearmap', 'mapbox_satellite', 'esri_world_imagery'];
+    var chosen = null;
+    for (var i = 0; i < priority.length; i++) {
+      if (providers.some(function(p) { return p.id === priority[i]; })) { chosen = priority[i]; break; }
+    }
+    if (chosen) map.setMapTypeId(chosen);
+
+    // Attribution badge — bottom-right of the trace map, swaps on map type change
+    var badge = document.createElement('div');
+    badge.id = 'sa-trace-attr';
+    badge.style.cssText = 'position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.65);color:#fff;font-size:10px;padding:2px 6px;border-radius:3px;pointer-events:none;z-index:5;max-width:60%;text-align:right;line-height:1.3';
+    mapEl.style.position = 'relative';
+    mapEl.appendChild(badge);
+    function refreshAttr() {
+      var id = map.getMapTypeId();
+      var match = providers.find(function(x) { return x.id === id; });
+      if (match) { badge.textContent = match.attribution; badge.style.display = 'block'; }
+      else { badge.style.display = 'none'; }
+    }
+    refreshAttr();
+    map.addListener('maptypeid_changed', refreshAttr);
+  }).catch(function(err) {
+    console.warn('[SA Trace] basemaps load failed', err);
+  });
 
   // Render the user-placed pin so admin can see where the customer marked their house
   if (lat && lng) {

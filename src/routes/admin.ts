@@ -5,6 +5,7 @@ import { generateReportForOrder } from './reports'
 import { createAutoInvoiceForOrder } from '../services/auto-invoice'
 import { validateTraceUi } from '../utils/trace-validation'
 import { RoofMeasurementEngine, traceUiToEnginePayload } from '../services/roof-measurement-engine'
+import { BASEMAP_PROVIDERS } from '../services/satellite-imagery'
 import { generateApiKey } from '../middleware/api-auth'
 import { addCredits } from '../services/api-billing'
 import { notifyNewReportRequest, sendGmailOAuth2, sendViaResend, sendGmailEmail } from '../services/email'
@@ -3754,6 +3755,33 @@ adminRoutes.get('/superadmin/onboarding/config', async (c) => {
     const row = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'onboarding_config' AND master_company_id = 1").first<any>()
     return c.json({ config: row?.setting_value ? JSON.parse(row.setting_value) : { free_trial_reports: 3, require_phone: false, enable_secretary: true, default_plan: 'free' } })
   } catch { return c.json({ config: { free_trial_reports: 3, require_phone: false, enable_secretary: true, default_plan: 'free' } }) }
+})
+
+// ============================================================
+// BASEMAP PROVIDERS — Higher-res alternatives to Google Satellite for the
+// admin trace tool. Mirrors /api/storm-scout/basemaps but gated by admin JWT.
+// ============================================================
+adminRoutes.get('/superadmin/basemaps', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const env: any = c.env
+  const out: any[] = []
+  for (const p of Object.values(BASEMAP_PROVIDERS)) {
+    if (!p.requiresToken) {
+      out.push({ id: p.id, name: p.name, maxZoom: p.maxZoom, attribution: p.attribution, urlTemplate: p.urlTemplate, enabled: true })
+      continue
+    }
+    let token: string | undefined
+    if (p.id === 'mapbox_satellite') token = env.MAPBOX_ACCESS_TOKEN
+    if (p.id === 'nearmap') token = env.NEARMAP_API_KEY
+    if (!token) continue
+    out.push({
+      id: p.id, name: p.name, maxZoom: p.maxZoom, attribution: p.attribution,
+      urlTemplate: p.urlTemplate.replace('{token}', token),
+      enabled: true
+    })
+  }
+  return c.json({ providers: out })
 })
 
 // ============================================================
