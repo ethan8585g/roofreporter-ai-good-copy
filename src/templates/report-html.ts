@@ -17,6 +17,9 @@ import {
   generateArchitecturalDiagramSVG, generatePreciseAIOverlaySVG,
   generateSquaresGridDiagramSVG
 } from './svg-diagrams'
+import {
+  generateAllStructureSVGs, splitStructures, allocateMaterialsToStructures,
+} from './svg-3d-diagram'
 
 // ============================================================
 // Per-structure breakdown helper — derives footprint/true-area/
@@ -158,6 +161,16 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
       predominantPitch, grossAreaSF
     )
   }
+
+  // ── 3D Axonometric per-structure diagrams (Phase 1) ──
+  // For multi-structure reports, render each traced building as its own
+  // 3D-look diagram so house and garage no longer get merged into one.
+  // Single-structure reports also benefit (3D look replaces the flat view
+  // when no AI geometry is available).
+  const structureDiagrams = generateAllStructureSVGs(report)
+  const perStructureMaterials = structureDiagrams.length > 0
+    ? allocateMaterialsToStructures(report, structureDiagrams.map(s => s.partition))
+    : []
 
   // ── Edge summary by type for Page 2 table ──
   const edgesByType: Record<string, { count: number; totalFt: number }> = {}
@@ -442,12 +455,24 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   </div>
 
   <!-- Main diagram area -->
+  ${structureDiagrams.length >= 2 ? `
+  <div style="padding:0 28px;margin-bottom:8px">
+    <div style="display:grid;grid-template-columns:repeat(${structureDiagrams.length === 2 ? 2 : Math.min(2, structureDiagrams.length)}, 1fr);gap:10px">
+      ${structureDiagrams.map(({ partition, svg }) => `
+        <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;overflow:hidden">
+          <div style="background:linear-gradient(90deg,${TEAL},${TEAL_DARK});color:#fff;padding:4px 10px;font-size:9px;font-weight:800;letter-spacing:0.5px">Structure ${partition.index} &mdash; ${partition.label}</div>
+          ${svg}
+        </div>
+      `).join('')}
+    </div>
+    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">3D Axonometric Diagrams &mdash; Each traced building rendered separately. All dimensions in feet.</div>
+  </div>` : `
   <div style="padding:0 28px;margin-bottom:8px">
     <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center">
-      ${architecturalDiagramSVG}
+      ${structureDiagrams.length === 1 ? structureDiagrams[0].svg : architecturalDiagramSVG}
     </div>
-    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">AI-Generated Roof Diagram — All dimensions in feet. Pitch multiplier applied for true 3D area.</div>
-  </div>
+    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">${structureDiagrams.length === 1 ? '3D Axonometric Diagram' : 'AI-Generated Roof Diagram'} &mdash; All dimensions in feet. Pitch multiplier applied for true 3D area.</div>
+  </div>`}
 
   <!-- Drawing Key / Legend — Industry Standard Color Coding -->
   <div style="padding:0 28px;margin-bottom:8px">
@@ -493,7 +518,39 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       </tbody>
     </table>
     <div style="font-size:6.5px;color:#888;margin-top:3px;font-style:italic">Per-structure areas derived from individual traced eave polygons; dominant pitch multiplier applied for sloped area.</div>
-  </div>` : ''}
+  </div>
+  <!-- Per-Structure Materials Allocation -->
+  ${perStructureMaterials.length >= 2 ? `
+  <div style="padding:6px 28px 0">
+    <div style="font-size:10px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;border-bottom:1.5px solid ${TEAL};padding-bottom:3px">Per-Structure Materials</div>
+    <table style="width:100%;border-collapse:collapse;font-size:8px">
+      <thead>
+        <tr style="background:#1a1a2e;color:#fff">
+          <th style="padding:4px 8px;text-align:left;font-size:7.5px;font-weight:700">Structure</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Squares</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Bundles</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Underlay</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">I&amp;W (SF)</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Ridge Cap (LF)</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Drip Edge (LF)</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Nails (lbs)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${perStructureMaterials.map((m, i) => `<tr style="${i % 2 === 0 ? 'background:#fafafa' : ''}">
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;font-weight:700">Structure ${m.index} &mdash; ${m.label}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${m.squares}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right;font-weight:700;color:${TEAL_DARK}">${m.bundles}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${m.underlayment_rolls}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${m.ice_water_sqft.toLocaleString()}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${m.ridge_cap_lf}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${m.drip_edge_lf}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${m.nails_lbs}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="font-size:6.5px;color:#888;margin-top:3px;font-style:italic">Materials allocated by roof-area share. Combined total appears on the Material Take-Off page.</div>
+  </div>` : ''}` : ''}
 
   <!-- Methodology note -->
   <div style="padding:6px 28px 0">
