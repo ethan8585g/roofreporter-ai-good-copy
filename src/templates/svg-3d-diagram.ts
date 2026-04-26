@@ -296,6 +296,8 @@ function buildRoofMesh(
   eavesXY: { x: number; y: number }[],
   pitch_rise: number,
   tracedRidgesXY: { x: number; y: number }[][],
+  tracedHipsXY: { x: number; y: number }[][] = [],
+  tracedValleysXY: { x: number; y: number }[][] = [],
 ): Face3[] {
   const n = eavesXY.length
   if (n < 3) return []
@@ -312,15 +314,13 @@ function buildRoofMesh(
   const ridgeHeightM = (shortSideM / 2) * (pitch_rise / 12)
 
   // ── PATH A: traced ridges available ──
-  // For each eave edge, find the closest ridge SEGMENT (not just an
-  // endpoint) and project both eave endpoints onto that ridge line. This
-  // produces a proper hip/gable mesh that follows the user's actual ridge
-  // structure — multi-ridge T-shape and L-shape roofs render with each
-  // face hugging its own ridge instead of all faces fanning to a single
-  // averaged apex.
+  // 5-pass algorithm: assign each eave edge to its nearest ridge, smooth
+  // singleton runs caused by short jogs in the trace, group consecutive
+  // same-assignment edges into runs, emit ONE face per run (the previous
+  // one-face-per-edge approach produced a "lightning bolt" zigzag on
+  // multi-ridge roofs), and stitch hip triangles at run boundaries using
+  // traced hip endpoints when available.
   if (tracedRidgesXY && tracedRidgesXY.length > 0) {
-    // Build a flat list of ridge SEGMENTS (consecutive point pairs from
-    // every traced ridge polyline).
     const ridgeSegs: { a: { x: number; y: number }; b: { x: number; y: number } }[] = []
     for (const ridge of tracedRidgesXY) {
       if (!ridge || ridge.length < 2) continue
@@ -328,9 +328,23 @@ function buildRoofMesh(
         ridgeSegs.push({ a: ridge[i], b: ridge[i + 1] })
       }
     }
+    const hipSegs: { a: { x: number; y: number }; b: { x: number; y: number } }[] = []
+    for (const hip of tracedHipsXY) {
+      if (!hip || hip.length < 2) continue
+      for (let i = 0; i < hip.length - 1; i++) hipSegs.push({ a: hip[i], b: hip[i + 1] })
+    }
+    const valleySegs: { a: { x: number; y: number }; b: { x: number; y: number } }[] = []
+    for (const vly of tracedValleysXY) {
+      if (!vly || vly.length < 2) continue
+      for (let i = 0; i < vly.length - 1; i++) valleySegs.push({ a: vly[i], b: vly[i + 1] })
+    }
+
     if (ridgeSegs.length > 0) {
-      // Project p onto segment ab (clamped to the segment) and return the
-      // closest point + distance.
+      const SHARED_APEX_M = 0.6   // run-end projections within this distance → triangle
+      const SHORT_EDGE_M = 2.0    // singleton runs shorter than this absorb into neighbours
+      const HIP_SNAP_M = 1.0      // hip endpoint match radius
+      const VALLEY_SNAP_M = 1.0   // valley proximity for inboard clipping
+
       const projectOnto = (p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) => {
         const abx = b.x - a.x, aby = b.y - a.y
         const lenSq = abx * abx + aby * aby
@@ -343,37 +357,162 @@ function buildRoofMesh(
 
       const corners: V3[] = eavesXY.map(p => ({ x: p.x, y: p.y, z: 0 }))
       const faces: Face3[] = []
-      const SHARED_APEX_M = 0.6   // when both eave endpoints project to ~same ridge point → triangle
 
+      // ── Pass 1: assign each eave edge to its nearest ridge segment ──
+      const assigned: number[] = new Array(n)
+      const edgeLen: number[] = new Array(n)
       for (let i = 0; i < n; i++) {
         const a = corners[i]
         const b = corners[(i + 1) % n]
+        edgeLen[i] = Math.hypot(b.x - a.x, b.y - a.y)
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
-
-        // Pick the ridge segment whose closest point to the eave-edge
-        // midpoint is nearest.
-        let bestSeg = ridgeSegs[0]
+        let best = 0
         let bestDist = Infinity
-        for (const seg of ridgeSegs) {
-          const proj = projectOnto(mid, seg.a, seg.b)
-          if (proj.d < bestDist) { bestDist = proj.d; bestSeg = seg }
+        for (let j = 0; j < ridgeSegs.length; j++) {
+          const proj = projectOnto(mid, ridgeSegs[j].a, ridgeSegs[j].b)
+          if (proj.d < bestDist) { bestDist = proj.d; best = j }
+        }
+        assigned[i] = best
+      }
+
+      // ── Pass 1.5: smooth singleton runs ──
+      // Short eave segments sandwiched between two long edges with the same
+      // ridge assignment are almost always polygon-trace jogs (3–4 ft
+      // step-overs). Reassigning them to the dominant neighbour ridge
+      // collapses the jog into the surrounding run.
+      for (let pass = 0; pass < 2; pass++) {
+        for (let i = 0; i < n; i++) {
+          const prev = (i - 1 + n) % n
+          const next = (i + 1) % n
+          if (assigned[i] === assigned[prev] || assigned[i] === assigned[next]) continue
+          if (assigned[prev] !== assigned[next]) continue
+          if (edgeLen[i] >= SHORT_EDGE_M) continue
+          assigned[i] = assigned[prev]
+        }
+      }
+
+      // ── Pass 2: group consecutive same-assignment edges into runs ──
+      type Run = { ridgeIdx: number; edgeIdxs: number[] }
+      const runs: Run[] = []
+      const startBreak = (() => {
+        for (let i = 0; i < n; i++) {
+          if (assigned[i] !== assigned[(i - 1 + n) % n]) return i
+        }
+        return 0
+      })()
+      let cursor = startBreak
+      let visited = 0
+      while (visited < n) {
+        const ridgeIdx = assigned[cursor]
+        const run: Run = { ridgeIdx, edgeIdxs: [] }
+        while (visited < n && assigned[cursor] === ridgeIdx) {
+          run.edgeIdxs.push(cursor)
+          cursor = (cursor + 1) % n
+          visited++
+        }
+        runs.push(run)
+      }
+
+      // ── Pass 3: emit one face per run ──
+      type RunGeom = { firstCornerIdx: number; lastCornerIdx: number; ridgeA: V3; ridgeB: V3 }
+      const runGeoms: RunGeom[] = []
+      for (const run of runs) {
+        const firstEdge = run.edgeIdxs[0]
+        const lastEdge = run.edgeIdxs[run.edgeIdxs.length - 1]
+        const firstCornerIdx = firstEdge
+        const lastCornerIdx = (lastEdge + 1) % n
+
+        const eaveCorners: V3[] = []
+        for (const ei of run.edgeIdxs) eaveCorners.push(corners[ei])
+        eaveCorners.push(corners[lastCornerIdx])
+
+        // ── Pass 5: valley-aware inboard clipping ──
+        // If a traced valley is significantly closer to the run's eave
+        // midpoints than the assigned ridge, use the valley as the inboard
+        // edge. Prevents two faces flanking a valley from extending past
+        // each other and overlapping.
+        let inboardSeg = ridgeSegs[run.ridgeIdx]
+        if (valleySegs.length > 0) {
+          let bestRidgeDist = Infinity
+          let bestValleyDist = Infinity
+          let bestValleySeg = valleySegs[0]
+          for (const ei of run.edgeIdxs) {
+            const ma = corners[ei]
+            const mb = corners[(ei + 1) % n]
+            const mid = { x: (ma.x + mb.x) / 2, y: (ma.y + mb.y) / 2 }
+            const rp = projectOnto(mid, inboardSeg.a, inboardSeg.b)
+            if (rp.d < bestRidgeDist) bestRidgeDist = rp.d
+            for (const vs of valleySegs) {
+              const vp = projectOnto(mid, vs.a, vs.b)
+              if (vp.d < bestValleyDist) { bestValleyDist = vp.d; bestValleySeg = vs }
+            }
+          }
+          if (bestValleyDist < VALLEY_SNAP_M && bestValleyDist < bestRidgeDist * 0.7) {
+            inboardSeg = bestValleySeg
+          }
         }
 
-        // Project both eave endpoints onto the chosen ridge.
-        const pa = projectOnto(a, bestSeg.a, bestSeg.b)
-        const pb = projectOnto(b, bestSeg.a, bestSeg.b)
+        const pa = projectOnto(corners[firstCornerIdx], inboardSeg.a, inboardSeg.b)
+        const pb = projectOnto(corners[lastCornerIdx], inboardSeg.a, inboardSeg.b)
         const ridgeA: V3 = { x: pa.x, y: pa.y, z: ridgeHeightM }
         const ridgeB: V3 = { x: pb.x, y: pb.y, z: ridgeHeightM }
 
-        if (Math.hypot(ridgeA.x - ridgeB.x, ridgeA.y - ridgeB.y) < SHARED_APEX_M) {
-          // Both eave corners project to the same point on the ridge → hip-end triangle.
+        const isTriangle = Math.hypot(ridgeA.x - ridgeB.x, ridgeA.y - ridgeB.y) < SHARED_APEX_M
+        if (isTriangle) {
           const apex: V3 = { x: (ridgeA.x + ridgeB.x) / 2, y: (ridgeA.y + ridgeB.y) / 2, z: ridgeHeightM }
-          faces.push(makeFace([a, b, apex], pitch_rise))
+          if (eaveCorners.length === 2) {
+            faces.push(makeFace([eaveCorners[0], eaveCorners[1], apex], pitch_rise))
+          } else {
+            for (let k = 0; k < eaveCorners.length - 1; k++) {
+              faces.push(makeFace([eaveCorners[k], eaveCorners[k + 1], apex], pitch_rise))
+            }
+          }
         } else {
-          // Distinct ridge points → proper long-side trapezoid.
-          faces.push(makeFace([a, b, ridgeB, ridgeA], pitch_rise))
+          faces.push(makeFace([...eaveCorners, ridgeB, ridgeA], pitch_rise))
+        }
+
+        runGeoms.push({ firstCornerIdx, lastCornerIdx, ridgeA, ridgeB })
+      }
+
+      // ── Pass 4: hip triangles at run boundaries ──
+      // When two adjacent runs meet at corner C, the previous run's ridgeB
+      // and the next run's ridgeA may differ (different ridges, no apex).
+      // A traced hip should bridge the gap; use its actual upper endpoint
+      // when available so the face matches what the user drew.
+      if (runGeoms.length > 1) {
+        for (let i = 0; i < runGeoms.length; i++) {
+          const prev = runGeoms[i]
+          const next = runGeoms[(i + 1) % runGeoms.length]
+          if (prev.lastCornerIdx !== next.firstCornerIdx) continue
+          const C = corners[prev.lastCornerIdx]
+          const rEnd = prev.ridgeB
+          const rStart = next.ridgeA
+          const gap = Math.hypot(rEnd.x - rStart.x, rEnd.y - rStart.y)
+          if (gap < SHARED_APEX_M) continue
+
+          let apex: V3 | null = null
+          for (const hs of hipSegs) {
+            const dA = Math.hypot(hs.a.x - C.x, hs.a.y - C.y)
+            const dB = Math.hypot(hs.b.x - C.x, hs.b.y - C.y)
+            if (Math.min(dA, dB) >= HIP_SNAP_M) continue
+            const upper = dA < dB ? hs.b : hs.a
+            const upperToEnd = Math.hypot(upper.x - rEnd.x, upper.y - rEnd.y)
+            const upperToStart = Math.hypot(upper.x - rStart.x, upper.y - rStart.y)
+            if (Math.min(upperToEnd, upperToStart) < HIP_SNAP_M * 2) {
+              apex = { x: upper.x, y: upper.y, z: ridgeHeightM }
+              break
+            }
+          }
+
+          if (apex) {
+            faces.push(makeFace([C, rEnd, apex], pitch_rise))
+            faces.push(makeFace([C, apex, rStart], pitch_rise))
+          } else {
+            faces.push(makeFace([C, rEnd, rStart], pitch_rise))
+          }
         }
       }
+
       return faces
     }
   }
@@ -526,11 +665,13 @@ export function generateAxonometricRoofSVG(
   const cosLat = Math.cos(refLat * Math.PI / 180)
   const eavesXY = projectLatLngToMeters(structure.eaves, cosLat, refLat, refLng)
   const tracedRidgesXY = (structure.ridges || []).map(r => projectLatLngToMeters(r, cosLat, refLat, refLng))
+  const tracedHipsXY = (structure.hips || []).map(hp => projectLatLngToMeters(hp, cosLat, refLat, refLng))
+  const tracedValleysXY = (structure.valleys || []).map(v => projectLatLngToMeters(v, cosLat, refLat, refLng))
 
   // Build mesh — uses traced ridges when available so the roof shape
   // matches what the user actually drew (instead of guessing from the bbox).
   const pitchRise = 12 * Math.tan(structure.dominant_pitch_deg * Math.PI / 180)
-  const faces = buildRoofMesh(eavesXY, pitchRise, tracedRidgesXY)
+  const faces = buildRoofMesh(eavesXY, pitchRise, tracedRidgesXY, tracedHipsXY, tracedValleysXY)
 
   // Project all vertices to screen plane.
   const projected: Face3[] = faces.map(f => ({
