@@ -74,7 +74,7 @@
           var origSize = new (window.THREE.Vector2)();
           ctx.renderer.getSize(origSize);
           var origPixelRatio = ctx.renderer.getPixelRatio();
-          var printPixelRatio = 3; // ~288 DPI at print scale
+          var printPixelRatio = 4; // ~384 DPI at print scale
           ctx.renderer.setPixelRatio(printPixelRatio);
           ctx.renderer.setSize(origSize.x, origSize.y, false);
           ctx.renderer.render(ctx.scene, ctx.camera);
@@ -143,9 +143,18 @@
     var renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(width, height);
+    // Richer mid-tones + correct gamma. ACES gives a more photographic look
+    // than the default Linear/None pair, and SRGBColorSpace ensures the
+    // material colours map correctly to display-referred values.
+    if (THREE.SRGBColorSpace !== undefined) renderer.outputColorSpace = THREE.SRGBColorSpace;
+    if (THREE.ACESFilmicToneMapping !== undefined) {
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.05;
+    }
     renderer.shadowMap.enabled = true;
+    if (THREE.PCFSoftShadowMap !== undefined) renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     mount.appendChild(renderer.domElement);
-    renderer.domElement.style.cssText = 'width:100%;height:100%;display:block;border-radius:4px';
+    renderer.domElement.style.cssText = 'width:100%;height:100%;display:block;border-radius:4px;cursor:pointer';
 
     // Lights
     var hemi = new THREE.HemisphereLight(0xfafafa, 0xcbd5e1, 0.55);
@@ -153,7 +162,11 @@
     var sun = new THREE.DirectionalLight(0xffffff, 0.95);
     sun.position.set(-30, 60, 40);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
+    // Higher shadow-map resolution noticeably reduces aliasing at 3-4x print
+    // pixel ratio. 4096 is well within WebGL spec floor (2048) on modern
+    // hardware; the renderer falls back gracefully if exceeded.
+    sun.shadow.mapSize.set(4096, 4096);
+    sun.shadow.bias = -0.0005;
     scene.add(sun);
 
     // Ground
@@ -171,31 +184,100 @@
     var roofGroup = buildHipRoofGroup(THREE, eavesXY, pitchRise);
     scene.add(roofGroup);
 
-    // Frame the camera around the building footprint.
+    // Frame the camera around the building's true bounding sphere so long /
+    // skinny roofs (which the old maxDim(x,z) heuristic cropped) and tall
+    // ridges (ignored by the old heuristic entirely) both fit cleanly.
     var bbox = new THREE.Box3().setFromObject(roofGroup);
-    var size = bbox.getSize(new THREE.Vector3());
-    var center = bbox.getCenter(new THREE.Vector3());
-    var maxDim = Math.max(size.x, size.z);
-    camera.position.set(center.x + maxDim * 1.4, maxDim * 1.1, center.z + maxDim * 1.4);
+    var sphere = bbox.getBoundingSphere(new THREE.Sphere());
+    var center = sphere.center.clone();
+    var radius = sphere.radius;
+    var fovV = camera.fov * Math.PI / 180;
+    var fovH = 2 * Math.atan(Math.tan(fovV / 2) * camera.aspect);
+    var distance = radius / Math.sin(Math.min(fovV, fovH) / 2) * 1.18; // 18% padding
+    var dirVec = new THREE.Vector3(1, 0.85, 1).normalize();
+    camera.position.copy(center).addScaledVector(dirVec, distance);
     camera.lookAt(center);
 
     var controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.target.copy(center);
     controls.enableDamping = true;
     controls.dampingFactor = 0.12;
-    controls.minDistance = maxDim * 0.6;
-    controls.maxDistance = maxDim * 4;
+    controls.minDistance = radius * 1.1;
+    controls.maxDistance = distance * 3.5;
     controls.maxPolarAngle = Math.PI / 2 - 0.05;
     controls.update();
 
     // Top-right overlay label
     var label = document.createElement('div');
-    label.textContent = 'Drag to rotate • Scroll to zoom';
+    label.textContent = 'Drag to rotate • Scroll to zoom • Click a face';
     label.style.cssText = 'position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:9px;color:#64748B;background:rgba(255,255,255,0.85);padding:2px 8px;border-radius:8px;pointer-events:none;font-family:Inter,sans-serif';
     if (mount.style.position !== 'absolute' && mount.style.position !== 'relative') {
       mount.style.position = 'relative';
     }
     mount.appendChild(label);
+
+    // ─── Click-to-inspect: raycaster + measurement panel ───
+    var panel = document.createElement('div');
+    panel.className = 'roof3d-panel';
+    panel.style.cssText = 'position:absolute;top:8px;right:8px;font-size:10px;font-family:Inter,sans-serif;background:rgba(255,255,255,0.94);border:1px solid #cbd5e1;border-radius:6px;padding:8px 10px;min-width:148px;max-width:200px;box-shadow:0 2px 6px rgba(15,23,42,0.10);pointer-events:none;line-height:1.45';
+    panel.innerHTML = '<div style="font-weight:800;color:#0F766E;letter-spacing:0.5px;text-transform:uppercase;font-size:8.5px;margin-bottom:3px">Selection</div><div style="color:#64748B">Click a roof face for measurements</div>';
+    mount.appendChild(panel);
+
+    var raycaster = new THREE.Raycaster();
+    var pointerVec = new THREE.Vector2();
+    var HIGHLIGHT_HEX = 0xF59E0B;
+    var selected = null;
+
+    function clearSelection() {
+      if (selected && selected.material && selected.userData) {
+        selected.material.color.setHex(selected.userData.original_color);
+        selected.material.needsUpdate = true;
+      }
+      selected = null;
+    }
+
+    function showInfo(mesh) {
+      var u = mesh.userData;
+      panel.innerHTML =
+        '<div style="font-weight:800;color:#0F766E;letter-spacing:0.5px;text-transform:uppercase;font-size:8.5px;margin-bottom:3px">' + u.id + '</div>' +
+        '<div style="display:grid;grid-template-columns:auto 1fr;gap:1px 8px">' +
+          '<span style="color:#64748B">Type</span><span style="font-weight:700;text-align:right">' + u.kind + '</span>' +
+          '<span style="color:#64748B">Area</span><span style="font-weight:800;text-align:right;color:#0F172A">' + u.area_sqft.toFixed(1) + ' sqft</span>' +
+          '<span style="color:#64748B">Pitch</span><span style="font-weight:700;text-align:right">' + u.pitch_deg.toFixed(1) + '°</span>' +
+        '</div>';
+    }
+
+    function onPointerDown(ev) {
+      // Skip drags — only treat as a click if pointer doesn't move much.
+      var startX = ev.clientX, startY = ev.clientY;
+      function onUp(uev) {
+        renderer.domElement.removeEventListener('pointerup', onUp);
+        var dx = uev.clientX - startX, dy = uev.clientY - startY;
+        if (Math.hypot(dx, dy) > 4) return; // dragging, not clicking
+        var rect = renderer.domElement.getBoundingClientRect();
+        pointerVec.x = ((uev.clientX - rect.left) / rect.width) * 2 - 1;
+        pointerVec.y = -((uev.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(pointerVec, camera);
+        var hits = raycaster.intersectObjects(roofGroup.children, true);
+        var pickable = null;
+        for (var i = 0; i < hits.length; i++) {
+          if (hits[i].object && hits[i].object.userData && hits[i].object.userData.roofPickable) {
+            pickable = hits[i].object; break;
+          }
+        }
+        clearSelection();
+        if (!pickable) {
+          panel.innerHTML = '<div style="font-weight:800;color:#0F766E;letter-spacing:0.5px;text-transform:uppercase;font-size:8.5px;margin-bottom:3px">Selection</div><div style="color:#64748B">Click a roof face for measurements</div>';
+          return;
+        }
+        pickable.material.color.setHex(HIGHLIGHT_HEX);
+        pickable.material.needsUpdate = true;
+        selected = pickable;
+        showInfo(pickable);
+      }
+      renderer.domElement.addEventListener('pointerup', onUp);
+    }
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
 
     // Render loop
     var stopped = false;
@@ -277,6 +359,10 @@
     var isRect = eavesXY.length === 4;
     var roofMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.78, side: THREE.DoubleSide });
 
+    var faceCounter = 0;
+    function nextFaceId(kind) { faceCounter += 1; return 'Face_' + kind + '_' + faceCounter; }
+    var M2_PER_M2_FT2 = 10.7639;
+
     if (isRect) {
       var longestX = w >= d;
       var ridgeA = new THREE.Vector3(
@@ -299,10 +385,10 @@
         if (dA < dB) sideA.push(c); else sideB.push(c);
       });
       if (sideA.length >= 2 && sideB.length >= 2) {
-        addQuad(group, roofMat, [sideA[0], sideB[0], ridgeB, ridgeA]);
-        addQuad(group, roofMat, [sideB[1], sideA[1], ridgeA, ridgeB]);
-        addTri(group, roofMat, [sideA[0], ridgeA, sideA[1]]);
-        addTri(group, roofMat, [sideB[0], sideB[1], ridgeB]);
+        addQuad(group, roofMat, [sideA[0], sideB[0], ridgeB, ridgeA], { id: nextFaceId('Slope'), kind: 'Main slope' });
+        addQuad(group, roofMat, [sideB[1], sideA[1], ridgeA, ridgeB], { id: nextFaceId('Slope'), kind: 'Main slope' });
+        addTri(group, roofMat, [sideA[0], ridgeA, sideA[1]], { id: nextFaceId('Hip'), kind: 'Hip end' });
+        addTri(group, roofMat, [sideB[0], sideB[1], ridgeB], { id: nextFaceId('Hip'), kind: 'Hip end' });
       } else {
         addPyramid(group, roofMat, corners, new THREE.Vector3(cx, wallHeight + ridgeHeight, cz));
       }
@@ -311,7 +397,34 @@
       addPyramid(group, roofMat, corners2, new THREE.Vector3(cx, wallHeight + ridgeHeight, cz));
     }
 
-    function addQuad(grp, mat, verts) {
+    function attachFaceMeta(mesh, verts, meta) {
+      // Compute true area (sloped) for the polygon and the pitch from the
+      // face normal vs. world up. These numbers feed the click-to-inspect
+      // panel.
+      var area = 0;
+      for (var t = 1; t < verts.length - 1; t++) {
+        var a = verts[0], b = verts[t], c = verts[t + 1];
+        var ab = new THREE.Vector3().subVectors(b, a);
+        var ac = new THREE.Vector3().subVectors(c, a);
+        area += new THREE.Vector3().crossVectors(ab, ac).length() * 0.5;
+      }
+      var areaSqFt = area * M2_PER_M2_FT2;
+      var ab2 = new THREE.Vector3().subVectors(verts[1], verts[0]);
+      var ac2 = new THREE.Vector3().subVectors(verts[2], verts[0]);
+      var normal = new THREE.Vector3().crossVectors(ab2, ac2).normalize();
+      if (normal.y < 0) normal.multiplyScalar(-1);
+      var pitchDeg = Math.acos(Math.max(-1, Math.min(1, normal.y))) * 180 / Math.PI;
+      mesh.userData = {
+        roofPickable: true,
+        id: meta.id,
+        kind: meta.kind,
+        area_sqft: areaSqFt,
+        pitch_deg: pitchDeg,
+        original_color: mesh.material.color.getHex(),
+      };
+    }
+
+    function addQuad(grp, mat, verts, meta) {
       var geo = new THREE.BufferGeometry();
       var pos = new Float32Array([
         verts[0].x, verts[0].y, verts[0].z,
@@ -323,11 +436,14 @@
       ]);
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       geo.computeVertexNormals();
-      var mesh = new THREE.Mesh(geo, mat);
+      // Each pickable face needs its own material instance so highlighting
+      // one doesn't recolor every roof face that shares the shared base mat.
+      var mesh = new THREE.Mesh(geo, mat.clone());
       mesh.castShadow = true; mesh.receiveShadow = true;
+      if (meta) attachFaceMeta(mesh, verts, meta);
       grp.add(mesh);
     }
-    function addTri(grp, mat, verts) {
+    function addTri(grp, mat, verts, meta) {
       var geo = new THREE.BufferGeometry();
       var pos = new Float32Array([
         verts[0].x, verts[0].y, verts[0].z,
@@ -336,13 +452,14 @@
       ]);
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       geo.computeVertexNormals();
-      var mesh = new THREE.Mesh(geo, mat);
+      var mesh = new THREE.Mesh(geo, mat.clone());
       mesh.castShadow = true; mesh.receiveShadow = true;
+      if (meta) attachFaceMeta(mesh, verts, meta);
       grp.add(mesh);
     }
     function addPyramid(grp, mat, base, apex) {
       for (var k = 0; k < base.length; k++) {
-        addTri(grp, mat, [base[k], base[(k + 1) % base.length], apex]);
+        addTri(grp, mat, [base[k], base[(k + 1) % base.length], apex], { id: nextFaceId('Slope'), kind: 'Roof slope' });
       }
     }
 

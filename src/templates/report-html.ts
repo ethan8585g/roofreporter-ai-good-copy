@@ -489,36 +489,34 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
           <div style="font-size:11px;font-weight:800;letter-spacing:0.5px">Structure ${partition.index} &mdash; ${partition.label}</div>
           <div style="font-size:9px;font-weight:600;opacity:0.95">${partition.true_area_sqft.toLocaleString()} sqft @ ${partition.dominant_pitch_label} &bull; ${partition.perimeter_ft.toLocaleString()} LF perimeter</div>
         </div>
-        <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:0">
-          <div class="roof3d-frame" data-roof3d-mount="${partition.index}" style="position:relative;width:100%;aspect-ratio:5/3;border-right:1px solid #e2e8f0">${svg}</div>
-          <div style="padding:8px 12px;font-size:8.5px">
-            <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Measurements</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 10px">
-              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Footprint</span><span style="font-weight:700">${partition.footprint_sqft.toLocaleString()} SF</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Roof Area</span><span style="font-weight:800;color:${TEAL_DARK}">${partition.true_area_sqft.toLocaleString()} SF</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Gross w/${(mat.waste_pct || 5)}% waste</span><span style="font-weight:700">${Math.round(partition.true_area_sqft * (1 + (mat.waste_pct || 5) / 100)).toLocaleString()} SF</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Pitch</span><span style="font-weight:700">${partition.dominant_pitch_label}</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#16A34A">Eave</span><span style="font-weight:700">${partition.eave_lf.toLocaleString()} LF</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#DC2626">Ridge</span><span style="font-weight:700">${partition.ridge_lf.toLocaleString()} LF</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#EA580C">Hip</span><span style="font-weight:700">${partition.hip_lf.toLocaleString()} LF</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#2563EB">Valley</span><span style="font-weight:700">${partition.valley_lf.toLocaleString()} LF</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#7C3AED">Rake</span><span style="font-weight:700">${partition.rake_lf.toLocaleString()} LF</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Perimeter</span><span style="font-weight:700">${partition.perimeter_ft.toLocaleString()} LF</span></div>
-            </div>
-            ${matRow ? `
-            <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin:8px 0 4px">Materials (allocated)</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 10px">
-              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Roof Area</span><span style="font-weight:700">${Math.round(matRow.squares * 100).toLocaleString()} SF</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Bundles</span><span style="font-weight:800;color:${TEAL_DARK}">${matRow.bundles}</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Underlay</span><span style="font-weight:700">${matRow.underlayment_rolls} rolls</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">I&amp;W</span><span style="font-weight:700">${matRow.ice_water_sqft.toLocaleString()} SF</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Ridge Cap</span><span style="font-weight:700">${matRow.ridge_cap_lf} LF</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Drip Edge</span><span style="font-weight:700">${matRow.drip_edge_lf} LF</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Valley</span><span style="font-weight:700">${matRow.valley_flashing_lf} LF</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Nails</span><span style="font-weight:700">${matRow.nails_lbs} lbs</span></div>
-            </div>
-            ` : ''}
+        <div class="roof3d-frame" data-roof3d-mount="${partition.index}" style="position:relative;width:100%;aspect-ratio:8/5;border-bottom:1px solid #e2e8f0">${svg}</div>
+        <div style="padding:8px 12px;font-size:8.5px">
+          <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Measurements</div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:2px 14px">
+            <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Footprint</span><span style="font-weight:700">${partition.footprint_sqft.toLocaleString()} SF</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Roof Area</span><span style="font-weight:800;color:${TEAL_DARK}">${partition.true_area_sqft.toLocaleString()} SF</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Gross w/${(mat.waste_pct || 5)}%</span><span style="font-weight:700">${Math.round(partition.true_area_sqft * (1 + (mat.waste_pct || 5) / 100)).toLocaleString()} SF</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Pitch</span><span style="font-weight:700">${partition.dominant_pitch_label}</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Perimeter</span><span style="font-weight:700">${partition.perimeter_ft.toLocaleString()} LF</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#16A34A">Eave</span><span style="font-weight:700">${partition.eave_lf.toLocaleString()} LF</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#DC2626">Ridge</span><span style="font-weight:700">${partition.ridge_lf.toLocaleString()} LF</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#EA580C">Hip</span><span style="font-weight:700">${partition.hip_lf.toLocaleString()} LF</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#2563EB">Valley</span><span style="font-weight:700">${partition.valley_lf.toLocaleString()} LF</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#7C3AED">Rake</span><span style="font-weight:700">${partition.rake_lf.toLocaleString()} LF</span></div>
           </div>
+          ${matRow ? `
+          <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin:8px 0 4px">Materials (allocated)</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px 14px">
+            <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Roof Area</span><span style="font-weight:700">${Math.round(matRow.squares * 100).toLocaleString()} SF</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Bundles</span><span style="font-weight:800;color:${TEAL_DARK}">${matRow.bundles}</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Underlay</span><span style="font-weight:700">${matRow.underlayment_rolls} rolls</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#64748b">I&amp;W</span><span style="font-weight:700">${matRow.ice_water_sqft.toLocaleString()} SF</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Ridge Cap</span><span style="font-weight:700">${matRow.ridge_cap_lf} LF</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Drip Edge</span><span style="font-weight:700">${matRow.drip_edge_lf} LF</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Valley</span><span style="font-weight:700">${matRow.valley_flashing_lf} LF</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Nails</span><span style="font-weight:700">${matRow.nails_lbs} lbs</span></div>
+          </div>
+          ` : ''}
         </div>
         <div style="border-top:1px solid #e2e8f0;padding:6px 12px 0;background:#fafbfc">
           <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">2D Plan View &mdash; Edge Dimensions</div>
@@ -529,7 +527,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
     <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">3D Axonometric on top &mdash; 2D Plan View below shows every traced edge with its haversine length. Each traced building rendered separately.</div>
   </div>` : `
   <div style="padding:0 28px;margin-bottom:8px">
-    <div class="roof3d-frame" ${structureDiagrams.length === 1 ? `data-roof3d-mount="${structureDiagrams[0].partition.index}"` : ''} style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center;position:relative;${structureDiagrams.length === 1 ? 'aspect-ratio:5/3' : ''}">
+    <div class="roof3d-frame" ${structureDiagrams.length === 1 ? `data-roof3d-mount="${structureDiagrams[0].partition.index}"` : ''} style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center;position:relative;${structureDiagrams.length === 1 ? 'aspect-ratio:8/5' : ''}">
       ${structureDiagrams.length === 1 ? structureDiagrams[0].svg : architecturalDiagramSVG}
     </div>
     <div style="text-align:center;font-size:6.5px;color:#999;margin:2px 0 8px">${structureDiagrams.length === 1 ? '3D Roof Diagram &mdash; Drag to rotate on screen' : 'AI-Generated Roof Diagram'} &mdash; All dimensions in feet. Pitch multiplier applied for true 3D area.</div>
@@ -663,6 +661,8 @@ ${structureDiagrams.length > 0 ? `
   @media print {
     .roof3d-frame canvas { display: none !important; }
     .roof3d-frame svg { display: block !important; }
+    .roof3d-frame .roof3d-panel { display: none !important; }
+    .roof3d-frame > div[style*="position:absolute"] { display: none !important; }
   }
 </style>
 <script>window.__roofReport3D = ${JSON.stringify({

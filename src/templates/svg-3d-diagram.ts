@@ -62,10 +62,20 @@ const FT2_PER_M2 = 10.7639
 const YAW_DEG = 0
 const PITCH_DEG = 30
 
-// Sun direction for Lambert shading (NW, 45° elevation).
-const SUN = (() => {
-  const az = 315 * Math.PI / 180  // NW (compass)
+// Two-light Lambert shading: a strong KEY sun from the NW and a softer FILL
+// from the SE so the back side of the roof never goes dead-flat dark.
+const SUN_KEY = (() => {
+  const az = 315 * Math.PI / 180  // NW
   const el = 45 * Math.PI / 180
+  return {
+    x: Math.cos(el) * Math.sin(az),
+    y: Math.cos(el) * Math.cos(az),
+    z: Math.sin(el),
+  }
+})()
+const SUN_FILL = (() => {
+  const az = 135 * Math.PI / 180  // SE
+  const el = 25 * Math.PI / 180
   return {
     x: Math.cos(el) * Math.sin(az),
     y: Math.cos(el) * Math.cos(az),
@@ -633,9 +643,12 @@ function shadeColor(hex: string, factor: number): string {
 }
 
 function lambertFactor(normal: V3): number {
-  const dot = normal.x * SUN.x + normal.y * SUN.y + normal.z * SUN.z
-  // Map [-1,1] dot → [0.55, 1.35] shade factor (avoids pure black / pure white).
-  return 0.95 + dot * 0.40
+  const dotKey  = normal.x * SUN_KEY.x  + normal.y * SUN_KEY.y  + normal.z * SUN_KEY.z
+  const dotFill = normal.x * SUN_FILL.x + normal.y * SUN_FILL.y + normal.z * SUN_FILL.z
+  // Ambient + clamped key + clamped fill. Ambient floor (0.78) prevents the
+  // backlit side from collapsing to pure shadow (which read as dead-flat in
+  // the old single-sun model).
+  return 0.78 + Math.max(0, dotKey) * 0.45 + Math.max(0, dotFill) * 0.18
 }
 
 // ───────────────────────── MAIN GENERATOR ─────────────────────────
@@ -648,9 +661,9 @@ export function generateAxonometricRoofSVG(
   structure: StructurePartition,
   opts: { width?: number; height?: number; showShadow?: boolean; showCompass?: boolean; showDimensions?: boolean } = {},
 ): string {
-  const W = opts.width ?? 700
-  const H = opts.height ?? 420
-  const PAD = 36
+  const W = opts.width ?? 1200
+  const H = opts.height ?? 750
+  const PAD = 48
   const showShadow = opts.showShadow !== false
   const showCompass = opts.showCompass !== false
   const showDimensions = opts.showDimensions !== false
@@ -673,9 +686,12 @@ export function generateAxonometricRoofSVG(
   const pitchRise = 12 * Math.tan(structure.dominant_pitch_deg * Math.PI / 180)
   const faces = buildRoofMesh(eavesXY, pitchRise, tracedRidgesXY, tracedHipsXY, tracedValleysXY)
 
-  // Project all vertices to screen plane.
-  const projected: Face3[] = faces.map(f => ({
+  // Project all vertices to screen plane. Keep the world-space copy too so
+  // ridge length callouts can be measured in metres before being formatted.
+  type ProjFace = Face3 & { worldVertices: V3[] }
+  const projected: ProjFace[] = faces.map(f => ({
     ...f,
+    worldVertices: f.vertices,
     vertices: f.vertices.map(v => {
       const p = projectAxonometric(v)
       return { x: p.x, y: p.y, z: p.depth } as V3
@@ -684,12 +700,7 @@ export function generateAxonometricRoofSVG(
       const p = projectAxonometric(f.centroid)
       return { x: p.x, y: p.y, z: p.depth } as V3
     })(),
-    normal: (() => {
-      // Project normal direction (no translation) for shading purposes —
-      // shading uses the original world-space normal vs. SUN, NOT the
-      // projected one. Keep original.
-      return f.normal
-    })(),
+    normal: f.normal,
   }))
 
   // Footprint outline (z=0) projected for shadow + ground reference.
@@ -724,9 +735,17 @@ export function generateAxonometricRoofSVG(
   let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#fff" preserveAspectRatio="xMidYMid meet">`
 
   // SVG defs (filters, gradients)
+  // - ground-shadow: blurred silhouette under the building.
+  // - face-ao: blur applied to a darkened-stroke pass laid down BEFORE the
+  //   real face polygons. Where two faces share an edge, the dark blurred
+  //   strokes accumulate, producing a soft ambient-occlusion crease at hips,
+  //   ridges and valleys — the depth cue the old flat-Lambert lacked.
   svg += `<defs>
-    <filter id="ground-shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="3.5"/>
+    <filter id="ground-shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="5"/>
+    </filter>
+    <filter id="face-ao" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="2.2"/>
     </filter>
     <linearGradient id="bg-grad" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#F8FAFC"/>
@@ -743,9 +762,9 @@ export function generateAxonometricRoofSVG(
   // Drop shadow under building (silhouette of footprint, blurred + offset).
   if (showShadow) {
     const shadowPts = groundOutline
-      .map(p => `${(tx(p.x) + 4).toFixed(1)},${(ty(p.y) + 6).toFixed(1)}`)
+      .map(p => `${(tx(p.x) + 7).toFixed(1)},${(ty(p.y) + 11).toFixed(1)}`)
       .join(' ')
-    svg += `<polygon points="${shadowPts}" fill="rgba(15,23,42,0.20)" filter="url(#ground-shadow)"/>`
+    svg += `<polygon points="${shadowPts}" fill="rgba(15,23,42,0.28)" filter="url(#ground-shadow)"/>`
   }
 
   // Faux walls — extrude the silhouette downward to the ground line in a
@@ -763,6 +782,16 @@ export function generateAxonometricRoofSVG(
     svg += `<polygon points="${x1.toFixed(1)},${y1.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)} ${x2.toFixed(1)},${(y2 + wallSkirtPx).toFixed(1)} ${x1.toFixed(1)},${(y1 + wallSkirtPx).toFixed(1)}" fill="#E2E8F0" stroke="#CBD5E1" stroke-width="0.5"/>`
   }
 
+  // Ambient-occlusion underlay: dark blurred strokes that accumulate where
+  // adjacent faces share an edge, producing soft creases at hips, ridges and
+  // valleys without any per-edge logic.
+  svg += `<g filter="url(#face-ao)">`
+  for (const f of sortedFaces) {
+    const pts = f.vertices.map(v => `${tx(v.x).toFixed(1)},${ty(v.y).toFixed(1)}`).join(' ')
+    svg += `<polygon points="${pts}" fill="none" stroke="#0F172A" stroke-width="3.4" stroke-linejoin="round" stroke-opacity="0.55"/>`
+  }
+  svg += `</g>`
+
   // Roof faces (back-to-front).
   for (const f of sortedFaces) {
     const base = pitchBaseColor(f.pitch_rise)
@@ -773,22 +802,33 @@ export function generateAxonometricRoofSVG(
 
   // Highlight ridges + hips: any shared edge between the topmost two faces
   // OR the topmost edge of each face.
-  // Cheap proxy: draw the highest edge of each face in the ridge color.
+  // Pick the highest world-z edge per face (true ridge), draw it bold in
+  // ridge red, and remember its world endpoints for the callout pass below.
+  type RidgeRender = { aProj: V3; bProj: V3; aWorld: V3; bWorld: V3; lengthFt: number }
+  const ridgeRenders: RidgeRender[] = []
   for (const f of sortedFaces) {
-    let bestEdge: { a: V3; b: V3; avgZ: number } | null = null
-    for (let i = 0; i < f.vertices.length; i++) {
-      const a = f.vertices[i]
-      const b = f.vertices[(i + 1) % f.vertices.length]
-      const avgZ = (a.z + b.z) / 2
-      // We want to emphasize edges that are at the top of the face — i.e.
-      // closer to the camera (smaller projected y). Use centroid as ref.
-      const aboveCentroid = avgZ > f.centroid.z
-      if (aboveCentroid && (!bestEdge || avgZ > bestEdge.avgZ)) {
-        bestEdge = { a, b, avgZ }
+    let bestEdgeIdx = -1
+    let bestAvgZ = -Infinity
+    const verts = f.vertices
+    const wverts = (f as ProjFace).worldVertices
+    const worldCentroidZ = wverts.reduce((s, v) => s + v.z, 0) / wverts.length
+    for (let i = 0; i < verts.length; i++) {
+      const aw = wverts[i]
+      const bw = wverts[(i + 1) % wverts.length]
+      const avgZ = (aw.z + bw.z) / 2
+      if (avgZ > worldCentroidZ + 1e-3 && avgZ > bestAvgZ) {
+        bestAvgZ = avgZ
+        bestEdgeIdx = i
       }
     }
-    if (bestEdge) {
-      svg += `<line x1="${tx(bestEdge.a.x).toFixed(1)}" y1="${ty(bestEdge.a.y).toFixed(1)}" x2="${tx(bestEdge.b.x).toFixed(1)}" y2="${ty(bestEdge.b.y).toFixed(1)}" stroke="${EDGE_COLOR.RIDGE}" stroke-width="1.6" stroke-linecap="round" stroke-opacity="0.85"/>`
+    if (bestEdgeIdx >= 0) {
+      const a = verts[bestEdgeIdx]
+      const b = verts[(bestEdgeIdx + 1) % verts.length]
+      const aw = wverts[bestEdgeIdx]
+      const bw = wverts[(bestEdgeIdx + 1) % wverts.length]
+      const lengthFt = Math.hypot(bw.x - aw.x, bw.y - aw.y, bw.z - aw.z) * M_TO_FT
+      svg += `<line x1="${tx(a.x).toFixed(1)}" y1="${ty(a.y).toFixed(1)}" x2="${tx(b.x).toFixed(1)}" y2="${ty(b.y).toFixed(1)}" stroke="${EDGE_COLOR.RIDGE}" stroke-width="1.8" stroke-linecap="round" stroke-opacity="0.9"/>`
+      ridgeRenders.push({ aProj: a, bProj: b, aWorld: aw, bWorld: bw, lengthFt })
     }
   }
 
@@ -845,6 +885,28 @@ export function generateAxonometricRoofSVG(
       const ly = my + (ey / elen) * offset
 
       svg += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" font-size="9" font-weight="700" fill="#0F172A" ${FONT} stroke="#fff" stroke-width="2.5" paint-order="stroke">${lenFt.toFixed(1)} ft</text>`
+    }
+  }
+
+  // Ridge length callouts. Two faces sharing a ridge will both report the
+  // same edge — dedup on midpoint hash before drawing so we don't stack
+  // two identical labels on top of each other.
+  if (showDimensions && ridgeRenders.length > 0) {
+    const seen = new Set<string>()
+    for (const r of ridgeRenders) {
+      if (r.lengthFt < 3) continue
+      const mxw = (r.aWorld.x + r.bWorld.x) / 2
+      const myw = (r.aWorld.y + r.bWorld.y) / 2
+      const key = `${mxw.toFixed(2)},${myw.toFixed(2)},${r.lengthFt.toFixed(1)}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const mx = (tx(r.aProj.x) + tx(r.bProj.x)) / 2
+      const my = (ty(r.aProj.y) + ty(r.bProj.y)) / 2
+      // Lift the label upward a few pixels so it sits above the ridge line
+      // (ridges are by definition the highest screen-y of their face, so a
+      // small negative y offset is a safe direction).
+      const ly = my - 9
+      svg += `<text x="${mx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" font-size="9" font-weight="700" fill="${EDGE_COLOR.RIDGE}" ${FONT} stroke="#fff" stroke-width="2.5" paint-order="stroke">${r.lengthFt.toFixed(1)} ft</text>`
     }
   }
 
