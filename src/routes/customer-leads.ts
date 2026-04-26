@@ -23,7 +23,7 @@ async function getOwnerId(c: any): Promise<{ ownerId: number; userId: number } |
 // GET /api/customer-leads — Unified leads aggregator
 // Pulls from: widget_leads, d2d_appointments, secretary_call_logs,
 //   secretary_messages, secretary_callbacks, asset_report_leads,
-//   contact_leads, crew_messages
+//   contact_leads, crew_messages, rover_conversations
 // ============================================================
 customerLeadsRoutes.get('/', async (c) => {
   const auth = await getOwnerId(c)
@@ -43,6 +43,7 @@ customerLeadsRoutes.get('/', async (c) => {
     secretaryMessages,
     secretaryCallbacks,
     jobMessages,
+    roverChats,
     readStates
   ] = await Promise.all([
     channel === 'all' || channel === 'web_widget'
@@ -80,6 +81,15 @@ customerLeadsRoutes.get('/', async (c) => {
           `SELECT cm.id, cm.job_id, cm.author_name, cm.content, cm.created_at, j.customer_name as job_customer
            FROM crew_messages cm JOIN jobs j ON cm.job_id = j.id
            WHERE j.customer_id = ? ORDER BY cm.created_at DESC LIMIT 100`
+        ).bind(ownerId).all<any>()
+      : { results: [] },
+
+    channel === 'all' || channel === 'rover_chat'
+      ? c.env.DB.prepare(
+          `SELECT id, session_id, visitor_name, visitor_email, visitor_phone, page_url,
+                  message_count, lead_score, lead_status, summary, tags, last_message_at, created_at
+           FROM rover_conversations
+           WHERE customer_id = ? ORDER BY created_at DESC LIMIT 100`
         ).bind(ownerId).all<any>()
       : { results: [] },
 
@@ -180,6 +190,27 @@ customerLeadsRoutes.get('/', async (c) => {
     })
   }
 
+  for (const rc of roverChats.results || []) {
+    const statusMap: Record<string, string> = {
+      new: 'new',
+      qualified: 'new',
+      contacted: 'contacted',
+      converted: 'contacted',
+      spam: 'contacted'
+    }
+    leads.push({
+      id: `rover_${rc.id}`,
+      channel: 'rover_chat',
+      contact_name: rc.visitor_name || 'Website Visitor',
+      contact_info: rc.visitor_email || rc.visitor_phone || rc.page_url || '',
+      summary: rc.summary || `Web chat (${rc.message_count || 0} msgs)${rc.lead_score ? ` · score ${rc.lead_score}` : ''}`,
+      detail: rc.tags ? `Tags: ${rc.tags}` : (rc.lead_status ? `Lead: ${rc.lead_status}` : ''),
+      status: statusMap[rc.lead_status] || 'new',
+      created_at: rc.last_message_at || rc.created_at,
+      is_read: readSet.has(`rover_chat:rover_${rc.id}`)
+    })
+  }
+
   // Sort all by created_at descending
   leads.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
@@ -204,6 +235,7 @@ customerLeadsRoutes.get('/', async (c) => {
       voicemail: leads.filter(l => l.channel === 'voicemail').length,
       d2d_appointment: leads.filter(l => l.channel === 'd2d_appointment').length,
       crm_job_message: leads.filter(l => l.channel === 'crm_job_message').length,
+      rover_chat: leads.filter(l => l.channel === 'rover_chat').length,
     }
   })
 })
@@ -217,15 +249,16 @@ customerLeadsRoutes.get('/unread-count', async (c) => {
   const { ownerId, userId } = auth
 
   // Count total leads across all sources
-  const [widgets, calls, messages, callbacks, d2dAppts] = await Promise.all([
+  const [widgets, calls, messages, callbacks, d2dAppts, roverChats] = await Promise.all([
     c.env.DB.prepare('SELECT COUNT(*) as cnt FROM widget_leads WHERE customer_id = ?').bind(ownerId).first<any>(),
     c.env.DB.prepare('SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ?').bind(ownerId).first<any>(),
     c.env.DB.prepare('SELECT COUNT(*) as cnt FROM secretary_messages WHERE customer_id = ?').bind(ownerId).first<any>(),
     c.env.DB.prepare('SELECT COUNT(*) as cnt FROM secretary_callbacks WHERE customer_id = ?').bind(ownerId).first<any>(),
     c.env.DB.prepare('SELECT COUNT(*) as cnt FROM d2d_appointments WHERE owner_id = ?').bind(ownerId).first<any>(),
+    c.env.DB.prepare('SELECT COUNT(*) as cnt FROM rover_conversations WHERE customer_id = ?').bind(ownerId).first<any>(),
   ])
 
-  const totalLeads = (widgets?.cnt || 0) + (calls?.cnt || 0) + (messages?.cnt || 0) + (callbacks?.cnt || 0) + (d2dAppts?.cnt || 0)
+  const totalLeads = (widgets?.cnt || 0) + (calls?.cnt || 0) + (messages?.cnt || 0) + (callbacks?.cnt || 0) + (d2dAppts?.cnt || 0) + (roverChats?.cnt || 0)
 
   // Count read states
   const readCount = await c.env.DB.prepare(
