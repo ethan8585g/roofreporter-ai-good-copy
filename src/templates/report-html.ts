@@ -15,7 +15,7 @@ import {
 import {
   generateSatelliteOverlaySVG, generateOverlayLegend, generateBlueprintSVG,
   generateArchitecturalDiagramSVG, generatePreciseAIOverlaySVG,
-  generateSquaresGridDiagramSVG
+  generateSquaresGridDiagramSVG, generateTraceBasedDiagramSVG
 } from './svg-diagrams'
 import {
   generateAllStructureSVGs, splitStructures, allocateMaterialsToStructures,
@@ -459,6 +459,30 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <div style="padding:0 28px;margin-bottom:8px">
     ${structureDiagrams.map(({ partition, svg }) => {
       const matRow = perStructureMaterials.find(m => m.index === partition.index)
+      // 2D top-down drawing for this structure only — same renderer as the
+      // legacy diagram, fed only this structure's eaves + traced lines so
+      // the per-edge dimension callouts are visible.
+      const flat2dSvg = generateTraceBasedDiagramSVG(
+        {
+          eaves: partition.eaves,
+          eaves_sections: [partition.eaves],
+          ridges: partition.ridges,
+          hips: partition.hips,
+          valleys: partition.valleys,
+        },
+        {
+          total_ridge_ft: partition.ridge_lf,
+          total_hip_ft: partition.hip_lf,
+          total_valley_ft: partition.valley_lf,
+          total_eave_ft: partition.eave_lf,
+          total_rake_ft: partition.rake_lf,
+        },
+        partition.footprint_sqft,
+        partition.dominant_pitch_deg,
+        partition.dominant_pitch_label,
+        Math.round(partition.true_area_sqft / 100 * (1 + (mat.waste_pct || 5) / 100) * 10) / 10,
+        partition.true_area_sqft,
+      )
       return `
       <div style="border:1.5px solid #cbd5e1;border-radius:6px;background:#fff;overflow:hidden;margin-bottom:10px">
         <div style="background:linear-gradient(90deg,${TEAL},${TEAL_DARK});color:#fff;padding:6px 12px;display:flex;align-items:center;justify-content:space-between">
@@ -472,7 +496,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 10px">
               <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Footprint</span><span style="font-weight:700">${partition.footprint_sqft.toLocaleString()} SF</span></div>
               <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Roof Area</span><span style="font-weight:800;color:${TEAL_DARK}">${partition.true_area_sqft.toLocaleString()} SF</span></div>
-              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Squares</span><span style="font-weight:700">${(partition.true_area_sqft / 100).toFixed(1)}</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Gross w/${(mat.waste_pct || 5)}% waste</span><span style="font-weight:700">${Math.round(partition.true_area_sqft * (1 + (mat.waste_pct || 5) / 100)).toLocaleString()} SF</span></div>
               <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Pitch</span><span style="font-weight:700">${partition.dominant_pitch_label}</span></div>
               <div style="display:flex;justify-content:space-between"><span style="color:#16A34A">Eave</span><span style="font-weight:700">${partition.eave_lf.toLocaleString()} LF</span></div>
               <div style="display:flex;justify-content:space-between"><span style="color:#DC2626">Ridge</span><span style="font-weight:700">${partition.ridge_lf.toLocaleString()} LF</span></div>
@@ -484,7 +508,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
             ${matRow ? `
             <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin:8px 0 4px">Materials (allocated)</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 10px">
-              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Squares</span><span style="font-weight:700">${matRow.squares}</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Roof Area</span><span style="font-weight:700">${Math.round(matRow.squares * 100).toLocaleString()} SF</span></div>
               <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Bundles</span><span style="font-weight:800;color:${TEAL_DARK}">${matRow.bundles}</span></div>
               <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Underlay</span><span style="font-weight:700">${matRow.underlayment_rolls} rolls</span></div>
               <div style="display:flex;justify-content:space-between"><span style="color:#64748b">I&amp;W</span><span style="font-weight:700">${matRow.ice_water_sqft.toLocaleString()} SF</span></div>
@@ -496,15 +520,33 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
             ` : ''}
           </div>
         </div>
+        <div style="border-top:1px solid #e2e8f0;padding:6px 12px 0;background:#fafbfc">
+          <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">2D Plan View &mdash; Edge Dimensions</div>
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:3px;overflow:hidden">${flat2dSvg}</div>
+        </div>
       </div>
     `}).join('')}
-    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">3D Axonometric Diagrams &mdash; Each traced building rendered separately. Drag to rotate on screen; SVG fallback prints in PDF.</div>
+    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">3D Axonometric on top &mdash; 2D Plan View below shows every traced edge with its haversine length. Each traced building rendered separately.</div>
   </div>` : `
   <div style="padding:0 28px;margin-bottom:8px">
     <div class="roof3d-frame" ${structureDiagrams.length === 1 ? `data-roof3d-mount="${structureDiagrams[0].partition.index}"` : ''} style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center;position:relative;${structureDiagrams.length === 1 ? 'aspect-ratio:5/3' : ''}">
       ${structureDiagrams.length === 1 ? structureDiagrams[0].svg : architecturalDiagramSVG}
     </div>
-    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">${structureDiagrams.length === 1 ? '3D Roof Diagram &mdash; Drag to rotate on screen' : 'AI-Generated Roof Diagram'} &mdash; All dimensions in feet. Pitch multiplier applied for true 3D area.</div>
+    <div style="text-align:center;font-size:6.5px;color:#999;margin:2px 0 8px">${structureDiagrams.length === 1 ? '3D Roof Diagram &mdash; Drag to rotate on screen' : 'AI-Generated Roof Diagram'} &mdash; All dimensions in feet. Pitch multiplier applied for true 3D area.</div>
+    ${structureDiagrams.length === 1 ? (() => {
+      const p = structureDiagrams[0].partition
+      const flat = generateTraceBasedDiagramSVG(
+        { eaves: p.eaves, eaves_sections: [p.eaves], ridges: p.ridges, hips: p.hips, valleys: p.valleys },
+        { total_ridge_ft: p.ridge_lf, total_hip_ft: p.hip_lf, total_valley_ft: p.valley_lf, total_eave_ft: p.eave_lf, total_rake_ft: p.rake_lf },
+        p.footprint_sqft, p.dominant_pitch_deg, p.dominant_pitch_label,
+        Math.round(p.true_area_sqft / 100 * (1 + (mat.waste_pct || 5) / 100) * 10) / 10,
+        p.true_area_sqft,
+      )
+      return `
+      <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">2D Plan View &mdash; Edge Dimensions</div>
+      <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center">${flat}</div>
+      <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">2D top-down plan with haversine edge lengths.</div>
+    `})() : ''}
   </div>`}
 
   <!-- Drawing Key / Legend — Industry Standard Color Coding -->
@@ -529,7 +571,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
           <th style="padding:4px 8px;text-align:left;font-size:7.5px;font-weight:700">Structure</th>
           <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Footprint (SF)</th>
           <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Roof Area (SF)</th>
-          <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Squares</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Gross (SF)</th>
           <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Perimeter (LF)</th>
         </tr>
       </thead>
@@ -538,14 +580,14 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
           <td style="padding:4px 8px;border-bottom:1px solid #eee;font-weight:700">${s.label}</td>
           <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${s.footprint_sf.toLocaleString()}</td>
           <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right;font-weight:700;color:${TEAL_DARK}">${s.true_area_sf.toLocaleString()}</td>
-          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${s.squares}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${Math.round(s.squares * 100).toLocaleString()}</td>
           <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${s.perimeter_ft.toLocaleString()}</td>
         </tr>`).join('')}
         <tr style="background:#eee;font-weight:800">
           <td style="padding:5px 8px;border-top:2px solid #333">Combined Total</td>
           <td style="padding:5px 8px;border-top:2px solid #333;text-align:right">${structuresBreakdown.reduce((s, x) => s + x.footprint_sf, 0).toLocaleString()}</td>
           <td style="padding:5px 8px;border-top:2px solid #333;text-align:right;color:${TEAL_DARK}">${structuresBreakdown.reduce((s, x) => s + x.true_area_sf, 0).toLocaleString()}</td>
-          <td style="padding:5px 8px;border-top:2px solid #333;text-align:right">${Math.round(structuresBreakdown.reduce((s, x) => s + x.squares, 0) * 10) / 10}</td>
+          <td style="padding:5px 8px;border-top:2px solid #333;text-align:right">${Math.round(structuresBreakdown.reduce((s, x) => s + x.squares * 100, 0)).toLocaleString()}</td>
           <td style="padding:5px 8px;border-top:2px solid #333;text-align:right">${Math.round(structuresBreakdown.reduce((s, x) => s + x.perimeter_ft, 0) * 10) / 10}</td>
         </tr>
       </tbody>
@@ -560,7 +602,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       <thead>
         <tr style="background:#1a1a2e;color:#fff">
           <th style="padding:4px 8px;text-align:left;font-size:7.5px;font-weight:700">Structure</th>
-          <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Squares</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Roof Area (SF)</th>
           <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Bundles</th>
           <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Underlay</th>
           <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">I&amp;W (SF)</th>
@@ -572,7 +614,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       <tbody>
         ${perStructureMaterials.map((m, i) => `<tr style="${i % 2 === 0 ? 'background:#fafafa' : ''}">
           <td style="padding:4px 8px;border-bottom:1px solid #eee;font-weight:700">Structure ${m.index} &mdash; ${m.label}</td>
-          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${m.squares}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${Math.round(m.squares * 100).toLocaleString()}</td>
           <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right;font-weight:700;color:${TEAL_DARK}">${m.bundles}</td>
           <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${m.underlayment_rolls}</td>
           <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${m.ice_water_sqft.toLocaleString()}</td>
