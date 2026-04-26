@@ -306,28 +306,67 @@ function buildRoofMesh(
   const ridgeHeightM = (shortSideM / 2) * (pitch_rise / 12)
 
   // ── PATH A: traced ridges available ──
-  // Use the AVERAGE of all ridge points as the apex (so a T-shaped or
-  // central-hip ridge layout puts the hump in the middle of the polygon
-  // instead of pulling it into a corner). Lift to ridgeHeightM and fan
-  // triangulate every eave edge to it. This keeps the apex centered for
-  // complex footprints while still respecting the user's traced ridge
-  // orientation through the average.
+  // For each eave edge, find the closest ridge SEGMENT (not just an
+  // endpoint) and project both eave endpoints onto that ridge line. This
+  // produces a proper hip/gable mesh that follows the user's actual ridge
+  // structure — multi-ridge T-shape and L-shape roofs render with each
+  // face hugging its own ridge instead of all faces fanning to a single
+  // averaged apex.
   if (tracedRidgesXY && tracedRidgesXY.length > 0) {
-    let sumX = 0, sumY = 0, count = 0
+    // Build a flat list of ridge SEGMENTS (consecutive point pairs from
+    // every traced ridge polyline).
+    const ridgeSegs: { a: { x: number; y: number }; b: { x: number; y: number } }[] = []
     for (const ridge of tracedRidgesXY) {
-      if (!ridge || ridge.length === 0) continue
-      for (const p of ridge) { sumX += p.x; sumY += p.y; count++ }
+      if (!ridge || ridge.length < 2) continue
+      for (let i = 0; i < ridge.length - 1; i++) {
+        ridgeSegs.push({ a: ridge[i], b: ridge[i + 1] })
+      }
     }
-    if (count > 0) {
-      // Constrain the apex inside the footprint bbox so an off-roof ridge
-      // trace doesn't yank the hump outside the building.
-      const apexX = Math.max(minX + 0.5, Math.min(maxX - 0.5, sumX / count))
-      const apexY = Math.max(minY + 0.5, Math.min(maxY - 0.5, sumY / count))
-      const apex: V3 = { x: apexX, y: apexY, z: ridgeHeightM }
+    if (ridgeSegs.length > 0) {
+      // Project p onto segment ab (clamped to the segment) and return the
+      // closest point + distance.
+      const projectOnto = (p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) => {
+        const abx = b.x - a.x, aby = b.y - a.y
+        const lenSq = abx * abx + aby * aby
+        if (lenSq < 1e-9) return { x: a.x, y: a.y, t: 0, d: Math.hypot(p.x - a.x, p.y - a.y) }
+        let t = ((p.x - a.x) * abx + (p.y - a.y) * aby) / lenSq
+        t = Math.max(0, Math.min(1, t))
+        const cx = a.x + t * abx, cy = a.y + t * aby
+        return { x: cx, y: cy, t, d: Math.hypot(p.x - cx, p.y - cy) }
+      }
+
       const corners: V3[] = eavesXY.map(p => ({ x: p.x, y: p.y, z: 0 }))
       const faces: Face3[] = []
+      const SHARED_APEX_M = 0.6   // when both eave endpoints project to ~same ridge point → triangle
+
       for (let i = 0; i < n; i++) {
-        faces.push(makeFace([corners[i], corners[(i + 1) % n], apex], pitch_rise))
+        const a = corners[i]
+        const b = corners[(i + 1) % n]
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+
+        // Pick the ridge segment whose closest point to the eave-edge
+        // midpoint is nearest.
+        let bestSeg = ridgeSegs[0]
+        let bestDist = Infinity
+        for (const seg of ridgeSegs) {
+          const proj = projectOnto(mid, seg.a, seg.b)
+          if (proj.d < bestDist) { bestDist = proj.d; bestSeg = seg }
+        }
+
+        // Project both eave endpoints onto the chosen ridge.
+        const pa = projectOnto(a, bestSeg.a, bestSeg.b)
+        const pb = projectOnto(b, bestSeg.a, bestSeg.b)
+        const ridgeA: V3 = { x: pa.x, y: pa.y, z: ridgeHeightM }
+        const ridgeB: V3 = { x: pb.x, y: pb.y, z: ridgeHeightM }
+
+        if (Math.hypot(ridgeA.x - ridgeB.x, ridgeA.y - ridgeB.y) < SHARED_APEX_M) {
+          // Both eave corners project to the same point on the ridge → hip-end triangle.
+          const apex: V3 = { x: (ridgeA.x + ridgeB.x) / 2, y: (ridgeA.y + ridgeB.y) / 2, z: ridgeHeightM }
+          faces.push(makeFace([a, b, apex], pitch_rise))
+        } else {
+          // Distinct ridge points → proper long-side trapezoid.
+          faces.push(makeFace([a, b, ridgeB, ridgeA], pitch_rise))
+        }
       }
       return faces
     }
