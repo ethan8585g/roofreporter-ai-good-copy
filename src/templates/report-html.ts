@@ -461,17 +461,17 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       ${structureDiagrams.map(({ partition, svg }) => `
         <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;overflow:hidden">
           <div style="background:linear-gradient(90deg,${TEAL},${TEAL_DARK});color:#fff;padding:4px 10px;font-size:9px;font-weight:800;letter-spacing:0.5px">Structure ${partition.index} &mdash; ${partition.label}</div>
-          ${svg}
+          <div class="roof3d-frame" data-roof3d-mount="${partition.index}" style="position:relative;width:100%;aspect-ratio:5/3">${svg}</div>
         </div>
       `).join('')}
     </div>
-    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">3D Axonometric Diagrams &mdash; Each traced building rendered separately. All dimensions in feet.</div>
+    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">3D Axonometric Diagrams &mdash; Each traced building rendered separately. Drag to rotate on screen; SVG fallback prints in PDF.</div>
   </div>` : `
   <div style="padding:0 28px;margin-bottom:8px">
-    <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center">
+    <div class="roof3d-frame" ${structureDiagrams.length === 1 ? `data-roof3d-mount="${structureDiagrams[0].partition.index}"` : ''} style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center;position:relative;${structureDiagrams.length === 1 ? 'aspect-ratio:5/3' : ''}">
       ${structureDiagrams.length === 1 ? structureDiagrams[0].svg : architecturalDiagramSVG}
     </div>
-    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">${structureDiagrams.length === 1 ? '3D Axonometric Diagram' : 'AI-Generated Roof Diagram'} &mdash; All dimensions in feet. Pitch multiplier applied for true 3D area.</div>
+    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">${structureDiagrams.length === 1 ? '3D Roof Diagram &mdash; Drag to rotate on screen' : 'AI-Generated Roof Diagram'} &mdash; All dimensions in feet. Pitch multiplier applied for true 3D area.</div>
   </div>`}
 
   <!-- Drawing Key / Legend — Industry Standard Color Coding -->
@@ -582,6 +582,26 @@ ${report.solar_panel_layout ? buildSolarProposalPage(report, reportNum, reportDa
 
 ${report.vision_findings ? buildVisionFindingsHTML(report.vision_findings) : ''}
 
+${structureDiagrams.length > 0 ? `
+<style>
+  .roof3d-frame canvas { display: block; }
+  @media print {
+    .roof3d-frame canvas { display: none !important; }
+    .roof3d-frame svg { display: block !important; }
+  }
+</style>
+<script>window.__roofReport3D = ${JSON.stringify({
+  structures: structureDiagrams.map(({ partition }) => ({
+    index: partition.index,
+    label: partition.label,
+    eaves: partition.eaves,
+    dominant_pitch_deg: partition.dominant_pitch_deg,
+    dominant_pitch_label: partition.dominant_pitch_label,
+    true_area_sqft: partition.true_area_sqft,
+  })),
+})};</script>
+<script src="/static/report-3d-viewer.js" defer></script>
+` : ''}
 </body>
 </html>`
 }
