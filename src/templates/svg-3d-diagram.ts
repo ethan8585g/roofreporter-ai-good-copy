@@ -277,6 +277,65 @@ export function splitStructures(report: RoofReport): StructurePartition[] {
   })
 }
 
+// ───────────────────────── EAVE SIMPLIFICATION ─────────────────────────
+
+/**
+ * Local denoising pass for the projected metres-frame eave polygon used by
+ * the mesh builder. The server-side trace enhancer applies the same idea on
+ * the raw lat/lng — this is a defensive second pass so even legacy traces
+ * stored before the enhancer shipped render cleanly.
+ *
+ * Drops sub-`minEdgeM` edges (digitization wiggles) and merges adjacent
+ * edges whose bearings differ by less than `angleThreshDeg` (collinear runs
+ * the user dragged through with extra clicks). Refuses to drop below 3
+ * vertices.
+ */
+function simplifyEavesXY(
+  pts: { x: number; y: number }[],
+  angleThreshDeg = 5,
+  minEdgeM = 0.4,
+): { x: number; y: number }[] {
+  if (pts.length < 4) return pts
+  let work = pts.slice()
+
+  // Tiny-edge pass.
+  for (let pass = 0; pass < 3; pass++) {
+    if (work.length < 4) break
+    let dropIdx = -1
+    let shortest = Infinity
+    for (let i = 0; i < work.length; i++) {
+      const a = work[i]
+      const b = work[(i + 1) % work.length]
+      const len = Math.hypot(b.x - a.x, b.y - a.y)
+      if (len < minEdgeM && len < shortest) { shortest = len; dropIdx = i }
+    }
+    if (dropIdx < 0) break
+    work.splice((dropIdx + 1) % work.length, 1)
+  }
+
+  // Collinear-merge pass.
+  for (let pass = 0; pass < 3; pass++) {
+    const n = work.length
+    if (n < 4) break
+    const drop = new Set<number>()
+    for (let i = 0; i < n; i++) {
+      const prev = (i - 1 + n) % n
+      const next = (i + 1) % n
+      if (drop.has(prev) || drop.has(next)) continue
+      const b1 = Math.atan2(work[i].y - work[prev].y, work[i].x - work[prev].x) * 180 / Math.PI
+      const b2 = Math.atan2(work[next].y - work[i].y, work[next].x - work[i].x) * 180 / Math.PI
+      let d = Math.abs(b1 - b2) % 360
+      if (d > 180) d = 360 - d
+      if (d < angleThreshDeg) drop.add(i)
+    }
+    if (drop.size === 0) break
+    if (n - drop.size < 3) break
+    work = work.filter((_, i) => !drop.has(i))
+  }
+
+  return work
+}
+
 // ───────────────────────── 3D MESH BUILDER ─────────────────────────
 
 interface V3 { x: number; y: number; z: number }
@@ -303,12 +362,18 @@ interface Face3 {
  *     (longest-axis ridge for rectangles, pyramid for non-rectangles).
  */
 function buildRoofMesh(
-  eavesXY: { x: number; y: number }[],
+  rawEavesXY: { x: number; y: number }[],
   pitch_rise: number,
   tracedRidgesXY: { x: number; y: number }[][],
   tracedHipsXY: { x: number; y: number }[][] = [],
   tracedValleysXY: { x: number; y: number }[][] = [],
 ): Face3[] {
+  // Defensive cleanup: collapse near-collinear vertices and drop sub-0.4 m
+  // jogs before the run-grouping pass runs. The server-side trace enhancer
+  // already does this on lat/lng input, but legacy traces stored on disk
+  // bypass it — without this pass those reports re-render with the same
+  // zigzag they had before.
+  const eavesXY = simplifyEavesXY(rawEavesXY, 5, 0.4)
   const n = eavesXY.length
   if (n < 3) return []
 
@@ -351,7 +416,7 @@ function buildRoofMesh(
 
     if (ridgeSegs.length > 0) {
       const SHARED_APEX_M = 0.6   // run-end projections within this distance → triangle
-      const SHORT_EDGE_M = 2.0    // singleton runs shorter than this absorb into neighbours
+      const SHORT_EDGE_M = 2.5    // singleton runs shorter than this absorb into neighbours
       const HIP_SNAP_M = 1.0      // hip endpoint match radius
       const VALLEY_SNAP_M = 1.0   // valley proximity for inboard clipping
 
@@ -389,8 +454,10 @@ function buildRoofMesh(
       // Short eave segments sandwiched between two long edges with the same
       // ridge assignment are almost always polygon-trace jogs (3–4 ft
       // step-overs). Reassigning them to the dominant neighbour ridge
-      // collapses the jog into the surrounding run.
-      for (let pass = 0; pass < 2; pass++) {
+      // collapses the jog into the surrounding run. Three passes catch the
+      // case where the singleton's neighbours are themselves singletons that
+      // get cleaned up only on the second pass.
+      for (let pass = 0; pass < 3; pass++) {
         for (let i = 0; i < n; i++) {
           const prev = (i - 1 + n) % n
           const next = (i + 1) % n
@@ -528,12 +595,30 @@ function buildRoofMesh(
   }
 
   // ── PATH B: no ridges → hip-roof from footprint ──
+  // Treat the polygon as "near-rectangular" when its area fills ≥ 85% of its
+  // axis-aligned bounding box. This catches the common case where the user
+  // traced a rectangular building with a couple of extra clicks on a long
+  // edge (n=5..8 but visually a rectangle). Building the hip from the bbox
+  // gives a single ridge along the long axis instead of a pyramid apex (which
+  // is what the old `n !== 4` branch produced — visibly wrong on the
+  // McDermid Dr report's main house).
   const cx = (minX + maxX) / 2
   const cy = (minY + maxY) / 2
-  const isRect = n === 4
+  const corners: V3[] = eavesXY.map(p => ({ x: p.x, y: p.y, z: 0 }))
+  const polyAreaM2 = (() => {
+    let a = 0
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n
+      a += eavesXY[i].x * eavesXY[j].y - eavesXY[j].x * eavesXY[i].y
+    }
+    return Math.abs(a) / 2
+  })()
+  const bboxAreaM2 = w * h
+  const fillRatio = bboxAreaM2 > 1e-6 ? polyAreaM2 / bboxAreaM2 : 0
+  const isNearRect = fillRatio >= 0.85
   const faces: Face3[] = []
 
-  if (isRect) {
+  if (isNearRect) {
     const longestAxisIsX = w >= h
     const ridgeA: V3 = longestAxisIsX
       ? { x: cx - (w - shortSideM) / 2, y: cy, z: ridgeHeightM }
@@ -541,7 +626,12 @@ function buildRoofMesh(
     const ridgeB: V3 = longestAxisIsX
       ? { x: cx + (w - shortSideM) / 2, y: cy, z: ridgeHeightM }
       : { x: cx, y: cy + (h - shortSideM) / 2, z: ridgeHeightM }
-    const corners: V3[] = eavesXY.map(p => ({ x: p.x, y: p.y, z: 0 }))
+
+    // Walk the polygon and group each corner with the closer ridge endpoint.
+    // For n > 4 (rectangle traced with extra mid-edge clicks) this still
+    // produces two long sides + two hip ends — the only thing we lose is
+    // perfect alignment of those mid-edge clicks with the ridge, which is
+    // imperceptible at report scale.
     const sideA: V3[] = [], sideB: V3[] = []
     for (const c of corners) {
       const dA = (c.x - ridgeA.x) ** 2 + (c.y - ridgeA.y) ** 2
@@ -549,21 +639,26 @@ function buildRoofMesh(
       if (dA < dB) sideA.push(c); else sideB.push(c)
     }
     if (sideA.length >= 2 && sideB.length >= 2) {
+      // Long sides: connect first/last corners of each side to the ridge.
       faces.push(
         makeFace([sideA[0], sideB[0], ridgeB, ridgeA], pitch_rise),
-        makeFace([sideB[1], sideA[1], ridgeA, ridgeB], pitch_rise),
-        makeFace([sideA[0], ridgeA, sideA[1]], pitch_rise),
-        makeFace([sideB[0], sideB[1], ridgeB], pitch_rise),
+        makeFace([sideB[sideB.length - 1], sideA[sideA.length - 1], ridgeA, ridgeB], pitch_rise),
+        // Hip ends: triangle from the two end-most same-side corners to the ridge end.
+        makeFace([sideA[0], ridgeA, sideA[sideA.length - 1]], pitch_rise),
+        makeFace([sideB[0], sideB[sideB.length - 1], ridgeB], pitch_rise),
       )
     } else {
+      // Degenerate split → pyramid fallback.
       const apex: V3 = { x: cx, y: cy, z: ridgeHeightM }
       for (let i = 0; i < n; i++) {
         faces.push(makeFace([corners[i], corners[(i + 1) % n], apex], pitch_rise))
       }
     }
   } else {
+    // Truly non-rectangular (L/T/U/odd shapes) — pyramid to centroid is the
+    // honest fallback. Without traced ridges we can't infer the spine
+    // reliably, and the visible-side faces still read as a pitched roof mass.
     const apex: V3 = { x: cx, y: cy, z: ridgeHeightM }
-    const corners: V3[] = eavesXY.map(p => ({ x: p.x, y: p.y, z: 0 }))
     for (let i = 0; i < n; i++) {
       faces.push(makeFace([corners[i], corners[(i + 1) % n], apex], pitch_rise))
     }

@@ -29,6 +29,7 @@ import { generateTraceBasedDiagramSVG } from '../templates/svg-diagrams'
 import { RoofMeasurementEngine, traceUiToEnginePayload, calculateRoofSpecs, type TraceReport } from '../services/roof-measurement-engine'
 import { ROOF_PITCH_MULTIPLIERS, HIP_VALLEY_MULTIPLIERS } from '../services/pitch'
 import { validateTraceUi, resolveEaves, allEavePoints } from '../utils/trace-validation'
+import { enhanceTraceWithAI } from '../services/trace-enhancer'
 import { resolvePitch } from '../services/pitch-resolver'
 import { generatePanelLayout } from '../services/solar-panel-layout'
 import { estimateMaterials, generateAccuLynxCSV, generateXactimateXML, type DetailedMaterialBOM } from '../services/material-estimation-engine'
@@ -1026,8 +1027,16 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
       }, 400)
     }
 
+    // Auto-clean the trace before measurement: deterministic geometry rules
+    // (collinear merge, tiny-edge drop, right-angle snap, ridge endpoint snap)
+    // plus optional Claude review for high-confidence corrections the rules
+    // can't see. The original trace is NOT mutated server-side; the enhanced
+    // copy flows through to the engine.
+    const enhancement = await enhanceTraceWithAI(trace, c.env, { aiEnabled: true })
+    const enhancedTrace = enhancement.trace
+
     // Resolve pitch via centralized helper (Solar API → user default → engine default)
-    const centroidPts = allEavePoints(trace)
+    const centroidPts = allEavePoints(enhancedTrace)
     const centroidLat = centroidPts.length > 0
       ? centroidPts.reduce((s, p) => s + p.lat, 0) / centroidPts.length : NaN
     const centroidLng = centroidPts.length > 0
@@ -1049,9 +1058,9 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
     const solarPitchDeg    = resolved.solar_pitch_deg
     const solarFootprintFt2 = resolved.solar_footprint_ft2
 
-    // Convert trace UI format to engine payload
+    // Convert trace UI format to engine payload (uses ENHANCED trace)
     const enginePayload = traceUiToEnginePayload(
-      trace,
+      enhancedTrace,
       {
         property_address: address || 'Pre-Order Measurement',
         homeowner_name: '',
@@ -1111,6 +1120,13 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
       calculation_ms: elapsed,
       engine_version: report.report_meta.engine_version,
       validation_warnings: validation.warnings,
+      trace_enhancements: {
+        changes: enhancement.changes,
+        warnings: enhancement.warnings,
+        ai_used: enhancement.ai_used,
+        ai_suggestions_applied: enhancement.ai_suggestions_applied,
+        ai_suggestions_skipped: enhancement.ai_suggestions_skipped,
+      },
 
       // Key numbers for the order form display
       measurements: {
