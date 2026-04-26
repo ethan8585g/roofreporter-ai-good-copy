@@ -9,6 +9,7 @@
 // ============================================================
 
 import type { RoofReport, RoofSegment } from '../types'
+import { detectDisjointEaves } from '../utils/disjoint-eaves'
 
 // ───────────────────────── TYPES ─────────────────────────
 
@@ -151,6 +152,15 @@ export function splitStructures(report: RoofReport): StructurePartition[] {
     sections = [rt.eaves_outline]
   }
   if (sections.length === 0) return []
+
+  // Auto-detect: if the user traced two structures into a single polygon
+  // without clicking "add structure", split it back into per-structure
+  // sub-polygons. Returns the original polygon untouched when the trace
+  // is genuinely a single shape.
+  if (sections.length === 1) {
+    const split = detectDisjointEaves(sections[0])
+    if (split.length > 1) sections = split
+  }
 
   // Common projection origin = centroid of all eave points across sections.
   const allPts = sections.flat()

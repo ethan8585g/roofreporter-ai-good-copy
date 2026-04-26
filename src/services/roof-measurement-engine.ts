@@ -1,4 +1,5 @@
 import { slopeFactor, hipSlopeFactor, pitchAngleDeg, pitchAngleRad } from './pitch'
+import { detectDisjointEaves } from '../utils/disjoint-eaves'
 
 // ============================================================
 // Roof Manager — Roof Measurement Engine v4.0
@@ -34,6 +35,12 @@ const BUNDLES_PER_SQ    = 3
 const SQ_PER_UNDERLAY   = 4
 const LF_PER_RIDGE_BUNDLE = 35
 const ICE_SHIELD_WIDTH_FT = 3.0
+// Ice & Water Barrier — IRC R905.1.2 / NBC code triggers
+const LOW_SLOPE_RISE_THRESHOLD = 2.0   // pitches < 2:12 require full-roof I&W
+const EAVE_PAST_WALL_FT       = 2.0    // 24" past interior heated-wall line
+const EAVE_OVERHANG_DEFAULT_FT = 1.0   // assumed 12" overhang when not provided
+const IW_VALLEY_HALF_WIDTH_FT = 3.0    // 3 ft each side of every valley
+const IW_ROLL_SQFT             = 200
 const NAIL_LBS_PER_SQ   = 2.5
 const SNAP_THRESHOLD_M   = 0.15  // ~6 inches — lowered from 0.3 to avoid collapsing short dormers/returns
 const DEG_TO_RAD = Math.PI / 180
@@ -163,6 +170,17 @@ export interface FaceDetail {
   azimuth_deg?: number | null
 }
 
+export interface IceWaterBreakdown {
+  low_slope_full_coverage_sqft: number   // sloped area of segments with rise < 2:12
+  low_slope_face_count: number
+  eave_strip_sqft: number                // standard-pitch eave LF × (overhang + 24")
+  eave_strip_depth_ft: number            // resolved per-eave depth used in formula
+  valley_sqft: number                    // valley LF × 3 ft × 2 sides
+  total_sqft: number
+  total_rolls_2sq: number
+  trigger_notes: string[]
+}
+
 export interface TraceMaterialEstimate {
   shingles_squares_net: number
   shingles_squares_gross: number
@@ -170,6 +188,7 @@ export interface TraceMaterialEstimate {
   underlayment_rolls: number
   ice_water_shield_sqft: number
   ice_water_shield_rolls_2sq: number
+  ice_water_breakdown?: IceWaterBreakdown
   ridge_cap_lf: number
   ridge_cap_bundles: number
   starter_strip_lf: number
@@ -728,18 +747,80 @@ function validateEaveGeometry(pts: { x: number; y: number }[]): string[] {
   return warnings
 }
 
+// IRC R905.1.2 / NBC ice & water barrier breakdown.
+// Faces below 2:12 require full sloped-area coverage; standard-pitch
+// faces only need an eave strip extending 24" past the heated wall,
+// plus 3 ft on each side of every valley.
+export function computeIceWaterBreakdown(
+  faces: { pitch_rise: number; sloped_area_ft2: number }[],
+  totalEaveFt: number,
+  totalValleyFt: number,
+  eaveDepths: EaveDepthLayer[]
+): IceWaterBreakdown {
+  const lowSlopeFaces = faces.filter(f => f.pitch_rise > 0 && f.pitch_rise < LOW_SLOPE_RISE_THRESHOLD)
+  const lowSlopeSqft = lowSlopeFaces.reduce((s, f) => s + f.sloped_area_ft2, 0)
+  const totalFaces = faces.length
+  const lowSlopeCount = lowSlopeFaces.length
+
+  // Eave LF on standard-pitch faces only — proportional approximation
+  // since face-to-edge mapping is not resolved at this layer.
+  const standardPitchEaveFt = totalFaces > 0
+    ? totalEaveFt * (1 - lowSlopeCount / totalFaces)
+    : totalEaveFt
+
+  const overhangFt = eaveDepths.length > 0
+    ? Math.max(...eaveDepths.map(l => l.depth_ft), EAVE_OVERHANG_DEFAULT_FT)
+    : EAVE_OVERHANG_DEFAULT_FT
+  const stripDepthFt = overhangFt + EAVE_PAST_WALL_FT
+
+  const eaveStripSqft = standardPitchEaveFt * stripDepthFt
+  const valleySqft = totalValleyFt * IW_VALLEY_HALF_WIDTH_FT * 2
+
+  const totalSqft = lowSlopeSqft + eaveStripSqft + valleySqft
+  const totalRolls = Math.ceil(totalSqft / IW_ROLL_SQFT)
+
+  const notes: string[] = []
+  if (lowSlopeSqft > 0) {
+    notes.push(`Low-slope coverage: ${lowSlopeCount} face(s) below 2:12 → ${round(lowSlopeSqft, 0)} sqft full I&W per IRC R905.1.2.`)
+  }
+  if (eaveStripSqft > 0) {
+    notes.push(`Eave strip: ${round(standardPitchEaveFt, 0)} LF × ${round(stripDepthFt, 1)} ft (overhang ${round(overhangFt, 1)} + 24" past heated wall) = ${round(eaveStripSqft, 0)} sqft.`)
+  }
+  if (valleySqft > 0) {
+    notes.push(`Valley coverage: ${round(totalValleyFt, 0)} LF × 3 ft × 2 sides = ${round(valleySqft, 0)} sqft.`)
+  }
+  if (totalFaces > 0 && lowSlopeCount > 0 && lowSlopeCount < totalFaces) {
+    notes.push('Eave LF on low-slope faces is excluded from the strip calc using a proportional approximation; verify against per-face edge mapping for high-stakes quotes.')
+  }
+
+  return {
+    low_slope_full_coverage_sqft: round(lowSlopeSqft, 1),
+    low_slope_face_count: lowSlopeCount,
+    eave_strip_sqft: round(eaveStripSqft, 1),
+    eave_strip_depth_ft: round(stripDepthFt, 2),
+    valley_sqft: round(valleySqft, 1),
+    total_sqft: round(totalSqft, 1),
+    total_rolls_2sq: totalRolls,
+    trigger_notes: notes,
+  }
+}
+
 function materialsEstimate(
   netSquares: number, wasteFrac: number,
-  eaveFt: number, ridgeFt: number, hipFt: number, valleyFt: number, rakeFt: number
+  eaveFt: number, ridgeFt: number, hipFt: number, valleyFt: number, rakeFt: number,
+  faces?: { pitch_rise: number; sloped_area_ft2: number }[],
+  eaveDepths?: EaveDepthLayer[]
 ): TraceMaterialEstimate {
   const gross = netSquares * (1 + wasteFrac)
+  const iw = computeIceWaterBreakdown(faces || [], eaveFt, valleyFt, eaveDepths || [])
   return {
     shingles_squares_net:       round(netSquares, 2),
     shingles_squares_gross:     round(gross, 2),
     shingles_bundles:           Math.ceil(gross * BUNDLES_PER_SQ),
     underlayment_rolls:         Math.ceil(gross / SQ_PER_UNDERLAY),
-    ice_water_shield_sqft:      round(eaveFt * ICE_SHIELD_WIDTH_FT, 1),
-    ice_water_shield_rolls_2sq: Math.ceil((eaveFt * ICE_SHIELD_WIDTH_FT) / 200),
+    ice_water_shield_sqft:      iw.total_sqft,
+    ice_water_shield_rolls_2sq: iw.total_rolls_2sq,
+    ice_water_breakdown:        iw,
     ridge_cap_lf:               round(ridgeFt + hipFt, 1),
     ridge_cap_bundles:          Math.ceil((ridgeFt + hipFt) / LF_PER_RIDGE_BUNDLE),
     starter_strip_lf:           round(eaveFt + rakeFt, 1),
@@ -1566,41 +1647,16 @@ export class RoofMeasurementEngine {
     const grossSquares = netSquares * (1 + wFrac)
     const labor = laborEstimate(totalSloped, domPitch, this.complexity)
 
-    // ── EAVE DEPTH LAYER ICE & WATER SHIELD ──
-    // If multi-layer eave depths are provided, compute ice shield per layer
-    let iceShieldSqft = totalEaveFt * ICE_SHIELD_WIDTH_FT  // default
-    if (this.eaveDepths.length > 0) {
-      // Override ice shield: use actual depth per layer
-      let layerIce = 0
-      for (const layer of this.eaveDepths) {
-        const depthFt = Math.max(layer.depth_ft, ICE_SHIELD_WIDTH_FT)
-        // Find the eave length for this section
-        if (layer.section_index === 0) {
-          layerIce += totalEaveFt * depthFt
-        } else {
-          // Extra sections — compute their perimeter
-          const secIdx = layer.section_index - 1
-          if (secIdx < this.rawEavesSections.length) {
-            const secPts = this.rawEavesSections[secIdx]
-            const { projected: secCart } = projectToCartesian(secPts)
-            let secPerim = 0
-            for (let i = 0; i < secCart.length - 1; i++) {
-              secPerim += dist2D(secCart[i], secCart[i + 1]) * M_TO_FT
-            }
-            layerIce += secPerim * depthFt
-          }
-        }
-      }
-      if (layerIce > 0) iceShieldSqft = layerIce
-    }
-
+    // ── ICE & WATER BARRIER (IRC R905.1.2 / NBC) ──
+    // Computed inside materialsEstimate via computeIceWaterBreakdown:
+    //   • Low-slope faces (rise < 2:12) → full sloped-area coverage
+    //   • Standard-pitch eaves           → eave LF × (overhang + 24")
+    //   • Valleys                        → LF × 3 ft × 2 sides
     const mat = materialsEstimate(
       netSquares, wFrac,
-      totalEaveFt, totalRidgeFt, totalHipFt, totalValleyFt, totalRakeFt
+      totalEaveFt, totalRidgeFt, totalHipFt, totalValleyFt, totalRakeFt,
+      facesData, this.eaveDepths
     )
-    // Override ice & water shield with depth-aware calculation
-    mat.ice_water_shield_sqft = round(iceShieldSqft, 1)
-    mat.ice_water_shield_rolls_2sq = Math.ceil(iceShieldSqft / 200)
 
     const perimeterFt = totalEaveFt + totalRakeFt
 
@@ -1643,6 +1699,11 @@ export class RoofMeasurementEngine {
         `Section ${d.section_index}: ${d.depth_ft} ft${d.label ? ` (${d.label})` : ''}`
       ).join('; ')
       notes.push(`Multi-layer eave depth applied: ${depthSummary}. Ice & water shield calculated per-layer depth.`)
+    }
+
+    // Ice & water barrier trigger notes (IRC R905.1.2 / NBC)
+    if (mat.ice_water_breakdown) {
+      for (const n of mat.ice_water_breakdown.trigger_notes) notes.push(n)
     }
 
     // Small corner notes
@@ -1829,6 +1890,15 @@ export function traceUiToEnginePayload(
       const flat = traceJson.eaves as { lat: number; lng: number }[]
       if (flat.length >= 3) allSections = [flat]
     }
+  }
+
+  // Auto-detect: if the user traced a house + detached garage in one
+  // stroke without clicking "add structure", the polygon will contain
+  // two long "jump" edges bridging the buildings. Split it back into
+  // per-structure sub-polygons so the engine measures each separately.
+  if (allSections.length === 1) {
+    const split = detectDisjointEaves(allSections[0])
+    if (split.length > 1) allSections = split
   }
 
   // Primary outline = largest section (most eave points)
