@@ -59,6 +59,38 @@ import { embedAndStoreReport, generateQueryEmbedding, searchReports, buildReport
 // Validation
 import { parseBody, ValidationError, toggleSegmentsBody, visionFilterQuery, datalayersAnalyzeBody, emailBody } from '../utils/validation'
 
+/**
+ * Compute a sensible center lat/lng for the static-map satellite tile from
+ * the user-traced eaves polygon(s). Returns the bbox-center across every
+ * traced eave point so the entire roof is in frame even when the geocoded
+ * address pin lands off-roof (corner lots, deep setbacks, multi-structure).
+ * Returns null if no usable trace exists — caller falls back to address.
+ */
+function computeTracedImageryCenter(traceData: any): { lat: number; lng: number } | null {
+  if (!traceData) return null
+  const points: { lat: number; lng: number }[] = []
+  const collect = (arr: any) => {
+    if (!Array.isArray(arr)) return
+    for (const p of arr) {
+      if (p && typeof p.lat === 'number' && typeof p.lng === 'number') points.push(p)
+    }
+  }
+  if (Array.isArray(traceData.eaves_sections)) {
+    for (const sec of traceData.eaves_sections) collect(sec)
+  }
+  collect(traceData.eaves)
+  collect(traceData.eaves_outline)
+  if (points.length < 3) return null
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity
+  for (const p of points) {
+    if (p.lat < minLat) minLat = p.lat
+    if (p.lat > maxLat) maxLat = p.lat
+    if (p.lng < minLng) minLng = p.lng
+    if (p.lng > maxLng) maxLng = p.lng
+  }
+  return { lat: (minLat + maxLat) / 2, lng: (minLng + maxLng) / 2 }
+}
+
 export const reportsRoutes = new Hono<{ Bindings: Bindings }>()
 
 // ── GLOBAL ERROR HANDLER ──
@@ -2703,10 +2735,13 @@ async function _generateReportForOrderInner(
           ? traceData.eaves_sections.filter((s: any) => Array.isArray(s) && s.length >= 3).length
           : 0
         const imageryZoomOffset = structureCount >= 2 ? -1 : 0
+        // Re-center the static map on the polygon's bbox-center so the house
+        // can't be cropped out when the geocoded address pin lands off-roof.
+        const imageryCenter = computeTracedImageryCenter(traceData)
         // Fetch pitch + the two extra report images (flux heatmap, mask overlay) in parallel.
         // Imagery failure is non-fatal and falls back to the single-image layout.
         const [pitchRes, imgRes] = await Promise.all([
-          fetchSolarPitchAndImagery(order.latitude, order.longitude, solarApiKey, mapsApiKey || solarApiKey, footprintHint, imageryZoomOffset),
+          fetchSolarPitchAndImagery(order.latitude, order.longitude, solarApiKey, mapsApiKey || solarApiKey, footprintHint, imageryZoomOffset, imageryCenter || undefined),
           fetchSolarImageryOnly(order.latitude, order.longitude, solarApiKey).catch(() => null),
         ])
         solarPitch = pitchRes
@@ -2862,13 +2897,15 @@ async function _generateReportForOrderInner(
         ? traceData.eaves_sections.filter((s: any) => Array.isArray(s) && s.length >= 3).length
         : 0
       const imageryZoomOffsetFallback = traceStructureCount >= 2 ? -1 : 0
+      const imageryCenterFallback = computeTracedImageryCenter(traceData)
       const imagery = {
         ...(solarPitch
           ? { ...solarPitch.imagery, dsm_url: null, mask_url: null }
           : {
               ...generateEnhancedImagery(
                 order.latitude || 0, order.longitude || 0,
-                mapsApiKey || '', km.total_projected_footprint_ft2, imageryZoomOffsetFallback
+                mapsApiKey || '', km.total_projected_footprint_ft2, imageryZoomOffsetFallback,
+                imageryCenterFallback || undefined
               ),
               dsm_url: null, mask_url: null,
             }),

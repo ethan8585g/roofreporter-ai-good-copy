@@ -55,7 +55,13 @@ export function roofZoomFor(footprintSqft: number = 1500): number {
   return m2 > 2000 ? 20 : m2 > 800 ? 20 : m2 > 400 ? 21 : m2 > 100 ? 21 : 21
 }
 
-export function generateEnhancedImagery(lat: number, lng: number, apiKey: string, footprintSqft: number = 1500, zoomOffset: number = 0) {
+export function generateEnhancedImagery(lat: number, lng: number, apiKey: string, footprintSqft: number = 1500, zoomOffset: number = 0, imageryCenter?: { lat: number; lng: number }) {
+  // imageryCenter — when the user has traced the roof we re-center the
+  // static-map call on the polygon's centroid instead of the geocoded address.
+  // This prevents the house from being cropped out of frame when the geocode
+  // pin lands on the lot edge / driveway / wrong side of a corner lot.
+  const cLat = imageryCenter?.lat ?? lat
+  const cLng = imageryCenter?.lng ?? lng
   // Calculate zoom based on roof size — ZOOMED IN but entire roof visible.
   // Google Maps zoom at scale=2 (1280px actual):
   //   Zoom 21 ≈ 15m across → excellent for small roofs (<150 m²)
@@ -124,14 +130,14 @@ export function generateEnhancedImagery(lat: number, lng: number, apiKey: string
   return {
     // ── PRIMARY: Dead-center overhead — TIGHT zoom on roof, larger canvas captures full roof + edges ──
     // Using 800x800 @ scale=2 = 1600x1600px actual — more detail + more coverage than 640x640
-    satellite_url: `${base}?center=${lat},${lng}&zoom=${roofZoom}&size=800x800&scale=2&maptype=satellite&key=${apiKey}`,
-    satellite_overhead_url: `${base}?center=${lat},${lng}&zoom=${roofZoom}&size=800x800&scale=2&maptype=satellite&key=${apiKey}`,
-    
+    satellite_url: `${base}?center=${cLat},${cLng}&zoom=${roofZoom}&size=800x800&scale=2&maptype=satellite&key=${apiKey}`,
+    satellite_overhead_url: `${base}?center=${cLat},${cLng}&zoom=${roofZoom}&size=800x800&scale=2&maptype=satellite&key=${apiKey}`,
+
     // ── MEDIUM: Property view — shows full lot (zoom-1 from overhead) ──
-    satellite_medium_url: `${base}?center=${lat},${lng}&zoom=${mediumZoom}&size=640x640&scale=2&maptype=satellite&key=${apiKey}`,
-    
+    satellite_medium_url: `${base}?center=${cLat},${cLng}&zoom=${mediumZoom}&size=640x640&scale=2&maptype=satellite&key=${apiKey}`,
+
     // ── CONTEXT: Wide neighborhood view (zoom-3 from overhead) ──
-    satellite_context_url: `${base}?center=${lat},${lng}&zoom=${contextZoom}&size=640x640&scale=2&maptype=satellite&key=${apiKey}`,
+    satellite_context_url: `${base}?center=${cLat},${cLng}&zoom=${contextZoom}&size=640x640&scale=2&maptype=satellite&key=${apiKey}`,
     
     // ── DSM/MASK/FLUX: Solar API data (set later) ──
     dsm_url: '',
@@ -148,10 +154,10 @@ export function generateEnhancedImagery(lat: number, lng: number, apiKey: string
     west_url:  `https://maps.googleapis.com/maps/api/streetview?location=${lat},${lng}&size=640x400&heading=90&pitch=15&fov=90&key=${apiKey}`,
     
     // ── CLOSE-UP QUADRANTS: Slight zoom-in at 4 corners — shows roof detail without losing context ──
-    closeup_nw_url: `${base}?center=${lat + quadLat},${lng - quadLng}&zoom=${closeupZoom}&size=400x400&scale=2&maptype=satellite&key=${apiKey}`,
-    closeup_ne_url: `${base}?center=${lat + quadLat},${lng + quadLng}&zoom=${closeupZoom}&size=400x400&scale=2&maptype=satellite&key=${apiKey}`,
-    closeup_sw_url: `${base}?center=${lat - quadLat},${lng - quadLng}&zoom=${closeupZoom}&size=400x400&scale=2&maptype=satellite&key=${apiKey}`,
-    closeup_se_url: `${base}?center=${lat - quadLat},${lng + quadLng}&zoom=${closeupZoom}&size=400x400&scale=2&maptype=satellite&key=${apiKey}`,
+    closeup_nw_url: `${base}?center=${cLat + quadLat},${cLng - quadLng}&zoom=${closeupZoom}&size=400x400&scale=2&maptype=satellite&key=${apiKey}`,
+    closeup_ne_url: `${base}?center=${cLat + quadLat},${cLng + quadLng}&zoom=${closeupZoom}&size=400x400&scale=2&maptype=satellite&key=${apiKey}`,
+    closeup_sw_url: `${base}?center=${cLat - quadLat},${cLng - quadLng}&zoom=${closeupZoom}&size=400x400&scale=2&maptype=satellite&key=${apiKey}`,
+    closeup_se_url: `${base}?center=${cLat - quadLat},${cLng + quadLng}&zoom=${closeupZoom}&size=400x400&scale=2&maptype=satellite&key=${apiKey}`,
     // Street view removed per user request
   }
 }
@@ -191,7 +197,8 @@ export async function fetchSolarPitchAndImagery(
   lat: number, lng: number,
   solarApiKey: string, mapsApiKey: string,
   footprintSqftHint: number = 1500,
-  zoomOffset: number = 0
+  zoomOffset: number = 0,
+  imageryCenter?: { lat: number; lng: number }
 ): Promise<SolarPitchAndImagery> {
   const startTime = Date.now()
   const preciseLat = parseFloat(lat.toFixed(7))
@@ -262,7 +269,7 @@ export async function fetchSolarPitchAndImagery(
     : undefined
 
   // Generate satellite imagery URLs (uses footprint hint for zoom calculation)
-  const imagery = generateEnhancedImagery(lat, lng, mapsApiKey, footprintSqftHint, zoomOffset)
+  const imagery = generateEnhancedImagery(lat, lng, mapsApiKey, footprintSqftHint, zoomOffset, imageryCenter)
 
   console.log(`[SolarPitch] Extracted pitch=${avgPitch.toFixed(1)}° (${pitchRatio}), ` +
     `${segmentPitches.length} segments, quality=${imageryQuality}, ` +

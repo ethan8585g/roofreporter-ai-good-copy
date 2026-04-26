@@ -53,10 +53,13 @@ const M_PER_DEG_LAT = 111320
 const M_TO_FT = 3.28084
 const FT2_PER_M2 = 10.7639
 
-// Axonometric tilt: 210° yaw (camera viewing from the SW so the street/front
-// of the building is in the foreground, matching the typical satellite POV
-// where the building's "front" is south/east), 30° pitch.
-const YAW_DEG = 210
+// Axonometric tilt: 0° yaw + 30° pitch.
+// Yaw 0 keeps NORTH at the top of the diagram and EAST on the right —
+// the same orientation as the Google Maps Static satellite tile on page 1.
+// Any non-zero yaw rotates the diagram relative to the satellite, which
+// makes it look "backwards" because the user instinctively compares the two.
+// Pitch 30° gives the 3D mass without tipping past visual readability.
+const YAW_DEG = 0
 const PITCH_DEG = 30
 
 // Sun direction for Lambert shading (NW, 45° elevation).
@@ -125,9 +128,12 @@ function midLatLng(line: LatLng[]): LatLng {
 }
 
 function projectLatLngToMeters(pts: LatLng[], cosLat: number, refLat: number, refLng: number) {
+  // Standard math convention: +x = east, +y = north. Combined with
+  // projectAxonometric's screen-y flip, yaw=0 gives a north-up east-right
+  // view that matches Google Maps Static (which is always north-up).
   return pts.map(p => ({
     x: (p.lng - refLng) * 111320 * cosLat,
-    y: -(p.lat - refLat) * M_PER_DEG_LAT,
+    y: (p.lat - refLat) * M_PER_DEG_LAT,
   }))
 }
 
