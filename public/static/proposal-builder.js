@@ -798,6 +798,37 @@ document.addEventListener('DOMContentLoaded', () => {
               '<div><label style="color:var(--text-muted);font-size:11px">Customer $/Square</label><input type="number" value="' + (state.customerPricePerSquare || 0) + '" onchange="window.__pbState.customerPricePerSquare=Number(this.value);window.__pbRender()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-weight:700;font-size:18px;margin-top:4px"></div>'
             ) +
           '</div>' +
+
+          // Internal profit summary — never shown to customer
+          (function() {
+            var markupAmount = customerTotal - effectiveCost;
+            var markupPctOnCost = effectiveCost > 0 ? (markupAmount / effectiveCost * 100) : 0;
+            var profitColor = markupAmount < 0 ? '#ef4444' : '#16a34a';
+            return '<div style="background:var(--bg-card);border:1px dashed #f59e0b;border-radius:12px;padding:14px 16px;margin-top:12px">' +
+              '<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">' +
+                '<i class="fas fa-lock" style="color:#f59e0b;font-size:11px"></i>' +
+                '<span style="color:#f59e0b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px">Internal Only — Not Shown to Customer</span>' +
+              '</div>' +
+              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+                '<div style="background:var(--bg-elevated);border-radius:8px;padding:8px 10px">' +
+                  '<div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Contractor Cost</div>' +
+                  '<div style="color:#ef4444;font-size:16px;font-weight:800">$' + effectiveCost.toFixed(2) + '</div>' +
+                '</div>' +
+                '<div style="background:var(--bg-elevated);border-radius:8px;padding:8px 10px">' +
+                  '<div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Total Customer Price</div>' +
+                  '<div style="color:var(--text-primary);font-size:16px;font-weight:800">$' + customerTotal.toFixed(2) + '</div>' +
+                '</div>' +
+                '<div style="background:var(--bg-elevated);border-radius:8px;padding:8px 10px">' +
+                  '<div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Total Markup</div>' +
+                  '<div style="color:' + profitColor + ';font-size:16px;font-weight:800">$' + markupAmount.toFixed(2) + ' <span style="font-size:11px;font-weight:600;opacity:0.75">(' + markupPctOnCost.toFixed(1) + '%)</span></div>' +
+                '</div>' +
+                '<div style="background:var(--bg-elevated);border-radius:8px;padding:8px 10px">' +
+                  '<div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Profit Margin</div>' +
+                  '<div style="color:' + profitColor + ';font-size:16px;font-weight:800">' + margin.toFixed(1) + '%</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+          })() +
         '</div>' +
 
         // RIGHT COLUMN: Report Toggles + Details + Certs
