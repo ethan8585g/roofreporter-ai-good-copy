@@ -4756,8 +4756,17 @@
     fetch('/api/reports/' + orderId + '/share', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ email: email }) })
       .then(function(r) { return r.json(); })
       .then(function(res) {
-        if (res.success) { toast('Report link sent to ' + email + '!'); closeModal(); }
-        else toast(res.error || 'Failed to send email', 'error');
+        if (res && res.email_sent) {
+          toast('Report link sent to ' + email + '!');
+          closeModal();
+        } else if (res && res.success === true && res.email_requested && !res.email_sent) {
+          var msg = res.email_error === 'no_email_provider_configured'
+            ? 'Email is not configured on this account — share link generated, copy it manually.'
+            : 'Could not send email (' + (res.email_error || 'unknown') + '). Share link is still valid — copy it manually.';
+          toast(msg, 'error');
+        } else {
+          toast((res && res.error) || 'Failed to send email', 'error');
+        }
       })
       .catch(function() { toast('Network error', 'error'); });
   };

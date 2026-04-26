@@ -2290,10 +2290,17 @@ reportsRoutes.post('/:orderId/share', async (c) => {
   const baseUrl = new URL(c.req.url).origin
   const shareUrl = `${baseUrl}/report/share/${shareToken}`
 
-  // Optionally send email to homeowner
+  // Optionally send email to homeowner. Try Gmail OAuth2 first, then
+  // fall back to Resend. Surface the real outcome to the caller so the UI
+  // can stop falsely claiming success when nothing was sent.
+  let emailSent = false
+  let emailError: string | null = null
+  let emailVia: 'gmail' | 'resend' | null = null
+
   if (body.email) {
     const address = report.property_address || 'your property'
     const contractor = report.contractor_name || 'Your roofing contractor'
+    const subject = `Your Roof Report is Ready — ${address}`
     const notifHtml = `<!DOCTYPE html><html><body style="font-family:Inter,system-ui,sans-serif;background:#f8fafc;margin:0;padding:32px">
 <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
   <div style="background:linear-gradient(135deg,#0369a1,#0ea5e9);padding:32px;text-align:center">
@@ -2311,17 +2318,50 @@ reportsRoutes.post('/:orderId/share', async (c) => {
     <p style="color:#9ca3af;font-size:12px;margin:0">Powered by <a href="https://roofmanager.ca" style="color:#0369a1">Roof Manager</a></p>
   </div>
 </div></body></html>`
-    try {
-      const ci = (c.env as any).GMAIL_CLIENT_ID
-      const cs = (c.env as any).GMAIL_CLIENT_SECRET
-      const rt = (c.env as any).GMAIL_REFRESH_TOKEN
-      if (ci && cs && rt) {
-        await sendGmailOAuth2(ci, cs, rt, body.email, `Your Roof Report is Ready — ${address}`, notifHtml, c.env.GMAIL_SENDER_EMAIL)
+
+    const env: any = c.env
+    const ci = env.GMAIL_CLIENT_ID
+    const cs = env.GMAIL_CLIENT_SECRET
+    const rt = env.GMAIL_REFRESH_TOKEN
+    const resendKey = env.RESEND_API_KEY
+
+    if (ci && cs && rt) {
+      try {
+        await sendGmailOAuth2(ci, cs, rt, body.email, subject, notifHtml, env.GMAIL_SENDER_EMAIL)
+        emailSent = true
+        emailVia = 'gmail'
+      } catch (e: any) {
+        emailError = `gmail: ${e?.message || 'send failed'}`
+        console.warn('[Share] Gmail send failed:', e?.message)
       }
-    } catch (e: any) { console.warn('[Share] Email failed:', e.message) }
+    }
+
+    if (!emailSent && resendKey) {
+      try {
+        await sendViaResend(resendKey, body.email, subject, notifHtml, env.GMAIL_SENDER_EMAIL || null)
+        emailSent = true
+        emailVia = 'resend'
+        emailError = null
+      } catch (e: any) {
+        emailError = (emailError ? emailError + '; ' : '') + `resend: ${e?.message || 'send failed'}`
+        console.warn('[Share] Resend send failed:', e?.message)
+      }
+    }
+
+    if (!emailSent && !emailError) {
+      emailError = 'no_email_provider_configured'
+    }
   }
 
-  return c.json({ success: true, share_url: shareUrl, share_token: shareToken })
+  return c.json({
+    success: true,
+    share_url: shareUrl,
+    share_token: shareToken,
+    email_requested: !!body.email,
+    email_sent: emailSent,
+    email_via: emailVia,
+    email_error: emailError,
+  })
 })
 
 // ============================================================
