@@ -50,10 +50,79 @@
         try { mountViewer(mount, struct); }
         catch (err) { console.warn('[report-3d] viewer init failed', err); }
       });
+      installPrintHook(mounts);
     })
     .catch(function (err) {
       console.warn('[report-3d] Three.js failed to load; SVG fallback remains', err);
     });
+
+  // ─── PHASE 3: print-time PNG snapshot ───
+  // When the browser is about to print, render each canvas at higher
+  // resolution and inject the PNG into the print DOM so the PDF gets
+  // the 3D rendering instead of the axonometric SVG fallback.
+  function installPrintHook(mounts) {
+    if (window.__roof3dPrintHookInstalled) return;
+    window.__roof3dPrintHookInstalled = true;
+
+    function snapshotAll() {
+      mounts.forEach(function (mount) {
+        var ctx = mount.__roof3d;
+        if (!ctx || !ctx.renderer) return;
+
+        try {
+          // Rerender at higher resolution for crisp PDF output.
+          var origSize = new (window.THREE.Vector2)();
+          ctx.renderer.getSize(origSize);
+          var origPixelRatio = ctx.renderer.getPixelRatio();
+          var printPixelRatio = 3; // ~288 DPI at print scale
+          ctx.renderer.setPixelRatio(printPixelRatio);
+          ctx.renderer.setSize(origSize.x, origSize.y, false);
+          ctx.renderer.render(ctx.scene, ctx.camera);
+
+          var dataUrl = ctx.renderer.domElement.toDataURL('image/png');
+
+          // Restore live render
+          ctx.renderer.setPixelRatio(origPixelRatio);
+          ctx.renderer.setSize(origSize.x, origSize.y, false);
+          ctx.renderer.render(ctx.scene, ctx.camera);
+
+          // Inject print-only image; SVG/canvas already hidden by @media print.
+          var existing = mount.querySelector('img.roof3d-print-img');
+          if (!existing) {
+            existing = document.createElement('img');
+            existing.className = 'roof3d-print-img';
+            existing.style.cssText = 'display:none;width:100%;height:auto';
+            mount.appendChild(existing);
+          }
+          existing.src = dataUrl;
+        } catch (err) {
+          console.warn('[report-3d] snapshot failed for structure', err);
+        }
+      });
+
+      // Inject one-time print stylesheet that prefers the PNG over the SVG.
+      if (!document.getElementById('roof3d-print-style')) {
+        var style = document.createElement('style');
+        style.id = 'roof3d-print-style';
+        style.textContent = '@media print { ' +
+          '.roof3d-frame canvas { display: none !important; } ' +
+          '.roof3d-frame img.roof3d-print-img { display: block !important; } ' +
+          '.roof3d-frame:has(img.roof3d-print-img) svg { display: none !important; } ' +
+        '}';
+        document.head.appendChild(style);
+      }
+    }
+
+    window.addEventListener('beforeprint', snapshotAll);
+
+    // Safari fallback: matchMedia('print')
+    if (window.matchMedia) {
+      var mq = window.matchMedia('print');
+      var listener = function (e) { if (e.matches) snapshotAll(); };
+      if (mq.addEventListener) mq.addEventListener('change', listener);
+      else if (mq.addListener) mq.addListener(listener);
+    }
+  }
 
   function mountViewer(mount, struct) {
     var THREE = window.THREE;
