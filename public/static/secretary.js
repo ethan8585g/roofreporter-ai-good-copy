@@ -173,15 +173,16 @@
       banner = '<div class="bg-gradient-to-r from-[#0e1d34] to-[#0b1628] border border-sky-500/40 rounded-xl p-4 mb-4 flex items-center justify-between gap-3">' +
         '<div class="flex items-center gap-3"><i class="fas fa-gift text-sky-400 text-xl"></i>' +
         '<div><div class="text-sm font-bold text-sky-200">Free trial active — ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' left</div>' +
-        '<div class="text-xs text-gray-400">Your card ending in ' + (trial.card_last4 || '••••') + ' will be charged $149 on ' + (trial.next_charge_date || trial.trial_ends_at) + '.</div></div></div>' +
+        '<div class="text-xs text-gray-400">Your card ending in ' + (trial.card_last4 || '••••') + ' will be charged $199 on ' + (trial.next_charge_date || trial.trial_ends_at) + '.</div></div></div>' +
         '<button onclick="secCancelSubscription()" class="text-xs text-red-300 hover:text-red-200 underline">Cancel before renewal</button></div>';
     } else if (trial.status === 'past_due') {
       banner = '<div class="bg-red-500/10 border border-red-500/40 rounded-xl p-4 mb-4 text-red-200 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Your last payment failed. Please update your card to avoid cancellation.</div>';
     } else if (trial.status === 'active' && trial.card_last4) {
-      banner = '<div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 mb-4 text-emerald-200 text-xs"><i class="fas fa-check-circle mr-2"></i>Subscribed &bull; $149/mo &bull; Card ••• ' + trial.card_last4 + '</div>';
+      banner = '<div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 mb-4 text-emerald-200 text-xs"><i class="fas fa-check-circle mr-2"></i>Subscribed &bull; $199/mo &bull; Card ••• ' + trial.card_last4 + '</div>';
     }
 
-    root.innerHTML = banner +
+    var fwdBanner = (typeof window.secRenderForwardingBanner === 'function') ? window.secRenderForwardingBanner() : '';
+    root.innerHTML = banner + fwdBanner +
       '<div class="flex flex-wrap gap-2 mb-6">' +
         tabBtn('setup', 'fa-cog', 'Setup & Config') +
         tabBtn('connect', 'fa-phone-alt', 'Connect Phone') +
@@ -217,7 +218,7 @@
   window.secSetTab = function(t) { state.activeTab = t; render(); if (t === 'calls') loadCalls(); if (t === 'leads') loadLeads(); if (t === 'messages') loadAndRenderMessages(); if (t === 'appointments') loadAndRenderAppointments(); if (t === 'callbacks') loadAndRenderCallbacks(); };
 
   // ============================================================
-  // TRIAL SIGNUP PAGE — 1-month free trial, card on file, then $149/mo
+  // TRIAL SIGNUP PAGE — 1-month free trial, card on file, then $199/mo
   // ============================================================
   function renderSubscriptionPage() {
     var custData = {};
@@ -258,9 +259,9 @@
         '<div class="bg-[#111111] rounded-2xl border-2 border-sky-500 shadow-lg p-4 sm:p-6 mb-6">' +
           '<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">' +
             '<div><h3 class="font-bold text-gray-100 text-xl"><i class="fas fa-gift text-sky-500 mr-2"></i>Start Your Free Trial</h3>' +
-              '<p class="text-gray-500 text-sm mt-1">1 month free &bull; Card on file required &bull; Then $149/mo &bull; Cancel anytime</p></div>' +
+              '<p class="text-gray-500 text-sm mt-1">1 month free &bull; Card on file required &bull; Then $199/mo &bull; Cancel anytime</p></div>' +
             '<div class="text-right"><div class="text-2xl sm:text-3xl font-extrabold text-sky-400">$0<span class="text-sm font-normal text-gray-500"> for 30 days</span></div>' +
-              '<div class="text-xs text-gray-400">then $149/mo</div></div>' +
+              '<div class="text-xs text-gray-400">then $199/mo</div></div>' +
           '</div>' +
           '<div class="space-y-3 mb-4">' +
             '<div class="flex items-start gap-2 text-sm text-gray-300"><i class="fas fa-shield-alt text-emerald-400 mt-1"></i><div><strong>Secure card entry.</strong> Card is tokenized by Square. We never see your card number.</div></div>' +
@@ -2388,7 +2389,7 @@
   };
 
   window.secBuyNumber = async function(phoneNumber) {
-    if (!confirm('Purchase ' + phoneNumber + ' for $1/mo? This number will become your Secretary\'s AI phone number and attach to LiveKit automatically.')) return;
+    if (!confirm('Purchase ' + phoneNumber + ' for $1 one-time? This becomes your AI receptionist number and attaches to LiveKit automatically.')) return;
     try {
       var res = await fetch('/api/secretary/numbers/purchase', {
         method: 'POST', headers: authHeaders(),
@@ -2396,13 +2397,250 @@
       });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Purchase failed');
-      showToast('Number purchased and wired to your AI agent!', 'success');
       var modal = document.getElementById('numberPickerModal');
       if (modal) modal.remove();
       await loadStatus();
+      // Open the forwarding wizard with the live setup_instructions payload.
+      window.secShowForwardingWizard(data.phone_number || phoneNumber, data.setup_instructions || null);
     } catch (e) {
       showToast(e.message || 'Purchase failed', 'error');
     }
+  };
+
+  // ============================================================
+  // Call-forwarding wizard
+  // ------------------------------------------------------------
+  // Walks the customer through forwarding their existing business line
+  // to the freshly-purchased AI number. 4 steps: welcome → phone type →
+  // carrier-specific instructions → confirm.
+  //
+  // Re-openable from the Connect tab via the persistent banner when
+  // connection_status !== 'connected'.
+  // ============================================================
+  function fmtPhoneDisplay(p) {
+    if (!p) return '';
+    var d = String(p).replace(/^\+1/, '').replace(/\D/g, '');
+    if (d.length === 10) return '(' + d.slice(0,3) + ') ' + d.slice(3,6) + '-' + d.slice(6);
+    return p;
+  }
+  function aiDigitsOf(p) {
+    return String(p || '').replace(/^\+1/, '').replace(/\D/g, '');
+  }
+
+  window.secShowForwardingWizard = function(aiNumber, instructions) {
+    // Remove any existing wizard instance so re-opening is idempotent.
+    var existing = document.getElementById('fwdWizardModal');
+    if (existing) existing.remove();
+
+    var aiDigits = aiDigitsOf(aiNumber);
+    var displayNum = fmtPhoneDisplay(aiNumber);
+    var dialCode = '*72' + aiDigits;
+    var disableCode = '*73';
+
+    var modal = document.createElement('div');
+    modal.id = 'fwdWizardModal';
+    modal.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4';
+    modal.innerHTML = '<div class="bg-[#111111] border border-white/10 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">' +
+      '<div id="fwdWizBody" class="overflow-y-auto"></div>' +
+      '</div>';
+    document.body.appendChild(modal);
+
+    var step = 1;
+    var phoneType = '';
+
+    function header(stepNum, title) {
+      return '<div class="flex items-center justify-between p-5 border-b border-white/10">' +
+        '<div><div class="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-0.5">Step ' + stepNum + ' of 4</div>' +
+        '<h3 class="text-lg font-bold text-gray-100">' + title + '</h3></div>' +
+        '<button onclick="document.getElementById(\'fwdWizardModal\').remove()" class="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 flex items-center justify-center"><i class="fas fa-times"></i></button>' +
+        '</div>';
+    }
+    function footer(backBtn, nextBtn) {
+      return '<div class="p-5 border-t border-white/10 flex items-center justify-between">' +
+        (backBtn || '<span></span>') +
+        (nextBtn || '<span></span>') +
+        '</div>';
+    }
+    function copyBtn(value) {
+      return '<button onclick="navigator.clipboard.writeText(\'' + value + '\').then(function(){window.rmToast && window.rmToast(\'Copied: ' + value + '\', \'success\')})" class="ml-2 inline-flex items-center gap-1 px-2 py-1 bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 text-xs font-semibold rounded-md"><i class="fas fa-copy"></i>Copy</button>';
+    }
+
+    function renderStep1() {
+      document.getElementById('fwdWizBody').innerHTML =
+        header(1, 'Your AI number is live') +
+        '<div class="p-6 space-y-4 text-gray-200">' +
+        '<div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-start gap-3">' +
+        '<i class="fas fa-check-circle text-emerald-400 text-xl mt-0.5"></i>' +
+        '<div><div class="font-bold text-emerald-300 mb-1">Number purchased: ' + displayNum + '</div>' +
+        '<div class="text-sm text-emerald-200/80">SIP trunk and dispatch rule are wired up. Now forward your existing business line to this number so the AI answers when you can\'t.</div></div></div>' +
+        '<p class="text-sm text-gray-300">Take 2 minutes now to set up call forwarding. We\'ll show you the exact steps for your phone.</p>' +
+        '</div>' +
+        footer(
+          '<button onclick="document.getElementById(\'fwdWizardModal\').remove()" class="px-4 py-2 text-sm text-gray-400 hover:text-gray-200">Skip for now</button>',
+          '<button onclick="window.__fwdNext(2)" class="px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-sm font-bold"><i class="fas fa-arrow-right mr-1"></i>Continue</button>'
+        );
+    }
+
+    function renderStep2() {
+      var opts = [
+        { id: 'iphone', label: 'iPhone', icon: 'fa-mobile-alt' },
+        { id: 'android', label: 'Android', icon: 'fa-mobile-alt' },
+        { id: 'landline', label: 'Landline', icon: 'fa-phone' },
+        { id: 'voip', label: 'VoIP / PBX', icon: 'fa-network-wired' },
+      ];
+      var cards = opts.map(function(o) {
+        return '<button onclick="window.__fwdPickType(\'' + o.id + '\')" class="bg-[#0A0A0A] border-2 ' +
+          (phoneType === o.id ? 'border-sky-500 ring-2 ring-sky-500/30' : 'border-white/10 hover:border-sky-400') +
+          ' rounded-xl p-5 text-left transition-all">' +
+          '<i class="fas ' + o.icon + ' text-2xl text-sky-400 mb-3"></i>' +
+          '<div class="text-base font-bold text-gray-100">' + o.label + '</div>' +
+          '</button>';
+      }).join('');
+      document.getElementById('fwdWizBody').innerHTML =
+        header(2, 'What kind of phone is your business line?') +
+        '<div class="p-6 space-y-4">' +
+        '<p class="text-sm text-gray-400">Pick the device or system that currently rings when customers call your business.</p>' +
+        '<div class="grid grid-cols-2 gap-3">' + cards + '</div>' +
+        '</div>' +
+        footer(
+          '<button onclick="window.__fwdNext(1)" class="px-4 py-2 text-sm text-gray-400 hover:text-gray-200"><i class="fas fa-arrow-left mr-1"></i>Back</button>',
+          phoneType
+            ? '<button onclick="window.__fwdNext(3)" class="px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-sm font-bold">Continue<i class="fas fa-arrow-right ml-1"></i></button>'
+            : '<button disabled class="px-5 py-2.5 bg-gray-600 text-gray-400 rounded-xl text-sm font-bold cursor-not-allowed">Pick a phone type</button>'
+        );
+    }
+
+    function renderStep3() {
+      var blocks = '';
+      // Universal *72 block (always shown for mobile + landline).
+      var showUniversal = (phoneType === 'iphone' || phoneType === 'android' || phoneType === 'landline');
+      if (showUniversal) {
+        blocks += '<div class="bg-[#0A0A0A] border border-white/10 rounded-xl p-4">' +
+          '<div class="text-sm font-bold text-sky-300 mb-2"><i class="fas fa-bolt mr-1"></i>Universal carrier code (works on most North American carriers)</div>' +
+          '<div class="text-sm text-gray-300 mb-2">From your business phone, dial:</div>' +
+          '<div class="font-mono text-xl text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-4 py-3 inline-flex items-center">' +
+          dialCode + copyBtn(dialCode) + '</div>' +
+          '<div class="text-xs text-gray-400 mt-2">Wait for the confirmation tone, then hang up. To turn forwarding off later: dial <span class="font-mono text-gray-200">' + disableCode + '</span>.</div>' +
+          '</div>';
+      }
+      if (phoneType === 'iphone') {
+        blocks += '<div class="bg-[#0A0A0A] border border-white/10 rounded-xl p-4">' +
+          '<div class="text-sm font-bold text-blue-300 mb-2"><i class="fab fa-apple mr-1"></i>iPhone settings (alternative)</div>' +
+          '<ol class="text-sm text-gray-300 space-y-1.5 list-decimal list-inside">' +
+          '<li>Open <strong>Settings</strong></li>' +
+          '<li>Tap <strong>Phone</strong></li>' +
+          '<li>Tap <strong>Call Forwarding</strong></li>' +
+          '<li>Toggle <strong>Call Forwarding</strong> on</li>' +
+          '<li>Enter <span class="font-mono text-emerald-300">' + displayNum + '</span></li>' +
+          '</ol></div>';
+      }
+      if (phoneType === 'android') {
+        blocks += '<div class="bg-[#0A0A0A] border border-white/10 rounded-xl p-4">' +
+          '<div class="text-sm font-bold text-green-300 mb-2"><i class="fab fa-android mr-1"></i>Android settings (alternative)</div>' +
+          '<ol class="text-sm text-gray-300 space-y-1.5 list-decimal list-inside">' +
+          '<li>Open the <strong>Phone</strong> app</li>' +
+          '<li>Tap the <strong>⋮</strong> menu (top-right)</li>' +
+          '<li>Tap <strong>Settings</strong> → <strong>Calls</strong> → <strong>Call forwarding</strong></li>' +
+          '<li>Tap <strong>Always forward</strong></li>' +
+          '<li>Enter <span class="font-mono text-emerald-300">' + displayNum + '</span></li>' +
+          '</ol></div>';
+      }
+      if (phoneType === 'landline') {
+        blocks += '<div class="bg-[#0A0A0A] border border-white/10 rounded-xl p-4">' +
+          '<div class="text-sm font-bold text-amber-300 mb-2"><i class="fas fa-phone mr-1"></i>Landline tone-based forwarding</div>' +
+          '<ol class="text-sm text-gray-300 space-y-1.5 list-decimal list-inside">' +
+          '<li>Pick up the handset, listen for a dial tone</li>' +
+          '<li>Dial <span class="font-mono text-emerald-300">*72</span></li>' +
+          '<li>Wait for the confirmation tone</li>' +
+          '<li>Dial <span class="font-mono text-emerald-300">' + aiDigits + '</span></li>' +
+          '<li>Wait for the second confirmation tone, then hang up</li>' +
+          '</ol>' +
+          '<div class="text-xs text-gray-400 mt-2">To cancel forwarding later, dial <span class="font-mono text-gray-200">*73</span> from the same handset.</div>' +
+          '</div>';
+      }
+      if (phoneType === 'voip') {
+        blocks += '<div class="bg-[#0A0A0A] border border-white/10 rounded-xl p-4">' +
+          '<div class="text-sm font-bold text-violet-300 mb-2"><i class="fas fa-network-wired mr-1"></i>VoIP / PBX (RingCentral, 3CX, Vonage Business, Grasshopper)</div>' +
+          '<ol class="text-sm text-gray-300 space-y-1.5 list-decimal list-inside">' +
+          '<li>Sign in to your VoIP/PBX admin console</li>' +
+          '<li>Open the inbound call rules for your business number</li>' +
+          '<li>Set <strong>"Forward unanswered calls"</strong> after 4 rings to <span class="font-mono text-emerald-300">' + displayNum + '</span></li>' +
+          '<li>Save the rule</li>' +
+          '</ol>' +
+          '<div class="text-xs text-gray-400 mt-2">Search your provider\'s help docs for "conditional call forwarding" if the option name differs.</div>' +
+          '</div>';
+      }
+      document.getElementById('fwdWizBody').innerHTML =
+        header(3, 'Set up forwarding') +
+        '<div class="p-6 space-y-4">' + blocks + '</div>' +
+        footer(
+          '<button onclick="window.__fwdNext(2)" class="px-4 py-2 text-sm text-gray-400 hover:text-gray-200"><i class="fas fa-arrow-left mr-1"></i>Back</button>',
+          '<button onclick="window.__fwdNext(4)" class="px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-sm font-bold">I followed the steps<i class="fas fa-arrow-right ml-1"></i></button>'
+        );
+    }
+
+    function renderStep4() {
+      document.getElementById('fwdWizBody').innerHTML =
+        header(4, 'Test it') +
+        '<div class="p-6 space-y-4 text-gray-200">' +
+        '<div class="bg-sky-500/10 border border-sky-500/30 rounded-xl p-4">' +
+        '<div class="text-sm font-bold text-sky-300 mb-2"><i class="fas fa-vial mr-1"></i>Quick test</div>' +
+        '<ol class="text-sm text-gray-300 space-y-1.5 list-decimal list-inside">' +
+        '<li>From a different phone, call your <strong>existing business line</strong></li>' +
+        '<li>Don\'t answer — let it ring at least 4 times</li>' +
+        '<li>You should hear your AI receptionist greet the caller</li>' +
+        '</ol></div>' +
+        '<p class="text-sm text-gray-400">Once it works, mark this connection as Connected. The Secretary tab will then show "Live" instead of "Pending forwarding".</p>' +
+        '</div>' +
+        footer(
+          '<button onclick="window.__fwdNext(3)" class="px-4 py-2 text-sm text-gray-400 hover:text-gray-200"><i class="fas fa-arrow-left mr-1"></i>Back</button>',
+          '<button onclick="window.__fwdMarkConnected()" class="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold"><i class="fas fa-check-circle mr-1"></i>I set it up — mark as Connected</button>'
+        );
+    }
+
+    window.__fwdPickType = function(t) { phoneType = t; renderStep2(); };
+    window.__fwdNext = function(s) {
+      step = s;
+      if (s === 1) renderStep1();
+      else if (s === 2) renderStep2();
+      else if (s === 3) renderStep3();
+      else if (s === 4) renderStep4();
+    };
+    window.__fwdMarkConnected = async function() {
+      try {
+        var res = await fetch('/api/secretary/quick-connect/complete', { method: 'POST', headers: authHeaders() });
+        if (res.ok) {
+          showToast('Connection marked as Live!', 'success');
+          modal.remove();
+          await loadStatus();
+        } else {
+          var d = await res.json().catch(function(){ return {} });
+          throw new Error(d.error || 'Failed to mark connected');
+        }
+      } catch (e) {
+        showToast(e.message || 'Failed to mark connected', 'error');
+      }
+    };
+
+    renderStep1();
+  };
+
+  // Persistent banner: when the customer has bought a number but call forwarding
+  // hasn't been confirmed, surface a one-click "Show forwarding setup again" button.
+  window.secRenderForwardingBanner = function() {
+    var ps = state.phoneSetup || {};
+    var qc = state.quickConnect || {};
+    var ai = qc.ai_phone_number || ps.assigned_phone_number || '';
+    var status = ps.connection_status || qc.status || '';
+    if (!ai || ai.includes('0000')) return '';
+    if (status === 'connected') return '';
+    return '<div id="fwdSetupBanner" class="bg-amber-500/10 border border-amber-500/40 rounded-xl p-4 mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">' +
+      '<div class="flex items-start gap-3">' +
+      '<i class="fas fa-exclamation-triangle text-amber-400 text-xl mt-0.5"></i>' +
+      '<div><div class="text-sm font-bold text-amber-200">Forwarding setup pending</div>' +
+      '<div class="text-xs text-amber-200/80">Your AI number ' + fmtPhoneDisplay(ai) + ' is live, but you haven\'t confirmed call forwarding yet. Calls won\'t reach the AI until you do.</div></div></div>' +
+      '<button onclick="window.secShowForwardingWizard(\'' + ai + '\')" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black text-xs font-bold rounded-lg whitespace-nowrap"><i class="fas fa-magic-wand-sparkles mr-1"></i>Show forwarding setup</button>' +
+      '</div>';
   };
 
   window.secCancelSubscription = async function() {

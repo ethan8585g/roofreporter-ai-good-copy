@@ -51,7 +51,7 @@
     },
     professional: {
       name: 'Professional',
-      price: 149,
+      price: 199,
       period: '/mo',
       icon: 'fa-crown',
       color: 'blue',
@@ -417,7 +417,7 @@
           <tr class="bg-gray-100 font-bold">
             <td class="px-4 py-3">Price</td>
             <td class="text-center px-4 py-3 text-emerald-600">$49/mo</td>
-            <td class="text-center px-4 py-3 text-blue-600">$149/mo</td>
+            <td class="text-center px-4 py-3 text-blue-600">$199/mo</td>
             <td class="text-center px-4 py-3 text-purple-600">$499/mo</td>
           </tr>
         </tbody>

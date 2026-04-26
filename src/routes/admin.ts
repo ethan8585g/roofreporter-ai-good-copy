@@ -2360,7 +2360,7 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
 
   // Trial + subscription setup
   const trialDaysNum = parseInt(trial_days) || 30
-  const tierPrices: Record<string, number> = { starter: 4999, pro: 14900, enterprise: 49900 }
+  const tierPrices: Record<string, number> = { starter: 4999, pro: 19900, enterprise: 49900 }
   const selectedTier = subscription_tier || 'starter'
   const priceCents = tierPrices[selectedTier] || 4999
 
@@ -2394,7 +2394,7 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
     if (enable_secretary !== false) {
       // NOTE: Previously this block auto-activated a free secretary_subscriptions row.
       // That path is removed — all Secretary activation now flows through
-      // POST /api/secretary/start-trial (1-month free trial + card on file, then $149/mo).
+      // POST /api/secretary/start-trial (1-month free trial + card on file, then $199/mo).
       // To comp an account for free, use POST /superadmin/secretary/:customerId/comp
       // which sets secretary_subscriptions.comp_until. This keeps every account visible
       // in the new Secretary subscriptions tracking dashboard.
@@ -2970,6 +2970,279 @@ adminRoutes.post('/superadmin/secretary/:customerId/comp', async (c) => {
   ).bind(customerId, JSON.stringify({ until, admin_id: admin.id })).run()
 
   return c.json({ success: true, comp_until: until })
+})
+
+// ============================================================
+// SUPERADMIN: SECRETARY MANAGER — connections panel
+// ------------------------------------------------------------
+// Endpoints the super-admin-dashboard.js Secretary Manager view depends on.
+// Without these, clicking a customer row in the Manager tab silently fails (404).
+// ============================================================
+
+// GET /superadmin/secretary-manager/customer/:customerId
+// Returns the full bundle the detail view needs.
+adminRoutes.get('/superadmin/secretary-manager/customer/:customerId', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  const customerId = parseInt(c.req.param('customerId'))
+  if (!customerId) return c.json({ error: 'Invalid customerId' }, 400)
+
+  const customer = await c.env.DB.prepare(
+    `SELECT id, email, name, company_name, phone, created_at FROM customers WHERE id = ?`
+  ).bind(customerId).first<any>()
+  if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+  const config = await c.env.DB.prepare(
+    `SELECT * FROM secretary_config WHERE customer_id = ?`
+  ).bind(customerId).first<any>() || {}
+
+  const directories = config.id
+    ? (await c.env.DB.prepare(
+        `SELECT * FROM secretary_directories WHERE config_id = ? ORDER BY sort_order, id`
+      ).bind(config.id).all<any>()).results || []
+    : []
+
+  const subscription = await c.env.DB.prepare(
+    `SELECT id, status, monthly_price_cents, trial_started_at, trial_ends_at, comp_until,
+            current_period_start, current_period_end, card_brand, card_last4,
+            square_subscription_id, cancelled_at, created_at, updated_at
+     FROM secretary_subscriptions WHERE customer_id = ? ORDER BY id DESC LIMIT 1`
+  ).bind(customerId).first<any>() || {}
+
+  const callStats = await c.env.DB.prepare(
+    `SELECT
+       COUNT(*) as total,
+       COALESCE(SUM(call_duration_seconds), 0) as total_seconds,
+       SUM(CASE WHEN created_at > datetime('now', '-7 days') THEN 1 ELSE 0 END) as calls_7d,
+       SUM(CASE WHEN call_outcome = 'answered' THEN 1 ELSE 0 END) as leads
+     FROM secretary_call_logs WHERE customer_id = ?`
+  ).bind(customerId).first<any>() || { total: 0, total_seconds: 0, calls_7d: 0, leads: 0 }
+
+  return c.json({ customer, config, directories, subscription, call_stats: callStats })
+})
+
+// PUT /superadmin/secretary-manager/customer/:customerId/config
+// Accepts the body posted by super-admin-dashboard.js smSaveConfig().
+// Updates secretary_config and replaces secretary_directories.
+const secretaryManagerConfigHandler = async (c: any) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  const customerId = parseInt(c.req.param('customerId'))
+  if (!customerId) return c.json({ error: 'Invalid customerId' }, 400)
+
+  let body: any = {}
+  try { body = await c.req.json() } catch {}
+
+  // Whitelist of secretary_config columns the manager view edits.
+  const fields: Record<string, any> = {
+    agent_name: body.agent_name,
+    agent_voice: body.agent_voice,
+    secretary_mode: body.secretary_mode,
+    is_active: typeof body.is_active === 'number' ? body.is_active : (body.is_active ? 1 : 0),
+    connection_status: body.connection_status,
+    business_phone: body.business_phone,
+    assigned_phone_number: body.assigned_phone_number,
+    carrier_name: body.carrier_name,
+    forwarding_method: body.forwarding_method,
+    answering_forward_number: body.answering_forward_number,
+    greeting_script: body.greeting_script,
+    common_qa: body.common_qa,
+    general_notes: body.general_notes,
+    full_can_book_appointments: body.full_can_book_appointments,
+    full_can_send_email: body.full_can_send_email,
+    full_can_schedule_callback: body.full_can_schedule_callback,
+    full_can_answer_faq: body.full_can_answer_faq,
+    full_can_take_payment_info: body.full_can_take_payment_info,
+    full_booking_link: body.full_booking_link,
+    full_services_offered: body.full_services_offered,
+    full_pricing_info: body.full_pricing_info,
+    full_service_area: body.full_service_area,
+    full_business_hours: body.full_business_hours,
+    answering_fallback_action: body.answering_fallback_action,
+    answering_sms_notify: body.answering_sms_notify,
+    answering_email_notify: body.answering_email_notify,
+    answering_notify_email: body.answering_notify_email,
+    full_email_from_name: body.full_email_from_name,
+  }
+
+  // Build dynamic update from non-undefined keys only.
+  const setKeys: string[] = []
+  const setVals: any[] = []
+  for (const [k, v] of Object.entries(fields)) {
+    if (v === undefined) continue
+    setKeys.push(`${k} = ?`)
+    setVals.push(v)
+  }
+
+  // Ensure a config row exists.
+  const existing = await c.env.DB.prepare(`SELECT id FROM secretary_config WHERE customer_id = ?`).bind(customerId).first<any>()
+  if (!existing) {
+    await c.env.DB.prepare(
+      `INSERT INTO secretary_config (customer_id, business_phone, greeting_script, created_at, updated_at)
+       VALUES (?, '', '', datetime('now'), datetime('now'))`
+    ).bind(customerId).run()
+  }
+
+  if (setKeys.length > 0) {
+    setKeys.push(`updated_at = datetime('now')`)
+    await c.env.DB.prepare(
+      `UPDATE secretary_config SET ${setKeys.join(', ')} WHERE customer_id = ?`
+    ).bind(...setVals, customerId).run()
+  }
+
+  // Replace directories.
+  const cfgRow = await c.env.DB.prepare(`SELECT id FROM secretary_config WHERE customer_id = ?`).bind(customerId).first<any>()
+  if (cfgRow?.id && Array.isArray(body.directories)) {
+    await c.env.DB.prepare(`DELETE FROM secretary_directories WHERE config_id = ?`).bind(cfgRow.id).run()
+    for (let i = 0; i < body.directories.length; i++) {
+      const d = body.directories[i] || {}
+      if (!d.name) continue
+      await c.env.DB.prepare(
+        `INSERT INTO secretary_directories (customer_id, config_id, name, phone_or_action, special_notes, sort_order, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
+      ).bind(customerId, cfgRow.id, d.name, d.phone_or_action || '', d.special_notes || '', i).run()
+    }
+  }
+
+  return c.json({ success: true })
+}
+adminRoutes.put('/superadmin/secretary-manager/customer/:customerId/config', secretaryManagerConfigHandler)
+adminRoutes.post('/superadmin/secretary-manager/customer/:customerId/config', secretaryManagerConfigHandler)
+
+// POST /superadmin/secretary-manager/setup-livekit/:customerId
+// Wraps deployLiveKitForCustomer for the existing config's assigned_phone_number.
+adminRoutes.post('/superadmin/secretary-manager/setup-livekit/:customerId', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  const customerId = parseInt(c.req.param('customerId'))
+  if (!customerId) return c.json({ error: 'Invalid customerId' }, 400)
+
+  const cfg = await c.env.DB.prepare(
+    `SELECT assigned_phone_number, livekit_inbound_trunk_id, livekit_dispatch_rule_id
+     FROM secretary_config WHERE customer_id = ?`
+  ).bind(customerId).first<any>()
+  if (!cfg?.assigned_phone_number) {
+    return c.json({ error: 'Customer has no assigned phone number — assign one first.' }, 400)
+  }
+  if (cfg.livekit_inbound_trunk_id && cfg.livekit_dispatch_rule_id) {
+    return c.json({
+      already_configured: true,
+      trunk_id: cfg.livekit_inbound_trunk_id,
+      dispatch_rule_id: cfg.livekit_dispatch_rule_id,
+    })
+  }
+  try {
+    const result = await deployLiveKitForCustomer(c.env, customerId, cfg.assigned_phone_number, { reuse_existing: true })
+    return c.json({ success: true, ...result })
+  } catch (err: any) {
+    return c.json({ error: err?.message || 'LiveKit setup failed' }, 500)
+  }
+})
+
+// POST /superadmin/secretary/reconcile
+// One-shot helper to seed/update a customer's secretary_config + secretary_phone_pool +
+// secretary_subscriptions to reflect infrastructure that already exists outside the
+// normal /numbers/purchase flow (e.g. the founder's own pre-existing trunk).
+//
+// Body: {
+//   customer_id: number,
+//   phone_number: string (E.164),
+//   business_phone?: string,
+//   livekit_inbound_trunk_id?: string,
+//   livekit_dispatch_rule_id?: string,
+//   set_status?: 'connected' | 'pending_forwarding' | 'not_connected',
+//   set_comp?: boolean   // if true, comp the subscription for 10 years
+// }
+adminRoutes.post('/superadmin/secretary/reconcile', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  let body: any = {}
+  try { body = await c.req.json() } catch {}
+  const customerId = parseInt(body.customer_id)
+  const phoneNumber = (body.phone_number || '').toString().trim()
+  if (!customerId || !phoneNumber) return c.json({ error: 'customer_id and phone_number are required' }, 400)
+
+  const customer = await c.env.DB.prepare(`SELECT id FROM customers WHERE id = ?`).bind(customerId).first<any>()
+  if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+  const businessPhone = body.business_phone || ''
+  const trunkId = body.livekit_inbound_trunk_id || ''
+  const dispatchId = body.livekit_dispatch_rule_id || ''
+  const setStatus = body.set_status || 'connected'
+
+  // Ensure phone is in pool.
+  await c.env.DB.prepare(
+    `INSERT OR IGNORE INTO secretary_phone_pool
+     (phone_number, region, status, assigned_to_customer_id, assigned_at, sip_trunk_id, dispatch_rule_id, provider, monthly_cost_cents_billed, purchased_at)
+     VALUES (?, '', 'assigned', ?, datetime('now'), ?, ?, 'telnyx', 0, datetime('now'))`
+  ).bind(phoneNumber, customerId, trunkId, dispatchId).run()
+  await c.env.DB.prepare(
+    `UPDATE secretary_phone_pool
+     SET status = 'assigned', assigned_to_customer_id = ?,
+         sip_trunk_id = COALESCE(NULLIF(?, ''), sip_trunk_id),
+         dispatch_rule_id = COALESCE(NULLIF(?, ''), dispatch_rule_id),
+         provider = COALESCE(provider, 'telnyx'),
+         updated_at = datetime('now')
+     WHERE phone_number = ?`
+  ).bind(customerId, trunkId, dispatchId, phoneNumber).run()
+
+  // Ensure secretary_config row exists.
+  const cfgExisting = await c.env.DB.prepare(`SELECT id FROM secretary_config WHERE customer_id = ?`).bind(customerId).first<any>()
+  if (!cfgExisting) {
+    await c.env.DB.prepare(
+      `INSERT INTO secretary_config (
+         customer_id, business_phone, assigned_phone_number,
+         livekit_inbound_trunk_id, livekit_dispatch_rule_id,
+         connection_status, is_active, secretary_mode, agent_name, forwarding_method,
+         greeting_script, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 1, 'full', 'Sarah', 'livekit_number', '', datetime('now'), datetime('now'))`
+    ).bind(customerId, businessPhone, phoneNumber, trunkId, dispatchId, setStatus).run()
+  } else {
+    await c.env.DB.prepare(
+      `UPDATE secretary_config
+       SET business_phone = COALESCE(NULLIF(?, ''), business_phone),
+           assigned_phone_number = ?,
+           livekit_inbound_trunk_id = COALESCE(NULLIF(?, ''), livekit_inbound_trunk_id),
+           livekit_dispatch_rule_id = COALESCE(NULLIF(?, ''), livekit_dispatch_rule_id),
+           connection_status = ?,
+           is_active = 1,
+           updated_at = datetime('now')
+       WHERE customer_id = ?`
+    ).bind(businessPhone, phoneNumber, trunkId, dispatchId, setStatus, customerId).run()
+  }
+
+  // Optionally comp the subscription so they're never charged.
+  if (body.set_comp) {
+    const sub = await c.env.DB.prepare(`SELECT id FROM secretary_subscriptions WHERE customer_id = ? ORDER BY id DESC LIMIT 1`).bind(customerId).first<any>()
+    if (sub?.id) {
+      await c.env.DB.prepare(
+        `UPDATE secretary_subscriptions SET status = 'active', comp_until = datetime('now', '+10 years'), updated_at = datetime('now') WHERE id = ?`
+      ).bind(sub.id).run()
+    } else {
+      await c.env.DB.prepare(
+        `INSERT INTO secretary_subscriptions (customer_id, status, monthly_price_cents, comp_until, created_at, updated_at)
+         VALUES (?, 'active', 19900, datetime('now', '+10 years'), datetime('now'), datetime('now'))`
+      ).bind(customerId).run()
+    }
+  }
+
+  await c.env.DB.prepare(
+    `INSERT INTO secretary_billing_events (customer_id, event_type, metadata) VALUES (?, 'reconciled', ?)`
+  ).bind(customerId, JSON.stringify({
+    phone_number: phoneNumber, trunk_id: trunkId, dispatch_rule_id: dispatchId,
+    set_status: setStatus, set_comp: !!body.set_comp, admin_id: admin.id,
+  })).run()
+
+  return c.json({
+    success: true,
+    customer_id: customerId,
+    phone_number: phoneNumber,
+    trunk_id: trunkId,
+    dispatch_rule_id: dispatchId,
+    connection_status: setStatus,
+    comped: !!body.set_comp,
+  })
 })
 
 // ============================================================

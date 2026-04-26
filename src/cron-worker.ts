@@ -122,7 +122,7 @@ async function runSecretaryTrialManagement(env: Bindings): Promise<{ remindersSe
           <p style="color:#374151">Hi ${row.name || 'there'},</p>
           <p style="color:#374151">
             Your 1-month free trial of Roofer Secretary ends on <strong>${row.trial_ends_at}</strong>.
-            On that date we'll charge the card ending in ${row.card_last4 || '••••'} <strong>$149</strong> for your first monthly subscription.
+            On that date we'll charge the card ending in ${row.card_last4 || '••••'} <strong>$199</strong> for your first monthly subscription.
           </p>
           <p style="color:#374151">
             Want to keep answering every call with AI? There's nothing to do — service continues automatically.

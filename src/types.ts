@@ -98,7 +98,7 @@ export type Bindings = {
   TELNYX_API_KEY?: string
   TELNYX_SECRETARY_CONNECTION_ID?: string  // Cached after first ensureSecretaryConnection() call
 
-  // Square Subscriptions — Cached plan variation id for the Roofer Secretary $149/mo plan.
+  // Square Subscriptions — Cached plan variation id for the Roofer Secretary $199/mo plan.
   // Set after first ensurePlan() call logs it.
   SQUARE_SECRETARY_PLAN_VARIATION_ID?: string
 

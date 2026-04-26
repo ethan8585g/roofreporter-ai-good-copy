@@ -16,6 +16,9 @@
 
 const SQUARE_API_VERSION = '2025-01-23'
 
+// Single source of truth for the Roofer Secretary monthly subscription price.
+export const SECRETARY_MONTHLY_CENTS = 19900
+
 export interface SquareSubsBindings {
   SQUARE_ACCESS_TOKEN: string
   SQUARE_LOCATION_ID: string
@@ -116,7 +119,7 @@ export async function saveCard(
 }
 
 /**
- * Ensure a $149/mo "Roofer Secretary" subscription plan + variation exist in
+ * Ensure a $199/mo "Roofer Secretary" subscription plan + variation exist in
  * Square's catalog. Returns the plan_variation_id that is passed to
  * /v2/subscriptions.
  *
@@ -126,10 +129,11 @@ export async function saveCard(
 export async function ensurePlan(env: SquareSubsBindings): Promise<string> {
   if (env.SQUARE_SECRETARY_PLAN_VARIATION_ID) return env.SQUARE_SECRETARY_PLAN_VARIATION_ID
 
-  // Search for an existing plan variation named "Roofer Secretary Monthly".
+  // Search for an existing plan variation named "Roofer Secretary Monthly v2" (the $199 variation).
+  // The previous "Roofer Secretary Monthly" variation at $149 is intentionally not reused.
   const search = await squareFetch(env, 'POST', '/catalog/search', {
     object_types: ['SUBSCRIPTION_PLAN_VARIATION'],
-    query: { exact_query: { attribute_name: 'name', attribute_value: 'Roofer Secretary Monthly' } },
+    query: { exact_query: { attribute_name: 'name', attribute_value: 'Roofer Secretary Monthly v2' } },
     limit: 1,
   })
   const existingVariation = search?.objects?.[0]
@@ -137,9 +141,9 @@ export async function ensurePlan(env: SquareSubsBindings): Promise<string> {
 
   // Create plan + variation in one batch upsert.
   const planId = `#roofer-secretary-plan`
-  const variationId = `#roofer-secretary-plan-variation-monthly`
+  const variationId = `#roofer-secretary-plan-variation-monthly-v2`
   const batch = await squareFetch(env, 'POST', '/catalog/batch-upsert', {
-    idempotency_key: `plan-upsert-${Date.now()}`,
+    idempotency_key: `plan-upsert-v2-${Date.now()}`,
     batches: [{
       objects: [
         {
@@ -153,13 +157,13 @@ export async function ensurePlan(env: SquareSubsBindings): Promise<string> {
           type: 'SUBSCRIPTION_PLAN_VARIATION',
           id: variationId,
           subscription_plan_variation_data: {
-            name: 'Roofer Secretary Monthly',
+            name: 'Roofer Secretary Monthly v2',
             phases: [{
               cadence: 'MONTHLY',
               periods: null,
               pricing: {
                 type: 'STATIC',
-                price: { amount: 14900, currency: 'USD' },
+                price: { amount: SECRETARY_MONTHLY_CENTS, currency: 'USD' },
               },
             }],
             subscription_plan_id: planId,
@@ -239,4 +243,47 @@ export async function resumeSubscription(
   await squareFetch(env, 'POST', `/subscriptions/${subscriptionId}/resume`, {
     resume_effective_date: opts?.resumeEffectiveDate,
   })
+}
+
+/**
+ * One-time charge against a saved card. Used for the $1 phone number purchase fee.
+ * Idempotency key required so retries don't double-charge.
+ */
+export async function chargeOneTime(
+  env: SquareSubsBindings,
+  opts: { customerId: string; cardId: string; amountCents: number; idempotencyKey: string; note?: string },
+): Promise<{ paymentId: string; status: string }> {
+  const created = await squareFetch(env, 'POST', '/payments', {
+    idempotency_key: opts.idempotencyKey,
+    source_id: opts.cardId,
+    customer_id: opts.customerId,
+    location_id: env.SQUARE_LOCATION_ID,
+    amount_money: { amount: opts.amountCents, currency: 'USD' },
+    autocomplete: true,
+    note: opts.note,
+  })
+  const payment = created?.payment
+  if (!payment?.id) throw new Error('Square one-time charge returned no payment id')
+  return { paymentId: String(payment.id), status: String(payment.status || 'COMPLETED') }
+}
+
+/**
+ * Refund a previously-completed Square payment.
+ * Used to roll back the $1 phone-number charge if downstream provisioning fails.
+ */
+export async function refundPayment(
+  env: SquareSubsBindings,
+  paymentId: string,
+  amountCents: number,
+  reason?: string,
+): Promise<{ refundId: string; status: string }> {
+  const created = await squareFetch(env, 'POST', '/refunds', {
+    idempotency_key: `refund-${paymentId}-${Date.now()}`,
+    payment_id: paymentId,
+    amount_money: { amount: amountCents, currency: 'USD' },
+    reason: reason || 'Provisioning rolled back',
+  })
+  const refund = created?.refund
+  if (!refund?.id) throw new Error('Square refund returned no id')
+  return { refundId: String(refund.id), status: String(refund.status || 'PENDING') }
 }

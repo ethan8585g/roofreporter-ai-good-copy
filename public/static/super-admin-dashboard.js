@@ -6576,13 +6576,13 @@ function renderCustomerOnboardingView() {
     '<input type="checkbox" id="inv-annual" class="rounded" value="annual"><div><div class="text-sm font-semibold text-gray-800">Annual Membership <span class="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold">SAVE 2 MONTHS</span></div><div class="text-xs text-gray-500">$499.00/yr (equiv. $41.58/mo)</div></div>' +
     '</label>' +
     '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-violet-400 has-[:checked]:bg-violet-50">' +
-    '<input type="checkbox" id="inv-secretary-1mo" class="rounded" value="secretary-1mo"><div><div class="text-sm font-semibold text-gray-800">AI Secretary — 1st Month</div><div class="text-xs text-gray-500">$149.00 (first month of Secretary AI subscription)</div></div>' +
+    '<input type="checkbox" id="inv-secretary-1mo" class="rounded" value="secretary-1mo"><div><div class="text-sm font-semibold text-gray-800">AI Secretary — 1st Month</div><div class="text-xs text-gray-500">$199.00 (first month of Secretary AI subscription)</div></div>' +
     '</label>' +
     '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50">' +
     '<input type="checkbox" id="inv-mem-starter" class="rounded" value="mem-starter"><div><div class="text-sm font-semibold text-gray-800">Monthly Membership — Starter</div><div class="text-xs text-gray-500">$49.99/mo</div></div>' +
     '</label>' +
     '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50">' +
-    '<input type="checkbox" id="inv-mem-pro" class="rounded" value="mem-pro"><div><div class="text-sm font-semibold text-gray-800">Monthly Membership — Pro</div><div class="text-xs text-gray-500">$149.00/mo</div></div>' +
+    '<input type="checkbox" id="inv-mem-pro" class="rounded" value="mem-pro"><div><div class="text-sm font-semibold text-gray-800">Monthly Membership — Pro</div><div class="text-xs text-gray-500">$199.00/mo</div></div>' +
     '</label>' +
     '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50">' +
     '<input type="checkbox" id="inv-mem-enterprise" class="rounded" value="mem-enterprise"><div><div class="text-sm font-semibold text-gray-800">Monthly Membership — Enterprise</div><div class="text-xs text-gray-500">$499.00/mo</div></div>' +
@@ -6708,7 +6708,7 @@ function renderCustomerOnboardingView() {
     '<div><label class="text-xs text-gray-600 font-bold block mb-1">Subscription Tier</label>' +
     '<select id="ob-sub-tier" class="w-full border-2 border-green-200 rounded-lg px-3 py-2.5 text-sm">' +
     '<option value="starter">Starter — $49.99/mo</option>' +
-    '<option value="pro">Pro — $149/mo</option>' +
+    '<option value="pro">Pro — $199/mo</option>' +
     '<option value="enterprise">Enterprise — $499/mo</option>' +
     '</select></div>' +
     '<div><label class="text-xs text-gray-600 font-bold block mb-1">Trial Period</label>' +
@@ -6861,9 +6861,9 @@ window.saSendOnboardingInvoice = async function() {
   if (document.getElementById('inv-25pack').checked)  items.push({ description: '25 Roof Report Credits',  quantity: 25,  unit_price: 7.00 });
   if (document.getElementById('inv-100pack').checked) items.push({ description: '100 Roof Report Credits', quantity: 100, unit_price: 5.95 });
   if (document.getElementById('inv-annual').checked)  items.push({ description: 'Annual Membership — 12 months (2 months free)', quantity: 1, unit_price: 499.00 });
-  var secEl = document.getElementById('inv-secretary-1mo');       if (secEl && secEl.checked) items.push({ description: 'AI Secretary — 1st Month Subscription', quantity: 1, unit_price: 149.00 });
+  var secEl = document.getElementById('inv-secretary-1mo');       if (secEl && secEl.checked) items.push({ description: 'AI Secretary — 1st Month Subscription', quantity: 1, unit_price: 199.00 });
   var msEl = document.getElementById('inv-mem-starter');           if (msEl && msEl.checked) items.push({ description: 'Monthly Membership — Starter (1 month)', quantity: 1, unit_price: 49.99 });
-  var mpEl = document.getElementById('inv-mem-pro');               if (mpEl && mpEl.checked) items.push({ description: 'Monthly Membership — Pro (1 month)', quantity: 1, unit_price: 149.00 });
+  var mpEl = document.getElementById('inv-mem-pro');               if (mpEl && mpEl.checked) items.push({ description: 'Monthly Membership — Pro (1 month)', quantity: 1, unit_price: 199.00 });
   var meEl = document.getElementById('inv-mem-enterprise');        if (meEl && meEl.checked) items.push({ description: 'Monthly Membership — Enterprise (1 month)', quantity: 1, unit_price: 499.00 });
 
   var customDesc  = (document.getElementById('inv-custom-desc').value || '').trim();
@@ -6943,7 +6943,7 @@ document.addEventListener('change', function(e) {
   if (!t) return;
   var ids = ['inv-10pack','inv-25pack','inv-100pack','inv-annual','inv-secretary-1mo','inv-mem-starter','inv-mem-pro','inv-mem-enterprise'];
   if (ids.indexOf(t.id) === -1 && t.id !== 'inv-custom-price') return;
-  var prices = { 'inv-10pack': 55, 'inv-25pack': 175, 'inv-100pack': 475, 'inv-annual': 499, 'inv-secretary-1mo': 149, 'inv-mem-starter': 49.99, 'inv-mem-pro': 149, 'inv-mem-enterprise': 499 };
+  var prices = { 'inv-10pack': 55, 'inv-25pack': 175, 'inv-100pack': 475, 'inv-annual': 499, 'inv-secretary-1mo': 199, 'inv-mem-starter': 49.99, 'inv-mem-pro': 199, 'inv-mem-enterprise': 499 };
   var total = 0;
   ids.forEach(function(id) { var el = document.getElementById(id); if (el && el.checked) total += prices[id]; });
   var cp = parseFloat((document.getElementById('inv-custom-price') || {}).value) || 0;
@@ -6964,9 +6964,9 @@ window.saPreviewOnboardingInvoice = async function() {
   if (document.getElementById('inv-25pack').checked)  items.push({ description: '25 Roof Report Credits',  quantity: 25,  unit_price: 7.00 });
   if (document.getElementById('inv-100pack').checked) items.push({ description: '100 Roof Report Credits', quantity: 100, unit_price: 5.95 });
   if (document.getElementById('inv-annual').checked)  items.push({ description: 'Annual Membership — 12 months (2 months free)', quantity: 1, unit_price: 499.00 });
-  var secEl = document.getElementById('inv-secretary-1mo');       if (secEl && secEl.checked) items.push({ description: 'AI Secretary — 1st Month Subscription', quantity: 1, unit_price: 149.00 });
+  var secEl = document.getElementById('inv-secretary-1mo');       if (secEl && secEl.checked) items.push({ description: 'AI Secretary — 1st Month Subscription', quantity: 1, unit_price: 199.00 });
   var msEl = document.getElementById('inv-mem-starter');           if (msEl && msEl.checked) items.push({ description: 'Monthly Membership — Starter (1 month)', quantity: 1, unit_price: 49.99 });
-  var mpEl = document.getElementById('inv-mem-pro');               if (mpEl && mpEl.checked) items.push({ description: 'Monthly Membership — Pro (1 month)', quantity: 1, unit_price: 149.00 });
+  var mpEl = document.getElementById('inv-mem-pro');               if (mpEl && mpEl.checked) items.push({ description: 'Monthly Membership — Pro (1 month)', quantity: 1, unit_price: 199.00 });
   var meEl = document.getElementById('inv-mem-enterprise');        if (meEl && meEl.checked) items.push({ description: 'Monthly Membership — Enterprise (1 month)', quantity: 1, unit_price: 499.00 });
 
   var customDesc  = (document.getElementById('inv-custom-desc').value || '').trim();
@@ -7489,7 +7489,7 @@ function renderServiceInvoicesView() {
     '</div>' +
     '<div class="mb-4"><label class="text-xs text-gray-500 font-medium block mb-1">Line Items</label>' +
     '<div id="si-items">' +
-    '<div class="flex gap-2 mb-2 si-item"><input class="flex-1 border rounded-lg px-3 py-2 text-sm si-desc" placeholder="Description" value="Roofer Secretary AI — Monthly Subscription"><input class="w-24 border rounded-lg px-3 py-2 text-sm text-right si-price" placeholder="Price" value="149.00" type="number" step="0.01"><button onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-600 text-sm px-2"><i class="fas fa-trash"></i></button></div>' +
+    '<div class="flex gap-2 mb-2 si-item"><input class="flex-1 border rounded-lg px-3 py-2 text-sm si-desc" placeholder="Description" value="Roofer Secretary AI — Monthly Subscription"><input class="w-24 border rounded-lg px-3 py-2 text-sm text-right si-price" placeholder="Price" value="199.00" type="number" step="0.01"><button onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-600 text-sm px-2"><i class="fas fa-trash"></i></button></div>' +
     '<div class="flex gap-2 mb-2 si-item"><input class="flex-1 border rounded-lg px-3 py-2 text-sm si-desc" placeholder="Description" value="Secretary AI Setup Fee (One-Time)"><input class="w-24 border rounded-lg px-3 py-2 text-sm text-right si-price" placeholder="Price" value="299.00" type="number" step="0.01"><button onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-600 text-sm px-2"><i class="fas fa-trash"></i></button></div>' +
     '</div>' +
     '<button onclick="addServiceInvoiceItem()" class="text-xs text-blue-600 hover:text-blue-800 font-medium mt-1"><i class="fas fa-plus mr-1"></i>Add Line Item</button></div>' +

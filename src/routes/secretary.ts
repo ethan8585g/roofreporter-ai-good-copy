@@ -2,7 +2,7 @@
 // Roof Manager — Roofer Secretary AI Phone Answering Service
 // Powered by LiveKit.io
 // ============================================================
-// Self-serve signup (1-month free trial + card on file, then $149/mo):
+// Self-serve signup (1-month free trial + card on file, then $199/mo):
 //   POST /api/secretary/start-trial      — Save card + create Square subscription
 //   GET  /api/secretary/trial-status     — Days remaining, next charge date
 //   POST /api/secretary/cancel           — Cancel subscription (stays active to period end)
@@ -164,7 +164,7 @@ async function logBillingEvent(
 // Body: { cardNonce: string, cardholderName?: string, verificationToken?: string }
 //   cardNonce comes from the Square Web Payments SDK running in the browser.
 // Result: subscription row with status='trialing', trial_ends_at=today+30d,
-//   Square subscription scheduled to auto-charge on day 31 at $149/mo.
+//   Square subscription scheduled to auto-charge on day 31 at $199/mo.
 // ============================================================
 secretaryRoutes.post('/start-trial', async (c) => {
   const customerId = c.get('customerId' as any) as number
@@ -226,7 +226,7 @@ secretaryRoutes.post('/start-trial', async (c) => {
       verificationToken,
     })
 
-    // 3. Ensure the $149/mo plan variation exists.
+    // 3. Ensure the $199/mo plan variation exists.
     const planVariationId = await SquareSubs.ensurePlan(c.env)
 
     // 4. Create subscription with start_date = today + 30 days (= free trial).
@@ -247,7 +247,7 @@ secretaryRoutes.post('/start-trial', async (c) => {
          square_customer_id, square_subscription_id, square_card_id,
          card_brand, card_last4,
          current_period_start, current_period_end
-       ) VALUES (?, 'trialing', 14900, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       ) VALUES (?, 'trialing', ${SquareSubs.SECRETARY_MONTHLY_CENTS}, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       customerId,
       nowIso,
@@ -3145,6 +3145,13 @@ secretaryRoutes.get('/numbers/search', async (c) => {
 })
 
 // POST /numbers/purchase { phone_number }
+//
+// Strict transactional ordering: charge $1 → buy from Telnyx → create LiveKit trunk →
+// create dispatch rule → write to D1. Any failure after the Square charge triggers
+// a refund + Telnyx release so we never leave the customer charged for orphaned infra.
+//
+// Idempotency: the Square charge uses a deterministic key based on (customer, phone),
+// so retries of the SAME number for the same customer never double-charge.
 secretaryRoutes.post('/numbers/purchase', async (c) => {
   const customerId = c.get('customerId' as any) as number
   const gate = await requireSubscription(c, customerId)
@@ -3160,11 +3167,65 @@ secretaryRoutes.post('/numbers/purchase', async (c) => {
   const livekitUrl = c.env.LIVEKIT_URL
   if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit is not configured' }, 500)
 
-  try {
-    // 1. Purchase from Telnyx + attach to shared Secretary connection.
-    const bought = await Telnyx.purchaseNumber(c.env, phoneNumber)
+  // Pre-flight: ensure the caller has a Square card on file (or is comped).
+  const subRow = await c.env.DB.prepare(
+    `SELECT square_customer_id, square_card_id, comp_until FROM secretary_subscriptions
+     WHERE customer_id = ? ORDER BY id DESC LIMIT 1`
+  ).bind(customerId).first<any>()
+  const isComped = subRow?.comp_until && new Date(subRow.comp_until).getTime() > Date.now()
+  const hasCard = subRow?.square_customer_id && subRow?.square_card_id
+  if (!hasCard && !isComped) {
+    return c.json({ error: 'Add a card via Start Trial before purchasing a number.' }, 402)
+  }
 
-    // 2. Register the number with a LiveKit inbound trunk.
+  const NUMBER_FEE_CENTS = 100
+  const idempotencyKey = `secretary-num-${customerId}-${phoneNumber.replace(/\D/g, '')}`
+
+  // Step 1 — charge $1 (skip for comped accounts).
+  let paymentId: string | null = null
+  if (!isComped && hasCard) {
+    try {
+      const charge = await SquareSubs.chargeOneTime(c.env, {
+        customerId: subRow.square_customer_id,
+        cardId: subRow.square_card_id,
+        amountCents: NUMBER_FEE_CENTS,
+        idempotencyKey,
+        note: `Roofer Secretary phone purchase ${phoneNumber}`,
+      })
+      paymentId = charge.paymentId
+    } catch (chargeErr: any) {
+      console.error('[Secretary Numbers Purchase] Square charge failed:', chargeErr?.message)
+      return c.json({ error: 'Card charge failed: ' + (chargeErr?.message || 'unknown') }, 402)
+    }
+  }
+
+  // Helper: roll the Square charge back if anything downstream fails.
+  const rollbackCharge = async (reason: string) => {
+    if (!paymentId) return
+    try {
+      await SquareSubs.refundPayment(c.env, paymentId, NUMBER_FEE_CENTS, reason)
+      await logBillingEvent(c.env.DB, customerId, 'phone_purchase_refunded', {
+        amountCents: NUMBER_FEE_CENTS,
+        metadata: { phone_number: phoneNumber, reason, square_payment_id: paymentId },
+      })
+    } catch (refundErr: any) {
+      console.error('[Secretary Numbers Purchase] refund failed (manual cleanup needed):', refundErr?.message)
+    }
+  }
+
+  // Step 2 — Telnyx purchase.
+  let bought: { telnyxPhoneNumberId: string; phoneNumber: string; connectionId: string }
+  try {
+    bought = await Telnyx.purchaseNumber(c.env, phoneNumber)
+  } catch (telnyxErr: any) {
+    console.error('[Secretary Numbers Purchase] Telnyx failed:', telnyxErr?.message)
+    await rollbackCharge('telnyx_purchase_failed')
+    return c.json({ error: 'Phone number purchase failed: ' + (telnyxErr?.message || 'unknown') }, 502)
+  }
+
+  // Step 3 — LiveKit inbound trunk.
+  let trunkId = ''
+  try {
     const trunkResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
       '/twirp/livekit.SIP/CreateSIPInboundTrunk', {
         trunk: {
@@ -3174,10 +3235,18 @@ secretaryRoutes.post('/numbers/purchase', async (c) => {
           metadata: JSON.stringify({ customer_id: customerId, provider: 'telnyx', service: 'roofer_secretary' }),
         },
       })
-    const trunkId = trunkResult?.sip_trunk_id || trunkResult?.trunk?.sip_trunk_id || ''
+    trunkId = trunkResult?.sip_trunk_id || trunkResult?.trunk?.sip_trunk_id || ''
     if (!trunkId) throw new Error('LiveKit did not return a trunk id')
+  } catch (lkErr: any) {
+    console.error('[Secretary Numbers Purchase] LiveKit trunk failed:', lkErr?.message)
+    try { await Telnyx.releaseNumber(c.env, bought.telnyxPhoneNumberId) } catch {}
+    await rollbackCharge('livekit_trunk_failed')
+    return c.json({ error: 'LiveKit trunk creation failed: ' + (lkErr?.message || 'unknown') }, 502)
+  }
 
-    // 3. Create per-customer dispatch rule.
+  // Step 4 — LiveKit dispatch rule.
+  let dispatchId = ''
+  try {
     const dispatchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
       '/twirp/livekit.SIP/CreateSIPDispatchRule', {
         trunk_ids: [trunkId],
@@ -3185,60 +3254,89 @@ secretaryRoutes.post('/numbers/purchase', async (c) => {
         name: `secretary-dispatch-${customerId}`,
         metadata: JSON.stringify({ customer_id: customerId, provider: 'telnyx' }),
       })
-    const dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
+    dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
+  } catch (dispErr: any) {
+    console.error('[Secretary Numbers Purchase] LiveKit dispatch failed:', dispErr?.message)
+    try { await Telnyx.releaseNumber(c.env, bought.telnyxPhoneNumberId) } catch {}
+    // (We don't tear down the trunk — orphaned trunk is harmless and the next retry will reuse it.)
+    await rollbackCharge('livekit_dispatch_failed')
+    return c.json({ error: 'LiveKit dispatch rule creation failed: ' + (dispErr?.message || 'unknown') }, 502)
+  }
 
-    // 4. Save into phone pool + config.
-    await c.env.DB.prepare(
-      `INSERT INTO secretary_phone_pool
-       (phone_number, phone_sid, region, status, assigned_to_customer_id, assigned_at,
-        sip_trunk_id, dispatch_rule_id, provider, telnyx_phone_number_id, telnyx_connection_id,
-        purchased_at, monthly_cost_cents_billed)
-       VALUES (?, ?, '', 'assigned', ?, datetime('now'), ?, ?, 'telnyx', ?, ?, datetime('now'), 100)`
-    ).bind(
-      bought.phoneNumber,
-      bought.telnyxPhoneNumberId,
-      customerId,
-      trunkId,
-      dispatchId,
-      bought.telnyxPhoneNumberId,
-      bought.connectionId,
-    ).run()
+  // Step 5 — DB writes (atomic batch).
+  try {
+    await c.env.DB.batch([
+      c.env.DB.prepare(
+        `INSERT INTO secretary_phone_pool
+         (phone_number, phone_sid, region, status, assigned_to_customer_id, assigned_at,
+          sip_trunk_id, dispatch_rule_id, provider, telnyx_phone_number_id, telnyx_connection_id,
+          purchased_at, monthly_cost_cents_billed)
+         VALUES (?, ?, '', 'assigned', ?, datetime('now'), ?, ?, 'telnyx', ?, ?, datetime('now'), 100)`
+      ).bind(
+        bought.phoneNumber,
+        bought.telnyxPhoneNumberId,
+        customerId,
+        trunkId,
+        dispatchId,
+        bought.telnyxPhoneNumberId,
+        bought.connectionId,
+      ),
+      c.env.DB.prepare(
+        `UPDATE secretary_config
+         SET assigned_phone_number = ?,
+             livekit_inbound_trunk_id = ?,
+             livekit_dispatch_rule_id = ?,
+             connection_status = 'pending_forwarding',
+             updated_at = datetime('now')
+         WHERE customer_id = ?`
+      ).bind(bought.phoneNumber, trunkId, dispatchId, customerId),
+    ])
+  } catch (dbErr: any) {
+    console.error('[Secretary Numbers Purchase] DB write failed:', dbErr?.message)
+    try { await Telnyx.releaseNumber(c.env, bought.telnyxPhoneNumberId) } catch {}
+    await rollbackCharge('db_write_failed')
+    return c.json({ error: 'Internal error saving number: ' + (dbErr?.message || 'unknown') }, 500)
+  }
 
-    await c.env.DB.prepare(
-      `UPDATE secretary_config
-       SET assigned_phone_number = ?,
-           livekit_inbound_trunk_id = ?,
-           livekit_dispatch_rule_id = ?,
-           connection_status = 'connected',
-           updated_at = datetime('now')
-       WHERE customer_id = ?`
-    ).bind(bought.phoneNumber, trunkId, dispatchId, customerId).run()
-
-    await logBillingEvent(c.env.DB, customerId, 'phone_purchased', {
-      amountCents: 100,
-      metadata: { phone_number: bought.phoneNumber, provider: 'telnyx', trunk_id: trunkId },
-    })
-
-    return c.json({
+  await logBillingEvent(c.env.DB, customerId, 'phone_purchased', {
+    amountCents: NUMBER_FEE_CENTS,
+    metadata: {
       phone_number: bought.phoneNumber,
       provider: 'telnyx',
-      monthly_cost_cents: 100,
       trunk_id: trunkId,
       dispatch_rule_id: dispatchId,
-      setup_instructions: {
-        title: 'Your new phone number is live!',
-        steps: [
-          'Share this number with customers, or set your existing business line to forward to it.',
-          'Carrier call-forwarding code: dial *72 then the number from your business phone, wait for the tone, hang up.',
-          'To disable forwarding later: dial *73 from your business phone.',
-        ],
-        disable_forwarding_code: '*73',
-      },
-    })
-  } catch (err: any) {
-    console.error('[Secretary Numbers Purchase]', err)
-    return c.json({ error: err?.message || 'Number purchase failed' }, 500)
-  }
+      square_payment_id: paymentId,
+      comped: isComped ? true : undefined,
+    },
+  })
+
+  // Carrier-aware forwarding hint for the wizard. Strip +1 for *72 dial code.
+  const aiDigits = bought.phoneNumber.replace(/^\+1/, '').replace(/\D/g, '')
+  return c.json({
+    phone_number: bought.phoneNumber,
+    provider: 'telnyx',
+    monthly_cost_cents: 100,
+    charged_cents: paymentId ? NUMBER_FEE_CENTS : 0,
+    payment_id: paymentId,
+    trunk_id: trunkId,
+    dispatch_rule_id: dispatchId,
+    setup_instructions: {
+      title: 'Your new phone number is live!',
+      ai_number: bought.phoneNumber,
+      forwarding_dial_code: `*72${aiDigits}`,
+      disable_forwarding_code: '*73',
+      test_instructions: 'Call your business line, let it ring 4 times, you should hear the AI greet you.',
+      wizard_steps: [
+        { id: 'welcome', title: 'Your AI number is live', body: `Forward your existing business line to <strong>${bought.phoneNumber}</strong> so the AI answers when you can't.` },
+        { id: 'mobile', title: 'Mobile carriers (universal)', body: `Dial <strong>*72${aiDigits}</strong> from your business phone, wait for the confirmation tone, hang up. To turn off later, dial <strong>*73</strong>.` },
+        { id: 'iphone', title: 'iPhone settings', body: `Settings → Phone → Call Forwarding → toggle on → enter <strong>${bought.phoneNumber}</strong>.` },
+        { id: 'android', title: 'Android settings', body: `Phone app → ⋮ menu → Settings → Calls → Call forwarding → Always forward → enter <strong>${bought.phoneNumber}</strong>.` },
+        { id: 'landline', title: 'Landline', body: `Pick up the handset, dial <strong>*72</strong>, wait for the tone, dial <strong>${bought.phoneNumber}</strong>, wait for the confirmation tone, hang up. To cancel: dial <strong>*73</strong>.` },
+        { id: 'voip', title: 'VoIP / PBX (RingCentral, 3CX, Vonage Business, Grasshopper)', body: `Open your PBX admin, set the inbound rule to forward unanswered calls (after 4 rings) to <strong>${bought.phoneNumber}</strong>. Search your provider's docs for "conditional call forwarding".` },
+        { id: 'confirm', title: 'Confirm', body: `Test now: call your business line, let it ring 4 times. You should hear the AI greet you. Once it works, mark this as Connected.` },
+      ],
+    },
+  })
 })
 
 // POST /numbers/release — Release the currently-assigned Telnyx number
