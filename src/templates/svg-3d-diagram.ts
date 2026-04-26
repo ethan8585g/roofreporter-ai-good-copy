@@ -53,8 +53,10 @@ const M_PER_DEG_LAT = 111320
 const M_TO_FT = 3.28084
 const FT2_PER_M2 = 10.7639
 
-// Axonometric tilt: 30° yaw, 30° pitch (industry-standard isometric look).
-const YAW_DEG = 30
+// Axonometric tilt: 210° yaw (camera viewing from the SW so the street/front
+// of the building is in the foreground, matching the typical satellite POV
+// where the building's "front" is south/east), 30° pitch.
+const YAW_DEG = 210
 const PITCH_DEG = 30
 
 // Sun direction for Lambert shading (NW, 45° elevation).
@@ -304,63 +306,29 @@ function buildRoofMesh(
   const ridgeHeightM = (shortSideM / 2) * (pitch_rise / 12)
 
   // ── PATH A: traced ridges available ──
+  // Use the AVERAGE of all ridge points as the apex (so a T-shaped or
+  // central-hip ridge layout puts the hump in the middle of the polygon
+  // instead of pulling it into a corner). Lift to ridgeHeightM and fan
+  // triangulate every eave edge to it. This keeps the apex centered for
+  // complex footprints while still respecting the user's traced ridge
+  // orientation through the average.
   if (tracedRidgesXY && tracedRidgesXY.length > 0) {
-    // Collect ridge segments (endpoint pairs) lifted to z = ridgeHeight.
-    const ridgeSegs: { a: V3; b: V3 }[] = []
+    let sumX = 0, sumY = 0, count = 0
     for (const ridge of tracedRidgesXY) {
-      if (!ridge || ridge.length < 2) continue
-      // Use first/last only; intermediate points are visual-only.
-      const a = ridge[0]
-      const b = ridge[ridge.length - 1]
-      ridgeSegs.push({
-        a: { x: a.x, y: a.y, z: ridgeHeightM },
-        b: { x: b.x, y: b.y, z: ridgeHeightM },
-      })
+      if (!ridge || ridge.length === 0) continue
+      for (const p of ridge) { sumX += p.x; sumY += p.y; count++ }
     }
-    if (ridgeSegs.length > 0) {
-      // For each eave corner, find its nearest ridge endpoint (by 2D distance).
-      // Then for each eave edge (corner i → corner i+1), build a triangle or
-      // quad up to the ridge endpoint(s) the corners are closest to.
+    if (count > 0) {
+      // Constrain the apex inside the footprint bbox so an off-roof ridge
+      // trace doesn't yank the hump outside the building.
+      const apexX = Math.max(minX + 0.5, Math.min(maxX - 0.5, sumX / count))
+      const apexY = Math.max(minY + 0.5, Math.min(maxY - 0.5, sumY / count))
+      const apex: V3 = { x: apexX, y: apexY, z: ridgeHeightM }
       const corners: V3[] = eavesXY.map(p => ({ x: p.x, y: p.y, z: 0 }))
-      const ridgeEndpoints: V3[] = []
-      for (const seg of ridgeSegs) {
-        ridgeEndpoints.push(seg.a, seg.b)
-      }
-      // Snap-merge ridge endpoints that are within 2 m of each other so a
-      // shared corner doesn't get duplicated.
-      const SNAP_M = 2.0
-      const merged: V3[] = []
-      for (const ep of ridgeEndpoints) {
-        const found = merged.find(m => Math.hypot(m.x - ep.x, m.y - ep.y) < SNAP_M)
-        if (!found) merged.push(ep)
-      }
-      const closestRidgeIdx = (p: { x: number; y: number }): number => {
-        let best = 0, bestD = Infinity
-        for (let i = 0; i < merged.length; i++) {
-          const d = (merged[i].x - p.x) ** 2 + (merged[i].y - p.y) ** 2
-          if (d < bestD) { bestD = d; best = i }
-        }
-        return best
-      }
-      const cornerRidge = corners.map(c => closestRidgeIdx(c))
-
       const faces: Face3[] = []
       for (let i = 0; i < n; i++) {
-        const a = corners[i]
-        const b = corners[(i + 1) % n]
-        const ra = merged[cornerRidge[i]]
-        const rb = merged[cornerRidge[(i + 1) % n]]
-        if (ra === rb) {
-          // Both eave corners share the same ridge endpoint → triangle.
-          faces.push(makeFace([a, b, ra], pitch_rise))
-        } else {
-          // Two distinct ridge endpoints → trapezoid.
-          faces.push(makeFace([a, b, rb, ra], pitch_rise))
-        }
+        faces.push(makeFace([corners[i], corners[(i + 1) % n], apex], pitch_rise))
       }
-      // Cap any unused ridge endpoints (e.g. valleys/hips not closing) by
-      // adding a pyramid-ish triangle to the centroid — usually unnecessary
-      // for clean traces.
       return faces
     }
   }
