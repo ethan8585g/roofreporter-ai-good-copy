@@ -604,6 +604,9 @@ reportsRoutes.post('/:orderId/enhance-async', async (c) => {
             if (rt && ci && cs) {
               await sendGmailOAuth2(ci, cs, rt, custRow.email, `Roof Report - ${order?.property_address || 'Property'}`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
               console.log(`[AutoEmail] Enhanced report ${orderId} auto-sent to ${custRow.email}`)
+              try {
+                await sendGmailOAuth2(ci, cs, rt, 'sales@roofmanager.ca', `[Self-Trace Copy] Roof Report - ${order?.property_address || 'Property'} (sent to ${custRow.email})`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
+              } catch (salesErr: any) { console.warn(`[SalesCopy] Failed for order ${orderId}: ${salesErr.message}`) }
             }
           }
         }
@@ -1855,6 +1858,10 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
                     await sendGmailOAuth2(ci, cs, custGmail.gmail_refresh_token, recipient, `Roof Report - ${order.property_address}`, emailHtml, custGmail.gmail_connected_email)
                     sent = true
                     console.log(`[AutoEmail] Report ${orderId} sent via customer Gmail: ${custGmail.gmail_connected_email}`)
+                    try {
+                      const platRt = (c.env as any).GMAIL_REFRESH_TOKEN || await repo.getSettingValue(c.env.DB, 'gmail_refresh_token')
+                      if (platRt) await sendGmailOAuth2(ci, cs, platRt, 'sales@roofmanager.ca', `[Self-Trace Copy] Roof Report - ${order.property_address} (sent to ${recipient})`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
+                    } catch (salesErr: any) { console.warn(`[SalesCopy] Failed for order ${orderId}: ${salesErr.message}`) }
                   }
                 } catch (custErr: any) {
                   console.warn(`[AutoEmail] Customer Gmail failed: ${custErr.message}`)
@@ -1867,6 +1874,9 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
                 if (rt && ci && cs) {
                   await sendGmailOAuth2(ci, cs, rt, recipient, `Roof Report - ${order.property_address}`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
                   sent = true
+                  try {
+                    await sendGmailOAuth2(ci, cs, rt, 'sales@roofmanager.ca', `[Self-Trace Copy] Roof Report - ${order.property_address} (sent to ${recipient})`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
+                  } catch (salesErr: any) { console.warn(`[SalesCopy] Failed for order ${orderId}: ${salesErr.message}`) }
                 }
               }
 
@@ -1893,7 +1903,12 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
       try {
         const emailHtml = buildEmailWrapper(baseHtml, order.property_address, `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`, recipient)
         const rt = (c.env as any).GMAIL_REFRESH_TOKEN, ci = (c.env as any).GMAIL_CLIENT_ID, cs = (c.env as any).GMAIL_CLIENT_SECRET
-        if (rt && ci && cs) await sendGmailOAuth2(ci, cs, rt, recipient, `Roof Report - ${order.property_address}`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
+        if (rt && ci && cs) {
+          await sendGmailOAuth2(ci, cs, rt, recipient, `Roof Report - ${order.property_address}`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
+          try {
+            await sendGmailOAuth2(ci, cs, rt, 'sales@roofmanager.ca', `[Self-Trace Copy] Roof Report - ${order.property_address} (sent to ${recipient})`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
+          } catch (salesErr: any) { console.warn(`[SalesCopy] Failed for order ${orderId}: ${salesErr.message}`) }
+        }
         if (autoEmailEnabled) console.log(`[AutoEmail] Report ${orderId} auto-sent to ${recipient}`)
       } catch {}
     }
@@ -2167,6 +2182,19 @@ reportsRoutes.post('/:orderId/email', async (c) => {
 
   await repo.logApiRequest(c.env.DB, orderId, 'email_sent', method, 200, 0, JSON.stringify({ to: recipient, from: senderEmail, method, delivery_id: deliveryId }))
   trackEmailSent(c.env as any, 'report_email', recipient, { order_id: orderId, method }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+
+  // BCC-style copy to sales@roofmanager.ca for every self-trace report email
+  try {
+    const ci = (c.env as any).GMAIL_CLIENT_ID
+    const cs = (c.env as any).GMAIL_CLIENT_SECRET || await repo.getSettingValue(c.env.DB, 'gmail_client_secret')
+    const rt = (c.env as any).GMAIL_REFRESH_TOKEN || await repo.getSettingValue(c.env.DB, 'gmail_refresh_token')
+    if (ci && cs && rt) {
+      await sendGmailOAuth2(ci, cs, rt, 'sales@roofmanager.ca', `[Self-Trace Copy] ${subject} (sent to ${recipient})`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
+    }
+  } catch (salesErr: any) {
+    console.warn(`[SalesCopy] Failed for order ${orderId}: ${salesErr.message}`)
+  }
+
   return c.json({ success: true, to: recipient, method, from: senderEmail, delivery_id: deliveryId, provider_message_id: providerMessageId || null })
 })
 
