@@ -1514,7 +1514,11 @@ function saInitTraceMap(lat, lng, address) {
       style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
       mapTypeIds: ['satellite', 'hybrid']
     },
-    streetViewControl: false, fullscreenControl: false
+    streetViewControl: false, fullscreenControl: false,
+    gestureHandling: 'greedy',
+    zoomControl: true,
+    scrollwheel: true,
+    disableDoubleClickZoom: false
   });
   s.map = map;
 
@@ -1611,13 +1615,21 @@ function saInitTraceMap(lat, lng, address) {
     var tool = s.tool;
     if (tool === 'eave') {
       var pts = s._eaveLatLngs || (s._eaveLatLngs = []);
-      // Close section on click near first point (>=3 pts)
+      // Close section only on a deliberate click ON the visible start marker.
+      // Use screen-pixel distance via the map projection so the threshold is
+      // independent of zoom level (avoids the old 1.5m bug where casual clicks
+      // could accidentally close the polygon).
       if (pts.length >= 3) {
-        var first = pts[0];
-        var dLat = (first.lat() - e.latLng.lat()) * 111320;
-        var dLng = (first.lng() - e.latLng.lng()) * 111320 * Math.cos(first.lat() * Math.PI / 180);
-        var distM = Math.sqrt(dLat * dLat + dLng * dLng);
-        if (distM < 1.5) { saCloseEaveSection(); return; }
+        var proj = map.getProjection();
+        if (proj) {
+          var scale = Math.pow(2, map.getZoom());
+          var p1 = proj.fromLatLngToPoint(pts[0]);
+          var pc = proj.fromLatLngToPoint(e.latLng);
+          var dxPx = (p1.x - pc.x) * scale;
+          var dyPx = (p1.y - pc.y) * scale;
+          var distPx = Math.sqrt(dxPx * dxPx + dyPx * dyPx);
+          if (distPx < 12) { saCloseEaveSection(); return; }
+        }
       }
       pts.push(e.latLng);
       // Numbered marker — clickable:false so it never absorbs a click meant
