@@ -336,6 +336,44 @@ function simplifyEavesXY(
   return work
 }
 
+// ───────────────────────── SLIVER DETECTION ─────────────────────────
+
+/**
+ * A "sliver" face is a long thin polygon — almost always a degenerate
+ * artifact, not a real roof plane. Caused by the run-grouping pass when
+ * an eave edge gets assigned to a structurally-distant ridge: the projected
+ * ridge endpoints collapse near each other while the eave corners stay
+ * far away, producing a tall narrow quad/triangle that the renderer then
+ * highlights with a ridge-red top edge.
+ *
+ * The Foxboro Crescent report (00000193) showed two such slivers
+ * spanning the polygon interior — ~24 ft tall, ~3 ft wide, ~30–40 sqft.
+ *
+ * Thresholds chosen so legitimate small hip-end triangles (typically
+ * 6–10 ft sides, near-equilateral, 12–25 sqft) are NEVER dropped.
+ */
+export function isSliverFace(face: { vertices: { x: number; y: number; z: number }[]; area_sqft: number }): boolean {
+  const verts = face.vertices
+  if (verts.length < 3) return true
+  // Use XY bounding box — the world-space coords before axonometric projection.
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+  for (const v of verts) {
+    if (v.x < minX) minX = v.x
+    if (v.x > maxX) maxX = v.x
+    if (v.y < minY) minY = v.y
+    if (v.y > maxY) maxY = v.y
+  }
+  const w = maxX - minX
+  const h = maxY - minY
+  const longer = Math.max(w, h)
+  const shorter = Math.min(w, h)
+  if (shorter < 1e-6) return true              // 1D degenerate
+  const aspect = longer / shorter
+  // Sliver = long-thin AND small-area. Both conditions required so a
+  // legitimate long ridge face (e.g., 30 ft × 6 ft, 180 sqft) survives.
+  return aspect > 5 && shorter < 1.2 && face.area_sqft < 50
+}
+
 // ───────────────────────── 3D MESH BUILDER ─────────────────────────
 
 interface V3 { x: number; y: number; z: number }
@@ -419,6 +457,12 @@ function buildRoofMesh(
       const SHORT_EDGE_M = 2.5    // singleton runs shorter than this absorb into neighbours
       const HIP_SNAP_M = 1.0      // hip endpoint match radius
       const VALLEY_SNAP_M = 1.0   // valley proximity for inboard clipping
+      // Pass 1 distance guard: an eave edge whose nearest ridge midpoint is
+      // farther than this is structurally not "served" by any ridge — its
+      // projected ridge endpoints would form a sliver. Treat it as a no-ridge
+      // run and apex-fold it locally instead. Calibrated against the
+      // shorter span of the polygon so it scales with house size.
+      const RIDGE_FAR_M = 0.6 * shortSideM
 
       const projectOnto = (p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) => {
         const abx = b.x - a.x, aby = b.y - a.y
@@ -434,6 +478,9 @@ function buildRoofMesh(
       const faces: Face3[] = []
 
       // ── Pass 1: assign each eave edge to its nearest ridge segment ──
+      // assigned[i] = -1 means "no ridge close enough to be structurally
+      // valid" — that edge gets a local apex face in Pass 3 instead of a
+      // ridge-projected quad (which would be a sliver across the polygon).
       const assigned: number[] = new Array(n)
       const edgeLen: number[] = new Array(n)
       for (let i = 0; i < n; i++) {
@@ -447,7 +494,7 @@ function buildRoofMesh(
           const proj = projectOnto(mid, ridgeSegs[j].a, ridgeSegs[j].b)
           if (proj.d < bestDist) { bestDist = proj.d; best = j }
         }
-        assigned[i] = best
+        assigned[i] = bestDist > RIDGE_FAR_M ? -1 : best
       }
 
       // ── Pass 1.5: smooth singleton runs ──
@@ -502,6 +549,22 @@ function buildRoofMesh(
         const eaveCorners: V3[] = []
         for (const ei of run.edgeIdxs) eaveCorners.push(corners[ei])
         eaveCorners.push(corners[lastCornerIdx])
+
+        // ── No-ridge run: every assigned ridge was structurally too far.
+        // Lift the run's eave midpoint to ridge height as a local apex and
+        // emit triangles. This produces an honest "tented" look instead of
+        // a sliver stretching across the polygon.
+        if (run.ridgeIdx === -1) {
+          let mx = 0, my = 0
+          for (const c of eaveCorners) { mx += c.x; my += c.y }
+          mx /= eaveCorners.length; my /= eaveCorners.length
+          const apex: V3 = { x: mx, y: my, z: ridgeHeightM }
+          for (let k = 0; k < eaveCorners.length - 1; k++) {
+            faces.push(makeFace([eaveCorners[k], eaveCorners[k + 1], apex], pitch_rise))
+          }
+          runGeoms.push({ firstCornerIdx, lastCornerIdx, ridgeA: apex, ridgeB: apex })
+          continue
+        }
 
         // ── Pass 5: valley-aware inboard clipping ──
         // If a traced valley is significantly closer to the run's eave
@@ -582,15 +645,24 @@ function buildRoofMesh(
           }
 
           if (apex) {
-            faces.push(makeFace([C, rEnd, apex], pitch_rise))
-            faces.push(makeFace([C, apex, rStart], pitch_rise))
+            const tA = makeFace([C, rEnd, apex], pitch_rise)
+            const tB = makeFace([C, apex, rStart], pitch_rise)
+            if (!isSliverFace(tA)) faces.push(tA)
+            if (!isSliverFace(tB)) faces.push(tB)
           } else {
-            faces.push(makeFace([C, rEnd, rStart], pitch_rise))
+            const tri = makeFace([C, rEnd, rStart], pitch_rise)
+            if (!isSliverFace(tri)) faces.push(tri)
           }
         }
       }
 
-      return faces
+      // Final safety net: drop any face that survived the per-pass guards
+      // but still came out as a degenerate sliver. With the Pass 1 distance
+      // guard + the Pass 4 pre-check, this should be empty in normal
+      // geometry — it exists to catch edge cases the structural checks
+      // miss (e.g. valley clipping that lands two run faces in unfortunate
+      // spots).
+      return faces.filter(f => !isSliverFace(f))
     }
   }
 
@@ -820,9 +892,30 @@ export function generateAxonometricRoofSVG(
   const tx = (x: number) => oX + x * sc
   const ty = (y: number) => oY + y * sc
 
+  // Screen-space sliver filter: a real-world face can render as a degenerate
+  // sliver after axonometric projection foreshortening (e.g. a face whose
+  // long axis lines up with the camera tilt collapses to a thin strip).
+  // Drop any face whose post-projection screen bbox has aspect > 8 AND
+  // shorter side < 18 px — the visual artifact threshold above which the
+  // human eye unmistakably reads the face as wrong.
+  const screenFiltered = projected.filter(f => {
+    let mnx = Infinity, mxx = -Infinity, mny = Infinity, mxy = -Infinity
+    for (const v of f.vertices) {
+      const sx = oX + v.x * sc, sy = oY + v.y * sc
+      if (sx < mnx) mnx = sx
+      if (sx > mxx) mxx = sx
+      if (sy < mny) mny = sy
+      if (sy > mxy) mxy = sy
+    }
+    const wPx = mxx - mnx, hPx = mxy - mny
+    const longer = Math.max(wPx, hPx), shorter = Math.min(wPx, hPx)
+    if (shorter < 0.5) return false                    // 1D / off-screen
+    return !(longer / shorter > 8 && shorter < 18)
+  })
+
   // Painter's sort — back-to-front by centroid screen-Y (smaller y = farther
   // away in our axonometric).
-  const sortedFaces = [...projected].sort((a, b) => a.centroid.y - b.centroid.y)
+  const sortedFaces = [...screenFiltered].sort((a, b) => a.centroid.y - b.centroid.y)
 
   // ─── BUILD SVG ───
 
