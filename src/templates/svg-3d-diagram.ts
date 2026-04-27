@@ -371,7 +371,48 @@ export function isSliverFace(face: { vertices: { x: number; y: number; z: number
   const aspect = longer / shorter
   // Sliver = long-thin AND small-area. Both conditions required so a
   // legitimate long ridge face (e.g., 30 ft × 6 ft, 180 sqft) survives.
+  // For the 7611 183 St NW class of artifact (wider triangular wedges),
+  // the footprint-containment filter at the end of buildRoofMesh catches
+  // them via centroid-outside-polygon, not this aspect check.
   return aspect > 5 && shorter < 1.2 && face.area_sqft < 50
+}
+
+/**
+ * Point-in-polygon (ray-casting) on the XY plane. Used to validate that a
+ * generated face's centroid actually sits over the eaves footprint — faces
+ * whose centroids fall outside the polygon are geometric artifacts (Pass 3
+ * quad overshoot, Pass 4 hip-bridge spans) and must be dropped.
+ */
+function pointInPoly(p: { x: number; y: number }, poly: { x: number; y: number }[]): boolean {
+  let inside = false
+  const n = poly.length
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y
+    const xj = poly[j].x, yj = poly[j].y
+    const intersect = ((yi > p.y) !== (yj > p.y)) &&
+      (p.x < (xj - xi) * (p.y - yi) / ((yj - yi) || 1e-9) + xi)
+    if (intersect) inside = !inside
+  }
+  return inside
+}
+
+/**
+ * Distance from point to polygon edge (XY). Returns 0 if inside.
+ * Used to grant a small tolerance buffer before declaring a face out-of-bounds.
+ */
+function distToPolyEdge(p: { x: number; y: number }, poly: { x: number; y: number }[]): number {
+  let best = Infinity
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length]
+    const abx = b.x - a.x, aby = b.y - a.y
+    const lenSq = abx * abx + aby * aby
+    let t = lenSq < 1e-9 ? 0 : ((p.x - a.x) * abx + (p.y - a.y) * aby) / lenSq
+    t = Math.max(0, Math.min(1, t))
+    const cx = a.x + t * abx, cy = a.y + t * aby
+    const d = Math.hypot(p.x - cx, p.y - cy)
+    if (d < best) best = d
+  }
+  return best
 }
 
 // ───────────────────────── 3D MESH BUILDER ─────────────────────────
@@ -598,14 +639,36 @@ function buildRoofMesh(
         const ridgeB: V3 = { x: pb.x, y: pb.y, z: ridgeHeightM }
 
         const isTriangle = Math.hypot(ridgeA.x - ridgeB.x, ridgeA.y - ridgeB.y) < SHARED_APEX_M
-        if (isTriangle) {
-          const apex: V3 = { x: (ridgeA.x + ridgeB.x) / 2, y: (ridgeA.y + ridgeB.y) / 2, z: ridgeHeightM }
+        // Pass 3 quad guard: when the projected ridge segment is dramatically
+        // wider than the eave run that's supposed to feed it, the resulting
+        // quad overshoots the structure boundary and visually overlaps the
+        // adjacent face. Fall back to apex triangles built from the run's
+        // own midpoint instead — honest geometry, no overshoot.
+        let runEaveLen = 0
+        for (const ei of run.edgeIdxs) runEaveLen += edgeLen[ei]
+        const projRidgeLen = Math.hypot(ridgeA.x - ridgeB.x, ridgeA.y - ridgeB.y)
+        const overshoot = !isTriangle && runEaveLen > 0.1 && projRidgeLen > runEaveLen * 2
+        if (isTriangle || overshoot) {
+          const apex: V3 = overshoot
+            ? (() => {
+                let mx = 0, my = 0
+                for (const c of eaveCorners) { mx += c.x; my += c.y }
+                return { x: mx / eaveCorners.length, y: my / eaveCorners.length, z: ridgeHeightM }
+              })()
+            : { x: (ridgeA.x + ridgeB.x) / 2, y: (ridgeA.y + ridgeB.y) / 2, z: ridgeHeightM }
           if (eaveCorners.length === 2) {
             faces.push(makeFace([eaveCorners[0], eaveCorners[1], apex], pitch_rise))
           } else {
             for (let k = 0; k < eaveCorners.length - 1; k++) {
               faces.push(makeFace([eaveCorners[k], eaveCorners[k + 1], apex], pitch_rise))
             }
+          }
+          // When we collapsed an overshooting quad to apex triangles, the run's
+          // ridge endpoints are now both at the apex — record that so Pass 4
+          // doesn't try to bridge a phantom gap with a rogue triangle.
+          if (overshoot) {
+            runGeoms.push({ firstCornerIdx, lastCornerIdx, ridgeA: apex, ridgeB: apex })
+            continue
           }
         } else {
           faces.push(makeFace([...eaveCorners, ridgeB, ridgeA], pitch_rise))
@@ -650,19 +713,32 @@ function buildRoofMesh(
             if (!isSliverFace(tA)) faces.push(tA)
             if (!isSliverFace(tB)) faces.push(tB)
           } else {
-            const tri = makeFace([C, rEnd, rStart], pitch_rise)
-            if (!isSliverFace(tri)) faces.push(tri)
+            // Pass 4 hip-triangle distance guard: if either projected ridge
+            // endpoint is far from corner C, the fallback triangle spans an
+            // implausibly large region (the artifact in 7611 183 St NW).
+            // Better to leave a small visual gap than emit a rogue face.
+            const HIP_TRI_MAX_M = 0.5 * shortSideM
+            const dToEnd = Math.hypot(rEnd.x - C.x, rEnd.y - C.y)
+            const dToStart = Math.hypot(rStart.x - C.x, rStart.y - C.y)
+            if (dToEnd <= HIP_TRI_MAX_M && dToStart <= HIP_TRI_MAX_M) {
+              const tri = makeFace([C, rEnd, rStart], pitch_rise)
+              if (!isSliverFace(tri)) faces.push(tri)
+            }
           }
         }
       }
 
       // Final safety net: drop any face that survived the per-pass guards
-      // but still came out as a degenerate sliver. With the Pass 1 distance
-      // guard + the Pass 4 pre-check, this should be empty in normal
-      // geometry — it exists to catch edge cases the structural checks
-      // miss (e.g. valley clipping that lands two run faces in unfortunate
-      // spots).
-      return faces.filter(f => !isSliverFace(f))
+      // but still came out as a degenerate sliver, OR whose centroid sits
+      // outside the eaves polygon (the Pass 3 / Pass 4 overshoot signature).
+      // The 0.5m tolerance keeps legitimate ridge-line apex faces whose
+      // centroids land just barely off-edge due to projection rounding.
+      return faces.filter(f => {
+        if (isSliverFace(f)) return false
+        const c = { x: f.centroid.x, y: f.centroid.y }
+        if (pointInPoly(c, eavesXY)) return true
+        return distToPolyEdge(c, eavesXY) <= 0.5
+      })
     }
   }
 

@@ -206,3 +206,91 @@ describe('generateAxonometricRoofSVG — Foxboro-style complex polygon does NOT 
     expect(slivers).toBe(0)
   })
 })
+
+describe('generateAxonometricRoofSVG — 7611 183 St NW two-rectangle bug', () => {
+  it('does not emit faces whose centroid sits outside the eaves footprint', () => {
+    const REF = { lat: 53.5161, lng: -113.3145 }
+    const FT_PER_DEG_LAT = 364_000
+    const ftToLat = (ft: number) => ft / FT_PER_DEG_LAT
+    const ftToLng = (ft: number, lat: number) =>
+      ft / (FT_PER_DEG_LAT * Math.cos(lat * Math.PI / 180))
+    const at = (dxFt: number, dyFt: number) => ({
+      lat: REF.lat + ftToLat(dyFt),
+      lng: REF.lng + ftToLng(dxFt, REF.lat),
+    })
+
+    // Approximate the 7611 183 St NW main house: a "fat L" — large
+    // 45×28 ft rectangle (B) with a smaller 23×20 ft section (A) butting
+    // up against its left side. Two ridges: one along B's long axis,
+    // one running down through the shared wall. Two valleys at the meeting.
+    const part = partition({
+      eaves: [
+        // A section (left)
+        at(0,  0),
+        at(18, 0),
+        at(18, 11),
+        at(28, 11),    // jog out at shared wall
+        // B section (right) starts here
+        at(28, 0),
+        at(73, 0),
+        at(73, 28),
+        at(28, 28),
+        // back to A
+        at(28, 20),
+        at(0,  20),
+      ],
+      ridges: [
+        // B's main ridge along its long axis
+        [at(35, 14), at(68, 14)],
+        // A's ridge
+        [at(5,  10), at(15, 10)],
+      ],
+      hips: [
+        [at(0,  0),  at(5, 10)],
+        [at(0,  20), at(5, 10)],
+        [at(18, 0),  at(15, 10)],
+        [at(73, 0),  at(68, 14)],
+        [at(73, 28), at(68, 14)],
+      ],
+      valleys: [
+        [at(28, 11), at(35, 14)],
+        [at(28, 20), at(35, 14)],
+      ],
+      footprint_sqft: 1620,
+      true_area_sqft: 1850,
+    })
+
+    const svg = generateAxonometricRoofSVG(part)
+
+    // Smoke check: SVG renders.
+    expect(svg).toContain('<svg')
+    expect(svg).toContain('</svg>')
+
+    // Reuse the same screen-space sliver detection as the Foxboro test.
+    const polyRe = /<polygon\s+points="([^"]+)"\s+fill="(rgb\([^)]+\))"/g
+    let match: RegExpExecArray | null
+    let slivers = 0
+    let facesChecked = 0
+    while ((match = polyRe.exec(svg)) !== null) {
+      const pts = match[1].trim().split(/\s+/).map(p => {
+        const [x, y] = p.split(',').map(Number)
+        return { x, y }
+      })
+      if (pts.length < 3) continue
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+      for (const p of pts) {
+        if (p.x < minX) minX = p.x
+        if (p.x > maxX) maxX = p.x
+        if (p.y < minY) minY = p.y
+        if (p.y > maxY) maxY = p.y
+      }
+      const w = maxX - minX, h = maxY - minY
+      const longer = Math.max(w, h), shorter = Math.min(w, h)
+      if (shorter < 1) continue
+      facesChecked++
+      if (longer / shorter > 8 && shorter < 18) slivers++
+    }
+    expect(facesChecked).toBeGreaterThan(0)
+    expect(slivers).toBe(0)
+  })
+})
