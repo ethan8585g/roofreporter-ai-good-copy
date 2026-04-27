@@ -1403,7 +1403,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<button onclick="saTraceSetTool(\'vent\')" id="sa-tool-vent" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Vent</button>' +
           '<button onclick="saTraceSetTool(\'skylight\')" id="sa-tool-skylight" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Skylight</button>' +
           '<button onclick="saTraceSetTool(\'chimney\')" id="sa-tool-chimney" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Chimney</button>' +
-          '<button onclick="saAddStructure()" id="sa-tool-add-structure" title="Trace another structure such as a detached garage" style="display:none;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.4)"><i class="fas fa-plus mr-1"></i>Add another building</button>' +
+          '<button onclick="saAddStructure()" id="sa-tool-add-structure" title="Trace another structure such as a detached garage" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.4)"><i class="fas fa-plus mr-1"></i>Add another building</button>' +
           '<button onclick="saTraceUndo()" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">Undo</button>' +
           '<button onclick="saTraceClear()" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#ef4444;border:1px solid #374151">Clear All</button>' +
         '</div>' +
@@ -1459,8 +1459,6 @@ window.saTraceClear = function() {
   s.eaveSections = [];
   (s._eaveMarkers || []).forEach(function(m) { m.setMap(null); }); s._eaveMarkers = [];
   (s._sectionLabelMarkers || []).forEach(function(m) { m.setMap(null); }); s._sectionLabelMarkers = [];
-  var addBtn = document.getElementById('sa-tool-add-structure');
-  if (addBtn) addBtn.style.display = 'none';
   s.ridges.forEach(function(l) { l.setMap(null); }); s.ridges = [];
   s.hips.forEach(function(l) { l.setMap(null); }); s.hips = [];
   s.valleys.forEach(function(l) { l.setMap(null); }); s.valleys = [];
@@ -1509,10 +1507,6 @@ window.saTraceUndo = function() {
     if (s._sectionLabelMarkers && s._sectionLabelMarkers.length > 0) {
       var lbl = s._sectionLabelMarkers.pop();
       if (lbl) lbl.setMap(null);
-    }
-    if (s.eaveSections.length === 0) {
-      var addBtn = document.getElementById('sa-tool-add-structure');
-      if (addBtn) addBtn.style.display = 'none';
     }
   }
 };
@@ -1797,10 +1791,6 @@ function saCloseEaveSection() {
 
   s._eaveLatLngs = [];
   s.eavePoints = [];
-
-  // Reveal "+ Add another building" now that there's at least one closed section
-  var addBtn = document.getElementById('sa-tool-add-structure');
-  if (addBtn) addBtn.style.display = '';
 }
 
 window.saSubmitTrace = async function(orderId) {
