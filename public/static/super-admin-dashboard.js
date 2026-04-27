@@ -1397,6 +1397,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<button onclick="saTraceSetTool(\'vent\')" id="sa-tool-vent" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Vent</button>' +
           '<button onclick="saTraceSetTool(\'skylight\')" id="sa-tool-skylight" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Skylight</button>' +
           '<button onclick="saTraceSetTool(\'chimney\')" id="sa-tool-chimney" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Chimney</button>' +
+          '<button onclick="saAddStructure()" id="sa-tool-add-structure" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:#0ea5e9;color:#fff;border:none">+ New Structure</button>' +
           '<button onclick="saTraceUndo()" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">Undo</button>' +
           '<button onclick="saTraceClear()" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#ef4444;border:1px solid #374151">Clear All</button>' +
         '</div>' +
@@ -1680,6 +1681,18 @@ function saInitTraceMap(lat, lng, address) {
     }
   });
 }
+
+window.saAddStructure = function() {
+  var s = window._saTraceState; if (!s || !s.map) { return; }
+  var pts = s._eaveLatLngs || [];
+  if (pts.length < 3) {
+    alert('Place at least 3 eave points for the current structure before adding a new one.');
+    return;
+  }
+  saCloseEaveSection();
+  // Switch tool back to eave so the next click starts the new structure's first point.
+  if (typeof saTraceSetTool === 'function') saTraceSetTool('eave');
+};
 
 function saCloseEaveSection() {
   var s = window._saTraceState; if (!s || !s.map) return;
