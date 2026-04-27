@@ -206,7 +206,6 @@ function renderDashboard() {
         navLink('/customer/certificate-automations', 'fa-robot', 'Automations', null, 'bg-emerald-600') +
         navLink('/customer/commissions', 'fa-dollar-sign', 'Commissions', null, 'bg-emerald-600') +
         navLink('/customer/suppliers', 'fa-store', 'Suppliers', null, '') +
-        navLink('/customer/website-builder', 'fa-globe', 'Website Builder', null, '') +
         navLink('/customer/referrals', 'fa-gift', 'Referrals', null, '') +
         // Leads (unified inbox)
         '<a href="/customer/leads" class="flex items-center justify-between px-3 py-2 rounded-lg transition-colors group" style="color:var(--text-secondary);background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.05))">' +
