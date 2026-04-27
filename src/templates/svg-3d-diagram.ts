@@ -515,6 +515,21 @@ function buildRoofMesh(
         return { x: cx, y: cy, t, d: Math.hypot(p.x - cx, p.y - cy) }
       }
 
+      // Same orthogonal projection as projectOnto, but onto the INFINITE line
+      // through a→b (no t-clamp). Used only for placing run ridge endpoints
+      // (pa / pb) so that an eave run's projected ridge tips extend along
+      // the ridge axis instead of collapsing onto a segment endpoint.
+      // Without this, a short traced ridge inside a long polygon causes
+      // every off-the-end eave to fan-collapse onto the ridge tip.
+      const projectOntoLine = (p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) => {
+        const abx = b.x - a.x, aby = b.y - a.y
+        const lenSq = abx * abx + aby * aby
+        if (lenSq < 1e-9) return { x: a.x, y: a.y, t: 0, d: Math.hypot(p.x - a.x, p.y - a.y) }
+        const t = ((p.x - a.x) * abx + (p.y - a.y) * aby) / lenSq
+        const cx = a.x + t * abx, cy = a.y + t * aby
+        return { x: cx, y: cy, t, d: Math.hypot(p.x - cx, p.y - cy) }
+      }
+
       const corners: V3[] = eavesXY.map(p => ({ x: p.x, y: p.y, z: 0 }))
       const faces: Face3[] = []
 
@@ -633,8 +648,11 @@ function buildRoofMesh(
           }
         }
 
-        const pa = projectOnto(corners[firstCornerIdx], inboardSeg.a, inboardSeg.b)
-        const pb = projectOnto(corners[lastCornerIdx], inboardSeg.a, inboardSeg.b)
+        // Use line-projection (not segment-projection) so eave corners that
+        // lie past the end of a short traced ridge extend along the ridge
+        // axis instead of collapsing onto its tip. Trapezoid faces, not fan.
+        const pa = projectOntoLine(corners[firstCornerIdx], inboardSeg.a, inboardSeg.b)
+        const pb = projectOntoLine(corners[lastCornerIdx], inboardSeg.a, inboardSeg.b)
         const ridgeA: V3 = { x: pa.x, y: pa.y, z: ridgeHeightM }
         const ridgeB: V3 = { x: pb.x, y: pb.y, z: ridgeHeightM }
 
