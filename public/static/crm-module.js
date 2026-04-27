@@ -253,12 +253,12 @@
   function renderCustomers(data) {
     var customers = data.customers || [];
     var stats = data.stats || {};
-    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3"><div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-users text-blue-400 mr-2"></i>My Customers (' + (stats.total || 0) + ')</h2><p class="text-xs text-gray-500 mt-0.5">' + (stats.active_count || 0) + ' active</p></div><div class="flex items-center gap-2"><input type="text" id="custSearch" placeholder="Search customers..." class="px-3 py-2 border border-white/15 rounded-lg text-sm w-48 focus:ring-2 focus:ring-brand-500" onkeyup="if(event.key===\'Enter\')window._crmSearchCustomers()"><button onclick="window._crmAddCustomer()" class="bg-blue-500/15 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-500/15"><i class="fas fa-plus mr-1"></i>Add Customer</button></div></div>';
+    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3"><div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-users text-blue-400 mr-2"></i>My Customers (' + (stats.total || 0) + ')</h2><p class="text-xs text-gray-400 mt-0.5">' + (stats.active_count || 0) + ' active</p></div><div class="flex items-center gap-2"><input type="text" id="custSearch" placeholder="Search customers..." class="px-3 py-2 border border-white/15 rounded-lg text-sm w-48 focus:ring-2 focus:ring-brand-500" onkeyup="if(event.key===\'Enter\')window._crmSearchCustomers()"><button onclick="window._crmAddCustomer()" class="bg-blue-500/15 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-500/15"><i class="fas fa-plus mr-1"></i>Add Customer</button></div></div>';
 
     if (customers.length === 0) {
       html += '<div class="bg-[#111111] rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-blue-500/15 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-users text-blue-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-300 mb-2">No Customers Yet</h3><p class="text-gray-500 mb-4">Add your first client to start managing leads & invoices.</p><button onclick="window._crmAddCustomer()" class="bg-blue-500/15 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-blue-500/15"><i class="fas fa-plus mr-2"></i>Add First Customer</button></div>';
     } else {
-      html += '<div class="bg-[#111111] rounded-xl border overflow-hidden overflow-x-auto"><table class="w-full text-sm"><thead class="bg-[#0A0A0A]"><tr><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Name</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Company</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden lg:table-cell">Phone</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden lg:table-cell">Email</th><th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">Status</th><th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">Revenue</th><th class="px-4 py-3"></th></tr></thead><tbody class="divide-y divide-gray-50">';
+      html += '<div class="bg-[#111111] rounded-xl border overflow-hidden overflow-x-auto"><table class="w-full text-sm"><thead class="bg-[#0A0A0A]"><tr><th class="px-4 py-3 text-left text-xs font-semibold text-gray-300">Name</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-300 hidden md:table-cell">Company</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-300 hidden lg:table-cell">Phone</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-300 hidden lg:table-cell">Email</th><th class="px-4 py-3 text-center text-xs font-semibold text-gray-300">Status</th><th class="px-4 py-3 text-right text-xs font-semibold text-gray-300">Revenue</th><th class="px-4 py-3"></th></tr></thead><tbody class="divide-y divide-gray-50">';
       for (var i = 0; i < customers.length; i++) {
         var c = customers[i];
         html += '<tr class="hover:bg-[#111111]/5 cursor-pointer" onclick="window._crmViewCustomer(' + c.id + ')"><td class="px-4 py-3 font-medium" style="color:var(--text-primary)">' + c.name + '</td><td class="px-4 py-3 hidden md:table-cell" style="color:var(--text-secondary)">' + (c.company || '-') + '</td><td class="px-4 py-3 hidden lg:table-cell" style="color:var(--text-secondary)">' + (c.phone || '-') + '</td><td class="px-4 py-3 hidden lg:table-cell" style="color:var(--text-secondary)">' + (c.email || '-') + '</td><td class="px-4 py-3 text-center">' + badge(c.status) + '</td><td class="px-4 py-3 text-right font-semibold" style="color:var(--text-primary)">' + money(c.lifetime_value) + '</td><td class="px-4 py-3 text-right"><button onclick="event.stopPropagation();window._crmEditCustomer(' + c.id + ')" style="color:var(--text-secondary)" class="hover:text-brand-600"><i class="fas fa-pencil-alt"></i></button></td></tr>';
@@ -1778,7 +1778,7 @@
     // A. Header bar — unified Job & Crew Hub
     html += '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
     html += '<div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-hard-hat text-emerald-400 mr-2"></i>Job & Crew Hub</h2>';
-    html += '<p class="text-xs text-gray-500 mt-0.5">Manage jobs, dispatch crew, and track progress</p></div>';
+    html += '<p class="text-xs text-gray-400 mt-0.5">Manage jobs, dispatch crew, and track progress</p></div>';
     html += '<div class="flex items-center gap-2 flex-wrap">';
     if (_calConnected) {
       html += '<button onclick="window._crmCalendarSettings()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"><i class="fab fa-google text-emerald-400"></i>Calendar Connected</button>';
@@ -1791,12 +1791,12 @@
 
     // B. Stats bar — combined jobs + crew
     html += '<div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-5">' +
-      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-gray-100">' + (stats.total || 0) + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Total Jobs</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-blue-400">' + (stats.scheduled || 0) + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Scheduled</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-cyan-400">' + (stats.in_progress || 0) + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">In Progress</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-emerald-400">' + (stats.completed || 0) + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Completed</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-purple-400">' + _crewList.length + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Crew Members</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-orange-400">' + _activeCheckins.length + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Checked In</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-gray-100">' + (stats.total || 0) + '</p><p class="text-[10px] text-gray-300 uppercase tracking-wide">Total Jobs</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-blue-400">' + (stats.scheduled || 0) + '</p><p class="text-[10px] text-gray-300 uppercase tracking-wide">Scheduled</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-cyan-400">' + (stats.in_progress || 0) + '</p><p class="text-[10px] text-gray-300 uppercase tracking-wide">In Progress</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-emerald-400">' + (stats.completed || 0) + '</p><p class="text-[10px] text-gray-300 uppercase tracking-wide">Completed</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-purple-400">' + _crewList.length + '</p><p class="text-[10px] text-gray-300 uppercase tracking-wide">Crew Members</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-orange-400">' + _activeCheckins.length + '</p><p class="text-[10px] text-gray-300 uppercase tracking-wide">Checked In</p></div>' +
       '</div>';
 
     // B2. View toggle tabs — Calendar vs Dispatch Board
@@ -1850,7 +1850,7 @@
       html += '<div class="px-5 py-4 border-b border-cyan-500/10 flex items-center justify-between">';
       html += '<div class="flex items-center gap-2"><h3 class="font-bold text-cyan-400 text-sm"><i class="fas fa-hammer mr-2"></i>Today\'s Active Jobs</h3>';
       html += '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-400">' + _todayJobs.length + '</span></div>';
-      html += '<p class="text-[10px] text-gray-500">' + new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) + '</p>';
+      html += '<p class="text-[10px] text-gray-300">' + new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) + '</p>';
       html += '</div>';
       html += '<div class="divide-y divide-white/5">';
       for (var ti = 0; ti < _todayJobs.length; ti++) {
@@ -1865,13 +1865,13 @@
         html += '<div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ' + (isInProgress ? 'bg-cyan-500/20 border border-cyan-500/30' : 'bg-blue-500/15 border border-blue-500/20') + '"><i class="fas ' + jobTypeIcon(tj.job_type) + ' ' + (isInProgress ? 'text-cyan-400' : 'text-blue-400') + '"></i></div>';
         // Job info
         html += '<div class="flex-1 min-w-0">';
-        html += '<div class="flex items-center gap-2 mb-1">' + statusDot + '<span class="font-mono text-[10px] text-gray-500">' + (tj.job_number || '') + '</span></div>';
+        html += '<div class="flex items-center gap-2 mb-1">' + statusDot + '<span class="font-mono text-[10px] text-gray-300">' + (tj.job_number || '') + '</span></div>';
         html += '<p class="text-sm font-semibold text-gray-100 truncate cursor-pointer hover:text-cyan-400" onclick="window._crmViewJob(' + tj.id + ')">' + (tj.title || 'Untitled Job') + '</p>';
-        if (tj.customer_name) html += '<p class="text-xs text-gray-400 mt-0.5"><i class="fas fa-user mr-1"></i>' + tj.customer_name + '</p>';
-        if (tj.property_address) html += '<p class="text-xs text-gray-500 truncate mt-0.5"><i class="fas fa-map-marker-alt mr-1"></i>' + tj.property_address + '</p>';
-        if (tj.scheduled_time) html += '<p class="text-xs text-gray-500 mt-0.5"><i class="fas fa-clock mr-1"></i>' + tj.scheduled_time + (tj.estimated_duration ? ' — Est. ' + tj.estimated_duration : '') + '</p>';
+        if (tj.customer_name) html += '<p class="text-xs text-gray-300 mt-0.5"><i class="fas fa-user mr-1"></i>' + tj.customer_name + '</p>';
+        if (tj.property_address) html += '<p class="text-xs text-gray-300 truncate mt-0.5"><i class="fas fa-map-marker-alt mr-1"></i>' + tj.property_address + '</p>';
+        if (tj.scheduled_time) html += '<p class="text-xs text-gray-300 mt-0.5"><i class="fas fa-clock mr-1"></i>' + tj.scheduled_time + (tj.estimated_duration ? ' — Est. ' + tj.estimated_duration : '') + '</p>';
         // Photo counts row
-        html += '<div class="flex items-center gap-3 mt-2" id="todayJobPhotoCounts' + tj.id + '"><span class="text-[10px] text-gray-500"><i class="fas fa-camera mr-1"></i>' + (tj.photo_count || 0) + ' photos</span></div>';
+        html += '<div class="flex items-center gap-3 mt-2" id="todayJobPhotoCounts' + tj.id + '"><span class="text-[10px] text-gray-300"><i class="fas fa-camera mr-1"></i>' + (tj.photo_count || 0) + ' photos</span></div>';
         html += '</div>';
         // Action buttons column
         html += '<div class="flex flex-col gap-1.5 flex-shrink-0">';
@@ -1897,9 +1897,9 @@
       html += '<div class="bg-[#111111] rounded-2xl border border-white/10 overflow-hidden">';
       html += '<div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">';
       html += '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-hammer text-cyan-400 mr-2"></i>Today\'s Active Jobs</h3>';
-      html += '<p class="text-[10px] text-gray-500">' + new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) + '</p>';
+      html += '<p class="text-[10px] text-gray-300">' + new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) + '</p>';
       html += '</div>';
-      html += '<div class="p-8 text-center"><i class="fas fa-sun text-3xl text-gray-600 mb-3 block opacity-30"></i><p class="text-sm text-gray-400">No jobs scheduled for today.</p><p class="text-xs text-gray-500 mt-1">Schedule jobs from the calendar above or the Ready to Schedule section below.</p></div>';
+      html += '<div class="p-8 text-center"><i class="fas fa-sun text-3xl text-gray-600 mb-3 block opacity-30"></i><p class="text-sm text-gray-200">No jobs scheduled for today.</p><p class="text-xs text-gray-400 mt-1">Schedule jobs from the calendar above or the Ready to Schedule section below.</p></div>';
       html += '</div></div>';
     }
 
@@ -1908,7 +1908,7 @@
       html += '<div class="bg-gradient-to-r from-orange-500/10 to-yellow-500/10 rounded-2xl border border-orange-500/20 overflow-hidden mt-6">';
       html += '<div class="px-5 py-4 border-b border-orange-500/10 flex items-center justify-between">';
       html += '<h3 class="font-bold text-orange-400 text-sm"><i class="fas fa-bell mr-2"></i>Ready to Schedule (' + _readyToSchedule.length + ')</h3>';
-      html += '<p class="text-[10px] text-gray-500">Accepted proposals & paid invoices awaiting scheduling</p>';
+      html += '<p class="text-[10px] text-gray-300">Accepted proposals & paid invoices awaiting scheduling</p>';
       html += '</div>';
       html += '<div class="divide-y divide-white/5">';
       for (var ri = 0; ri < _readyToSchedule.length; ri++) {
@@ -1919,8 +1919,8 @@
         html += '<div class="w-10 h-10 rounded-lg bg-orange-500/15 flex items-center justify-center flex-shrink-0"><i class="fas ' + srcIcon + ' ' + srcColor + '"></i></div>';
         html += '<div class="flex-1 min-w-0">';
         html += '<p class="text-sm font-semibold text-gray-100 truncate">' + (rItem.title || 'Untitled') + '</p>';
-        html += '<p class="text-xs text-gray-400">' + (rItem.source_type === 'proposal' ? 'Proposal' : 'Invoice') + ' ' + (rItem.source_number || '') + (rItem.customer_name ? ' — ' + rItem.customer_name : '') + '</p>';
-        if (rItem.property_address) html += '<p class="text-xs text-gray-500 truncate"><i class="fas fa-map-marker-alt mr-1"></i>' + rItem.property_address + '</p>';
+        html += '<p class="text-xs text-gray-300">' + (rItem.source_type === 'proposal' ? 'Proposal' : 'Invoice') + ' ' + (rItem.source_number || '') + (rItem.customer_name ? ' — ' + rItem.customer_name : '') + '</p>';
+        if (rItem.property_address) html += '<p class="text-xs text-gray-300 truncate"><i class="fas fa-map-marker-alt mr-1"></i>' + rItem.property_address + '</p>';
         html += '</div>';
         html += '<div class="text-right flex-shrink-0">';
         if (rItem.total_amount) html += '<p class="text-sm font-bold text-emerald-400">$' + parseFloat(rItem.total_amount).toFixed(2) + '</p>';
@@ -1935,10 +1935,10 @@
     html += '<div class="bg-[#111111] rounded-2xl border border-white/10 overflow-hidden">';
     html += '<div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">';
     html += '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-map-marker-alt text-emerald-400 mr-2"></i>Crew Check-Ins</h3>';
-    html += '<span class="text-[10px] px-2 py-0.5 rounded-full ' + (_activeCheckins.length > 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-gray-500') + ' font-bold">' + _activeCheckins.length + ' active</span>';
+    html += '<span class="text-[10px] px-2 py-0.5 rounded-full ' + (_activeCheckins.length > 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-gray-300') + ' font-bold">' + _activeCheckins.length + ' active</span>';
     html += '</div>';
     if (_activeCheckins.length === 0 && _recentCheckins.length === 0) {
-      html += '<div class="p-8 text-center"><i class="fas fa-clock text-3xl text-gray-600 mb-3 block"></i><p class="text-sm text-gray-400">No crew check-ins yet today.</p></div>';
+      html += '<div class="p-8 text-center"><i class="fas fa-clock text-3xl text-gray-600 mb-3 block"></i><p class="text-sm text-gray-200">No crew check-ins yet today.</p></div>';
     } else {
       if (_activeCheckins.length > 0) {
         html += '<div class="px-5 py-3"><p class="text-xs font-bold text-emerald-400 uppercase tracking-wide mb-2"><i class="fas fa-circle text-[8px] mr-1 animate-pulse"></i>Currently On Site</p>';
@@ -1953,16 +1953,16 @@
           html += '<div class="w-9 h-9 bg-emerald-500/20 rounded-full flex items-center justify-center"><i class="fas fa-user-check text-emerald-400 text-sm"></i></div>';
           html += '<div class="flex-1 min-w-0">';
           html += '<p class="text-sm font-semibold text-gray-100">' + (ac.crew_name || 'Crew') + '</p>';
-          html += '<p class="text-xs text-gray-400 truncate"><i class="fas fa-hard-hat mr-1"></i>' + (ac.job_title || 'Job') + ' — ' + (ac.job_number || '') + '</p>';
+          html += '<p class="text-xs text-gray-300 truncate"><i class="fas fa-hard-hat mr-1"></i>' + (ac.job_title || 'Job') + ' — ' + (ac.job_number || '') + '</p>';
           html += '</div>';
           html += '<div class="text-right"><p class="text-sm font-bold text-emerald-400">' + (hrs > 0 ? hrs + 'h ' : '') + mins + 'm</p>';
-          html += '<p class="text-[10px] text-gray-500">since ' + clockInTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '</p></div>';
+          html += '<p class="text-[10px] text-gray-300">since ' + clockInTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '</p></div>';
           html += '</div>';
         }
         html += '</div></div>';
       }
       if (_recentCheckins.length > 0) {
-        html += '<div class="px-5 py-3 border-t border-white/5"><p class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Recent (last 24h)</p>';
+        html += '<div class="px-5 py-3 border-t border-white/5"><p class="text-xs font-bold text-gray-300 uppercase tracking-wide mb-2">Recent (last 24h)</p>';
         html += '<div class="space-y-1">';
         for (var rci = 0; rci < Math.min(_recentCheckins.length, 5); rci++) {
           var rc = _recentCheckins[rci];
@@ -1970,10 +1970,10 @@
           var rHrs = Math.floor(dur / 60);
           var rMins = dur % 60;
           html += '<div class="flex items-center gap-3 py-2 text-sm">';
-          html += '<i class="fas fa-check-circle text-gray-500 text-xs"></i>';
-          html += '<span class="text-gray-300">' + (rc.crew_name || 'Crew') + '</span>';
-          html += '<span class="text-gray-500 text-xs truncate flex-1">' + (rc.job_title || '') + '</span>';
-          html += '<span class="text-gray-400 font-mono text-xs">' + (rHrs > 0 ? rHrs + 'h ' : '') + rMins + 'm</span>';
+          html += '<i class="fas fa-check-circle text-gray-400 text-xs"></i>';
+          html += '<span class="text-gray-100">' + (rc.crew_name || 'Crew') + '</span>';
+          html += '<span class="text-gray-300 text-xs truncate flex-1">' + (rc.job_title || '') + '</span>';
+          html += '<span class="text-gray-200 font-mono text-xs">' + (rHrs > 0 ? rHrs + 'h ' : '') + rMins + 'm</span>';
           html += '</div>';
         }
         html += '</div></div>';
@@ -1988,9 +1988,9 @@
     html += '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-users text-purple-400 mr-2"></i>Crew Roster (' + _crewList.length + '/5 included)</h3>';
     html += '<a href="/customer/team" class="text-emerald-400 hover:text-emerald-300 text-xs font-semibold"><i class="fas fa-user-plus mr-1"></i>Invite Crew</a>';
     html += '</div>';
-    html += '<p class="px-5 py-2 text-[10px] text-gray-500 border-b border-white/5"><i class="fas fa-info-circle mr-1"></i>Your $49.99/mo plan includes 5 sales team + 5 crew members at no extra cost</p>';
+    html += '<p class="px-5 py-2 text-[10px] text-gray-300 border-b border-white/5"><i class="fas fa-info-circle mr-1"></i>Your $49.99/mo plan includes 5 sales team + 5 crew members at no extra cost</p>';
     if (_crewList.length === 0) {
-      html += '<div class="p-8 text-center"><i class="fas fa-hard-hat text-3xl text-gray-600 mb-3 block opacity-30"></i><p class="text-sm text-gray-400">No crew members yet.</p><a href="/customer/team" class="inline-block mt-3 text-sm text-emerald-400 hover:underline font-semibold"><i class="fas fa-user-plus mr-1"></i>Invite Your First Crew Member</a></div>';
+      html += '<div class="p-8 text-center"><i class="fas fa-hard-hat text-3xl text-gray-600 mb-3 block opacity-30"></i><p class="text-sm text-gray-200">No crew members yet.</p><a href="/customer/team" class="inline-block mt-3 text-sm text-emerald-400 hover:underline font-semibold"><i class="fas fa-user-plus mr-1"></i>Invite Your First Crew Member</a></div>';
     } else {
       html += '<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">';
       for (var ci = 0; ci < _crewList.length; ci++) {
@@ -1999,8 +1999,8 @@
         html += '<div class="bg-[#0A0A0A] rounded-xl p-4 border border-white/10 hover:border-emerald-500/20 transition-colors">';
         html += '<div class="flex items-center gap-3 mb-2"><div class="w-10 h-10 bg-emerald-500/15 rounded-full flex items-center justify-center text-emerald-400 font-bold text-sm">' + cmInitials + '</div>';
         html += '<div class="min-w-0"><p class="font-semibold text-sm text-gray-100 truncate">' + (cm.name || 'Unknown') + '</p>';
-        html += '<p class="text-xs text-gray-500">' + (cm.role === 'admin' ? 'Admin' : 'Crew Member') + '</p></div></div>';
-        if (cm.phone) html += '<p class="text-xs text-gray-500 mb-1"><i class="fas fa-phone mr-1.5 text-gray-400"></i>' + cm.phone + '</p>';
+        html += '<p class="text-xs text-gray-300">' + (cm.role === 'admin' ? 'Admin' : 'Crew Member') + '</p></div></div>';
+        if (cm.phone) html += '<p class="text-xs text-gray-300 mb-1"><i class="fas fa-phone mr-1.5 text-gray-400"></i>' + cm.phone + '</p>';
         html += '<div class="flex items-center gap-2 mt-2"><span class="px-2 py-0.5 bg-blue-500/15 text-blue-400 rounded-full text-[10px] font-bold">' + (cm.total_assignments || 0) + ' jobs</span>';
         if (cm.active_jobs > 0) html += '<span class="px-2 py-0.5 bg-emerald-500/15 text-emerald-400 rounded-full text-[10px] font-bold">' + cm.active_jobs + ' active</span>';
         html += '</div></div>';
@@ -4082,7 +4082,7 @@
 
   function renderCatalog() {
     var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
-    html += '<div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-box-open text-blue-500 mr-2"></i>Material Catalog</h2><p class="text-xs text-gray-500 mt-0.5">' + _catalogProducts.length + ' products · Prices used in Material Calculator</p></div>';
+    html += '<div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-box-open text-blue-500 mr-2"></i>Material Catalog</h2><p class="text-xs text-gray-400 mt-0.5">' + _catalogProducts.length + ' products · Prices used in Material Calculator</p></div>';
     html += '<div class="flex gap-2">';
     html += '<button onclick="window._catAddProduct()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700"><i class="fas fa-plus mr-1"></i>Add Product</button>';
     if (_catalogProducts.length === 0) {
@@ -4094,14 +4094,14 @@
     var totalValue = 0; _catalogProducts.forEach(function(p) { totalValue += p.unit_price || 0; });
     var cats = {}; _catalogProducts.forEach(function(p) { cats[p.category] = (cats[p.category] || 0) + 1; });
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + _catalogProducts.length + '</p><p class="text-[10px] text-gray-500">Total Products</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + Object.keys(cats).length + '</p><p class="text-[10px] text-gray-500">Categories</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">' + _catalogProducts.filter(function(p) { return p.is_default; }).length + '</p><p class="text-[10px] text-gray-500">Default Items</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-400">$' + totalValue.toFixed(0) + '</p><p class="text-[10px] text-gray-500">Avg Unit Value</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + _catalogProducts.length + '</p><p class="text-[10px] text-gray-300">Total Products</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + Object.keys(cats).length + '</p><p class="text-[10px] text-gray-300">Categories</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">' + _catalogProducts.filter(function(p) { return p.is_default; }).length + '</p><p class="text-[10px] text-gray-300">Default Items</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-200">$' + totalValue.toFixed(0) + '</p><p class="text-[10px] text-gray-300">Avg Unit Value</p></div>';
     html += '</div>';
 
     if (_catalogProducts.length === 0) {
-      html += '<div class="bg-[#111111] rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-box-open text-blue-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-300 mb-2">No Products Yet</h3><p class="text-gray-500 mb-4">Add your materials and pricing so the Material Calculator uses your custom prices.</p><button onclick="window._catSeedDefaults()" class="bg-gray-800 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-gray-900 mr-2"><i class="fas fa-magic mr-2"></i>Load Standard Roofing Products</button><button onclick="window._catAddProduct()" class="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-blue-700"><i class="fas fa-plus mr-2"></i>Add Custom Product</button></div>';
+      html += '<div class="bg-[#111111] rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-box-open text-blue-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-100 mb-2">No Products Yet</h3><p class="text-gray-300 mb-4">Add your materials and pricing so the Material Calculator uses your custom prices.</p><button onclick="window._catSeedDefaults()" class="bg-gray-800 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-gray-900 mr-2"><i class="fas fa-magic mr-2"></i>Load Standard Roofing Products</button><button onclick="window._catAddProduct()" class="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-blue-700"><i class="fas fa-plus mr-2"></i>Add Custom Product</button></div>';
     } else {
       // Group by category
       var grouped = {};
@@ -4118,7 +4118,7 @@
         var catInfo = _catalogCategories[catKey] || { label: catKey, icon: 'fa-box', color: 'gray' };
         html += '<div class="bg-[#111111] rounded-xl border shadow-sm mb-4 overflow-hidden">';
         html += '<div class="px-5 py-3 border-b border-white/5 flex items-center justify-between" style="background:' + (_catColorMap[catInfo.color] || 'rgba(255,255,255,0.05)') + '">';
-        html += '<h3 class="font-bold text-gray-100 text-sm"><i class="fas ' + catInfo.icon + ' text-' + catInfo.color + '-500 mr-2"></i>' + catInfo.label + ' <span class="text-xs font-normal text-gray-400">(' + catItems.length + ')</span></h3>';
+        html += '<h3 class="font-bold text-gray-100 text-sm"><i class="fas ' + catInfo.icon + ' text-' + catInfo.color + '-500 mr-2"></i>' + catInfo.label + ' <span class="text-xs font-normal text-gray-300">(' + catItems.length + ')</span></h3>';
         html += '</div>';
         html += '<div class="divide-y divide-white/5">';
         for (var pi = 0; pi < catItems.length; pi++) {
@@ -4127,14 +4127,14 @@
           html += '<div class="min-w-0 flex-1">';
           html += '<div class="flex items-center gap-2"><p class="font-medium text-sm text-gray-100">' + p.name + '</p>';
           if (p.is_default) html += '<span class="px-1.5 py-0.5 bg-blue-500/15 text-blue-400 rounded text-[9px] font-bold">DEFAULT</span>';
-          if (p.sku) html += '<span class="text-[10px] text-gray-400 font-mono">' + p.sku + '</span>';
+          if (p.sku) html += '<span class="text-[10px] text-gray-300 font-mono">' + p.sku + '</span>';
           html += '</div>';
-          html += '<div class="flex items-center gap-3 mt-0.5 text-xs text-gray-500">';
+          html += '<div class="flex items-center gap-3 mt-0.5 text-xs text-gray-300">';
           if (p.coverage_per_unit) html += '<span><i class="fas fa-ruler-combined mr-0.5"></i>' + p.coverage_per_unit + '</span>';
           if (p.supplier) html += '<span><i class="fas fa-truck mr-0.5"></i>' + p.supplier + '</span>';
           html += '</div></div>';
           html += '<div class="flex items-center gap-3 flex-shrink-0 ml-4">';
-          html += '<div class="text-right"><p class="text-lg font-black text-gray-100">$' + p.unit_price.toFixed(2) + '</p><p class="text-[10px] text-gray-400">per ' + p.unit + '</p></div>';
+          html += '<div class="text-right"><p class="text-lg font-black text-gray-100">$' + p.unit_price.toFixed(2) + '</p><p class="text-[10px] text-gray-300">per ' + p.unit + '</p></div>';
           html += '<div class="flex gap-1">';
           html += '<button onclick="window._catEditProduct(' + p.id + ')" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#111111]/10 text-gray-400 hover:text-blue-600"><i class="fas fa-edit text-xs"></i></button>';
           html += '<button onclick="window._catDeleteProduct(' + p.id + ')" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#111111]/10 text-gray-400 hover:text-red-600"><i class="fas fa-trash text-xs"></i></button>';
