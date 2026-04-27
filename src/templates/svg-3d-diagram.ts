@@ -432,6 +432,86 @@ interface Face3 {
 }
 
 /**
+ * Merge ridge segments that are collinear (or near-collinear) on the same
+ * logical spine. Two segments are "co-spinal" when:
+ *   - their direction vectors are parallel (|cos θ| > 0.95)
+ *   - the perpendicular distance from one segment's midpoint to the other's
+ *     infinite line is small (< 1.2 m)
+ *
+ * For each cluster, replace all member segments with a single segment from
+ * the leftmost endpoint to the rightmost (along the cluster's mean axis).
+ *
+ * Why: compound hip roofs are traced as two parallel ridges with a valley
+ * between (the cross-gable saddle). Treating them as one logical ridge in
+ * Pass 1 stops the run-grouping pass from flipping eave assignments back
+ * and forth, which was the root cause of the cross-roof "translucent
+ * triangle" artifacts on report 00000203 (63 Chestermere Crescent).
+ */
+function mergeParallelRidges(
+  segs: { a: { x: number; y: number }; b: { x: number; y: number } }[],
+): { a: { x: number; y: number }; b: { x: number; y: number } }[] {
+  if (segs.length < 2) return segs
+  const PARALLEL_COS = 0.95
+  const PERP_MAX_M = 1.2
+  const used = new Array(segs.length).fill(false)
+  const out: { a: { x: number; y: number }; b: { x: number; y: number } }[] = []
+  for (let i = 0; i < segs.length; i++) {
+    if (used[i]) continue
+    const cluster = [segs[i]]
+    used[i] = true
+    const aiX = segs[i].b.x - segs[i].a.x, aiY = segs[i].b.y - segs[i].a.y
+    const aiLen = Math.hypot(aiX, aiY) || 1
+    const dirX = aiX / aiLen, dirY = aiY / aiLen
+    for (let j = i + 1; j < segs.length; j++) {
+      if (used[j]) continue
+      const bjX = segs[j].b.x - segs[j].a.x, bjY = segs[j].b.y - segs[j].a.y
+      const bjLen = Math.hypot(bjX, bjY) || 1
+      const cos = Math.abs(dirX * bjX + dirY * bjY) / bjLen
+      if (cos < PARALLEL_COS) continue
+      // Perpendicular distance from segs[j]'s midpoint to segs[i]'s line.
+      const mx = (segs[j].a.x + segs[j].b.x) / 2
+      const my = (segs[j].a.y + segs[j].b.y) / 2
+      const ex = mx - segs[i].a.x, ey = my - segs[i].a.y
+      const along = ex * dirX + ey * dirY
+      const perpX = ex - along * dirX, perpY = ey - along * dirY
+      const perpDist = Math.hypot(perpX, perpY)
+      if (perpDist > PERP_MAX_M) continue
+      cluster.push(segs[j])
+      used[j] = true
+    }
+    if (cluster.length === 1) {
+      out.push(segs[i])
+      continue
+    }
+    // Project all cluster endpoints onto the seed segment's axis and take
+    // the extreme along-axis points as the merged segment's endpoints.
+    let tMin = Infinity, tMax = -Infinity
+    let pMin = segs[i].a, pMax = segs[i].b
+    const meanY0 = cluster.reduce((s, c) => s + (c.a.y + c.b.y) / 2, 0) / cluster.length
+    const meanX0 = cluster.reduce((s, c) => s + (c.a.x + c.b.x) / 2, 0) / cluster.length
+    for (const c of cluster) {
+      for (const p of [c.a, c.b]) {
+        const t = (p.x - segs[i].a.x) * dirX + (p.y - segs[i].a.y) * dirY
+        if (t < tMin) { tMin = t; pMin = p }
+        if (t > tMax) { tMax = t; pMax = p }
+      }
+    }
+    // Use mean-perpendicular position so the merged ridge sits between the
+    // parallel cluster members (not on top of the seed).
+    const seedX0 = segs[i].a.x, seedY0 = segs[i].a.y
+    const offsetAlongMin = tMin
+    const offsetAlongMax = tMax
+    const perpOffsetX = meanX0 - (seedX0 + ((tMin + tMax) / 2) * dirX)
+    const perpOffsetY = meanY0 - (seedY0 + ((tMin + tMax) / 2) * dirY)
+    out.push({
+      a: { x: seedX0 + offsetAlongMin * dirX + perpOffsetX, y: seedY0 + offsetAlongMin * dirY + perpOffsetY },
+      b: { x: seedX0 + offsetAlongMax * dirX + perpOffsetX, y: seedY0 + offsetAlongMax * dirY + perpOffsetY },
+    })
+  }
+  return out
+}
+
+/**
  * Build a folded roof mesh.
  *
  *   - When user-traced ridges are provided, lift their endpoints to ridge
@@ -475,13 +555,20 @@ function buildRoofMesh(
   // multi-ridge roofs), and stitch hip triangles at run boundaries using
   // traced hip endpoints when available.
   if (tracedRidgesXY && tracedRidgesXY.length > 0) {
-    const ridgeSegs: { a: { x: number; y: number }; b: { x: number; y: number } }[] = []
+    const rawRidgeSegs: { a: { x: number; y: number }; b: { x: number; y: number } }[] = []
     for (const ridge of tracedRidgesXY) {
       if (!ridge || ridge.length < 2) continue
       for (let i = 0; i < ridge.length - 1; i++) {
-        ridgeSegs.push({ a: ridge[i], b: ridge[i + 1] })
+        rawRidgeSegs.push({ a: ridge[i], b: ridge[i + 1] })
       }
     }
+    // Pre-merge: combine collinear / near-parallel ridge segments that sit
+    // on the same logical roof spine. Compound hips like 63 Chestermere
+    // Crescent are traced as two short parallel ridges with a valley
+    // between, but for face assignment they should be ONE long ridge —
+    // otherwise each eave edge gets pulled toward its arbitrarily-nearer
+    // segment and runs flip back and forth.
+    const ridgeSegs = mergeParallelRidges(rawRidgeSegs)
     const hipSegs: { a: { x: number; y: number }; b: { x: number; y: number } }[] = []
     for (const hip of tracedHipsXY) {
       if (!hip || hip.length < 2) continue
@@ -533,7 +620,17 @@ function buildRoofMesh(
       const corners: V3[] = eavesXY.map(p => ({ x: p.x, y: p.y, z: 0 }))
       const faces: Face3[] = []
 
-      // ── Pass 1: assign each eave edge to its nearest ridge segment ──
+      // ── Pass 1: assign each eave edge to its nearest *parallel* ridge ──
+      // Naive nearest-midpoint flips back and forth between two parallel
+      // ridges (compound hip roofs at e.g. 63 Chestermere Crescent), creating
+      // non-contiguous runs that emit faces crossing each other in 3D.
+      //
+      // Instead, score each (edge, ridge) pair as
+      //   distance × (1 + 2 × perpendicular_factor)
+      // where perpendicular_factor goes from 0 (edge parallel to ridge) to 1
+      // (edge perpendicular). An eave that runs *parallel* to a ridge belongs
+      // to it; an eave running across the ridge axis does not.
+      //
       // assigned[i] = -1 means "no ridge close enough to be structurally
       // valid" — that edge gets a local apex face in Pass 3 instead of a
       // ridge-projected quad (which would be a sliver across the polygon).
@@ -544,13 +641,23 @@ function buildRoofMesh(
         const b = corners[(i + 1) % n]
         edgeLen[i] = Math.hypot(b.x - a.x, b.y - a.y)
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+        const eaveDx = b.x - a.x, eaveDy = b.y - a.y
+        const eaveLen = Math.hypot(eaveDx, eaveDy) || 1
         let best = 0
-        let bestDist = Infinity
+        let bestScore = Infinity
+        let bestRawDist = Infinity
         for (let j = 0; j < ridgeSegs.length; j++) {
-          const proj = projectOnto(mid, ridgeSegs[j].a, ridgeSegs[j].b)
-          if (proj.d < bestDist) { bestDist = proj.d; best = j }
+          const rs = ridgeSegs[j]
+          const proj = projectOnto(mid, rs.a, rs.b)
+          // Perpendicularity: |eave · ridge| / (|eave| × |ridge|) → 1 = parallel, 0 = perpendicular
+          const ridgeDx = rs.b.x - rs.a.x, ridgeDy = rs.b.y - rs.a.y
+          const ridgeLen = Math.hypot(ridgeDx, ridgeDy) || 1
+          const cos = Math.abs(eaveDx * ridgeDx + eaveDy * ridgeDy) / (eaveLen * ridgeLen)
+          const perpFactor = 1 - cos                       // 0 parallel … 1 perpendicular
+          const score = proj.d * (1 + 2 * perpFactor)
+          if (score < bestScore) { bestScore = score; best = j; bestRawDist = proj.d }
         }
-        assigned[i] = bestDist > RIDGE_FAR_M ? -1 : best
+        assigned[i] = bestRawDist > RIDGE_FAR_M ? -1 : best
       }
 
       // ── Pass 1.5: smooth singleton runs ──
@@ -643,7 +750,12 @@ function buildRoofMesh(
               if (vp.d < bestValleyDist) { bestValleyDist = vp.d; bestValleySeg = vs }
             }
           }
-          if (bestValleyDist < VALLEY_SNAP_M && bestValleyDist < bestRidgeDist * 0.7) {
+          // Relaxed from 0.7× to 1.1× — for compound hip roofs (63 Chestermere)
+          // the cross-gable eaves sit roughly equidistant from the assigned
+          // ridge and the connecting valley. Preferring the valley keeps that
+          // face folded inboard instead of bridging across the polygon to a
+          // far ridge and producing a giant rogue face.
+          if (bestValleyDist < VALLEY_SNAP_M * 2 && bestValleyDist < bestRidgeDist * 1.1) {
             inboardSeg = bestValleySeg
           }
         }
@@ -665,7 +777,15 @@ function buildRoofMesh(
         let runEaveLen = 0
         for (const ei of run.edgeIdxs) runEaveLen += edgeLen[ei]
         const projRidgeLen = Math.hypot(ridgeA.x - ridgeB.x, ridgeA.y - ridgeB.y)
-        const overshoot = !isTriangle && runEaveLen > 0.1 && projRidgeLen > runEaveLen * 2
+        // Ridge-endpoint containment guard: if either projected ridge tip
+        // sits outside the eaves polygon (>1m beyond), the resulting quad
+        // will overshoot the structure — emit apex triangles instead. This
+        // is what was producing the huge cross-roof "translucent triangle"
+        // artifacts on parallel-ridge compound hips (63 Chestermere).
+        const ridgeAOutside = !pointInPoly(ridgeA, eavesXY) && distToPolyEdge(ridgeA, eavesXY) > 1
+        const ridgeBOutside = !pointInPoly(ridgeB, eavesXY) && distToPolyEdge(ridgeB, eavesXY) > 1
+        const ridgeOutside = ridgeAOutside || ridgeBOutside
+        const overshoot = (!isTriangle && runEaveLen > 0.1 && projRidgeLen > runEaveLen * 2) || ridgeOutside
         if (isTriangle || overshoot) {
           const apex: V3 = overshoot
             ? (() => {

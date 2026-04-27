@@ -207,6 +207,51 @@ describe('generateAxonometricRoofSVG — Foxboro-style complex polygon does NOT 
   })
 })
 
+describe('generateAxonometricRoofSVG — compound hip with parallel ridges (63 Chestermere)', () => {
+  it('renders without throwing and emits multiple roof faces', () => {
+    const REF = { lat: 53.5161, lng: -113.3145 }
+    const FT_PER_DEG_LAT = 364_000
+    const ftToLat = (ft: number) => ft / FT_PER_DEG_LAT
+    const ftToLng = (ft: number, lat: number) =>
+      ft / (FT_PER_DEG_LAT * Math.cos(lat * Math.PI / 180))
+    const at = (dxFt: number, dyFt: number) => ({
+      lat: REF.lat + ftToLat(dyFt),
+      lng: REF.lng + ftToLng(dxFt, REF.lat),
+    })
+
+    // Two parallel ridges with valleys between — exercises the new
+    // mergeParallelRidges() pre-pass and Pass 1 perpendicularity scoring.
+    const part = partition({
+      eaves: [
+        at(0,  0),  at(75, 0),  at(75, 35), at(60, 35), at(60, 50),
+        at(40, 50), at(40, 35), at(20, 35), at(20, 50), at(0,  50),
+      ],
+      ridges: [
+        [at(8,  17), at(32, 17)],
+        [at(48, 17), at(67, 17)],
+      ],
+      hips: [
+        [at(0,  0),  at(8,  17)], [at(0,  35), at(8,  17)],
+        [at(75, 0),  at(67, 17)], [at(75, 35), at(67, 17)],
+      ],
+      valleys: [
+        [at(32, 17), at(40, 35)],
+        [at(48, 17), at(40, 35)],
+      ],
+      footprint_sqft: 2700,
+      true_area_sqft: 3100,
+    })
+
+    const svg = generateAxonometricRoofSVG(part)
+    expect(svg).toContain('<svg')
+    const polyRe = /<polygon\s+points="([^"]+)"\s+fill="(rgb\([^)]+\))"/g
+    const faces: string[] = []
+    let match: RegExpExecArray | null
+    while ((match = polyRe.exec(svg)) !== null) faces.push(match[1])
+    expect(faces.length).toBeGreaterThanOrEqual(2)
+  })
+})
+
 describe('generateAxonometricRoofSVG — 7611 183 St NW two-rectangle bug', () => {
   it('does not emit faces whose centroid sits outside the eaves footprint', () => {
     const REF = { lat: 53.5161, lng: -113.3145 }
