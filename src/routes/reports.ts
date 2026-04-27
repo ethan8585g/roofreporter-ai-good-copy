@@ -2320,14 +2320,22 @@ reportsRoutes.post('/:orderId/share', async (c) => {
 </div></body></html>`
 
     const env: any = c.env
-    const ci = env.GMAIL_CLIENT_ID
-    const cs = env.GMAIL_CLIENT_SECRET
-    const rt = env.GMAIL_REFRESH_TOKEN
+    // Share-report emails ALWAYS go from sales@roofmanager.ca, regardless of
+    // which user/account triggered the share. Use platform Gmail OAuth2 creds
+    // — fall back to D1 `settings` rows when env vars are missing (same
+    // pattern as report-completion email and email-outreach paths).
+    const SENDER = 'sales@roofmanager.ca'
+    let ci = env.GMAIL_CLIENT_ID || ''
+    let cs = env.GMAIL_CLIENT_SECRET || ''
+    let rt = env.GMAIL_REFRESH_TOKEN || ''
+    if (!ci) try { ci = (await repo.getSettingValue(c.env.DB, 'gmail_client_id')) || '' } catch {}
+    if (!cs) try { cs = (await repo.getSettingValue(c.env.DB, 'gmail_client_secret')) || '' } catch {}
+    if (!rt) try { rt = (await repo.getSettingValue(c.env.DB, 'gmail_refresh_token')) || '' } catch {}
     const resendKey = env.RESEND_API_KEY
 
     if (ci && cs && rt) {
       try {
-        await sendGmailOAuth2(ci, cs, rt, body.email, subject, notifHtml, env.GMAIL_SENDER_EMAIL)
+        await sendGmailOAuth2(ci, cs, rt, body.email, subject, notifHtml, SENDER)
         emailSent = true
         emailVia = 'gmail'
       } catch (e: any) {
@@ -2338,7 +2346,7 @@ reportsRoutes.post('/:orderId/share', async (c) => {
 
     if (!emailSent && resendKey) {
       try {
-        await sendViaResend(resendKey, body.email, subject, notifHtml, env.GMAIL_SENDER_EMAIL || null)
+        await sendViaResend(resendKey, body.email, subject, notifHtml, SENDER)
         emailSent = true
         emailVia = 'resend'
         emailError = null
