@@ -1385,7 +1385,13 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
         '<span style="margin-right:12px"><span style="display:inline-block;width:10px;height:10px;background:#a855f7;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Vent</span>' +
         '<span style="margin-right:12px"><span style="display:inline-block;width:10px;height:10px;background:#eab308;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Skylight</span>' +
         '<span><span style="display:inline-block;width:10px;height:10px;background:#dc2626;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Chimney</span>' +
-        '<span style="float:right;color:#f59e0b">2-story? Close lower eaves (click 1st point), then trace upper eaves inside it.</span>' +
+        '<span style="display:block;margin-top:6px;color:#9ca3af;font-size:11px">' +
+          '<i class="fas fa-mouse-pointer mr-1"></i>Click = Add point &nbsp; ' +
+          '<i class="fas fa-draw-polygon mr-1" style="color:#22c55e"></i>Click 1st point to close a section &nbsp; ' +
+          '<i class="fas fa-arrows-alt mr-1" style="color:#22c55e"></i>Drag any corner to fine-tune after placing &nbsp; ' +
+          '<i class="fas fa-layer-group mr-1" style="color:#22c55e"></i>2-story? After closing lower eaves, click inside to start the upper layer &nbsp; ' +
+          '<i class="fas fa-expand-arrows-alt mr-1 text-blue-400"></i>Trace the outermost roof edge (drip line), not the walls' +
+        '</span>' +
       '</div>' +
       '<div id="sa-trace-map" style="flex:1;min-height:0"></div>' +
       '<div style="padding:14px 20px;border-top:1px solid #374151;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;flex-shrink:0">' +
@@ -1397,7 +1403,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<button onclick="saTraceSetTool(\'vent\')" id="sa-tool-vent" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Vent</button>' +
           '<button onclick="saTraceSetTool(\'skylight\')" id="sa-tool-skylight" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Skylight</button>' +
           '<button onclick="saTraceSetTool(\'chimney\')" id="sa-tool-chimney" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Chimney</button>' +
-          '<button onclick="saAddStructure()" id="sa-tool-add-structure" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:#0ea5e9;color:#fff;border:none">+ New Structure</button>' +
+          '<button onclick="saAddStructure()" id="sa-tool-add-structure" title="Trace another structure such as a detached garage" style="display:none;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.4)"><i class="fas fa-plus mr-1"></i>Add another building</button>' +
           '<button onclick="saTraceUndo()" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">Undo</button>' +
           '<button onclick="saTraceClear()" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#ef4444;border:1px solid #374151">Clear All</button>' +
         '</div>' +
@@ -1409,15 +1415,18 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
   document.body.appendChild(overlay);
 
   // Initialize the trace map
+  var _isPhoneUA = /Android|iPhone|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent || '') || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
   window._saTraceState = {
     orderId: orderId, tool: 'eave',
     eaveSections: [],            // [{points, polygon}] closed sections
     eavePoints: [], eavePoly: null, _eaveLatLngs: [], _eaveMarkers: [],
+    _sectionLabelMarkers: [],    // S1, S2... centroid label markers (one per closed section)
     ridges: [], hips: [], valleys: [],
     _ridgeData: [], _hipData: [], _valleyData: [],
     _segStart: null, _segStartMarker: null,
     vents: [], skylights: [], chimneys: [],
-    _ventMarkers: [], _skylightMarkers: [], _chimneyMarkers: []
+    _ventMarkers: [], _skylightMarkers: [], _chimneyMarkers: [],
+    _isPhone: _isPhoneUA
   };
   setTimeout(function() { saInitTraceMap(lat, lng, address); }, 100);
 };
@@ -1449,6 +1458,9 @@ window.saTraceClear = function() {
   (s.eaveSections || []).forEach(function(sec) { if (sec.polygon) sec.polygon.setMap(null); });
   s.eaveSections = [];
   (s._eaveMarkers || []).forEach(function(m) { m.setMap(null); }); s._eaveMarkers = [];
+  (s._sectionLabelMarkers || []).forEach(function(m) { m.setMap(null); }); s._sectionLabelMarkers = [];
+  var addBtn = document.getElementById('sa-tool-add-structure');
+  if (addBtn) addBtn.style.display = 'none';
   s.ridges.forEach(function(l) { l.setMap(null); }); s.ridges = [];
   s.hips.forEach(function(l) { l.setMap(null); }); s.hips = [];
   s.valleys.forEach(function(l) { l.setMap(null); }); s.valleys = [];
@@ -1494,6 +1506,14 @@ window.saTraceUndo = function() {
   if (s.eaveSections && s.eaveSections.length > 0) {
     var last = s.eaveSections.pop();
     if (last.polygon) last.polygon.setMap(null);
+    if (s._sectionLabelMarkers && s._sectionLabelMarkers.length > 0) {
+      var lbl = s._sectionLabelMarkers.pop();
+      if (lbl) lbl.setMap(null);
+    }
+    if (s.eaveSections.length === 0) {
+      var addBtn = document.getElementById('sa-tool-add-structure');
+      if (addBtn) addBtn.style.display = 'none';
+    }
   }
 };
 
@@ -1612,9 +1632,34 @@ function saInitTraceMap(lat, lng, address) {
     });
   }
 
+  // Snap a tap to the nearest existing eaves vertex within tolM metres so adjacent
+  // structures share exact corners on phones. Mirrors customer-order.js snapToNearbyVertex.
+  function saSnapToNearbyVertex(latLng, tolM) {
+    var bestLL = null;
+    var bestD = tolM;
+    var lat0 = latLng.lat();
+    var cosLat = Math.cos(lat0 * Math.PI / 180);
+    function consider(p) {
+      var pLat = (typeof p.lat === 'function') ? p.lat() : p.lat;
+      var pLng = (typeof p.lng === 'function') ? p.lng() : p.lng;
+      var dx = (pLat - lat0) * 111320;
+      var dy = (pLng - latLng.lng()) * 111320 * cosLat;
+      var d = Math.sqrt(dx * dx + dy * dy);
+      if (d < bestD) { bestD = d; bestLL = new google.maps.LatLng(pLat, pLng); }
+    }
+    (s.eaveSections || []).forEach(function(sec) { (sec.points || []).forEach(consider); });
+    (s._eaveLatLngs || []).forEach(consider);
+    return bestLL;
+  }
+
   map.addListener('click', function(e) {
     var tool = s.tool;
     if (tool === 'eave') {
+      // Phone-only: snap near-miss taps to existing vertices so structures share corners
+      if (s._isPhone) {
+        var snapped = saSnapToNearbyVertex(e.latLng, 2.0);
+        if (snapped) e = { latLng: snapped };
+      }
       var pts = s._eaveLatLngs || (s._eaveLatLngs = []);
       // Close section only on a deliberate click ON the visible start marker.
       // Use screen-pixel distance via the map projection so the threshold is
@@ -1684,13 +1729,24 @@ function saInitTraceMap(lat, lng, address) {
 
 window.saAddStructure = function() {
   var s = window._saTraceState; if (!s || !s.map) { return; }
-  var pts = s._eaveLatLngs || [];
-  if (pts.length < 3) {
-    alert('Place at least 3 eave points for the current structure before adding a new one.');
+  // Auto-close current draft if it has >=3 points; otherwise require an existing closed section.
+  var draft = s._eaveLatLngs || [];
+  if (draft.length >= 3) {
+    saCloseEaveSection();
+  } else if (!s.eaveSections || s.eaveSections.length === 0) {
+    alert('Close at least one building first by clicking back to the first eave point (or place 3+ points before clicking "+ Add another building").');
     return;
   }
-  saCloseEaveSection();
-  // Switch tool back to eave so the next click starts the new structure's first point.
+  if (s.eaveSections.length >= 5) {
+    alert('Maximum of 5 buildings per report.');
+    return;
+  }
+  // Discard any leftover in-progress draft (markers + draft polyline) so the next click starts fresh
+  s._eaveLatLngs = [];
+  s.eavePoints = [];
+  if (s.eavePoly) { s.eavePoly.setMap(null); s.eavePoly = null; }
+  (s._eaveMarkers || []).forEach(function(m) { m.setMap(null); }); s._eaveMarkers = [];
+  // Make sure tool is set back to eave so the next click starts the new structure's first point
   if (typeof saTraceSetTool === 'function') saTraceSetTool('eave');
 };
 
@@ -1700,17 +1756,51 @@ function saCloseEaveSection() {
   if (pts.length < 3) return;
   if (s.eavePoly) { s.eavePoly.setMap(null); s.eavePoly = null; }
   (s._eaveMarkers || []).forEach(function(m) { m.setMap(null); }); s._eaveMarkers = [];
+  // Closed section polygon — editable so admin can drag vertices to fix mis-clicks,
+  // clickable:false so taps inside it pass through to start a stacked upper layer.
   var poly = new google.maps.Polygon({
     paths: pts.slice(),
     strokeColor: '#22c55e', strokeWeight: 3, strokeOpacity: 0.9,
     fillColor: '#22c55e', fillOpacity: 0.15,
-    clickable: false, editable: false, draggable: false,
+    clickable: false, editable: true, draggable: false,
     map: s.map, zIndex: 1
   });
   var sectionPoints = pts.map(function(p) { return { lat: p.lat(), lng: p.lng() }; });
-  s.eaveSections.push({ points: sectionPoints, polygon: poly });
+  var section = { points: sectionPoints, polygon: poly };
+  s.eaveSections.push(section);
+
+  // Sync vertex drags / midpoint adds back into section.points
+  var path = poly.getPath();
+  function syncPath() {
+    var newPts = [];
+    for (var i = 0; i < path.getLength(); i++) {
+      var ll = path.getAt(i);
+      newPts.push({ lat: ll.lat(), lng: ll.lng() });
+    }
+    if (newPts.length < 3) return;
+    section.points = newPts;
+  }
+  google.maps.event.addListener(path, 'set_at', syncPath);
+  google.maps.event.addListener(path, 'insert_at', syncPath);
+  google.maps.event.addListener(path, 'remove_at', syncPath);
+
+  // S1, S2... centroid label
+  var cx = 0, cy = 0;
+  for (var i = 0; i < sectionPoints.length; i++) { cx += sectionPoints[i].lat; cy += sectionPoints[i].lng; }
+  cx /= sectionPoints.length; cy /= sectionPoints.length;
+  var labelMk = new google.maps.Marker({
+    position: { lat: cx, lng: cy }, map: s.map, clickable: false, zIndex: 10,
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: '#22c55e', fillOpacity: 0.95, strokeColor: '#fff', strokeWeight: 1.5 },
+    label: { text: 'S' + s.eaveSections.length, color: '#fff', fontSize: '10px', fontWeight: '700' }
+  });
+  s._sectionLabelMarkers.push(labelMk);
+
   s._eaveLatLngs = [];
   s.eavePoints = [];
+
+  // Reveal "+ Add another building" now that there's at least one closed section
+  var addBtn = document.getElementById('sa-tool-add-structure');
+  if (addBtn) addBtn.style.display = '';
 }
 
 window.saSubmitTrace = async function(orderId) {
