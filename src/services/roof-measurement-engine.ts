@@ -1312,6 +1312,7 @@ export class RoofMeasurementEngine {
               projected_area_ft2: round(polyArea, 1),
               sloped_area_ft2:    round(sloped, 1),
               squares:            round(sloped / SQFT_PER_SQUARE, 3),
+              azimuth_deg:        estimateFaceAzimuth(facePolys[i].pts),
             })
           }
           

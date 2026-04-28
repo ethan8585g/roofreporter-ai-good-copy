@@ -5,7 +5,7 @@
 
 import { Hono } from 'hono'
 import type { Bindings, RoofReport } from '../types'
-import { computeMaterialEstimate } from '../utils/geo-math'
+import { computeMaterialEstimate, degreesToCardinal } from '../utils/geo-math'
 import { validateAdminSession } from '../routes/auth'
 import { getCustomerSessionToken } from '../lib/session-tokens'
 import { resolveTeamOwner } from './team'
@@ -270,10 +270,14 @@ reportsRoutes.get('/:orderId/segments', async (c) => {
 // GET /:orderId/html — Rendered report HTML (no auth for iframes)
 // ============================================================
 reportsRoutes.get('/:orderId/html', async (c) => {
-  const row = await repo.getReportHtml(c.env.DB, c.req.param('orderId'))
+  const orderId = c.req.param('orderId')
+  const row = await repo.getReportHtml(c.env.DB, orderId)
   if (!row) return c.json({ error: 'Report not found' }, 404)
   const html = resolveHtml(row.professional_report_html, row.api_response_raw)
-  if (!html) return c.json({ error: 'Report data not available' }, 404)
+  if (!html) {
+    const fallback = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Report Regeneration Required &mdash; Roof Manager</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;background:#f8fafc;color:#1e293b;margin:0;padding:48px 24px;display:flex;justify-content:center}.box{max-width:560px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,0.05)}h1{margin:0 0 12px;font-size:20px;color:#0f172a}p{line-height:1.55;color:#475569}.code{font-family:SF Mono,Menlo,monospace;font-size:13px;background:#f1f5f9;padding:2px 8px;border-radius:4px;color:#334155}.btn{display:inline-block;margin-top:16px;padding:10px 18px;background:#0f766e;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;font-size:14px}.btn:hover{background:#115e59}.muted{font-size:12px;color:#64748b;margin-top:24px;border-top:1px solid #e2e8f0;padding-top:16px}</style></head><body><div class="box"><h1>Report regeneration required</h1><p>Order <span class="code">#${orderId}</span> finished without measurement data. This usually means the AI pipeline timed out or the satellite imagery returned an empty footprint. Your order is preserved &mdash; nothing was lost.</p><p>Re-run the generator from your dashboard, or contact support and we will regenerate it for you.</p><a class="btn" href="/customer/dashboard">Open dashboard</a> <a class="btn" style="background:#475569" href="mailto:support@roofmanager.ca?subject=Regenerate%20order%20${orderId}">Email support</a><div class="muted">Order ${orderId} &middot; Roof Manager &middot; roofmanager.ca</div></div></body></html>`
+    return c.html(fallback, 404)
+  }
   return c.html(html)
 })
 
@@ -2903,8 +2907,8 @@ async function _generateReportForOrderInner(
             true_area_sqm: Math.round(face.sloped_area_ft2 * 0.0929 * 10) / 10,
             pitch_degrees: Math.round(face.pitch_angle_deg * 10) / 10,
             pitch_ratio: face.pitch_label,
-            azimuth_degrees: 0,
-            azimuth_direction: 'N/A',
+            azimuth_degrees: face.azimuth_deg != null ? Math.round(face.azimuth_deg * 10) / 10 : 0,
+            azimuth_direction: face.azimuth_deg != null ? degreesToCardinal(face.azimuth_deg) : '',
           }))
         : [{
             name: 'Total Roof (Traced)',
@@ -2914,7 +2918,7 @@ async function _generateReportForOrderInner(
             pitch_degrees: Math.round(km.dominant_pitch_angle_deg * 10) / 10,
             pitch_ratio: km.dominant_pitch_label,
             azimuth_degrees: 0,
-            azimuth_direction: 'N/A',
+            azimuth_direction: '',
           }]
 
       // Build edges from trace line details
@@ -3142,8 +3146,8 @@ async function _generateReportForOrderInner(
               true_area_sqft:      Math.round(face.sloped_area_ft2),
               pitch_degrees:       face.pitch_angle_deg,
               pitch_ratio:         face.pitch_label,
-              azimuth_degrees:     0,
-              azimuth_cardinal:    'N/A',
+              azimuth_degrees:     face.azimuth_deg != null ? Math.round(face.azimuth_deg * 10) / 10 : 0,
+              azimuth_direction:   face.azimuth_deg != null ? degreesToCardinal(face.azimuth_deg) : '',
               area_meters2:        Math.round(face.sloped_area_ft2 / 10.7639 * 10) / 10,
             }))
           : [{
@@ -3153,7 +3157,7 @@ async function _generateReportForOrderInner(
               pitch_degrees:       km.dominant_pitch_angle_deg,
               pitch_ratio:         km.dominant_pitch_label,
               azimuth_degrees:     0,
-              azimuth_cardinal:    'N/A',
+              azimuth_direction:   '',
               area_meters2:        Math.round(totalSlopedFt2 / 10.7639 * 10) / 10,
             }]
 

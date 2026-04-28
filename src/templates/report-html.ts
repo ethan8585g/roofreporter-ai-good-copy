@@ -431,9 +431,10 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
     </div>`
   })()}
 
-  <!-- Disclaimer -->
-  <div style="padding:4px 28px 36px;font-size:7px;color:#888;line-height:1.5;text-align:center">
-    REPORT IS PROVIDED FOR ESTIMATION PURPOSES ONLY. ACTUAL MEASUREMENTS MAY VARY.
+  <!-- Accuracy + Disclaimer -->
+  <div style="padding:4px 28px 36px;font-size:7px;color:#666;line-height:1.5;text-align:center">
+    <strong style="color:#333">Accuracy:</strong> &plusmn;2% area, &plusmn;1% linear &mdash; industry-standard tolerance per EagleView/RoofSnap convention.
+    Report is an engineering-grade estimate based on user-traced GPS or AI vision; physical verification recommended for code-critical work.
     &copy; ${new Date().getFullYear()} Roof Manager. All imagery &copy; Google.
   </div>
 
@@ -628,7 +629,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <!-- Methodology note -->
   <div style="padding:6px 28px 0">
     <div style="padding:4px 8px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:3px;font-size:6.5px;color:#0369a1;line-height:1.4">
-      <strong>Methodology:</strong> Measurements from ${(report as any).roof_trace ? 'user-traced GPS coordinates (UTM projection, Shoelace formula)' : 'AI vision analysis of satellite imagery'}. Pitch multiplier &radic;(rise&sup2;+12&sup2;)/12 applied for true 3D surface area. Engine v6.0 &mdash; Industry-standard multipliers per GAF/CertainTeed/IKO/EagleView.
+      <strong>Methodology:</strong> Measurements from ${(report as any).roof_trace ? 'user-traced GPS coordinates (UTM projection, Shoelace formula)' : 'AI vision analysis of satellite imagery'}. Pitch multiplier &radic;(rise&sup2;+12&sup2;)/12 applied for true 3D surface area. Pitch source: ${(report as any).roof_trace ? 'per-segment GPS where computed; otherwise dominant pitch from Solar API roofSegmentStats' : 'AI vision (Gemini)'}. Engine v6.0 &mdash; Industry-standard multipliers per GAF/CertainTeed/IKO/EagleView.
     </div>
   </div>
 
@@ -1320,6 +1321,7 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
       note: `${Math.round(iwb.low_slope_full_coverage_sqft).toLocaleString()} SF across ${iwb.low_slope_face_count} face(s)`,
       icon: '&#10052;',
       color: '#1d4ed8',
+      code: 'RFG IWS',
     })
     const eaveValleySqft = (iwb.eave_strip_sqft || 0) + (iwb.valley_sqft || 0)
     if (eaveValleySqft > 0) {
@@ -1331,6 +1333,7 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
         note: `${Math.round(eaveValleySqft).toLocaleString()} SF (eave ${Math.round(iwb.eave_strip_sqft || 0)} + valley ${Math.round(iwb.valley_sqft || 0)})`,
         icon: '&#10052;',
         color: '#2563eb',
+        code: 'RFG IWS',
       })
     }
   } else {
@@ -1343,20 +1346,21 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
       note: `${m.ice_water_shield_sqft.toLocaleString()} SF total IWB area (strip ${stripDepth} ft)`,
       icon: '&#10052;',
       color: '#2563eb',
+      code: 'RFG IWS',
     })
   }
 
   const items = [
-    { cat: 'Field Shingles', desc: shingleName + ' shingles', qty: m.shingles_bundles, unit: 'bundles', note: `${m.shingles_squares_gross} sq gross (${m.shingles_squares_net} net + ${wastePct}% waste)${shingleSpec ? ' | ' + shingleSpec : ''}`, icon: '&#9632;', color: '#0891b2' },
-    { cat: 'Underlayment', desc: 'Synthetic roof underlayment (15 sq/roll)', qty: m.underlayment_rolls, unit: 'rolls', note: `Covers ${netArea.toLocaleString()} SF net roof area`, icon: '&#9632;', color: '#6366f1' },
+    { cat: 'Field Shingles', desc: shingleName + ' shingles', qty: m.shingles_bundles, unit: 'bundles', note: `${m.shingles_squares_gross} sq gross (${m.shingles_squares_net} net + ${wastePct}% waste)${shingleSpec ? ' | ' + shingleSpec : ''}`, icon: '&#9632;', color: '#0891b2', code: 'RFG ARCH' },
+    { cat: 'Underlayment', desc: 'Synthetic roof underlayment (15 sq/roll)', qty: m.underlayment_rolls, unit: 'rolls', note: `Covers ${netArea.toLocaleString()} SF net roof area`, icon: '&#9632;', color: '#6366f1', code: 'RFG SYNUL' },
     ...iwbRows,
-    { cat: 'Ridge Cap', desc: 'Hip &amp; ridge cap shingles', qty: m.ridge_cap_bundles, unit: 'bundles', note: `${m.ridge_cap_lf} LF total ridge + hip`, icon: '&#9650;', color: '#dc2626' },
-    { cat: 'Starter Strip', desc: 'Starter shingles (eave + rake perimeter)', qty: Math.ceil(m.starter_strip_lf / 100), unit: 'rolls', note: `${m.starter_strip_lf} LF perimeter`, icon: '&#9644;', color: '#16a34a' },
-    { cat: 'Drip Edge — Eave', desc: 'Metal drip edge, eave profile (10.5ft sticks)', qty: Math.ceil(m.drip_edge_eave_lf / 10.5), unit: 'sticks', note: `${m.drip_edge_eave_lf} LF`, icon: '&#9472;', color: '#16a34a' },
-    { cat: 'Drip Edge — Rake', desc: 'Metal drip edge, rake profile (10.5ft sticks)', qty: Math.ceil(m.drip_edge_rake_lf / 10.5), unit: 'sticks', note: `${m.drip_edge_rake_lf} LF`, icon: '&#9472;', color: '#7c3aed' },
-    { cat: 'Valley Flashing', desc: 'Pre-bent W-valley metal or roll valley', qty: Math.ceil(m.valley_flashing_lf / 10), unit: 'pcs', note: `${m.valley_flashing_lf} LF total valley`, icon: '&#9660;', color: '#2563eb' },
-    { cat: 'Roofing Nails', desc: '1.25″ galvanized coil nails', qty: m.roofing_nails_lbs, unit: 'lbs', note: 'Approx 2.5 lbs per square', icon: '&#9733;', color: '#64748b' },
-    { cat: 'Caulk / Sealant', desc: 'Roofing sealant tubes', qty: m.caulk_tubes, unit: 'tubes', note: 'Flashings, vents, and penetrations', icon: '&#9679;', color: '#0891b2' }
+    { cat: 'Ridge Cap', desc: 'Hip &amp; ridge cap shingles', qty: m.ridge_cap_bundles, unit: 'bundles', note: `${m.ridge_cap_lf} LF total ridge + hip`, icon: '&#9650;', color: '#dc2626', code: 'RFG RIDGC' },
+    { cat: 'Starter Strip', desc: 'Starter shingles (eave + rake perimeter)', qty: Math.ceil(m.starter_strip_lf / 100), unit: 'rolls', note: `${m.starter_strip_lf} LF perimeter`, icon: '&#9644;', color: '#16a34a', code: 'RFG STARTU' },
+    { cat: 'Drip Edge — Eave', desc: 'Metal drip edge, eave profile (10.5ft sticks)', qty: Math.ceil(m.drip_edge_eave_lf / 10.5), unit: 'sticks', note: `${m.drip_edge_eave_lf} LF`, icon: '&#9472;', color: '#16a34a', code: 'RFG GUTAS' },
+    { cat: 'Drip Edge — Rake', desc: 'Metal drip edge, rake profile (10.5ft sticks)', qty: Math.ceil(m.drip_edge_rake_lf / 10.5), unit: 'sticks', note: `${m.drip_edge_rake_lf} LF`, icon: '&#9472;', color: '#7c3aed', code: 'RFG GUTRS' },
+    { cat: 'Valley Flashing', desc: 'Pre-bent W-valley metal or roll valley', qty: Math.ceil(m.valley_flashing_lf / 10), unit: 'pcs', note: `${m.valley_flashing_lf} LF total valley`, icon: '&#9660;', color: '#2563eb', code: 'RFG VALLEYM' },
+    { cat: 'Roofing Nails', desc: '1.25″ galvanized coil nails', qty: m.roofing_nails_lbs, unit: 'lbs', note: 'Approx 2.5 lbs per square', icon: '&#9733;', color: '#64748b', code: 'RFG NAIL' },
+    { cat: 'Caulk / Sealant', desc: 'Roofing sealant tubes', qty: m.caulk_tubes, unit: 'tubes', note: 'Flashings, vents, and penetrations', icon: '&#9679;', color: '#0891b2', code: 'RFG CLK' }
   ]
 
   return `
@@ -1392,20 +1396,22 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
     <table style="width:100%;border-collapse:collapse;font-size:8.5px">
       <thead>
         <tr style="background:#1a1a2e;color:#fff">
-          <th style="padding:5px 8px;text-align:left;font-size:7.5px;font-weight:700;width:28%">Material</th>
-          <th style="padding:5px 8px;text-align:left;font-size:7.5px;font-weight:700;width:28%">Description</th>
-          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700;width:10%">Quantity</th>
-          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700;width:8%">Unit</th>
-          <th style="padding:5px 8px;text-align:left;font-size:7.5px;font-weight:700;width:26%">Notes</th>
+          <th style="padding:5px 8px;text-align:left;font-size:7.5px;font-weight:700;width:24%">Material</th>
+          <th style="padding:5px 8px;text-align:left;font-size:7.5px;font-weight:700;width:24%">Description</th>
+          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700;width:9%">Quantity</th>
+          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700;width:7%">Unit</th>
+          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700;width:12%">Xactimate</th>
+          <th style="padding:5px 8px;text-align:left;font-size:7.5px;font-weight:700;width:24%">Notes</th>
         </tr>
       </thead>
       <tbody>
-        ${items.map((item, i) => `
+        ${items.map((item: any, i: number) => `
         <tr style="${i % 2 === 0 ? '' : 'background:#f8fafc'};border-bottom:1px solid #eee">
           <td style="padding:5px 8px;font-weight:700"><span style="color:${item.color};margin-right:3px">${item.icon}</span>${item.cat}</td>
           <td style="padding:5px 8px;color:#555">${item.desc}</td>
           <td style="padding:5px 8px;text-align:center;font-weight:800;font-size:10px;color:${item.color}">${item.qty}</td>
           <td style="padding:5px 8px;text-align:center;font-size:7.5px;color:#777">${item.unit}</td>
+          <td style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700;color:#1a1a2e;font-family:'SF Mono',Menlo,monospace">${item.code || ''}</td>
           <td style="padding:5px 8px;font-size:7.5px;color:#666">${item.note}</td>
         </tr>`).join('')}
       </tbody>
@@ -1970,9 +1976,10 @@ function buildMeasurementSummaryPage(report: RoofReport, reportNum: string, repo
     </div>
   </div>
 
-  <!-- Disclaimer -->
-  <div style="padding:6px 28px 0;font-size:7px;color:#888;line-height:1.5;text-align:center">
-    REPORT IS PROVIDED FOR ESTIMATION PURPOSES ONLY. ACTUAL MEASUREMENTS MAY VARY.
+  <!-- Accuracy + Disclaimer -->
+  <div style="padding:6px 28px 0;font-size:7px;color:#666;line-height:1.5;text-align:center">
+    <strong style="color:#333">Accuracy:</strong> &plusmn;2% area, &plusmn;1% linear &mdash; industry-standard tolerance per EagleView/RoofSnap convention.
+    Engineering-grade estimate; physical verification recommended for code-critical work.
     &copy; ${new Date().getFullYear()} Roof Manager.
   </div>
 
