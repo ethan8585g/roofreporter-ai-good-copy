@@ -60,6 +60,7 @@ import { sam3Routes } from './routes/sam3-analysis'
 import { platformAdmin } from './routes/platform-admin'
 import { superAdminBi } from './routes/super-admin-bi'
 import { superAdminLeads } from './routes/super-admin-leads'
+import { superAdminAttribution } from './routes/super-admin-attribution'
 import { fieldRoutes, fieldUiRoutes } from './routes/field'
 import { publicApiRoutes } from './routes/public-api'
 import { publicPreviewRoutes } from './routes/public-preview'
@@ -433,6 +434,9 @@ app.route('/api/sam3', sam3Routes)
 app.route('/api/admin/platform', platformAdmin)
 app.route('/api/admin/bi', superAdminBi)
 app.route('/api/admin/leads', superAdminLeads)
+// Super-admin attribution: HTML pages at /super-admin/attribution* + JSON at /api/super-admin/attribution/*
+app.route('/super-admin/attribution', superAdminAttribution)
+app.route('/api/super-admin/attribution', superAdminAttribution)
 
 // Exit-intent modal body — returns the free-measurement-report form variant.
 // Kept out of getHeadTags so the modal HTML only ships when actually triggered.

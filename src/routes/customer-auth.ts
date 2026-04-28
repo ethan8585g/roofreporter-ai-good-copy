@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { trackUserSignup, trackUserLogin } from '../services/ga4-events'
+import { identifySession } from '../services/attribution'
 import { resolveTeamOwner } from './team'
 import { hashPassword, verifyPassword, isLegacyHash, dummyVerify } from '../lib/password'
 import { getCustomerSessionToken } from '../lib/session-tokens'
@@ -474,6 +475,12 @@ customerAuthRoutes.post('/google', async (c) => {
       trackUserSignup(c.env as any, String(customer.id), 'google', { email_domain: email.split('@')[1] || 'unknown' }).catch((e) => console.warn('[customer-auth] GA4 trackUserSignup failed (google):', e?.message || e))
     }
 
+    // Attribution — link recent same-IP traffic to this customer + recompute
+    try {
+      const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || ''
+      c.executionCtx.waitUntil(identifySession(c.env.DB, customer.id as number, ip).catch((e) => console.warn('[attribution] identify (google) failed:', e?.message)))
+    } catch (e: any) { console.warn('[attribution] identify (google) skip:', e?.message) }
+
     // Create session
     const token = generateSessionToken()
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // P1-01: 7 days
@@ -653,6 +660,12 @@ customerAuthRoutes.post('/register', async (c) => {
       primary_use: cleanPrimaryUse || '',
     }).catch((e) => console.warn('[customer-auth] GA4 trackUserSignup failed (email):', e?.message || e))
 
+    // Attribution — link recent same-IP traffic + recompute (non-blocking)
+    try {
+      const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || ''
+      c.executionCtx.waitUntil(identifySession(c.env.DB, result.meta.last_row_id as number, ip).catch((e) => console.warn('[attribution] identify (register) failed:', e?.message)))
+    } catch (e: any) { console.warn('[attribution] identify (register) skip:', e?.message) }
+
     return c.json({
       success: true,
       is_new: true,
@@ -751,6 +764,12 @@ customerAuthRoutes.post('/login', async (c) => {
 
     // Track login event in GA4
     trackUserLogin(c.env as any, String(customer.id), 'email', { email_domain: customer.email.split('@')[1] || 'unknown' }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+
+    // Attribution — link recent same-IP traffic to this customer (non-blocking)
+    try {
+      const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || ''
+      c.executionCtx.waitUntil(identifySession(c.env.DB, customer.id as number, ip).catch((e) => console.warn('[attribution] identify (login) failed:', e?.message)))
+    } catch (e: any) { console.warn('[attribution] identify (login) skip:', e?.message) }
 
     return c.json({
       success: true,

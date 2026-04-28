@@ -12,6 +12,7 @@ import { runLeadAgent } from './services/lead-agent'
 import { runEmailAgent } from './services/email-agent'
 import { runMonitorAgent } from './services/monitor-agent'
 import { runTrafficAgent } from './services/traffic-agent'
+import { runNightlyAttributionRollup } from './services/attribution'
 
 // ── Abandoned signup recovery ─────────────────────────────────────────────────
 async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number; skipped: number }> {
@@ -331,6 +332,24 @@ export default {
           console.log(`[CRON:secretary] Reminders: ${result.remindersSent}, past-due cancelled: ${result.pastDueCancelled}`)
         } catch (err: any) {
           console.error('[CRON:secretary] Error:', err.message)
+        }
+      })())
+    }
+
+    // ── Attribution & content rollup (daily at 03:00 UTC) ───
+    // Recomputes analytics_attribution for customers with recent activity
+    // and rebuilds analytics_content_daily for yesterday.
+    if (hour === 3 && minute < 10) {
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const r = await runNightlyAttributionRollup(env.DB)
+          const summary = `Attribution rollup — ${r.recomputed||0} customers, ${r.templates||0} templates for ${r.date}`
+          console.log(`[CRON:attribution] ${summary}`)
+          await logRun('attribution', 'success', summary, r, Date.now() - t0).catch(() => {})
+        } catch (err: any) {
+          console.error('[CRON:attribution] Error:', err.message)
+          await logRun('attribution', 'error', err.message, {}, Date.now() - t0).catch(() => {})
         }
       })())
     }
