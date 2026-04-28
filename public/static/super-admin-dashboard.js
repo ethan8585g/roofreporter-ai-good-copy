@@ -943,7 +943,7 @@ function renderUsersView() {
                   ${u.google_id ? '<span class="text-xs text-red-500"><i class="fab fa-google"></i></span>' : '<span class="text-xs text-gray-400"><i class="fas fa-envelope"></i></span>'}
                 </td>
                 <td class="px-4 py-3 text-center">
-                  <span class="text-xs ${(u.free_trial_used || 0) >= (u.free_trial_total || 3) ? 'text-red-500 font-bold' : 'text-gray-600'}">${u.free_trial_used || 0}/${u.free_trial_total || 3}</span>
+                  <span class="text-xs ${(u.trial_orders || 0) >= (u.free_trial_total || 0) && (u.free_trial_total || 0) > 0 ? 'text-red-500 font-bold' : 'text-gray-600'}">${u.trial_orders || 0}/${u.free_trial_total || 0}</span>
                 </td>
                 <td class="px-4 py-3 text-center">
                   <span class="text-xs font-medium ${(u.report_credits || 0) > 0 ? 'text-green-600' : 'text-gray-400'}">${u.report_credits || 0}</span>
