@@ -85,19 +85,21 @@ const SUN_FILL = (() => {
 
 const EDGE_COLOR: Record<string, string> = {
   EAVE:   '#0F766E',
-  RIDGE:  '#B91C1C',
+  RIDGE:  '#991B1B',
   HIP:    '#C2410C',
   VALLEY: '#1D4ED8',
   RAKE:   '#6D28D9',
 }
 
-// Per-pitch base color ramp; gets shaded by Lambert.
+// Per-pitch base color ramp; gets shaded by Lambert. Warm architectural
+// roof tones (warm-grey → charcoal) instead of the old cool slate, which
+// was reading bluish on print and screen.
 const PITCH_BAND_COLOR: Array<[number, string]> = [
-  [2, '#94A3B8'],    // flat → slate
-  [4, '#64748B'],    // low-slope
-  [7, '#475569'],    // mid
-  [10, '#334155'],   // standard
-  [99, '#1E293B'],   // steep
+  [2, '#9CA3A0'],    // flat → warm slate
+  [4, '#6B7271'],    // low-slope
+  [7, '#4B5152'],    // mid
+  [10, '#363B3D'],   // standard
+  [99, '#22272A'],   // steep → charcoal
 ]
 
 // ───────────────────────── GEOM HELPERS ─────────────────────────
@@ -1014,13 +1016,22 @@ function pitchBaseColor(pitchRise: number): string {
 
 function shadeColor(hex: string, factor: number): string {
   // factor 0..1.5 (1.0 = unchanged, <1 = darker, >1 = lighter)
+  // Adds a subtle hue shift — sunlit faces drift warm (boosted R/G), shadowed
+  // faces drift cool (boosted B). Real roof shingles photograph this way under
+  // sun + sky, and the chromatic separation makes adjacent faces distinguish
+  // each other without needing heavier outline strokes.
   const c = hex.replace('#', '')
   const r = parseInt(c.slice(0, 2), 16)
   const g = parseInt(c.slice(2, 4), 16)
   const b = parseInt(c.slice(4, 6), 16)
   const f = Math.max(0.3, Math.min(1.6, factor))
-  const out = (n: number) => Math.max(0, Math.min(255, Math.round(n * f)))
-  return `rgb(${out(r)},${out(g)},${out(b)})`
+  // tint: -1 (cool/shadow) … 0 (neutral) … +1 (warm/highlight)
+  const tint = Math.max(-1, Math.min(1, (factor - 1.0) * 1.4))
+  const warmR = tint > 0 ? 1 + tint * 0.06 : 1 + tint * 0.02
+  const warmG = tint > 0 ? 1 + tint * 0.03 : 1 + tint * 0.01
+  const warmB = tint > 0 ? 1 - tint * 0.04 : 1 - tint * 0.06
+  const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n)))
+  return `rgb(${clamp(r * f * warmR)},${clamp(g * f * warmG)},${clamp(b * f * warmB)})`
 }
 
 function lambertFactor(normal: V3): number {
@@ -1144,14 +1155,18 @@ export function generateAxonometricRoofSVG(
   //   ridges and valleys — the depth cue the old flat-Lambert lacked.
   svg += `<defs>
     <filter id="ground-shadow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="5"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="7"/>
     </filter>
     <filter id="face-ao" x="-10%" y="-10%" width="120%" height="120%">
-      <feGaussianBlur stdDeviation="2.2"/>
+      <feGaussianBlur stdDeviation="1.7"/>
     </filter>
     <linearGradient id="bg-grad" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#F8FAFC"/>
       <stop offset="100%" stop-color="#FFFFFF"/>
+    </linearGradient>
+    <linearGradient id="wall-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F1F5F9"/>
+      <stop offset="100%" stop-color="#CBD5E1"/>
     </linearGradient>
   </defs>`
 
@@ -1164,9 +1179,9 @@ export function generateAxonometricRoofSVG(
   // Drop shadow under building (silhouette of footprint, blurred + offset).
   if (showShadow) {
     const shadowPts = groundOutline
-      .map(p => `${(tx(p.x) + 7).toFixed(1)},${(ty(p.y) + 11).toFixed(1)}`)
+      .map(p => `${(tx(p.x) + 9).toFixed(1)},${(ty(p.y) + 14).toFixed(1)}`)
       .join(' ')
-    svg += `<polygon points="${shadowPts}" fill="rgba(15,23,42,0.28)" filter="url(#ground-shadow)"/>`
+    svg += `<polygon points="${shadowPts}" fill="rgba(15,23,42,0.22)" filter="url(#ground-shadow)"/>`
   }
 
   // Faux walls — extrude the silhouette downward to the ground line in a
@@ -1181,7 +1196,7 @@ export function generateAxonometricRoofSVG(
     const b = groundOutline[(i + 1) % groundOutline.length]
     const x1 = tx(a.x), y1 = ty(a.y)
     const x2 = tx(b.x), y2 = ty(b.y)
-    svg += `<polygon points="${x1.toFixed(1)},${y1.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)} ${x2.toFixed(1)},${(y2 + wallSkirtPx).toFixed(1)} ${x1.toFixed(1)},${(y1 + wallSkirtPx).toFixed(1)}" fill="#E2E8F0" stroke="#CBD5E1" stroke-width="0.5"/>`
+    svg += `<polygon points="${x1.toFixed(1)},${y1.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)} ${x2.toFixed(1)},${(y2 + wallSkirtPx).toFixed(1)} ${x1.toFixed(1)},${(y1 + wallSkirtPx).toFixed(1)}" fill="url(#wall-grad)" stroke="#94A3B8" stroke-width="0.6"/>`
   }
 
   // Ambient-occlusion underlay: dark blurred strokes that accumulate where
@@ -1190,7 +1205,7 @@ export function generateAxonometricRoofSVG(
   svg += `<g filter="url(#face-ao)">`
   for (const f of sortedFaces) {
     const pts = f.vertices.map(v => `${tx(v.x).toFixed(1)},${ty(v.y).toFixed(1)}`).join(' ')
-    svg += `<polygon points="${pts}" fill="none" stroke="#0F172A" stroke-width="3.4" stroke-linejoin="round" stroke-opacity="0.55"/>`
+    svg += `<polygon points="${pts}" fill="none" stroke="#0F172A" stroke-width="4.0" stroke-linejoin="round" stroke-opacity="0.45"/>`
   }
   svg += `</g>`
 
@@ -1199,7 +1214,7 @@ export function generateAxonometricRoofSVG(
     const base = pitchBaseColor(f.pitch_rise)
     const shade = shadeColor(base, lambertFactor(f.normal))
     const pts = f.vertices.map(v => `${tx(v.x).toFixed(1)},${ty(v.y).toFixed(1)}`).join(' ')
-    svg += `<polygon points="${pts}" fill="${shade}" stroke="#0F172A" stroke-width="0.8" stroke-linejoin="round" stroke-opacity="0.55"/>`
+    svg += `<polygon points="${pts}" fill="${shade}" stroke="#0F172A" stroke-width="1.0" stroke-linejoin="round" stroke-opacity="0.7"/>`
   }
 
   // Highlight ridges + hips: any shared edge between the topmost two faces
@@ -1238,7 +1253,7 @@ export function generateAxonometricRoofSVG(
   const eavePts = groundOutline
     .map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`)
     .join(' ')
-  svg += `<polygon points="${eavePts}" fill="none" stroke="${EDGE_COLOR.EAVE}" stroke-width="1.6" stroke-linejoin="round" stroke-opacity="0.85"/>`
+  svg += `<polygon points="${eavePts}" fill="none" stroke="${EDGE_COLOR.EAVE}" stroke-width="2.0" stroke-linejoin="round" stroke-opacity="0.95"/>`
 
   // Compass (top-right)
   if (showCompass) {
