@@ -123,51 +123,24 @@ export function generateSegmentsFromDLAnalysis(
     }
   }
 
-  // Fallback: hardcoded template percentages
-  console.log(`[Segments] FALLBACK: Using hardcoded template percentages`)
-  const segmentCount = totalFootprintSqft > 3000 ? 6
-    : totalFootprintSqft > 2000 ? 4
-    : totalFootprintSqft > 1000 ? 4
-    : 2
-
-  const segmentDefs = segmentCount >= 6
-    ? [
-        { name: 'Main South Face',   pct: 0.25, pitchOff: 0,    azBase: 180 },
-        { name: 'Main North Face',   pct: 0.25, pitchOff: 0,    azBase: 0   },
-        { name: 'East Wing Upper',   pct: 0.15, pitchOff: -3,   azBase: 90  },
-        { name: 'West Wing Upper',   pct: 0.15, pitchOff: -3,   azBase: 270 },
-        { name: 'East Wing Lower',   pct: 0.10, pitchOff: -5,   azBase: 90  },
-        { name: 'West Wing Lower',   pct: 0.10, pitchOff: -5,   azBase: 270 },
-      ]
-    : segmentCount >= 4
-    ? [
-        { name: 'Main South Face',  pct: 0.35, pitchOff: 0,    azBase: 180 },
-        { name: 'Main North Face',  pct: 0.35, pitchOff: 0,    azBase: 0   },
-        { name: 'East Wing',        pct: 0.15, pitchOff: -3,   azBase: 90  },
-        { name: 'West Wing',        pct: 0.15, pitchOff: -3,   azBase: 270 },
-      ]
-    : [
-        { name: 'Main South Face',  pct: 0.50, pitchOff: 0,    azBase: 180 },
-        { name: 'Main North Face',  pct: 0.50, pitchOff: 0,    azBase: 0   },
-      ]
-
-  return segmentDefs.map(def => {
-    const footprintSqft = totalFootprintSqft * def.pct
-    const pitchDeg = Math.max(5, avgPitch + def.pitchOff)
-    const trueAreaSqft = trueAreaFromFootprint(footprintSqft, pitchDeg)
-    const trueAreaSqm = trueAreaSqft * 0.0929
-
-    return {
-      name: def.name,
-      footprint_area_sqft: Math.round(footprintSqft),
-      true_area_sqft: Math.round(trueAreaSqft),
-      true_area_sqm: Math.round(trueAreaSqm * 10) / 10,
-      pitch_degrees: Math.round(pitchDeg * 10) / 10,
-      pitch_ratio: pitchToRatio(pitchDeg),
-      azimuth_degrees: def.azBase,
-      azimuth_direction: degreesToCardinal(def.azBase)
-    }
-  })
+  // Fallback: when no AI geometry is available, return a single aggregate
+  // segment instead of inventing 4–6 hardcoded "Main South Face / East Wing
+  // Upper / ..." rows from fixed percentages. Those rows looked like
+  // measured per-plane data but were just templates pasted onto every roof
+  // regardless of actual geometry. Surfacing one honest row makes the
+  // limitation visible rather than disguising it as accuracy.
+  console.log(`[Segments] FALLBACK: No AI geometry — returning single aggregate segment`)
+  const trueAreaSqft = trueAreaFromFootprint(totalFootprintSqft, avgPitch)
+  return [{
+    name: 'Total Roof',
+    footprint_area_sqft: Math.round(totalFootprintSqft),
+    true_area_sqft: Math.round(trueAreaSqft),
+    true_area_sqm: Math.round(trueAreaSqft * 0.0929 * 10) / 10,
+    pitch_degrees: Math.round(avgPitch * 10) / 10,
+    pitch_ratio: pitchToRatio(avgPitch),
+    azimuth_degrees: 180,
+    azimuth_direction: degreesToCardinal(180),
+  }]
 }
 
 /**

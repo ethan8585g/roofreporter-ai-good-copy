@@ -1437,77 +1437,27 @@ export class RoofMeasurementEngine {
     return []
   }
 
-  // ── PROPORTIONAL FACE SPLIT ──────────────────────────
-  // When geometric splitting isn't possible, use eave perimeter ratios
-  // and bounding box analysis to estimate per-face areas proportionally.
-  
+  // ── AGGREGATE FACE FALLBACK ──────────────────────────
+  // Multi-ridge roofs that don't fit splitEavePolygonIntoFaces' single-ridge
+  // hip pattern fall through here. The previous behaviour invented N synthetic
+  // faces by dividing total area into bounding-box buckets, producing
+  // misleading "A=970, B=970, C=970, D=970" rows that read as real per-plane
+  // measurements but were just (total / N). One honest aggregate row beats
+  // four fake ones.
+
   private proportionalFaceSplit(results: FaceDetail[], totalProjFt2: number): void {
-    // Use eave polygon bounding box to determine roof aspect ratio
-    const eaveVerts = this.eavesCart.slice(0, -1)
-    if (eaveVerts.length < 4) {
-      // Can't determine proportions — single face
-      const rise = this.defPitch
-      const sloped = slopedFromProjected(totalProjFt2, rise)
-      results.push({
-        face_id: 'total_roof',
-        pitch_rise: rise,
-        pitch_label: `${rise}:12`,
-        pitch_angle_deg: round(pitchAngleDeg(rise), 1),
-        slope_factor: round(slopeFactor(rise), 4),
-        projected_area_ft2: round(totalProjFt2, 1),
-        sloped_area_ft2: round(sloped, 1),
-        squares: round(sloped / SQFT_PER_SQUARE, 3),
-      })
-      return
-    }
-
-    // Compute oriented bounding box width/height to find aspect ratio
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
-    eaveVerts.forEach(p => {
-      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
-      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y)
+    const rise = this.defPitch
+    const sloped = slopedFromProjected(totalProjFt2, rise)
+    results.push({
+      face_id: 'total_roof',
+      pitch_rise: rise,
+      pitch_label: `${rise}:12`,
+      pitch_angle_deg: round(pitchAngleDeg(rise), 1),
+      slope_factor: round(slopeFactor(rise), 4),
+      projected_area_ft2: round(totalProjFt2, 1),
+      sloped_area_ft2: round(sloped, 1),
+      squares: round(sloped / SQFT_PER_SQUARE, 3),
     })
-    const bbW = (maxX - minX) * M_TO_FT
-    const bbH = (maxY - minY) * M_TO_FT
-    const longSide = Math.max(bbW, bbH)
-    const shortSide = Math.min(bbW, bbH)
-
-    // For a hip roof: estimate ridge length ≈ longSide - shortSide
-    // Hip triangle area ≈ shortSide/2 × shortSide/2 each (two triangles)
-    // Main trapezoid area ≈ (totalFootprint - 2×triangle) / 2 each
-    const estRidgeLen = Math.max(longSide - shortSide, 0)
-    const hipTriangleArea = (shortSide * shortSide) / 4  // each hip end triangle
-    const mainFaceArea = Math.max((totalProjFt2 - 2 * hipTriangleArea) / 2, totalProjFt2 / 4)
-    const adjustedHipArea = (totalProjFt2 - 2 * mainFaceArea) / 2
-
-    const numFaces = this.ridgesCart.length > 0 ? Math.max(this.ridgesCart.length + 1, 4) : 4
-
-    // Build proportional faces
-    const faceAreas = numFaces >= 4
-      ? [adjustedHipArea, mainFaceArea, adjustedHipArea, mainFaceArea]
-      : Array(numFaces).fill(totalProjFt2 / numFaces)
-
-    // Normalize so they sum exactly to total
-    const rawSum = faceAreas.reduce((s, a) => s + a, 0)
-    const scale = totalProjFt2 / rawSum
-
-    for (let i = 0; i < faceAreas.length; i++) {
-      const faceProj = faceAreas[i] * scale
-      const ridge = i < this.ridgesCart.length ? this.ridgesCart[i] : null
-      const { theta } = ridge ? this.resolveTheta(ridge) : { theta: this.defThetaRad }
-      const rise = 12 * Math.tan(theta)
-      const sloped = slopedFromProjected(faceProj, rise)
-      results.push({
-        face_id: `face_${String.fromCharCode(65 + i)}`,
-        pitch_rise: round(rise, 1),
-        pitch_label: `${round(rise, 1)}:12`,
-        pitch_angle_deg: round(theta * 180 / Math.PI, 1),
-        slope_factor: round(slopeFactor(rise), 4),
-        projected_area_ft2: round(faceProj, 1),
-        sloped_area_ft2: round(sloped, 1),
-        squares: round(sloped / SQFT_PER_SQUARE, 3),
-      })
-    }
   }
 
   // ── OBSTRUCTION AREA CALCULATION ─────────────────────

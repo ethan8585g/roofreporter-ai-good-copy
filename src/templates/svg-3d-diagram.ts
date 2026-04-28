@@ -954,6 +954,19 @@ function buildRoofMesh(
   return faces
 }
 
+// Same height computation buildRoofMesh uses for ridge tops, factored out so
+// the renderer can place the footprint coverage base at the correct z.
+function ridgeHeightFromMesh(eavesXY: { x: number; y: number }[], pitch_rise: number): number {
+  if (eavesXY.length < 3) return 0
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+  for (const p of eavesXY) {
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y)
+  }
+  const shortSideM = Math.min(maxX - minX, maxY - minY)
+  return (shortSideM / 2) * (pitch_rise / 12)
+}
+
 function makeFace(vertices: V3[], pitch_rise: number): Face3 {
   const cx = vertices.reduce((s, v) => s + v.x, 0) / vertices.length
   const cy = vertices.reduce((s, v) => s + v.y, 0) / vertices.length
@@ -1198,6 +1211,21 @@ export function generateAxonometricRoofSVG(
     const x2 = tx(b.x), y2 = ty(b.y)
     svg += `<polygon points="${x1.toFixed(1)},${y1.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)} ${x2.toFixed(1)},${(y2 + wallSkirtPx).toFixed(1)} ${x1.toFixed(1)},${(y1 + wallSkirtPx).toFixed(1)}" fill="url(#wall-grad)" stroke="#94A3B8" stroke-width="0.6"/>`
   }
+
+  // Footprint coverage base: lift the entire eave polygon to ridge height
+  // and paint it in the dominant pitch tone before any per-face polygon is
+  // drawn. Acts as a safety net for complex multi-ridge roofs where the
+  // eave-walk algorithm can't classify every interior region (e.g. the
+  // central cross-gable saddle on multi-wing houses) — without this, those
+  // regions render as bare background white. With this, an unclassified
+  // region just reads as a uniform pitched plane, which is honest given we
+  // don't have a face polygon for it.
+  const baseShade = shadeColor(pitchBaseColor(pitchRise), lambertFactor({ x: 0, y: 0, z: 1 }))
+  const basePts = eavesXY
+    .map(p => projectAxonometric({ x: p.x, y: p.y, z: ridgeHeightFromMesh(eavesXY, pitchRise) }))
+    .map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`)
+    .join(' ')
+  svg += `<polygon points="${basePts}" fill="${baseShade}" stroke="#0F172A" stroke-width="0.6" stroke-linejoin="round" stroke-opacity="0.4"/>`
 
   // Ambient-occlusion underlay: dark blurred strokes that accumulate where
   // adjacent faces share an edge, producing soft creases at hips, ridges and
