@@ -449,12 +449,89 @@ interface Face3 {
  * and forth, which was the root cause of the cross-roof "translucent
  * triangle" artifacts on report 00000203 (63 Chestermere Crescent).
  */
+/**
+ * Drop ridge segments that are clearly user-tracing jogs, not real ridges.
+ *
+ * A "jog" segment is one a user accidentally introduced when clicking the
+ * spine in multiple pieces — a tiny perpendicular stub at the joint between
+ * two longer collinear ridges. Without dropping it, mergeParallelRidges
+ * leaves three logical-spine segments (with one perpendicular stub) standing,
+ * and Pass 1's nearest-ridge assignment then pulls eaves toward the
+ * perpendicular stub, producing visibly broken faces (order 211 / 58
+ * Foxboro Bay was the canonical case — a 1.24m horizontal stub between two
+ * 5–7m N–S spine segments dragged right-side eaves into a rogue right block).
+ *
+ * To qualify as a jog (so it can't accidentally drop a real perpendicular
+ * cross-ridge), a segment must satisfy ALL of:
+ *   1. length ≤ max(1.5m, 0.25 × longest segment)
+ *   2. both endpoints sit within 0.5m of an endpoint of two OTHER segments
+ *   3. it is roughly perpendicular (|cos| ≤ 0.5) to both of those neighbours
+ *
+ * Real perpendicular ridges (T/L houses) are either long enough to fail (1),
+ * or only meet one neighbour at one endpoint, so they fail (2).
+ */
+function dropRidgeJogs(
+  segs: { a: { x: number; y: number }; b: { x: number; y: number } }[],
+): { a: { x: number; y: number }; b: { x: number; y: number } }[] {
+  if (segs.length < 3) return segs
+  const ENDPOINT_SNAP_M = 0.5
+  const PERP_COS_MAX = 0.5
+  const lengths = segs.map(s => Math.hypot(s.b.x - s.a.x, s.b.y - s.a.y))
+  const longest = Math.max(...lengths)
+  const SHORT_MAX = Math.max(1.5, 0.25 * longest)
+
+  const dirOf = (s: { a: { x: number; y: number }; b: { x: number; y: number } }) => {
+    const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y
+    const len = Math.hypot(dx, dy) || 1
+    return { x: dx / len, y: dy / len }
+  }
+
+  const out: typeof segs = []
+  for (let i = 0; i < segs.length; i++) {
+    const s = segs[i]
+    if (lengths[i] > SHORT_MAX) { out.push(s); continue }
+
+    // Find a different segment whose endpoint is near s.a, and another
+    // whose endpoint is near s.b. They must be two distinct segments.
+    const dirS = dirOf(s)
+    let neighbourA = -1, neighbourB = -1
+    for (let j = 0; j < segs.length; j++) {
+      if (j === i) continue
+      const t = segs[j]
+      const nearAa = Math.hypot(t.a.x - s.a.x, t.a.y - s.a.y) < ENDPOINT_SNAP_M
+      const nearAb = Math.hypot(t.b.x - s.a.x, t.b.y - s.a.y) < ENDPOINT_SNAP_M
+      if (neighbourA < 0 && (nearAa || nearAb)) neighbourA = j
+      const nearBa = Math.hypot(t.a.x - s.b.x, t.a.y - s.b.y) < ENDPOINT_SNAP_M
+      const nearBb = Math.hypot(t.b.x - s.b.x, t.b.y - s.b.y) < ENDPOINT_SNAP_M
+      if (neighbourB < 0 && j !== neighbourA && (nearBa || nearBb)) neighbourB = j
+    }
+    if (neighbourA < 0 || neighbourB < 0) { out.push(s); continue }
+
+    const dirA = dirOf(segs[neighbourA])
+    const dirB = dirOf(segs[neighbourB])
+    const cosA = Math.abs(dirS.x * dirA.x + dirS.y * dirA.y)
+    const cosB = Math.abs(dirS.x * dirB.x + dirS.y * dirB.y)
+    if (cosA <= PERP_COS_MAX && cosB <= PERP_COS_MAX) {
+      // Skip this jog — both neighbours are roughly perpendicular to it
+      // AND they sit at its endpoints, so it's a digitization artifact.
+      continue
+    }
+    out.push(s)
+  }
+  return out
+}
+
 function mergeParallelRidges(
   segs: { a: { x: number; y: number }; b: { x: number; y: number } }[],
 ): { a: { x: number; y: number }; b: { x: number; y: number } }[] {
   if (segs.length < 2) return segs
   const PARALLEL_COS = 0.95
-  const PERP_MAX_M = 1.2
+  // Adaptive perpendicular-distance tolerance. Scales with the mean segment
+  // length so two collinear-ish 7m ridges with 1.4m of tracing drift still
+  // collapse into one (Foxboro 58 case), while hard-capping at 2.0m so two
+  // unrelated parallel ridges on a real compound house never get merged.
+  const meanLen = segs.reduce((s, r) => s + Math.hypot(r.b.x - r.a.x, r.b.y - r.a.y), 0) / segs.length
+  const PERP_MAX_M = Math.min(2.0, Math.max(1.2, 0.20 * meanLen))
   const used = new Array(segs.length).fill(false)
   const out: { a: { x: number; y: number }; b: { x: number; y: number } }[] = []
   for (let i = 0; i < segs.length; i++) {
@@ -564,13 +641,19 @@ function buildRoofMesh(
         rawRidgeSegs.push({ a: ridge[i], b: ridge[i + 1] })
       }
     }
+    // Pre-merge cleanup: drop tiny perpendicular jog segments that the user
+    // introduced when clicking a single logical spine in multiple pieces
+    // (Foxboro 58 / order 211 — a 1.24m perpendicular stub between two
+    // 5–7m N–S spine segments). Real perpendicular ridges survive because
+    // they are either long, or only meet one neighbour endpoint.
+    const cleanedRidgeSegs = dropRidgeJogs(rawRidgeSegs)
     // Pre-merge: combine collinear / near-parallel ridge segments that sit
     // on the same logical roof spine. Compound hips like 63 Chestermere
     // Crescent are traced as two short parallel ridges with a valley
     // between, but for face assignment they should be ONE long ridge —
     // otherwise each eave edge gets pulled toward its arbitrarily-nearer
     // segment and runs flip back and forth.
-    const ridgeSegs = mergeParallelRidges(rawRidgeSegs)
+    const ridgeSegs = mergeParallelRidges(cleanedRidgeSegs)
     const hipSegs: { a: { x: number; y: number }; b: { x: number; y: number } }[] = []
     for (const hip of tracedHipsXY) {
       if (!hip || hip.length < 2) continue
