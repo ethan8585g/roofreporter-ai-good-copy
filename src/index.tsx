@@ -9,6 +9,7 @@ import { ordersRoutes } from './routes/orders'
 import { companiesRoutes } from './routes/companies'
 import { settingsRoutes } from './routes/settings'
 import { reportsRoutes } from './routes/reports'
+import { insuranceRoutes } from './routes/insurance'
 import { adminRoutes } from './routes/admin'
 import { aiAnalysisRoutes } from './routes/ai-analysis'
 import { authRoutes } from './routes/auth'
@@ -383,6 +384,7 @@ app.route('/api/orders', ordersRoutes)
 app.route('/api/companies', companiesRoutes)
 app.route('/api/settings', settingsRoutes)
 app.route('/api/reports', reportsRoutes)
+app.route('/api/insurance', insuranceRoutes)
 app.route('/api/admin', adminRoutes)
 app.route('/api/ai', aiAnalysisRoutes)
 app.route('/api/auth', authRoutes)

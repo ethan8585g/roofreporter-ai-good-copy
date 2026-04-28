@@ -227,6 +227,23 @@ export async function markReportFailed(db: D1Database, orderId: number | string,
 }
 
 export async function markOrderStatus(db: D1Database, orderId: number | string, status: string) {
+  // Phase 3 orphan-prevention gate: refuse to flip an order to 'completed' unless
+  // the corresponding report has renderable content. Prevents the IDs 49 / 50
+  // class of bug where the order was completed without measurement data.
+  if (status === 'completed') {
+    const r = await db.prepare(`
+      SELECT professional_report_html, api_response_raw FROM reports WHERE order_id = ?
+    `).bind(orderId).first<{ professional_report_html: string | null; api_response_raw: string | null }>()
+    const hasContent = !!(r && (
+      (r.professional_report_html && r.professional_report_html.length > 100) ||
+      (r.api_response_raw && r.api_response_raw.length > 100)
+    ))
+    if (!hasContent) {
+      console.warn(`[markOrderStatus] order ${orderId}: refusing 'completed' — report has no renderable content`)
+      // Leave the order as-is so the generator can be re-run; never silently produce an orphan.
+      return
+    }
+  }
   const extra = status === 'completed' ? ", delivered_at = datetime('now')" : ''
   await db.prepare(`UPDATE orders SET status = ?, updated_at = datetime('now')${extra} WHERE id = ?`)
     .bind(status, orderId).run()
