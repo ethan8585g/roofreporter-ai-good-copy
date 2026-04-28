@@ -90,7 +90,7 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   const reportDate = new Date(report.generated_at).toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' })
   const fullAddress = [prop.address, prop.city, prop.province, prop.postal_code].filter(Boolean).join(', ')
   // All areas in square feet (no roofing squares)
-  const netAreaSF = Math.round(report.total_footprint_sqft || report.total_true_area_sqft)
+  const netAreaSF = Math.round(report.total_true_area_sqft || report.total_footprint_sqft)
   const grossAreaSF = Math.round(netAreaSF * (1 + (mat.waste_pct || 5) / 100))
   const totalPerimeter = es.total_eave_ft + es.total_rake_ft
   const ridgeHipFt = es.total_ridge_ft + es.total_hip_ft
@@ -863,7 +863,7 @@ export function generateSimpleTwoPageReport(report: RoofReport): string {
 
   const fullAddress = [prop.address, prop.city, prop.province, prop.postal_code].filter(Boolean).join(', ')
   const reportDate = new Date(report.generated_at).toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' })
-  const netAreaSF = Math.round(report.total_footprint_sqft || report.total_true_area_sqft)
+  const netAreaSF = Math.round(report.total_true_area_sqft || report.total_footprint_sqft)
   const grossAreaSF = Math.round(netAreaSF * (1 + (mat.waste_pct || 5) / 100))
 
   // Predominant pitch from largest segment
