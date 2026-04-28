@@ -111,12 +111,26 @@ function saUpdateUrl(push) {
   }
 }
 
+// Aliases: friendly URLs that should resolve to canonical sections/tabs.
+var SA_SECTION_ALIASES = {
+  'ai-operations': { section: 'ai-ops' },
+  'aioperations': { section: 'ai-ops' },
+  'aiops': { section: 'ai-ops' },
+  'settings': { section: 'platform', tab: 'platform-settings' },
+  'admin-settings': { section: 'platform', tab: 'platform-settings' }
+};
+
 function saParseUrl() {
   var path = window.location.pathname;
   var match = path.match(/^\/super-admin(?:\/([^/]+))?(?:\/([^/]+))?/);
   if (!match) return null;
   var section = match[1] || 'inbox';
   var tab = match[2] || null;
+  if (SA_SECTION_ALIASES[section]) {
+    var a = SA_SECTION_ALIASES[section];
+    section = a.section;
+    if (a.tab && !tab) tab = a.tab;
+  }
   if (!SA_SECTIONS[section]) return null;
   if (tab) {
     // Verify tab belongs to section
@@ -747,13 +761,16 @@ function fmtSeconds(s) {
 }
 
 function statusBadge(s) {
+  // Solid filled pill with leading dot — distinguishes order Status from payment Payment.
+  const dotColor = { pending:'bg-yellow-500', processing:'bg-indigo-500', completed:'bg-green-500', failed:'bg-red-500', cancelled:'bg-gray-400' };
   const m = { pending:'bg-yellow-100 text-yellow-800', processing:'bg-indigo-100 text-indigo-800', completed:'bg-green-100 text-green-800', failed:'bg-red-100 text-red-800', cancelled:'bg-gray-100 text-gray-500' };
-  return `<span class="px-2 py-0.5 ${m[s]||'bg-gray-100 text-gray-600'} rounded-full text-xs font-medium capitalize">${s}</span>`;
+  return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 ${m[s]||'bg-gray-100 text-gray-600'} rounded-full text-xs font-medium capitalize"><span class="w-1.5 h-1.5 rounded-full ${dotColor[s]||'bg-gray-400'}"></span>${s}</span>`;
 }
 
 function payBadge(s) {
-  const m = { unpaid:'bg-yellow-100 text-yellow-800', paid:'bg-green-100 text-green-800', refunded:'bg-purple-100 text-purple-800', trial:'bg-blue-100 text-blue-800' };
-  return `<span class="px-2 py-0.5 ${m[s]||'bg-gray-100 text-gray-600'} rounded-full text-xs font-medium capitalize">${s === 'trial' ? 'Free Trial' : s}</span>`;
+  // Outlined pill with $ icon — distinguishes Payment from order Status (which is filled with a dot).
+  const m = { unpaid:'border-yellow-400 text-yellow-700 bg-white', paid:'border-green-500 text-green-700 bg-white', refunded:'border-purple-400 text-purple-700 bg-white', trial:'border-blue-400 text-blue-700 bg-white' };
+  return `<span class="inline-flex items-center gap-1 px-2 py-0.5 border ${m[s]||'border-gray-300 text-gray-600 bg-white'} rounded-full text-xs font-medium capitalize"><i class="fas fa-dollar-sign text-[9px] opacity-70"></i>${s === 'trial' ? 'Free Trial' : s}</span>`;
 }
 
 function saSection(title, icon, content, actions) {
@@ -1900,7 +1917,7 @@ function renderOrdersView() {
       ${samc('Completed', counts.completed || 0, 'fa-check-circle', 'green')}
       ${samc('Pending', counts.pending || 0, 'fa-clock', 'yellow')}
       ${samc('Processing', counts.processing || 0, 'fa-spinner', 'indigo')}
-      ${samc('Avg Price', $$(counts.avg_price), 'fa-tag', 'purple')}
+      ${samc('Avg Price (Paid)', $$(counts.avg_price_paid), 'fa-tag', 'purple', (counts.paid_orders || 0) + ' paid · ' + (counts.trial_orders || 0) + ' trial')}
       ${samc('Avg Completion', fmtSeconds(avgSec), 'fa-stopwatch', 'red', 'software time')}
     </div>
 
@@ -10771,7 +10788,7 @@ function renderInboxView() {
   var totalUnread = d.total_unread || 0;
 
   var channelFilters = [
-    { id: 'all', label: 'All', icon: 'fa-inbox', count: d.total || 0 },
+    { id: 'all', label: 'All', icon: 'fa-inbox', count: totalUnread },
     { id: 'web_chat', label: 'Web Chat', icon: 'fa-comments', count: unread.web_chat || 0 },
     { id: 'voice', label: 'Calls', icon: 'fa-phone-alt', count: unread.voice || 0 },
     { id: 'sms', label: 'Messages', icon: 'fa-sms', count: unread.sms || 0 },
@@ -11165,24 +11182,52 @@ function renderGrowthOverviewView() {
   var anomalyHtml = '';
   if (anomalies.length > 0) {
     anomalyHtml = '<div class="mb-5">' + saSection('Anomaly Alerts', 'fa-exclamation-triangle', anomalies.map(function(a) {
-      var color = a.severity === 'critical' ? 'red' : a.severity === 'high' ? 'orange' : 'yellow';
-      return '<div class="flex items-center gap-3 p-3 bg-' + color + '-50 rounded-lg mb-2"><i class="fas fa-' + (a.severity === 'critical' ? 'fire' : 'exclamation-circle') + ' text-' + color + '-500"></i><div><span class="font-semibold text-sm">' + (a.title || a.type) + '</span><p class="text-xs text-gray-600">' + (a.description || '') + '</p></div></div>';
+      var sev = a.severity || 'medium';
+      var color = sev === 'critical' ? 'red' : sev === 'high' ? 'orange' : 'yellow';
+      var icon = sev === 'critical' ? 'fire' : 'exclamation-circle';
+      var when = a.detected_at || a.created_at || a.timestamp || null;
+      var ago = when ? hubTimeAgo(when) : '';
+      var fireType = (a.type || '').toString().toLowerCase();
+      var drillTab = (fireType.indexOf('traffic') >= 0 || fireType.indexOf('visits') >= 0) ? 'growth-traffic'
+        : (fireType.indexOf('revenue') >= 0 || fireType.indexOf('order') >= 0) ? 'orders'
+        : (fireType.indexOf('signup') >= 0) ? 'signups'
+        : null;
+      var linkBtn = drillTab
+        ? '<button onclick="event.stopPropagation();saSetView(\'' + drillTab + '\')" class="ml-auto text-[11px] font-semibold text-' + color + '-700 hover:underline whitespace-nowrap">View details <i class="fas fa-arrow-right text-[9px] ml-0.5"></i></button>'
+        : '';
+      return '<div class="flex items-center gap-3 p-3 bg-' + color + '-50 rounded-lg mb-2 border border-' + color + '-100">' +
+        '<i class="fas fa-' + icon + ' text-' + color + '-500"></i>' +
+        '<div class="flex-1 min-w-0">' +
+          '<div class="flex items-center gap-2 flex-wrap">' +
+            '<span class="font-semibold text-sm">' + (a.title || a.type) + '</span>' +
+            '<span class="px-1.5 py-0.5 bg-' + color + '-100 text-' + color + '-700 rounded text-[10px] font-bold uppercase">' + sev + '</span>' +
+            (ago ? '<span class="text-[10px] text-gray-500"><i class="fas fa-clock mr-0.5"></i>' + ago + '</span>' : '') +
+          '</div>' +
+          '<p class="text-xs text-gray-600 mt-0.5">' + (a.description || '') + '</p>' +
+        '</div>' +
+        linkBtn +
+      '</div>';
     }).join('')) + '</div>';
   }
 
   var funnelHtml = '';
   if (funnelStages.length > 0) {
+    var topCount = Math.max(1, funnelStages[0].count || 0);
     funnelHtml = '<div class="grid grid-cols-5 gap-2">';
     funnelStages.forEach(function(s, i) {
-      var pct = s.pct_of_top || 0;
+      var apiPct = (typeof s.pct_of_top === 'number') ? s.pct_of_top : null;
+      var computedPct = topCount > 0 ? Math.round(((s.count || 0) / topCount) * 100) : 0;
+      var pct = (apiPct && apiPct > 0) ? apiPct : computedPct;
+      var pctLabel = (i === 0) ? 'top of funnel' : pct + '% of top';
       funnelHtml += '<div class="text-center p-3 bg-white rounded-lg border border-gray-200">' +
         '<div class="text-2xl font-black text-gray-900">' + (s.count || 0) + '</div>' +
         '<div class="text-xs text-gray-500 mt-1">' + (s.label || 'Stage ' + (i+1)) + '</div>' +
-        '<div class="mt-2 h-1.5 bg-gray-100 rounded-full"><div class="h-1.5 bg-teal-500 rounded-full" style="width:' + pct + '%"></div></div>' +
-        '<div class="text-[10px] text-gray-400 mt-1">' + pct + '%</div>' +
+        '<div class="mt-2 h-1.5 bg-gray-100 rounded-full"><div class="h-1.5 bg-teal-500 rounded-full" style="width:' + Math.min(100, pct) + '%"></div></div>' +
+        '<div class="text-[10px] text-gray-400 mt-1">' + pctLabel + '</div>' +
       '</div>';
     });
     funnelHtml += '</div>';
+    funnelHtml += '<p class="text-[10px] text-gray-400 mt-2 italic">Step counts (not strictly sequential — events are tracked independently).</p>';
   }
 
   return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-tachometer-alt mr-2 text-teal-500"></i>Growth Overview</h2><p class="text-sm text-gray-500 mt-1">Key business metrics, funnel, and anomaly alerts</p></div>' +
@@ -11604,8 +11649,35 @@ function renderPlatformHealthView() {
 
 function renderPeopleDirectoryView() {
   var d = SA.data.people || {};
-  var people = d.people || [];
+  var rawPeople = d.people || [];
   var total = d.total || 0;
+
+  // Dedupe on lowercased email — same person can appear as both platform_user and crm_customer.
+  // Keep the entry with the most populated fields; tag the survivor with a count pill if collapsed.
+  function fieldScore(p) {
+    var keys = ['name','email','phone','company_name','company','owner_company'];
+    var n = 0;
+    for (var i = 0; i < keys.length; i++) if (p[keys[i]] && String(p[keys[i]]).trim()) n++;
+    return n;
+  }
+  var byKey = {};
+  rawPeople.forEach(function(p) {
+    var key = (p.email && String(p.email).trim().toLowerCase()) || ('id:' + p.person_type + ':' + p.id);
+    if (!byKey[key]) { byKey[key] = { primary: p, dupes: 0, types: {} }; }
+    else {
+      byKey[key].dupes += 1;
+      if (fieldScore(p) > fieldScore(byKey[key].primary)) {
+        byKey[key].primary = p;
+      }
+    }
+    byKey[key].types[p.person_type] = true;
+  });
+  var people = Object.keys(byKey).map(function(k) {
+    var entry = byKey[k];
+    entry.primary._dupCount = entry.dupes;
+    entry.primary._dupTypes = Object.keys(entry.types);
+    return entry.primary;
+  });
 
   var typeFilters = [
     { id: '', label: 'All', icon: 'fa-users' },
@@ -11641,8 +11713,11 @@ function renderPeopleDirectoryView() {
     people.forEach(function(p) {
       var badge = typeBadge[p.person_type] || 'bg-gray-100 text-gray-600';
       var label = typeLabel[p.person_type] || p.person_type;
+      var dupPill = (p._dupCount > 0)
+        ? ' <span title="' + (p._dupTypes || []).join(', ') + '" class="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold">+' + p._dupCount + ' dup</span>'
+        : '';
       listHtml += '<tr class="border-t border-gray-100 hover:bg-gray-50 cursor-pointer" onclick="peopleOpenProfile(\'' + p.person_type + '\',' + p.id + ')">' +
-        '<td class="px-4 py-3 font-medium text-gray-900">' + (p.name || '—') + '</td>' +
+        '<td class="px-4 py-3 font-medium text-gray-900">' + (p.name || '—') + dupPill + '</td>' +
         '<td class="px-4 py-3 text-gray-500">' + (p.email || '—') + '</td>' +
         '<td class="px-4 py-3 text-gray-500">' + (p.phone || '—') + '</td>' +
         '<td class="px-4 py-3 text-gray-500">' + (p.company_name || p.company || p.owner_company || '—') + '</td>' +
@@ -11660,7 +11735,7 @@ function renderPeopleDirectoryView() {
         '<div class="w-72">' + searchHtml + '</div>' +
       '</div>' +
       listHtml +
-      '<div class="p-3 border-t border-gray-100 text-xs text-gray-400 text-center">Showing ' + people.length + ' of ' + total + ' people</div>' +
+      '<div class="p-3 border-t border-gray-100 text-xs text-gray-400 text-center">Showing ' + people.length + ' unique of ' + total + ' total records (deduped on email)</div>' +
     '</div>';
 }
 

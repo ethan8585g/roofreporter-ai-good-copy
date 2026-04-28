@@ -1359,7 +1359,10 @@ adminRoutes.get('/superadmin/orders', async (c) => {
         SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
         SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled,
         AVG(price) as avg_price,
-        SUM(CASE WHEN is_trial = 1 THEN 1 ELSE 0 END) as trial_orders
+        AVG(CASE WHEN COALESCE(is_trial,0) = 0 THEN price END) as avg_price_paid,
+        AVG(CASE WHEN COALESCE(is_trial,0) = 1 THEN price END) as avg_price_trial,
+        SUM(CASE WHEN is_trial = 1 THEN 1 ELSE 0 END) as trial_orders,
+        SUM(CASE WHEN COALESCE(is_trial,0) = 0 THEN 1 ELSE 0 END) as paid_orders
       FROM orders
     `).first()
 
