@@ -42,7 +42,8 @@ const state = {
     customer_company_id: null,
     // Step 5: Review + Pricing
     notes: '',
-    price_per_bundle: null
+    price_per_bundle: null,
+    additional_structures: []
   },
   customerCompanies: [],
   // Map instances (separate for each phase)
@@ -51,6 +52,8 @@ const state = {
   autocomplete: null,
   pinMap: null,
   pinMarker: null,
+  additionalPinMarkers: [],
+  addingAdditionalPin: false,
   geocoder: null,
   // Tracing state
   traceMap: null,
@@ -485,31 +488,49 @@ function renderStep2PinPhase() {
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div class="bg-gray-800 px-4 py-2.5 flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <div class="w-2 h-2 rounded-full ${state.formData.pinPlaced ? 'bg-green-400' : 'bg-red-400 animate-pulse'}"></div>
+            <div data-pin-dot class="w-2 h-2 rounded-full ${state.formData.pinPlaced ? 'bg-green-400' : 'bg-red-400 animate-pulse'}"></div>
             <span class="text-xs font-medium text-gray-300 uppercase tracking-wide">
               <i class="fas fa-satellite mr-1"></i> Satellite View — Roof Targeting
             </span>
           </div>
           <div class="flex items-center gap-3">
-            ${state.formData.pinPlaced ? `
-              <span class="text-xs bg-green-500/20 text-green-400 px-3 py-1 rounded-full font-medium">
-                <i class="fas fa-check-circle mr-1"></i>Pin Placed — ${state.formData.latitude.toFixed(6)}, ${state.formData.longitude.toFixed(6)}
-              </span>
-            ` : `
-              <span class="text-xs bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full font-medium animate-pulse">
-                <i class="fas fa-hand-pointer mr-1"></i>Click on the roof to place pin
-              </span>
-            `}
+            <span data-pin-status>
+              ${state.addingAdditionalPin ? `
+                <span class="text-xs bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full font-medium animate-pulse">
+                  <i class="fas fa-hand-pointer mr-1"></i>Click on the map to add another structure
+                </span>
+              ` : state.formData.pinPlaced ? `
+                <span class="text-xs bg-green-500/20 text-green-400 px-3 py-1 rounded-full font-medium">
+                  <i class="fas fa-check-circle mr-1"></i>Pin Placed — ${state.formData.latitude.toFixed(6)}, ${state.formData.longitude.toFixed(6)}
+                </span>
+              ` : `
+                <span class="text-xs bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full font-medium animate-pulse">
+                  <i class="fas fa-hand-pointer mr-1"></i>Click on the roof to place pin
+                </span>
+              `}
+            </span>
+            <button onclick="enableAdditionalPinMode()" id="add-structure-btn"
+              class="text-xs px-3 py-1 rounded-full font-semibold transition-all flex items-center gap-1 ${state.formData.pinPlaced ? 'bg-amber-500 hover:bg-amber-600 text-white cursor-pointer' : 'bg-gray-600 text-gray-400 cursor-not-allowed'}"
+              ${!state.formData.pinPlaced ? 'disabled' : ''}
+              title="Add another structure (e.g. detached garage)">
+              <i class="fas fa-plus"></i> Add another structure
+            </button>
           </div>
         </div>
         <div id="pin-map" style="height: 500px; cursor: crosshair; background: #1a1a2e;"></div>
       </div>
 
       <!-- Instructions -->
-      <div class="flex items-center gap-4 text-xs text-gray-500 mt-3 mb-4">
+      <div class="flex items-center gap-4 text-xs text-gray-500 mt-3 mb-2">
         <span><i class="fas fa-mouse-pointer mr-1"></i>Click = Place pin</span>
         <span><i class="fas fa-hand-rock mr-1"></i>Drag pin = Adjust</span>
         <span><i class="fas fa-search-plus mr-1"></i>Scroll = Zoom</span>
+        <span><i class="fas fa-circle mr-1" style="color:#f59e0b"></i>Amber pins = additional structures (right-click to remove)</span>
+      </div>
+
+      <!-- Additional structures list -->
+      <div data-extra-structures-list class="mb-4">
+        ${renderAdditionalStructuresList()}
       </div>
 
       <!-- Two delivery option buttons stacked -->
@@ -739,10 +760,20 @@ function initPinMap() {
     placePinMarker({ lat: state.formData.latitude, lng: state.formData.longitude });
   }
 
-  // Click to place/move roof pin
+  // Click to place/move roof pin (or drop an extra structure pin if mode is active)
   state.pinMap.addListener('click', (e) => {
     const lat = e.latLng.lat();
     const lng = e.latLng.lng();
+
+    if (state.addingAdditionalPin) {
+      const idx = state.formData.additional_structures.length;
+      state.formData.additional_structures.push({ lat, lng });
+      placeAdditionalPinMarker({ lat, lng }, idx);
+      state.addingAdditionalPin = false;
+      updatePinUI();
+      return;
+    }
+
     state.formData.latitude = lat;
     state.formData.longitude = lng;
     state.formData.pinPlaced = true;
@@ -751,6 +782,11 @@ function initPinMap() {
     // Update UI without full re-render (avoid destroying the map)
     updatePinUI();
   });
+
+  // Re-render any previously placed additional pins (e.g. returning to this step)
+  if (Array.isArray(state.formData.additional_structures)) {
+    state.formData.additional_structures.forEach((pos, i) => placeAdditionalPinMarker(pos, i));
+  }
 }
 
 function placePinMarker(pos) {
@@ -784,17 +820,117 @@ function placePinMarker(pos) {
   });
 }
 
+function additionalPinIcon(label) {
+  // Amber crosshair w/ centered numeric label so the primary red pin stays visually distinct
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">' +
+    '<circle cx="24" cy="24" r="22" fill="none" stroke="%23f59e0b" stroke-width="3" stroke-dasharray="6,3"/>' +
+    '<circle cx="24" cy="24" r="10" fill="%23f59e0b"/>' +
+    '<text x="24" y="28" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" font-weight="700" fill="%23ffffff">' + label + '</text>' +
+    '<line x1="24" y1="2" x2="24" y2="10" stroke="%23f59e0b" stroke-width="2"/>' +
+    '<line x1="24" y1="38" x2="24" y2="46" stroke="%23f59e0b" stroke-width="2"/>' +
+    '<line x1="2" y1="24" x2="10" y2="24" stroke="%23f59e0b" stroke-width="2"/>' +
+    '<line x1="38" y1="24" x2="46" y2="24" stroke="%23f59e0b" stroke-width="2"/>' +
+    '</svg>';
+  return {
+    url: 'data:image/svg+xml,' + svg,
+    scaledSize: new google.maps.Size(48, 48),
+    anchor: new google.maps.Point(24, 24),
+  };
+}
+
+function placeAdditionalPinMarker(pos, index) {
+  const marker = new google.maps.Marker({
+    position: pos,
+    map: state.pinMap,
+    draggable: true,
+    animation: google.maps.Animation.DROP,
+    // Label shows structure number — primary pin is #1, so additional pins start at #2
+    icon: additionalPinIcon(String(index + 2)),
+    title: 'Structure #' + (index + 2) + ' — drag to adjust, right-click to remove',
+  });
+
+  marker.addListener('dragend', (e) => {
+    const i = state.additionalPinMarkers.indexOf(marker);
+    if (i >= 0 && state.formData.additional_structures[i]) {
+      state.formData.additional_structures[i] = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+      updatePinUI();
+    }
+  });
+
+  marker.addListener('rightclick', () => {
+    removeAdditionalPin(state.additionalPinMarkers.indexOf(marker));
+  });
+
+  state.additionalPinMarkers.push(marker);
+  updatePinUI();
+}
+
+function removeAdditionalPin(index) {
+  if (index < 0 || index >= state.additionalPinMarkers.length) return;
+  const marker = state.additionalPinMarkers[index];
+  if (marker) marker.setMap(null);
+  state.additionalPinMarkers.splice(index, 1);
+  state.formData.additional_structures.splice(index, 1);
+  // Re-label remaining markers so numbering stays sequential
+  state.additionalPinMarkers.forEach((m, i) => m.setIcon(additionalPinIcon(String(i + 2))));
+  updatePinUI();
+}
+
+function enableAdditionalPinMode() {
+  if (!state.formData.pinPlaced) {
+    showToast('Place the primary roof pin first', 'warning');
+    return;
+  }
+  state.addingAdditionalPin = true;
+  updatePinUI();
+}
+
+function renderAdditionalStructuresList() {
+  const extras = state.formData.additional_structures || [];
+  if (extras.length === 0) return '';
+  return `
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+      <div class="text-xs font-semibold text-amber-800 mb-2 flex items-center gap-1">
+        <i class="fas fa-layer-group"></i> Additional structures (${extras.length})
+      </div>
+      <ul class="space-y-1">
+        ${extras.map((p, i) => `
+          <li class="flex items-center justify-between text-xs text-gray-700">
+            <span>
+              <span class="inline-block w-5 h-5 rounded-full bg-amber-500 text-white text-center font-bold mr-2" style="line-height:20px">${i + 2}</span>
+              ${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}
+            </span>
+            <button onclick="removeAdditionalPin(${i})" class="text-red-600 hover:text-red-800 font-semibold px-2" title="Remove">
+              <i class="fas fa-times"></i>
+            </button>
+          </li>
+        `).join('')}
+      </ul>
+    </div>
+  `;
+}
+
+// Expose handlers for inline onclick attributes
+window.enableAdditionalPinMode = enableAdditionalPinMode;
+window.removeAdditionalPin = removeAdditionalPin;
+
 function updatePinUI() {
   // Update the pin status bar without re-rendering the whole page
   const statusBar = document.querySelector('[data-pin-status]');
   if (statusBar) {
-    statusBar.innerHTML = state.formData.pinPlaced
-      ? `<span class="text-xs bg-green-500/20 text-green-400 px-3 py-1 rounded-full font-medium">
+    if (state.addingAdditionalPin) {
+      statusBar.innerHTML = `<span class="text-xs bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full font-medium animate-pulse">
+           <i class="fas fa-hand-pointer mr-1"></i>Click on the map to add another structure
+         </span>`;
+    } else if (state.formData.pinPlaced) {
+      statusBar.innerHTML = `<span class="text-xs bg-green-500/20 text-green-400 px-3 py-1 rounded-full font-medium">
            <i class="fas fa-check-circle mr-1"></i>Pin Placed — ${state.formData.latitude.toFixed(6)}, ${state.formData.longitude.toFixed(6)}
-         </span>`
-      : `<span class="text-xs bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full font-medium animate-pulse">
+         </span>`;
+    } else {
+      statusBar.innerHTML = `<span class="text-xs bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full font-medium animate-pulse">
            <i class="fas fa-hand-pointer mr-1"></i>Click on the roof to place pin
          </span>`;
+    }
   }
 
   // Update confirm button
@@ -803,6 +939,18 @@ function updatePinUI() {
     btn.disabled = false;
     btn.className = 'px-6 py-3 rounded-lg font-semibold text-sm transition-all shadow-md flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white';
   }
+
+  // Update the "Add another structure" button — only enabled once primary pin exists
+  const addBtn = document.getElementById('add-structure-btn');
+  if (addBtn) {
+    addBtn.disabled = !state.formData.pinPlaced;
+    addBtn.className = 'text-xs px-3 py-1 rounded-full font-semibold transition-all flex items-center gap-1 ' +
+      (state.formData.pinPlaced ? 'bg-amber-500 hover:bg-amber-600 text-white cursor-pointer' : 'bg-gray-600 text-gray-400 cursor-not-allowed');
+  }
+
+  // Update the additional-structures list
+  const listEl = document.querySelector('[data-extra-structures-list]');
+  if (listEl) listEl.innerHTML = renderAdditionalStructuresList();
 
   // Update the status dot
   const dot = document.querySelector('[data-pin-dot]');
@@ -2003,6 +2151,16 @@ async function submitOrder() {
     const submitData = { ...state.formData };
     if (submitData.roof_trace_json && typeof submitData.roof_trace_json === 'object') {
       submitData.roof_trace_json = JSON.stringify(submitData.roof_trace_json);
+    }
+
+    // Surface additional structures to the measurement team via the order notes
+    const extras = Array.isArray(submitData.additional_structures) ? submitData.additional_structures : [];
+    if (extras.length > 0) {
+      const marker = '[Additional structures requested:]';
+      const block = marker + '\n' +
+        extras.map((p, i) => `  #${i + 2}: ${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`).join('\n');
+      const existingNotes = (submitData.notes || '').replace(/\[Additional structures requested:\][\s\S]*?(?=\n\n|$)/, '').trim();
+      submitData.notes = existingNotes ? `${block}\n\n${existingNotes}` : block;
     }
     const orderRes = await fetch(API + '/api/orders', {
       method: 'POST',
