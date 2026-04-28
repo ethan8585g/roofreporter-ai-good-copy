@@ -133,6 +133,27 @@ async function loadOrderData() {
 let _mapInitAttempts = 0;
 let _placesInitialized = false;
 
+// Esri World Imagery — sharper than Google Satellite in many regions
+// (notably Ontario, where Esri pulls SWOOP/NRVIS provincial orthophoto).
+// No token required. Registered as a custom Google MapType so the rest of
+// the map plumbing (markers, click handlers, places autocomplete) keeps working.
+function registerEsriBasemap(map) {
+  if (!map || !window.google || !google.maps) return null;
+  const esri = new google.maps.ImageMapType({
+    name: 'Esri Imagery',
+    tileSize: new google.maps.Size(256, 256),
+    minZoom: 1,
+    maxZoom: 19,
+    getTileUrl: function(coord, zoom) {
+      if (zoom > 19) return null;
+      return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' +
+        zoom + '/' + coord.y + '/' + coord.x;
+    }
+  });
+  map.mapTypes.set('esri', esri);
+  return esri;
+}
+
 function initMap() {
   // 1) Wait for Google Maps API to be available
   if (typeof google === 'undefined' || !google.maps) {
@@ -186,13 +207,16 @@ function initMap() {
     mapTypeControlOptions: {
       style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
       position: google.maps.ControlPosition.TOP_RIGHT,
-      mapTypeIds: ['roadmap', 'satellite', 'hybrid']
+      mapTypeIds: ['roadmap', 'satellite', 'hybrid', 'esri']
     },
     streetViewControl: false,
     fullscreenControl: true,
     zoomControl: true,
     gestureHandling: 'greedy',
   });
+
+  registerEsriBasemap(orderState.map);
+  orderState.map.setMapTypeId('esri');
 
   orderState.map.addListener('click', (e) => {
     placeMarker(e.latLng.lat(), e.latLng.lng());
@@ -990,9 +1014,12 @@ function initTraceMap() {
     gestureHandling: isPhone ? 'greedy' : 'auto',  // One-finger pan on phones (no "use two fingers" overlay)
     mapTypeControlOptions: {
       style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
-      mapTypeIds: ['satellite', 'hybrid']
+      mapTypeIds: ['satellite', 'hybrid', 'esri']
     }
   });
+
+  registerEsriBasemap(orderState.traceMap);
+  orderState.traceMap.setMapTypeId('esri');
 
   // Pin marker
   new google.maps.Marker({
