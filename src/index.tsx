@@ -61,6 +61,7 @@ import { platformAdmin } from './routes/platform-admin'
 import { superAdminBi } from './routes/super-admin-bi'
 import { superAdminLeads } from './routes/super-admin-leads'
 import { superAdminAttribution } from './routes/super-admin-attribution'
+import { superAdminColdCall } from './routes/super-admin-cold-call'
 import { fieldRoutes, fieldUiRoutes } from './routes/field'
 import { publicApiRoutes } from './routes/public-api'
 import { publicPreviewRoutes } from './routes/public-preview'
@@ -437,6 +438,9 @@ app.route('/api/admin/leads', superAdminLeads)
 // Super-admin attribution: HTML pages at /super-admin/attribution* + JSON at /api/super-admin/attribution/*
 app.route('/super-admin/attribution', superAdminAttribution)
 app.route('/api/super-admin/attribution', superAdminAttribution)
+// Super-admin manual cold-call tracker (no phone integration — just structured note-taking)
+app.route('/super-admin/cold-call', superAdminColdCall)
+app.route('/api/super-admin/cold-call', superAdminColdCall)
 
 // Exit-intent modal body — returns the free-measurement-report form variant.
 // Kept out of getHeadTags so the modal HTML only ships when actually triggered.
