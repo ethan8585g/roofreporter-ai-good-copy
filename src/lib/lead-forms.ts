@@ -18,6 +18,11 @@ function formSubmitJS(formId: string, successHTML?: string): string {
   return `return (async function(e){e.preventDefault();var f=e.target;if(f.querySelector('[name=website]').value)return false;function clearErr(){try{f.querySelectorAll('[data-rr-err]').forEach(function(el){el.remove()});f.querySelectorAll('input,textarea').forEach(function(el){el.style.borderColor=''})}catch(_){}}function setErr(el,msg){try{if(!el)return;el.style.borderColor='#f87171';var err=document.createElement('div');err.setAttribute('data-rr-err','1');err.style.cssText='color:#fca5a5;font-size:12px;margin:4px 0 8px 2px;font-weight:600';err.textContent=msg;el.insertAdjacentElement('afterend',err)}catch(_){}}clearErr();var bad=false;f.querySelectorAll('input,textarea').forEach(function(el){if(el.hasAttribute('required')&&!String(el.value||'').trim()){setErr(el,(el.getAttribute('data-label')||'This field')+' is required');bad=true}});var eEl=f.querySelector('[name=e]');if(eEl&&String(eEl.value||'').trim()&&!/[^@]+@[^@]+\\\\.[^@]+/.test(eEl.value)){setErr(eEl,'Please enter a valid email');bad=true}var pEl=f.querySelector('[name=p]');if(pEl&&String(pEl.value||'').trim()){var digits=String(pEl.value).replace(/\\\\D/g,'');if(digits.length<7){setErr(pEl,'Phone must be at least 7 digits');bad=true}}if(bad)return false;var b=f.querySelector('button[type=submit]');var origLabel=b.innerHTML;b.disabled=true;b.innerHTML='<i class=\"fas fa-spinner fa-spin\"></i> Sending...';try{var ss=window.sessionStorage;var q=new URLSearchParams(location.search);function pick(k){return q.get(k)||(ss&&ss.getItem('_rm_'+k))||''}var landingPage='';try{landingPage=(ss&&ss.getItem('_rm_landing'))||(location.pathname+location.search)||''}catch(_){landingPage=location.pathname||''}var ltEl=f.querySelector('[name=lt]');var firstName=(f.n&&f.n.value?String(f.n.value).trim().split(' ')[0]:'');var r=await fetch('/api/agents/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:f.n?f.n.value:'',email:f.e.value,phone:f.p?f.p.value:'',address:f.a?f.a.value:'',message:f.m?f.m.value:'',source_page:f.src.value,lead_type:ltEl?ltEl.value:'',utm_source:pick('utm_source'),utm_medium:pick('utm_medium'),utm_campaign:pick('utm_campaign'),utm_content:pick('utm_content'),utm_term:pick('utm_term'),referrer:(ss&&ss.getItem('_rm_referrer'))||document.referrer||'',landing_page:landingPage})});var d={};try{d=await r.json()}catch(_){}if(r.ok&&(d.success!==false)){try{if(ss)ss.setItem('rm_lead_captured','1')}catch(_){}var html='${successBlock.replace(/'/g, "\\'")}'.replace('{firstName}',firstName||'there');f.innerHTML=html;try{if(typeof window.rrTrack==='function')window.rrTrack('lead_submit',{form:'${formId}'})}catch(_){}try{if(typeof window.gtag==='function')window.gtag('event','generate_lead',{form_location:'${formId}'})}catch(_){}try{if(typeof window.fireMetaLeadEvent==='function'){window.fireMetaLeadEvent({content_name:'${formId}'})}else if(typeof window.fbq==='function'){window.fbq('track','Lead')}}catch(_){}return}var serverErr=(d&&d.error)?String(d.error):'Something went wrong. Please try again.';var box=document.createElement('div');box.setAttribute('data-rr-err','1');box.style.cssText='color:#fca5a5;font-size:13px;margin:8px 0;font-weight:600;padding:10px 12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px';box.textContent=serverErr;f.insertBefore(box,b);b.disabled=false;b.innerHTML=origLabel}catch(x){var box2=document.createElement('div');box2.setAttribute('data-rr-err','1');box2.style.cssText='color:#fca5a5;font-size:13px;margin:8px 0;font-weight:600;padding:10px 12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px';box2.textContent='Network error — please try again.';f.insertBefore(box2,b);b.disabled=false;b.innerHTML=origLabel}return false})(event)`
 }
 
+/** HTML-attribute-escape a JS handler string so embedded " chars don't terminate the onsubmit="..." attribute. */
+function attrEscape(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+}
+
 /** Fire rrTrack('form_view') once when the form is attached. Kept as inline <script>. */
 function formViewScript(formId: string): string {
   return `<script>(function(){try{var ss=window.sessionStorage;if(ss&&!ss.getItem('_rm_landing')){ss.setItem('_rm_landing',location.pathname+location.search)}if(ss&&!ss.getItem('_rm_referrer')&&document.referrer){ss.setItem('_rm_referrer',document.referrer)}}catch(_){}try{var f=document.getElementById('${formId}');if(!f)return;if(f.getAttribute('data-rr-view'))return;f.setAttribute('data-rr-view','1');if(typeof window.rrTrack==='function'){window.rrTrack('form_view',{form:'${formId}'})}else{document.addEventListener('rrtrack:ready',function(){try{window.rrTrack&&window.rrTrack('form_view',{form:'${formId}'})}catch(_){}},{once:true})}}catch(_){}})();</script>`
@@ -45,7 +50,7 @@ export function inlineQuoteFormHTML(source: string): string {
     <h3 style="color:#fff;font-size:22px;font-weight:800;margin:10px 0 4px">Get Your Free Roof Measurement</h3>
     <p style="color:#9ca3af;font-size:13px;margin:0">Satellite-powered report in under 60 seconds. No site visit needed.</p>
   </div>
-  <form id="${fid}" novalidate onsubmit="${formSubmitJS(fid)}" style="position:relative">
+  <form id="${fid}" novalidate onsubmit="${attrEscape(formSubmitJS(fid))}" style="position:relative">
     <input type="hidden" name="src" value="${source}">
     ${honeypot}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
@@ -89,7 +94,7 @@ export function comparisonLeadFormHTML(source: string): string {
     <h3 style="color:#fff;font-size:22px;font-weight:800;margin:10px 0 4px">See How Your Roof Compares</h3>
     <p style="color:#9ca3af;font-size:13px;margin:0">Enter your property address for a free satellite measurement report.</p>
   </div>
-  <form id="${fid}" novalidate onsubmit="${formSubmitJS(fid)}" style="position:relative">
+  <form id="${fid}" novalidate onsubmit="${attrEscape(formSubmitJS(fid))}" style="position:relative">
     <input type="hidden" name="src" value="${source}">
     ${honeypot}
     <div style="margin-bottom:10px">
@@ -133,7 +138,7 @@ export function damageAssessmentFormHTML(source: string, perilType: string): str
     <h3 style="color:#fff;font-size:22px;font-weight:800;margin:10px 0 4px"><i class="fas ${p.icon}" style="color:#fb923c;margin-right:8px"></i>${p.title}</h3>
     <p style="color:#fdba74;font-size:13px;margin:0">${p.sub}</p>
   </div>
-  <form id="${fid}" novalidate onsubmit="${formSubmitJS(fid)}" style="position:relative">
+  <form id="${fid}" novalidate onsubmit="${attrEscape(formSubmitJS(fid))}" style="position:relative">
     <input type="hidden" name="src" value="${source}">
     ${honeypot}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
@@ -186,7 +191,7 @@ export function freeMeasurementReportFormHTML(source: string, variant: 'hero' | 
     <h3 style="color:#fff;font-size:${variant === 'hero' ? '24px' : '20px'};font-weight:800;margin:4px 0 6px;line-height:1.25">Get a Free Roof Measurement Report — Emailed to You in Hours</h3>
     <p style="color:#9ca3af;font-size:13px;margin:0 0 18px;line-height:1.5">Enter your address. We\u2019ll send satellite-accurate measurements to your inbox. No credit card. No sales call unless you want one.</p>`
 
-  const formBody = `<form id="${fid}" novalidate onsubmit="${submitHandler}" style="position:relative">
+  const formBody = `<form id="${fid}" novalidate onsubmit="${attrEscape(submitHandler)}" style="position:relative">
       <input type="hidden" name="src" value="${source}">
       <input type="hidden" name="lt" value="free_measurement_report">
       ${honeypot}

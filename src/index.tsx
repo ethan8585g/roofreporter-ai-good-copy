@@ -875,6 +875,11 @@ app.get('/admin', (c) => {
   return c.redirect('/super-admin/revenue', 302)
 })
 
+// /admin/login — redirect to the actual admin entry (login is handled at /super-admin)
+app.get('/admin/login', (c) => {
+  return c.redirect('/super-admin/revenue', 302)
+})
+
 // Dispatch Board — crew scheduling + route optimization
 app.get('/admin/dispatch', (c) => {
   return c.html(getDispatchBoardHTML(c.env.GOOGLE_MAPS_API_KEY || ''))
@@ -1300,12 +1305,6 @@ Disallow: /admin/
 Disallow: /superadmin/
 
 Sitemap: https://www.roofmanager.ca/sitemap-index.xml
-Sitemap: https://www.roofmanager.ca/sitemap.xml
-Sitemap: https://www.roofmanager.ca/sitemap-us-states.xml
-Sitemap: https://www.roofmanager.ca/sitemap-us-cities.xml
-Sitemap: https://www.roofmanager.ca/sitemap-us-verticals.xml
-Sitemap: https://www.roofmanager.ca/sitemap-comparisons.xml
-Sitemap: https://www.roofmanager.ca/image-sitemap.xml
 
 # AI Search Retrieval Bots (real-time citation)
 User-agent: OAI-SearchBot
@@ -6714,6 +6713,9 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
   <meta name="keywords" content="roof measurement software, roofing CRM, satellite roof reports, roof area calculator, roofing estimate tool, roof pitch analysis, material takeoff, roofing contractor software, AI roof measurement, Canadian roofing software">
   <link rel="canonical" href="https://www.roofmanager.ca/">
+  <link rel="alternate" hreflang="en-ca" href="https://www.roofmanager.ca/ca">
+  <link rel="alternate" hreflang="en-us" href="https://www.roofmanager.ca/us">
+  <link rel="alternate" hreflang="x-default" href="https://www.roofmanager.ca/">
   <!-- JSON-LD Structured Data for SEO -->
   <script type="application/ld+json">
   {
@@ -6809,15 +6811,17 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-    /* Landing page scroll animations */
+    /* Landing page scroll animations — opacity stays at 1 so content is always readable; only transform animates */
     .scroll-animate {
-      opacity: 0;
-      transform: translateY(2rem);
-      transition: opacity 0.7s, transform 0.7s;
+      opacity: 1;
+      transform: translateY(1rem);
+      transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .scroll-animate.animate-in {
-      opacity: 1 !important;
       transform: none !important;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .scroll-animate { transform: none !important; transition: none !important; }
     }
     html { scroll-behavior: smooth; }
     /* Navbar: starts transparent, turns dark on scroll */
@@ -9320,7 +9324,7 @@ function getCustomerLoginHTML(googleClientId = '') {
           <div class="space-y-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input type="email" id="custLoginEmail" name="email" autocomplete="email" placeholder="you@company.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm">
+              <input type="email" id="custLoginEmail" name="email" autocomplete="username" placeholder="you@company.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm">
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
@@ -13107,8 +13111,9 @@ function getServicesPageHTML() {
   ]}
   </script>
   <style>
-    .scroll-animate { opacity: 0; transform: translateY(30px); transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
-    .scroll-animate.animate-in { opacity: 1 !important; transform: translateY(0) !important; }
+    .scroll-animate { opacity: 1; transform: translateY(20px); transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+    .scroll-animate.animate-in { transform: translateY(0) !important; }
+    @media (prefers-reduced-motion: reduce) { .scroll-animate { transform: none !important; transition: none !important; } }
     .neon-text { color: #00FF88; }
   </style>
 </head>
@@ -13670,8 +13675,9 @@ function getCoveragePageHTML() {
   {"@context":"https://schema.org","@type":"WebPage","name":"Roof Manager Global Coverage","description":"AI-powered satellite roof measurement reports available in 40+ countries worldwide","url":"https://www.roofmanager.ca/coverage","publisher":{"@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca"},"areaServed":[${allCountries.map(c => `{"@type":"Country","name":"${c}"}`).join(',')}]}
   </script>
   <style>
-    .scroll-animate { opacity: 0; transform: translateY(30px); transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
-    .scroll-animate.animate-in { opacity: 1 !important; transform: translateY(0) !important; }
+    .scroll-animate { opacity: 1; transform: translateY(20px); transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+    .scroll-animate.animate-in { transform: translateY(0) !important; }
+    @media (prefers-reduced-motion: reduce) { .scroll-animate { transform: none !important; transition: none !important; } }
     .card-hover { transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
     .card-hover:hover { transform: translateY(-8px); box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
     .neon-text { color: #00FF88; }
@@ -14779,8 +14785,9 @@ function getLanderFunnelHTML() {
   <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
   <style>
     html { scroll-behavior: smooth; }
-    .scroll-animate { opacity: 0; transform: translateY(20px); transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1); }
-    .scroll-animate.animate-in { opacity: 1 !important; transform: translateY(0) !important; }
+    .scroll-animate { opacity: 1; transform: translateY(16px); transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+    .scroll-animate.animate-in { transform: translateY(0) !important; }
+    @media (prefers-reduced-motion: reduce) { .scroll-animate { transform: none !important; transition: none !important; } }
     @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-10px); } }
     .float-anim { animation: float 3s ease-in-out infinite; }
   </style>
@@ -15055,8 +15062,9 @@ function getDemoLandingPageHTML() {
     .demo-input:focus { border-color:rgba(0,255,136,0.5); }
     #cal-wrapper { display:none; }
     #cal-wrapper.visible { display:block; }
-    .scroll-animate { opacity:0;transform:translateY(20px);transition:all 0.7s cubic-bezier(0.4,0,0.2,1); }
-    .scroll-animate.animate-in { opacity:1!important;transform:translateY(0)!important; }
+    .scroll-animate { opacity:1;transform:translateY(16px);transition:transform 0.5s cubic-bezier(0.4,0,0.2,1); }
+    .scroll-animate.animate-in { transform:translateY(0)!important; }
+    @media (prefers-reduced-motion: reduce) { .scroll-animate { transform:none!important;transition:none!important; } }
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

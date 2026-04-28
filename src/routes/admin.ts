@@ -2373,7 +2373,7 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
         created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, 1, 1, 3, 0, 0, ?, 'trialing',
         datetime('now', '+' || ? || ' days'), ?,
-        1,
+        0,
         datetime('now'), datetime('now'))
     `).bind(
       email.toLowerCase(), password_hash, contact_name,
@@ -2671,7 +2671,7 @@ adminRoutes.post('/superadmin/users/create', async (c) => {
       INSERT INTO customers (email, password_hash, name, company_name, phone,
         is_active, email_verified, free_trial_total, free_trial_used, report_credits,
         subscription_plan, subscription_status, auto_invoice_enabled, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 1, 1, 0, 0, 0, 'starter', 'inactive', 1, datetime('now'), datetime('now'))
+      VALUES (?, ?, ?, ?, ?, 1, 1, 0, 0, 0, 'starter', 'inactive', 0, datetime('now'), datetime('now'))
     `).bind(email.toLowerCase(), password_hash, name, company_name || name, phone || '').run()
     const customerId = (result as any).meta?.last_row_id
     return c.json({ success: true, customer_id: customerId, email: email.toLowerCase() })

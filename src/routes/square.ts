@@ -205,7 +205,7 @@ async function getCustomerFromToken(db: D1Database, token: string | undefined): 
     // Auto-create a linked customer account with ample free trials
     const result = await db.prepare(`
       INSERT INTO customers (name, email, is_active, free_trial_total, free_trial_used, report_credits, credits_used, auto_invoice_enabled)
-      VALUES (?, ?, 1, 999, 0, 0, 0, 1)
+      VALUES (?, ?, 1, 999, 0, 0, 0, 0)
       RETURNING *
     `).bind(admin.name || admin.email, admin.email).first<any>()
     customer = result
