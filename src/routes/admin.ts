@@ -1848,15 +1848,25 @@ adminRoutes.get('/superadmin/secretary/overview', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
-    // Subscription stats
+    // Subscription stats — MRR excludes comped accounts (free access via comp_until)
     const subStats = await c.env.DB.prepare(`
       SELECT
         COUNT(*) as total_subscriptions,
         SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_count,
+        SUM(CASE WHEN status = 'trialing' THEN 1 ELSE 0 END) as trialing_count,
         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_count,
         SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled_count,
         SUM(CASE WHEN status = 'past_due' THEN 1 ELSE 0 END) as past_due_count,
-        SUM(CASE WHEN status = 'active' THEN monthly_price_cents ELSE 0 END) as monthly_mrr_cents
+        SUM(CASE
+          WHEN status = 'active'
+           AND comp_until IS NOT NULL AND comp_until > datetime('now')
+          THEN 1 ELSE 0
+        END) as comped_count,
+        SUM(CASE
+          WHEN status = 'active'
+           AND (comp_until IS NULL OR comp_until <= datetime('now'))
+          THEN monthly_price_cents ELSE 0
+        END) as monthly_mrr_cents
       FROM secretary_subscriptions
     `).first<any>()
 
@@ -2706,12 +2716,21 @@ adminRoutes.get('/superadmin/secretary/stats', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
+  // Subscription counts grouped by status. MRR-eligible total excludes
+  // comped subs (status='active' but comp_until > now → free access).
   const counts = await c.env.DB.prepare(`
-    SELECT status, COUNT(*) AS count, SUM(monthly_price_cents) AS total_cents
+    SELECT status,
+           COUNT(*) AS count,
+           SUM(CASE
+             WHEN comp_until IS NULL OR comp_until <= datetime('now')
+             THEN monthly_price_cents ELSE 0
+           END) AS billable_cents
     FROM secretary_subscriptions
     GROUP BY status
   `).all<any>()
 
+  // Phone-pool spend is what WE pay Telnyx/Twilio for the numbers — an
+  // operational cost, NOT subscriber revenue. Reported separately.
   const phoneNumbers = await c.env.DB.prepare(`
     SELECT provider, COUNT(*) AS count, SUM(monthly_cost_cents_billed) AS total_cents
     FROM secretary_phone_pool
@@ -2733,10 +2752,11 @@ adminRoutes.get('/superadmin/secretary/stats', async (c) => {
 
   let mrrCents = 0
   for (const r of (counts.results || [])) {
-    if (r.status === 'active') mrrCents += Number(r.total_cents || 0)
+    if (r.status === 'active') mrrCents += Number(r.billable_cents || 0)
   }
+  let phoneInfraCents = 0
   for (const r of (phoneNumbers.results || [])) {
-    mrrCents += Number(r.total_cents || 0)
+    phoneInfraCents += Number(r.total_cents || 0)
   }
 
   const startedN = Number(trialHistory?.started || 0)
@@ -2748,6 +2768,8 @@ adminRoutes.get('/superadmin/secretary/stats', async (c) => {
     phone_numbers: phoneNumbers.results || [],
     mrr_cents: mrrCents,
     mrr_dollars: mrrCents / 100,
+    phone_infra_cents: phoneInfraCents,
+    phone_infra_dollars: phoneInfraCents / 100,
     trials_started: startedN,
     trials_converted: convertedN,
     conversion_rate: conversionRate,

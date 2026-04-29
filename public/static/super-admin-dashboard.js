@@ -4138,9 +4138,9 @@ function renderSecretaryBillingView() {
   const statsRow =
     '<div class="grid grid-cols-2 md:grid-cols-5 gap-3">' +
       statCard('MRR', fmtMoney((stats.mrr_cents || 0)), 'fa-dollar-sign', 'text-emerald-500') +
+      statCard('Phone Infra Cost', fmtMoney((stats.phone_infra_cents || 0)), 'fa-network-wired', 'text-violet-500') +
       statCard('Trialing', byStatus.trialing || 0, 'fa-gift', 'text-sky-500') +
       statCard('Active', byStatus.active || 0, 'fa-check-circle', 'text-emerald-500') +
-      statCard('Past Due', byStatus.past_due || 0, 'fa-exclamation-triangle', 'text-amber-500') +
       statCard('Conversion', ((stats.conversion_rate || 0) * 100).toFixed(1) + '%', 'fa-arrow-up', 'text-indigo-500') +
     '</div>';
 
@@ -4232,8 +4232,8 @@ function renderSecretaryAdminView() {
 
     <!-- Key Metrics -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      ${samc('Active Subscribers', subs.active_count || 0, 'fa-users', 'emerald', 'Paying $249/mo')}
-      ${samc('Monthly MRR', '$' + mrrDollars, 'fa-dollar-sign', 'green', (subs.active_count || 0) + ' active subs')}
+      ${samc('Active Subscribers', subs.active_count || 0, 'fa-users', 'emerald', (subs.comped_count || 0) + ' comped (free access)')}
+      ${samc('Monthly MRR', '$' + mrrDollars, 'fa-dollar-sign', 'green', 'paying subs only — comp/trial excluded')}
       ${samc('Total Calls (All Time)', calls.total_calls || 0, 'fa-phone', 'blue', fmtSeconds(calls.total_seconds || 0) + ' total')}
       ${samc('Calls (30d)', recent.calls_30d || 0, 'fa-chart-bar', 'purple', (recent.active_users_30d || 0) + ' active users')}
     </div>
