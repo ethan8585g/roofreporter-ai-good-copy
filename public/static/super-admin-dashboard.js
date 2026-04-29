@@ -323,6 +323,10 @@ document.addEventListener('DOMContentLoaded', () => {
   loadInboxBadge();
   setInterval(loadInboxBadge, 60000);
 
+  // Poll new-signups count every 60s for the Customers sidebar badge
+  loadNewSignupsBadge();
+  setInterval(loadNewSignupsBadge, 60000);
+
   // Auto-prompt for push notifications after dashboard loads
   setTimeout(() => {
     if (window.RoofPush && localStorage.getItem('rc_token')) {
@@ -900,7 +904,26 @@ function renderUsersView() {
   const users = d.users || [];
   const s = d.summary || {};
 
+  // Count signups in the last 24h directly off the loaded user list so the
+  // banner stays consistent with the table without an extra fetch.
+  const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  const newToday = users.filter(u => {
+    if (!u.created_at) return false;
+    const t = Date.parse(u.created_at.replace(' ', 'T') + 'Z');
+    return Number.isFinite(t) && t > dayAgo;
+  }).length;
+  const banner = newToday > 0 ? `
+    <div class="mb-4 p-3 rounded-xl border border-emerald-200 bg-emerald-50 flex items-center gap-3">
+      <i class="fas fa-bell text-emerald-600"></i>
+      <span class="text-sm text-emerald-900 font-semibold">
+        ${newToday} new signup${newToday === 1 ? '' : 's'} in the last 24h
+      </span>
+      <a href="/super-admin/customers/signups" class="ml-auto text-xs font-semibold text-emerald-700 hover:underline">View sign-ups <i class="fas fa-arrow-right text-[9px] ml-0.5"></i></a>
+    </div>
+  ` : '';
+
   return `
+    ${banner}
     <div class="mb-6">
       <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-users mr-2 text-teal-500"></i>All Users</h2>
       <p class="text-sm text-gray-500 mt-1">Complete user registry with account details, credits, and order history</p>
@@ -11189,6 +11212,22 @@ async function loadInboxBadge() {
       if (sidebarBadge) {
         sidebarBadge.textContent = total;
         sidebarBadge.style.display = total > 0 ? '' : 'none';
+      }
+    }
+  } catch (e) { /* best effort */ }
+}
+
+// New user signups in the last 24h — green badge on the Customers nav item.
+async function loadNewSignupsBadge() {
+  try {
+    var res = await saFetch('/api/admin/superadmin/new-signups-count');
+    if (res && res.ok) {
+      var data = await res.json();
+      var total = data.total || 0;
+      var badge = document.getElementById('sa-sidebar-newsignups-badge');
+      if (badge) {
+        badge.textContent = total;
+        badge.style.display = total > 0 ? '' : 'none';
       }
     }
   } catch (e) { /* best effort */ }

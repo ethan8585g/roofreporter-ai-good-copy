@@ -1766,6 +1766,23 @@ adminRoutes.get('/superadmin/inbox/unread-count', async (c) => {
   }
 })
 
+// GET /superadmin/new-signups-count — Sidebar badge for new user signups in the last 24h.
+// Drives the "Customers" green badge so the super admin sees fresh signups at a glance.
+adminRoutes.get('/superadmin/new-signups-count', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  try {
+    const r = await c.env.DB.prepare(
+      `SELECT COUNT(*) as c FROM customers WHERE created_at > datetime('now', '-1 day')`
+    ).first<any>()
+    const total = r?.c || 0
+    return c.json({ total, window: '24h' })
+  } catch (err: any) {
+    return c.json({ total: 0 }, 200)
+  }
+})
+
 // GET /superadmin/inbox/lead/:type/:id — Single lead detail (type = lead|sitelead|contact|demo)
 adminRoutes.get('/superadmin/inbox/lead/:type/:id', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))

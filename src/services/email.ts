@@ -635,3 +635,106 @@ export async function notifySalesNewLead(env: any, data: {
     console.error('[notifySalesNewLead] ALL email methods failed — lead notification for', data.email, 'was NOT delivered to sales@roofmanager.ca')
   }
 }
+
+// ============================================================
+// Notify sales@roofmanager.ca when a NEW USER signs up.
+// Called fire-and-forget from registration handlers; never throws.
+// ============================================================
+export async function notifyNewUserSignup(env: any, data: {
+  signup_method: 'email' | 'google'
+  customer_id?: number | string | null
+  email?: string | null
+  name?: string | null
+  phone?: string | null
+  company_name?: string | null
+  company_size?: string | null
+  primary_use?: string | null
+  ip?: string | null
+}): Promise<void> {
+  const esc = (v: any) => String(v ?? '').replace(/[&<>"']/g, (m) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' } as any)[m])
+  const rows: string[] = []
+  const push = (label: string, val: any, link?: 'mailto' | 'tel') => {
+    if (val === null || val === undefined || val === '') return
+    const v = esc(val)
+    const cell = link === 'mailto' ? `<a href="mailto:${v}" style="color:#0ea5e9">${v}</a>`
+      : link === 'tel' ? `<a href="tel:${v}" style="color:#0ea5e9">${v}</a>`
+      : v
+    rows.push(`<tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:130px;vertical-align:top"><strong>${esc(label)}</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${cell}</td></tr>`)
+  }
+  push('Name', data.name)
+  push('Email', data.email, 'mailto')
+  push('Phone', data.phone, 'tel')
+  push('Company', data.company_name)
+  push('Company size', data.company_size)
+  push('Primary use', data.primary_use)
+  push('Signup method', data.signup_method === 'google' ? 'Google sign-in' : 'Email + password')
+  if (data.customer_id) push('Customer ID', `#${data.customer_id}`)
+  if (data.ip) push('IP', data.ip)
+
+  const html = `
+<div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
+  <div style="background:#0f172a;padding:24px;border-radius:12px 12px 0 0">
+    <h1 style="color:#34d399;font-size:18px;margin:0">🎉 New User Signup — Roof Manager</h1>
+    <p style="color:#94a3b8;font-size:13px;margin:4px 0 0">A new account just registered.</p>
+  </div>
+  <div style="background:white;padding:24px;border:1px solid #e2e8f0;border-top:none">
+    <table style="width:100%;border-collapse:collapse">${rows.join('')}</table>
+  </div>
+  <div style="background:#f8fafc;padding:16px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;border-top:none;text-align:center">
+    <a href="https://www.roofmanager.ca/super-admin" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Super Admin Dashboard</a>
+  </div>
+</div>`
+  const subject = `🎉 New Signup: ${data.name || data.email || 'unknown'}${data.company_name ? ' (' + data.company_name + ')' : ''}`
+
+  // Strategy 1: Gmail OAuth2
+  let sent = false
+  const clientId = env.GMAIL_CLIENT_ID
+  let clientSecret = env.GMAIL_CLIENT_SECRET || ''
+  let refreshToken = env.GMAIL_REFRESH_TOKEN || ''
+  if (!refreshToken || !clientSecret) {
+    try {
+      const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
+      if (r?.setting_value) refreshToken = r.setting_value
+      const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
+      if (s?.setting_value) clientSecret = s.setting_value
+    } catch (e: any) {
+      console.warn('[notifyNewUserSignup] DB credential lookup failed:', e?.message)
+    }
+  }
+
+  if (clientId && clientSecret && refreshToken) {
+    try {
+      await sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofmanager.ca', subject, html, 'sales@roofmanager.ca')
+      sent = true
+      console.log('[notifyNewUserSignup] sent via Gmail OAuth2')
+    } catch (e: any) {
+      console.error('[notifyNewUserSignup] Gmail OAuth2 failed:', e?.message || e)
+    }
+  }
+
+  // Strategy 2: Resend fallback
+  if (!sent && env.RESEND_API_KEY) {
+    try {
+      await sendViaResend(env.RESEND_API_KEY, 'sales@roofmanager.ca', subject, html)
+      sent = true
+      console.log('[notifyNewUserSignup] sent via Resend fallback')
+    } catch (e: any) {
+      console.error('[notifyNewUserSignup] Resend fallback failed:', e?.message || e)
+    }
+  }
+
+  // Strategy 3: GCP Service Account fallback
+  if (!sent && env.GCP_SERVICE_ACCOUNT_JSON) {
+    try {
+      await sendGmailEmail(env.GCP_SERVICE_ACCOUNT_JSON, 'sales@roofmanager.ca', subject, html, 'sales@roofmanager.ca')
+      sent = true
+      console.log('[notifyNewUserSignup] sent via GCP Service Account fallback')
+    } catch (e: any) {
+      console.error('[notifyNewUserSignup] GCP Service Account failed:', e?.message || e)
+    }
+  }
+
+  if (!sent) {
+    console.error('[notifyNewUserSignup] ALL email methods failed — signup notification for', data.email, 'was NOT delivered to sales@roofmanager.ca')
+  }
+}

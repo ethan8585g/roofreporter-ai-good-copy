@@ -5,6 +5,7 @@ import { identifySession } from '../services/attribution'
 import { resolveTeamOwner } from './team'
 import { hashPassword, verifyPassword, isLegacyHash, dummyVerify } from '../lib/password'
 import { getCustomerSessionToken } from '../lib/session-tokens'
+import { notifyNewUserSignup } from '../services/email'
 
 // P1-11: sanitize values before splicing into MIME headers. Strips CR/LF and
 // control chars that could be used for header injection (inject Bcc, etc.).
@@ -450,8 +451,8 @@ customerAuthRoutes.post('/google', async (c) => {
     } else {
       // Create new customer with 4 free trial reports (NOT paid credits)
       const result = await c.env.DB.prepare(`
-        INSERT INTO customers (email, name, google_id, google_avatar, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, auto_invoice_enabled)
-        VALUES (?, ?, ?, ?, 1, 1, 0, 0, 4, 0, 0)
+        INSERT INTO customers (email, name, google_id, google_avatar, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, auto_invoice_enabled, last_login)
+        VALUES (?, ?, ?, ?, 1, 1, 0, 0, 4, 0, 0, datetime('now'))
       `).bind(email, name, googleId, avatar).run()
 
       customer = {
@@ -473,6 +474,18 @@ customerAuthRoutes.post('/google', async (c) => {
 
       // Track Google signup in GA4 (non-blocking)
       trackUserSignup(c.env as any, String(customer.id), 'google', { email_domain: email.split('@')[1] || 'unknown' }).catch((e) => console.warn('[customer-auth] GA4 trackUserSignup failed (google):', e?.message || e))
+
+      // Notify sales@roofmanager.ca of new signup (non-blocking)
+      try {
+        const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || ''
+        c.executionCtx.waitUntil(notifyNewUserSignup(c.env as any, {
+          signup_method: 'google',
+          customer_id: customer.id,
+          email,
+          name,
+          ip,
+        }).catch((e) => console.warn('[customer-auth] notifyNewUserSignup (google) failed:', e?.message || e)))
+      } catch (e: any) { console.warn('[customer-auth] notifyNewUserSignup (google) skip:', e?.message) }
     }
 
     // Attribution — link recent same-IP traffic to this customer + recompute
@@ -626,8 +639,8 @@ customerAuthRoutes.post('/register', async (c) => {
     // Insert with 4 free trial reports (NOT paid credits) — email_verified = 1 since we verified
     // conv-v5: persist phone, company_size, primary_use for sales-qualification
     const result = await c.env.DB.prepare(`
-      INSERT INTO customers (email, name, phone, company_name, company_size, primary_use, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by, auto_invoice_enabled)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 0, 0, 4, 0, ?, ?, 0)
+      INSERT INTO customers (email, name, phone, company_name, company_size, primary_use, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by, auto_invoice_enabled, last_login)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 0, 0, 4, 0, ?, ?, 0, datetime('now'))
     `).bind(cleanEmail, name, cleanPhone, cleanCompanyName, cleanCompanySize, cleanPrimaryUse, storedHash, refCode, referredBy).run()
 
     if (!result.meta.last_row_id) {
@@ -665,6 +678,22 @@ customerAuthRoutes.post('/register', async (c) => {
       const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || ''
       c.executionCtx.waitUntil(identifySession(c.env.DB, result.meta.last_row_id as number, ip).catch((e) => console.warn('[attribution] identify (register) failed:', e?.message)))
     } catch (e: any) { console.warn('[attribution] identify (register) skip:', e?.message) }
+
+    // Notify sales@roofmanager.ca of new signup (non-blocking)
+    try {
+      const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || ''
+      c.executionCtx.waitUntil(notifyNewUserSignup(c.env as any, {
+        signup_method: 'email',
+        customer_id: result.meta.last_row_id,
+        email: cleanEmail,
+        name,
+        phone: cleanPhone,
+        company_name: cleanCompanyName,
+        company_size: cleanCompanySize,
+        primary_use: cleanPrimaryUse,
+        ip,
+      }).catch((e) => console.warn('[customer-auth] notifyNewUserSignup (email) failed:', e?.message || e)))
+    } catch (e: any) { console.warn('[customer-auth] notifyNewUserSignup (email) skip:', e?.message) }
 
     return c.json({
       success: true,
