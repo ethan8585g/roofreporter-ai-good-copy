@@ -9,6 +9,7 @@ import { ordersRoutes } from './routes/orders'
 import { companiesRoutes } from './routes/companies'
 import { settingsRoutes } from './routes/settings'
 import { reportsRoutes } from './routes/reports'
+import { measureRoutes } from './routes/measure'
 import { insuranceRoutes } from './routes/insurance'
 import { adminRoutes } from './routes/admin'
 import { aiAnalysisRoutes } from './routes/ai-analysis'
@@ -384,6 +385,7 @@ app.route('/api/orders', ordersRoutes)
 app.route('/api/companies', companiesRoutes)
 app.route('/api/settings', settingsRoutes)
 app.route('/api/reports', reportsRoutes)
+app.route('/api/measure', measureRoutes)
 app.route('/api/insurance', insuranceRoutes)
 app.route('/api/admin', adminRoutes)
 app.route('/api/ai', aiAnalysisRoutes)
@@ -2792,9 +2794,27 @@ app.post('/api/demo/lead', async (c) => {
 })
 
 // Customer Order & Pay page
-app.get('/customer/order', (c) => {
+app.get('/customer/order', async (c) => {
   const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
-  return c.html(getCustomerOrderPageHTML(mapsKey))
+  // Best-effort: pre-flight a Nearmap coverage check when the page is opened
+  // with explicit coordinates. If covered, inject a tile template the
+  // tracing UI can use as a higher-resolution Google Maps overlay.
+  let nearmapTileUrl: string | null = null
+  try {
+    const lat = Number(c.req.query('lat'))
+    const lng = Number(c.req.query('lng'))
+    const nearmapKey = (c.env as any).NEARMAP_API_KEY as string | undefined
+    if (Number.isFinite(lat) && Number.isFinite(lng) && nearmapKey) {
+      const { checkNearmapCoverage, buildNearmapTileUrlTemplate } = await import('./services/nearmap')
+      const cov = await checkNearmapCoverage(lat, lng, nearmapKey, { timeoutMs: 3500 })
+      if (cov.hasCoverage) {
+        nearmapTileUrl = buildNearmapTileUrlTemplate(nearmapKey, cov.latestSurveyId)
+      }
+    }
+  } catch (err) {
+    console.warn('[customer/order] Nearmap pre-flight failed:', (err as Error).message)
+  }
+  return c.html(getCustomerOrderPageHTML(mapsKey, nearmapTileUrl))
 })
 
 // Property Imagery — Dev account only
@@ -15284,7 +15304,7 @@ function getDemoLandingPageHTML() {
 // ============================================================
 // CUSTOMER ORDER PAGE — Address entry + pay or use credit
 // ============================================================
-function getCustomerOrderPageHTML(mapsApiKey: string) {
+function getCustomerOrderPageHTML(mapsApiKey: string, nearmapTileUrl: string | null = null) {
   const mapsScript = mapsApiKey
     ? `<script>
       var googleMapsReady = false;
@@ -15297,11 +15317,16 @@ function getCustomerOrderPageHTML(mapsApiKey: string) {
     <script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places&callback=onCustomerMapsReady" async defer></script>`
     : '<!-- Google Maps: No API key configured -->'
 
+  const nearmapInjection = nearmapTileUrl
+    ? `<script>window.__NEARMAP_TILE_URL__ = ${JSON.stringify(nearmapTileUrl)};</script>`
+    : ''
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   ${getHeadTags()}
   <title>Order a Report - Roof Manager</title>
+  ${nearmapInjection}
   ${mapsScript}
 </head>
 <body style="background:var(--bg-page)" class="min-h-screen">

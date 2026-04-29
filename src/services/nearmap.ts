@@ -279,3 +279,18 @@ export async function fetchNearmapImageryForReport(
 
   return { imagery, coverage }
 }
+
+// ============================================================
+// TILE TEMPLATE — for live overlay on Google Maps in the trace UI
+// ============================================================
+// Returns an XYZ template URL with {z}/{x}/{y} placeholders that
+// Google Maps' ImageMapType can substitute. Includes the API key
+// inline; safe because the trace page is server-rendered and the
+// template is only injected when coverage was already verified.
+// ============================================================
+export function buildNearmapTileUrlTemplate(apiKey: string, surveyId?: string): string {
+  if (surveyId) {
+    return `${NEARMAP_TILE_BASE}/surveys/${surveyId}/Vert/{z}/{x}/{y}.jpg?apikey=${apiKey}`
+  }
+  return `${NEARMAP_TILE_BASE}/Vert/{z}/{x}/{y}.jpg?apikey=${apiKey}`
+}

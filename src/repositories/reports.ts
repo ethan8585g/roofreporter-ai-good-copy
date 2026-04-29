@@ -158,6 +158,14 @@ export async function saveCompletedReport(
   // roof_area_sqft stores the PROJECTED footprint (matches the PDF report's
   // displayed "roof area" per the e5a94c5 fix). Material estimation keeps using
   // total_true_area_sqft internally via reportData.materials for shingle counts.
+  const reviewFlag: any = (reportData as any).review_flag || null
+  const needsReview: boolean = (reportData as any).needs_review === true || reviewFlag != null
+  const reviewReason: string | null = reviewFlag?.reason || null
+  const reviewDetailJson: string | null = reviewFlag ? JSON.stringify(reviewFlag) : null
+  const eavesTagsJson: string | null = (reportData as any).eaves_tags
+    ? JSON.stringify((reportData as any).eaves_tags)
+    : null
+
   const bindValues = [
     n(reportData.total_footprint_sqft || reportData.total_true_area_sqft), n(reportData.total_footprint_sqm || reportData.total_true_area_sqm),
     n(reportData.total_footprint_sqft), n(reportData.total_footprint_sqm),
@@ -178,6 +186,7 @@ export async function saveCompletedReport(
     satUrl,
     reportData.vision_findings ? JSON.stringify(reportData.vision_findings) : null,
     reportData.solar_panel_layout ? JSON.stringify(reportData.solar_panel_layout) : null,
+    needsReview ? 1 : 0, reviewReason, reviewDetailJson, eavesTagsJson,
     orderId
   ]
 
@@ -213,6 +222,7 @@ export async function saveCompletedReport(
       satellite_image_url = ?,
       vision_findings_json = ?,
       solar_panel_layout = ?,
+      needs_review = ?, review_reason = ?, review_detail = ?, eaves_tags = ?,
       status = 'completed', generation_completed_at = datetime('now'), updated_at = datetime('now')
     WHERE order_id = ?
   `).bind(...bindValues).run()

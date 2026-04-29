@@ -739,3 +739,65 @@ export function runEdgeClassifier(
 
   return result
 }
+
+// ============================================================
+// Pixel-space → lat/lng projection (for frontend snap features)
+// ============================================================
+
+export interface SnapFeatureBounds {
+  north: number
+  south: number
+  east: number
+  west: number
+}
+
+export interface SnapLatLng { lat: number; lng: number }
+
+export interface SnapFeatures {
+  ridges: SnapLatLng[][]
+  eaves: SnapLatLng[][]
+  hips: SnapLatLng[][]
+  valleys: SnapLatLng[][]
+}
+
+/**
+ * Convert pixel-space ClassifiedEdge endpoints to lat/lng polylines, grouped by edge type.
+ * Edge endpoints from runEdgeClassifier are stored in meter-space (pixel_idx * pixelSizeMeters);
+ * we recover pixel index by dividing, then linearly interpolate within the GeoTIFF bounds.
+ */
+export function classifiedEdgesToLatLng(
+  result: EdgeClassifierResult,
+  pixelSizeMeters: number,
+  width: number,
+  height: number,
+  bounds: SnapFeatureBounds
+): SnapFeatures {
+  const features: SnapFeatures = { ridges: [], eaves: [], hips: [], valleys: [] }
+  if (!Number.isFinite(pixelSizeMeters) || pixelSizeMeters <= 0) return features
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return features
+
+  const latSpan = bounds.north - bounds.south
+  const lngSpan = bounds.east - bounds.west
+
+  const project = (mx: number, my: number): SnapLatLng => {
+    const px = mx / pixelSizeMeters
+    const py = my / pixelSizeMeters
+    return {
+      lat: bounds.north - (py / height) * latSpan,
+      lng: bounds.west + (px / width) * lngSpan,
+    }
+  }
+
+  for (const edge of result.edges) {
+    const segment: SnapLatLng[] = [
+      project(edge.start.x, edge.start.y),
+      project(edge.end.x, edge.end.y),
+    ]
+    if (edge.type === 'ridge') features.ridges.push(segment)
+    else if (edge.type === 'eave') features.eaves.push(segment)
+    else if (edge.type === 'hip') features.hips.push(segment)
+    else if (edge.type === 'valley') features.valleys.push(segment)
+  }
+
+  return features
+}

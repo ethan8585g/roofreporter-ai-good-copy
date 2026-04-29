@@ -120,6 +120,21 @@ export interface TracePayload {
   small_corner_threshold_ft?: number
   // Optional external footprint for engine vs source variance cross-check
   cross_check?: { source: string; footprint_ft2: number }
+  // Optional per-plane pitches (rise:12) extracted upstream from the DSM
+  // (e.g. by edge-classifier RANSAC). When provided, each traced face polygon
+  // is matched to the plane whose centroid falls inside the polygon, and the
+  // matched plane's pitch overrides the default. Falls back to default_pitch
+  // when no plane matches a given face.
+  plane_segments_lat_lng?: Array<{
+    pitch_rise: number
+    centroid: { lat: number; lng: number }
+    area_m2?: number
+  }>
+  // Per-edge tags captured during tracing. Each entry tags the edge starting
+  // at the corresponding eaves_outline vertex ('eave' or 'rake'). When present
+  // and lengths match, the engine attributes per-edge linear footage to the
+  // explicit category instead of inferring rakes from line geometry.
+  eaves_tags?: Array<'eave' | 'rake'>
 }
 
 export interface EaveEdge {
@@ -250,6 +265,15 @@ export interface CrossCheck {
   verdict: 'aligned' | 'minor_variance' | 'significant_variance'
 }
 
+export interface ReviewFlag {
+  reason: 'footprint_mismatch'
+  traced_ft2: number
+  external_ft2: number
+  delta_pct: number
+  external_source: string
+  message: string
+}
+
 export interface TraceReport {
   report_meta: {
     address: string
@@ -279,6 +303,8 @@ export interface TraceReport {
     num_obstructions: number
   }
   cross_check?: CrossCheck
+  needs_review?: boolean
+  review_flag?: ReviewFlag
   geometry_warnings?: string[]
   linear_measurements: {
     eaves_total_ft: number
@@ -463,6 +489,19 @@ function shoelaceAreaM2(pts: { x: number; y: number }[]): number {
 
 function dist2D(a: { x: number; y: number }, b: { x: number; y: number }): number {
   return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2)
+}
+
+/** Even-odd ray-casting point-in-polygon test (2D, ignores z). */
+function pointInPolygon2D(px: number, py: number, poly: { x: number; y: number }[]): boolean {
+  let inside = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y
+    const xj = poly[j].x, yj = poly[j].y
+    const intersect = ((yi > py) !== (yj > py))
+      && (px < ((xj - xi) * (py - yi)) / ((yj - yi) || 1e-12) + xi)
+    if (intersect) inside = !inside
+  }
+  return inside
 }
 
 function dist3D(a: CartesianPt, b: CartesianPt): number {
@@ -886,6 +925,12 @@ export class RoofMeasurementEngine {
   private valleysCart: { id: string; pts: CartesianPt[]; pitch: number | null; slope_ref: string }[]
   private rakesCart: { id: string; pts: CartesianPt[]; pitch: number | null; slope_ref: string }[]
   private facesCart: { face_id: string; poly: CartesianPt[]; pitch: number; label: string }[]
+  // DSM-derived per-plane pitches (rise:12) projected into engine-local cartesian.
+  // Empty when the caller did not supply plane_segments_lat_lng.
+  private planeSegmentsCart: { x: number; y: number; pitch_rise: number; area_m2: number }[] = []
+  // Per-eave-edge tags ('eave' | 'rake') captured during tracing. Index aligns
+  // with the from_pt index of each EaveEdge. Empty array = infer (legacy).
+  private eavesTags: Array<'eave' | 'rake'> = []
 
   constructor(payload: TracePayload) {
     this.address    = payload.address || 'Unknown Address'
@@ -905,6 +950,13 @@ export class RoofMeasurementEngine {
     this.crossCheckSource = payload.cross_check && payload.cross_check.footprint_ft2 > 0
       ? { source: payload.cross_check.source, footprint_ft2: payload.cross_check.footprint_ft2 }
       : null
+
+    // Per-edge eave/rake tags from the tracing UI. Stored verbatim; honored in
+    // run() only when length matches the eaves outline so a misaligned array
+    // can never silently shift accounting.
+    this.eavesTags = Array.isArray(payload.eaves_tags)
+      ? payload.eaves_tags.filter((t): t is 'eave' | 'rake' => t === 'eave' || t === 'rake')
+      : []
 
     // Normalise default slope (rise:12 → radians)
     this.defThetaRad = pitchAngleRad(this.defPitch)
@@ -936,6 +988,28 @@ export class RoofMeasurementEngine {
     // STEP 1: Project all points to local Cartesian
     const { origin, projected } = projectToCartesian(this.rawEaves)
     this.origin = origin
+
+    // Project DSM-derived plane centroids into engine-local cartesian so face
+    // polygons (also cartesian) can find their best-matching plane via a simple
+    // point-in-polygon test in faceAreas().
+    if (payload.plane_segments_lat_lng && payload.plane_segments_lat_lng.length > 0) {
+      this.planeSegmentsCart = payload.plane_segments_lat_lng
+        .filter(seg => Number.isFinite(seg.pitch_rise) && seg.pitch_rise > 0
+          && Number.isFinite(seg.centroid?.lat) && Number.isFinite(seg.centroid?.lng))
+        .map(seg => {
+          const cp = projectPoint(
+            { lat: seg.centroid.lat, lng: seg.centroid.lng, elevation: null },
+            this.origin.lat,
+            this.origin.lng,
+          )
+          return {
+            x: cp.x,
+            y: cp.y,
+            pitch_rise: seg.pitch_rise,
+            area_m2: seg.area_m2 ?? 0,
+          }
+        })
+    }
 
     // STEP 2: Vertex snapping
     this.snapper = new VertexSnapper()
@@ -1260,6 +1334,29 @@ export class RoofMeasurementEngine {
     })
   }
 
+  // ── FACE ↔ DSM PLANE MATCHING ────────────────────────
+  // Find the DSM-derived plane whose centroid lies inside the given face
+  // polygon. Returns the plane's pitch_rise (rise:12) or null when no match.
+  // When several planes overlap a single face, prefer the one with the
+  // largest reported area_m2 (ties broken by closest centroid).
+  private matchPlanePitchToFace(facePts: { x: number; y: number }[]): number | null {
+    if (this.planeSegmentsCart.length === 0 || facePts.length < 3) return null
+
+    let best: { pitch_rise: number; area_m2: number; dist2: number } | null = null
+    for (const plane of this.planeSegmentsCart) {
+      if (!pointInPolygon2D(plane.x, plane.y, facePts)) continue
+      const fxAvg = facePts.reduce((s, p) => s + p.x, 0) / facePts.length
+      const fyAvg = facePts.reduce((s, p) => s + p.y, 0) / facePts.length
+      const dist2 = (plane.x - fxAvg) ** 2 + (plane.y - fyAvg) ** 2
+      if (!best
+        || plane.area_m2 > best.area_m2
+        || (plane.area_m2 === best.area_m2 && dist2 < best.dist2)) {
+        best = { pitch_rise: plane.pitch_rise, area_m2: plane.area_m2, dist2 }
+      }
+    }
+    return best?.pitch_rise ?? null
+  }
+
   // ── FACE AREA CALCULATION ────────────────────────────
 
   faceAreas(): FaceDetail[] {
@@ -1299,7 +1396,17 @@ export class RoofMeasurementEngine {
           let assignedArea = 0
           for (let i = 0; i < facePolys.length; i++) {
             const polyArea = shoelaceAreaM2(facePolys[i].pts) * M2_TO_FT2
-            const { theta } = facePolys[i].ridge ? this.resolveTheta(facePolys[i].ridge) : { theta: this.defThetaRad }
+            // Per-facet pitch from DSM RANSAC takes priority over the ridge-resolved
+            // pitch when a plane centroid falls inside this face. Falls back to the
+            // ridge-resolved (or default) theta when no plane matches.
+            const dsmPitch = this.matchPlanePitchToFace(facePolys[i].pts)
+            let theta: number
+            if (dsmPitch != null) {
+              theta = pitchAngleRad(dsmPitch)
+            } else {
+              const resolved = facePolys[i].ridge ? this.resolveTheta(facePolys[i].ridge) : { theta: this.defThetaRad }
+              theta = resolved.theta
+            }
             const rise = 12 * Math.tan(theta)
             const sloped = slopedFromProjected(polyArea, rise)
             assignedArea += polyArea
@@ -1533,7 +1640,7 @@ export class RoofMeasurementEngine {
 
   run(): TraceReport {
     const edges = this.eaveEdges()
-    const totalEaveFt = edges.reduce((s, e) => s + e.length_2d_ft, 0)
+    let totalEaveFt = edges.reduce((s, e) => s + e.length_2d_ft, 0)
 
     const ridgeSegs  = this.lineDetails(this.ridgesCart, 'ridge')
     const hipSegs    = this.lineDetails(this.hipsCart, 'hip')
@@ -1543,7 +1650,23 @@ export class RoofMeasurementEngine {
     const totalRidgeFt  = ridgeSegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
     const totalHipFt    = hipSegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
     const totalValleyFt = valleySegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
-    const totalRakeFt   = rakeSegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
+    let totalRakeFt     = rakeSegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
+
+    // Per-edge eave/rake tagging — only applied when the user-supplied tag
+    // count matches the eave-edge count, so an off-by-one cannot silently
+    // mis-attribute footage. Tags index by from_pt: tag[i] applies to the
+    // edge starting at vertex i.
+    if (this.eavesTags.length > 0 && this.eavesTags.length >= edges.length) {
+      let rakeFromTags = 0
+      let eaveFromTags = 0
+      for (const e of edges) {
+        const tag = this.eavesTags[e.from_pt]
+        if (tag === 'rake') rakeFromTags += e.length_2d_ft
+        else eaveFromTags += e.length_2d_ft
+      }
+      totalEaveFt = eaveFromTags
+      totalRakeFt = totalRakeFt + rakeFromTags
+    }
 
     const facesData   = this.faceAreas()
     let totalSloped = facesData.reduce((s, f) => s + f.sloped_area_ft2, 0)
@@ -1714,6 +1837,7 @@ export class RoofMeasurementEngine {
 
     // Cross-check against external source (Solar API, EagleView, etc.)
     let crossCheck: CrossCheck | undefined
+    let reviewFlag: ReviewFlag | undefined
     if (this.crossCheckSource && totalProj > 0) {
       const ext = this.crossCheckSource.footprint_ft2
       const variance = Math.abs(totalProj - ext) / ext * 100
@@ -1725,6 +1849,20 @@ export class RoofMeasurementEngine {
         engine_footprint_ft2: round(totalProj, 1),
         variance_pct: round(variance, 1),
         verdict,
+      }
+      // Hard reconciliation gate: > 10 % delta marks the report for review.
+      if (variance > 10) {
+        reviewFlag = {
+          reason: 'footprint_mismatch',
+          traced_ft2: round(totalProj, 1),
+          external_ft2: round(ext, 1),
+          delta_pct: round(variance, 1),
+          external_source: this.crossCheckSource.source,
+          message:
+            `Traced footprint (${round(totalProj, 0)} ft²) differs from ${this.crossCheckSource.source} ` +
+            `(${round(ext, 0)} ft²) by ${round(variance, 1)} %. Field-verify before ordering materials.`,
+        }
+        notes.push(`⚠ NEEDS REVIEW: ${reviewFlag.message}`)
       }
     }
 
@@ -1786,6 +1924,8 @@ export class RoofMeasurementEngine {
       materials_estimate:  mat,
       advisory_notes:      notes,
       cross_check:         crossCheck,
+      needs_review:        reviewFlag != null ? true : undefined,
+      review_flag:         reviewFlag,
       geometry_warnings:   geometryWarnings.length > 0 ? geometryWarnings : undefined,
     }
   }
@@ -1815,6 +1955,13 @@ export function traceUiToEnginePayload(
       chimneys?: { lat: number; lng: number }[]
     }
     traced_at?: string
+    eaves_tags?: Array<'eave' | 'rake'>
+    eaves_sections_tags?: Array<Array<'eave' | 'rake'>>
+    plane_segments_lat_lng?: Array<{
+      pitch_rise: number
+      centroid: { lat: number; lng: number }
+      area_m2?: number
+    }>
   },
   order: {
     property_address?: string
@@ -1938,6 +2085,8 @@ export function traceUiToEnginePayload(
       ? traceJson.slope_map
       : undefined,
     cross_check:    crossCheck,
+    plane_segments_lat_lng: traceJson.plane_segments_lat_lng,
+    eaves_tags: traceJson.eaves_tags,
   }
 }
 

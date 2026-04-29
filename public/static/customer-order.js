@@ -691,8 +691,10 @@ function renderTraceStep(root, progressBar) {
           </div>
 
           <div class="space-y-2">
+            <button onclick="autoDetectRoof()" class="w-full px-3 py-2 bg-emerald-500/10 hover:bg-emerald-200 text-emerald-400 rounded-lg text-sm font-medium" id="autoDetectBtn"><i class="fas fa-magic mr-1"></i>Auto-Detect Roof</button>
             <button onclick="undoLastTrace()" class="w-full px-3 py-2 bg-white/5 hover:bg-gray-200 text-gray-400 rounded-lg text-sm font-medium"><i class="fas fa-undo mr-1"></i>Undo</button>
             <button onclick="clearAllTraces()" class="w-full px-3 py-2 bg-red-500/10 hover:bg-red-100 text-red-400 rounded-lg text-sm font-medium"><i class="fas fa-trash mr-1"></i>Clear All</button>
+            <div class="text-[10px] text-gray-500 text-center pt-1" id="eaveTagHint">Hotkeys: <kbd class="px-1 bg-white/10 rounded text-gray-300">E</kbd>=Eave <kbd class="px-1 bg-white/10 rounded text-gray-300">R</kbd>=Rake — current: <span id="nextEaveTag" class="text-emerald-400 font-bold">EAVE</span></div>
           </div>
         </div>
 
@@ -1021,6 +1023,35 @@ function initTraceMap() {
   registerEsriBasemap(orderState.traceMap);
   orderState.traceMap.setMapTypeId('esri');
 
+  // Nearmap overlay — when the server confirmed coverage and injected a tile
+  // template, render Nearmap's 7.5cm-GSD imagery as a higher-resolution overlay
+  // on top of the satellite basemap. Falls through silently when not present.
+  if (window.__NEARMAP_TILE_URL__) {
+    try {
+      const tmpl = window.__NEARMAP_TILE_URL__;
+      const nearmapType = new google.maps.ImageMapType({
+        getTileUrl: (coord, zoom) => tmpl.replace('{z}', zoom).replace('{x}', coord.x).replace('{y}', coord.y),
+        tileSize: new google.maps.Size(256, 256),
+        name: 'Nearmap',
+        maxZoom: 23,
+        minZoom: 17,
+        opacity: 1.0,
+      });
+      orderState.traceMap.overlayMapTypes.insertAt(0, nearmapType);
+      console.log('[Trace] Nearmap overlay enabled (7.5cm GSD)');
+    } catch (err) {
+      console.warn('[Trace] Nearmap overlay failed:', err && err.message);
+    }
+  }
+
+  // Fetch DSM-derived snap features (ridges/eaves polylines) once. Cached
+  // server-side; cheap on repeat. Used by snapToNearbyVertex to also snap to
+  // detected roof edges within ~50cm.
+  fetchSnapFeatures(center.lat, center.lng).catch(() => {});
+
+  // Fetch live pitch reading for the metrics bar.
+  fetchLivePitch(center.lat, center.lng).catch(() => {});
+
   // Pin marker
   new google.maps.Marker({
     position: center,
@@ -1138,6 +1169,169 @@ function hapticTick() {
   try { if (navigator.vibrate) navigator.vibrate(10); } catch (e) {}
 }
 
+// ============================================================
+// Snap features, live pitch, geometry helpers
+// ============================================================
+
+const DEG2RAD_FE = Math.PI / 180;
+const EARTH_R_FE = 6371000;
+
+function llToMeters(p, originLat, originLng) {
+  const cosLat = Math.cos(originLat * DEG2RAD_FE);
+  const mPerDegLat = DEG2RAD_FE * EARTH_R_FE;
+  const mPerDegLng = DEG2RAD_FE * EARTH_R_FE * cosLat;
+  return {
+    x: (p.lng - originLng) * mPerDegLng,
+    y: (p.lat - originLat) * mPerDegLat,
+  };
+}
+
+function metersToLL(x, y, originLat, originLng) {
+  const cosLat = Math.cos(originLat * DEG2RAD_FE);
+  const mPerDegLat = DEG2RAD_FE * EARTH_R_FE;
+  const mPerDegLng = DEG2RAD_FE * EARTH_R_FE * cosLat;
+  return {
+    lat: originLat + y / mPerDegLat,
+    lng: originLng + x / mPerDegLng,
+  };
+}
+
+// Perpendicular distance from point P to segment AB, returning closest point on AB.
+function pointToSegmentClosestM(p, a, b) {
+  const ax = a.x, ay = a.y;
+  const bx = b.x, by = b.y;
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  if (len2 < 1e-9) return { x: ax, y: ay, dist: Math.hypot(p.x - ax, p.y - ay) };
+  let t = ((p.x - ax) * dx + (p.y - ay) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  const cx = ax + t * dx, cy = ay + t * dy;
+  return { x: cx, y: cy, dist: Math.hypot(p.x - cx, p.y - cy) };
+}
+
+// Fetch DSM-derived ridge/eave polylines for the current location once and
+// stash on orderState.snapFeatures. Used by snapToNearbyVertex.
+async function fetchSnapFeatures(lat, lng) {
+  try {
+    const r = await fetch(`/api/measure/snap-features?lat=${lat}&lng=${lng}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!data || data.available === false) return;
+    orderState.snapFeatures = {
+      ridges: Array.isArray(data.ridges) ? data.ridges : [],
+      eaves: Array.isArray(data.eaves) ? data.eaves : [],
+      hips: Array.isArray(data.hips) ? data.hips : [],
+      valleys: Array.isArray(data.valleys) ? data.valleys : [],
+      origin: { lat, lng },
+    };
+    console.log('[Trace] Snap features loaded:', {
+      ridges: orderState.snapFeatures.ridges.length,
+      eaves: orderState.snapFeatures.eaves.length,
+    });
+  } catch (err) {
+    /* network failure → no snap features, fall back to vertex snapping */
+  }
+}
+
+// Fetch a single live pitch reading and stash for the metrics bar.
+async function fetchLivePitch(lat, lng) {
+  try {
+    const r = await fetch(`/api/measure/live-pitch?lat=${lat}&lng=${lng}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data && Number.isFinite(data.pitch_rise) && data.pitch_rise > 0) {
+      orderState.livePitchRise = Math.round(data.pitch_rise * 10) / 10;
+      orderState.livePitchSource = data.source || null;
+      orderState.livePitchConfidence = data.confidence || null;
+      updatePhoneMetricsBar();
+      const desktopEl = document.getElementById('desktopMetricPitch');
+      if (desktopEl) desktopEl.textContent = orderState.livePitchRise + ':12';
+    }
+  } catch (err) { /* silent */ }
+}
+
+// Snap a click to the closest DSM ridge/eave segment within `tolM` metres.
+// Returns the projected lat/lng on the segment or null.
+function snapToDsmSegment(pt, tolM) {
+  const sf = orderState.snapFeatures;
+  if (!sf || !sf.origin) return null;
+  const ptM = llToMeters(pt, sf.origin.lat, sf.origin.lng);
+  let best = null;
+  const consider = (segments) => {
+    for (const seg of segments) {
+      if (!Array.isArray(seg) || seg.length < 2) continue;
+      for (let i = 0; i < seg.length - 1; i++) {
+        const aM = llToMeters(seg[i], sf.origin.lat, sf.origin.lng);
+        const bM = llToMeters(seg[i + 1], sf.origin.lat, sf.origin.lng);
+        const c = pointToSegmentClosestM(ptM, aM, bM);
+        if (c.dist <= tolM && (!best || c.dist < best.dist)) {
+          best = c;
+        }
+      }
+    }
+  };
+  consider(sf.ridges);
+  consider(sf.eaves);
+  consider(sf.hips);
+  consider(sf.valleys);
+  if (!best) return null;
+  return metersToLL(best.x, best.y, sf.origin.lat, sf.origin.lng);
+}
+
+// Right-angle snap: when the new edge from `anchor`→`cand` is within 5° of the
+// previous edge's bearing or its perpendicular, snap candidate so the angle is
+// exactly 0/90/180/270°. Returns the (possibly adjusted) candidate.
+function snapRightAngle(prev, anchor, cand) {
+  if (!prev || !anchor || !cand) return cand;
+  const a = llToMeters(anchor, anchor.lat, anchor.lng);
+  const p = llToMeters(prev, anchor.lat, anchor.lng);
+  const c = llToMeters(cand, anchor.lat, anchor.lng);
+  const baseAng = Math.atan2(a.y - p.y, a.x - p.x);
+  const candAng = Math.atan2(c.y - a.y, c.x - a.x);
+  const diff = ((candAng - baseAng) * 180 / Math.PI + 360) % 360;
+  const targets = [0, 90, 180, 270];
+  let snapAng = null;
+  for (const t of targets) {
+    if (Math.abs(diff - t) < 5 || Math.abs(diff - t) > 355) {
+      snapAng = baseAng + t * Math.PI / 180;
+      break;
+    }
+  }
+  if (snapAng == null) return cand;
+  const dist = Math.hypot(c.x - a.x, c.y - a.y);
+  const newX = a.x + Math.cos(snapAng) * dist;
+  const newY = a.y + Math.sin(snapAng) * dist;
+  return metersToLL(newX, newY, anchor.lat, anchor.lng);
+}
+
+// 2D segment-segment intersection test (proper crossing only — touching at a
+// shared endpoint does not count). Mirrors the server-side check in
+// src/utils/trace-validation.ts.
+function _segmentsCross(p1, p2, p3, p4) {
+  const ccw = (A, B, C) => (C.y - A.y) * (B.x - A.x) - (B.y - A.y) * (C.x - A.x);
+  const a = ccw(p1, p2, p3);
+  const b = ccw(p1, p2, p4);
+  const c = ccw(p3, p4, p1);
+  const d = ccw(p3, p4, p2);
+  return (a > 0 !== b > 0) && (c > 0 !== d > 0);
+}
+
+// Returns true if pushing `cand` onto `pts` would create a self-intersecting
+// polygon (the new closing edge or the new outgoing edge crosses an existing
+// edge). Used to reject the click before it lands.
+function wouldSelfIntersect(pts, cand) {
+  if (!pts || pts.length < 2) return false;
+  const origin = pts[0];
+  const xy = pts.map(p => llToMeters(p, origin.lat, origin.lng));
+  const candXY = llToMeters(cand, origin.lat, origin.lng);
+  // Check the new edge (last → cand) against every prior non-adjacent edge.
+  const last = xy[xy.length - 1];
+  for (let i = 0; i < xy.length - 2; i++) {
+    if (_segmentsCross(xy[i], xy[i + 1], last, candXY)) return true;
+  }
+  return false;
+}
+
 // Find the nearest existing eaves vertex within `tolM` metres; return that vertex or null.
 // Used on phones to snap near-miss taps to shared corners across sections.
 function snapToNearbyVertex(pt, tolM) {
@@ -1162,6 +1356,76 @@ function placePointAtReticle() {
 }
 window.placePointAtReticle = placePointAtReticle;
 
+// ============================================================
+// Auto-Detect Roof — fetches a satellite snapshot of the current
+// map view, runs server-side Gemini segmentation, and pre-fills
+// the eaves polygon so the user only edits.
+// ============================================================
+async function autoDetectRoof() {
+  if (!orderState.traceMap) return;
+  const btn = document.getElementById('autoDetectBtn');
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Detecting…'; }
+  try {
+    const c = orderState.traceMap.getCenter();
+    const lat = c.lat(), lng = c.lng();
+    const zoom = Math.max(18, Math.min(21, orderState.traceMap.getZoom() || 20));
+    const res = await fetch('/api/measure/auto-detect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat, lng, zoom, imageWidth: 640, imageHeight: 640 }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data || !Array.isArray(data.eaves) || data.eaves.length < 3) {
+      showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Auto-detect couldn\'t find a roof outline. Try a tighter zoom or trace manually.');
+      return;
+    }
+    // Drop existing trace state without the confirmation prompt and replace
+    // with the AI outline. User edits via the editable polygon vertices.
+    orderState.traceEavesPoints = [];
+    orderState.traceEavesTags = [];
+    orderState.traceEavesSectionsTags = [];
+    orderState.traceEavesSectionPolygons.forEach(p => { if (p) p.setMap(null); });
+    orderState.traceEavesSectionPolygons = [];
+    orderState.traceEavesSections = [];
+    orderState.traceMarkers.forEach(m => m.setMap(null));
+    orderState.traceMarkers = [];
+    orderState.tracePolylines.forEach(p => p.setMap(null));
+    orderState.tracePolylines = [];
+    orderState.traceEavesPoints = data.eaves.map(p => ({ lat: p.lat, lng: p.lng }));
+    orderState.traceEavesTags = orderState.traceEavesPoints.map(() => 'eave');
+    closeEavesPolygon();
+    showMsg('success', '<i class="fas fa-check mr-1"></i>Roof detected — drag any vertex to refine, then continue.');
+  } catch (err) {
+    showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Auto-detect failed: ' + (err && err.message || 'network error'));
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+  }
+}
+window.autoDetectRoof = autoDetectRoof;
+
+// ============================================================
+// E/R hotkey listener — toggles whether the next eave point's
+// outgoing edge is tagged 'eave' (default) or 'rake'.
+// ============================================================
+(function installEaveTagHotkeys() {
+  if (typeof document === 'undefined') return;
+  document.addEventListener('keydown', (ev) => {
+    if (orderState.step !== 'trace' || orderState.traceMode !== 'eaves') return;
+    const target = ev.target;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+    const k = ev.key && ev.key.toLowerCase();
+    if (k !== 'e' && k !== 'r') return;
+    orderState.nextEaveTag = (k === 'r') ? 'rake' : 'eave';
+    const el = document.getElementById('nextEaveTag');
+    if (el) {
+      el.textContent = orderState.nextEaveTag.toUpperCase();
+      el.className = orderState.nextEaveTag === 'rake' ? 'text-purple-400 font-bold' : 'text-emerald-400 font-bold';
+    }
+    ev.preventDefault();
+  });
+})();
+
 // Refresh the mobile sticky metrics bar + FAB labels. Called from updateTraceUI.
 // Safe to call on non-phone devices — it bails if the overlay isn't present.
 function updatePhoneMetricsBar() {
@@ -1174,6 +1438,8 @@ function updatePhoneMetricsBar() {
   const countLabelEl = document.getElementById('phoneMetricCountLabel');
   if (areaEl) areaEl.textContent = orderState.liveFootprintSqft ? orderState.liveFootprintSqft.toLocaleString() + ' ft²' : '—';
   if (perimEl) perimEl.textContent = orderState.livePerimeterFt ? orderState.livePerimeterFt.toLocaleString() + ' ft' : '—';
+  const pitchEl = document.getElementById('phoneMetricPitch');
+  if (pitchEl) pitchEl.textContent = orderState.livePitchRise ? orderState.livePitchRise + ':12' : '—';
   const mode = orderState.traceMode;
   if (countEl && countLabelEl) {
     if (mode === 'eaves') {
@@ -1211,11 +1477,23 @@ function updatePhoneFabLabels() {
 
 function handleTraceClick(pt) {
   const mode = orderState.traceMode;
-  // Phone-only: snap to any nearby existing vertex (across all sections and the current in-progress
-  // section) so adjacent polygons share exact corners instead of near-miss corners. 2m tolerance.
+  // 1. Vertex snap — phones snap near-miss taps to existing corners (2m).
   if (orderState.traceIsPhone && mode === 'eaves') {
     const snapped = snapToNearbyVertex(pt, 2.0);
     if (snapped) pt = snapped;
+  }
+  // 2. DSM ridge/eave snap — clicks within 0.5m of a detected roof edge
+  //    snap onto the edge so the trace follows the actual roof line.
+  if (mode === 'eaves' || mode === 'ridge' || mode === 'hip' || mode === 'valley') {
+    const dsmSnap = snapToDsmSegment(pt, 0.5);
+    if (dsmSnap) pt = dsmSnap;
+  }
+  // 3. Right-angle snap — if the candidate edge is within 5° of 0/90/180/270
+  //    relative to the previous edge, lock it to the perpendicular/parallel.
+  if (mode === 'eaves' && orderState.traceEavesPoints.length >= 2) {
+    const prev = orderState.traceEavesPoints[orderState.traceEavesPoints.length - 2];
+    const anchor = orderState.traceEavesPoints[orderState.traceEavesPoints.length - 1];
+    pt = snapRightAngle(prev, anchor, pt);
   }
   if (mode === 'eaves') {
     if (orderState.traceEavesPoints.length >= 3) {
@@ -1225,7 +1503,17 @@ function handleTraceClick(pt) {
         return;
       }
     }
+    // 4. Self-intersect guard — reject the click if it would create a
+    //    crossing edge.
+    if (orderState.traceEavesPoints.length >= 3 && wouldSelfIntersect(orderState.traceEavesPoints, pt)) {
+      showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>That point would cross an existing edge — try a different spot.');
+      return;
+    }
     orderState.traceEavesPoints.push(pt);
+    // 5. Per-edge tag — store the active eave/rake tag for the edge starting
+    //    at this vertex. Defaults to 'eave' when the user hasn't toggled.
+    if (!Array.isArray(orderState.traceEavesTags)) orderState.traceEavesTags = [];
+    orderState.traceEavesTags.push(orderState.nextEaveTag === 'rake' ? 'rake' : 'eave');
     addTraceMarker(pt, '#22c55e', orderState.traceEavesPoints.length);
     if (orderState.traceEavesPoints.length > 1) {
       drawPolyline(orderState.traceEavesPoints, '#22c55e', 3, false);
@@ -1275,7 +1563,13 @@ function closeEavesPolygon() {
   });
 
   const sectionIdx = orderState.traceEavesSections.length;
-  orderState.traceEavesSections.push({ points: [...orderState.traceEavesPoints] });
+  const sectionTags = Array.isArray(orderState.traceEavesTags) ? [...orderState.traceEavesTags] : [];
+  orderState.traceEavesSections.push({
+    points: [...orderState.traceEavesPoints],
+    tags: sectionTags,
+  });
+  if (!Array.isArray(orderState.traceEavesSectionsTags)) orderState.traceEavesSectionsTags = [];
+  orderState.traceEavesSectionsTags.push(sectionTags);
   orderState.traceEavesSectionPolygons.push(polygon);
   attachSectionPolygonEditListeners(polygon, sectionIdx);
 
@@ -1287,6 +1581,7 @@ function closeEavesPolygon() {
 
   // Reset current in-progress section
   orderState.traceEavesPoints = [];
+  orderState.traceEavesTags = [];
   orderState.traceEavesPolygon = null;
 
   restoreLineOverlays();
@@ -1540,6 +1835,7 @@ function undoLastTrace() {
         orderState.traceEavesPolygon = null;
       }
       orderState.traceEavesPoints.pop();
+      if (Array.isArray(orderState.traceEavesTags)) orderState.traceEavesTags.pop();
       // Clear only markers/polylines — keep existing section polygons on map
       orderState.traceMarkers.forEach(m => m.setMap(null));
       orderState.traceMarkers = [];
@@ -1561,8 +1857,10 @@ function undoLastTrace() {
       // Undo last closed section — pop it and restore as in-progress
       const lastSection = orderState.traceEavesSections.pop();
       const lastPolygon = orderState.traceEavesSectionPolygons.pop();
+      if (Array.isArray(orderState.traceEavesSectionsTags)) orderState.traceEavesSectionsTags.pop();
       if (lastPolygon) lastPolygon.setMap(null);
       orderState.traceEavesPoints = [...lastSection.points];
+      orderState.traceEavesTags = Array.isArray(lastSection.tags) ? [...lastSection.tags] : [];
       // Clear markers/polylines and redraw
       orderState.traceMarkers.forEach(m => m.setMap(null));
       orderState.traceMarkers = [];
@@ -1682,6 +1980,8 @@ function startNewBuilding() {
 async function clearAllTraces() {
   if (!(await window.rmConfirm('Clear all traces?'))) return
   orderState.traceEavesPoints = [];
+  orderState.traceEavesTags = [];
+  orderState.traceEavesSectionsTags = [];
   orderState.traceEavesSectionPolygons.forEach(p => { if (p) p.setMap(null); });
   orderState.traceEavesSectionPolygons = [];
   orderState.traceEavesSections = [];
@@ -1773,6 +2073,12 @@ function updateTraceUI() {
             : `<div class="mt-2 px-2 py-1.5 bg-red-100 border border-red-300 rounded-lg text-xs text-red-800"><i class="fas fa-exclamation-triangle mr-1"></i>${cv.msg}</div>`
       ) : '';
 
+      const pitchRow = (orderState.livePitchRise && orderState.livePitchRise > 0)
+        ? `<div class="flex justify-between items-center">
+            <span class="text-gray-500 text-xs"><i class="fas fa-mountain mr-1"></i>Pitch</span>
+            <span class="font-bold text-sm text-amber-700" id="desktopMetricPitch">${orderState.livePitchRise}:12</span>
+          </div>`
+        : '';
       metricsPanel.innerHTML = `
         <div class="space-y-2">
           <div class="flex justify-between items-center">
@@ -1783,6 +2089,7 @@ function updateTraceUI() {
             <span class="text-gray-500 text-xs"><i class="fas fa-ruler mr-1"></i>Perimeter</span>
             <span class="font-bold text-sm text-gray-100">${orderState.livePerimeterFt.toLocaleString()} ft</span>
           </div>
+          ${pitchRow}
           <div class="flex justify-between items-center">
             <span class="text-gray-500 text-xs"><i class="fas fa-th mr-1"></i>Est. Area</span>
             <span class="font-bold text-sm text-blue-700">${(orderState.liveFootprintSqft / 100).toFixed(1)}</span>
@@ -1986,12 +2293,26 @@ async function confirmTrace() {
   const _primary = _sections.length > 0
     ? _sections.reduce((best, s) => (s.length > best.length ? s : best), _sections[0])
     : orderState.traceEavesPoints;
+  // Per-edge eave/rake tags collected during tracing. The first section's tags
+  // are flattened into `eaves_tags` for back-compat with the engine; multi-section
+  // tags ride along in `eaves_sections_tags`.
+  const _sectionTags = Array.isArray(orderState.traceEavesSectionsTags)
+    ? orderState.traceEavesSectionsTags
+    : (orderState.traceEavesSections || []).map(s => Array.isArray(s.tags) ? s.tags : []);
+  // Find the index of the primary section to pull its tag array.
+  const _primaryIdx = _sections.findIndex(s => s === _primary);
+  const _primaryTags = _primaryIdx >= 0 && Array.isArray(_sectionTags[_primaryIdx])
+    ? _sectionTags[_primaryIdx]
+    : [];
+
   orderState.roofTraceJson = {
     eaves: _primary,
     eaves_sections: _sections,
     ridges: orderState.traceRidgeLines,
     hips: orderState.traceHipLines,
     valleys: orderState.traceValleyLines,
+    eaves_tags: _primaryTags,
+    eaves_sections_tags: _sectionTags,
     annotations: {
       vents: orderState.traceVents,
       skylights: orderState.traceSkylights,

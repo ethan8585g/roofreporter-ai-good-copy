@@ -73,6 +73,31 @@ export function computeStructuresBreakdown(report: RoofReport): StructureBreakdo
   return out
 }
 
+/**
+ * Renders an orange "Needs review" banner above the accuracy stamp when the
+ * engine's reconciliation gate flagged a footprint mismatch >10 % between the
+ * traced polygon and the external (Solar API) footprint. Returns empty string
+ * when no flag is set.
+ */
+function renderNeedsReviewBanner(report: RoofReport): string {
+  const flag = (report as any).review_flag || (report as any).needs_review_flag
+  const needs = (report as any).needs_review === true || flag != null
+  if (!needs) return ''
+  const traced = flag?.traced_ft2 != null ? Math.round(flag.traced_ft2).toLocaleString() : '—'
+  const external = flag?.external_ft2 != null ? Math.round(flag.external_ft2).toLocaleString() : '—'
+  const delta = flag?.delta_pct != null ? `${flag.delta_pct.toFixed(1)}%` : '>10%'
+  const source = flag?.external_source || 'Google Solar'
+  const message = flag?.message || `Traced footprint differs from ${source} by ${delta}. Field-verify before ordering materials.`
+  return `
+  <div style="margin:0 28px 6px;padding:8px 12px;background:#FFF4E5;border:1px solid #F5A524;border-radius:6px;display:flex;align-items:flex-start;gap:8px;font-size:8px;color:#7A4A05;line-height:1.4">
+    <span style="font-size:11px;line-height:1;flex-shrink:0">&#9888;</span>
+    <div>
+      <strong style="display:block;font-size:8.5px;color:#5C3704;text-transform:uppercase;letter-spacing:0.4px">Needs review</strong>
+      <span>${message} (Traced: ${traced} ft&sup2; vs ${source}: ${external} ft&sup2;.)</span>
+    </div>
+  </div>`
+}
+
 export function generateProfessionalReportHTML(report: RoofReport): string {
   // ── Safe defaults ──
   const prop = report.property || { address: 'Unknown' } as any
@@ -430,6 +455,9 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       </div>
     </div>`
   })()}
+
+  <!-- Needs-review banner: rendered when reconciliation gate flagged a footprint mismatch >10% -->
+  ${renderNeedsReviewBanner(report)}
 
   <!-- Accuracy + Disclaimer -->
   <div style="padding:4px 28px 36px;font-size:7px;color:#666;line-height:1.5;text-align:center">
@@ -1532,15 +1560,21 @@ function buildEdgeBreakdownPage(report: RoofReport, reportNum: string, reportDat
     <tr style="background:${color}10;border-top:2px solid ${color}">
       <td colspan="6" style="padding:5px 8px;font-weight:800;font-size:9px;color:${color}"><span style="display:inline-block;width:14px;height:3px;background:${color};border-radius:1px;margin-right:6px;vertical-align:middle"></span>${label} — ${details.length} segments, ${totalFt} LF total</td>
     </tr>
-    ${details.map((d: any, i: number) => `
+    ${details.map((d: any, i: number) => {
+      const conf = typeof d.classifier_confidence === 'number' ? d.classifier_confidence : null
+      const verifyPill = conf != null && conf < 70
+        ? ` <span style="display:inline-block;padding:1px 5px;background:#FFF4E5;color:#7A4A05;border:1px solid #F5A524;border-radius:3px;font-size:6px;font-weight:700;margin-left:4px">VERIFY ${conf}%</span>`
+        : ''
+      return `
     <tr style="${i % 2 === 0 ? '' : 'background:#f8fafc'};border-bottom:1px solid #f1f5f9">
       <td style="padding:3px 8px;font-weight:600;font-size:8px">${d.id || d.edge_num || (i + 1)}</td>
-      <td style="padding:3px 8px;font-size:8px;color:#555">${type}</td>
+      <td style="padding:3px 8px;font-size:8px;color:#555">${type}${verifyPill}</td>
       <td style="padding:3px 8px;text-align:right;font-weight:700;font-size:8px">${Math.round((d.horiz_length_ft || d.length_2d_ft || 0) * 10) / 10}</td>
       <td style="padding:3px 8px;text-align:right;font-size:8px;color:#555">${Math.round((d.sloped_length_ft || d.length_3d_ft || d.horiz_length_ft || d.length_2d_ft || 0) * 10) / 10}</td>
       <td style="padding:3px 8px;text-align:center;font-size:7px;color:#888">${d.slope_factor ? '×' + d.slope_factor.toFixed(3) : '—'}</td>
       <td style="padding:3px 8px;text-align:center;font-size:7px;color:#888">${d.bearing_deg ? Math.round(d.bearing_deg) + '°' : '—'}</td>
-    </tr>`).join('')}`
+    </tr>`
+    }).join('')}`
   }
 
   return `

@@ -311,6 +311,10 @@ export interface EdgeMeasurement {
 
   /** Pitch factor used to compute true 3D length */
   pitch_factor?: number
+
+  /** DSM-derived classifier confidence (0–100). Edges below 70 should be
+   *  flagged as "Verify in field" on the report. */
+  classifier_confidence?: number
 }
 
 // ============================================================

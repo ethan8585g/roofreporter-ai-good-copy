@@ -1149,6 +1149,8 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
       solar_imagery_reliability: resolved.solar_imagery_reliability,
       solar_imagery_warning:     resolved.solar_imagery_warning,
       solar_cross_check: enhancedSolarCheck,
+      needs_review: report.needs_review === true,
+      review_flag: report.review_flag || null,
       calculation_ms: elapsed,
       engine_version: report.report_meta.engine_version,
       validation_warnings: validation.warnings,
