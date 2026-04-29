@@ -2402,7 +2402,13 @@ export function generateTraceBasedDiagramSVG(
     'rgba(220,38,38,0.04)', 'rgba(37,99,235,0.04)', 'rgba(22,163,74,0.04)', 'rgba(234,88,12,0.04)',
   ]
 
-  const fmtFt = (ft: number): string => ft < 0.5 ? '' : Math.round(ft).toString()
+  const fmtFt = (ft: number): string => {
+    if (ft < 0.5) return ''
+    const totalIn = Math.round(ft * 12)
+    const f = Math.floor(totalIn / 12)
+    const i = totalIn % 12
+    return i === 0 ? `${f}'` : `${f}'${i}"`
+  }
   const fmtFtUnit = (ft: number): string => ft < 0.5 ? '' : `${Math.round(ft)} ft`
 
   // ── Convert lat/lng to local X/Y (metres from centroid) ──

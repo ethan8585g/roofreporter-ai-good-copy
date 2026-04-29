@@ -1069,10 +1069,16 @@ export function geminiOutlineToTracePayload(
     outlinePixels = convexHull(allPts)
   }
 
-  const eavesOutline = outlinePixels.map(p => {
+  const eavesOutlineRaw = outlinePixels.map(p => {
     const ll = px2ll(p.x, p.y)
     return { lat: ll.lat, lng: ll.lng, elevation: null as number | null }
   })
+
+  // Regularize the AI-generated polygon: drop micro-vertices, snap near-rectilinear
+  // edges to right angles, and average symmetric pairs. Vision-language models have
+  // ~±0.5–2 ft per-vertex noise that otherwise produces asymmetric edges on
+  // symmetric buildings. The pass is a no-op for non-rectilinear roofs.
+  const eavesOutline = regularizePolygon(eavesOutlineRaw, lat)
 
   // 2. Build ridge lines
   const ridges = geminiResult.edges
@@ -1181,4 +1187,203 @@ function convexHull(points: { x: number; y: number }[]): { x: number; y: number 
     hull.push(p)
   }
   return hull
+}
+
+/**
+ * Regularize an AI-generated roof-outline polygon.
+ *
+ * Gemini vision returns vertex pixel coordinates with ~±0.5–2 ft noise per
+ * vertex. On symmetric buildings (e.g. a 62 × 28.67 ft chamfered rectangle
+ * with four equal 14′4″ corner segments), independent per-vertex noise breaks
+ * symmetry — the report ends up showing 12/16 on one end and 12/15 on the
+ * other. This pass:
+ *
+ *   1. Projects to a local-tangent metric plane.
+ *   2. Douglas-Peucker simplifies (~1 ft tol) to drop noise micro-vertices.
+ *   3. Detects the principal axis from a length-weighted bearing histogram.
+ *   4. Bails (returns the input unchanged) unless ≥80 % of the perimeter
+ *      lies within ±8° of the principal axis or its perpendicular — protects
+ *      complex / curved / L-shaped roofs from over-aggressive snapping.
+ *   5. Snaps axis-aligned and perpendicular-aligned edges to exact directions
+ *      while leaving diagonals (chamfers, hips) untouched.
+ *   6. Averages symmetric parallel-edge groups whose totals differ by <10 %.
+ *   7. Distributes any closure residual across same-direction edges so the
+ *      polygon closes exactly.
+ *   8. Reprojects back to lat/lng.
+ */
+type LatLngElev = { lat: number; lng: number; elevation: number | null }
+
+function regularizePolygon(pts: LatLngElev[], centerLatDeg: number): LatLngElev[] {
+  if (pts.length < 4) return pts
+
+  const M_PER_DEG_LAT = 111_320
+  const cosLat = Math.cos(centerLatDeg * Math.PI / 180)
+  const M_PER_DEG_LNG = 111_320 * cosLat
+  const cLat = pts.reduce((s, p) => s + p.lat, 0) / pts.length
+  const cLng = pts.reduce((s, p) => s + p.lng, 0) / pts.length
+
+  // 1. Project to metres (XY in tangent plane).
+  let xy = pts.map(p => ({
+    x: (p.lng - cLng) * M_PER_DEG_LNG,
+    y: (p.lat - cLat) * M_PER_DEG_LAT,
+  }))
+
+  // Drop trailing duplicate (closed polygon → open ring) for processing.
+  const last = xy[xy.length - 1]
+  const first = xy[0]
+  if (xy.length > 3 && Math.hypot(last.x - first.x, last.y - first.y) < 0.01) {
+    xy = xy.slice(0, -1)
+  }
+
+  // 2. Douglas-Peucker simplify, tolerance 0.30 m (~1 ft).
+  xy = douglasPeucker(xy, 0.30)
+  if (xy.length < 4) return pts
+
+  // 3. Edge bearings, mod π (orientation-symmetric).
+  const n0 = xy.length
+  const edges0 = xy.map((a, i) => {
+    const b = xy[(i + 1) % n0]
+    const len = Math.hypot(b.x - a.x, b.y - a.y)
+    let theta = Math.atan2(b.y - a.y, b.x - a.x)
+    theta = ((theta % Math.PI) + Math.PI) % Math.PI
+    return { len, theta }
+  })
+
+  // Length-weighted modal bearing via 18-bin histogram (10° bins), refined
+  // with a length-weighted mean inside the winning bin.
+  const BINS = 18
+  const bins: { weight: number; sumLen: number; sumWeighted: number }[] =
+    Array.from({ length: BINS }, () => ({ weight: 0, sumLen: 0, sumWeighted: 0 }))
+  for (const e of edges0) {
+    const idx = Math.min(BINS - 1, Math.floor((e.theta / Math.PI) * BINS))
+    bins[idx].weight += e.len
+    bins[idx].sumLen += e.len
+    bins[idx].sumWeighted += e.theta * e.len
+  }
+  let bestBin = 0, bestW = -1
+  bins.forEach((b, i) => { if (b.weight > bestW) { bestW = b.weight; bestBin = i } })
+  const axis = bins[bestBin].sumLen > 0
+    ? bins[bestBin].sumWeighted / bins[bestBin].sumLen
+    : (bestBin + 0.5) * Math.PI / BINS
+
+  // 4. Rectilinearity guard.
+  const TOL_RAD = 8 * Math.PI / 180
+  const angularDelta = (a: number, b: number) => {
+    const d = Math.abs(((a - b) % Math.PI) + Math.PI) % Math.PI
+    return Math.min(d, Math.PI - d)
+  }
+  const perpAxis = (axis + Math.PI / 2) % Math.PI
+  const totalLen = edges0.reduce((s, e) => s + e.len, 0)
+  const alignedLen = edges0.reduce((s, e) => {
+    const d = Math.min(angularDelta(e.theta, axis), angularDelta(e.theta, perpAxis))
+    return s + (d <= TOL_RAD ? e.len : 0)
+  }, 0)
+  if (totalLen <= 0 || alignedLen / totalLen < 0.80) return pts
+
+  // 5. Right-angle snap. Walk vertex-by-vertex using direction × length so
+  //    snapped angles are exact, not approximate.
+  const u = { x: Math.cos(axis), y: Math.sin(axis) }
+  const v = { x: -u.y, y: u.x }
+  type SnappedEdge = { kind: 'axis' | 'perp' | 'diag'; sign: number; len: number; rawDx: number; rawDy: number }
+  const snappedEdges: SnappedEdge[] = edges0.map((e, i) => {
+    const a = xy[i], b = xy[(i + 1) % n0]
+    const dx = b.x - a.x, dy = b.y - a.y
+    const projU = dx * u.x + dy * u.y
+    const projV = dx * v.x + dy * v.y
+    const onAxis = angularDelta(e.theta, axis) <= TOL_RAD
+    const onPerp = angularDelta(e.theta, perpAxis) <= TOL_RAD
+    if (onAxis) return { kind: 'axis', sign: Math.sign(projU) || 1, len: Math.abs(projU), rawDx: dx, rawDy: dy }
+    if (onPerp) return { kind: 'perp', sign: Math.sign(projV) || 1, len: Math.abs(projV), rawDx: dx, rawDy: dy }
+    return { kind: 'diag', sign: 1, len: Math.hypot(dx, dy), rawDx: dx, rawDy: dy }
+  })
+
+  // 6. Symmetric-pair averaging on opposing axis/perp groups.
+  const avgPair = (kind: 'axis' | 'perp', signA: number, signB: number) => {
+    const a = snappedEdges.filter(e => e.kind === kind && e.sign === signA)
+    const b = snappedEdges.filter(e => e.kind === kind && e.sign === signB)
+    if (a.length === 0 || b.length === 0 || a.length !== b.length) return
+    const sumA = a.reduce((s, e) => s + e.len, 0)
+    const sumB = b.reduce((s, e) => s + e.len, 0)
+    if (sumA <= 0 || sumB <= 0) return
+    const ratio = Math.abs(sumA - sumB) / Math.max(sumA, sumB)
+    if (ratio > 0.10) return
+    const target = (sumA + sumB) / 2
+    const sa = target / sumA, sb = target / sumB
+    a.forEach(e => { e.len *= sa })
+    b.forEach(e => { e.len *= sb })
+  }
+  avgPair('axis', 1, -1)
+  avgPair('perp', 1, -1)
+
+  // 7. Walk to produce snapped vertices. Closure residual is distributed back
+  //    across axis/perp edges proportional to length.
+  const dirVec = (e: SnappedEdge) => {
+    if (e.kind === 'axis') return { x: u.x * e.sign * e.len, y: u.y * e.sign * e.len }
+    if (e.kind === 'perp') return { x: v.x * e.sign * e.len, y: v.y * e.sign * e.len }
+    return { x: e.rawDx, y: e.rawDy }
+  }
+  let sumDx = 0, sumDy = 0
+  for (const e of snappedEdges) { const d = dirVec(e); sumDx += d.x; sumDy += d.y }
+  const adjustableLenU = snappedEdges.filter(e => e.kind === 'axis').reduce((s, e) => s + e.len, 0)
+  const adjustableLenV = snappedEdges.filter(e => e.kind === 'perp').reduce((s, e) => s + e.len, 0)
+  // Project the residual onto the axis/perp basis; absorb each component into
+  // its corresponding edge group.
+  const residU = sumDx * u.x + sumDy * u.y
+  const residV = sumDx * v.x + sumDy * v.y
+  if (adjustableLenU > 0) {
+    snappedEdges.filter(e => e.kind === 'axis').forEach(e => {
+      e.len -= (residU / adjustableLenU) * e.len * e.sign
+      if (e.len < 0) e.len = 0
+    })
+  }
+  if (adjustableLenV > 0) {
+    snappedEdges.filter(e => e.kind === 'perp').forEach(e => {
+      e.len -= (residV / adjustableLenV) * e.len * e.sign
+      if (e.len < 0) e.len = 0
+    })
+  }
+
+  const out: { x: number; y: number }[] = [{ x: xy[0].x, y: xy[0].y }]
+  for (let i = 0; i < snappedEdges.length - 1; i++) {
+    const prev = out[out.length - 1]
+    const d = dirVec(snappedEdges[i])
+    out.push({ x: prev.x + d.x, y: prev.y + d.y })
+  }
+
+  // 8. Reproject to lat/lng (closed polygon — append first point at end).
+  const reproj: LatLngElev[] = out.map((p, i) => ({
+    lat: cLat + p.y / M_PER_DEG_LAT,
+    lng: cLng + p.x / M_PER_DEG_LNG,
+    elevation: pts[Math.min(i, pts.length - 1)].elevation,
+  }))
+  reproj.push({ ...reproj[0] })
+  return reproj
+}
+
+/** Iterative Douglas-Peucker on an open polyline of metres-projected points. */
+function douglasPeucker(points: { x: number; y: number }[], tolerance: number): { x: number; y: number }[] {
+  const n = points.length
+  if (n < 3) return points.slice()
+  const keep = new Uint8Array(n)
+  keep[0] = 1; keep[n - 1] = 1
+  const stack: [number, number][] = [[0, n - 1]]
+  while (stack.length) {
+    const [i0, i1] = stack.pop()!
+    const a = points[i0], b = points[i1]
+    const dx = b.x - a.x, dy = b.y - a.y
+    const len = Math.hypot(dx, dy) || 1
+    let maxD = -1, maxI = -1
+    for (let i = i0 + 1; i < i1; i++) {
+      const p = points[i]
+      const d = Math.abs(dy * p.x - dx * p.y + b.x * a.y - b.y * a.x) / len
+      if (d > maxD) { maxD = d; maxI = i }
+    }
+    if (maxD > tolerance && maxI !== -1) {
+      keep[maxI] = 1
+      stack.push([i0, maxI], [maxI, i1])
+    }
+  }
+  const out: { x: number; y: number }[] = []
+  for (let i = 0; i < n; i++) if (keep[i]) out.push(points[i])
+  return out
 }
