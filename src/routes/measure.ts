@@ -106,13 +106,17 @@ measureRoutes.post('/auto-detect', async (c) => {
     }
     const payload = geminiOutlineToTracePayload(seg, lat, lng, zoom, imageWidth, imageHeight, {})
 
+    const eaves = (payload.eaves_outline || []).map(p => ({ lat: p.lat, lng: p.lng }))
+    if (eaves.length < 3) {
+      return c.json({ error: 'no_outline_detected' }, 422)
+    }
+
     return c.json({
-      eaves: payload.eaves,
-      eaves_sections: payload.eaves_sections || [],
+      eaves,
       ridges: payload.ridges || [],
       hips: payload.hips || [],
       valleys: payload.valleys || [],
-      pitch_rise: payload.pitch_rise || null,
+      pitch_rise: payload.default_pitch ?? null,
     })
   } catch (err: any) {
     console.warn('[measure/auto-detect]', err?.message)
