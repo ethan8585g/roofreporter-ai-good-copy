@@ -1142,6 +1142,12 @@ adminRoutes.get('/superadmin/users', async (c) => {
     const users = await c.env.DB.prepare(`
       SELECT
         c.id, c.email, c.name, c.phone, c.company_name,
+        c.company_size, c.primary_use,
+        c.address, c.city, c.province, c.postal_code,
+        c.email_verified,
+        c.referral_code, c.referred_by,
+        ref.name as referred_by_name, ref.email as referred_by_email,
+        c.lead_source, c.lead_utm_source,
         c.google_id, c.google_avatar,
         c.is_active, c.last_login, c.created_at,
         c.free_trial_used, c.free_trial_total,
@@ -1161,6 +1167,7 @@ adminRoutes.get('/superadmin/users', async (c) => {
       FROM customers c
       LEFT JOIN team_members tm ON tm.member_customer_id = c.id AND tm.status = 'active'
       LEFT JOIN customers owner ON owner.id = tm.owner_id
+      LEFT JOIN customers ref ON ref.id = c.referred_by
       ORDER BY c.created_at DESC
     `).all()
 
@@ -1176,6 +1183,19 @@ adminRoutes.get('/superadmin/users', async (c) => {
           a.company_name as name,
           NULL as phone,
           a.company_name,
+          NULL as company_size,
+          NULL as primary_use,
+          NULL as address,
+          NULL as city,
+          NULL as province,
+          NULL as postal_code,
+          NULL as email_verified,
+          NULL as referral_code,
+          NULL as referred_by,
+          NULL as referred_by_name,
+          NULL as referred_by_email,
+          NULL as lead_source,
+          NULL as lead_utm_source,
           NULL as google_id,
           NULL as google_avatar,
           CASE WHEN a.status = 'active' THEN 1 ELSE 0 END as is_active,

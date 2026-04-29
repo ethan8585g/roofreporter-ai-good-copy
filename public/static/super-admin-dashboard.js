@@ -946,6 +946,7 @@ function renderUsersView() {
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">User</th>
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Company</th>
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Contact</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Signup Details</th>
               <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Auth</th>
               <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Free Trial</th>
               <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Credits</th>
@@ -958,7 +959,7 @@ function renderUsersView() {
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-50">
-            ${users.length === 0 ? '<tr><td colspan="12" class="px-4 py-8 text-center text-gray-400">No registered users yet</td></tr>' : ''}
+            ${users.length === 0 ? '<tr><td colspan="13" class="px-4 py-8 text-center text-gray-400">No registered users yet</td></tr>' : ''}
             ${users.map(u => `
               <tr class="hover:bg-teal-50/30 transition-colors">
                 <td class="px-4 py-3">
@@ -971,7 +972,18 @@ function renderUsersView() {
                   </div>
                 </td>
                 <td class="px-4 py-3 text-sm text-gray-600">${u.company_name || '-'}</td>
-                <td class="px-4 py-3 text-xs text-gray-500">${u.phone || '-'}</td>
+                <td class="px-4 py-3 text-xs text-gray-500">
+                  <div>${u.phone || '<span class="text-gray-300">no phone</span>'}</div>
+                  ${[u.city, u.province].filter(Boolean).join(', ') ? `<div class="text-[10px] text-gray-400">${[u.address, u.city, u.province, u.postal_code].filter(Boolean).join(', ')}</div>` : ''}
+                </td>
+                <td class="px-4 py-3 text-xs text-gray-600">
+                  ${u.company_size ? `<div><span class="text-gray-400">Size:</span> <span class="font-medium">${u.company_size}</span></div>` : ''}
+                  ${u.primary_use ? `<div><span class="text-gray-400">Use:</span> <span class="font-medium">${u.primary_use}</span></div>` : ''}
+                  ${u.email_verified ? '<div class="text-[10px] text-green-600"><i class="fas fa-check-circle"></i> Email verified</div>' : (u.user_type !== 'api_account' ? '<div class="text-[10px] text-amber-600"><i class="fas fa-exclamation-circle"></i> Email unverified</div>' : '')}
+                  ${u.referred_by_name || u.referred_by_email ? `<div class="text-[10px] text-purple-600"><i class="fas fa-user-friends"></i> Referred by ${u.referred_by_name || u.referred_by_email}</div>` : ''}
+                  ${u.lead_source ? `<div class="text-[10px] text-blue-600"><i class="fas fa-bullseye"></i> ${u.lead_source}${u.lead_utm_source ? ' · ' + u.lead_utm_source : ''}</div>` : ''}
+                  ${!u.company_size && !u.primary_use && !u.referred_by_name && !u.referred_by_email && !u.lead_source ? '<span class="text-gray-300">—</span>' : ''}
+                </td>
                 <td class="px-4 py-3 text-center">
                   ${u.google_id ? '<span class="text-xs text-red-500"><i class="fab fa-google"></i></span>' : '<span class="text-xs text-gray-400"><i class="fas fa-envelope"></i></span>'}
                 </td>
