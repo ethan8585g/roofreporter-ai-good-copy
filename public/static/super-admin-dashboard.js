@@ -10783,112 +10783,151 @@ function hubTimeAgo(dateStr) {
 
 function renderInboxView() {
   var d = SA.data.inbox || {};
-  var conversations = d.conversations || [];
-  var unread = d.unread || {};
-  var totalUnread = d.total_unread || 0;
+  var summary = d.summary || { active_trials: 0, paid_subscribers: 0, active_sip_trunks: 0, total_call_minutes_30d: 0 };
+  var trials = d.trials || [];
+  var trunks = d.sip_trunks || [];
+  var callVolume = d.call_volume_by_customer || [];
 
-  var channelFilters = [
-    { id: 'all', label: 'All', icon: 'fa-inbox', count: totalUnread },
-    { id: 'web_chat', label: 'Web Chat', icon: 'fa-comments', count: unread.web_chat || 0 },
-    { id: 'voice', label: 'Calls', icon: 'fa-phone-alt', count: unread.voice || 0 },
-    { id: 'sms', label: 'Messages', icon: 'fa-sms', count: unread.sms || 0 },
-    { id: 'voicemail', label: 'Callbacks', icon: 'fa-voicemail', count: unread.voicemail || 0 },
-    { id: 'form', label: 'Leads', icon: 'fa-wpforms', count: unread.form || 0 },
-    { id: 'cold_call', label: 'Cold Calls', icon: 'fa-phone-volume', count: 0 },
-    { id: 'job_message', label: 'Job Messages', icon: 'fa-hard-hat', count: 0 }
-  ];
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function fmtDay(s) { return s ? new Date(String(s).replace(' ', 'T') + 'Z').toLocaleDateString('en-CA') : '-'; }
+  function fmtDayTime(s) { return s ? new Date(String(s).replace(' ', 'T') + 'Z').toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' }) : '-'; }
 
-  var filtersHtml = '<div class="flex items-center gap-2 flex-wrap">';
-  channelFilters.forEach(function(f) {
-    var active = SA.inboxChannel === f.id;
-    filtersHtml += '<button onclick="inboxFilterChannel(\'' + f.id + '\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ' +
-      (active ? 'bg-slate-800 text-white shadow-sm' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200') + '">' +
-      '<i class="fas ' + f.icon + '"></i>' + f.label +
-      (f.count > 0 ? ' <span class="bg-' + (active ? 'white/20' : 'gray-100') + ' px-1.5 py-0.5 rounded text-[10px] font-bold">' + f.count + '</span>' : '') +
-      '</button>';
-  });
-  filtersHtml += '</div>';
-
-  var searchHtml = '<div class="relative">' +
-    '<input type="text" id="inbox-search" placeholder="Search conversations..." value="' + (SA.inboxSearch || '') + '" ' +
-    'onkeydown="if(event.key===\'Enter\')inboxDoSearch()" ' +
-    'class="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500">' +
-    '<i class="fas fa-search absolute left-3 top-2.5 text-gray-400 text-sm"></i>' +
+  // ── KPI cards ────────────────────────────────────────────────
+  var cardsHtml =
+    '<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">' +
+      samc('Active Trials', summary.active_trials || 0, 'fa-hourglass-half', 'blue', 'free 1-month AI Secretary trial') +
+      samc('Paid Subscribers', summary.paid_subscribers || 0, 'fa-check-circle', 'green', 'converted to paid plan') +
+      samc('Active SIP Trunks', summary.active_sip_trunks || 0, 'fa-network-wired', 'purple', 'LiveKit/Telnyx trunks online') +
+      samc('Call Minutes (30d)', (summary.total_call_minutes_30d || 0).toLocaleString(), 'fa-phone-alt', 'orange', 'total minutes across all customers') +
     '</div>';
 
-  var listHtml = '';
-  if (conversations.length === 0) {
-    listHtml = '<div class="text-center py-16 text-gray-400">' +
-      '<i class="fas fa-inbox text-4xl mb-3"></i>' +
-      '<p class="font-medium">No conversations found</p>' +
-      '<p class="text-xs mt-1">Try a different filter or search term</p>' +
-      '</div>';
+  // ── Trials table ─────────────────────────────────────────────
+  var trialRows = '';
+  if (trials.length === 0) {
+    trialRows = '<tr><td colspan="9" class="text-center py-6 text-gray-400 text-xs">No customers on a free trial yet</td></tr>';
   } else {
-    listHtml = '<div class="divide-y divide-gray-100">';
-    conversations.forEach(function(conv) {
-      var channelIcon = { web_chat: 'fa-comments text-blue-500', voice: 'fa-phone-alt text-green-500', sms: 'fa-sms text-purple-500', voicemail: 'fa-voicemail text-orange-500', form: 'fa-wpforms text-teal-500', cold_call: 'fa-phone-volume text-red-500', job_message: 'fa-hard-hat text-yellow-600' };
-      var channelLabel = { web_chat: 'Web Chat', voice: 'Phone Call', sms: 'Message', voicemail: 'Callback Request', form: 'Lead Form', cold_call: 'Cold Call', job_message: 'Job Message' };
-      var icon = channelIcon[conv.channel] || 'fa-comment text-gray-400';
-      var label = channelLabel[conv.channel] || conv.channel;
-      var name = conv.contact_name || conv.contact_email || conv.contact_phone || 'Unknown';
-      var preview = (conv.preview || '').substring(0, 120);
-      var time = hubTimeAgo(conv.last_activity_at || conv.created_at);
-      var isNew = conv.status === 'new' || conv.status === 'active';
-      var statusDot = isNew ? '<span class="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></span>' : '';
-      var urgencyBadge = conv.urgency === 'urgent' ? '<span class="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-bold">URGENT</span>' : '';
-      var durationStr = conv.call_duration_seconds ? '<span class="text-[10px] text-gray-400"><i class="fas fa-clock mr-0.5"></i>' + fmtSeconds(conv.call_duration_seconds) + '</span>' : '';
-      var companyStr = conv.customer_company ? '<span class="text-[10px] text-gray-400"><i class="fas fa-building mr-0.5"></i>' + conv.customer_company + '</span>' : '';
-
-      listHtml += '<div class="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors" onclick="inboxOpenConversation(\'' + conv.source_id + '\', \'' + conv.channel + '\')">' +
-        '<div class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5"><i class="fas ' + icon + ' text-sm"></i></div>' +
-        '<div class="flex-1 min-w-0">' +
-          '<div class="flex items-center gap-2">' +
-            statusDot +
-            '<span class="font-semibold text-sm text-gray-900 truncate">' + name + '</span>' +
-            '<span class="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded font-medium">' + label + '</span>' +
-            urgencyBadge + durationStr + companyStr +
-            '<span class="ml-auto text-[10px] text-gray-400 flex-shrink-0">' + time + '</span>' +
-          '</div>' +
-          '<p class="text-xs text-gray-500 mt-0.5 truncate">' + preview + '</p>' +
-          '<div class="flex items-center gap-2 mt-1">' +
-            (conv.contact_email ? '<span class="text-[10px] text-gray-400"><i class="fas fa-envelope mr-0.5"></i>' + conv.contact_email + '</span>' : '') +
-            (conv.contact_phone ? '<span class="text-[10px] text-gray-400"><i class="fas fa-phone mr-0.5"></i>' + conv.contact_phone + '</span>' : '') +
-          '</div>' +
-        '</div>' +
-      '</div>';
+    trials.forEach(function(t) {
+      var statusColor = (t.status === 'trialing') ? 'bg-blue-100 text-blue-700'
+        : (t.status === 'active') ? 'bg-green-100 text-green-700'
+        : (t.status === 'cancelled') ? 'bg-gray-100 text-gray-600'
+        : (t.status === 'past_due') ? 'bg-red-100 text-red-700'
+        : 'bg-gray-100 text-gray-600';
+      var daysLeft = (t.days_remaining > 0) ? (t.days_remaining + 'd') : (t.days_remaining === 0 ? 'today' : 'expired');
+      var daysColor = (t.days_remaining <= 3) ? 'text-red-600 font-bold' : (t.days_remaining <= 7 ? 'text-orange-600 font-semibold' : 'text-gray-700');
+      trialRows += '<tr class="border-b border-gray-100">' +
+        '<td class="py-2 px-3 text-xs font-semibold text-gray-900">' + esc(t.customer_name || '—') + '</td>' +
+        '<td class="py-2 px-3 text-xs text-gray-600">' + esc(t.company_name || '—') + '</td>' +
+        '<td class="py-2 px-3 text-xs text-gray-600">' + esc(t.customer_email || '—') + '</td>' +
+        '<td class="py-2 px-3 text-xs text-gray-600">' + fmtDay(t.trial_started_at) + '</td>' +
+        '<td class="py-2 px-3 text-xs text-gray-600">' + fmtDay(t.trial_ends_at) + '</td>' +
+        '<td class="py-2 px-3 text-xs ' + daysColor + '">' + daysLeft + '</td>' +
+        '<td class="py-2 px-3 text-xs text-gray-700 text-right">' + (t.calls_count || 0) + '</td>' +
+        '<td class="py-2 px-3 text-xs text-gray-700 text-right">' + (t.minutes_used || 0) + '</td>' +
+        '<td class="py-2 px-3 text-xs"><span class="px-2 py-0.5 rounded ' + statusColor + ' font-semibold uppercase tracking-wide text-[10px]">' + esc(t.status || '—') + '</span></td>' +
+      '</tr>';
     });
-    listHtml += '</div>';
   }
-
-  // Web chat funnel (last 7 days) — impressions → opens → conversations
-  var fn = d.web_chat_funnel || { impressions_7d: 0, opens_7d: 0, conversations_7d: 0, conversion_rate: 0 };
-  var openRate = fn.impressions_7d > 0 ? Math.round((fn.opens_7d / fn.impressions_7d) * 1000) / 10 : 0;
-  var msgRate = fn.opens_7d > 0 ? Math.round((fn.conversations_7d / fn.opens_7d) * 1000) / 10 : 0;
-  var funnelHtml =
-    '<div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-4">' +
-      '<div class="flex items-center justify-between mb-3">' +
-        '<div>' +
-          '<h3 class="text-sm font-bold text-gray-900"><i class="fas fa-chart-line mr-1.5 text-blue-500"></i>Web Chat Funnel <span class="text-[10px] text-gray-400 font-normal">(last 7 days)</span></h3>' +
-          '<p class="text-[11px] text-gray-500 mt-0.5">Rover widget engagement across the site</p>' +
-        '</div>' +
-        '<span class="text-[11px] text-gray-500">Overall conversion: <strong class="text-gray-900">' + fn.conversion_rate + '%</strong></span>' +
+  var trialsTable =
+    '<div class="bg-white rounded-xl border border-gray-200 shadow-sm mb-5">' +
+      '<div class="p-4 border-b border-gray-100">' +
+        '<h3 class="text-sm font-bold text-gray-900"><i class="fas fa-hourglass-half mr-1.5 text-blue-500"></i>Customers on Free Trial</h3>' +
+        '<p class="text-[11px] text-gray-500 mt-0.5">1-month AI Secretary trial — usage and time remaining</p>' +
       '</div>' +
-      '<div class="grid grid-cols-3 gap-3">' +
-        '<div class="p-3 rounded-lg bg-blue-50 border border-blue-100">' +
-          '<div class="text-[10px] uppercase tracking-wide text-blue-700 font-bold">Impressions</div>' +
-          '<div class="text-2xl font-black text-blue-900 mt-0.5">' + (fn.impressions_7d || 0).toLocaleString() + '</div>' +
-          '<div class="text-[10px] text-blue-700 mt-0.5">visitors who saw the widget</div>' +
-        '</div>' +
-        '<div class="p-3 rounded-lg bg-indigo-50 border border-indigo-100">' +
-          '<div class="text-[10px] uppercase tracking-wide text-indigo-700 font-bold">Opens <span class="float-right">' + openRate + '%</span></div>' +
-          '<div class="text-2xl font-black text-indigo-900 mt-0.5">' + (fn.opens_7d || 0).toLocaleString() + '</div>' +
-          '<div class="text-[10px] text-indigo-700 mt-0.5">clicked the chat bubble</div>' +
-        '</div>' +
-        '<div class="p-3 rounded-lg bg-emerald-50 border border-emerald-100">' +
-          '<div class="text-[10px] uppercase tracking-wide text-emerald-700 font-bold">Conversations <span class="float-right">' + msgRate + '%</span></div>' +
-          '<div class="text-2xl font-black text-emerald-900 mt-0.5">' + (fn.conversations_7d || 0).toLocaleString() + '</div>' +
-          '<div class="text-[10px] text-emerald-700 mt-0.5">sent at least one message</div>' +
-        '</div>' +
+      '<div class="overflow-x-auto">' +
+        '<table class="w-full">' +
+          '<thead><tr class="bg-gray-50 border-b border-gray-200">' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Customer</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Company</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Email</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Trial Started</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Trial Ends</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Days Left</th>' +
+            '<th class="py-2 px-3 text-right text-[10px] font-bold uppercase tracking-wide text-gray-500">Calls</th>' +
+            '<th class="py-2 px-3 text-right text-[10px] font-bold uppercase tracking-wide text-gray-500">Minutes</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Status</th>' +
+          '</tr></thead>' +
+          '<tbody>' + trialRows + '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</div>';
+
+  // ── SIP trunk table ──────────────────────────────────────────
+  var trunkRows = '';
+  if (trunks.length === 0) {
+    trunkRows = '<tr><td colspan="6" class="text-center py-6 text-gray-400 text-xs">No SIP trunks configured</td></tr>';
+  } else {
+    trunks.forEach(function(t) {
+      var statusColor = (t.status === 'active') ? 'bg-green-100 text-green-700'
+        : (t.status === 'disabled') ? 'bg-gray-100 text-gray-600'
+        : (t.status === 'deleted') ? 'bg-red-100 text-red-700'
+        : 'bg-gray-100 text-gray-600';
+      var typeColor = (t.trunk_type === 'inbound') ? 'bg-blue-100 text-blue-700' : 'bg-indigo-100 text-indigo-700';
+      var assignee = t.assigned_customer_name
+        ? esc(t.assigned_customer_name) + (t.assigned_company_name ? ' <span class="text-gray-400">(' + esc(t.assigned_company_name) + ')</span>' : '')
+        : '<span class="text-gray-400 italic">unassigned</span>';
+      trunkRows += '<tr class="border-b border-gray-100">' +
+        '<td class="py-2 px-3 text-xs font-mono text-gray-700">' + esc(t.trunk_id || '—') + '</td>' +
+        '<td class="py-2 px-3 text-xs"><span class="px-2 py-0.5 rounded ' + typeColor + ' font-semibold uppercase tracking-wide text-[10px]">' + esc(t.trunk_type || '—') + '</span></td>' +
+        '<td class="py-2 px-3 text-xs text-gray-700">' + esc(t.phone_number || '—') + '</td>' +
+        '<td class="py-2 px-3 text-xs"><span class="px-2 py-0.5 rounded ' + statusColor + ' font-semibold uppercase tracking-wide text-[10px]">' + esc(t.status || '—') + '</span></td>' +
+        '<td class="py-2 px-3 text-xs text-gray-700">' + assignee + '</td>' +
+        '<td class="py-2 px-3 text-xs text-gray-500">' + fmtDayTime(t.created_at) + '</td>' +
+      '</tr>';
+    });
+  }
+  var trunksTable =
+    '<div class="bg-white rounded-xl border border-gray-200 shadow-sm mb-5">' +
+      '<div class="p-4 border-b border-gray-100">' +
+        '<h3 class="text-sm font-bold text-gray-900"><i class="fas fa-network-wired mr-1.5 text-purple-500"></i>SIP Trunk Connections</h3>' +
+        '<p class="text-[11px] text-gray-500 mt-0.5">LiveKit/Telnyx trunks and their assigned customer</p>' +
+      '</div>' +
+      '<div class="overflow-x-auto">' +
+        '<table class="w-full">' +
+          '<thead><tr class="bg-gray-50 border-b border-gray-200">' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Trunk ID</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Type</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Phone Number</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Status</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Assigned To</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Created</th>' +
+          '</tr></thead>' +
+          '<tbody>' + trunkRows + '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</div>';
+
+  // ── Call volume table ────────────────────────────────────────
+  var volRows = '';
+  if (callVolume.length === 0) {
+    volRows = '<tr><td colspan="5" class="text-center py-6 text-gray-400 text-xs">No call activity in the last 30 days</td></tr>';
+  } else {
+    callVolume.forEach(function(v) {
+      volRows += '<tr class="border-b border-gray-100">' +
+        '<td class="py-2 px-3 text-xs font-semibold text-gray-900">' + esc(v.customer_name || '—') + '</td>' +
+        '<td class="py-2 px-3 text-xs text-gray-600">' + esc(v.company_name || '—') + '</td>' +
+        '<td class="py-2 px-3 text-xs text-gray-700 text-right">' + (v.calls_30d || 0) + '</td>' +
+        '<td class="py-2 px-3 text-xs text-gray-700 text-right">' + (v.minutes_30d || 0) + '</td>' +
+        '<td class="py-2 px-3 text-xs text-gray-500">' + fmtDayTime(v.last_call_at) + '</td>' +
+      '</tr>';
+    });
+  }
+  var volTable =
+    '<div class="bg-white rounded-xl border border-gray-200 shadow-sm">' +
+      '<div class="p-4 border-b border-gray-100">' +
+        '<h3 class="text-sm font-bold text-gray-900"><i class="fas fa-phone-alt mr-1.5 text-orange-500"></i>Call Volume by Customer <span class="text-[10px] text-gray-400 font-normal">(last 30 days)</span></h3>' +
+        '<p class="text-[11px] text-gray-500 mt-0.5">Per-user AI Secretary call usage</p>' +
+      '</div>' +
+      '<div class="overflow-x-auto">' +
+        '<table class="w-full">' +
+          '<thead><tr class="bg-gray-50 border-b border-gray-200">' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Customer</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Company</th>' +
+            '<th class="py-2 px-3 text-right text-[10px] font-bold uppercase tracking-wide text-gray-500">Calls</th>' +
+            '<th class="py-2 px-3 text-right text-[10px] font-bold uppercase tracking-wide text-gray-500">Minutes</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Last Call</th>' +
+          '</tr></thead>' +
+          '<tbody>' + volRows + '</tbody>' +
+        '</table>' +
       '</div>' +
     '</div>';
 
@@ -10897,30 +10936,9 @@ function renderInboxView() {
       '<h2 class="text-2xl font-black text-gray-900"><i class="fas fa-inbox mr-2 text-slate-600"></i>Inbox</h2>' +
       '<button onclick="saSetView(\'inbox\')" class="px-3 py-1.5 text-xs font-medium bg-white border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>' +
     '</div>' +
-    '<p class="text-sm text-gray-500">All conversations across web chat, calls, messages, callbacks, and leads</p>' +
+    '<p class="text-sm text-gray-500">AI Secretary platform metrics — trials, SIP trunks, and per-customer call usage</p>' +
   '</div>' +
-  funnelHtml +
-  // Unread summary cards
-  '<div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">' +
-    samc('Active Chats', unread.web_chat || 0, 'fa-comments', 'blue') +
-    samc('Today\'s Calls', unread.voice || 0, 'fa-phone-alt', 'green') +
-    samc('Unread Messages', unread.sms || 0, 'fa-sms', 'purple') +
-    samc('Pending Callbacks', unread.voicemail || 0, 'fa-voicemail', 'orange') +
-    samc('Recent Leads (7d)', unread.form || 0, 'fa-wpforms', 'teal') +
-  '</div>' +
-  // Filters + Search
-  '<div class="bg-white rounded-xl border border-gray-200 shadow-sm">' +
-    '<div class="p-4 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">' +
-      filtersHtml +
-      '<div class="w-64">' + searchHtml + '</div>' +
-    '</div>' +
-    // Conversation list
-    listHtml +
-    // Pagination info
-    '<div class="p-3 border-t border-gray-100 text-xs text-gray-400 text-center">' +
-      'Showing ' + conversations.length + ' of ' + (d.total || 0) + ' conversations' +
-    '</div>' +
-  '</div>';
+  cardsHtml + trialsTable + trunksTable + volTable;
 }
 
 function inboxFilterChannel(channel) {

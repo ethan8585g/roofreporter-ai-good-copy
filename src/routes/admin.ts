@@ -1568,372 +1568,184 @@ adminRoutes.get('/superadmin/trial-expiry', async (c) => {
 })
 
 // ============================================================
-// SUPERADMIN: UNIFIED INBOX — Aggregates rover chat, secretary calls/messages/callbacks, lead captures
+// SUPERADMIN: AI SECRETARY PLATFORM METRICS
+// Trial signups, SIP trunk connections, per-customer call minutes.
+// Replaces the old per-account inbox aggregator (web chat / leads /
+// callbacks) which belonged on the customer dashboard, not super admin.
 // ============================================================
 
-// GET /superadmin/inbox — Unified conversations across all channels
+// GET /superadmin/inbox — AI Secretary platform-wide metrics for super admin
 adminRoutes.get('/superadmin/inbox', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   try {
-    const channel = c.req.query('channel') || ''  // web_chat, voice, sms, voicemail, form, all
-    const limit = parseInt(c.req.query('limit') || '50')
-    const offset = parseInt(c.req.query('offset') || '0')
-    const search = c.req.query('search') || ''
-
-    const conversations: any[] = []
-
-    // 1. Rover web chat conversations
-    if (!channel || channel === 'all' || channel === 'web_chat') {
-      const roverQuery = search
-        ? `SELECT id, visitor_name as contact_name, visitor_email as contact_email, visitor_phone as contact_phone,
-             'web_chat' as channel, status, lead_status, summary as preview,
-             last_message_at as last_activity_at, first_message_at as created_at,
-             (SELECT COUNT(*) FROM rover_messages WHERE conversation_id = rc.id) as message_count
-           FROM rover_conversations rc
-           WHERE visitor_name LIKE ? OR visitor_email LIKE ? OR summary LIKE ?
-           ORDER BY last_message_at DESC LIMIT 100`
-        : `SELECT id, visitor_name as contact_name, visitor_email as contact_email, visitor_phone as contact_phone,
-             'web_chat' as channel, status, lead_status, summary as preview,
-             last_message_at as last_activity_at, first_message_at as created_at,
-             (SELECT COUNT(*) FROM rover_messages WHERE conversation_id = rc.id) as message_count
-           FROM rover_conversations rc
-           ORDER BY last_message_at DESC LIMIT 100`
-      const roverRes = search
-        ? await c.env.DB.prepare(roverQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`).all()
-        : await c.env.DB.prepare(roverQuery).all()
-      for (const r of (roverRes.results || [])) {
-        conversations.push({ ...r, source_id: `rover_${r.id}` })
-      }
+    // Summary KPIs
+    const summary = {
+      active_trials: 0,
+      paid_subscribers: 0,
+      active_sip_trunks: 0,
+      total_call_minutes_30d: 0,
     }
 
-    // 2. Secretary call logs
-    if (!channel || channel === 'all' || channel === 'voice') {
-      const callQuery = search
-        ? `SELECT cl.id, cl.caller_name as contact_name, '' as contact_email, cl.caller_phone as contact_phone,
-             'voice' as channel, cl.call_outcome as status, '' as lead_status,
-             cl.call_summary as preview, cl.created_at as last_activity_at, cl.created_at,
-             1 as message_count, cl.call_duration_seconds, c.company_name as customer_company
+    try {
+      const r = await c.env.DB.prepare(
+        `SELECT COUNT(*) as c FROM secretary_subscriptions
+           WHERE status = 'trialing'
+             AND (trial_ends_at IS NULL OR trial_ends_at > datetime('now'))`
+      ).first<any>()
+      summary.active_trials = r?.c || 0
+    } catch {}
+
+    try {
+      const r = await c.env.DB.prepare(
+        `SELECT COUNT(*) as c FROM secretary_subscriptions WHERE status = 'active'`
+      ).first<any>()
+      summary.paid_subscribers = r?.c || 0
+    } catch {}
+
+    try {
+      const r = await c.env.DB.prepare(
+        `SELECT COUNT(*) as c FROM sip_trunks WHERE status = 'active'`
+      ).first<any>()
+      summary.active_sip_trunks = r?.c || 0
+    } catch {}
+
+    try {
+      const r = await c.env.DB.prepare(
+        `SELECT COALESCE(SUM(call_duration_seconds), 0) as s
+           FROM secretary_call_logs
+           WHERE created_at >= datetime('now', '-30 days')`
+      ).first<any>()
+      summary.total_call_minutes_30d = Math.round((r?.s || 0) / 60)
+    } catch {}
+
+    // Trials list — every customer currently in or recently in a trial,
+    // joined to customer info, with trial usage stats.
+    let trials: any[] = []
+    try {
+      const res = await c.env.DB.prepare(
+        `SELECT s.customer_id,
+                c.name        as customer_name,
+                c.email       as customer_email,
+                c.company_name as company_name,
+                s.trial_started_at,
+                s.trial_ends_at,
+                s.status,
+                CAST(
+                  (julianday(COALESCE(s.trial_ends_at, datetime('now'))) - julianday(datetime('now')))
+                  AS INTEGER
+                ) as days_remaining,
+                (SELECT COUNT(*) FROM secretary_call_logs cl
+                   WHERE cl.customer_id = s.customer_id
+                     AND cl.created_at >= s.trial_started_at) as calls_count,
+                (SELECT COALESCE(SUM(call_duration_seconds), 0) FROM secretary_call_logs cl
+                   WHERE cl.customer_id = s.customer_id
+                     AND cl.created_at >= s.trial_started_at) as seconds_used
+           FROM secretary_subscriptions s
+           LEFT JOIN customers c ON c.id = s.customer_id
+           WHERE s.trial_started_at IS NOT NULL
+           ORDER BY s.trial_started_at DESC
+           LIMIT 200`
+      ).all()
+      trials = (res.results || []).map((r: any) => ({
+        customer_id: r.customer_id,
+        customer_name: r.customer_name || '',
+        customer_email: r.customer_email || '',
+        company_name: r.company_name || '',
+        trial_started_at: r.trial_started_at,
+        trial_ends_at: r.trial_ends_at,
+        days_remaining: typeof r.days_remaining === 'number' ? r.days_remaining : 0,
+        status: r.status,
+        calls_count: r.calls_count || 0,
+        minutes_used: Math.round((r.seconds_used || 0) / 60),
+      }))
+    } catch {}
+
+    // SIP trunk connections — joined to assigned customer (if any) via the
+    // phone pool. Trunks may be unassigned, in which case customer is null.
+    let sipTrunks: any[] = []
+    try {
+      const res = await c.env.DB.prepare(
+        `SELECT t.trunk_id,
+                t.trunk_type,
+                t.phone_number,
+                t.status,
+                t.created_at,
+                p.assigned_to_customer_id as assigned_customer_id,
+                c.name        as assigned_customer_name,
+                c.company_name as assigned_company_name
+           FROM sip_trunks t
+           LEFT JOIN secretary_phone_pool p ON p.sip_trunk_id = t.trunk_id
+           LEFT JOIN customers c ON c.id = p.assigned_to_customer_id
+           ORDER BY t.created_at DESC
+           LIMIT 200`
+      ).all()
+      sipTrunks = (res.results || []).map((r: any) => ({
+        trunk_id: r.trunk_id,
+        trunk_type: r.trunk_type,
+        phone_number: r.phone_number || '',
+        status: r.status,
+        created_at: r.created_at,
+        assigned_customer_id: r.assigned_customer_id || null,
+        assigned_customer_name: r.assigned_customer_name || '',
+        assigned_company_name: r.assigned_company_name || '',
+      }))
+    } catch {}
+
+    // Call volume by customer (last 30 days)
+    let callVolume: any[] = []
+    try {
+      const res = await c.env.DB.prepare(
+        `SELECT cl.customer_id,
+                c.name        as customer_name,
+                c.company_name as company_name,
+                COUNT(*)      as calls_30d,
+                COALESCE(SUM(cl.call_duration_seconds), 0) as seconds_30d,
+                MAX(cl.created_at) as last_call_at
            FROM secretary_call_logs cl
            LEFT JOIN customers c ON c.id = cl.customer_id
-           WHERE cl.caller_name LIKE ? OR cl.caller_phone LIKE ? OR cl.call_summary LIKE ?
-           ORDER BY cl.created_at DESC LIMIT 100`
-        : `SELECT cl.id, cl.caller_name as contact_name, '' as contact_email, cl.caller_phone as contact_phone,
-             'voice' as channel, cl.call_outcome as status, '' as lead_status,
-             cl.call_summary as preview, cl.created_at as last_activity_at, cl.created_at,
-             1 as message_count, cl.call_duration_seconds, c.company_name as customer_company
-           FROM secretary_call_logs cl
-           LEFT JOIN customers c ON c.id = cl.customer_id
-           ORDER BY cl.created_at DESC LIMIT 100`
-      const callRes = search
-        ? await c.env.DB.prepare(callQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`).all()
-        : await c.env.DB.prepare(callQuery).all()
-      for (const r of (callRes.results || [])) {
-        conversations.push({ ...r, source_id: `call_${r.id}` })
-      }
-    }
-
-    // 3. Secretary messages (answering mode)
-    if (!channel || channel === 'all' || channel === 'sms') {
-      const msgQuery = search
-        ? `SELECT sm.id, sm.caller_name as contact_name, '' as contact_email, sm.caller_phone as contact_phone,
-             'sms' as channel, CASE WHEN sm.is_read = 1 THEN 'read' ELSE 'new' END as status, '' as lead_status,
-             sm.message_text as preview, sm.created_at as last_activity_at, sm.created_at,
-             1 as message_count, sm.urgency, c.company_name as customer_company
-           FROM secretary_messages sm
-           LEFT JOIN customers c ON c.id = sm.customer_id
-           WHERE sm.caller_name LIKE ? OR sm.caller_phone LIKE ? OR sm.message_text LIKE ?
-           ORDER BY sm.created_at DESC LIMIT 100`
-        : `SELECT sm.id, sm.caller_name as contact_name, '' as contact_email, sm.caller_phone as contact_phone,
-             'sms' as channel, CASE WHEN sm.is_read = 1 THEN 'read' ELSE 'new' END as status, '' as lead_status,
-             sm.message_text as preview, sm.created_at as last_activity_at, sm.created_at,
-             1 as message_count, sm.urgency, c.company_name as customer_company
-           FROM secretary_messages sm
-           LEFT JOIN customers c ON c.id = sm.customer_id
-           ORDER BY sm.created_at DESC LIMIT 100`
-      const msgRes = search
-        ? await c.env.DB.prepare(msgQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`).all()
-        : await c.env.DB.prepare(msgQuery).all()
-      for (const r of (msgRes.results || [])) {
-        conversations.push({ ...r, source_id: `msg_${r.id}` })
-      }
-    }
-
-    // 4. Secretary callbacks
-    if (!channel || channel === 'all' || channel === 'voicemail') {
-      const cbQuery = search
-        ? `SELECT sc.id, sc.caller_name as contact_name, '' as contact_email, sc.caller_phone as contact_phone,
-             'voicemail' as channel, sc.status, '' as lead_status,
-             sc.reason as preview, sc.created_at as last_activity_at, sc.created_at,
-             1 as message_count, sc.preferred_time, c.company_name as customer_company
-           FROM secretary_callbacks sc
-           LEFT JOIN customers c ON c.id = sc.customer_id
-           WHERE sc.caller_name LIKE ? OR sc.caller_phone LIKE ? OR sc.reason LIKE ?
-           ORDER BY sc.created_at DESC LIMIT 50`
-        : `SELECT sc.id, sc.caller_name as contact_name, '' as contact_email, sc.caller_phone as contact_phone,
-             'voicemail' as channel, sc.status, '' as lead_status,
-             sc.reason as preview, sc.created_at as last_activity_at, sc.created_at,
-             1 as message_count, sc.preferred_time, c.company_name as customer_company
-           FROM secretary_callbacks sc
-           LEFT JOIN customers c ON c.id = sc.customer_id
-           ORDER BY sc.created_at DESC LIMIT 50`
-      const cbRes = search
-        ? await c.env.DB.prepare(cbQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`).all()
-        : await c.env.DB.prepare(cbQuery).all()
-      for (const r of (cbRes.results || [])) {
-        conversations.push({ ...r, source_id: `cb_${r.id}` })
-      }
-    }
-
-    // 5. Lead capture form submissions (all lead tables)
-    if (!channel || channel === 'all' || channel === 'form') {
-      // 5a. asset_report_leads (homepage CTA, exit intent, demo portal, condo)
-      const leadQuery = search
-        ? `SELECT id, name as contact_name, email as contact_email, '' as contact_phone,
-             'form' as channel, 'new' as status, '' as lead_status,
-             COALESCE(address, 'Lead from ' || source) as preview,
-             created_at as last_activity_at, created_at,
-             1 as message_count, source, tag, company as customer_company
-           FROM asset_report_leads
-           WHERE name LIKE ? OR email LIKE ? OR address LIKE ?
-           ORDER BY created_at DESC LIMIT 100`
-        : `SELECT id, name as contact_name, email as contact_email, '' as contact_phone,
-             'form' as channel, 'new' as status, '' as lead_status,
-             COALESCE(address, 'Lead from ' || source) as preview,
-             created_at as last_activity_at, created_at,
-             1 as message_count, source, tag, company as customer_company
-           FROM asset_report_leads
-           ORDER BY created_at DESC LIMIT 100`
-      const leadRes = search
-        ? await c.env.DB.prepare(leadQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`).all()
-        : await c.env.DB.prepare(leadQuery).all()
-      for (const r of (leadRes.results || [])) {
-        conversations.push({ ...r, source_id: `lead_${r.id}` })
-      }
-
-      // 5b. leads table (blog, pricing, feature page, comparison page forms)
-      try {
-        const siteLeadQuery = search
-          ? `SELECT id, name as contact_name, email as contact_email, phone as contact_phone,
-               'form' as channel, status, '' as lead_status,
-               COALESCE(message, 'Lead from ' || source_page) as preview,
-               created_at as last_activity_at, created_at,
-               1 as message_count, source_page as source, '' as tag, company_name as customer_company
-             FROM leads
-             WHERE name LIKE ? OR email LIKE ? OR message LIKE ? OR company_name LIKE ?
-             ORDER BY created_at DESC LIMIT 100`
-          : `SELECT id, name as contact_name, email as contact_email, phone as contact_phone,
-               'form' as channel, status, '' as lead_status,
-               COALESCE(message, 'Lead from ' || source_page) as preview,
-               created_at as last_activity_at, created_at,
-               1 as message_count, source_page as source, '' as tag, company_name as customer_company
-             FROM leads
-             ORDER BY created_at DESC LIMIT 100`
-        const siteLeadRes = search
-          ? await c.env.DB.prepare(siteLeadQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`).all()
-          : await c.env.DB.prepare(siteLeadQuery).all()
-        for (const r of (siteLeadRes.results || [])) {
-          conversations.push({ ...r, source_id: `sitelead_${r.id}` })
-        }
-      } catch (e) { /* leads table may not exist */ }
-
-      // 5c. contact_leads table (contact page form)
-      try {
-        const contactQuery = search
-          ? `SELECT id, name as contact_name, email as contact_email, phone as contact_phone,
-               'form' as channel, 'new' as status, '' as lead_status,
-               COALESCE(message, 'Contact form inquiry') as preview,
-               created_at as last_activity_at, created_at,
-               1 as message_count, 'contact_form' as source, interest as tag, company as customer_company
-             FROM contact_leads
-             WHERE name LIKE ? OR email LIKE ? OR message LIKE ? OR company LIKE ?
-             ORDER BY created_at DESC LIMIT 100`
-          : `SELECT id, name as contact_name, email as contact_email, phone as contact_phone,
-               'form' as channel, 'new' as status, '' as lead_status,
-               COALESCE(message, 'Contact form inquiry') as preview,
-               created_at as last_activity_at, created_at,
-               1 as message_count, 'contact_form' as source, interest as tag, company as customer_company
-             FROM contact_leads
-             ORDER BY created_at DESC LIMIT 100`
-        const contactRes = search
-          ? await c.env.DB.prepare(contactQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`).all()
-          : await c.env.DB.prepare(contactQuery).all()
-        for (const r of (contactRes.results || [])) {
-          conversations.push({ ...r, source_id: `contact_${r.id}` })
-        }
-      } catch (e) { /* contact_leads table may not exist */ }
-
-      // 5d. demo_leads table (demo scheduling form)
-      try {
-        const demoQuery = search
-          ? `SELECT id, name as contact_name, email as contact_email, phone as contact_phone,
-               'form' as channel, 'new' as status, '' as lead_status,
-               COALESCE(message, 'Demo request') as preview,
-               created_at as last_activity_at, created_at,
-               1 as message_count, 'demo_request' as source, '' as tag, company as customer_company
-             FROM demo_leads
-             WHERE name LIKE ? OR email LIKE ? OR message LIKE ? OR company LIKE ?
-             ORDER BY created_at DESC LIMIT 100`
-          : `SELECT id, name as contact_name, email as contact_email, phone as contact_phone,
-               'form' as channel, 'new' as status, '' as lead_status,
-               COALESCE(message, 'Demo request') as preview,
-               created_at as last_activity_at, created_at,
-               1 as message_count, 'demo_request' as source, '' as tag, company as customer_company
-             FROM demo_leads
-             ORDER BY created_at DESC LIMIT 100`
-        const demoRes = search
-          ? await c.env.DB.prepare(demoQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`).all()
-          : await c.env.DB.prepare(demoQuery).all()
-        for (const r of (demoRes.results || [])) {
-          conversations.push({ ...r, source_id: `demo_${r.id}` })
-        }
-      } catch (e) { /* demo_leads table may not exist */ }
-    }
-
-    // 6. Cold-call outbound call logs
-    if (!channel || channel === 'all' || channel === 'cold_call') {
-      try {
-        const ccQuery = search
-          ? `SELECT cl.id, cl.contact_name, '' as contact_email, cl.phone_dialed as contact_phone,
-               'cold_call' as channel, cl.call_outcome as status, '' as lead_status,
-               cl.call_summary as preview, cl.created_at as last_activity_at, cl.created_at,
-               1 as message_count, cl.call_duration_seconds, cl.company_name as customer_company
-             FROM cc_call_logs cl
-             WHERE cl.contact_name LIKE ? OR cl.phone_dialed LIKE ? OR cl.call_summary LIKE ?
-             ORDER BY cl.created_at DESC LIMIT 100`
-          : `SELECT cl.id, cl.contact_name, '' as contact_email, cl.phone_dialed as contact_phone,
-               'cold_call' as channel, cl.call_outcome as status, '' as lead_status,
-               cl.call_summary as preview, cl.created_at as last_activity_at, cl.created_at,
-               1 as message_count, cl.call_duration_seconds, cl.company_name as customer_company
-             FROM cc_call_logs cl
-             ORDER BY cl.created_at DESC LIMIT 100`
-        const ccRes = search
-          ? await c.env.DB.prepare(ccQuery).bind(`%${search}%`, `%${search}%`, `%${search}%`).all()
-          : await c.env.DB.prepare(ccQuery).all()
-        for (const r of (ccRes.results || [])) {
-          conversations.push({ ...r, source_id: `cc_${r.id}` })
-        }
-      } catch (e) { /* cc_call_logs may not exist */ }
-    }
-
-    // 7. CRM job messages (crew messages)
-    if (!channel || channel === 'all' || channel === 'job_message') {
-      try {
-        const jmQuery = search
-          ? `SELECT cm.id, cm.author_name as contact_name, '' as contact_email, '' as contact_phone,
-               'job_message' as channel, 'open' as status, '' as lead_status,
-               cm.content as preview, cm.created_at as last_activity_at, cm.created_at,
-               1 as message_count, j.title as customer_company
-             FROM crew_messages cm
-             LEFT JOIN crm_jobs j ON j.id = cm.job_id
-             WHERE cm.author_name LIKE ? OR cm.content LIKE ?
-             ORDER BY cm.created_at DESC LIMIT 100`
-          : `SELECT cm.id, cm.author_name as contact_name, '' as contact_email, '' as contact_phone,
-               'job_message' as channel, 'open' as status, '' as lead_status,
-               cm.content as preview, cm.created_at as last_activity_at, cm.created_at,
-               1 as message_count, j.title as customer_company
-             FROM crew_messages cm
-             LEFT JOIN crm_jobs j ON j.id = cm.job_id
-             ORDER BY cm.created_at DESC LIMIT 100`
-        const jmRes = search
-          ? await c.env.DB.prepare(jmQuery).bind(`%${search}%`, `%${search}%`).all()
-          : await c.env.DB.prepare(jmQuery).all()
-        for (const r of (jmRes.results || [])) {
-          conversations.push({ ...r, source_id: `job_${r.id}` })
-        }
-      } catch (e) { /* crew_messages may not exist */ }
-    }
-
-    // Sort all by last_activity_at descending, then paginate
-    conversations.sort((a, b) => {
-      const da = a.last_activity_at || a.created_at || ''
-      const db = b.last_activity_at || b.created_at || ''
-      return db.localeCompare(da)
-    })
-
-    const total = conversations.length
-    const paginated = conversations.slice(offset, offset + limit)
-
-    // Unread counts per channel
-    const unreadCounts: Record<string, number> = {}
-    try {
-      const roverUnread = await c.env.DB.prepare(
-        `SELECT COUNT(*) as c FROM rover_conversations WHERE status = 'active'`
-      ).first<any>()
-      unreadCounts.web_chat = roverUnread?.c || 0
-
-      const msgUnread = await c.env.DB.prepare(
-        `SELECT COUNT(*) as c FROM secretary_messages WHERE is_read = 0`
-      ).first<any>()
-      unreadCounts.sms = msgUnread?.c || 0
-
-      const cbPending = await c.env.DB.prepare(
-        `SELECT COUNT(*) as c FROM secretary_callbacks WHERE status = 'pending'`
-      ).first<any>()
-      unreadCounts.voicemail = cbPending?.c || 0
-
-      const todayCalls = await c.env.DB.prepare(
-        `SELECT COUNT(*) as c FROM secretary_call_logs WHERE created_at >= datetime('now', '-24 hours')`
-      ).first<any>()
-      unreadCounts.voice = todayCalls?.c || 0
-
-      let formCount = 0
-      const recentLeads = await c.env.DB.prepare(
-        `SELECT COUNT(*) as c FROM asset_report_leads WHERE created_at >= datetime('now', '-7 days')`
-      ).first<any>()
-      formCount += recentLeads?.c || 0
-      try { const r = await c.env.DB.prepare(`SELECT COUNT(*) as c FROM leads WHERE created_at >= datetime('now', '-7 days')`).first<any>(); formCount += r?.c || 0 } catch {}
-      try { const r = await c.env.DB.prepare(`SELECT COUNT(*) as c FROM contact_leads WHERE created_at >= datetime('now', '-7 days')`).first<any>(); formCount += r?.c || 0 } catch {}
-      try { const r = await c.env.DB.prepare(`SELECT COUNT(*) as c FROM demo_leads WHERE created_at >= datetime('now', '-7 days')`).first<any>(); formCount += r?.c || 0 } catch {}
-      unreadCounts.form = formCount
-    } catch (e) { /* counts are best-effort */ }
-
-    const totalUnread = (unreadCounts.web_chat || 0) + (unreadCounts.sms || 0) + (unreadCounts.voicemail || 0)
-
-    // Web chat funnel — impressions → opens → conversations (rv_* sessions only, last 7d)
-    const webChatFunnel = { impressions_7d: 0, opens_7d: 0, conversations_7d: 0, conversion_rate: 0 }
-    try {
-      const [imp, opn, conv] = await Promise.all([
-        c.env.DB.prepare(`SELECT COUNT(*) as c FROM rover_widget_events WHERE event_type = 'widget_impression' AND created_at >= datetime('now', '-7 days')`).first<any>(),
-        c.env.DB.prepare(`SELECT COUNT(*) as c FROM rover_widget_events WHERE event_type = 'widget_opened' AND created_at >= datetime('now', '-7 days')`).first<any>(),
-        c.env.DB.prepare(`SELECT COUNT(*) as c FROM rover_conversations WHERE session_id LIKE 'rv_%' AND created_at >= datetime('now', '-7 days')`).first<any>(),
-      ])
-      webChatFunnel.impressions_7d = imp?.c || 0
-      webChatFunnel.opens_7d = opn?.c || 0
-      webChatFunnel.conversations_7d = conv?.c || 0
-      webChatFunnel.conversion_rate = webChatFunnel.impressions_7d > 0
-        ? Math.round((webChatFunnel.conversations_7d / webChatFunnel.impressions_7d) * 10000) / 100
-        : 0
-    } catch (e) { /* best-effort; table may not exist pre-migration */ }
+           WHERE cl.created_at >= datetime('now', '-30 days')
+           GROUP BY cl.customer_id
+           ORDER BY seconds_30d DESC
+           LIMIT 200`
+      ).all()
+      callVolume = (res.results || []).map((r: any) => ({
+        customer_id: r.customer_id,
+        customer_name: r.customer_name || '',
+        company_name: r.company_name || '',
+        calls_30d: r.calls_30d || 0,
+        minutes_30d: Math.round((r.seconds_30d || 0) / 60),
+        last_call_at: r.last_call_at,
+      }))
+    } catch {}
 
     return c.json({
-      conversations: paginated,
-      total,
-      offset,
-      limit,
-      unread: unreadCounts,
-      total_unread: totalUnread,
-      web_chat_funnel: webChatFunnel
+      summary,
+      trials,
+      sip_trunks: sipTrunks,
+      call_volume_by_customer: callVolume,
     })
   } catch (err: any) {
     return c.json({ error: err.message }, 500)
   }
 })
 
-// GET /superadmin/inbox/unread-count — Lightweight badge count
+// GET /superadmin/inbox/unread-count — Sidebar badge for the AI Secretary
+// section. Returns the count of currently-active trials; that's the
+// actionable number a super admin cares about at a glance.
 adminRoutes.get('/superadmin/inbox/unread-count', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
   try {
-    const [roverR, msgR, cbR] = await Promise.all([
-      c.env.DB.prepare(`SELECT COUNT(*) as c FROM rover_conversations WHERE status = 'active'`).first<any>(),
-      c.env.DB.prepare(`SELECT COUNT(*) as c FROM secretary_messages WHERE is_read = 0`).first<any>(),
-      c.env.DB.prepare(`SELECT COUNT(*) as c FROM secretary_callbacks WHERE status = 'pending'`).first<any>(),
-    ])
-    const total = (roverR?.c || 0) + (msgR?.c || 0) + (cbR?.c || 0)
-    return c.json({ total, web_chat: roverR?.c || 0, sms: msgR?.c || 0, voicemail: cbR?.c || 0 })
+    const r = await c.env.DB.prepare(
+      `SELECT COUNT(*) as c FROM secretary_subscriptions
+         WHERE status = 'trialing'
+           AND (trial_ends_at IS NULL OR trial_ends_at > datetime('now'))`
+    ).first<any>()
+    const total = r?.c || 0
+    return c.json({ total, active_trials: total })
   } catch (err: any) {
     return c.json({ total: 0 }, 200)
   }
