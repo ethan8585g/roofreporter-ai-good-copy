@@ -36,4 +36,12 @@
   //     "bucket_name": "storm-scout-snapshots"
   //   }
   // ]
+
+  // Cron triggers — drives the scheduled() handler in src/index.tsx.
+  // Hourly tick covers tracing (every tick), monitor (every 6h), traffic
+  // (every 12h), content (8 UTC), email (Tue 10 UTC), and the user-
+  // activity rollup (7 UTC daily).
+  "triggers": {
+    "crons": ["0 * * * *"]
+  }
 }

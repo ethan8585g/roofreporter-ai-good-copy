@@ -72,6 +72,8 @@ import { aiAutopilotRoutes } from './routes/ai-autopilot'
 import { agentHubRoutes } from './routes/agent-hub'
 import { commissionRoutes } from './routes/commissions'
 import { customerLeadsRoutes } from './routes/customer-leads'
+import { activityRoutes } from './routes/activity'
+import { rollupYesterday as activityRollupYesterday } from './services/activity-tracker'
 import usStatesRoutes from './routes/us-states'
 import usVerticalsRoutes from './routes/us-verticals'
 import usComparisonsRoutes from './routes/us-comparisons'
@@ -362,6 +364,42 @@ window.fireMetaContactEvent=function(d){if(typeof fbq==='function')fbq('track','
   }
 })
 
+// Activity-heartbeat injection — fires every 60s on authenticated HTML pages
+// to feed the super-admin User Activity dashboard. Cheap (< 1KB script) and
+// no-ops when no session cookie is present.
+app.use('*', async (c, next) => {
+  await next()
+  const contentType = c.res.headers.get('content-type') || ''
+  if (!contentType.includes('text/html')) return
+  const url = new URL(c.req.url)
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/static/')) return
+
+  // Authenticated surfaces: admin dashboards, customer portal, measure tool,
+  // login/onboarding (so we capture pre-auth landings), field UI.
+  const p = url.pathname
+  const authed = p.startsWith('/super-admin')
+    || p.startsWith('/admin')
+    || p.startsWith('/customer')
+    || p.startsWith('/measure')
+    || p.startsWith('/order/')
+    || p.startsWith('/report/')
+    || p.startsWith('/field')
+    || p === '/dashboard'
+  if (!authed) return
+
+  try {
+    const body = await c.res.text()
+    const SENTINEL = '<!-- rm-activity-heartbeat-injected -->'
+    if (body.includes('</body>') && !body.includes(SENTINEL)) {
+      const injected = body.replace('</body>',
+        `<script src="/static/activity-heartbeat.js" defer></script>\n${SENTINEL}\n</body>`)
+      c.res = new Response(injected, { status: c.res.status, headers: c.res.headers })
+    } else {
+      c.res = new Response(body, { status: c.res.status, headers: c.res.headers })
+    }
+  } catch {}
+})
+
 // ── US SEO/GEO expansion routes ── (verticals before states — specific paths must precede /:state/:city catch-alls)
 app.route('/us', usVerticalsRoutes)
 app.route('/us', usStatesRoutes)
@@ -458,6 +496,7 @@ app.route('/api/agent-hub', agentHubRoutes)
 app.route('/api/field', fieldRoutes)
 app.route('/api/commissions', commissionRoutes)
 app.route('/api/customer-leads', customerLeadsRoutes)
+app.route('/api/activity', activityRoutes)
 app.route('/field', fieldUiRoutes)
 
 // Health check
@@ -4469,6 +4508,20 @@ export default {
         } catch (err: any) {
           console.error('[CRON:traffic] Error:', err.message)
           await logRun('traffic', 'error', err.message, {}, Date.now() - t0)
+        }
+      })())
+    }
+
+    // ── User Activity rollup (daily at 7 UTC) ────────────────
+    // Aggregates yesterday's user_module_visits into user_activity_daily
+    // and purges raw rows older than 90 days.
+    if (hour === 7) {
+      ctx.waitUntil((async () => {
+        try {
+          const result = await activityRollupYesterday(env)
+          console.log(`[CRON:activity] rolled=${result.rolled} purged=${result.purged}`)
+        } catch (err: any) {
+          console.error('[CRON:activity] Error:', err.message)
         }
       })())
     }

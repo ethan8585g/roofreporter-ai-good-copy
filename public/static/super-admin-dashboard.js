@@ -65,6 +65,7 @@ const SA_SECTIONS = {
     tabs: [
       { id: 'growth-overview', label: 'Overview', icon: 'fa-tachometer-alt' },
       { id: 'growth-traffic', label: 'Traffic', icon: 'fa-chart-area' },
+      { id: 'user-activity', label: 'User Activity', icon: 'fa-user-clock' },
       { id: 'growth-marketing', label: 'Marketing', icon: 'fa-bullhorn' },
       { id: 'growth-seo', label: 'SEO & Blog', icon: 'fa-pen-nib' },
       { id: 'meta-connect', label: 'Instagram', icon: 'fa-instagram' }
@@ -402,6 +403,14 @@ async function loadView(view) {
           var mktRes2 = await saFetch('/api/admin/superadmin/marketing');
           if (mktRes2 && mktRes2.ok) SA.data.marketing = await mktRes2.json();
         } catch(e) {}
+        break;
+      case 'user-activity':
+        try {
+          SA.uaPeriod = SA.uaPeriod || '7d';
+          SA.uaUserType = SA.uaUserType || 'all';
+          const uaRes = await saFetch('/api/activity/summary?period=' + SA.uaPeriod + '&userType=' + SA.uaUserType);
+          if (uaRes && uaRes.ok) SA.data.userActivity = await uaRes.json();
+        } catch(e) { console.warn('User activity load error:', e); }
         break;
       case 'growth-seo':
         try {
@@ -821,6 +830,7 @@ function renderContent() {
     case 'growth-overview': root.innerHTML = tabBar + renderGrowthOverviewView(); break;
     case 'growth-traffic': root.innerHTML = tabBar + renderGrowthTrafficView(); break;
     case 'growth-marketing': root.innerHTML = tabBar + renderGrowthMarketingView(); break;
+    case 'user-activity': root.innerHTML = tabBar + renderUserActivityView(); break;
     case 'growth-seo': root.innerHTML = tabBar + renderGrowthSeoView(); break;
     // ── AI Ops consolidated ──
     case 'aiops-overview': root.innerHTML = tabBar + renderAiOpsOverviewView(); break;
@@ -11783,4 +11793,243 @@ function renderPlatformSettingsView() {
       '<div onclick="saSetView(\'livekit-agents\')" class="p-5 bg-white rounded-xl border border-gray-200 hover:shadow-md cursor-pointer transition-all"><i class="fas fa-satellite text-2xl text-purple-500 mb-3"></i><h3 class="font-bold text-gray-900">LiveKit Agents</h3><p class="text-xs text-gray-500 mt-1">Agent deployment, phone pool, SIP trunks</p></div>' +
       '<div onclick="saSetView(\'telephony\')" class="p-5 bg-white rounded-xl border border-gray-200 hover:shadow-md cursor-pointer transition-all"><i class="fas fa-broadcast-tower text-2xl text-green-500 mb-3"></i><h3 class="font-bold text-gray-900">Telephony</h3><p class="text-xs text-gray-500 mt-1">SIP mapping, trunk status, voice config</p></div>' +
     '</div>';
+}
+
+// ============================================================
+// USER ACTIVITY VIEW — time spent + module usage per user
+// ============================================================
+var UA_MODULE_LABELS = {
+  measurement: 'Measurement',
+  reports: 'Reports & Orders',
+  crm: 'CRM / Pipeline',
+  invoicing: 'Invoicing',
+  proposals: 'Proposals',
+  solar: 'Solar',
+  secretary: 'AI Secretary',
+  marketing: 'Marketing',
+  team: 'Team',
+  admin_tools: 'Admin Tools',
+  customer_portal: 'Customer Portal',
+  home_designer: 'Home Designer / AI',
+  analytics_view: 'Analytics',
+  other: 'Other'
+};
+var UA_MODULE_COLORS = {
+  measurement: '#3b82f6', reports: '#10b981', crm: '#a855f7',
+  invoicing: '#f59e0b', proposals: '#06b6d4', solar: '#eab308',
+  secretary: '#ec4899', marketing: '#ef4444', team: '#14b8a6',
+  admin_tools: '#64748b', customer_portal: '#0ea5e9',
+  home_designer: '#8b5cf6', analytics_view: '#22c55e', other: '#94a3b8'
+};
+
+function uaFmtDuration(s) {
+  s = Math.max(0, parseInt(s || 0, 10));
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.round(s / 60) + 'm';
+  var h = Math.floor(s / 3600);
+  var m = Math.round((s % 3600) / 60);
+  return h + 'h' + (m ? ' ' + m + 'm' : '');
+}
+
+function uaModuleLabel(m) { return UA_MODULE_LABELS[m] || m; }
+
+function uaSetPeriod(p) {
+  SA.uaPeriod = p;
+  loadView('user-activity');
+}
+function uaSetUserType(t) {
+  SA.uaUserType = t;
+  loadView('user-activity');
+}
+
+function renderUserActivityView() {
+  var d = (SA.data && SA.data.userActivity) || {};
+  var users = d.users || [];
+  var modules = d.modules || [];
+  var k = d.kpis || { active_users: 0, total_hours: 0, total_visits: 0, live_now: 0 };
+  var period = SA.uaPeriod || '7d';
+  var userType = SA.uaUserType || 'all';
+
+  function pillBtn(value, current, label, onclick) {
+    var active = value === current;
+    return '<button onclick="' + onclick + '(\'' + value + '\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ' +
+      (active ? 'bg-slate-800 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200') + '">' + label + '</button>';
+  }
+
+  var filterBar =
+    '<div class="flex flex-wrap items-center gap-3 mb-5">' +
+      '<div class="flex items-center gap-1">' +
+        '<span class="text-[11px] font-bold text-gray-500 uppercase mr-2">Period</span>' +
+        pillBtn('24h', period, '24h', 'uaSetPeriod') +
+        pillBtn('7d', period, '7 days', 'uaSetPeriod') +
+        pillBtn('30d', period, '30 days', 'uaSetPeriod') +
+        pillBtn('90d', period, '90 days', 'uaSetPeriod') +
+      '</div>' +
+      '<div class="flex items-center gap-1 ml-4">' +
+        '<span class="text-[11px] font-bold text-gray-500 uppercase mr-2">Type</span>' +
+        pillBtn('all', userType, 'All', 'uaSetUserType') +
+        pillBtn('admin', userType, 'Admin/Staff', 'uaSetUserType') +
+        pillBtn('customer', userType, 'Customers', 'uaSetUserType') +
+      '</div>' +
+    '</div>';
+
+  function kpi(label, value, icon, color) {
+    return '<div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">' +
+      '<div class="flex items-center justify-between mb-2">' +
+        '<span class="text-[10px] font-bold uppercase tracking-wider text-gray-500">' + label + '</span>' +
+        '<i class="fas ' + icon + ' text-' + color + '-500"></i>' +
+      '</div>' +
+      '<div class="text-2xl font-black text-gray-900">' + value + '</div>' +
+    '</div>';
+  }
+
+  var kpiRow =
+    '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">' +
+      kpi('Active Users', k.active_users, 'fa-users', 'blue') +
+      kpi('Total Hours', k.total_hours + 'h', 'fa-clock', 'emerald') +
+      kpi('Total Visits', k.total_visits, 'fa-mouse-pointer', 'purple') +
+      kpi('Live Now', k.live_now, 'fa-circle', k.live_now > 0 ? 'green' : 'gray') +
+    '</div>';
+
+  // Top users table
+  var rows = '';
+  if (!users.length) {
+    rows = '<tr><td colspan="7" class="px-4 py-12 text-center text-gray-400 text-sm">No activity recorded yet for this filter. Heartbeats begin after users navigate the app.</td></tr>';
+  } else {
+    users.forEach(function (u) {
+      var typeBadge = u.user_type === 'admin'
+        ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700">ADMIN</span>'
+        : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">CUSTOMER</span>';
+      var lastSeen = u.last_seen ? new Date(u.last_seen + 'Z').toLocaleString() : '—';
+      var topModColor = UA_MODULE_COLORS[u.top_module] || '#94a3b8';
+      var topModLabel = uaModuleLabel(u.top_module);
+      rows +=
+        '<tr class="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onclick="uaOpenDrillIn(\'' + u.user_type + '\',' + u.user_id + ')">' +
+          '<td class="px-4 py-3"><div class="font-semibold text-gray-900 text-sm">' + (u.name || '—') + '</div><div class="text-[11px] text-gray-500">' + (u.email || '') + '</div></td>' +
+          '<td class="px-4 py-3">' + typeBadge + '</td>' +
+          '<td class="px-4 py-3 text-sm font-bold text-gray-900">' + uaFmtDuration(u.total_seconds) + '</td>' +
+          '<td class="px-4 py-3 text-sm text-gray-700">' + (u.visit_count || 0) + '</td>' +
+          '<td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 text-xs font-medium"><span class="w-2 h-2 rounded-full" style="background:' + topModColor + '"></span>' + topModLabel + '</span></td>' +
+          '<td class="px-4 py-3 text-[11px] text-gray-500">' + lastSeen + '</td>' +
+          '<td class="px-4 py-3 text-right"><i class="fas fa-chevron-right text-gray-400 text-xs"></i></td>' +
+        '</tr>';
+    });
+  }
+
+  var tableHTML =
+    '<div class="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">' +
+      '<div class="px-5 py-3 border-b border-gray-200 flex items-center justify-between">' +
+        '<h3 class="font-bold text-gray-900 text-sm"><i class="fas fa-trophy text-yellow-500 mr-1.5"></i>Top Users by Time Spent</h3>' +
+        '<span class="text-[11px] text-gray-500">Top ' + users.length + ' · click row to drill in</span>' +
+      '</div>' +
+      '<div class="overflow-x-auto">' +
+        '<table class="w-full text-left">' +
+          '<thead class="bg-gray-50 border-b border-gray-200"><tr>' +
+            '<th class="px-4 py-2 text-[10px] font-bold uppercase text-gray-500 tracking-wider">User</th>' +
+            '<th class="px-4 py-2 text-[10px] font-bold uppercase text-gray-500 tracking-wider">Type</th>' +
+            '<th class="px-4 py-2 text-[10px] font-bold uppercase text-gray-500 tracking-wider">Total Time</th>' +
+            '<th class="px-4 py-2 text-[10px] font-bold uppercase text-gray-500 tracking-wider">Visits</th>' +
+            '<th class="px-4 py-2 text-[10px] font-bold uppercase text-gray-500 tracking-wider">Top Module</th>' +
+            '<th class="px-4 py-2 text-[10px] font-bold uppercase text-gray-500 tracking-wider">Last Seen</th>' +
+            '<th></th>' +
+          '</tr></thead>' +
+          '<tbody>' + rows + '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</div>';
+
+  // Module breakdown bar chart
+  var maxModSec = modules.reduce(function (a, m) { return Math.max(a, m.seconds || 0); }, 0) || 1;
+  var modBars = modules.length
+    ? modules.map(function (m) {
+        var pct = Math.max(2, Math.round(((m.seconds || 0) / maxModSec) * 100));
+        var color = UA_MODULE_COLORS[m.module] || '#94a3b8';
+        return '<div class="mb-2.5">' +
+          '<div class="flex items-center justify-between text-xs mb-1"><span class="font-medium text-gray-700">' + uaModuleLabel(m.module) + '</span><span class="text-gray-500">' + uaFmtDuration(m.seconds) + ' · ' + (m.visits || 0) + ' visits</span></div>' +
+          '<div class="bg-gray-100 rounded-full h-2 overflow-hidden"><div class="h-full rounded-full" style="width:' + pct + '%; background:' + color + '"></div></div>' +
+        '</div>';
+      }).join('')
+    : '<p class="text-gray-400 text-sm">No module data yet for this filter.</p>';
+
+  var modSection =
+    '<div class="bg-white rounded-xl border border-gray-200 p-5">' +
+      '<h3 class="font-bold text-gray-900 text-sm mb-4"><i class="fas fa-th-large text-indigo-500 mr-1.5"></i>Module Usage Breakdown</h3>' +
+      modBars +
+    '</div>';
+
+  return '<div class="mb-5">' +
+      '<h2 class="text-2xl font-black text-gray-900"><i class="fas fa-user-clock mr-2 text-indigo-500"></i>User Activity</h2>' +
+      '<p class="text-sm text-gray-500 mt-1">Time spent and module usage across admin/staff and customer-portal users. Heartbeats every 60s while a tab is visible.</p>' +
+    '</div>' +
+    filterBar + kpiRow + tableHTML + modSection +
+    '<div id="ua-drill-in"></div>';
+}
+
+async function uaOpenDrillIn(userType, userId) {
+  var panel = document.getElementById('ua-drill-in');
+  if (!panel) return;
+  panel.innerHTML = '<div class="bg-white rounded-xl border border-gray-200 p-6 mt-6 text-center text-gray-500 text-sm"><div class="inline-block w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-2"></div>Loading user details…</div>';
+  try {
+    var res = await saFetch('/api/activity/user/' + userType + '/' + userId + '?period=' + (SA.uaPeriod || '7d'));
+    if (!res || !res.ok) {
+      panel.innerHTML = '<div class="bg-red-50 border border-red-200 text-red-700 rounded-xl p-5 mt-6 text-sm">Failed to load user details.</div>';
+      return;
+    }
+    var data = await res.json();
+    var profile = data.profile || {};
+    var modules = data.modules || [];
+    var daily = data.daily || [];
+    var recent = data.recent || [];
+    var maxModSec = modules.reduce(function (a, m) { return Math.max(a, m.seconds || 0); }, 0) || 1;
+    var modList = modules.map(function (m) {
+      var pct = Math.round(((m.seconds || 0) / maxModSec) * 100);
+      var color = UA_MODULE_COLORS[m.module] || '#94a3b8';
+      return '<div class="mb-2"><div class="flex justify-between text-xs mb-0.5"><span class="font-medium">' + uaModuleLabel(m.module) + '</span><span class="text-gray-500">' + uaFmtDuration(m.seconds) + '</span></div>' +
+        '<div class="bg-gray-100 h-1.5 rounded-full"><div class="h-full rounded-full" style="width:' + pct + '%; background:' + color + '"></div></div></div>';
+    }).join('') || '<p class="text-gray-400 text-sm">No data.</p>';
+
+    var maxDaily = daily.reduce(function (a, m) { return Math.max(a, m.seconds || 0); }, 0) || 1;
+    var dailyBars = daily.length
+      ? '<div class="flex items-end gap-1 h-24 mb-1">' + daily.map(function (d) {
+          var h = Math.max(2, Math.round(((d.seconds || 0) / maxDaily) * 92));
+          return '<div class="flex-1 bg-indigo-500 rounded-t" style="height:' + h + 'px" title="' + d.day + ': ' + uaFmtDuration(d.seconds) + '"></div>';
+        }).join('') + '</div>'
+        + '<div class="flex justify-between text-[9px] text-gray-400">' +
+            '<span>' + (daily[0] && daily[0].day || '') + '</span>' +
+            '<span>' + (daily[daily.length - 1] && daily[daily.length - 1].day || '') + '</span>' +
+          '</div>'
+      : '<p class="text-gray-400 text-sm">No daily data.</p>';
+
+    var recentRows = recent.map(function (r) {
+      var color = UA_MODULE_COLORS[r.module] || '#94a3b8';
+      return '<tr class="border-b border-gray-100"><td class="py-2 pr-3"><span class="inline-block w-2 h-2 rounded-full mr-2 align-middle" style="background:' + color + '"></span>' + uaModuleLabel(r.module) + '</td>' +
+        '<td class="py-2 pr-3 text-gray-500 text-[11px]">' + (r.started_at || '') + '</td>' +
+        '<td class="py-2 text-right font-semibold">' + uaFmtDuration(r.duration_seconds) + '</td></tr>';
+    }).join('') || '<tr><td colspan="3" class="py-3 text-center text-gray-400">No visits yet.</td></tr>';
+
+    var typeBadge = userType === 'admin'
+      ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700">ADMIN</span>'
+      : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">CUSTOMER</span>';
+
+    panel.innerHTML =
+      '<div class="bg-white rounded-xl border border-gray-200 p-5 mt-6">' +
+        '<div class="flex items-start justify-between mb-4">' +
+          '<div>' +
+            '<h3 class="font-bold text-gray-900 text-base">' + (profile.name || 'Unknown') + ' ' + typeBadge + '</h3>' +
+            '<p class="text-xs text-gray-500">' + (profile.email || '') + (profile.company_name ? ' · ' + profile.company_name : '') + '</p>' +
+          '</div>' +
+          '<button onclick="document.getElementById(\'ua-drill-in\').innerHTML=\'\'" class="text-gray-400 hover:text-gray-700 text-sm"><i class="fas fa-times"></i></button>' +
+        '</div>' +
+        '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+          '<div><h4 class="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2">Daily Time (' + (SA.uaPeriod || '7d') + ')</h4>' + dailyBars + '</div>' +
+          '<div><h4 class="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2">Modules</h4>' + modList + '</div>' +
+          '<div><h4 class="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-2">Recent Visits</h4><table class="w-full text-xs">' + recentRows + '</table></div>' +
+        '</div>' +
+      '</div>';
+
+    // Scroll the drill-in into view.
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    panel.innerHTML = '<div class="bg-red-50 border border-red-200 text-red-700 rounded-xl p-5 mt-6 text-sm">' + (e.message || 'Error loading details') + '</div>';
+  }
 }

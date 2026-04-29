@@ -13,6 +13,7 @@ import { notifyNewReportRequest, sendGmailOAuth2, sendViaResend, sendGmailEmail 
 import { logAdminAction } from '../lib/audit-log'
 import { clientIp } from '../lib/rate-limit'
 import { encryptSecret, decryptSecret } from '../lib/secret-vault'
+import { trackActivity } from '../services/activity-tracker'
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -80,6 +81,20 @@ adminRoutes.use('/*', async (c, next) => {
 
   // Store admin info in context for downstream use
   c.set('admin' as any, admin)
+
+  // Activity tracking — fire-and-forget. Never blocks the request.
+  try {
+    const job = trackActivity(c.env, {
+      userType: 'admin',
+      userId: admin.id,
+      path: c.req.path,
+      ip: c.req.header('CF-Connecting-IP') || null,
+      ua: c.req.header('User-Agent') || null,
+    })
+    // @ts-ignore — executionCtx is available in the Workers runtime
+    if (c.executionCtx?.waitUntil) c.executionCtx.waitUntil(job)
+  } catch {}
+
   return next()
 })
 
