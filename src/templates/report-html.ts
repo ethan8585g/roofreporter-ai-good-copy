@@ -20,6 +20,7 @@ import {
 import {
   generateAllStructureSVGs, splitStructures, allocateMaterialsToStructures,
 } from './svg-3d-diagram'
+import { estimateShingleAgeYears, regionalReplacementBandCad } from '../services/report-pro'
 
 // ============================================================
 // Per-structure breakdown helper — derives footprint/true-area/
@@ -71,6 +72,94 @@ export function computeStructuresBreakdown(report: RoofReport): StructureBreakdo
     })
   })
   return out
+}
+
+// ============================================================
+// PRO-TIER REPORT SECTIONS
+// ============================================================
+
+/** Renders the green/red diff banner shown only on report version >=2. */
+function renderVersionDiffBanner(report: RoofReport): string {
+  const versionNum = Number((report as any).current_version_num) || 1
+  const diff = (report as any).diff_summary
+  if (versionNum < 2 || !diff) return ''
+  const positiveDelta = diff.area_delta_ft2 > 0
+  const noChange = diff.area_delta_ft2 === 0 && diff.edges_added === 0 && diff.edges_removed === 0 && !diff.pitch_changed
+  // High-contrast palette: green for upward revisions, red for downward, slate for "no change"
+  const palette = noChange
+    ? { bg: '#F1F5F9', border: '#94A3B8', fg: '#1F2937', icon: '&#8635;' }
+    : positiveDelta
+      ? { bg: '#DCFCE7', border: '#16A34A', fg: '#14532D', icon: '&#8593;' }
+      : { bg: '#FEE2E2', border: '#DC2626', fg: '#7F1D1D', icon: '&#8595;' }
+  return `
+  <div style="margin:0 28px 6px;padding:8px 12px;background:${palette.bg};border:1px solid ${palette.border};border-radius:6px;display:flex;align-items:flex-start;gap:8px;font-size:8px;color:${palette.fg};line-height:1.4">
+    <span style="font-size:12px;line-height:1;flex-shrink:0;font-weight:700">${palette.icon}</span>
+    <div>
+      <strong style="display:block;font-size:8.5px;text-transform:uppercase;letter-spacing:0.4px">Re-analysis &mdash; v${versionNum} (was v${diff.prior_version_num})</strong>
+      <span>${diff.message}</span>
+    </div>
+  </div>`
+}
+
+/** Per-section confidence ratings (Pitch / Area / Edges). */
+function renderConfidenceBreakdown(report: RoofReport): string {
+  const cb = (report as any).confidence_breakdown
+  if (!cb) return ''
+  const tierColor = (t: string) => t === 'high' ? '#16A34A' : t === 'medium' ? '#D97706' : '#DC2626'
+  const tierBg    = (t: string) => t === 'high' ? '#DCFCE7' : t === 'medium' ? '#FEF3C7' : '#FEE2E2'
+  const row = (label: string, tier: string, basis: string) => `
+    <tr style="border-bottom:1px solid #f1f5f9">
+      <td style="padding:5px 8px;font-weight:700;font-size:8px;color:#333;width:18%">${label}</td>
+      <td style="padding:5px 8px;width:18%">
+        <span style="display:inline-block;padding:2px 8px;background:${tierBg(tier)};color:${tierColor(tier)};border:1px solid ${tierColor(tier)};border-radius:3px;font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px">${tier}</span>
+      </td>
+      <td style="padding:5px 8px;font-size:7.5px;color:#555">${basis}</td>
+    </tr>`
+  return `
+  <div style="margin:6px 28px 4px;padding:0">
+    <div style="font-size:9px;font-weight:800;color:#333;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;border-bottom:1px solid #00897B;padding-bottom:2px">Confidence Source Breakdown</div>
+    <table style="width:100%;border-collapse:collapse;background:#FAFAFA;border:1px solid #E5E7EB;border-radius:4px;overflow:hidden">
+      <tbody>
+        ${row('Pitch', cb.pitch, cb.pitch_basis)}
+        ${row('Area',  cb.area,  cb.area_basis)}
+        ${row('Edges', cb.edges, cb.edges_basis)}
+      </tbody>
+    </table>
+  </div>`
+}
+
+/** Imagery date / shingle age / regional replacement-cost band. */
+function renderInsuranceExtras(report: RoofReport): string {
+  const imgDate = report.quality?.imagery_date || null
+  const wr = (report as any).weather_risk
+  const shingleAge = estimateShingleAgeYears(imgDate || undefined)
+  const band = regionalReplacementBandCad(report)
+
+  const sloped = Number(report.total_true_area_sqft || 0)
+  const squares = sloped > 0 ? sloped / 100 : 0
+  const costLow  = band ? Math.round(squares * band.low)  : null
+  const costMid  = band ? Math.round(squares * band.mid)  : null
+  const costHigh = band ? Math.round(squares * band.high) : null
+
+  const tile = (label: string, value: string, sub?: string) => `
+    <div style="flex:1;padding:8px 10px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;text-align:center">
+      <div style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#475569">${label}</div>
+      <div style="font-size:11px;font-weight:900;color:#0F172A;margin-top:2px">${value}</div>
+      ${sub ? `<div style="font-size:6.5px;color:#64748B;margin-top:1px">${sub}</div>` : ''}
+    </div>`
+
+  const tiles: string[] = []
+  if (imgDate) tiles.push(tile('Imagery Date', imgDate, shingleAge != null ? `≥${shingleAge} yrs since survey` : ''))
+  if (wr) tiles.push(tile('Hail Risk', `${wr.hail_score}/100`, `${wr.hail_event_count} events ≤${wr.sample_radius_km}km, max ${wr.largest_hail_inches.toFixed(2)}"`))
+  if (wr) tiles.push(tile('Wind Risk', `${wr.wind_score}/100`, wr.peak_wind_kmh > 0 ? `peak ${wr.peak_wind_kmh} km/h` : 'no recent events'))
+  if (band && costMid != null) tiles.push(tile('Replacement (CAD)', `$${costMid.toLocaleString()}`, `range $${costLow!.toLocaleString()}–$${costHigh!.toLocaleString()}`))
+
+  if (tiles.length === 0) return ''
+  return `
+  <div style="margin:8px 28px 0">
+    <div style="font-size:9px;font-weight:800;color:#333;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;border-bottom:1px solid #00897B;padding-bottom:2px">Insurance Extras</div>
+    <div style="display:flex;gap:6px">${tiles.join('')}</div>
+  </div>`
 }
 
 /**
@@ -455,6 +544,15 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       </div>
     </div>`
   })()}
+
+  <!-- Pro-tier: version diff banner (only on v >= 2) -->
+  ${renderVersionDiffBanner(report)}
+
+  <!-- Pro-tier: per-section confidence breakdown (renders below the global score) -->
+  ${renderConfidenceBreakdown(report)}
+
+  <!-- Pro-tier: imagery date / shingle age / regional replacement-cost band / weather risk -->
+  ${renderInsuranceExtras(report)}
 
   <!-- Needs-review banner: rendered when reconciliation gate flagged a footprint mismatch >10% -->
   ${renderNeedsReviewBanner(report)}

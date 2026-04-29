@@ -473,6 +473,71 @@ export interface RASYieldAnalysis {
 }
 
 // ============================================================
+// PRO-TIER MEASUREMENT METADATA
+// ============================================================
+
+export type ConfidenceTier = 'high' | 'medium' | 'low'
+
+/** Per-source confidence ratings. Each field is human-readable + machine-readable. */
+export interface ConfidenceBreakdown {
+  pitch: ConfidenceTier
+  pitch_basis: string
+  area: ConfidenceTier
+  area_basis: string
+  edges: ConfidenceTier
+  edges_basis: string
+}
+
+export interface ReportVersionRow {
+  id?: number
+  report_id: number
+  version_num: number
+  data: any
+  diff_summary?: ReportDiffSummary | null
+  created_at?: string
+}
+
+export interface ReportDiffSummary {
+  prior_version_num: number
+  area_delta_ft2: number
+  area_delta_pct: number
+  squares_delta: number
+  edges_added: number
+  edges_removed: number
+  pitch_changed: boolean
+  prior_pitch?: string
+  new_pitch?: string
+  computed_ms: number
+  message: string
+}
+
+export interface ReportFeedbackRow {
+  id?: number
+  report_id: number
+  user_id?: number | null
+  type: 'measured_differently' | 'edge_wrong' | 'pitch_wrong' | 'other'
+  description?: string | null
+  survey_data?: any
+  discrepancy_pct?: number | null
+  needs_admin_review?: 0 | 1
+  status?: 'open' | 'reviewed' | 'resolved'
+  created_at?: string
+}
+
+export interface WeatherRisk {
+  hail_score: number               // 0-100, weighted by hail size + recency + proximity
+  wind_score: number               // 0-100
+  hail_event_count: number         // distinct events within sample radius/window
+  wind_event_count: number
+  largest_hail_inches: number
+  peak_wind_kmh: number
+  last_event_at: string | null
+  sample_radius_km: number
+  sample_window_days: number
+  computed_at: string
+}
+
+// ============================================================
 // COMPLETE ROOF MEASUREMENT REPORT — v2.1 (with RAS yield)
 // ============================================================
 
@@ -610,6 +675,16 @@ export interface RoofReport {
     /** Notes about data quality */
     notes: string[]
   }
+
+  /** Per-section confidence ratings shown on the Pro-tier report. */
+  confidence_breakdown?: ConfidenceBreakdown
+
+  /** Version + diff metadata for the Pro-tier diff banner. */
+  current_version_num?: number
+  diff_summary?: ReportDiffSummary | null
+
+  /** Weather-risk metadata derived from NWS / IEM hail history. */
+  weather_risk?: WeatherRisk | null
 
   // ---- AI GEOMETRY OVERLAY — Gemini Vision facet polygons for satellite image overlay ----
   ai_geometry?: AIMeasurementAnalysis | null

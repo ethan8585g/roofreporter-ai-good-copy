@@ -165,6 +165,13 @@ export async function saveCompletedReport(
   const eavesTagsJson: string | null = (reportData as any).eaves_tags
     ? JSON.stringify((reportData as any).eaves_tags)
     : null
+  const confidenceBreakdownJson: string | null = (reportData as any).confidence_breakdown
+    ? JSON.stringify((reportData as any).confidence_breakdown)
+    : null
+  const weatherRiskJson: string | null = (reportData as any).weather_risk
+    ? JSON.stringify((reportData as any).weather_risk)
+    : null
+  const currentVersionNum: number = Number((reportData as any).current_version_num) || 1
 
   const bindValues = [
     n(reportData.total_footprint_sqft || reportData.total_true_area_sqft), n(reportData.total_footprint_sqm || reportData.total_true_area_sqm),
@@ -187,6 +194,7 @@ export async function saveCompletedReport(
     reportData.vision_findings ? JSON.stringify(reportData.vision_findings) : null,
     reportData.solar_panel_layout ? JSON.stringify(reportData.solar_panel_layout) : null,
     needsReview ? 1 : 0, reviewReason, reviewDetailJson, eavesTagsJson,
+    confidenceBreakdownJson, weatherRiskJson, currentVersionNum,
     orderId
   ]
 
@@ -223,6 +231,7 @@ export async function saveCompletedReport(
       vision_findings_json = ?,
       solar_panel_layout = ?,
       needs_review = ?, review_reason = ?, review_detail = ?, eaves_tags = ?,
+      confidence_breakdown = ?, weather_risk = ?, current_version_num = ?,
       status = 'completed', generation_completed_at = datetime('now'), updated_at = datetime('now')
     WHERE order_id = ?
   `).bind(...bindValues).run()
@@ -436,4 +445,90 @@ export async function getAIImageryStatus(db: D1Database, orderId: number | strin
     SELECT ai_imagery_status, ai_imagery_error, ai_generated_imagery_json
     FROM reports WHERE order_id = ?
   `).bind(orderId).first<{ ai_imagery_status: string | null; ai_imagery_error: string | null; ai_generated_imagery_json: string | null }>()
+}
+
+// ============================================================
+// PRO-TIER: VERSIONING + FEEDBACK
+// ============================================================
+
+/**
+ * Snapshot the existing measurement payload + version_num before overwriting.
+ * Returns the *new* version_num the caller should attach to the next save.
+ * Idempotent-ish: if no prior report exists, returns 1 and records nothing.
+ */
+export async function snapshotPriorReportVersion(
+  db: D1Database,
+  orderId: number | string,
+  diffSummary: any | null = null,
+): Promise<number> {
+  const row = await db.prepare(`
+    SELECT id, current_version_num, api_response_raw
+    FROM reports WHERE order_id = ?
+  `).bind(orderId).first<{ id: number; current_version_num: number | null; api_response_raw: string | null }>()
+
+  if (!row || !row.id || !row.api_response_raw) return 1
+
+  const priorVersion = Number(row.current_version_num) || 1
+  await db.prepare(`
+    INSERT INTO report_versions (report_id, version_num, data, diff_summary)
+    VALUES (?, ?, ?, ?)
+  `).bind(row.id, priorVersion, row.api_response_raw, diffSummary ? JSON.stringify(diffSummary) : null).run()
+
+  return priorVersion + 1
+}
+
+/** Fetch the most recent saved measurement payload for diffing against. */
+export async function getPriorReportSnapshot(
+  db: D1Database,
+  orderId: number | string,
+): Promise<{ data: any; version_num: number } | null> {
+  const row = await db.prepare(`
+    SELECT current_version_num, api_response_raw
+    FROM reports WHERE order_id = ?
+  `).bind(orderId).first<{ current_version_num: number | null; api_response_raw: string | null }>()
+  if (!row?.api_response_raw) return null
+  try {
+    return {
+      data: JSON.parse(row.api_response_raw),
+      version_num: Number(row.current_version_num) || 1,
+    }
+  } catch { return null }
+}
+
+/** Insert a feedback row. Auto-flags discrepancies above 20% for admin review. */
+export async function insertReportFeedback(
+  db: D1Database,
+  args: {
+    report_id: number
+    user_id?: number | null
+    type: string
+    description?: string | null
+    survey_data?: any
+    discrepancy_pct?: number | null
+  },
+): Promise<{ id: number; needs_admin_review: boolean }> {
+  const needsReview = typeof args.discrepancy_pct === 'number' && args.discrepancy_pct > 20
+  const result = await db.prepare(`
+    INSERT INTO report_feedback (report_id, user_id, type, description, survey_data, discrepancy_pct, needs_admin_review)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    args.report_id,
+    args.user_id ?? null,
+    args.type,
+    args.description ?? null,
+    args.survey_data ? JSON.stringify(args.survey_data) : null,
+    args.discrepancy_pct ?? null,
+    needsReview ? 1 : 0,
+  ).run()
+  const id = (result as any).meta?.last_row_id ?? 0
+  return { id: Number(id), needs_admin_review: needsReview }
+}
+
+/** Look up the reports row by order_id — used to resolve report_id from the public-facing order id. */
+export async function getReportIdByOrder(
+  db: D1Database,
+  orderId: number | string,
+): Promise<number | null> {
+  const row = await db.prepare('SELECT id FROM reports WHERE order_id = ?').bind(orderId).first<{ id: number }>()
+  return row?.id ?? null
 }

@@ -576,3 +576,166 @@ document.addEventListener('DOMContentLoaded', () => {
     return isNaN(deg) ? 0 : deg;
   }
 });
+
+// ============================================================
+// Pro-tier "I measured this differently" widget
+// ============================================================
+// Auto-mounts on every rendered report page (/api/reports/:id/html).
+// Renders a floating bottom-right button + slide-over modal that
+// POSTs to /api/reports/:id/feedback. Server-side auto-flags
+// discrepancies above 20% for human admin review.
+// ============================================================
+(function rmFeedbackWidget() {
+  if (typeof document === 'undefined') return;
+  if (window.__RM_MEASURE_WIDGET_MOUNTED__) return;
+  // Mount only when the host page advertised an order id (set by reports.ts /html route).
+  if (!window.__ROOF_REPORT_ORDER_ID__) return;
+  window.__RM_MEASURE_WIDGET_MOUNTED__ = true;
+
+  var orderId = window.__ROOF_REPORT_ORDER_ID__;
+
+  var style = document.createElement('style');
+  style.textContent = [
+    '.rm-fb-fab{position:fixed;bottom:24px;right:24px;z-index:99998;background:#0F766E;color:#fff;border:none;border-radius:999px;padding:12px 20px;font:600 14px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(15,118,110,0.35);display:inline-flex;align-items:center;gap:8px;transition:transform .12s ease}',
+    '.rm-fb-fab:hover{transform:translateY(-2px);background:#115E59}',
+    '.rm-fb-overlay{position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:99999;opacity:0;pointer-events:none;transition:opacity .18s ease}',
+    '.rm-fb-overlay.open{opacity:1;pointer-events:auto}',
+    '.rm-fb-panel{position:fixed;top:0;right:0;height:100vh;width:100%;max-width:440px;background:#fff;z-index:100000;box-shadow:-12px 0 36px rgba(0,0,0,0.18);transform:translateX(100%);transition:transform .22s ease;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}',
+    '.rm-fb-panel.open{transform:translateX(0)}',
+    '.rm-fb-head{padding:18px 22px;border-bottom:1px solid #E5E7EB;display:flex;align-items:center;justify-content:space-between}',
+    '.rm-fb-title{font-size:16px;font-weight:700;color:#0F172A}',
+    '.rm-fb-close{background:transparent;border:none;font-size:20px;cursor:pointer;color:#64748B;padding:4px 8px;border-radius:4px}',
+    '.rm-fb-close:hover{background:#F1F5F9}',
+    '.rm-fb-body{padding:18px 22px;overflow-y:auto;flex:1}',
+    '.rm-fb-row{margin-bottom:14px}',
+    '.rm-fb-label{display:block;font-size:12px;font-weight:600;color:#334155;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.4px}',
+    '.rm-fb-input,.rm-fb-textarea,.rm-fb-select{width:100%;padding:10px 12px;border:1px solid #CBD5E1;border-radius:6px;font-size:14px;color:#0F172A;font-family:inherit;background:#fff;box-sizing:border-box}',
+    '.rm-fb-textarea{resize:vertical;min-height:84px}',
+    '.rm-fb-input:focus,.rm-fb-textarea:focus,.rm-fb-select:focus{outline:none;border-color:#0F766E;box-shadow:0 0 0 3px rgba(15,118,110,0.2)}',
+    '.rm-fb-help{font-size:11px;color:#64748B;margin-top:4px;line-height:1.4}',
+    '.rm-fb-foot{padding:14px 22px;border-top:1px solid #E5E7EB;display:flex;gap:8px;justify-content:flex-end;background:#F8FAFC}',
+    '.rm-fb-btn{padding:10px 18px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;border:1px solid transparent;font-family:inherit}',
+    '.rm-fb-btn-primary{background:#0F766E;color:#fff}',
+    '.rm-fb-btn-primary:hover{background:#115E59}',
+    '.rm-fb-btn-primary:disabled{background:#94A3B8;cursor:not-allowed}',
+    '.rm-fb-btn-ghost{background:#fff;color:#475569;border-color:#CBD5E1}',
+    '.rm-fb-btn-ghost:hover{background:#F1F5F9}',
+    '.rm-fb-toast{position:fixed;bottom:96px;right:24px;background:#0F172A;color:#fff;padding:12px 18px;border-radius:8px;font:14px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;z-index:100001;box-shadow:0 12px 28px rgba(0,0,0,0.28);max-width:340px;opacity:0;transform:translateY(8px);transition:opacity .2s ease,transform .2s ease;pointer-events:none}',
+    '.rm-fb-toast.show{opacity:1;transform:translateY(0)}',
+    '.rm-fb-toast.warn{background:#9A3412}',
+    '.rm-fb-toast.success{background:#15803D}'
+  ].join('');
+  document.head.appendChild(style);
+
+  var fab = document.createElement('button');
+  fab.className = 'rm-fb-fab';
+  fab.type = 'button';
+  fab.innerHTML = '<span style="font-size:16px">&#9998;</span><span>I measured this differently</span>';
+  fab.setAttribute('aria-label', 'Submit field-survey feedback');
+
+  var overlay = document.createElement('div');
+  overlay.className = 'rm-fb-overlay';
+
+  var panel = document.createElement('aside');
+  panel.className = 'rm-fb-panel';
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.innerHTML =
+    '<header class="rm-fb-head">' +
+      '<div class="rm-fb-title">Field-survey feedback</div>' +
+      '<button type="button" class="rm-fb-close" aria-label="Close">&times;</button>' +
+    '</header>' +
+    '<div class="rm-fb-body">' +
+      '<div class="rm-fb-row">' +
+        '<label class="rm-fb-label" for="rmFbType">What\'s wrong?</label>' +
+        '<select class="rm-fb-select" id="rmFbType">' +
+          '<option value="measured_differently">I measured a different total area</option>' +
+          '<option value="edge_wrong">An edge type is misclassified</option>' +
+          '<option value="pitch_wrong">The pitch doesn\'t match what I measured</option>' +
+          '<option value="other">Something else</option>' +
+        '</select>' +
+      '</div>' +
+      '<div class="rm-fb-row" id="rmFbAreaRow">' +
+        '<label class="rm-fb-label" for="rmFbArea">Your measured area (sq ft)</label>' +
+        '<input class="rm-fb-input" id="rmFbArea" type="number" min="0" step="1" placeholder="e.g. 2,450">' +
+        '<div class="rm-fb-help">If you measured the roof in the field with tape or a wheel, enter the total area. Discrepancies above 20% are routed for human review.</div>' +
+      '</div>' +
+      '<div class="rm-fb-row" id="rmFbPitchRow" style="display:none">' +
+        '<label class="rm-fb-label" for="rmFbPitch">Your measured pitch (rise:12)</label>' +
+        '<input class="rm-fb-input" id="rmFbPitch" type="text" placeholder="e.g. 6:12">' +
+      '</div>' +
+      '<div class="rm-fb-row">' +
+        '<label class="rm-fb-label" for="rmFbDesc">Notes for our reviewer</label>' +
+        '<textarea class="rm-fb-textarea" id="rmFbDesc" placeholder="What did you find on site? Any details that help us reproduce the discrepancy."></textarea>' +
+      '</div>' +
+    '</div>' +
+    '<footer class="rm-fb-foot">' +
+      '<button type="button" class="rm-fb-btn rm-fb-btn-ghost" id="rmFbCancel">Cancel</button>' +
+      '<button type="button" class="rm-fb-btn rm-fb-btn-primary" id="rmFbSubmit">Submit feedback</button>' +
+    '</footer>';
+
+  document.body.appendChild(fab);
+  document.body.appendChild(overlay);
+  document.body.appendChild(panel);
+
+  var typeSel = panel.querySelector('#rmFbType');
+  var areaRow = panel.querySelector('#rmFbAreaRow');
+  var pitchRow = panel.querySelector('#rmFbPitchRow');
+  typeSel.addEventListener('change', function () {
+    var t = typeSel.value;
+    areaRow.style.display = (t === 'measured_differently' || t === 'other') ? 'block' : 'none';
+    pitchRow.style.display = (t === 'pitch_wrong' || t === 'measured_differently') ? 'block' : 'none';
+  });
+
+  function open() { overlay.classList.add('open'); panel.classList.add('open'); document.body.style.overflow = 'hidden'; }
+  function close() { overlay.classList.remove('open'); panel.classList.remove('open'); document.body.style.overflow = ''; }
+  fab.addEventListener('click', open);
+  overlay.addEventListener('click', close);
+  panel.querySelector('.rm-fb-close').addEventListener('click', close);
+  panel.querySelector('#rmFbCancel').addEventListener('click', close);
+
+  function toast(message, kind) {
+    var t = document.createElement('div');
+    t.className = 'rm-fb-toast' + (kind ? ' ' + kind : '');
+    t.textContent = message;
+    document.body.appendChild(t);
+    requestAnimationFrame(function () { t.classList.add('show'); });
+    setTimeout(function () { t.classList.remove('show'); setTimeout(function () { t.remove(); }, 250); }, 4000);
+  }
+
+  panel.querySelector('#rmFbSubmit').addEventListener('click', async function (ev) {
+    var btn = ev.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+    try {
+      var t = typeSel.value;
+      var description = panel.querySelector('#rmFbDesc').value.trim();
+      var measuredArea = Number(panel.querySelector('#rmFbArea').value);
+      var measuredPitch = panel.querySelector('#rmFbPitch').value.trim();
+      var survey_data = {};
+      if (Number.isFinite(measuredArea) && measuredArea > 0) survey_data.measured_area_ft2 = measuredArea;
+      if (measuredPitch) survey_data.measured_pitch = measuredPitch;
+      var res = await fetch('/api/reports/' + encodeURIComponent(orderId) + '/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ type: t, description: description || null, survey_data: Object.keys(survey_data).length ? survey_data : null }),
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok) {
+        toast((data && data.error) || ('Submit failed (' + res.status + ')'), 'warn');
+      } else if (data.needs_admin_review) {
+        toast('Logged a ' + data.discrepancy_pct + '% discrepancy — flagged for human review.', 'warn');
+        close();
+      } else {
+        toast('Thanks — feedback recorded.', 'success');
+        close();
+      }
+    } catch (err) {
+      toast('Network error. Please try again.', 'warn');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Submit feedback';
+    }
+  });
+})();

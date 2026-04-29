@@ -94,6 +94,16 @@ function computeTracedImageryCenter(traceData: any): { lat: number; lng: number 
   return { lat: (minLat + maxLat) / 2, lng: (minLng + maxLng) / 2 }
 }
 
+/** Mean of classifier_confidence across edges; null when no classifier data is present. */
+function avgEdgeConfidence(edges: any[] | undefined): number | null {
+  if (!Array.isArray(edges) || edges.length === 0) return null
+  const vals = edges
+    .map((e: any) => Number(e?.classifier_confidence))
+    .filter(v => Number.isFinite(v))
+  if (vals.length === 0) return null
+  return vals.reduce((s, v) => s + v, 0) / vals.length
+}
+
 export const reportsRoutes = new Hono<{ Bindings: Bindings }>()
 
 // ── GLOBAL ERROR HANDLER ──
@@ -305,6 +315,16 @@ reportsRoutes.get('/:orderId/html', async (c) => {
   } catch (e) {
     // Never fail the report render because of insurance extensions.
     console.warn(`[insurance-ext] order ${orderId}: ${(e as any)?.message || e}`)
+  }
+
+  // Pro-tier: inject the "I measured this differently" widget. Appears as a
+  // floating button bottom-right of the rendered report; opens a slide-over
+  // modal that POSTs to /api/reports/:orderId/feedback.
+  const proWidget = `<script>window.__ROOF_REPORT_ORDER_ID__=${JSON.stringify(orderId)};</script><script src="/static/measure.js" defer></script>`
+  if (augmented.includes('</body>')) {
+    augmented = augmented.replace('</body>', `${proWidget}</body>`)
+  } else {
+    augmented = augmented + proWidget
   }
   return c.html(augmented)
 })
@@ -2568,6 +2588,56 @@ reportsRoutes.get('/:orderId/ai-imagery-status', async (c) => {
 })
 
 // ============================================================
+// POST /:orderId/feedback — "I measured this differently" capture
+// ============================================================
+// Pro-tier field-survey feedback. Auto-flags discrepancies > 20%
+// for admin review (visible from the platform-admin dashboard).
+// Accepts both customer and admin sessions.
+// ============================================================
+reportsRoutes.post('/:orderId/feedback', async (c) => {
+  const orderId = c.req.param('orderId')
+  const user = await validateAdminOrCustomer(c)
+  if (!user) return c.json({ error: 'Authentication required' }, 401)
+
+  let body: any
+  try { body = await c.req.json() } catch { return c.json({ error: 'invalid json' }, 400) }
+
+  const reportId = await repo.getReportIdByOrder(c.env.DB, orderId)
+  if (!reportId) return c.json({ error: 'Report not found' }, 404)
+
+  // Compute discrepancy from the saved measurement payload, when the user
+  // provided a measured area in their survey.
+  const surveyArea = Number(body?.survey_data?.measured_area_ft2)
+  let discrepancyPct: number | null = null
+  if (Number.isFinite(surveyArea) && surveyArea > 0) {
+    const prior = await repo.getPriorReportSnapshot(c.env.DB, orderId)
+    const reportArea = Number(prior?.data?.total_true_area_sqft || prior?.data?.total_footprint_sqft || 0)
+    if (reportArea > 0) {
+      discrepancyPct = Math.round(Math.abs(surveyArea - reportArea) / reportArea * 1000) / 10
+    }
+  }
+
+  const allowedTypes = ['measured_differently', 'edge_wrong', 'pitch_wrong', 'other'] as const
+  const type = (allowedTypes as readonly string[]).includes(body?.type) ? body.type : 'measured_differently'
+
+  const result = await repo.insertReportFeedback(c.env.DB, {
+    report_id: reportId,
+    user_id: (user as any).id ?? null,
+    type,
+    description: typeof body?.description === 'string' ? String(body.description).slice(0, 2000) : null,
+    survey_data: body?.survey_data ?? null,
+    discrepancy_pct: discrepancyPct,
+  })
+
+  return c.json({
+    success: true,
+    feedback_id: result.id,
+    discrepancy_pct: discrepancyPct,
+    needs_admin_review: result.needs_admin_review,
+  })
+})
+
+// ============================================================
 // POST /recovery/stuck — Auto-recover reports stuck in 'enhancing' or 'generating'
 // Admin endpoint that finds and fixes reports stuck > 90s
 // ============================================================
@@ -3271,6 +3341,47 @@ async function _generateReportForOrderInner(
       reportData.customer_gross_squares = grossSquares
       reportData.customer_total_cost_estimate = Math.round(grossSquares * parseFloat(order.price_per_bundle) * 100) / 100
       console.log(`[Generate] Order ${orderId}: Customer pricing — $${order.price_per_bundle}/sq × ${grossSquares} squares = $${reportData.customer_total_cost_estimate} CAD`)
+    }
+
+    // ── PRO-TIER: confidence breakdown, version diff, weather risk ──
+    try {
+      const { computeConfidenceBreakdown, diffMeasurements } = await import('../services/report-pro')
+      const { getWeatherRiskForLocation } = await import('../services/report-weather')
+
+      ;(reportData as any).confidence_breakdown = computeConfidenceBreakdown({
+        imagery_quality: reportData.quality?.imagery_quality,
+        pitch_confidence: (reportData as any).pitch_confidence,
+        pitch_source: (reportData as any).pitch_source,
+        area_variance_pct: (reportData as any).review_flag?.delta_pct,
+        edge_classifier_ran: !!((reportData as any).edge_classifier_ran || (reportData.edges || []).some((e: any) => typeof e.classifier_confidence === 'number')),
+        avg_edge_classifier_confidence: avgEdgeConfidence(reportData.edges),
+        low_confidence_edge_count: (reportData.edges || []).filter((e: any) => typeof e.classifier_confidence === 'number' && e.classifier_confidence < 70).length,
+      })
+
+      // Snapshot prior + compute diff before persisting the new payload.
+      const prior = await repo.getPriorReportSnapshot(env.DB, orderId)
+      let diffSummary: any = null
+      if (prior) {
+        diffSummary = diffMeasurements(prior.data, reportData as any, prior.version_num)
+        ;(reportData as any).diff_summary = diffSummary
+        const newVersion = await repo.snapshotPriorReportVersion(env.DB, orderId, diffSummary)
+        ;(reportData as any).current_version_num = newVersion
+      } else {
+        ;(reportData as any).current_version_num = 1
+      }
+
+      // Weather risk lookup runs in parallel with HTML generation; never blocks
+      // the pipeline if NWS/IEM is down.
+      if (order.latitude && order.longitude) {
+        try {
+          const risk = await getWeatherRiskForLocation(Number(order.latitude), Number(order.longitude))
+          if (risk) (reportData as any).weather_risk = risk
+        } catch (e: any) {
+          console.warn(`[Generate] Order ${orderId}: weather-risk lookup failed: ${e?.message}`)
+        }
+      }
+    } catch (proErr: any) {
+      console.warn(`[Generate] Order ${orderId}: pro-tier metadata pipeline error (non-fatal):`, proErr?.message)
     }
 
     console.log(`[Generate] Order ${orderId}: generating HTML report...`)
