@@ -470,7 +470,7 @@ export async function snapshotPriorReportVersion(
 
   const priorVersion = Number(row.current_version_num) || 1
   await db.prepare(`
-    INSERT INTO report_versions (report_id, version_num, data, diff_summary)
+    INSERT INTO report_measurement_versions (report_id, version_num, data, diff_summary)
     VALUES (?, ?, ?, ?)
   `).bind(row.id, priorVersion, row.api_response_raw, diffSummary ? JSON.stringify(diffSummary) : null).run()
 

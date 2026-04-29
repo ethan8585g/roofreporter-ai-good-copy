@@ -8,7 +8,7 @@ ALTER TABLE reports ADD COLUMN confidence_breakdown TEXT;        -- JSON: { pitc
 ALTER TABLE reports ADD COLUMN current_version_num INTEGER DEFAULT 1;
 ALTER TABLE reports ADD COLUMN weather_risk TEXT;                -- JSON: { hail_score, wind_score, last_event_at, sample_radius_km }
 
-CREATE TABLE IF NOT EXISTS report_versions (
+CREATE TABLE IF NOT EXISTS report_measurement_versions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   report_id INTEGER NOT NULL,
   version_num INTEGER NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS report_versions (
   FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_report_versions_report ON report_versions(report_id, version_num);
+CREATE INDEX IF NOT EXISTS idx_report_measurement_versions_report ON report_measurement_versions(report_id, version_num);
 
 CREATE TABLE IF NOT EXISTS report_feedback (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
