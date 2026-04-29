@@ -455,18 +455,6 @@ squareRoutes.post('/use-credit', async (c) => {
       }, 402)
     }
 
-    // Enforce monthly report limit (subscription tier)
-    if (!isDev && customer.monthly_report_limit && customer.monthly_report_limit > 0) {
-      const monthlyUsed = customer.monthly_reports_used || 0
-      if (monthlyUsed >= customer.monthly_report_limit) {
-        return c.json({
-          error: 'Monthly report limit reached (' + customer.monthly_report_limit + ' reports). Upgrade your plan or wait for the next billing period.',
-          monthly_limit: customer.monthly_report_limit,
-          monthly_used: monthlyUsed
-        }, 402)
-      }
-    }
-
     const { property_address, property_city, property_province, property_postal_code,
             service_tier, latitude, longitude, roof_trace_json, price_per_bundle, trace_measurement_json,
             needs_admin_trace, crm_customer_id,
@@ -641,8 +629,6 @@ squareRoutes.post('/use-credit', async (c) => {
           return c.json({ error: 'No credits remaining', credits_remaining: 0 }, 402)
         }
       }
-      // Increment monthly usage counter
-      await c.env.DB.prepare('UPDATE customers SET monthly_reports_used = monthly_reports_used + 1 WHERE id = ?').bind(customer.customer_id).run()
     }
 
     const newOrderId = result.meta.last_row_id as number
