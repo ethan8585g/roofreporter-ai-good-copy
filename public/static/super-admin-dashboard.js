@@ -1585,12 +1585,8 @@ function saInitTraceMap(lat, lng, address) {
   var center = { lat: lat || 53.5, lng: lng || -113.5 };
   var map = new google.maps.Map(mapEl, {
     center: center, zoom: 20,
-    mapTypeId: 'satellite', tilt: 0, rotateControl: false,
-    mapTypeControl: true,
-    mapTypeControlOptions: {
-      style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
-      mapTypeIds: ['satellite', 'hybrid']
-    },
+    mapTypeId: 'roadmap', tilt: 0, rotateControl: false,
+    mapTypeControl: false,
     streetViewControl: false, fullscreenControl: false,
     gestureHandling: 'greedy',
     zoomControl: true,
@@ -1598,11 +1594,34 @@ function saInitTraceMap(lat, lng, address) {
     disableDoubleClickZoom: false,
     clickableIcons: false,
     styles: [
+      { elementType: 'labels', stylers: [{ visibility: 'off' }] },
       { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-      { featureType: 'transit', stylers: [{ visibility: 'off' }] },
       { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
-      { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] }
+      { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+      { featureType: 'administrative', stylers: [{ visibility: 'off' }] }
     ]
+  });
+  // Register clean, label-free Esri World Imagery synchronously and use it as the
+  // default basemap. Google's 'satellite'/'hybrid' types render baked-in POI labels
+  // (Edmonton Bujinkan, Allendale Community League, etc.) that intercept clicks
+  // and pollute the trace canvas — Esri imagery has none of that.
+  var esriClean = new google.maps.ImageMapType({
+    name: 'Satellite',
+    tileSize: new google.maps.Size(256, 256),
+    minZoom: 1, maxZoom: 19,
+    getTileUrl: function(coord, zoom) {
+      if (zoom > 19) return null;
+      return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + zoom + '/' + coord.y + '/' + coord.x;
+    }
+  });
+  map.mapTypes.set('esri_clean', esriClean);
+  map.setMapTypeId('esri_clean');
+  map.setOptions({
+    mapTypeControl: true,
+    mapTypeControlOptions: {
+      style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
+      mapTypeIds: ['esri_clean']
+    }
   });
   s.map = map;
 
@@ -1615,7 +1634,7 @@ function saInitTraceMap(lat, lng, address) {
   }).then(function(data) {
     var providers = (data && data.providers) || [];
     if (!providers.length) return;
-    var controlIds = ['satellite', 'hybrid'];
+    var controlIds = ['esri_clean'];
     providers.forEach(function(p) {
       var layer = new google.maps.ImageMapType({
         name: p.name,
