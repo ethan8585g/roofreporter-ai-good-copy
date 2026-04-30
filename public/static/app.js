@@ -1184,38 +1184,24 @@ function initTraceMap() {
   state.traceMap = new google.maps.Map(mapDiv, {
     center,
     zoom: 20,
-    mapTypeId: 'roadmap',
+    mapTypeId: 'satellite',
     tilt: 0,
     fullscreenControl: true,
     streetViewControl: false,
     zoomControl: true,
-    mapTypeControl: false,
+    mapTypeControl: true,
     clickableIcons: false,
     styles: [
       { elementType: 'labels', stylers: [{ visibility: 'off' }] },
-      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-      { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
-      { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-      { featureType: 'administrative', stylers: [{ visibility: 'off' }] }
-    ]
-  });
-  // Use clean, label-free Esri World Imagery (no Google POI overlay).
-  var esriClean_app = new google.maps.ImageMapType({
-    name: 'Satellite',
-    tileSize: new google.maps.Size(256, 256),
-    minZoom: 1, maxZoom: 19,
-    getTileUrl: function(coord, zoom) {
-      if (zoom > 19) return null;
-      return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + zoom + '/' + coord.y + '/' + coord.x;
-    }
-  });
-  state.traceMap.mapTypes.set('esri_clean', esriClean_app);
-  state.traceMap.setMapTypeId('esri_clean');
-  state.traceMap.setOptions({
-    mapTypeControl: true,
+      { featureType: 'poi', elementType: 'all', stylers: [{ visibility: 'off' }] },
+      { featureType: 'poi.business', elementType: 'all', stylers: [{ visibility: 'off' }] },
+      { featureType: 'transit', elementType: 'all', stylers: [{ visibility: 'off' }] },
+      { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+      { featureType: 'administrative', elementType: 'labels', stylers: [{ visibility: 'off' }] }
+    ],
     mapTypeControlOptions: {
       style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
-      mapTypeIds: ['esri_clean']
+      mapTypeIds: ['satellite', 'hybrid']
     }
   });
 

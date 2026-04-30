@@ -1023,7 +1023,7 @@ function initTraceMap() {
     ],
     mapTypeControlOptions: {
       style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
-      mapTypeIds: ['esri']
+      mapTypeIds: ['satellite', 'hybrid', 'esri']
     }
   });
 
