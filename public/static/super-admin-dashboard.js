@@ -1620,7 +1620,7 @@ function saInitTraceMap(lat, lng, address) {
     mapTypeControl: true,
     mapTypeControlOptions: {
       style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
-      mapTypeIds: ['esri_clean']
+      mapTypeIds: ['esri_clean', 'satellite', 'hybrid']
     }
   });
   s.map = map;
@@ -1634,7 +1634,7 @@ function saInitTraceMap(lat, lng, address) {
   }).then(function(data) {
     var providers = (data && data.providers) || [];
     if (!providers.length) return;
-    var controlIds = ['esri_clean'];
+    var controlIds = ['esri_clean', 'satellite', 'hybrid'];
     providers.forEach(function(p) {
       var layer = new google.maps.ImageMapType({
         name: p.name,
