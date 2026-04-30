@@ -33,6 +33,9 @@ const DEFAULTS = {
   ridgeToCornerFt:   3.0,  // ridge endpoint within 3 ft of an eave corner → snap
   ridgeToLineFt:     2.0,  // ridge endpoint within 2 ft of a hip/valley endpoint → join
   ridgeGapFt:        1.5,  // two ridge polylines with endpoints within 1.5 ft → splice
+  parallelPairAngleDeg: 5, // opposite edges within 5° of antiparallel → candidate pair
+  parallelPairMaxDiffFt: 2.0,  // length gap ≤ 2 ft → equalize
+  parallelPairMaxDiffPct: 0.10, // AND length gap ≤ 10% of longer edge
   aiMinConfidence:   0.85, // only apply Claude suggestions at/above this threshold
 }
 
@@ -64,6 +67,9 @@ export interface EnhanceOptions {
   ridgeToCornerFt?: number
   ridgeToLineFt?: number
   ridgeGapFt?: number
+  parallelPairAngleDeg?: number
+  parallelPairMaxDiffFt?: number
+  parallelPairMaxDiffPct?: number
   aiEnabled?: boolean
   aiMinConfidence?: number
 }
@@ -263,6 +269,105 @@ export function snapRightAngles(
   return { pts: out.map(p => toLatLng(p, refLat, refLng)), snapped }
 }
 
+// ── Rule: equalize near-symmetric opposite edges ──────────────
+// Pairs each edge with its closest near-antiparallel mate (within
+// `angleThreshDeg` of 180° apart), and if their lengths are within
+// both `maxDiffFt` AND `maxDiffPct`, averages them. This catches
+// GPS wobble on bilaterally symmetric shapes (sheds, rectangular
+// houses with chamfered corners) where opposite eaves should be
+// equal but came out 1 ft apart.
+//
+// Conservative by design: skips any pair where the gap exceeds
+// either threshold, so genuinely asymmetric buildings are untouched.
+//
+// Algorithm:
+//  1. Compute each edge's midpoint, bearing, length.
+//  2. For each edge i, find best j (j != i) where bearings are
+//     within `angleThreshDeg` of 180° apart (antiparallel).
+//  3. If pair (i,j) is mutual best AND length gap is within both
+//     thresholds, mark for equalization to the average length.
+//  4. Apply by moving the SECOND endpoint of each marked edge
+//     along its current direction so length equals the target.
+//     Each vertex is moved at most once per pass.
+
+export function equalizeParallelPairs(
+  pts: LatLng[],
+  angleThreshDeg: number,
+  maxDiffFt: number,
+  maxDiffPct: number,
+): { pts: LatLng[]; equalized: number } {
+  const n = pts.length
+  if (n < 4) return { pts, equalized: 0 }
+  const refLat = pts.reduce((s, p) => s + p.lat, 0) / n
+  const refLng = pts.reduce((s, p) => s + p.lng, 0) / n
+  const xy = pts.map(p => toXY(p, refLat, refLng))
+
+  interface EdgeInfo { i: number; len: number; bearing: number; midX: number; midY: number }
+  const edges: EdgeInfo[] = []
+  for (let i = 0; i < n; i++) {
+    const a = xy[i]
+    const b = xy[(i + 1) % n]
+    edges.push({
+      i,
+      len: distFt(a, b),
+      bearing: bearingDeg(a, b),
+      midX: (a.x + b.x) / 2,
+      midY: (a.y + b.y) / 2,
+    })
+  }
+
+  // For each edge, find its single best antiparallel partner.
+  const partner: number[] = new Array(n).fill(-1)
+  for (let i = 0; i < n; i++) {
+    let bestJ = -1
+    let bestDelta = Infinity
+    for (let j = 0; j < n; j++) {
+      if (j === i) continue
+      // Antiparallel: bearings differ by ~180°.
+      const delta = Math.abs(180 - angleDiffDeg(edges[i].bearing, edges[j].bearing))
+      if (delta > angleThreshDeg) continue
+      if (delta < bestDelta) { bestDelta = delta; bestJ = j }
+    }
+    partner[i] = bestJ
+  }
+
+  // Mutual partners only, length-eligible, and process each pair once.
+  const handled = new Set<number>()
+  const newXY = xy.slice()
+  let equalized = 0
+  for (let i = 0; i < n; i++) {
+    if (handled.has(i)) continue
+    const j = partner[i]
+    if (j < 0 || partner[j] !== i) continue
+    const li = edges[i].len
+    const lj = edges[j].len
+    const diff = Math.abs(li - lj)
+    const longer = Math.max(li, lj)
+    if (longer < 0.5) continue
+    if (diff > maxDiffFt) continue
+    if (diff / longer > maxDiffPct) continue
+    if (diff < 0.05) { handled.add(i); handled.add(j); continue } // already equal
+    const target = (li + lj) / 2
+    // Move the SECOND vertex of each edge along its current direction
+    // so its length becomes `target`. Preserves the start vertex so
+    // already-snapped right-angle corners stay anchored on one side.
+    for (const k of [i, j]) {
+      const a = newXY[k]
+      const b = newXY[(k + 1) % n]
+      const curLen = Math.hypot(b.x - a.x, b.y - a.y)
+      if (curLen < 0.5) continue
+      const ux = (b.x - a.x) / curLen
+      const uy = (b.y - a.y) / curLen
+      newXY[(k + 1) % n] = { x: a.x + ux * target, y: a.y + uy * target }
+    }
+    handled.add(i); handled.add(j)
+    equalized++
+  }
+
+  if (equalized === 0) return { pts, equalized: 0 }
+  return { pts: newXY.map(p => toLatLng(p, refLat, refLng)), equalized }
+}
+
 // ── Rule: snap ridge endpoints to nearby eave corners ─────────
 
 export function snapRidgeEndpointsToCorners(
@@ -437,6 +542,12 @@ export function enhanceTrace(trace: UiTrace, opts: EnhanceOptions = {}): Enhance
       changes.push({ rule: 'snap_right_angle', layer: 'eaves', section: s, details: `snapped ${right.snapped} corners to 90° (within ${cfg.rightAngleSnapDeg}°)` })
     }
     pts = right.pts
+
+    const eq = equalizeParallelPairs(pts, cfg.parallelPairAngleDeg, cfg.parallelPairMaxDiffFt, cfg.parallelPairMaxDiffPct)
+    if (eq.equalized > 0) {
+      changes.push({ rule: 'equalize_parallel_pair', layer: 'eaves', section: s, details: `equalized ${eq.equalized} near-symmetric edge pair${eq.equalized === 1 ? '' : 's'} (≤${cfg.parallelPairMaxDiffFt} ft / ${Math.round(cfg.parallelPairMaxDiffPct * 100)}% gap, within ${cfg.parallelPairAngleDeg}° of antiparallel)` })
+    }
+    pts = eq.pts
 
     if (pts.length < 3) {
       warnings.push(`Section ${s + 1}: cleanup left fewer than 3 points; reverted to original ${beforeLen}-point polygon.`)

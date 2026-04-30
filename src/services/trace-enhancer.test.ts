@@ -7,6 +7,7 @@ import {
   snapRidgeEndpointsToCorners,
   snapRidgeEndpointsToLines,
   closeRidgeGaps,
+  equalizeParallelPairs,
 } from './trace-enhancer'
 import type { LatLng, UiTrace } from '../utils/trace-validation'
 
@@ -164,6 +165,61 @@ describe('closeRidgeGaps', () => {
     const out = closeRidgeGaps([a, b], 1.5)
     expect(out.spliced).toBe(0)
     expect(out.ridges.length).toBe(2)
+  })
+})
+
+describe('equalizeParallelPairs', () => {
+  // Helper: edge length in feet between two LatLngs.
+  function edgeFt(a: LatLng, b: LatLng): number {
+    const dy = (b.lat - a.lat) * FT_PER_DEG_LAT
+    const dx = (b.lng - a.lng) * FT_PER_DEG_LAT * Math.cos(a.lat * Math.PI / 180)
+    return Math.hypot(dx, dy)
+  }
+
+  it('equalizes a near-symmetric shed (60×27 vs 60×28)', () => {
+    // Mimics the user's shop: rectangle whose left side is 28 ft and
+    // right side is 27 ft due to GPS noise. Expect both ends → 27.5.
+    const pts: LatLng[] = [
+      REF,
+      offset(REF, 60, 0),
+      offset(REF, 60, 27),
+      offset(REF, 0, 28),
+    ]
+    const out = equalizeParallelPairs(pts, 5, 2.0, 0.10)
+    expect(out.equalized).toBeGreaterThanOrEqual(1)
+    const left = edgeFt(out.pts[3], out.pts[0])
+    const right = edgeFt(out.pts[1], out.pts[2])
+    expect(Math.abs(left - right)).toBeLessThan(0.5)
+  })
+
+  it('leaves a genuinely asymmetric shape alone (gap > 2 ft)', () => {
+    // Left side 20 ft, right side 28 ft — a real bumpout, not noise.
+    const pts: LatLng[] = [
+      REF,
+      offset(REF, 60, 0),
+      offset(REF, 60, 28),
+      offset(REF, 0, 20),
+    ]
+    const out = equalizeParallelPairs(pts, 5, 2.0, 0.10)
+    expect(out.equalized).toBe(0)
+  })
+
+  it('leaves a clean rectangle untouched (already equal)', () => {
+    const out = equalizeParallelPairs(cleanRect(), 5, 2.0, 0.10)
+    expect(out.equalized).toBe(0)
+  })
+
+  it('skips pairs that exceed the percent threshold even if under 2 ft', () => {
+    // 5 ft vs 6.5 ft → 1.5 ft gap (under 2 ft) but 23% (over 10%).
+    // Tiny structures shouldn't get force-equalized.
+    const pts: LatLng[] = [
+      REF,
+      offset(REF, 5, 0),
+      offset(REF, 5, 6.5),
+      offset(REF, 0, 5),
+    ]
+    const out = equalizeParallelPairs(pts, 5, 2.0, 0.10)
+    expect(out.equalized).toBe(0)
   })
 })
 
