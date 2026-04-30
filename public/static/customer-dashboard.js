@@ -194,19 +194,17 @@ function renderDashboard() {
       '<nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">' +
         (isSolar ? navLink('/customer/design-builder', 'fa-drafting-compass', 'Design Builder', null, 'bg-amber-600') : '') +
         navLink('/customer/dashboard', 'fa-th-large', 'Home', null, '') +
+        // Section 1 — Report Tools
+        '<div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Report Tools</div>' +
         navLink('/customer/order', 'fa-plus-circle', isSolar ? 'Order Solar Proposal' : 'Order Report', creditBadge || null, creditBadgeColor) +
         navLink('/customer/reports', 'fa-file-alt', 'Report History', null, '') +
+        // Section 2 — Billing Tools
+        '<div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Billing Tools</div>' +
         navLink('/customer/proposals', 'fa-file-signature', 'Proposals', propBadge || null, 'bg-blue-600') +
         navLink('/customer/invoices', 'fa-file-invoice-dollar', 'Invoice Builder', invBadge || null, 'bg-blue-600') +
-        navLink('/customer/jobs', 'fa-hard-hat', 'Jobs & Crew Manager', jobBadge || null, 'bg-gray-800') +
-        navLink('/customer/catalog', 'fa-box-open', 'Catalog', null, '') +
-        navLink('/customer/d2d', 'fa-door-open', 'D2D Manager', null, '') +
-        navLink('/customer/pipeline', 'fa-funnel-dollar', 'Pipeline', null, 'bg-gray-800') +
-        navLink('/customer/storm-scout', 'fa-cloud-bolt', 'Storm Alerts', null, '') +
-        navLink('/customer/certificate-automations', 'fa-robot', 'Automations', null, 'bg-emerald-600') +
-        navLink('/customer/commissions', 'fa-dollar-sign', 'Commissions', null, 'bg-emerald-600') +
-        navLink('/customer/suppliers', 'fa-store', 'Suppliers', null, '') +
-        navLink('/customer/referrals', 'fa-gift', 'Referrals', null, '') +
+        navLink('/customer/customers', 'fa-users', 'Customers', s.customers > 0 ? s.customers + '' : null, 'bg-gray-800') +
+        // Section 3 — Team Management & Business Tools
+        '<div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Team & Business</div>' +
         // Leads (unified inbox)
         '<a href="/customer/leads" class="flex items-center justify-between px-3 py-2 rounded-lg transition-colors group" style="color:var(--text-secondary);background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.05))">' +
           '<span class="flex items-center gap-2.5">' +
@@ -215,7 +213,15 @@ function renderDashboard() {
           '</span>' +
           leadsBadge +
         '</a>' +
-        navLink('/customer/customers', 'fa-users', 'Customers', s.customers > 0 ? s.customers + '' : null, 'bg-gray-800') +
+        navLink('/customer/pipeline', 'fa-funnel-dollar', 'Pipeline', null, 'bg-gray-800') +
+        navLink('/customer/jobs', 'fa-hard-hat', 'Jobs & Crew Manager', jobBadge || null, 'bg-gray-800') +
+        navLink('/customer/d2d', 'fa-door-open', 'D2D Manager', null, '') +
+        navLink('/customer/storm-scout', 'fa-cloud-bolt', 'Storm Alerts', null, '') +
+        navLink('/customer/certificate-automations', 'fa-robot', 'Automations', null, 'bg-emerald-600') +
+        navLink('/customer/commissions', 'fa-dollar-sign', 'Commissions', null, 'bg-emerald-600') +
+        navLink('/customer/suppliers', 'fa-store', 'Suppliers', null, '') +
+        navLink('/customer/catalog', 'fa-box-open', 'Catalog', null, '') +
+        navLink('/customer/referrals', 'fa-gift', 'Referrals', null, '') +
       '</nav>' +
       // Settings gear button
       '<div class="px-4 py-3 flex items-center" style="border-top:1px solid var(--border-color)">' +
