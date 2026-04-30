@@ -1937,6 +1937,13 @@ const seoCities: Record<string, { name: string; province: string; lat: string; l
   'sudbury': { name: 'Sudbury', province: 'Ontario', lat: '46.4917', lng: '-80.9930' },
   'kingston-ontario': { name: 'Kingston', province: 'Ontario', lat: '44.2312', lng: '-76.4860' },
   'thunder-bay': { name: 'Thunder Bay', province: 'Ontario', lat: '48.3809', lng: '-89.2477' },
+  // Quebec
+  'montreal': { name: 'Montreal', province: 'Quebec', lat: '45.5019', lng: '-73.5674' },
+  'quebec-city': { name: 'Quebec City', province: 'Quebec', lat: '46.8139', lng: '-71.2080' },
+  'laval': { name: 'Laval', province: 'Quebec', lat: '45.6066', lng: '-73.7124' },
+  'gatineau': { name: 'Gatineau', province: 'Quebec', lat: '45.4765', lng: '-75.7013' },
+  'sherbrooke': { name: 'Sherbrooke', province: 'Quebec', lat: '45.4042', lng: '-71.8929' },
+  'trois-rivieres': { name: 'Trois-Rivières', province: 'Quebec', lat: '46.3432', lng: '-72.5432' },
   // Atlantic Canada
   'halifax': { name: 'Halifax', province: 'Nova Scotia', lat: '44.6488', lng: '-63.5752' },
   'moncton': { name: 'Moncton', province: 'New Brunswick', lat: '46.0878', lng: '-64.7782' },
@@ -2240,9 +2247,7 @@ app.get('/roof-measurement/:city', (c) => {
   ${geoRegion ? `<meta name="geo.region" content="${geoRegion}">` : ''}
   <meta name="geo.placename" content="${city.name}, ${city.province}${countryLabel ? ', ' + countryLabel : ''}">
   <meta name="geo.position" content="${city.lat};${city.lng}">
-  <link rel="alternate" hreflang="en-US" href="https://www.roofmanager.ca/roof-measurement/${citySlug}">
-  <link rel="alternate" hreflang="en-CA" href="https://www.roofmanager.ca/roof-measurement/${citySlug}">
-  <link rel="alternate" hreflang="en" href="https://www.roofmanager.ca/roof-measurement/${citySlug}">
+  <link rel="alternate" hreflang="${isUS ? 'en-US' : 'en-CA'}" href="https://www.roofmanager.ca/roof-measurement/${citySlug}">
   <link rel="alternate" hreflang="x-default" href="https://www.roofmanager.ca/roof-measurement/${citySlug}">
   <script type="application/ld+json">
   {
@@ -4563,17 +4568,20 @@ function getTailwindConfig() {
 }
 
 function getHeadTags(canonicalPath?: string) {
-  // Per-page hreflang only when a canonical path is supplied. When omitted we
-  // emit no hreflang at all — emitting a homepage-target hreflang on every
-  // page told Google "the canonical version of this page is /", which caused
-  // Search Console to flag pages as "Alternate page with proper canonical tag"
-  // and exclude them from the index.
+  // Per-page hreflang only when a canonical path is supplied. Locale is
+  // inferred from the path so a single page only declares hreflang for the
+  // region it actually targets — declaring the same URL as both en-US and
+  // en-CA tells Google the pages are interchangeable, which lets US-targeted
+  // content outrank Canadian content for Canadian searchers.
   const hreflangBlock = canonicalPath
     ? (() => {
-        const target = `https://www.roofmanager.ca${canonicalPath.startsWith('/') ? canonicalPath : '/' + canonicalPath}`
-        return `<link rel="alternate" hreflang="en-US" href="${target}">
-  <link rel="alternate" hreflang="en-CA" href="${target}">
-  <link rel="alternate" hreflang="en" href="${target}">
+        const path = canonicalPath.startsWith('/') ? canonicalPath : '/' + canonicalPath
+        const target = `https://www.roofmanager.ca${path}`
+        const isUSPath = /^\/us\/|^\/roof-(?:measurement|replacement-cost)\/(?:united-states|new-york|los-angeles|chicago|houston|dallas|phoenix|san-antonio|san-diego|denver|miami|atlanta|tampa|orlando|charlotte|nashville|austin|seattle|portland|las-vegas|jacksonville|fort-worth|memphis|louisville|new-orleans|tulsa|oklahoma-city|virginia-beach|richmond-va|raleigh|baltimore|columbus-ohio|indianapolis|milwaukee|kansas-city|omaha|minneapolis|wichita|detroit|cleveland|pittsburgh|st-louis|cincinnati|akron|albuquerque)/.test(path)
+        const isUKPath = /^\/uk\/|\/united-kingdom/.test(path)
+        const isAUPath = /^\/au\/|\/australia/.test(path)
+        const locale = isUSPath ? 'en-US' : isUKPath ? 'en-GB' : isAUPath ? 'en-AU' : 'en-CA'
+        return `<link rel="alternate" hreflang="${locale}" href="${target}">
   <link rel="alternate" hreflang="x-default" href="${target}">`
       })()
     : ''
