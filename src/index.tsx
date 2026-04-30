@@ -78,6 +78,7 @@ import usStatesRoutes from './routes/us-states'
 import usVerticalsRoutes from './routes/us-verticals'
 import usComparisonsRoutes from './routes/us-comparisons'
 import caProvincesRoutes from './routes/ca-provinces'
+import { canadianDataRoutes } from './routes/canadian-data'
 import { ukApp as ukRoutes, auApp as auRoutes } from './routes/intl-regions'
 import { ALL_UK_REGION_SLUGS } from './data/uk-regions'
 import { ALL_AU_REGION_SLUGS } from './data/au-regions'
@@ -405,6 +406,8 @@ app.route('/us', usVerticalsRoutes)
 app.route('/us', usStatesRoutes)
 // ── CA SEO/GEO expansion routes ── Canadian province hub + per-province pages
 app.route('/ca', caProvincesRoutes)
+// ── Canadian original-research data + press pages (backlink targets) ──
+app.route('/', canadianDataRoutes)
 // ── International SEO/GEO expansion ── UK + AU hubs + region pages
 app.route('/uk', ukRoutes)
 app.route('/au', auRoutes)
@@ -1009,6 +1012,11 @@ app.get('/sitemap.xml', async (c) => {
     { loc: '/blog', priority: '0.8', changefreq: 'daily', lastmod: today },
     { loc: '/coverage', priority: '0.8', changefreq: 'monthly', lastmod: today },
     { loc: '/lander', priority: '0.7', changefreq: 'monthly', lastmod: today },
+    { loc: '/canadian-roof-cost-index-2026', priority: '0.9', changefreq: 'monthly', lastmod: today },
+    { loc: '/data/hail-claims-alberta', priority: '0.8', changefreq: 'monthly', lastmod: today },
+    { loc: '/data/roof-age-canadian-cities', priority: '0.8', changefreq: 'monthly', lastmod: today },
+    { loc: '/press', priority: '0.7', changefreq: 'monthly', lastmod: today },
+    { loc: '/partners', priority: '0.7', changefreq: 'monthly', lastmod: today },
     { loc: '/privacy', priority: '0.3', changefreq: 'yearly', lastmod: '2026-01-01' },
     { loc: '/terms', priority: '0.3', changefreq: 'yearly', lastmod: '2026-01-01' },
   ]
