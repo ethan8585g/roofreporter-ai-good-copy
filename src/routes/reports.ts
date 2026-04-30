@@ -3403,13 +3403,19 @@ async function _generateReportForOrderInner(
     await repo.markOrderStatus(env.DB, orderId, 'completed')
     console.log(`[Generate] Order ${orderId}: ✅ Report saved as COMPLETED (v${baseVersion}, provider=${finalReportData.metadata?.provider || 'unknown'})`)
 
-    // Auto-send report to the email captured on the order form (optional field
-    // under the address). Fire-and-forget via waitUntil so the worker response
-    // isn't blocked by Gmail send latency.
-    if (order.send_report_to_email) {
+    // Auto-send report to the order's email. Falls back through
+    // send_report_to_email → requester_email → homeowner_email so every
+    // completed report ships automatically. Fire-and-forget via waitUntil.
+    const autoRecipient = (
+      order.send_report_to_email
+      || order.requester_email
+      || order.homeowner_email
+      || ''
+    ).toString().trim()
+    if (autoRecipient) {
       const autoSendP = (async () => {
         try {
-          const recipient = String(order.send_report_to_email).trim()
+          const recipient = autoRecipient
           const reportNum = `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`
           const emailHtml = buildEmailWrapper(html, order.property_address || 'Property', reportNum, recipient)
           const ci = (env as any).GMAIL_CLIENT_ID
