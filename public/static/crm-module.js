@@ -2158,11 +2158,11 @@
     var daysInMonth = new Date(year, month + 1, 0).getDate();
     var totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
 
-    var html = '<div class="bg-[#111111] rounded-xl border overflow-hidden">';
+    var html = '<div class="bg-white rounded-xl border border-black overflow-hidden">';
     // Day headers
-    html += '<div class="grid grid-cols-7 border-b bg-[#0A0A0A]">';
+    html += '<div class="grid grid-cols-7 border-b border-black bg-gray-100">';
     for (var d = 0; d < 7; d++) {
-      html += '<div class="text-center text-[10px] font-semibold text-white uppercase py-2 px-1">' + dayNames[d] + '</div>';
+      html += '<div class="text-center text-[10px] font-semibold text-black uppercase py-2 px-1">' + dayNames[d] + '</div>';
     }
     html += '</div>';
     // Day cells
@@ -2175,12 +2175,12 @@
         dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(dayNum).padStart(2, '0');
       }
       var isToday = dateStr === todayStr;
-      var borderClass = isToday ? 'border border-emerald-500 bg-emerald-500/10' : 'border-r border-b border-white/5';
+      var borderClass = isToday ? 'border border-emerald-500 bg-emerald-500/10' : 'border-r border-b border-black';
 
-      html += '<div class="min-h-[110px] p-1.5 ' + borderClass + ' ' + (isCurrentMonth ? 'cursor-pointer hover:bg-white/5' : 'bg-[#0A0A0A]/50') + '" onclick="' + (isCurrentMonth ? 'window._crmCalendarDayClick(\'' + dateStr + '\')' : '') + '">';
+      html += '<div class="min-h-[110px] p-1.5 ' + borderClass + ' ' + (isCurrentMonth ? 'cursor-pointer hover:bg-gray-50' : 'bg-gray-100') + '" onclick="' + (isCurrentMonth ? 'window._crmCalendarDayClick(\'' + dateStr + '\')' : '') + '">';
 
       if (isCurrentMonth) {
-        html += '<div class="flex items-center justify-between mb-1"><span class="text-xs font-semibold ' + (isToday ? 'bg-brand-600 text-white w-6 h-6 flex items-center justify-center rounded-full' : 'text-white') + '">' + dayNum + '</span></div>';
+        html += '<div class="flex items-center justify-between mb-1"><span class="text-xs font-semibold ' + (isToday ? 'bg-brand-600 text-white w-6 h-6 flex items-center justify-center rounded-full' : 'text-black') + '">' + dayNum + '</span></div>';
 
         // Jobs for this day
         var dayJobs = [];
@@ -2244,7 +2244,7 @@
         if (adjMonth < 0) { adjMonth = 11; adjYear--; }
         if (adjMonth > 11) { adjMonth = 0; adjYear++; }
         var adjDay = dayNum < 1 ? new Date(adjYear, adjMonth + 1, 0).getDate() + dayNum : dayNum - daysInMonth;
-        html += '<span class="text-xs text-white/60">' + adjDay + '</span>';
+        html += '<span class="text-xs text-gray-400">' + adjDay + '</span>';
       }
       html += '</div>';
     }
@@ -2262,17 +2262,17 @@
       _calWeekStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     }
 
-    var html = '<div class="bg-[#111111] rounded-xl border overflow-hidden">';
+    var html = '<div class="bg-white rounded-xl border border-black overflow-hidden">';
     // Day headers with full date
-    html += '<div class="grid grid-cols-7 border-b bg-[#0A0A0A]">';
+    html += '<div class="grid grid-cols-7 border-b border-black bg-gray-100">';
     for (var d = 0; d < 7; d++) {
       var colDate = new Date(_calWeekStart);
       colDate.setDate(colDate.getDate() + d);
       var colStr = colDate.getFullYear() + '-' + String(colDate.getMonth() + 1).padStart(2, '0') + '-' + String(colDate.getDate()).padStart(2, '0');
       var isToday = colStr === todayStr;
       html += '<div class="text-center py-2 px-1 ' + (isToday ? 'bg-emerald-500/10' : '') + '">';
-      html += '<div class="text-[10px] font-semibold text-gray-300 uppercase">' + dayNames[d] + '</div>';
-      html += '<div class="text-sm font-bold ' + (isToday ? 'text-emerald-400' : 'text-gray-100') + '">' + colDate.getDate() + '</div>';
+      html += '<div class="text-[10px] font-semibold text-black uppercase">' + dayNames[d] + '</div>';
+      html += '<div class="text-sm font-bold ' + (isToday ? 'text-emerald-600' : 'text-black') + '">' + colDate.getDate() + '</div>';
       html += '</div>';
     }
     html += '</div>';
@@ -2284,7 +2284,7 @@
       var colStr = colDate.getFullYear() + '-' + String(colDate.getMonth() + 1).padStart(2, '0') + '-' + String(colDate.getDate()).padStart(2, '0');
       var isToday = colStr === todayStr;
 
-      html += '<div class="min-h-[250px] p-2 ' + (isToday ? 'bg-emerald-500/5 border border-emerald-500/30' : 'border-r border-b border-white/5') + ' cursor-pointer hover:bg-white/5" onclick="window._crmCalendarDayClick(\'' + colStr + '\')">';
+      html += '<div class="min-h-[250px] p-2 ' + (isToday ? 'bg-emerald-500/5 border border-emerald-500/30' : 'border-r border-b border-black') + ' cursor-pointer hover:bg-gray-50" onclick="window._crmCalendarDayClick(\'' + colStr + '\')">';
 
       // Jobs for this day
       var dayJobs = [];
