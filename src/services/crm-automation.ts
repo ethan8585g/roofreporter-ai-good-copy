@@ -1,14 +1,17 @@
 // ============================================================
-// CRM Automation — fire-and-forget hooks that wrap existing
-// /api/crm/proposals/:id/send and /api/calendar/sync-job/:jobId
-// endpoints, gated by per-user toggles on the customers table.
+// CRM Automation — fire-and-forget hooks for proposal-send and
+// calendar-sync, gated by per-user toggles on the customers table.
 // ============================================================
 //
-// Why internal HTTP rather than calling the handler directly:
-// the existing endpoints already encapsulate auth + Gmail token
-// refresh + DB writes. Re-using them avoids drift between the
-// manual and automatic paths.
+// Calendar sync calls syncJobToCalendarInternal directly (no
+// self-fetch) — internal HTTP requests on Cloudflare Workers
+// silently dropped the Authorization header in some routing paths,
+// causing auto-sync to fail while the manual button still worked.
+// Proposal-send still uses an internal fetch (the proposal/send
+// endpoint hasn't been refactored yet).
 // ============================================================
+
+import { syncJobToCalendarInternal } from '../routes/calendar'
 
 interface AutoCtx {
   env: any
@@ -91,15 +94,8 @@ export async function maybeAutoSyncJobToCalendar(
     if (!job) return { attempted: false, reason: 'job_not_found' }
     if (!job.scheduled_date) return { attempted: false, reason: 'no_scheduled_date' }
 
-    const url = new URL(c.req.url)
-    const auth = c.req.header('Authorization') || ''
-    const syncResp = await fetch(`${url.protocol}//${url.host}/api/calendar/sync-job/${jobId}`, {
-      method: 'POST',
-      headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
-      body: '{}'
-    })
-    const result: any = await syncResp.json().catch(() => ({}))
-    return { attempted: true, synced: !!result?.success, reason: result?.error || undefined }
+    const result = await syncJobToCalendarInternal(c.env, ownerId, jobId)
+    return { attempted: true, synced: !!result.success, reason: result.error || undefined }
   } catch (e: any) {
     console.warn('[silent-catch] maybeAutoSyncJobToCalendar', e?.message || e)
     return { attempted: false, reason: 'exception' }

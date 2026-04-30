@@ -23,31 +23,21 @@ import { resolveTeamOwner } from './team'
 export const calendarRoutes = new Hono<{ Bindings: Bindings }>()
 
 // ── AUTH HELPER ──
-async function getCalendarAuth(c: any): Promise<{ ownerId: number; accessToken: string; calendarEmail: string } | null> {
-  const auth = c.req.header('Authorization')
-  if (!auth || !auth.startsWith('Bearer ')) return null
-  const token = auth.slice(7)
-
-  const session = await c.env.DB.prepare(
-    "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
-  ).bind(token).first<any>()
-  if (!session) return null
-
-  const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
-
-  // Get Gmail/Calendar tokens
-  const customer = await c.env.DB.prepare(
+// Resolves a Google access token for the given owner directly from D1 (no HTTP context).
+// Used by both the public HTTP endpoints (via getCalendarAuth) and the internal
+// auto-sync helper (which already has ownerId and must not depend on c.req).
+async function getCalendarAuthForOwner(env: any, ownerId: number): Promise<{ ownerId: number; accessToken: string; calendarEmail: string } | null> {
+  const customer = await env.DB.prepare(
     'SELECT gmail_refresh_token, gmail_connected_email FROM customers WHERE id = ?'
   ).bind(ownerId).first<any>()
 
   if (!customer?.gmail_refresh_token) return null
 
-  // Refresh access token
-  const clientId = (c.env as any).GMAIL_CLIENT_ID2 || (c.env as any).GMAIL_CLIENT_ID
-  let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET2 || (c.env as any).GMAIL_CLIENT_SECRET || ''
+  const clientId = env.GMAIL_CLIENT_ID2 || env.GMAIL_CLIENT_ID
+  let clientSecret = env.GMAIL_CLIENT_SECRET2 || env.GMAIL_CLIENT_SECRET || ''
   if (!clientSecret) {
     try {
-      const csRow = await c.env.DB.prepare(
+      const csRow = await env.DB.prepare(
         "SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1"
       ).first<any>()
       if (csRow?.setting_value) clientSecret = csRow.setting_value
@@ -79,6 +69,20 @@ async function getCalendarAuth(c: any): Promise<{ ownerId: number; accessToken: 
   } catch {
     return null
   }
+}
+
+async function getCalendarAuth(c: any): Promise<{ ownerId: number; accessToken: string; calendarEmail: string } | null> {
+  const auth = c.req.header('Authorization')
+  if (!auth || !auth.startsWith('Bearer ')) return null
+  const token = auth.slice(7)
+
+  const session = await c.env.DB.prepare(
+    "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+  ).bind(token).first<any>()
+  if (!session) return null
+
+  const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
+  return getCalendarAuthForOwner(c.env, ownerId)
 }
 
 // Simple owner auth (no calendar token needed)
@@ -365,33 +369,30 @@ calendarRoutes.delete('/events/:id', async (c) => {
 })
 
 // ============================================================
-// POST /sync-job/:jobId — Sync a CRM job to Google Calendar
+// Internal helper — sync a CRM job to Google Calendar without
+// requiring a Hono request context. Call this directly from
+// server-side automation (avoids fragile self-fetch on Workers).
 // ============================================================
-calendarRoutes.post('/sync-job/:jobId', async (c) => {
-  const calAuth = await getCalendarAuth(c)
-  if (!calAuth) return c.json({ error: 'Calendar not connected' }, 401)
+export async function syncJobToCalendarInternal(env: any, ownerId: number, jobId: number | string): Promise<{ success: boolean; error?: string; google_event_id?: string; html_link?: string; action?: 'created' | 'updated' }> {
+  const calAuth = await getCalendarAuthForOwner(env, ownerId)
+  if (!calAuth) return { success: false, error: 'Calendar not connected' }
 
-  const { ownerId, accessToken } = calAuth
-  await ensureCalendarTables(c.env.DB)
+  const { accessToken } = calAuth
+  await ensureCalendarTables(env.DB)
 
-  const jobId = c.req.param('jobId')
-
-  // Get job details
-  const job = await c.env.DB.prepare(`
+  const job = await env.DB.prepare(`
     SELECT cj.*, cc.name as customer_name, cc.phone as customer_phone, cc.email as customer_email
-    FROM crm_jobs cj 
+    FROM crm_jobs cj
     LEFT JOIN crm_customers cc ON cc.id = cj.crm_customer_id
     WHERE cj.id = ? AND cj.owner_id = ?
   `).bind(jobId, ownerId).first<any>()
 
-  if (!job) return c.json({ error: 'Job not found' }, 404)
+  if (!job) return { success: false, error: 'Job not found' }
 
-  // Check if already synced
-  const existing = await c.env.DB.prepare(
+  const existing = await env.DB.prepare(
     "SELECT google_event_id FROM calendar_events WHERE linked_entity_type = 'job' AND linked_entity_id = ? AND owner_id = ?"
-  ).bind(parseInt(jobId), ownerId).first<any>()
+  ).bind(parseInt(String(jobId)), ownerId).first<any>()
 
-  // Build event details
   const startDate = job.scheduled_date || new Date().toISOString().split('T')[0]
   const startTime = job.scheduled_time || '09:00'
   const durationHrs = parseFloat(job.estimated_duration || '2')
@@ -415,17 +416,16 @@ calendarRoutes.post('/sync-job/:jobId', async (c) => {
     location: job.property_address || '',
     start: { dateTime: startDateTime, timeZone: 'America/Edmonton' },
     end: { dateTime: endDateTime, timeZone: 'America/Edmonton' },
-    colorId: job.status === 'completed' ? '2' : '9', // Green for completed, Blue for scheduled
+    colorId: job.status === 'completed' ? '2' : '9',
     reminders: {
       useDefault: false,
       overrides: [
         { method: 'popup', minutes: 60 },
-        { method: 'email', minutes: 1440 } // 24 hours before
+        { method: 'email', minutes: 1440 }
       ]
     }
   }
 
-  // Add customer as attendee if they have email
   if (job.customer_email) {
     gcalEvent.attendees = [{ email: job.customer_email }]
   }
@@ -434,35 +434,58 @@ calendarRoutes.post('/sync-job/:jobId', async (c) => {
     let result: any
 
     if (existing?.google_event_id) {
-      // Update existing event
       result = await gcalRequest(
         accessToken,
         `/calendars/primary/events/${encodeURIComponent(existing.google_event_id)}`,
         'PUT',
         gcalEvent
       )
-      await c.env.DB.prepare(
+      await env.DB.prepare(
         "UPDATE calendar_events SET title = ?, start_time = ?, end_time = ?, description = ?, location = ?, synced_at = datetime('now'), updated_at = datetime('now') WHERE google_event_id = ?"
       ).bind(gcalEvent.summary, startDateTime, endDateTime, description, job.property_address || '', existing.google_event_id).run()
     } else {
-      // Create new event
       result = await gcalRequest(accessToken, '/calendars/primary/events', 'POST', gcalEvent)
-      await c.env.DB.prepare(`
+      await env.DB.prepare(`
         INSERT INTO calendar_events (owner_id, google_event_id, title, description, location, start_time, end_time, event_type, linked_entity_type, linked_entity_id, color, synced_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'job', 'job', ?, '#0ea5e9', datetime('now'))
-      `).bind(ownerId, result.id, gcalEvent.summary, description, job.property_address || '', startDateTime, endDateTime, parseInt(jobId)).run()
+      `).bind(ownerId, result.id, gcalEvent.summary, description, job.property_address || '', startDateTime, endDateTime, parseInt(String(jobId))).run()
     }
 
-    return c.json({
+    return {
       success: true,
       google_event_id: result.id,
       html_link: result.htmlLink,
-      action: existing ? 'updated' : 'created',
-      message: `Job "${job.title}" synced to Google Calendar`
-    })
+      action: existing ? 'updated' : 'created'
+    }
   } catch (err: any) {
-    return c.json({ error: 'Calendar sync failed: ' + err.message }, 502)
+    return { success: false, error: err?.message || 'Calendar sync failed' }
   }
+}
+
+// ============================================================
+// POST /sync-job/:jobId — Sync a CRM job to Google Calendar
+// ============================================================
+calendarRoutes.post('/sync-job/:jobId', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+
+  const jobId = c.req.param('jobId')
+  const result = await syncJobToCalendarInternal(c.env, ownerId, jobId)
+
+  if (!result.success) {
+    const status = result.error === 'Calendar not connected' ? 401
+                 : result.error === 'Job not found' ? 404
+                 : 502
+    return c.json({ error: result.error }, status)
+  }
+
+  return c.json({
+    success: true,
+    google_event_id: result.google_event_id,
+    html_link: result.html_link,
+    action: result.action,
+    message: `Job synced to Google Calendar`
+  })
 })
 
 // ============================================================
