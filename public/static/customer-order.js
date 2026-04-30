@@ -1014,6 +1014,13 @@ function initTraceMap() {
     zoomControl: !isPhone,         // Pinch-to-zoom only on phones, zoom buttons overlap FABs
     mapTypeControl: !isPhone,
     gestureHandling: isPhone ? 'greedy' : 'auto',  // One-finger pan on phones (no "use two fingers" overlay)
+    clickableIcons: false,
+    styles: [
+      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+      { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
+      { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+      { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] }
+    ],
     mapTypeControlOptions: {
       style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
       mapTypeIds: ['satellite', 'hybrid', 'esri']

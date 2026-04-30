@@ -1595,7 +1595,14 @@ function saInitTraceMap(lat, lng, address) {
     gestureHandling: 'greedy',
     zoomControl: true,
     scrollwheel: true,
-    disableDoubleClickZoom: false
+    disableDoubleClickZoom: false,
+    clickableIcons: false,
+    styles: [
+      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+      { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+      { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
+      { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] }
+    ]
   });
   s.map = map;
 

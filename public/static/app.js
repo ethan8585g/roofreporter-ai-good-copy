@@ -1190,6 +1190,13 @@ function initTraceMap() {
     streetViewControl: false,
     zoomControl: true,
     mapTypeControl: true,
+    clickableIcons: false,
+    styles: [
+      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+      { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
+      { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+      { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] }
+    ],
     mapTypeControlOptions: {
       style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
       mapTypeIds: ['satellite', 'hybrid']
