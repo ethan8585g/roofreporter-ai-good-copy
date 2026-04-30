@@ -2254,6 +2254,108 @@ crmRoutes.get('/gmail/status', async (c) => {
   })
 })
 
+// Sync / Test Gmail — refresh the stored token and verify scope is correct.
+// If the refresh token is invalid (revoked, scope changed), clear the stored
+// connection so the UI prompts the user to reconnect.
+crmRoutes.post('/gmail/test', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+
+  const customer = await c.env.DB.prepare(
+    'SELECT gmail_refresh_token, gmail_connected_email FROM customers WHERE id = ?'
+  ).bind(ownerId).first<any>()
+
+  if (!customer?.gmail_refresh_token) {
+    return c.json({ ok: false, connected: false, code: 'not_connected', error: 'Gmail not connected. Click Connect Gmail to link your account.' })
+  }
+
+  const clientId = (c.env as any).GMAIL_CLIENT_ID
+  let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
+  if (!clientSecret) {
+    try {
+      const csRow = await c.env.DB.prepare(
+        "SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1"
+      ).first<any>()
+      if (csRow?.setting_value) clientSecret = csRow.setting_value
+    } catch (e) { /* ignore */ }
+  }
+
+  if (!clientId || !clientSecret) {
+    return c.json({ ok: false, connected: true, code: 'server_misconfigured', email: customer.gmail_connected_email, error: 'Gmail OAuth client credentials are missing on the server. Contact support.' })
+  }
+
+  // Try to refresh the access token
+  let tokenData: any = {}
+  try {
+    const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: customer.gmail_refresh_token,
+        client_id: clientId,
+        client_secret: clientSecret
+      }).toString()
+    })
+    tokenData = await tokenResp.json()
+    if (!tokenResp.ok || !tokenData.access_token) {
+      // invalid_grant means the refresh token was revoked or expired — soft-disconnect
+      if (tokenData.error === 'invalid_grant') {
+        await c.env.DB.prepare(
+          "UPDATE customers SET gmail_refresh_token = NULL, gmail_connected_email = NULL, gmail_connected_at = NULL WHERE id = ?"
+        ).bind(ownerId).run()
+        return c.json({ ok: false, connected: false, code: 'invalid_grant', error: 'Your Gmail connection was revoked or expired. Please click Connect Gmail to reconnect.' })
+      }
+      return c.json({ ok: false, connected: true, code: tokenData.error || 'token_refresh_failed', email: customer.gmail_connected_email, error: tokenData.error_description || tokenData.error || 'Could not refresh Gmail access token.' })
+    }
+  } catch (e: any) {
+    return c.json({ ok: false, connected: true, code: 'network_error', email: customer.gmail_connected_email, error: e?.message || 'Network error contacting Google.' })
+  }
+
+  // Verify the granted scope includes gmail.send
+  const grantedScope: string = (tokenData.scope || '').toString()
+  const hasSendScope = /gmail\.send/.test(grantedScope) || /gmail\.modify/.test(grantedScope) || /https:\/\/mail\.google\.com\//.test(grantedScope)
+
+  if (!hasSendScope) {
+    return c.json({
+      ok: false,
+      connected: true,
+      code: 'insufficient_scope',
+      email: customer.gmail_connected_email,
+      granted_scope: grantedScope,
+      error: 'Your Gmail connection is missing the "Send email" permission. Click Reconnect Gmail and make sure you grant the send-email permission when Google prompts you.'
+    })
+  }
+
+  // Verify by hitting the Gmail profile endpoint
+  let profileEmail = customer.gmail_connected_email
+  try {
+    const profileResp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+      headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
+    })
+    if (profileResp.ok) {
+      const profile: any = await profileResp.json()
+      if (profile.emailAddress) {
+        profileEmail = profile.emailAddress
+        // Update stored email in case Gmail address changed
+        if (profile.emailAddress !== customer.gmail_connected_email) {
+          await c.env.DB.prepare(
+            "UPDATE customers SET gmail_connected_email = ?, gmail_connected_at = datetime('now') WHERE id = ?"
+          ).bind(profile.emailAddress, ownerId).run()
+        }
+      }
+    }
+  } catch (e) { /* non-fatal */ }
+
+  return c.json({
+    ok: true,
+    connected: true,
+    code: 'healthy',
+    email: profileEmail,
+    granted_scope: grantedScope
+  })
+})
+
 // Start Gmail OAuth flow
 crmRoutes.get('/gmail/connect', async (c) => {
   const ownerId = await getOwnerId(c)
@@ -2603,9 +2705,13 @@ crmRoutes.post('/proposals/:id/send', async (c) => {
         } else {
           const errMsg = tokenData.error_description || tokenData.error || 'unknown'
           if (tokenData.error === 'invalid_grant') {
-            emailError = `Your stored Gmail connection is no longer valid (likely from a previous OAuth session). Please disconnect Gmail in Settings and reconnect. Google said: ${errMsg}`
+            // Refresh token is dead — soft-disconnect so UI prompts reconnect
+            await c.env.DB.prepare(
+              "UPDATE customers SET gmail_refresh_token = NULL, gmail_connected_email = NULL, gmail_connected_at = NULL WHERE id = ?"
+            ).bind(ownerId).run()
+            emailError = `Your Gmail connection was revoked or expired. Open the Gmail Settings modal and click "Connect Gmail" to reconnect (Google said: ${errMsg}).`
           } else {
-            emailError = `Could not refresh Gmail token: ${errMsg}. Please disconnect and reconnect Gmail in Settings.`
+            emailError = `Could not refresh Gmail token: ${errMsg}. Click "Sync Gmail" in the Gmail Settings modal — if it fails, reconnect.`
           }
           console.warn('[proposal-send] Token refresh failed', tokenData)
         }
@@ -2614,12 +2720,12 @@ crmRoutes.post('/proposals/:id/send', async (c) => {
         console.warn('[proposal-send] Exception during send', e)
       }
     } else {
-      emailError = 'Gmail OAuth client credentials missing on the server. Contact support.'
+      emailError = 'Gmail OAuth client credentials are missing on the server. Contact support.'
     }
   } else if (!customer?.gmail_refresh_token) {
-    emailError = 'Gmail not connected. Connect Gmail in settings to send proposals by email.'
+    emailError = 'Gmail is not connected for your account. Open the Gmail Settings modal and click "Connect Gmail" to link the account you want proposals to send from.'
   } else if (!proposal.customer_email) {
-    emailError = 'Customer has no email address on file.'
+    emailError = 'This proposal\'s customer has no email address on file. Edit the customer record and add an email, then resend.'
   }
 
   return c.json({

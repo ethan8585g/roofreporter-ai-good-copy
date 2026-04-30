@@ -966,6 +966,8 @@
         '<p class="font-semibold text-green-800">Gmail Connected</p>' +
         '<p class="text-sm text-emerald-400">' + _gmailEmail + '</p></div>';
       body += '<p class="text-sm text-gray-400">Proposals will be emailed from your connected Gmail account when you click "Send".</p>';
+      body += '<div id="gmailSyncStatus"></div>';
+      body += '<button onclick="window._crmSyncGmail()" class="w-full py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 mb-2"><i class="fas fa-sync-alt mr-2"></i>Sync Gmail (Test Connection)</button>';
       body += '<button onclick="window._crmChangeGmail()" class="w-full py-2.5 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700 mb-2"><i class="fab fa-google mr-2"></i>Change Gmail Account</button>';
       body += '<button onclick="window._crmDisconnectGmail()" class="w-full py-2 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50">Disconnect Gmail</button>';
     } else {
@@ -978,6 +980,37 @@
     }
     body += '</div>';
     showModal('Gmail Integration', body);
+  };
+
+  // Sync Gmail — verifies the stored refresh token and scope by calling the backend
+  // /api/crm/gmail/test endpoint. Surfaces the actual reason if proposals can't send.
+  window._crmSyncGmail = function() {
+    var statusEl = document.getElementById('gmailSyncStatus');
+    if (statusEl) {
+      statusEl.innerHTML = '<div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700 flex items-center gap-2"><i class="fas fa-spinner fa-spin"></i> Testing Gmail connection...</div>';
+    }
+    fetch('/api/crm/gmail/test', { method: 'POST', headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (!statusEl) return;
+        if (res.ok) {
+          _gmailConnected = true;
+          _gmailEmail = res.email || _gmailEmail;
+          statusEl.innerHTML = '<div class="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800"><div class="font-semibold"><i class="fas fa-check-circle text-emerald-500 mr-1"></i>Connection healthy</div><div class="text-xs text-emerald-700 mt-1">Send permission granted for ' + (res.email || '') + '. Proposals will be emailed from this address.</div></div>';
+        } else {
+          // Backend may have soft-disconnected (invalid_grant). Reflect in local state.
+          if (res.connected === false) { _gmailConnected = false; _gmailEmail = ''; }
+          var reconnectBtn = (res.connected === false || res.code === 'invalid_grant' || res.code === 'insufficient_scope')
+            ? '<button onclick="window._crmConnectGmail()" class="mt-2 w-full py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700"><i class="fab fa-google mr-2"></i>Reconnect Gmail</button>'
+            : '';
+          statusEl.innerHTML = '<div class="bg-red-50 border-2 border-red-300 rounded-lg p-3 text-sm text-red-800"><div class="font-bold"><i class="fas fa-exclamation-triangle mr-1"></i>Connection issue</div><div class="text-xs mt-1">' + (res.error || 'Unknown error') + '</div>' + reconnectBtn + '</div>';
+        }
+      })
+      .catch(function(e) {
+        if (statusEl) {
+          statusEl.innerHTML = '<div class="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800"><i class="fas fa-times-circle mr-1"></i>Network error: ' + (e.message || 'Unknown') + '</div>';
+        }
+      });
   };
 
   // (Gmail connect defined above in invoices section — this override uses same popup-first pattern)
