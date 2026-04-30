@@ -5878,6 +5878,7 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
     // saSetSection is defined in super-admin-dashboard.js — handles section switching
   </script>
   <script src="/static/toast.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
   <script src="/static/super-admin-dashboard.js?v=${Date.now()}"></script>
   <script src="/static/super-admin-leads.js?v=${Date.now()}"></script>
   <script src="/static/admin-agent-chat.js?v=${Date.now()}"></script>

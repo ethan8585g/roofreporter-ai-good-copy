@@ -376,14 +376,18 @@ async function loadView(view) {
       // ── Growth consolidated views ──
       case 'growth-overview':
         try {
-          const [biRes, funnelRes, anomalyRes] = await Promise.all([
+          const [biRes, funnelRes, anomalyRes, overviewRes, trendsRes] = await Promise.all([
             saFetch('/api/admin/bi/business-intel'),
             saFetch('/api/admin/bi/funnel?period=30d'),
-            saFetch('/api/admin/bi/anomalies')
+            saFetch('/api/admin/bi/anomalies'),
+            saFetch('/api/admin/bi/overview'),
+            saFetch('/api/admin/bi/usage-trends')
           ]);
           if (biRes && biRes.ok) SA.data.bi = await biRes.json();
           if (funnelRes && funnelRes.ok) SA.data.funnel = await funnelRes.json();
           if (anomalyRes && anomalyRes.ok) SA.data.anomalies = await anomalyRes.json();
+          if (overviewRes && overviewRes.ok) SA.data.biOverview = await overviewRes.json();
+          if (trendsRes && trendsRes.ok) SA.data.biTrends = await trendsRes.json();
         } catch(e) { console.warn('Growth overview load error:', e); }
         break;
       case 'growth-traffic':
@@ -831,7 +835,7 @@ function renderContent() {
       }
       break;
     // ── Growth consolidated ──
-    case 'growth-overview': root.innerHTML = tabBar + renderGrowthOverviewView(); break;
+    case 'growth-overview': root.innerHTML = tabBar + renderGrowthOverviewView(); saInitGrowthCharts(); break;
     case 'growth-traffic': root.innerHTML = tabBar + renderGrowthTrafficView(); break;
     case 'growth-marketing': root.innerHTML = tabBar + renderGrowthMarketingView(); break;
     case 'user-activity': root.innerHTML = tabBar + renderUserActivityView(); break;
@@ -11267,6 +11271,40 @@ function renderGrowthOverviewView() {
   var arr = ((bi.arr_cents || 0) / 100).toFixed(2);
   var arpc = ((bi.arpc_cents || 0) / 100).toFixed(2);
 
+  // ── North Star Metrics (orders-table revenue, real user count, today's active) ──
+  var ov = SA.data.biOverview || {};
+  var totalSales = (ov.total_sales || 0);
+  var totalSalesStr = '$' + totalSales.toFixed(2);
+  var paidOrdersStr = (ov.paid_orders || 0) + ' paid orders';
+  var userCount = ov.user_count || 0;
+  var activeToday = ov.active_today || 0;
+  var sessionAvgSec = ov.session_avg_seconds || 0;
+  var sessionAvgStr = sessionAvgSec >= 60 ? Math.round(sessionAvgSec / 60) + 'm' : sessionAvgSec + 's';
+  var conversionPct = userCount > 0 ? Math.round(((ov.paid_orders || 0) / userCount) * 100) : 0;
+
+  var northStarHtml = '<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">' +
+    samc('Total Revenue', totalSalesStr, 'fa-dollar-sign', 'green', paidOrdersStr) +
+    samc('Total Users', userCount, 'fa-users', 'blue', activeToday + ' active today') +
+    samc('Conversion', conversionPct + '%', 'fa-funnel-dollar', 'purple', 'paid / total users') +
+  '</div>';
+
+  // Chart canvases — Chart.js bound by saInitGrowthCharts() after innerHTML set.
+  var chartsHtml = '<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">' +
+    '<div class="lg:col-span-2 bg-white rounded-2xl border border-gray-200 p-5">' +
+      '<div class="flex items-center justify-between mb-3">' +
+        '<h3 class="text-sm font-bold text-gray-900"><i class="fas fa-chart-bar mr-2 text-teal-500"></i>Module Usage Frequency (30d)</h3>' +
+        '<span class="text-[10px] text-gray-400">Avg session: ' + sessionAvgStr + '</span>' +
+      '</div>' +
+      '<div id="sa-bar-error" class="hidden text-xs text-red-500 mb-2"></div>' +
+      '<div style="height:240px;position:relative"><canvas id="sa-module-bar"></canvas></div>' +
+    '</div>' +
+    '<div class="bg-white rounded-2xl border border-gray-200 p-5">' +
+      '<h3 class="text-sm font-bold text-gray-900 mb-3"><i class="fas fa-chart-pie mr-2 text-purple-500"></i>Time Spent per Dashboard</h3>' +
+      '<div id="sa-doughnut-error" class="hidden text-xs text-red-500 mb-2"></div>' +
+      '<div style="height:240px;position:relative"><canvas id="sa-module-doughnut"></canvas></div>' +
+    '</div>' +
+  '</div>';
+
   var anomalyHtml = '';
   if (anomalies.length > 0) {
     anomalyHtml = '<div class="mb-5">' + saSection('Anomaly Alerts', 'fa-exclamation-triangle', anomalies.map(function(a) {
@@ -11319,6 +11357,8 @@ function renderGrowthOverviewView() {
   }
 
   return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-tachometer-alt mr-2 text-teal-500"></i>Growth Overview</h2><p class="text-sm text-gray-500 mt-1">Key business metrics, funnel, and anomaly alerts</p></div>' +
+    northStarHtml +
+    chartsHtml +
     anomalyHtml +
     '<div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">' +
       samc('MRR', '$' + mrr, 'fa-dollar-sign', 'green') +
@@ -11334,6 +11374,66 @@ function renderGrowthOverviewView() {
       samc('Avg Quality', bi.avg_quality_score || 'N/A', 'fa-star', 'yellow') +
     '</div>' +
     (funnelHtml ? saSection('Conversion Funnel (30d)', 'fa-filter', funnelHtml) : '');
+}
+
+// Chart.js renderer + 60s refresh for Growth Overview. Wrapped in try/catch
+// so a chart failure never blanks the dashboard.
+window._saGrowthCharts = window._saGrowthCharts || { bar: null, doughnut: null };
+window._saGrowthPoll = window._saGrowthPoll || null;
+
+function saInitGrowthCharts() {
+  try {
+    if (typeof Chart === 'undefined') return; // CDN didn't load; metrics still render
+    var ov = SA.data.biOverview || {};
+    var modules = (ov.top_modules || []);
+    var labels = modules.map(function(m) { return m.module || 'unknown'; });
+    var visits = modules.map(function(m) { return m.visits || 0; });
+    var seconds = modules.map(function(m) { return Math.round((m.total_seconds || 0) / 60); });
+
+    var palette = ['#14b8a6','#3b82f6','#a855f7','#f59e0b','#ef4444','#10b981','#6366f1','#ec4899'];
+
+    // Destroy prior instances before re-render.
+    if (window._saGrowthCharts.bar) { try { window._saGrowthCharts.bar.destroy(); } catch(e) {} }
+    if (window._saGrowthCharts.doughnut) { try { window._saGrowthCharts.doughnut.destroy(); } catch(e) {} }
+
+    var barEl = document.getElementById('sa-module-bar');
+    var dEl = document.getElementById('sa-module-doughnut');
+    var barErr = document.getElementById('sa-bar-error');
+    var dErr = document.getElementById('sa-doughnut-error');
+
+    if (barEl) {
+      try {
+        window._saGrowthCharts.bar = new Chart(barEl.getContext('2d'), {
+          type: 'bar',
+          data: { labels: labels, datasets: [{ label: 'Visits (30d)', data: visits, backgroundColor: '#14b8a6', borderRadius: 6 }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+        });
+        if (barErr) barErr.classList.add('hidden');
+      } catch (err) {
+        if (barErr) { barErr.textContent = 'Chart failed to render: ' + err.message; barErr.classList.remove('hidden'); }
+      }
+    }
+
+    if (dEl) {
+      try {
+        window._saGrowthCharts.doughnut = new Chart(dEl.getContext('2d'), {
+          type: 'doughnut',
+          data: { labels: labels, datasets: [{ data: seconds, backgroundColor: palette.slice(0, labels.length), borderWidth: 2, borderColor: '#fff' }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } }, tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + ctx.parsed + ' min'; } } } } }
+        });
+        if (dErr) dErr.classList.add('hidden');
+      } catch (err) {
+        if (dErr) { dErr.textContent = 'Chart failed to render: ' + err.message; dErr.classList.remove('hidden'); }
+      }
+    }
+  } catch (e) { console.warn('saInitGrowthCharts error:', e); }
+
+  // 60s refresh while user stays on this view.
+  if (window._saGrowthPoll) clearInterval(window._saGrowthPoll);
+  window._saGrowthPoll = setInterval(function() {
+    if (SA.view !== 'growth-overview') { clearInterval(window._saGrowthPoll); window._saGrowthPoll = null; return; }
+    if (typeof loadView === 'function') loadView('growth-overview');
+  }, 60000);
 }
 
 function renderGrowthTrafficView() {

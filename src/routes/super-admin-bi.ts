@@ -4,6 +4,8 @@
  *
  * Endpoints:
  *   GET /api/admin/bi/business-intel   — MRR, ARR, ARPC, trial→paid, churn, report stats
+ *   GET /api/admin/bi/overview         — North Star metrics: total_sales, user_count, active_today, top_modules, session_avg
+ *   GET /api/admin/bi/usage-trends     — 30-day module usage trend series (from user_activity_daily)
  *   GET /api/admin/bi/funnel           — 5-stage conversion funnel (7d / 30d)
  *   GET /api/admin/bi/customer-health  — Per-customer health score (0-100) + at-risk flag
  *   GET /api/admin/bi/live-visitors    — Active sessions in last 5min + recent event feed
@@ -691,6 +693,71 @@ superAdminBi.get('/lead-sources', async (c) => {
       total_sessions: totalSessions,
       buckets: bucketsArr,
       blogs
+    })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// ── NORTH STAR OVERVIEW ───────────────────────────────────────
+// Total sales pulled from `orders.price` (paid, non-trial) — this is the
+// real revenue source (Square payments table is empty for D1-credit purchases).
+superAdminBi.get('/overview', async (c) => {
+  try {
+    const db = c.env.DB
+    const [salesRow, usersRow, activeTodayRow, topModulesRow, sessionAvgRow] = await db.batch([
+      db.prepare(`SELECT COALESCE(SUM(price),0) as total_sales, COUNT(*) as paid_orders FROM orders WHERE payment_status='paid' AND (is_trial IS NULL OR is_trial=0)`),
+      db.prepare(`SELECT COUNT(*) as user_count FROM customers`),
+      db.prepare(`SELECT COUNT(DISTINCT user_id || ':' || user_type) as active_today FROM user_module_visits WHERE started_at >= datetime('now','start of day')`),
+      db.prepare(`SELECT module, COUNT(*) as visits, COALESCE(SUM(duration_seconds),0) as total_seconds FROM user_module_visits WHERE started_at >= datetime('now','-30 days') GROUP BY module ORDER BY visits DESC LIMIT 8`),
+      db.prepare(`SELECT ROUND(AVG(duration_seconds),0) as session_avg FROM user_module_visits WHERE started_at >= datetime('now','-30 days') AND duration_seconds > 0`)
+    ]) as any[]
+
+    const total_sales = (salesRow.results?.[0]?.total_sales as number) || 0
+    const paid_orders = (salesRow.results?.[0]?.paid_orders as number) || 0
+    const user_count = (usersRow.results?.[0]?.user_count as number) || 0
+    const active_today = (activeTodayRow.results?.[0]?.active_today as number) || 0
+    const session_avg = (sessionAvgRow.results?.[0]?.session_avg as number) || 0
+    const top_modules = (topModulesRow.results || []) as any[]
+
+    return c.json({
+      total_sales,
+      paid_orders,
+      user_count,
+      active_today,
+      top_modules,
+      session_avg_seconds: session_avg
+    })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// ── USAGE TRENDS (30 days) ────────────────────────────────────
+// Per-day total seconds across all users, plus per-day per-module breakdown.
+superAdminBi.get('/usage-trends', async (c) => {
+  try {
+    const db = c.env.DB
+    const dailyRow = await db.prepare(
+      `SELECT day, SUM(total_seconds) as total_seconds, SUM(visit_count) as visits, COUNT(DISTINCT user_id || ':' || user_type) as unique_users
+       FROM user_activity_daily
+       WHERE day >= date('now','-30 days')
+       GROUP BY day
+       ORDER BY day ASC`
+    ).all() as any
+
+    const moduleRow = await db.prepare(
+      `SELECT module, SUM(total_seconds) as total_seconds, SUM(visit_count) as visits
+       FROM user_activity_daily
+       WHERE day >= date('now','-30 days')
+       GROUP BY module
+       ORDER BY total_seconds DESC
+       LIMIT 8`
+    ).all() as any
+
+    return c.json({
+      daily: (dailyRow.results || []) as any[],
+      by_module: (moduleRow.results || []) as any[]
     })
   } catch (e: any) {
     return c.json({ error: e.message }, 500)
