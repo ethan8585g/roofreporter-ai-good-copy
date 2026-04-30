@@ -198,7 +198,10 @@ function renderDashboard() {
         '<div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Report Tools</div>' +
         navLink('/customer/order', 'fa-plus-circle', isSolar ? 'Order Solar Proposal' : 'Order Report', creditBadge || null, creditBadgeColor) +
         navLink('/customer/reports', 'fa-file-alt', 'Report History', null, '') +
-        // Section 2 — Billing Tools
+        // Section 2 — AI Secretary
+        '<div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">AI Secretary</div>' +
+        navLink('/customer/secretary', 'fa-headset', 'Roofer Secretary AI', secBadge || null, secBadgeColor || 'bg-blue-600') +
+        // Section 3 — Billing Tools
         '<div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Billing Tools</div>' +
         navLink('/customer/proposals', 'fa-file-signature', 'Proposals', propBadge || null, 'bg-blue-600') +
         navLink('/customer/invoices', 'fa-file-invoice-dollar', 'Invoice Builder', invBadge || null, 'bg-blue-600') +
