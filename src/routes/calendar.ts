@@ -423,9 +423,22 @@ export async function syncJobToCalendarInternal(env: any, ownerId: number, jobId
 
   const startDate = job.scheduled_date || new Date().toISOString().split('T')[0]
   const startTime = job.scheduled_time || '09:00'
-  const durationHrs = parseFloat(job.estimated_duration || '2')
+  const durHrs = parseFloat(job.estimated_duration || '2')
+  const durationHrs = (!isFinite(durHrs) || durHrs <= 0) ? 2 : durHrs
   const startDateTime = `${startDate}T${startTime}:00`
-  const endDateTime = new Date(new Date(startDateTime).getTime() + durationHrs * 3600000).toISOString()
+  // End must be in the same naive-local format as start (no Z suffix) so Google
+  // applies the same timeZone to both. Mixing naive-local + UTC ISO causes
+  // "The specified time range is empty" because Google reads end as UTC.
+  const [sh, sm] = startTime.split(':').map((n: string) => parseInt(n, 10))
+  const totalEndMinutes = sh * 60 + sm + Math.round(durationHrs * 60)
+  const endDayOffset = Math.floor(totalEndMinutes / (24 * 60))
+  const endMinOfDay = ((totalEndMinutes % (24 * 60)) + 24 * 60) % (24 * 60)
+  const endHH = String(Math.floor(endMinOfDay / 60)).padStart(2, '0')
+  const endMM = String(endMinOfDay % 60).padStart(2, '0')
+  const endDateObj = new Date(`${startDate}T00:00:00Z`)
+  endDateObj.setUTCDate(endDateObj.getUTCDate() + endDayOffset)
+  const endDateStr = endDateObj.toISOString().split('T')[0]
+  const endDateTime = `${endDateStr}T${endHH}:${endMM}:00`
 
   const description = [
     `Job: ${job.job_number}`,
