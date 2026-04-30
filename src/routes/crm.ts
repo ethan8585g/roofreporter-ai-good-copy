@@ -1586,7 +1586,7 @@ crmRoutes.post('/jobs/schedule', async (c) => {
 
   // Auto-sync to Google Calendar on schedule (fire-and-forget, no-op if disabled)
   const calSync = await maybeAutoSyncJobToCalendar(c, jobId, ownerId)
-  return c.json({ success: true, calendar_synced: calSync.attempted ? calSync.synced : false })
+  return c.json({ success: true, calendar_synced: calSync.attempted ? calSync.synced : false, calendar_reason: calSync.reason || null })
 })
 
 crmRoutes.get('/jobs/:id', async (c) => {
@@ -1635,7 +1635,8 @@ crmRoutes.post('/jobs', async (c) => {
     success: true,
     id: jobId,
     job_number: jobNum,
-    calendar_synced: calSync.attempted ? calSync.synced : false
+    calendar_synced: calSync.attempted ? calSync.synced : false,
+    calendar_reason: calSync.reason || null
   })
 })
 
@@ -1721,7 +1722,7 @@ crmRoutes.put('/jobs/:id', async (c) => {
 
   // Auto-sync (will UPDATE the existing event if already linked, or CREATE new)
   const calSync = await maybeAutoSyncJobToCalendar(c, id, ownerId)
-  return c.json({ success: true, calendar_synced: calSync.attempted ? calSync.synced : false })
+  return c.json({ success: true, calendar_synced: calSync.attempted ? calSync.synced : false, calendar_reason: calSync.reason || null })
 })
 
 // Toggle checklist item

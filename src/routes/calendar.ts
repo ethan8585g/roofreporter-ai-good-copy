@@ -26,63 +26,85 @@ export const calendarRoutes = new Hono<{ Bindings: Bindings }>()
 // Resolves a Google access token for the given owner directly from D1 (no HTTP context).
 // Used by both the public HTTP endpoints (via getCalendarAuth) and the internal
 // auto-sync helper (which already has ownerId and must not depend on c.req).
-async function getCalendarAuthForOwner(env: any, ownerId: number): Promise<{ ownerId: number; accessToken: string; calendarEmail: string } | null> {
-  const customer = await env.DB.prepare(
-    'SELECT gmail_refresh_token, gmail_connected_email FROM customers WHERE id = ?'
-  ).bind(ownerId).first<any>()
-
-  if (!customer?.gmail_refresh_token) return null
-
-  const clientId = env.GMAIL_CLIENT_ID2 || env.GMAIL_CLIENT_ID
-  let clientSecret = env.GMAIL_CLIENT_SECRET2 || env.GMAIL_CLIENT_SECRET || ''
-  if (!clientSecret) {
-    try {
-      const csRow = await env.DB.prepare(
-        "SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1"
-      ).first<any>()
-      if (csRow?.setting_value) clientSecret = csRow.setting_value
-    } catch {}
-  }
-
-  if (!clientId || !clientSecret) return null
-
+async function getCalendarAuthForOwner(env: any, ownerId: number): Promise<{ ownerId: number; accessToken: string; calendarEmail: string } | { error: string } | null> {
   try {
-    const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: customer.gmail_refresh_token,
-        client_id: clientId,
-        client_secret: clientSecret
-      }).toString()
-    })
+    const customer = await env.DB.prepare(
+      'SELECT gmail_refresh_token, gmail_connected_email FROM customers WHERE id = ?'
+    ).bind(ownerId).first<any>()
 
-    const tokenData: any = await tokenResp.json()
-    if (!tokenData.access_token) return null
+    if (!customer?.gmail_refresh_token) return { error: 'Gmail not connected' }
+
+    const clientId = env.GMAIL_CLIENT_ID2 || env.GMAIL_CLIENT_ID
+    let clientSecret = env.GMAIL_CLIENT_SECRET2 || env.GMAIL_CLIENT_SECRET || ''
+    if (!clientSecret) {
+      try {
+        const csRow = await env.DB.prepare(
+          "SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1"
+        ).first<any>()
+        if (csRow?.setting_value) clientSecret = csRow.setting_value
+      } catch {}
+    }
+
+    if (!clientId || !clientSecret) return { error: 'Gmail OAuth credentials missing on server' }
+
+    let tokenResp: Response
+    try {
+      tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: customer.gmail_refresh_token,
+          client_id: clientId,
+          client_secret: clientSecret
+        }).toString()
+      })
+    } catch (e: any) {
+      console.error('[calendar-auth] token fetch failed', e?.message || e)
+      return { error: 'OAuth token endpoint unreachable: ' + (e?.message || 'unknown') }
+    }
+
+    let tokenData: any = {}
+    try { tokenData = await tokenResp.json() } catch {}
+
+    if (!tokenResp.ok || !tokenData.access_token) {
+      const detail = tokenData?.error_description || tokenData?.error || `HTTP ${tokenResp.status}`
+      console.error('[calendar-auth] token refresh failed', detail)
+      return { error: 'OAuth refresh failed: ' + detail }
+    }
 
     return {
       ownerId,
       accessToken: tokenData.access_token,
       calendarEmail: customer.gmail_connected_email || ''
     }
-  } catch {
-    return null
+  } catch (e: any) {
+    console.error('[calendar-auth] unexpected', e?.message || e, e?.stack)
+    return { error: 'Calendar auth crashed: ' + (e?.message || 'unknown') }
   }
 }
 
-async function getCalendarAuth(c: any): Promise<{ ownerId: number; accessToken: string; calendarEmail: string } | null> {
-  const auth = c.req.header('Authorization')
-  if (!auth || !auth.startsWith('Bearer ')) return null
-  const token = auth.slice(7)
+async function getCalendarAuth(c: any): Promise<{ ownerId: number; accessToken: string; calendarEmail: string } | { error: string } | null> {
+  try {
+    const auth = c.req.header('Authorization')
+    if (!auth || !auth.startsWith('Bearer ')) return null
+    const token = auth.slice(7)
 
-  const session = await c.env.DB.prepare(
-    "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
-  ).bind(token).first<any>()
-  if (!session) return null
+    const session = await c.env.DB.prepare(
+      "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+    ).bind(token).first<any>()
+    if (!session) return null
 
-  const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
-  return getCalendarAuthForOwner(c.env, ownerId)
+    const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
+    return getCalendarAuthForOwner(c.env, ownerId)
+  } catch (e: any) {
+    console.error('[calendar-auth-wrapper] crashed', e?.message || e)
+    return { error: 'Auth resolver crashed: ' + (e?.message || 'unknown') }
+  }
+}
+
+function isCalAuth(x: any): x is { ownerId: number; accessToken: string; calendarEmail: string } {
+  return !!x && typeof x === 'object' && typeof (x as any).accessToken === 'string'
 }
 
 // Simple owner auth (no calendar token needed)
@@ -179,6 +201,7 @@ calendarRoutes.get('/status', async (c) => {
 calendarRoutes.get('/events', async (c) => {
   const calAuth = await getCalendarAuth(c)
   if (!calAuth) return c.json({ error: 'Calendar not connected. Connect Gmail first.' }, 401)
+  if (!isCalAuth(calAuth)) return c.json({ error: (calAuth as any).error || 'Calendar auth failed' }, 502)
 
   const { ownerId, accessToken } = calAuth
   await ensureCalendarTables(c.env.DB)
@@ -232,6 +255,7 @@ calendarRoutes.get('/events', async (c) => {
 calendarRoutes.post('/events', async (c) => {
   const calAuth = await getCalendarAuth(c)
   if (!calAuth) return c.json({ error: 'Calendar not connected' }, 401)
+  if (!isCalAuth(calAuth)) return c.json({ error: (calAuth as any).error || 'Calendar auth failed' }, 502)
 
   const { ownerId, accessToken } = calAuth
   await ensureCalendarTables(c.env.DB)
@@ -300,6 +324,7 @@ calendarRoutes.post('/events', async (c) => {
 calendarRoutes.put('/events/:id', async (c) => {
   const calAuth = await getCalendarAuth(c)
   if (!calAuth) return c.json({ error: 'Calendar not connected' }, 401)
+  if (!isCalAuth(calAuth)) return c.json({ error: (calAuth as any).error || 'Calendar auth failed' }, 502)
 
   const { accessToken } = calAuth
   const googleEventId = c.req.param('id')
@@ -347,6 +372,7 @@ calendarRoutes.put('/events/:id', async (c) => {
 calendarRoutes.delete('/events/:id', async (c) => {
   const calAuth = await getCalendarAuth(c)
   if (!calAuth) return c.json({ error: 'Calendar not connected' }, 401)
+  if (!isCalAuth(calAuth)) return c.json({ error: (calAuth as any).error || 'Calendar auth failed' }, 502)
 
   const { ownerId, accessToken } = calAuth
   const googleEventId = c.req.param('id')
@@ -374,8 +400,10 @@ calendarRoutes.delete('/events/:id', async (c) => {
 // server-side automation (avoids fragile self-fetch on Workers).
 // ============================================================
 export async function syncJobToCalendarInternal(env: any, ownerId: number, jobId: number | string): Promise<{ success: boolean; error?: string; google_event_id?: string; html_link?: string; action?: 'created' | 'updated' }> {
+ try {
   const calAuth = await getCalendarAuthForOwner(env, ownerId)
   if (!calAuth) return { success: false, error: 'Calendar not connected' }
+  if (!isCalAuth(calAuth)) return { success: false, error: (calAuth as any).error || 'Calendar auth failed' }
 
   const { accessToken } = calAuth
   await ensureCalendarTables(env.DB)
@@ -458,34 +486,43 @@ export async function syncJobToCalendarInternal(env: any, ownerId: number, jobId
       action: existing ? 'updated' : 'created'
     }
   } catch (err: any) {
+    console.error('[sync-job] gcal call failed', err?.message || err)
     return { success: false, error: err?.message || 'Calendar sync failed' }
   }
+ } catch (outer: any) {
+   console.error('[sync-job] outer crash', outer?.message || outer, outer?.stack)
+   return { success: false, error: 'Sync crashed: ' + (outer?.message || 'unknown') }
+ }
 }
 
 // ============================================================
 // POST /sync-job/:jobId — Sync a CRM job to Google Calendar
 // ============================================================
 calendarRoutes.post('/sync-job/:jobId', async (c) => {
-  const ownerId = await getOwnerId(c)
-  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  try {
+    const ownerId = await getOwnerId(c)
+    if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
 
-  const jobId = c.req.param('jobId')
-  const result = await syncJobToCalendarInternal(c.env, ownerId, jobId)
+    const jobId = c.req.param('jobId')
+    const result = await syncJobToCalendarInternal(c.env, ownerId, jobId)
 
-  if (!result.success) {
-    const status = result.error === 'Calendar not connected' ? 401
-                 : result.error === 'Job not found' ? 404
-                 : 502
-    return c.json({ error: result.error }, status)
+    if (!result.success) {
+      const status = result.error === 'Calendar not connected' ? 401
+                   : result.error === 'Job not found' ? 404
+                   : 502
+      return c.json({ error: result.error }, status)
+    }
+    return c.json({
+      success: true,
+      google_event_id: result.google_event_id,
+      html_link: result.html_link,
+      action: result.action,
+      message: `Job synced to Google Calendar`
+    })
+  } catch (e: any) {
+    console.error('[sync-job route] crashed', e?.message || e)
+    return c.json({ error: 'Sync route crashed: ' + (e?.message || 'unknown') }, 502)
   }
-
-  return c.json({
-    success: true,
-    google_event_id: result.google_event_id,
-    html_link: result.html_link,
-    action: result.action,
-    message: `Job synced to Google Calendar`
-  })
 })
 
 // ============================================================
@@ -494,6 +531,7 @@ calendarRoutes.post('/sync-job/:jobId', async (c) => {
 calendarRoutes.post('/sync-all-jobs', async (c) => {
   const calAuth = await getCalendarAuth(c)
   if (!calAuth) return c.json({ error: 'Calendar not connected' }, 401)
+  if (!isCalAuth(calAuth)) return c.json({ error: (calAuth as any).error || 'Calendar auth failed' }, 502)
 
   const { ownerId } = calAuth
   await ensureCalendarTables(c.env.DB)
@@ -545,6 +583,7 @@ calendarRoutes.post('/sync-all-jobs', async (c) => {
 calendarRoutes.get('/availability', async (c) => {
   const calAuth = await getCalendarAuth(c)
   if (!calAuth) return c.json({ error: 'Calendar not connected' }, 401)
+  if (!isCalAuth(calAuth)) return c.json({ error: (calAuth as any).error || 'Calendar auth failed' }, 502)
 
   const { accessToken, calendarEmail } = calAuth
   const days = parseInt(c.req.query('days') || '7')

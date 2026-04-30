@@ -2554,7 +2554,21 @@
           });
           fetch('/api/crm/jobs', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
             .then(function(r) { return r.json(); })
-            .then(function(res) { if (res.success) { closeModal(); toast('Job scheduled!'); loadJobsForMonth(_calYear, _calMonth); } else { toast(res.error || 'Failed', 'error'); } })
+            .then(function(res) {
+              if (res.success) {
+                closeModal();
+                if (res.calendar_synced) {
+                  toast('Job scheduled and synced to Google Calendar!');
+                } else if (res.calendar_reason) {
+                  toast('Job scheduled — calendar sync skipped: ' + res.calendar_reason, 'error');
+                } else {
+                  toast('Job scheduled!');
+                }
+                loadJobsForMonth(_calYear, _calMonth);
+              } else {
+                toast(res.error || 'Failed', 'error');
+              }
+            })
             .catch(function(e) { toast('Failed to create job: ' + (e.message || 'Network error'), 'error'); });
         }, 'Schedule Job');
 
