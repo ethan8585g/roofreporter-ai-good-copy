@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { validateAdminSession } from './auth'
-import { sendGmailOAuth2 } from '../services/email'
+import { sendGmailOAuth2, loadGmailCreds } from '../services/email'
 import { logFromContext } from '../lib/team-activity'
 import { resolveTeamOwner } from './team'
 import { loadPermissionContext, can, redactFinancials, type PermissionContext } from '../lib/permissions'
@@ -688,14 +688,17 @@ invoiceRoutes.post('/:id/send', async (c) => {
       return c.json({ error: 'Customer does not have a valid email address on file' }, 400)
     }
 
-    // Actually send the email via Gmail OAuth2 if configured
+    // Actually send the email via Gmail OAuth2 if configured.
+    // Resolves creds from env first, then D1 settings (so the /api/auth/gmail
+    // "Connect Gmail" flow works without env vars also being set).
     let emailSent = false
     let emailError = ''
-    const clientId = (c.env as any).GMAIL_CLIENT_ID
-    const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
-    const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN
+    const { clientId, clientSecret, refreshToken, senderEmail } = await loadGmailCreds(c.env)
     if (!clientId || !clientSecret || !refreshToken) {
-      return c.json({ error: 'Email not configured. Please set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN.' }, 503)
+      return c.json({
+        error: 'Email not configured. Please connect Gmail at /api/auth/gmail or set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN.',
+        connect_url: '/api/auth/gmail'
+      }, 503)
     }
     if (clientId && clientSecret && refreshToken && invoice.customer_email) {
       try {
@@ -731,7 +734,7 @@ invoiceRoutes.post('/:id/send', async (c) => {
     <p style="color:#94a3b8;font-size:11px;margin:0">Powered by Roof Manager — Canada's AI Roof Measurement Platform</p>
   </div>
 </div>`
-        await sendGmailOAuth2(clientId, clientSecret, refreshToken, invoice.customer_email, `${docLabel} ${invoice.invoice_number} — $${Number(invoice.total || 0).toFixed(2)}`, emailHtml, c.env.GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca')
+        await sendGmailOAuth2(clientId, clientSecret, refreshToken, invoice.customer_email, `${docLabel} ${invoice.invoice_number} — $${Number(invoice.total || 0).toFixed(2)}`, emailHtml, senderEmail || c.env.GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca')
         emailSent = true
       } catch (e: any) {
         emailError = e.message || 'Email send failed'
@@ -1182,14 +1185,12 @@ invoiceRoutes.post('/:id/send-gmail', async (c) => {
   </div>
 </div>`
 
-    // Send email
-    const clientId = (c.env as any).GMAIL_CLIENT_ID
-    const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
-    const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN
+    // Send email — env first, D1 settings fallback (honors /api/auth/gmail flow)
+    const { clientId, clientSecret, refreshToken, senderEmail } = await loadGmailCreds(c.env)
     if (clientId && clientSecret && refreshToken) {
-      await sendGmailOAuth2(clientId, clientSecret, refreshToken, invoice.customer_email, `${docLabel} ${invoice.invoice_number} — $${Number(invoice.total || 0).toFixed(2)}`, emailHtml, c.env.GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca')
+      await sendGmailOAuth2(clientId, clientSecret, refreshToken, invoice.customer_email, `${docLabel} ${invoice.invoice_number} — $${Number(invoice.total || 0).toFixed(2)}`, emailHtml, senderEmail || c.env.GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca')
     } else {
-      return c.json({ error: 'Gmail not configured. Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN.' }, 503)
+      return c.json({ error: 'Gmail not configured. Connect Gmail at /api/auth/gmail or set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN.', connect_url: '/api/auth/gmail' }, 503)
     }
 
     // Update status to sent

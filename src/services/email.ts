@@ -188,6 +188,46 @@ export async function sendGmailEmail(serviceAccountJson: string, to: string, sub
 }
 
 // ============================================================
+// GMAIL CREDS LOADER — env first, D1 settings table fallback.
+// Mirrors the resolution used by /api/auth/gmail/status so a successful
+// "Connect Gmail" flow (which writes to settings) is honored by every send path.
+// ============================================================
+export async function loadGmailCreds(env: any): Promise<{
+  clientId: string
+  clientSecret: string
+  refreshToken: string
+  senderEmail: string
+  source: { clientSecret: 'env' | 'db' | 'missing'; refreshToken: 'env' | 'db' | 'missing'; senderEmail: 'env' | 'db' | 'missing' }
+}> {
+  const clientId: string = env?.GMAIL_CLIENT_ID || ''
+  let clientSecret: string = env?.GMAIL_CLIENT_SECRET || ''
+  let refreshToken: string = env?.GMAIL_REFRESH_TOKEN || ''
+  let senderEmail: string = env?.GMAIL_SENDER_EMAIL || ''
+  const source = {
+    clientSecret: (clientSecret ? 'env' : 'missing') as 'env' | 'db' | 'missing',
+    refreshToken: (refreshToken ? 'env' : 'missing') as 'env' | 'db' | 'missing',
+    senderEmail: (senderEmail ? 'env' : 'missing') as 'env' | 'db' | 'missing',
+  }
+  if (env?.DB && (!clientSecret || !refreshToken || !senderEmail)) {
+    try {
+      if (!clientSecret) {
+        const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
+        if (r?.setting_value) { clientSecret = r.setting_value; source.clientSecret = 'db' }
+      }
+      if (!refreshToken) {
+        const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
+        if (r?.setting_value) { refreshToken = r.setting_value; source.refreshToken = 'db' }
+      }
+      if (!senderEmail) {
+        const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_sender_email' AND master_company_id=1").first<any>()
+        if (r?.setting_value) { senderEmail = r.setting_value; source.senderEmail = 'db' }
+      }
+    } catch {}
+  }
+  return { clientId, clientSecret, refreshToken, senderEmail, source }
+}
+
+// ============================================================
 // RESEND API — Simple transactional email (recommended for personal Gmail)
 // Free tier: 100 emails/day, no domain verification needed for testing
 // https://resend.com/docs/api-reference/emails/send-email

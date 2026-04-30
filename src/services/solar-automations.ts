@@ -12,12 +12,15 @@
 // the underlying CRUD action never fails because the mailer hiccuped.
 // ============================================================
 
-import { sendViaResend } from './email'
+import { sendViaResend, sendGmailOAuth2, loadGmailCreds } from './email'
 
 type Env = {
   DB: D1Database
   RESEND_API_KEY?: string
   GMAIL_SENDER_EMAIL?: string
+  GMAIL_CLIENT_ID?: string
+  GMAIL_CLIENT_SECRET?: string
+  GMAIL_REFRESH_TOKEN?: string
 }
 
 interface Deal {
@@ -46,14 +49,29 @@ async function loadCustomer(env: Env, customerId: number) {
 }
 
 async function send(env: Env, to: string, subject: string, html: string, fromEmail?: string | null) {
-  if (!env.RESEND_API_KEY) {
-    console.log('[solar-automations] RESEND_API_KEY missing; skipping email to', to)
-    return
+  // Prefer Resend if configured; otherwise fall back to Gmail OAuth2
+  // (env first, then D1 settings — works after /api/auth/gmail flow).
+  if (env.RESEND_API_KEY) {
+    try {
+      await sendViaResend(env.RESEND_API_KEY, to, subject, html, fromEmail || null)
+      return
+    } catch (e: any) {
+      console.error('[solar-automations] resend failed, trying gmail:', e?.message || e)
+    }
   }
   try {
-    await sendViaResend(env.RESEND_API_KEY, to, subject, html, fromEmail || null)
+    const creds = await loadGmailCreds(env as any)
+    if (creds.clientId && creds.clientSecret && creds.refreshToken) {
+      await sendGmailOAuth2(
+        creds.clientId, creds.clientSecret, creds.refreshToken,
+        to, subject, html,
+        fromEmail || creds.senderEmail || env.GMAIL_SENDER_EMAIL || null
+      )
+      return
+    }
+    console.log('[solar-automations] no email provider configured; skipping email to', to)
   } catch (e: any) {
-    console.error('[solar-automations] send failed:', e?.message || e)
+    console.error('[solar-automations] gmail send failed:', e?.message || e)
   }
 }
 
