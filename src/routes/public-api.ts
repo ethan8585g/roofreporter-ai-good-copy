@@ -231,8 +231,8 @@ publicApiRoutes.post('/reports', async (c) => {
   await db.prepare('UPDATE api_jobs SET order_id = ? WHERE id = ?')
     .bind(orderResult.meta.last_row_id, jobId).run()
 
-  // Notify sales@roofmanager.ca of new API report request (fire-and-forget)
-  notifyNewReportRequest(c.env, {
+  // Notify sales@roofmanager.ca of new API report request (background via waitUntil)
+  const notifyPromise = notifyNewReportRequest(c.env, {
     order_number: orderNumber,
     property_address: address.trim(),
     requester_name: account.company_name || 'API Client',
@@ -241,6 +241,9 @@ publicApiRoutes.post('/reports', async (c) => {
     price: 0,
     is_trial: false
   }).catch((e: any) => console.warn('[silent-catch]', e?.message || e))
+  if ((c as any).executionCtx?.waitUntil) {
+    ;(c as any).executionCtx.waitUntil(notifyPromise)
+  }
 
   const job = await db.prepare('SELECT * FROM api_jobs WHERE id = ?')
     .bind(jobId).first<any>()

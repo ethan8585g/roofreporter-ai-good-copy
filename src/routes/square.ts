@@ -606,11 +606,14 @@ squareRoutes.post('/use-credit', async (c) => {
       throw insertErr
     }
 
-    // Notify sales@roofmanager.ca of new report request (fire-and-forget)
-    notifyNewReportRequest(c.env, {
+    // Notify sales@roofmanager.ca of new report request (background via waitUntil)
+    const notifyPromise = notifyNewReportRequest(c.env, {
       order_number: orderNumber, property_address, requester_name: customer.name,
       requester_email: customer.email, service_tier: tier, price, is_trial: isTrial
     }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+    if ((c as any).executionCtx?.waitUntil) {
+      ;(c as any).executionCtx.waitUntil(notifyPromise)
+    }
 
     // Atomic deduct: WHERE clause prevents overselling even with concurrent requests
     if (!isDev) {
@@ -903,12 +906,15 @@ squareRoutes.post('/webhook', async (c) => {
 
           const webhookOrderId = orderResult.meta.last_row_id as number
 
-          // Notify sales@roofmanager.ca of new report request (fire-and-forget)
-          notifyNewReportRequest(c.env, {
+          // Notify sales@roofmanager.ca of new report request (background via waitUntil)
+          const notifyPromise = notifyNewReportRequest(c.env, {
             order_number: orderNumber, property_address: address,
             requester_name: custData?.name || '', requester_email: custData?.email || '',
             service_tier: tier, price, is_trial: false
           }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+          if ((c as any).executionCtx?.waitUntil) {
+            ;(c as any).executionCtx.waitUntil(notifyPromise)
+          }
 
           // Update square payment with order_id
           await c.env.DB.prepare(
@@ -1276,12 +1282,15 @@ squareRoutes.get('/verify-payment', async (c) => {
 
           const newOrderId = orderResult.meta.last_row_id as number
 
-          // Notify sales@roofmanager.ca of new report request (fire-and-forget)
-          notifyNewReportRequest(c.env, {
+          // Notify sales@roofmanager.ca of new report request (background via waitUntil)
+          const notifyPromise = notifyNewReportRequest(c.env, {
             order_number: orderNumber, property_address: address,
             requester_name: custData?.name || '', requester_email: custData?.email || '',
             service_tier: tier, price, is_trial: false
           }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+          if ((c as any).executionCtx?.waitUntil) {
+            ;(c as any).executionCtx.waitUntil(notifyPromise)
+          }
 
           await c.env.DB.prepare(
             'UPDATE square_payments SET order_id = ? WHERE square_order_id = ?'

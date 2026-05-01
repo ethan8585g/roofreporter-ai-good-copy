@@ -100,12 +100,15 @@ ordersRoutes.post('/', async (c) => {
       VALUES (?, 'order_created', ?)
     `).bind(masterCompanyId, `Order ${orderNumber} created - ${service_tier} tier - $${price}`).run()
 
-    // Notify sales@roofmanager.ca of new report request (fire-and-forget)
-    notifyNewReportRequest(c.env, {
+    // Notify sales@roofmanager.ca of new report request (background via waitUntil)
+    const notifyPromise = notifyNewReportRequest(c.env, {
       order_number: orderNumber, property_address,
       requester_name: requester_name, requester_email: requester_email || '',
       service_tier, price, is_trial: false
     }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+    if ((c as any).executionCtx?.waitUntil) {
+      ;(c as any).executionCtx.waitUntil(notifyPromise)
+    }
 
     // ── AI Agent Auto-Trigger ──
     // If this order needs admin tracing and has coordinates, check if
