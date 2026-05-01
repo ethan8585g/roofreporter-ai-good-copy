@@ -339,7 +339,11 @@ reportsRoutes.get('/:orderId/customer-html', async (c) => {
   const orderId = c.req.param('orderId')
   const row = await repo.getCustomerReportHtml(c.env.DB, orderId)
   if (!row || !row.customer_report_html) {
-    const fallback = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Customer Report Not Available</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;background:#f8fafc;color:#1e293b;margin:0;padding:48px 24px;display:flex;justify-content:center}.box{max-width:560px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:32px}h1{margin:0 0 12px;font-size:20px;color:#0f172a}p{line-height:1.55;color:#475569}</style></head><body><div class="box"><h1>Customer report not available</h1><p>The customer-facing copy for order #${orderId} has not been generated yet. It is created automatically when a new report is produced.</p></div></body></html>`
+    // Hard-restrict the reflected id to digits so we never echo attacker-
+    // supplied HTML back into the page (the route handler upstream will
+    // accept any string for :orderId).
+    const safeId = String(orderId).replace(/[^0-9]/g, '').slice(0, 12) || '—'
+    const fallback = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Customer Report Not Available</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;background:#f8fafc;color:#1e293b;margin:0;padding:48px 24px;display:flex;justify-content:center}.box{max-width:560px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:32px}h1{margin:0 0 12px;font-size:20px;color:#0f172a}p{line-height:1.55;color:#475569}</style></head><body><div class="box"><h1>Customer report not available</h1><p>The customer-facing copy for order #${safeId} has not been generated yet. It is created automatically when a new report is produced.</p></div></body></html>`
     return c.html(fallback, 404)
   }
   return c.html(row.customer_report_html)
@@ -353,7 +357,7 @@ reportsRoutes.get('/:orderId/customer-pdf', async (c) => {
   const row = await repo.getCustomerReportHtml(c.env.DB, orderId)
   if (!row || !row.customer_report_html) return c.json({ error: 'Customer report not found' }, 404)
   const html = row.customer_report_html
-  const safe = String(orderId).replace(/[^a-zA-Z0-9_-]/g, '')
+  const safe = String(orderId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32)
   const pdfHtml = `${html}<script>if(new URLSearchParams(location.search).get('print')==='1')setTimeout(()=>window.print(),500)</script>`
   return new Response(pdfHtml, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Disposition': `inline; filename="Roof_Report_Customer_${safe}.pdf"` } })
 })
