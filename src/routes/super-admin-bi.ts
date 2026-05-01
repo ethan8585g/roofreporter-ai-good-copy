@@ -764,4 +764,111 @@ superAdminBi.get('/usage-trends', async (c) => {
   }
 })
 
+// ── COMMAND CENTER (unified main BI dashboard) ───────────────
+// Single endpoint powering the Super Admin Command Center view: per-customer
+// spend, per-user time-on-platform, recent signups, recent path events,
+// module-time distribution, North Star metrics — all in one shot.
+superAdminBi.get('/command-center', async (c) => {
+  try {
+    const db = c.env.DB
+    const period = c.req.query('period') || '30d'
+    const days = period === '24h' ? 1 : period === '7d' ? 7 : period === '90d' ? 90 : 30
+
+    const [
+      salesRow, usersRow, activeTodayRow, sessionAvgRow,
+      topSpendersRow, topUsersRow, recentSignupsRow, signupsTrendRow,
+      moduleDistRow, recentEventsRow, liveNowRow
+    ] = await db.batch([
+      // North Star
+      db.prepare(`SELECT COALESCE(SUM(price),0) as total_sales, COUNT(*) as paid_orders FROM orders WHERE payment_status='paid' AND (is_trial IS NULL OR is_trial=0)`),
+      db.prepare(`SELECT COUNT(*) as user_count, COUNT(CASE WHEN created_at >= datetime('now','-${days} days') THEN 1 END) as new_users FROM customers`),
+      db.prepare(`SELECT COUNT(DISTINCT user_id || ':' || user_type) as active_today FROM user_module_visits WHERE started_at >= datetime('now','start of day')`),
+      db.prepare(`SELECT ROUND(AVG(duration_seconds),0) as session_avg FROM user_module_visits WHERE started_at >= datetime('now','-${days} days') AND duration_seconds > 0`),
+      // Top spenders — per customer paid spend
+      db.prepare(`SELECT c.id, c.name, c.email, c.company_name,
+                         COUNT(o.id) as order_count,
+                         COALESCE(SUM(CASE WHEN o.payment_status='paid' AND (o.is_trial IS NULL OR o.is_trial=0) THEN o.price ELSE 0 END),0) as total_spent,
+                         MAX(o.created_at) as last_order_at
+                  FROM customers c
+                  LEFT JOIN orders o ON o.customer_id = c.id
+                  GROUP BY c.id
+                  HAVING total_spent > 0
+                  ORDER BY total_spent DESC
+                  LIMIT 10`),
+      // Top users by time spent
+      db.prepare(`SELECT user_type, user_id,
+                         SUM(duration_seconds) as total_seconds,
+                         COUNT(*) as visit_count,
+                         MAX(started_at) as last_seen
+                  FROM user_module_visits
+                  WHERE started_at >= datetime('now','-${days} days')
+                  GROUP BY user_type, user_id
+                  ORDER BY total_seconds DESC
+                  LIMIT 10`),
+      // Recent signups
+      db.prepare(`SELECT id, name, email, company_name, created_at FROM customers ORDER BY created_at DESC LIMIT 10`),
+      // Signups trend
+      db.prepare(`SELECT date(created_at) as day, COUNT(*) as count FROM customers WHERE created_at >= datetime('now','-${days} days') GROUP BY day ORDER BY day ASC`),
+      // Module time distribution (across all users)
+      db.prepare(`SELECT module, SUM(duration_seconds) as total_seconds, COUNT(*) as visits, COUNT(DISTINCT user_type || ':' || user_id) as users FROM user_module_visits WHERE started_at >= datetime('now','-${days} days') GROUP BY module ORDER BY total_seconds DESC`),
+      // Recent path events feed
+      db.prepare(`SELECT id, user_type, user_id, path, occurred_at FROM user_path_events ORDER BY occurred_at DESC LIMIT 50`),
+      // Live now
+      db.prepare(`SELECT COUNT(DISTINCT user_id || ':' || user_type) as live_now FROM active_visits WHERE last_seen_at >= datetime('now','-2 minutes')`)
+    ]) as any[]
+
+    const topUsers = (topUsersRow.results || []) as any[]
+    const events = (recentEventsRow.results || []) as any[]
+
+    // Resolve names for top users + events.
+    const adminIds = new Set<number>()
+    const custIds = new Set<number>()
+      ;[...topUsers, ...events].forEach((r: any) => {
+        if (r.user_type === 'admin') adminIds.add(r.user_id)
+        else if (r.user_type === 'customer') custIds.add(r.user_id)
+      })
+
+    const adminMap = new Map<number, any>()
+    const custMap = new Map<number, any>()
+    if (adminIds.size) {
+      const ids = Array.from(adminIds)
+      const ph = ids.map(() => '?').join(',')
+      const r = await db.prepare(`SELECT id, email, name FROM admin_users WHERE id IN (${ph})`).bind(...ids).all<any>()
+        ; (r?.results || []).forEach((u: any) => adminMap.set(u.id, u))
+    }
+    if (custIds.size) {
+      const ids = Array.from(custIds)
+      const ph = ids.map(() => '?').join(',')
+      const r = await db.prepare(`SELECT id, email, name FROM customers WHERE id IN (${ph})`).bind(...ids).all<any>()
+        ; (r?.results || []).forEach((u: any) => custMap.set(u.id, u))
+    }
+
+    const decorate = (r: any) => {
+      const p = r.user_type === 'admin' ? adminMap.get(r.user_id) : custMap.get(r.user_id)
+      return { ...r, name: p?.name || null, email: p?.email || null }
+    }
+
+    return c.json({
+      period,
+      north_star: {
+        total_sales: (salesRow.results?.[0]?.total_sales as number) || 0,
+        paid_orders: (salesRow.results?.[0]?.paid_orders as number) || 0,
+        user_count: (usersRow.results?.[0]?.user_count as number) || 0,
+        new_users: (usersRow.results?.[0]?.new_users as number) || 0,
+        active_today: (activeTodayRow.results?.[0]?.active_today as number) || 0,
+        live_now: (liveNowRow.results?.[0]?.live_now as number) || 0,
+        session_avg_seconds: (sessionAvgRow.results?.[0]?.session_avg as number) || 0,
+      },
+      top_spenders: (topSpendersRow.results || []),
+      top_users: topUsers.map(decorate),
+      recent_signups: (recentSignupsRow.results || []),
+      signups_trend: (signupsTrendRow.results || []),
+      module_distribution: (moduleDistRow.results || []),
+      recent_events: events.map(decorate),
+    })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
 export { superAdminBi }

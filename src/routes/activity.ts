@@ -67,6 +67,25 @@ activityRoutes.post('/heartbeat', async (c) => {
   if (c.executionCtx?.waitUntil) c.executionCtx.waitUntil(job)
   else await job
 
+  // Raw path-event log — only insert on path change (not every 60s heartbeat),
+  // so the Activity Log shows true navigation, not duplicate ticks.
+  try {
+    const last = await c.env.DB.prepare(
+      `SELECT path FROM user_path_events
+       WHERE user_type = ? AND user_id = ?
+       ORDER BY id DESC LIMIT 1`,
+    ).bind(userType, userId).first<{ path: string }>()
+    if (!last || last.path !== path) {
+      const insertJob = c.env.DB.prepare(
+        `INSERT INTO user_path_events (user_type, user_id, path, ip_address, user_agent)
+         VALUES (?, ?, ?, ?, ?)`,
+      ).bind(userType, userId, path, ip, ua).run()
+      // @ts-ignore — executionCtx exists on Cloudflare Workers runtime
+      if (c.executionCtx?.waitUntil) c.executionCtx.waitUntil(insertJob)
+      else await insertJob
+    }
+  } catch {}
+
   return c.body(null, 204)
 })
 
@@ -305,6 +324,88 @@ activityRoutes.get('/user/:userType/:userId', async (c) => {
     })
   } catch (err: any) {
     return c.json({ error: 'Failed to load user activity', details: err.message }, 500)
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────
+// EVENTS — raw per-path event feed (every page a user opens)
+// ─────────────────────────────────────────────────────────────────────
+
+activityRoutes.get('/events', async (c) => {
+  const blocked = await requireSuperadminGuard(c)
+  if (blocked) return blocked
+
+  const period = c.req.query('period') || '7d'
+  const cutoff = periodToCutoff(period)
+  const userType = c.req.query('userType') || ''
+  const userId = parseInt(c.req.query('userId') || '0', 10)
+  const search = (c.req.query('search') || '').trim()
+  const limit = Math.min(parseInt(c.req.query('limit') || '200', 10), 1000)
+  const offset = Math.max(parseInt(c.req.query('offset') || '0', 10), 0)
+
+  const where: string[] = [`occurred_at >= ${cutoff}`]
+  const args: any[] = []
+  if (userType === 'admin' || userType === 'customer') {
+    where.push('user_type = ?')
+    args.push(userType)
+  }
+  if (userId > 0) {
+    where.push('user_id = ?')
+    args.push(userId)
+  }
+  if (search) {
+    where.push('path LIKE ?')
+    args.push('%' + search + '%')
+  }
+
+  try {
+    const rs = await c.env.DB.prepare(
+      `SELECT id, user_type, user_id, path, occurred_at, ip_address
+       FROM user_path_events
+       WHERE ${where.join(' AND ')}
+       ORDER BY occurred_at DESC
+       LIMIT ? OFFSET ?`,
+    ).bind(...args, limit, offset).all<any>()
+
+    const rows = (rs?.results || []) as any[]
+
+    // Resolve names for each (type,id) pair in one shot.
+    const adminIds = Array.from(new Set(rows.filter(r => r.user_type === 'admin').map(r => r.user_id)))
+    const custIds = Array.from(new Set(rows.filter(r => r.user_type === 'customer').map(r => r.user_id)))
+    const adminMap = new Map<number, any>()
+    const custMap = new Map<number, any>()
+    if (adminIds.length) {
+      const ph = adminIds.map(() => '?').join(',')
+      const ar = await c.env.DB.prepare(`SELECT id, email, name FROM admin_users WHERE id IN (${ph})`).bind(...adminIds).all<any>()
+        ; (ar?.results || []).forEach((u: any) => adminMap.set(u.id, u))
+    }
+    if (custIds.length) {
+      const ph = custIds.map(() => '?').join(',')
+      const cr = await c.env.DB.prepare(`SELECT id, email, name FROM customers WHERE id IN (${ph})`).bind(...custIds).all<any>()
+        ; (cr?.results || []).forEach((u: any) => custMap.set(u.id, u))
+    }
+
+    const events = rows.map(r => {
+      const profile = r.user_type === 'admin' ? adminMap.get(r.user_id) : custMap.get(r.user_id)
+      return {
+        ...r,
+        name: profile?.name || null,
+        email: profile?.email || null,
+      }
+    })
+
+    const totalRow = await c.env.DB.prepare(
+      `SELECT COUNT(*) as cnt FROM user_path_events WHERE ${where.join(' AND ')}`,
+    ).bind(...args).first<{ cnt: number }>()
+
+    return c.json({
+      events,
+      total: totalRow?.cnt || 0,
+      limit,
+      offset,
+    })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to load events', details: err.message }, 500)
   }
 })
 

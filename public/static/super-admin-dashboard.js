@@ -65,6 +65,7 @@ const SA_SECTIONS = {
     tabs: [
       { id: 'growth-overview', label: 'Overview', icon: 'fa-tachometer-alt' },
       { id: 'growth-traffic', label: 'Traffic', icon: 'fa-chart-area' },
+      { id: 'command-center', label: 'Command Center', icon: 'fa-satellite-dish' },
       { id: 'user-activity', label: 'User Activity', icon: 'fa-user-clock' },
       { id: 'growth-marketing', label: 'Marketing', icon: 'fa-bullhorn' },
       { id: 'growth-seo', label: 'SEO & Blog', icon: 'fa-pen-nib' },
@@ -374,6 +375,13 @@ async function loadView(view) {
         if (inboxRes && inboxRes.ok) SA.data.inbox = await inboxRes.json();
         break;
       // ── Growth consolidated views ──
+      case 'command-center':
+        try {
+          SA.ccPeriod = SA.ccPeriod || '30d';
+          const ccRes = await saFetch('/api/admin/bi/command-center?period=' + SA.ccPeriod);
+          if (ccRes && ccRes.ok) SA.data.commandCenter = await ccRes.json();
+        } catch(e) { console.warn('Command Center load error:', e); }
+        break;
       case 'growth-overview':
         try {
           const [biRes, funnelRes, anomalyRes, overviewRes, trendsRes] = await Promise.all([
@@ -835,6 +843,7 @@ function renderContent() {
       }
       break;
     // ── Growth consolidated ──
+    case 'command-center': root.innerHTML = tabBar + renderCommandCenterView(); ccInitCharts(); break;
     case 'growth-overview': root.innerHTML = tabBar + renderGrowthOverviewView(); saInitGrowthCharts(); break;
     case 'growth-traffic': root.innerHTML = tabBar + renderGrowthTrafficView(); break;
     case 'growth-marketing': root.innerHTML = tabBar + renderGrowthMarketingView(); break;
@@ -11261,6 +11270,254 @@ async function loadNewSignupsBadge() {
 // ============================================================
 // GROWTH — CONSOLIDATED VIEWS
 // ============================================================
+
+// ============================================================
+// COMMAND CENTER — unified main BI dashboard
+// One screen: revenue, signups, per-customer spend, per-user time,
+// module distribution, live event feed.
+// ============================================================
+function ccSetPeriod(p) { SA.ccPeriod = p; loadView('command-center'); }
+
+function ccFmtDuration(s) {
+  s = Math.max(0, parseInt(s || 0, 10));
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.round(s / 60) + 'm';
+  var h = Math.floor(s / 3600);
+  var m = Math.round((s % 3600) / 60);
+  return h + 'h' + (m ? ' ' + m + 'm' : '');
+}
+
+function ccTimeAgo(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso.indexOf('Z') >= 0 ? iso : iso + 'Z');
+  var sec = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+  if (sec < 60) return sec + 's ago';
+  if (sec < 3600) return Math.round(sec / 60) + 'm ago';
+  if (sec < 86400) return Math.round(sec / 3600) + 'h ago';
+  return Math.round(sec / 86400) + 'd ago';
+}
+
+function renderCommandCenterView() {
+  var d = (SA.data && SA.data.commandCenter) || {};
+  var ns = d.north_star || {};
+  var spenders = d.top_spenders || [];
+  var topUsers = d.top_users || [];
+  var signups = d.recent_signups || [];
+  var modules = d.module_distribution || [];
+  var events = d.recent_events || [];
+  var period = SA.ccPeriod || '30d';
+
+  function pill(value, label) {
+    var active = value === period;
+    return '<button onclick="ccSetPeriod(\'' + value + '\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ' +
+      (active ? 'bg-slate-800 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200') + '">' + label + '</button>';
+  }
+
+  function metric(label, value, sub, icon, color) {
+    return '<div class="bg-white rounded-2xl border border-gray-200 p-5">' +
+      '<div class="flex items-center justify-between mb-2">' +
+        '<span class="text-[10px] font-bold uppercase tracking-wider text-gray-500">' + label + '</span>' +
+        '<i class="fas ' + icon + ' text-' + color + '-500"></i>' +
+      '</div>' +
+      '<div class="text-3xl font-black text-gray-900">' + value + '</div>' +
+      (sub ? '<div class="text-[11px] text-gray-500 mt-1">' + sub + '</div>' : '') +
+    '</div>';
+  }
+
+  var totalSales = (ns.total_sales || 0).toFixed(2);
+  var sessionAvg = ccFmtDuration(ns.session_avg_seconds || 0);
+  var conversion = ns.user_count > 0 ? Math.round(((ns.paid_orders || 0) / ns.user_count) * 100) : 0;
+
+  var header = '<div class="mb-5 flex flex-wrap items-center justify-between gap-3">' +
+    '<div>' +
+      '<h2 class="text-2xl font-black text-gray-900"><i class="fas fa-satellite-dish mr-2 text-teal-500"></i>Command Center</h2>' +
+      '<p class="text-sm text-gray-500 mt-1">Single-pane view of revenue, users, activity, and live events</p>' +
+    '</div>' +
+    '<div class="flex items-center gap-1">' +
+      pill('24h', '24h') + pill('7d', '7d') + pill('30d', '30d') + pill('90d', '90d') +
+    '</div>' +
+  '</div>';
+
+  // North Star — 5 cards
+  var northStar = '<div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">' +
+    metric('Total Revenue', '$' + totalSales, (ns.paid_orders || 0) + ' paid orders', 'fa-dollar-sign', 'green') +
+    metric('Total Users', ns.user_count || 0, '+' + (ns.new_users || 0) + ' new in ' + period, 'fa-users', 'blue') +
+    metric('Active Today', ns.active_today || 0, (ns.live_now || 0) + ' live now', 'fa-bolt', 'amber') +
+    metric('Avg Session', sessionAvg, 'across ' + period, 'fa-clock', 'purple') +
+    metric('Conversion', conversion + '%', 'paid / total users', 'fa-funnel-dollar', 'teal') +
+  '</div>';
+
+  // Charts row — module distribution (doughnut) + signups trend (line)
+  var chartsRow = '<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">' +
+    '<div class="bg-white rounded-2xl border border-gray-200 p-5">' +
+      '<h3 class="text-sm font-bold text-gray-900 mb-3"><i class="fas fa-chart-pie mr-2 text-purple-500"></i>Time per Module</h3>' +
+      '<div id="cc-module-error" class="hidden text-xs text-red-500 mb-2"></div>' +
+      '<div style="height:260px;position:relative"><canvas id="cc-module-chart"></canvas></div>' +
+    '</div>' +
+    '<div class="bg-white rounded-2xl border border-gray-200 p-5">' +
+      '<h3 class="text-sm font-bold text-gray-900 mb-3"><i class="fas fa-chart-line mr-2 text-blue-500"></i>Sign-ups Trend</h3>' +
+      '<div id="cc-signups-error" class="hidden text-xs text-red-500 mb-2"></div>' +
+      '<div style="height:260px;position:relative"><canvas id="cc-signups-chart"></canvas></div>' +
+    '</div>' +
+  '</div>';
+
+  // Top spenders table
+  var spendersRows = spenders.length === 0
+    ? '<tr><td colspan="4" class="px-4 py-10 text-center text-gray-400 text-sm">No paid orders yet.</td></tr>'
+    : spenders.map(function(s) {
+        return '<tr class="border-b border-gray-100 hover:bg-gray-50">' +
+          '<td class="px-4 py-3"><div class="font-semibold text-sm text-gray-900">' + (s.name || '—') + '</div><div class="text-[11px] text-gray-500">' + (s.email || '') + '</div></td>' +
+          '<td class="px-4 py-3 text-sm text-gray-700">' + (s.company_name || '—') + '</td>' +
+          '<td class="px-4 py-3 text-sm font-bold text-emerald-600">$' + (s.total_spent || 0).toFixed(2) + '</td>' +
+          '<td class="px-4 py-3 text-[11px] text-gray-500">' + (s.order_count || 0) + ' orders · last ' + ccTimeAgo(s.last_order_at) + '</td>' +
+        '</tr>';
+      }).join('');
+
+  var spendersCard = '<div class="bg-white rounded-2xl border border-gray-200 mb-6">' +
+    '<div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">' +
+      '<h3 class="text-sm font-bold text-gray-900"><i class="fas fa-trophy mr-2 text-yellow-500"></i>Top Spenders</h3>' +
+      '<span class="text-[11px] text-gray-500">By total paid revenue</span>' +
+    '</div>' +
+    '<table class="w-full"><thead class="bg-gray-50"><tr>' +
+      '<th class="px-4 py-2 text-left text-[10px] font-bold uppercase text-gray-500">Customer</th>' +
+      '<th class="px-4 py-2 text-left text-[10px] font-bold uppercase text-gray-500">Company</th>' +
+      '<th class="px-4 py-2 text-left text-[10px] font-bold uppercase text-gray-500">Total Spent</th>' +
+      '<th class="px-4 py-2 text-left text-[10px] font-bold uppercase text-gray-500">Activity</th>' +
+    '</tr></thead><tbody>' + spendersRows + '</tbody></table>' +
+  '</div>';
+
+  // Top users by time
+  var usersRows = topUsers.length === 0
+    ? '<tr><td colspan="4" class="px-4 py-10 text-center text-gray-400 text-sm">No tracked sessions yet. Heartbeats begin once users navigate the app.</td></tr>'
+    : topUsers.map(function(u) {
+        var badge = u.user_type === 'admin'
+          ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700">ADMIN</span>'
+          : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">CUSTOMER</span>';
+        return '<tr class="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onclick="uaOpenDrillIn(\'' + u.user_type + '\',' + u.user_id + ')">' +
+          '<td class="px-4 py-3"><div class="font-semibold text-sm text-gray-900">' + (u.name || '—') + '</div><div class="text-[11px] text-gray-500">' + (u.email || '') + '</div></td>' +
+          '<td class="px-4 py-3">' + badge + '</td>' +
+          '<td class="px-4 py-3 text-sm font-bold text-gray-900">' + ccFmtDuration(u.total_seconds) + '</td>' +
+          '<td class="px-4 py-3 text-[11px] text-gray-500">' + (u.visit_count || 0) + ' visits · last ' + ccTimeAgo(u.last_seen) + '</td>' +
+        '</tr>';
+      }).join('');
+
+  var usersCard = '<div class="bg-white rounded-2xl border border-gray-200 mb-6">' +
+    '<div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">' +
+      '<h3 class="text-sm font-bold text-gray-900"><i class="fas fa-user-clock mr-2 text-purple-500"></i>Top Users by Time on Platform</h3>' +
+      '<span class="text-[11px] text-gray-500">Click row for full per-module breakdown</span>' +
+    '</div>' +
+    '<table class="w-full"><thead class="bg-gray-50"><tr>' +
+      '<th class="px-4 py-2 text-left text-[10px] font-bold uppercase text-gray-500">User</th>' +
+      '<th class="px-4 py-2 text-left text-[10px] font-bold uppercase text-gray-500">Type</th>' +
+      '<th class="px-4 py-2 text-left text-[10px] font-bold uppercase text-gray-500">Time</th>' +
+      '<th class="px-4 py-2 text-left text-[10px] font-bold uppercase text-gray-500">Activity</th>' +
+    '</tr></thead><tbody>' + usersRows + '</tbody></table>' +
+  '</div>';
+
+  // Recent signups + Live event feed (side-by-side)
+  var signupsList = signups.length === 0
+    ? '<div class="px-5 py-10 text-center text-gray-400 text-sm">No signups yet.</div>'
+    : signups.map(function(s) {
+        return '<div class="px-5 py-3 border-b border-gray-100 last:border-0 flex items-center gap-3">' +
+          '<div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">' + ((s.name || s.email || '?')[0] || '?').toUpperCase() + '</div>' +
+          '<div class="flex-1 min-w-0">' +
+            '<div class="text-sm font-semibold text-gray-900 truncate">' + (s.name || s.email || '—') + '</div>' +
+            '<div class="text-[11px] text-gray-500 truncate">' + (s.company_name || s.email || '') + '</div>' +
+          '</div>' +
+          '<div class="text-[11px] text-gray-400 whitespace-nowrap">' + ccTimeAgo(s.created_at) + '</div>' +
+        '</div>';
+      }).join('');
+
+  var eventsList = events.length === 0
+    ? '<div class="px-5 py-10 text-center text-gray-400 text-sm">No tracked events yet — refresh after navigating the app.</div>'
+    : events.map(function(e) {
+        var dot = e.user_type === 'admin' ? 'bg-red-400' : 'bg-blue-400';
+        return '<div class="px-5 py-2.5 border-b border-gray-100 last:border-0 flex items-center gap-3 text-xs">' +
+          '<span class="w-2 h-2 rounded-full ' + dot + ' shrink-0"></span>' +
+          '<div class="flex-1 min-w-0">' +
+            '<div class="font-mono text-[11px] text-gray-700 truncate">' + (e.path || '/') + '</div>' +
+            '<div class="text-[10px] text-gray-500 truncate">' + (e.name || e.email || (e.user_type + ' #' + e.user_id)) + '</div>' +
+          '</div>' +
+          '<div class="text-[10px] text-gray-400 whitespace-nowrap">' + ccTimeAgo(e.occurred_at) + '</div>' +
+        '</div>';
+      }).join('');
+
+  var bottomRow = '<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">' +
+    '<div class="bg-white rounded-2xl border border-gray-200 overflow-hidden">' +
+      '<div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">' +
+        '<h3 class="text-sm font-bold text-gray-900"><i class="fas fa-user-plus mr-2 text-green-500"></i>Recent Sign-ups</h3>' +
+        '<button onclick="saSetView(\'signups\')" class="text-[11px] font-semibold text-teal-600 hover:underline">View all <i class="fas fa-arrow-right text-[9px]"></i></button>' +
+      '</div>' +
+      '<div class="max-h-96 overflow-y-auto">' + signupsList + '</div>' +
+    '</div>' +
+    '<div class="bg-white rounded-2xl border border-gray-200 overflow-hidden">' +
+      '<div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">' +
+        '<h3 class="text-sm font-bold text-gray-900"><i class="fas fa-stream mr-2 text-amber-500"></i>Live Activity Feed</h3>' +
+        '<span class="text-[11px] text-gray-500">Last 50 page visits</span>' +
+      '</div>' +
+      '<div class="max-h-96 overflow-y-auto">' + eventsList + '</div>' +
+    '</div>' +
+  '</div>';
+
+  return header + northStar + chartsRow + spendersCard + usersCard + bottomRow;
+}
+
+window._ccCharts = window._ccCharts || { module: null, signups: null };
+window._ccPoll = window._ccPoll || null;
+
+function ccInitCharts() {
+  try {
+    if (typeof Chart === 'undefined') return;
+    var d = (SA.data && SA.data.commandCenter) || {};
+    var modules = d.module_distribution || [];
+    var trend = d.signups_trend || [];
+    var palette = ['#14b8a6','#3b82f6','#a855f7','#f59e0b','#ef4444','#10b981','#6366f1','#ec4899','#06b6d4','#eab308'];
+
+    if (window._ccCharts.module) { try { window._ccCharts.module.destroy(); } catch(e) {} }
+    if (window._ccCharts.signups) { try { window._ccCharts.signups.destroy(); } catch(e) {} }
+
+    var modEl = document.getElementById('cc-module-chart');
+    var sigEl = document.getElementById('cc-signups-chart');
+    var modErr = document.getElementById('cc-module-error');
+    var sigErr = document.getElementById('cc-signups-error');
+
+    if (modEl) {
+      try {
+        var labels = modules.map(function(m) { return m.module || 'unknown'; });
+        var minutes = modules.map(function(m) { return Math.round((m.total_seconds || 0) / 60); });
+        window._ccCharts.module = new Chart(modEl.getContext('2d'), {
+          type: 'doughnut',
+          data: { labels: labels, datasets: [{ data: minutes, backgroundColor: palette.slice(0, labels.length), borderWidth: 2, borderColor: '#fff' }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } }, tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + ctx.parsed + ' min'; } } } } }
+        });
+        if (modErr) modErr.classList.add('hidden');
+      } catch (err) {
+        if (modErr) { modErr.textContent = 'Chart failed: ' + err.message; modErr.classList.remove('hidden'); }
+      }
+    }
+
+    if (sigEl) {
+      try {
+        var sLabels = trend.map(function(t) { return t.day; });
+        var sData = trend.map(function(t) { return t.count || 0; });
+        window._ccCharts.signups = new Chart(sigEl.getContext('2d'), {
+          type: 'line',
+          data: { labels: sLabels, datasets: [{ label: 'Sign-ups', data: sData, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.3, pointRadius: 3 }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+        });
+        if (sigErr) sigErr.classList.add('hidden');
+      } catch (err) {
+        if (sigErr) { sigErr.textContent = 'Chart failed: ' + err.message; sigErr.classList.remove('hidden'); }
+      }
+    }
+  } catch (e) { console.warn('ccInitCharts error:', e); }
+
+  if (window._ccPoll) clearInterval(window._ccPoll);
+  window._ccPoll = setInterval(function() {
+    if (SA.view !== 'command-center') { clearInterval(window._ccPoll); window._ccPoll = null; return; }
+    if (typeof loadView === 'function') loadView('command-center');
+  }, 60000);
+}
 
 function renderGrowthOverviewView() {
   var bi = SA.data.bi || {};
