@@ -19,8 +19,12 @@ import {
 } from './svg-diagrams'
 import {
   generateAllStructureSVGs, splitStructures, allocateMaterialsToStructures,
+  type StructurePartition,
 } from './svg-3d-diagram'
 import { estimateShingleAgeYears, regionalReplacementBandCad } from '../services/report-pro'
+import {
+  RoofMeasurementEngine, traceUiToEnginePayload, type TraceReport,
+} from '../services/roof-measurement-engine'
 
 // ============================================================
 // Per-structure breakdown helper — derives footprint/true-area/
@@ -187,7 +191,223 @@ function renderNeedsReviewBanner(report: RoofReport): string {
   </div>`
 }
 
+// ============================================================
+// MULTI-STRUCTURE: re-run the engine on each traced building so each
+// structure gets its own complete 5-page report. The trace UI lets a
+// super-admin click "+ Add another building" to record a second
+// (or third…) eaves polygon — when present, we render the entire
+// report once per structure instead of a single combined doc.
+// ============================================================
+function runEngineForPartition(
+  partition: StructurePartition,
+  origTrace: any,
+  defaultPitchRise: number,
+  orderInfo: { property_address?: string; homeowner_name?: string; order_number?: string },
+): TraceReport | null {
+  try {
+    const perStructTrace = {
+      eaves: partition.eaves,
+      eaves_sections: [partition.eaves],
+      ridges: partition.ridges,
+      hips: partition.hips,
+      valleys: partition.valleys,
+      annotations: origTrace?.annotations || {},
+      traced_at: origTrace?.traced_at || new Date().toISOString(),
+    }
+    const payload = traceUiToEnginePayload(perStructTrace as any, orderInfo, defaultPitchRise, undefined)
+    return new RoofMeasurementEngine(payload).run()
+  } catch (e) {
+    console.warn('[multi-structure] engine re-run failed for partition:', e)
+    return null
+  }
+}
+
+function buildPerStructureSynthReport(
+  report: RoofReport,
+  partition: StructurePartition,
+  engineResult: TraceReport,
+  partitionIdx: number,
+  partitionCount: number,
+): RoofReport {
+  const synth: any = { ...report }
+  const km = engineResult.key_measurements
+  const lm = engineResult.linear_measurements
+
+  synth.total_footprint_sqft = Math.round(km.total_projected_footprint_ft2)
+  synth.total_true_area_sqft = Math.round(km.total_roof_area_sloped_ft2)
+  synth.total_footprint_sqm = Math.round(km.total_projected_footprint_ft2 * 0.0929 * 10) / 10
+  synth.total_true_area_sqm = Math.round(km.total_roof_area_sloped_ft2 * 0.0929 * 10) / 10
+  synth.area_multiplier = km.total_roof_area_sloped_ft2 / Math.max(km.total_projected_footprint_ft2, 1)
+  synth.roof_pitch_degrees = Math.round(km.dominant_pitch_angle_deg * 10) / 10
+  synth.roof_pitch_ratio = km.dominant_pitch_label
+
+  synth.edge_summary = {
+    total_eave_ft: Math.round(lm.eaves_total_ft),
+    total_ridge_ft: Math.round(lm.ridges_total_ft),
+    total_hip_ft: Math.round(lm.hips_total_ft),
+    total_valley_ft: Math.round(lm.valleys_total_ft),
+    total_rake_ft: Math.round(lm.rakes_total_ft),
+    total_step_flashing_ft: 0,
+    total_wall_flashing_ft: 0,
+    total_transition_ft: 0,
+    total_parapet_ft: 0,
+    total_linear_ft: Math.round(lm.eaves_total_ft + lm.ridges_total_ft + lm.hips_total_ft + lm.valleys_total_ft + lm.rakes_total_ft),
+    total_flashing_ft: 0,
+  }
+
+  const origRt: any = (report as any).roof_trace || {}
+  synth.roof_trace = {
+    ...origRt,
+    eaves: partition.eaves,
+    eaves_sections: [partition.eaves],
+    ridges: partition.ridges,
+    hips: partition.hips,
+    valleys: partition.valleys,
+    traced_at: origRt.traced_at || new Date().toISOString(),
+  }
+
+  const wastePct = (report.materials as any)?.waste_pct || 5
+  const me = engineResult.materials_estimate
+  synth.materials = {
+    ...((report.materials as any) || {}),
+    net_area_sqft: synth.total_true_area_sqft,
+    gross_area_sqft: Math.round(synth.total_true_area_sqft * (1 + wastePct / 100)),
+    gross_squares: Math.round((synth.total_true_area_sqft / 100) * (1 + wastePct / 100) * 10) / 10,
+    bundle_count: me.shingles_bundles,
+    waste_pct: wastePct,
+  }
+
+  synth.trace_measurement = engineResult
+
+  synth.segments = engineResult.face_details.length > 0
+    ? engineResult.face_details.map((face, i) => ({
+        name: face.face_id || `Face ${i + 1}`,
+        footprint_area_sqft: Math.round(face.projected_area_ft2),
+        true_area_sqft: Math.round(face.sloped_area_ft2),
+        true_area_sqm: Math.round(face.sloped_area_ft2 * 0.0929 * 10) / 10,
+        pitch_degrees: Math.round(face.pitch_angle_deg * 10) / 10,
+        pitch_ratio: face.pitch_label,
+        azimuth_degrees: face.azimuth_deg != null ? Math.round(face.azimuth_deg * 10) / 10 : 0,
+        azimuth_direction: '',
+      }))
+    : [{
+        name: 'Total Roof (Traced)',
+        footprint_area_sqft: synth.total_footprint_sqft,
+        true_area_sqft: synth.total_true_area_sqft,
+        true_area_sqm: synth.total_true_area_sqm,
+        pitch_degrees: synth.roof_pitch_degrees,
+        pitch_ratio: synth.roof_pitch_ratio,
+        azimuth_degrees: 0,
+        azimuth_direction: '',
+      }]
+
+  synth.edges = []
+  for (const e of engineResult.eave_edge_breakdown) {
+    synth.edges.push({
+      edge_type: 'eave', label: `Eave ${e.edge_num}`,
+      plan_length_ft: Math.round(e.length_2d_ft),
+      true_length_ft: Math.round(e.length_2d_ft), pitch_factor: 1.0,
+    })
+  }
+  for (const seg of engineResult.ridge_details) {
+    synth.edges.push({
+      edge_type: 'ridge', label: seg.id,
+      plan_length_ft: Math.round(seg.horiz_length_ft),
+      true_length_ft: Math.round(seg.sloped_length_ft), pitch_factor: seg.slope_factor,
+    })
+  }
+  for (const seg of engineResult.hip_details) {
+    synth.edges.push({
+      edge_type: 'hip', label: seg.id,
+      plan_length_ft: Math.round(seg.horiz_length_ft),
+      true_length_ft: Math.round(seg.sloped_length_ft), pitch_factor: seg.slope_factor,
+    })
+  }
+  for (const seg of engineResult.valley_details) {
+    synth.edges.push({
+      edge_type: 'valley', label: seg.id,
+      plan_length_ft: Math.round(seg.horiz_length_ft),
+      true_length_ft: Math.round(seg.sloped_length_ft), pitch_factor: seg.slope_factor,
+    })
+  }
+  for (const seg of engineResult.rake_details) {
+    synth.edges.push({
+      edge_type: 'rake', label: seg.id,
+      plan_length_ft: Math.round(seg.horiz_length_ft),
+      true_length_ft: Math.round(seg.sloped_length_ft), pitch_factor: seg.slope_factor,
+    })
+  }
+
+  ;(synth as any).__per_structure_render = true
+  ;(synth as any).__structure_label = `Structure ${partitionIdx} of ${partitionCount} — ${partition.label}`
+  return synth as RoofReport
+}
+
+function renderMultiStructureReport(report: RoofReport): string {
+  const partitions = splitStructures(report)
+  if (partitions.length < 2) {
+    ;(report as any).__per_structure_render = true
+    return generateProfessionalReportHTML(report)
+  }
+  const origTrace: any = (report as any).roof_trace || {}
+  const defaultPitchRise = report.roof_pitch_degrees
+    ? 12 * Math.tan(report.roof_pitch_degrees * Math.PI / 180)
+    : 4.4
+  const orderInfo = {
+    property_address: (report.property as any)?.address || '',
+    homeowner_name: (report.property as any)?.homeowner_name || '',
+    order_number: String(report.order_id || ''),
+  }
+
+  const synthReports: RoofReport[] = []
+  for (let i = 0; i < partitions.length; i++) {
+    const engineResult = runEngineForPartition(partitions[i], origTrace, defaultPitchRise, orderInfo)
+    if (!engineResult) {
+      // Engine failure on any partition → fall back to combined
+      ;(report as any).__per_structure_render = true
+      return generateProfessionalReportHTML(report)
+    }
+    synthReports.push(buildPerStructureSynthReport(report, partitions[i], engineResult, i + 1, partitions.length))
+  }
+
+  // Render each per-structure report and stitch their <body> contents
+  // together inside the first one's outer wrapper.
+  const htmls = synthReports.map(r => generateProfessionalReportHTML(r))
+  const bodyRe = /<body[^>]*>([\s\S]*?)<\/body>/i
+  const bodies: string[] = []
+  for (let i = 0; i < htmls.length; i++) {
+    const m = htmls[i].match(bodyRe)
+    const inner = m ? m[1] : htmls[i]
+    const label = (synthReports[i] as any).__structure_label || `Structure ${i + 1}`
+    bodies.push(`
+<div class="page" style="${i > 0 ? 'page-break-before:always;' : ''}padding:0;min-height:auto">
+  <div style="background:linear-gradient(90deg,#00897B,#00695C);color:#fff;padding:18px 28px;text-align:center">
+    <div style="font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;opacity:0.85">Multi-Structure Report &mdash; ${i + 1} of ${synthReports.length}</div>
+    <div style="font-size:22px;font-weight:900;margin-top:4px;letter-spacing:0.5px">${label}</div>
+  </div>
+</div>
+${inner}`)
+  }
+  return htmls[0].replace(bodyRe, `<body>${bodies.join('\n')}</body>`)
+}
+
 export function generateProfessionalReportHTML(report: RoofReport): string {
+  // ── Multi-structure: render full report per traced building ──
+  // (Skipped when called recursively; the flag is set on synth reports.)
+  if (!(report as any).__per_structure_render) {
+    const rt: any = (report as any).roof_trace
+    const sections = Array.isArray(rt?.eaves_sections)
+      ? rt.eaves_sections.filter((s: any) => Array.isArray(s) && s.length >= 3)
+      : []
+    if (sections.length >= 2) {
+      try {
+        return renderMultiStructureReport(report)
+      } catch (e) {
+        console.warn('[multi-structure] falling back to combined render:', e)
+      }
+    }
+  }
+
   // ── Safe defaults ──
   const prop = report.property || { address: 'Unknown' } as any
   const mat = report.materials || { net_area_sqft: 0, gross_squares: 0, bundle_count: 0, line_items: [], waste_table: [], waste_pct: 5, gross_area_sqft: 0, total_material_cost_cad: 0, complexity_class: 'simple', complexity_factor: 1, shingle_type: 'architectural' } as any
@@ -616,7 +836,6 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
           <div style="font-size:11px;font-weight:800;letter-spacing:0.5px">Structure ${partition.index} &mdash; ${partition.label}</div>
           <div style="font-size:9px;font-weight:600;opacity:0.95">${partition.true_area_sqft.toLocaleString()} sqft @ ${partition.dominant_pitch_label} &bull; ${partition.perimeter_ft.toLocaleString()} LF perimeter</div>
         </div>
-        <div class="roof3d-frame" data-roof3d-mount="${partition.index}" style="position:relative;width:100%;aspect-ratio:8/5;border-bottom:1px solid #e2e8f0">${svg}</div>
         <div style="padding:8px 12px;font-size:8.5px">
           <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Measurements</div>
           <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:2px 14px">
@@ -651,13 +870,9 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         </div>
       </div>
     `}).join('')}
-    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">3D Axonometric on top &mdash; 2D Plan View below shows every traced edge with its haversine length. Each traced building rendered separately.</div>
+    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">2D Plan View shows every traced edge with its haversine length. Each traced building rendered separately.</div>
   </div>` : `
   <div style="padding:0 28px;margin-bottom:8px">
-    <div class="roof3d-frame" ${structureDiagrams.length === 1 ? `data-roof3d-mount="${structureDiagrams[0].partition.index}"` : ''} style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center;position:relative;${structureDiagrams.length === 1 ? 'aspect-ratio:8/5' : ''}">
-      ${structureDiagrams.length === 1 ? structureDiagrams[0].svg : architecturalDiagramSVG}
-    </div>
-    <div style="text-align:center;font-size:6.5px;color:#999;margin:2px 0 8px">${structureDiagrams.length === 1 ? '3D Roof Diagram &mdash; Drag to rotate on screen' : 'AI-Generated Roof Diagram'} &mdash; All dimensions in feet. Pitch multiplier applied for true 3D area.</div>
     ${structureDiagrams.length === 1 ? (() => {
       const p = structureDiagrams[0].partition
       const flat = generateTraceBasedDiagramSVG(
@@ -668,10 +883,12 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         p.true_area_sqft,
       )
       return `
-      <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">2D Plan View &mdash; Edge Dimensions</div>
       <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center">${flat}</div>
-      <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">2D top-down plan with haversine edge lengths.</div>
-    `})() : ''}
+      <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">2D top-down plan with haversine edge lengths. All dimensions in feet.</div>
+    `})() : `
+      <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center">${architecturalDiagramSVG}</div>
+      <div style="text-align:center;font-size:6.5px;color:#999;margin:2px 0 8px">AI-Generated Roof Diagram &mdash; All dimensions in feet. Pitch multiplier applied for true sloped area.</div>
+    `}
   </div>`}
 
   <!-- Drawing Key / Legend — Industry Standard Color Coding -->
@@ -782,28 +999,7 @@ ${report.solar_panel_layout ? buildSolarProposalPage(report, reportNum, reportDa
 
 ${report.vision_findings ? buildVisionFindingsHTML(report.vision_findings) : ''}
 
-${structureDiagrams.length > 0 ? `
-<style>
-  .roof3d-frame canvas { display: block; }
-  @media print {
-    .roof3d-frame canvas { display: none !important; }
-    .roof3d-frame svg { display: block !important; }
-    .roof3d-frame .roof3d-panel { display: none !important; }
-    .roof3d-frame > div[style*="position:absolute"] { display: none !important; }
-  }
-</style>
-<script>window.__roofReport3D = ${JSON.stringify({
-  structures: structureDiagrams.map(({ partition }) => ({
-    index: partition.index,
-    label: partition.label,
-    eaves: partition.eaves,
-    dominant_pitch_deg: partition.dominant_pitch_deg,
-    dominant_pitch_label: partition.dominant_pitch_label,
-    true_area_sqft: partition.true_area_sqft,
-  })),
-})};</script>
-<script src="/static/report-3d-viewer.js" defer></script>
-` : ''}
+
 </body>
 </html>`
 }
