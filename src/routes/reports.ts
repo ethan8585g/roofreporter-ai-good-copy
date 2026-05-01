@@ -2179,9 +2179,18 @@ reportsRoutes.post('/:orderId/email', async (c) => {
   const reportHtml = resolveHtml(order.professional_report_html, order.api_response_raw)
   if (!reportHtml) return c.json({ error: 'Report not yet generated' }, 400)
 
+  // Pull customer copy if it exists so it ships in the same email.
+  let customerHtml: string | null = null
+  try {
+    const cr = await repo.getCustomerReportHtml(c.env.DB, orderId)
+    customerHtml = cr?.customer_report_html || null
+  } catch (e: any) {
+    console.warn(`[Email] Order ${orderId}: customer copy lookup failed (non-fatal): ${e?.message}`)
+  }
+
   const reportNum = `RM-${orderId}`
   const subject = body?.subject_override || `Roof Measurement Report - ${order.property_address} [${reportNum}]`
-  const emailHtml = buildEmailWrapper(reportHtml, order.property_address || 'Property', reportNum, recipient)
+  const emailHtml = buildEmailWrapper(reportHtml, order.property_address || 'Property', reportNum, recipient, customerHtml)
 
   // Create a pending delivery row up front so every send attempt is auditable,
   // even if the request crashes or times out between here and the provider call.
@@ -3440,17 +3449,19 @@ async function _generateReportForOrderInner(
     console.log(`[Generate] Order ${orderId}: ✅ Report saved as COMPLETED (v${baseVersion}, provider=${finalReportData.metadata?.provider || 'unknown'})`)
 
     // ── CUSTOMER REPORT (no measurements) ──
-    // A second artifact built from the same data: aerial + 3D + 2D diagrams,
-    // no numbers anywhere. Stored on reports.customer_report_html so the
+    // A second artifact built from the same data: aerial + 2D diagram, no
+    // numbers anywhere. Stored on reports.customer_report_html so the
     // homeowner can see what was measured without being able to hand the
     // measurements themselves to a competing roofer. Failures here are
     // non-fatal — the regular report has already been saved.
+    let customerHtml: string | null = null
     try {
-      const customerHtml = generateCustomerReportHTML(finalReportData)
+      customerHtml = generateCustomerReportHTML(finalReportData)
       await repo.saveCustomerReportHtml(env.DB, orderId, customerHtml)
       console.log(`[Generate] Order ${orderId}: customer report saved (${customerHtml.length} chars)`)
     } catch (custErr: any) {
       console.warn(`[Generate] Order ${orderId}: customer report generation failed: ${custErr?.message}`)
+      customerHtml = null
     }
 
     // Auto-send report to the order's email. Falls back through
@@ -3467,7 +3478,7 @@ async function _generateReportForOrderInner(
         try {
           const recipient = autoRecipient
           const reportNum = `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`
-          const emailHtml = buildEmailWrapper(html, order.property_address || 'Property', reportNum, recipient)
+          const emailHtml = buildEmailWrapper(html, order.property_address || 'Property', reportNum, recipient, customerHtml)
           const ci = (env as any).GMAIL_CLIENT_ID
           let cs = (env as any).GMAIL_CLIENT_SECRET
           let rt = (env as any).GMAIL_REFRESH_TOKEN

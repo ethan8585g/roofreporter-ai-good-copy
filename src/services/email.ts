@@ -3,7 +3,19 @@
 // Supports: Gmail Service Account, Gmail OAuth2, Resend API
 // ============================================================
 
-export function buildEmailWrapper(reportHtml: string, address: string, reportNum: string, recipient: string): string {
+export function buildEmailWrapper(reportHtml: string, address: string, reportNum: string, recipient: string, customerReportHtml?: string | null): string {
+  const customerBlock = customerReportHtml
+    ? `
+  <!-- Customer Copy (no measurements) — shipped alongside the regular report -->
+  <div style="margin-top:24px;padding:16px 20px;background:#0F172A;color:#fff;border-radius:12px 12px 0 0;text-align:center">
+    <div style="font-size:16px;font-weight:800;letter-spacing:1px">CUSTOMER COPY</div>
+    <div style="font-size:12px;color:#93C5FD;margin-top:4px">Aerial &amp; diagrams only — no measurements</div>
+  </div>
+  <div style="border:2px solid #0F172A;border-top:none;border-radius:0 0 12px 12px;overflow:hidden;background:#fff">
+    ${customerReportHtml}
+  </div>`
+    : ''
+
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -36,6 +48,7 @@ export function buildEmailWrapper(reportHtml: string, address: string, reportNum
       <li><strong>Page 8:</strong> Report Summary &mdash; Complexity &amp; Waste Calculation</li>
       <li><strong>Page 9:</strong> Totals &amp; Materials &mdash; Complete Material Order</li>
     </ul>
+    ${customerReportHtml ? '<p style="font-size:13px;color:#374151;line-height:1.6;margin:0 0 16px;padding:12px 14px;background:#F1F5F9;border-left:3px solid #0F172A;border-radius:4px"><strong>Two reports below:</strong> the full measurement report (for your records) and a customer-facing copy with diagrams only — designed to share with the homeowner without revealing the measurements.</p>' : ''}
 
     <div style="text-align:center;margin:24px 0">
       <div style="font-size:12px;color:#6B7280;margin-bottom:8px">View your full report below</div>
@@ -46,7 +59,7 @@ export function buildEmailWrapper(reportHtml: string, address: string, reportNum
   <div style="border:2px solid #2563EB;border-radius:0 0 12px 12px;overflow:hidden;background:#fff">
     ${reportHtml}
   </div>
-
+${customerBlock}
   <!-- Email Footer -->
   <div style="text-align:center;padding:20px;color:#9CA3AF;font-size:11px">
     <p>&copy; ${new Date().getFullYear()} Roof Manager | Professional Roof Measurement Reports</p>

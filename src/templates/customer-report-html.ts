@@ -2,8 +2,7 @@
 // Roof Manager — CUSTOMER-FACING report (no measurements)
 // Built alongside the regular report. Shows ONLY:
 //   1) The aerial / satellite image of the property
-//   2) The 3D axonometric roof diagram (no labels)
-//   3) The 2D top-down roof diagram (no labels)
+//   2) The 2D top-down roof diagram (no labels)
 // No areas, lengths, pitches, edge counts, or material totals appear
 // anywhere in the document or its embedded SVGs. The intent is that
 // the homeowner can see what was measured without being able to hand
@@ -12,7 +11,6 @@
 
 import type { RoofReport } from '../types'
 import { generateTraceBasedDiagramSVG } from './svg-diagrams'
-import { generateAllStructureSVGs } from './svg-3d-diagram'
 
 const escapeHtml = (s: string): string =>
   String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
@@ -28,19 +26,6 @@ export function generateCustomerReportHTML(report: RoofReport): string {
     report.imagery?.satellite_overhead_url ||
     report.imagery?.satellite_url ||
     null
-
-  // 3D — call with showDimensions:false so no labels render in the SVG.
-  let threeDSVG = ''
-  try {
-    const partitions = generateAllStructureSVGs(report, {
-      showDimensions: false,
-      showCompass: true,
-      showShadow: true,
-    })
-    threeDSVG = partitions.map(p => p.svg).join('\n')
-  } catch {
-    threeDSVG = ''
-  }
 
   // 2D — re-render from the raw trace with hideMeasurements:true so no
   // dimension labels appear. The route stashes the parsed trace on
@@ -99,15 +84,6 @@ export function generateCustomerReportHTML(report: RoofReport): string {
     </section>`
     : ''
 
-  const section3D = threeDSVG
-    ? `
-    <section class="page">
-      <h2>3D Roof Model</h2>
-      <div class="frame">${threeDSVG}</div>
-      <p class="note">Three-dimensional model of the roof structure derived from your traced outline.</p>
-    </section>`
-    : ''
-
   const section2D = twoDSVG
     ? `
     <section class="page">
@@ -139,7 +115,6 @@ export function generateCustomerReportHTML(report: RoofReport): string {
     <p class="note"><span class="stamp">CUSTOMER COPY</span> &nbsp; This summary shows the property aerial and the roof diagrams produced for this order. Detailed measurements, edge lengths and material take-off are provided to your roofing contractor in a separate document.</p>
   </section>
   ${sectionSatellite}
-  ${section3D}
   ${section2D}
   <section class="page">
     <div class="footer">
