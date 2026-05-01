@@ -296,6 +296,17 @@ export async function updateAiStatus(db: D1Database, orderId: number | string, s
     .bind(status, orderId).run()
 }
 
+export async function saveCustomerReportHtml(db: D1Database, orderId: number | string, html: string) {
+  await db.prepare(`UPDATE reports SET customer_report_html = ?, updated_at = datetime('now') WHERE order_id = ?`)
+    .bind(html, parseInt(String(orderId))).run()
+}
+
+export async function getCustomerReportHtml(db: D1Database, orderId: number | string) {
+  return await db.prepare(`
+    SELECT customer_report_html FROM reports WHERE order_id = ?
+  `).bind(parseInt(String(orderId))).first<{ customer_report_html: string | null }>()
+}
+
 export async function logApiRequest(
   db: D1Database, orderId: number | string,
   type: string, endpoint: string, status: number, durationMs: number, payload?: string

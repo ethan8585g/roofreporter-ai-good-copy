@@ -2360,12 +2360,14 @@ export function generateTraceBasedDiagramSVG(
   avgPitchDeg: number,
   predominantPitch: string,
   grossSquares: number,
-  trueAreaSqft: number
+  trueAreaSqft: number,
+  opts: { hideMeasurements?: boolean } = {}
 ): string {
-  const W = 700, H = 700
+  const HIDE = opts.hideMeasurements === true
+  const W = 700, H = HIDE ? 660 : 700
   const PAD = 55
-  const FOOTER_H = 56
-  const LABEL_MARGIN = 45
+  const FOOTER_H = HIDE ? 0 : 56
+  const LABEL_MARGIN = HIDE ? 12 : 45
   const FONT = `font-family="Inter,system-ui,-apple-system,sans-serif"`
 
   // ── RESOLVE MULTI-SECTION EAVES ──
@@ -2759,64 +2761,68 @@ export function generateTraceBasedDiagramSVG(
 
     // Per-edge dimension labels (haversine length) with collision avoidance
     const sn = sec.length
-    for (let i = 0; i < sn; i++) {
-      const a = sec[i], b = sec[(i + 1) % sn]
-      const p1 = secXY[i], p2 = secXY[(i + 1) % sn]
-      const sx = tx(p1.x), sy = ty(p1.y), ex = tx(p2.x), ey = ty(p2.y)
-      const segPx = Math.sqrt((ex - sx) ** 2 + (ey - sy) ** 2)
-      if (segPx < 24) continue
-      const ftVal = haversineFt(a, b)
-      if (ftVal < 1) continue
-      const label = fmtFtUnit(ftVal)
-      if (!label) continue
+    if (!HIDE) {
+      for (let i = 0; i < sn; i++) {
+        const a = sec[i], b = sec[(i + 1) % sn]
+        const p1 = secXY[i], p2 = secXY[(i + 1) % sn]
+        const sx = tx(p1.x), sy = ty(p1.y), ex = tx(p2.x), ey = ty(p2.y)
+        const segPx = Math.sqrt((ex - sx) ** 2 + (ey - sy) ** 2)
+        if (segPx < 24) continue
+        const ftVal = haversineFt(a, b)
+        if (ftVal < 1) continue
+        const label = fmtFtUnit(ftVal)
+        if (!label) continue
 
-      const dx = ex - sx, dy = ey - sy
-      const len = Math.sqrt(dx * dx + dy * dy)
-      const nx = -dy / len, ny = dx / len
+        const dx = ex - sx, dy = ey - sy
+        const len = Math.sqrt(dx * dx + dy * dy)
+        const nx = -dy / len, ny = dx / len
 
-      const dimOffset = 18
-      const extEnd = dimOffset + 6
-      // Extension lines
-      svg += `<line x1="${(sx + nx * 3).toFixed(1)}" y1="${(sy + ny * 3).toFixed(1)}" x2="${(sx + nx * extEnd).toFixed(1)}" y2="${(sy + ny * extEnd).toFixed(1)}" stroke="#0d9668" stroke-width="0.4" stroke-opacity="0.7"/>`
-      svg += `<line x1="${(ex + nx * 3).toFixed(1)}" y1="${(ey + ny * 3).toFixed(1)}" x2="${(ex + nx * extEnd).toFixed(1)}" y2="${(ey + ny * extEnd).toFixed(1)}" stroke="#0d9668" stroke-width="0.4" stroke-opacity="0.7"/>`
-      // Dim line
-      const dsx = sx + nx * dimOffset, dsy = sy + ny * dimOffset
-      const dex = ex + nx * dimOffset, dey = ey + ny * dimOffset
-      svg += `<line x1="${dsx.toFixed(1)}" y1="${dsy.toFixed(1)}" x2="${dex.toFixed(1)}" y2="${dey.toFixed(1)}" stroke="#0d9668" stroke-width="0.5" stroke-opacity="0.85"/>`
+        const dimOffset = 18
+        const extEnd = dimOffset + 6
+        // Extension lines
+        svg += `<line x1="${(sx + nx * 3).toFixed(1)}" y1="${(sy + ny * 3).toFixed(1)}" x2="${(sx + nx * extEnd).toFixed(1)}" y2="${(sy + ny * extEnd).toFixed(1)}" stroke="#0d9668" stroke-width="0.4" stroke-opacity="0.7"/>`
+        svg += `<line x1="${(ex + nx * 3).toFixed(1)}" y1="${(ey + ny * 3).toFixed(1)}" x2="${(ex + nx * extEnd).toFixed(1)}" y2="${(ey + ny * extEnd).toFixed(1)}" stroke="#0d9668" stroke-width="0.4" stroke-opacity="0.7"/>`
+        // Dim line
+        const dsx = sx + nx * dimOffset, dsy = sy + ny * dimOffset
+        const dex = ex + nx * dimOffset, dey = ey + ny * dimOffset
+        svg += `<line x1="${dsx.toFixed(1)}" y1="${dsy.toFixed(1)}" x2="${dex.toFixed(1)}" y2="${dey.toFixed(1)}" stroke="#0d9668" stroke-width="0.5" stroke-opacity="0.85"/>`
 
-      let mx = (dsx + dex) / 2, my = (dsy + dey) / 2
-      let angle = Math.atan2(dey - dsy, dex - dsx) * 180 / Math.PI
-      if (angle > 90) angle -= 180
-      if (angle < -90) angle += 180
-      const bgW = Math.max(label.length * 5.2 + 8, 32)
-      const bgH = 13
-      if (labelCollides(mx, my, bgW, bgH)) { mx += nx * 12; my += ny * 12 }
-      if (labelCollides(mx, my, bgW, bgH)) { mx -= nx * 24; my -= ny * 24 }
-      placedLabels.push({ cx: mx, cy: my, w: bgW, h: bgH })
+        let mx = (dsx + dex) / 2, my = (dsy + dey) / 2
+        let angle = Math.atan2(dey - dsy, dex - dsx) * 180 / Math.PI
+        if (angle > 90) angle -= 180
+        if (angle < -90) angle += 180
+        const bgW = Math.max(label.length * 5.2 + 8, 32)
+        const bgH = 13
+        if (labelCollides(mx, my, bgW, bgH)) { mx += nx * 12; my += ny * 12 }
+        if (labelCollides(mx, my, bgW, bgH)) { mx -= nx * 24; my -= ny * 24 }
+        placedLabels.push({ cx: mx, cy: my, w: bgW, h: bgH })
 
-      svg += `<g transform="translate(${mx.toFixed(1)},${my.toFixed(1)}) rotate(${angle.toFixed(1)})">`
-      svg += `<rect x="${(-bgW / 2).toFixed(1)}" y="-7.5" width="${bgW.toFixed(1)}" height="${bgH}" rx="2" fill="#fff" stroke="#0d9668" stroke-width="0.3" opacity="0.97"/>`
-      svg += `<text x="0" y="3" text-anchor="middle" font-size="7.5" font-weight="700" fill="#0d6b4a" ${FONT}>${label}</text>`
-      svg += `</g>`
+        svg += `<g transform="translate(${mx.toFixed(1)},${my.toFixed(1)}) rotate(${angle.toFixed(1)})">`
+        svg += `<rect x="${(-bgW / 2).toFixed(1)}" y="-7.5" width="${bgW.toFixed(1)}" height="${bgH}" rx="2" fill="#fff" stroke="#0d9668" stroke-width="0.3" opacity="0.97"/>`
+        svg += `<text x="0" y="3" text-anchor="middle" font-size="7.5" font-weight="700" fill="#0d6b4a" ${FONT}>${label}</text>`
+        svg += `</g>`
+      }
     }
 
-    // Compute polygon area in sqft using Shoelace (XY already in metres)
-    let area2 = 0
-    for (let i = 0; i < sn; i++) {
-      const j = (i + 1) % sn
-      area2 += secXY[i].x * secXY[j].y - secXY[j].x * secXY[i].y
-    }
-    const footprintM2 = Math.abs(area2) / 2
-    const footprintFt2 = Math.round(footprintM2 * 10.7639)
-    const slopedFt2 = Math.round(footprintFt2 * slopeMultForExtras)
+    if (!HIDE) {
+      // Compute polygon area in sqft using Shoelace (XY already in metres)
+      let area2 = 0
+      for (let i = 0; i < sn; i++) {
+        const j = (i + 1) % sn
+        area2 += secXY[i].x * secXY[j].y - secXY[j].x * secXY[i].y
+      }
+      const footprintM2 = Math.abs(area2) / 2
+      const footprintFt2 = Math.round(footprintM2 * 10.7639)
+      const slopedFt2 = Math.round(footprintFt2 * slopeMultForExtras)
 
-    // Centroid label (Structure name + sloped area)
-    const cx = secXY.reduce((s, p) => s + p.x, 0) / secXY.length
-    const cy = secXY.reduce((s, p) => s + p.y, 0) / secXY.length
-    const lcx = tx(cx), lcy = ty(cy)
-    const structIdx = facets.length + si + 1
-    svg += `<text x="${lcx.toFixed(1)}" y="${(lcy - 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="800" fill="#0d6b4a" fill-opacity="0.85" ${FONT}>Structure ${structIdx}</text>`
-    svg += `<text x="${lcx.toFixed(1)}" y="${(lcy + 9).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="#0d6b4a" fill-opacity="0.85" ${FONT}>${slopedFt2.toLocaleString()} SF</text>`
+      // Centroid label (Structure name + sloped area)
+      const cx = secXY.reduce((s, p) => s + p.x, 0) / secXY.length
+      const cy = secXY.reduce((s, p) => s + p.y, 0) / secXY.length
+      const lcx = tx(cx), lcy = ty(cy)
+      const structIdx = facets.length + si + 1
+      svg += `<text x="${lcx.toFixed(1)}" y="${(lcy - 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="800" fill="#0d6b4a" fill-opacity="0.85" ${FONT}>Structure ${structIdx}</text>`
+      svg += `<text x="${lcx.toFixed(1)}" y="${(lcy + 9).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="#0d6b4a" fill-opacity="0.85" ${FONT}>${slopedFt2.toLocaleString()} SF</text>`
+    }
   })
 
   // ── RIDGE LINES (red, solid, prominent) ──
@@ -2846,6 +2852,7 @@ export function generateTraceBasedDiagramSVG(
   }
 
   for (let i = 0; i < n; i++) {
+    if (HIDE) break
     const a = eaves[i], b = eaves[(i + 1) % n]
     const p1 = eavesXY[i], p2 = eavesXY[(i + 1) % n]
     const sx = tx(p1.x), sy = ty(p1.y), ex = tx(p2.x), ey = ty(p2.y)
@@ -2909,6 +2916,7 @@ export function generateTraceBasedDiagramSVG(
 
   // ── INTERNAL LINE DIMENSION LABELS (Ridge/Hip/Valley — collision-aware) ──
   internalLines.forEach(l => {
+    if (HIDE) return
     if (l.ftLen < 1.5) return
     const sx = tx(l.start.x), sy = ty(l.start.y), ex = tx(l.end.x), ey = ty(l.end.y)
     const segPx = Math.sqrt((ex - sx) ** 2 + (ey - sy) ** 2)
@@ -2948,13 +2956,15 @@ export function generateTraceBasedDiagramSVG(
   })
 
   // ── FACET LABELS (A, B, C... with area) ──
-  facets.forEach((facet, fi) => {
-    const cx = tx(facet.centerX), cy = ty(facet.centerY)
-    // Facet letter (large)
-    svg += `<text x="${cx.toFixed(1)}" y="${(cy - 2).toFixed(1)}" text-anchor="middle" font-size="16" font-weight="800" fill="#C62828" fill-opacity="0.55" ${FONT}>${facet.label}</text>`
-    // Facet area (small)
-    svg += `<text x="${cx.toFixed(1)}" y="${(cy + 12).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="600" fill="#555" fill-opacity="0.7" ${FONT}>${facet.areaSqft.toLocaleString()} SF</text>`
-  })
+  if (!HIDE) {
+    facets.forEach((facet, fi) => {
+      const cx = tx(facet.centerX), cy = ty(facet.centerY)
+      // Facet letter (large)
+      svg += `<text x="${cx.toFixed(1)}" y="${(cy - 2).toFixed(1)}" text-anchor="middle" font-size="16" font-weight="800" fill="#C62828" fill-opacity="0.55" ${FONT}>${facet.label}</text>`
+      // Facet area (small)
+      svg += `<text x="${cx.toFixed(1)}" y="${(cy + 12).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="600" fill="#555" fill-opacity="0.7" ${FONT}>${facet.areaSqft.toLocaleString()} SF</text>`
+    })
+  }
 
   // ── VERTEX DOTS (clean small circles at intersections — slightly smaller for cleanliness) ──
   eavesXY.forEach(p => {
@@ -2974,7 +2984,13 @@ export function generateTraceBasedDiagramSVG(
     drawIfNew(l.end)
   })
 
-  // ── LEGEND (top-left, SkyQuote-style with per-type counts + summary totals) ──
+  // ── LEGEND / SCALE BAR / SOURCE BADGE — all gated together so the customer
+  //     diagram has none of the measurement-bearing chrome. ──
+  if (HIDE) {
+    // Skip legend, scale bar, source badge — go straight to compass.
+  }
+  const __SKIP_LEGEND_BLOCK__ = HIDE
+  if (!__SKIP_LEGEND_BLOCK__) {
   // Per-type segment counts (from trace input — authoritative)
   const eaveSegCount = n
   const ridgeSegCount = roofTrace.ridges?.length || 0
@@ -3065,6 +3081,7 @@ export function generateTraceBasedDiagramSVG(
 
   // ── SOURCE BADGE ──
   svg += `<text x="${W / 2}" y="${H - FOOTER_H - 6}" text-anchor="middle" font-size="6.5" fill="#666" ${FONT} font-weight="500" letter-spacing="0.5">AI-GENERATED ROOF DIAGRAM \u2014 TRACED FROM GPS COORDINATES \u2014 All dimensions in feet. Pitch multiplier applied for true 3D area.</text>`
+  } // end if (!__SKIP_LEGEND_BLOCK__)
 
   // ── COMPASS ROSE (professional style) ──
   const cX = W - 38, cY = 34
@@ -3082,6 +3099,7 @@ export function generateTraceBasedDiagramSVG(
 
   // ── FOOTER BAR ──
   // Single authoritative TOTAL ROOF AREA + waste calculations at 5%, 10%, 15%
+  if (!HIDE) {
   const fY = H - FOOTER_H
   const barW = W * 0.94, barX = (W - barW) / 2
   const cols = 6
@@ -3107,6 +3125,7 @@ export function generateTraceBasedDiagramSVG(
     svg += `<text x="${cx.toFixed(1)}" y="${fY + 15}" text-anchor="middle" font-size="6.5" font-weight="700" fill="${d.label === 'TOTAL ROOF AREA' ? '#fbbf24' : '#7eafd4'}" ${FONT} letter-spacing="1">${d.label}</text>`
     svg += `<text x="${cx.toFixed(1)}" y="${fY + 38}" text-anchor="middle" font-size="${d.small ? '11' : '16'}" font-weight="800" fill="${d.label === 'TOTAL ROOF AREA' ? '#fbbf24' : '#fff'}" ${FONT}>${d.value}</text>`
   })
+  } // end if (!HIDE) FOOTER
 
   svg += `</svg>`
   return svg

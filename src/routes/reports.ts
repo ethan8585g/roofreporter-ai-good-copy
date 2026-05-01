@@ -26,6 +26,7 @@ import { executeRoofOrder, fetchSolarImageryOnly, type DataLayersAnalysis } from
 import { generateProfessionalReportHTML, buildVisionFindingsHTML, generateSimpleTwoPageReport } from '../templates/report-html'
 import { generateSolarProposalHTML } from '../templates/solar-proposal'
 import { generateTraceBasedDiagramSVG } from '../templates/svg-diagrams'
+import { generateCustomerReportHTML } from '../templates/customer-report-html'
 import { RoofMeasurementEngine, traceUiToEnginePayload, calculateRoofSpecs, type TraceReport } from '../services/roof-measurement-engine'
 import { ROOF_PITCH_MULTIPLIERS, HIP_VALLEY_MULTIPLIERS } from '../services/pitch'
 import { validateTraceUi, resolveEaves, allEavePoints } from '../utils/trace-validation'
@@ -135,7 +136,7 @@ async function validateAdminOrCustomer(c: any) {
 
 reportsRoutes.use('/*', async (c, next) => {
   const path = c.req.path
-  if (path.endsWith('/html') || path.endsWith('/simple') || path.endsWith('/proposal') || path.endsWith('/pdf') || path.endsWith('/webhook-update') || path.endsWith('/webhooks/resend') || path.endsWith('/enhancement-status') || path.endsWith('/calculate-from-trace') || path.endsWith('/pitch-multipliers') || path.endsWith('/calculate-roof-specs') || path.endsWith('/export.json') || path.endsWith('/export.csv') || path.endsWith('/solar-panel-layout') || path.endsWith('/bom') || path.endsWith('/bom.csv') || path.endsWith('/bom.xml')) return next()
+  if (path.endsWith('/html') || path.endsWith('/simple') || path.endsWith('/proposal') || path.endsWith('/pdf') || path.endsWith('/customer-html') || path.endsWith('/customer-pdf') || path.endsWith('/webhook-update') || path.endsWith('/webhooks/resend') || path.endsWith('/enhancement-status') || path.endsWith('/calculate-from-trace') || path.endsWith('/pitch-multipliers') || path.endsWith('/calculate-roof-specs') || path.endsWith('/export.json') || path.endsWith('/export.csv') || path.endsWith('/solar-panel-layout') || path.endsWith('/bom') || path.endsWith('/bom.csv') || path.endsWith('/bom.xml')) return next()
   const user = await validateAdminOrCustomer(c)
   if (!user) return c.json({ error: 'Authentication required' }, 401)
   c.set('user' as any, user)
@@ -327,6 +328,34 @@ reportsRoutes.get('/:orderId/html', async (c) => {
     augmented = augmented + proWidget
   }
   return c.html(augmented)
+})
+
+// ============================================================
+// GET /:orderId/customer-html — Customer-facing copy (no measurements)
+// Aerial + 3D + 2D diagrams only. Built alongside the regular report.
+// Open to any viewer with the link, mirrors /html semantics.
+// ============================================================
+reportsRoutes.get('/:orderId/customer-html', async (c) => {
+  const orderId = c.req.param('orderId')
+  const row = await repo.getCustomerReportHtml(c.env.DB, orderId)
+  if (!row || !row.customer_report_html) {
+    const fallback = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Customer Report Not Available</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;background:#f8fafc;color:#1e293b;margin:0;padding:48px 24px;display:flex;justify-content:center}.box{max-width:560px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:32px}h1{margin:0 0 12px;font-size:20px;color:#0f172a}p{line-height:1.55;color:#475569}</style></head><body><div class="box"><h1>Customer report not available</h1><p>The customer-facing copy for order #${orderId} has not been generated yet. It is created automatically when a new report is produced.</p></div></body></html>`
+    return c.html(fallback, 404)
+  }
+  return c.html(row.customer_report_html)
+})
+
+// ============================================================
+// GET /:orderId/customer-pdf — Print-ready customer copy
+// ============================================================
+reportsRoutes.get('/:orderId/customer-pdf', async (c) => {
+  const orderId = c.req.param('orderId')
+  const row = await repo.getCustomerReportHtml(c.env.DB, orderId)
+  if (!row || !row.customer_report_html) return c.json({ error: 'Customer report not found' }, 404)
+  const html = row.customer_report_html
+  const safe = String(orderId).replace(/[^a-zA-Z0-9_-]/g, '')
+  const pdfHtml = `${html}<script>if(new URLSearchParams(location.search).get('print')==='1')setTimeout(()=>window.print(),500)</script>`
+  return new Response(pdfHtml, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Disposition': `inline; filename="Roof_Report_Customer_${safe}.pdf"` } })
 })
 
 // ============================================================
@@ -3193,6 +3222,9 @@ async function _generateReportForOrderInner(
           km.total_roof_area_sloped_ft2
         )
         ;(reportData as any).trace_diagram_svg = traceSVG
+        // Stash the raw trace input so the customer-report template can
+        // re-render the 2D diagram with hideMeasurements:true.
+        ;(reportData as any).customer_trace_input = traceData
       } catch (svgErr: any) {
         console.warn(`[Generate] Order ${orderId}: Trace SVG generation failed: ${svgErr.message}`)
       }
@@ -3402,6 +3434,20 @@ async function _generateReportForOrderInner(
     await repo.saveCompletedReport(env.DB, orderId, finalReportData, html, baseVersion)
     await repo.markOrderStatus(env.DB, orderId, 'completed')
     console.log(`[Generate] Order ${orderId}: ✅ Report saved as COMPLETED (v${baseVersion}, provider=${finalReportData.metadata?.provider || 'unknown'})`)
+
+    // ── CUSTOMER REPORT (no measurements) ──
+    // A second artifact built from the same data: aerial + 3D + 2D diagrams,
+    // no numbers anywhere. Stored on reports.customer_report_html so the
+    // homeowner can see what was measured without being able to hand the
+    // measurements themselves to a competing roofer. Failures here are
+    // non-fatal — the regular report has already been saved.
+    try {
+      const customerHtml = generateCustomerReportHTML(finalReportData)
+      await repo.saveCustomerReportHtml(env.DB, orderId, customerHtml)
+      console.log(`[Generate] Order ${orderId}: customer report saved (${customerHtml.length} chars)`)
+    } catch (custErr: any) {
+      console.warn(`[Generate] Order ${orderId}: customer report generation failed: ${custErr?.message}`)
+    }
 
     // Auto-send report to the order's email. Falls back through
     // send_report_to_email → requester_email → homeowner_email so every

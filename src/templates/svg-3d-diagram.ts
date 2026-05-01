@@ -1438,9 +1438,12 @@ export function generateAxonometricRoofSVG(
     }
   }
 
-  // Bottom label strip
-  const labelY = H - 10
-  svg += `<text x="${W/2}" y="${labelY}" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A" ${FONT}>${structure.label} — ${structure.true_area_sqft.toLocaleString()} sqft @ ${structure.dominant_pitch_label}</text>`
+  // Bottom label strip — gated by showDimensions so the customer-facing
+  // diagram never reveals area / pitch.
+  if (showDimensions) {
+    const labelY = H - 10
+    svg += `<text x="${W/2}" y="${labelY}" text-anchor="middle" font-size="10" font-weight="700" fill="#0F172A" ${FONT}>${structure.label} — ${structure.true_area_sqft.toLocaleString()} sqft @ ${structure.dominant_pitch_label}</text>`
+  }
 
   svg += `</svg>`
   return svg
@@ -1453,9 +1456,12 @@ export function generateAxonometricRoofSVG(
  * Returns one SVG string per structure. Caller decides whether to stack them
  * vertically, render them side-by-side, or paginate.
  */
-export function generateAllStructureSVGs(report: RoofReport): { partition: StructurePartition; svg: string }[] {
+export function generateAllStructureSVGs(
+  report: RoofReport,
+  opts: { width?: number; height?: number; showShadow?: boolean; showCompass?: boolean; showDimensions?: boolean } = {},
+): { partition: StructurePartition; svg: string }[] {
   const partitions = splitStructures(report)
-  return partitions.map(p => ({ partition: p, svg: generateAxonometricRoofSVG(p) }))
+  return partitions.map(p => ({ partition: p, svg: generateAxonometricRoofSVG(p, opts) }))
 }
 
 /**
