@@ -14,6 +14,11 @@ import type { Bindings } from '../types'
 
 export type UserType = 'admin' | 'customer'
 
+// Hard cap on a single closed visit. Anything over ~30 min on one module
+// almost always means a foreground-but-idle tab — clamp it on flush so the
+// dashboard never shows phantom 12-hour sessions.
+const MAX_VISIT_SECONDS = 1800
+
 export interface TrackParams {
   userType: UserType
   userId: number
@@ -180,10 +185,11 @@ export async function closeStaleVisits(env: Bindings): Promise<{ closed: number 
     if (!rows.length) return { closed: 0 }
 
     for (const r of rows) {
-      const dur = Math.max(
+      const rawDur = Math.max(
         1,
         Math.floor((Date.parse(r.last_seen_at + 'Z') - Date.parse(r.started_at + 'Z')) / 1000)
       )
+      const dur = Math.min(rawDur, MAX_VISIT_SECONDS)
       await env.DB.prepare(
         `INSERT INTO user_module_visits
            (user_type, user_id, module, started_at, ended_at, duration_seconds, request_count, ip_address, user_agent)

@@ -779,25 +779,31 @@ superAdminBi.get('/command-center', async (c) => {
       topSpendersRow, topUsersRow, recentSignupsRow, signupsTrendRow,
       moduleDistRow, recentEventsRow, liveNowRow
     ] = await db.batch([
-      // North Star
-      db.prepare(`SELECT COALESCE(SUM(price),0) as total_sales, COUNT(*) as paid_orders FROM orders WHERE payment_status='paid' AND (is_trial IS NULL OR is_trial=0)`),
+      // North Star — total_sales = paid orders + manual payments
+      db.prepare(`SELECT
+                    (SELECT COALESCE(SUM(price),0) FROM orders WHERE payment_status='paid' AND (is_trial IS NULL OR is_trial=0))
+                    + (SELECT COALESCE(SUM(amount),0) FROM manual_payments) AS total_sales,
+                    (SELECT COUNT(*) FROM orders WHERE payment_status='paid' AND (is_trial IS NULL OR is_trial=0)) AS paid_orders,
+                    (SELECT COUNT(*) FROM manual_payments) AS manual_payment_count`),
       db.prepare(`SELECT COUNT(*) as user_count, COUNT(CASE WHEN created_at >= datetime('now','-${days} days') THEN 1 END) as new_users FROM customers`),
       db.prepare(`SELECT COUNT(DISTINCT user_id || ':' || user_type) as active_today FROM user_module_visits WHERE started_at >= datetime('now','start of day')`),
-      db.prepare(`SELECT ROUND(AVG(duration_seconds),0) as session_avg FROM user_module_visits WHERE started_at >= datetime('now','-${days} days') AND duration_seconds > 0`),
-      // Top spenders — per customer paid spend
+      // Defensive cap on read in case any uncapped legacy rows slip through.
+      db.prepare(`SELECT ROUND(AVG(MIN(duration_seconds, 1800)),0) as session_avg FROM user_module_visits WHERE started_at >= datetime('now','-${days} days') AND duration_seconds > 0`),
+      // Top spenders — orders + manual payments
       db.prepare(`SELECT c.id, c.name, c.email, c.company_name,
-                         COUNT(o.id) as order_count,
-                         COALESCE(SUM(CASE WHEN o.payment_status='paid' AND (o.is_trial IS NULL OR o.is_trial=0) THEN o.price ELSE 0 END),0) as total_spent,
-                         MAX(o.created_at) as last_order_at
+                         (SELECT COUNT(*) FROM orders o WHERE o.customer_id=c.id) as order_count,
+                         (SELECT COALESCE(SUM(o.price),0) FROM orders o WHERE o.customer_id=c.id AND o.payment_status='paid' AND (o.is_trial IS NULL OR o.is_trial=0))
+                         + (SELECT COALESCE(SUM(mp.amount),0) FROM manual_payments mp WHERE mp.customer_id=c.id) as total_spent,
+                         (SELECT COALESCE(SUM(mp.amount),0) FROM manual_payments mp WHERE mp.customer_id=c.id) as manual_amount,
+                         (SELECT MAX(o.created_at) FROM orders o WHERE o.customer_id=c.id) as last_order_at
                   FROM customers c
-                  LEFT JOIN orders o ON o.customer_id = c.id
-                  GROUP BY c.id
-                  HAVING total_spent > 0
+                  WHERE (SELECT COALESCE(SUM(o.price),0) FROM orders o WHERE o.customer_id=c.id AND o.payment_status='paid' AND (o.is_trial IS NULL OR o.is_trial=0))
+                       + (SELECT COALESCE(SUM(mp.amount),0) FROM manual_payments mp WHERE mp.customer_id=c.id) > 0
                   ORDER BY total_spent DESC
                   LIMIT 10`),
-      // Top users by time spent
+      // Top users by time — defensive read-side cap (MIN per row before SUM).
       db.prepare(`SELECT user_type, user_id,
-                         SUM(duration_seconds) as total_seconds,
+                         SUM(MIN(duration_seconds, 1800)) as total_seconds,
                          COUNT(*) as visit_count,
                          MAX(started_at) as last_seen
                   FROM user_module_visits
@@ -809,8 +815,8 @@ superAdminBi.get('/command-center', async (c) => {
       db.prepare(`SELECT id, name, email, company_name, created_at FROM customers ORDER BY created_at DESC LIMIT 10`),
       // Signups trend
       db.prepare(`SELECT date(created_at) as day, COUNT(*) as count FROM customers WHERE created_at >= datetime('now','-${days} days') GROUP BY day ORDER BY day ASC`),
-      // Module time distribution (across all users)
-      db.prepare(`SELECT module, SUM(duration_seconds) as total_seconds, COUNT(*) as visits, COUNT(DISTINCT user_type || ':' || user_id) as users FROM user_module_visits WHERE started_at >= datetime('now','-${days} days') GROUP BY module ORDER BY total_seconds DESC`),
+      // Module time distribution (across all users) — capped per-row.
+      db.prepare(`SELECT module, SUM(MIN(duration_seconds, 1800)) as total_seconds, COUNT(*) as visits, COUNT(DISTINCT user_type || ':' || user_id) as users FROM user_module_visits WHERE started_at >= datetime('now','-${days} days') GROUP BY module ORDER BY total_seconds DESC`),
       // Recent path events feed
       db.prepare(`SELECT id, user_type, user_id, path, occurred_at FROM user_path_events ORDER BY occurred_at DESC LIMIT 50`),
       // Live now
@@ -866,6 +872,65 @@ superAdminBi.get('/command-center', async (c) => {
       module_distribution: (moduleDistRow.results || []),
       recent_events: events.map(decorate),
     })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// ── MANUAL PAYMENTS — record offline / pricing-changed purchases ──────
+superAdminBi.post('/manual-payments', async (c) => {
+  try {
+    const admin = c.get('admin' as any) as any
+    const body = await c.req.json<any>().catch(() => ({}))
+    const customer_id = parseInt(body.customer_id, 10)
+    const amount = parseFloat(body.amount)
+    const description = (body.description || '').toString().slice(0, 500)
+    const paid_at = (body.paid_at || '').toString().trim()
+
+    if (!customer_id || customer_id <= 0) return c.json({ error: 'customer_id required' }, 400)
+    if (!isFinite(amount) || amount <= 0) return c.json({ error: 'amount must be positive' }, 400)
+
+    const exists = await c.env.DB.prepare(`SELECT id FROM customers WHERE id = ?`).bind(customer_id).first()
+    if (!exists) return c.json({ error: 'customer not found' }, 404)
+
+    const result = await c.env.DB.prepare(
+      paid_at
+        ? `INSERT INTO manual_payments (customer_id, amount, description, paid_at, recorded_by_admin_id) VALUES (?, ?, ?, ?, ?)`
+        : `INSERT INTO manual_payments (customer_id, amount, description, recorded_by_admin_id) VALUES (?, ?, ?, ?)`
+    ).bind(...(paid_at ? [customer_id, amount, description, paid_at, admin?.id || null] : [customer_id, amount, description, admin?.id || null])).run()
+
+    return c.json({ success: true, id: (result as any)?.meta?.last_row_id || null })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+superAdminBi.get('/manual-payments', async (c) => {
+  try {
+    const customerId = parseInt(c.req.query('customer_id') || '0', 10)
+    const sql = customerId > 0
+      ? `SELECT mp.id, mp.customer_id, mp.amount, mp.description, mp.paid_at, mp.created_at,
+                c.name as customer_name, c.email as customer_email
+         FROM manual_payments mp LEFT JOIN customers c ON c.id = mp.customer_id
+         WHERE mp.customer_id = ? ORDER BY mp.paid_at DESC LIMIT 200`
+      : `SELECT mp.id, mp.customer_id, mp.amount, mp.description, mp.paid_at, mp.created_at,
+                c.name as customer_name, c.email as customer_email
+         FROM manual_payments mp LEFT JOIN customers c ON c.id = mp.customer_id
+         ORDER BY mp.paid_at DESC LIMIT 200`
+    const stmt = customerId > 0 ? c.env.DB.prepare(sql).bind(customerId) : c.env.DB.prepare(sql)
+    const rs = await stmt.all<any>()
+    return c.json({ payments: rs?.results || [] })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+superAdminBi.delete('/manual-payments/:id', async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'), 10)
+    if (!id) return c.json({ error: 'id required' }, 400)
+    await c.env.DB.prepare(`DELETE FROM manual_payments WHERE id = ?`).bind(id).run()
+    return c.json({ success: true })
   } catch (e: any) {
     return c.json({ error: e.message }, 500)
   }

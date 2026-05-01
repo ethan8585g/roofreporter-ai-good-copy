@@ -11361,28 +11361,37 @@ function renderCommandCenterView() {
     '</div>' +
   '</div>';
 
-  // Top spenders table
+  // Top spenders table — orders + manual payments
   var spendersRows = spenders.length === 0
-    ? '<tr><td colspan="4" class="px-4 py-10 text-center text-gray-400 text-sm">No paid orders yet.</td></tr>'
+    ? '<tr><td colspan="5" class="px-4 py-10 text-center text-gray-400 text-sm">No paid orders or manual payments yet.</td></tr>'
     : spenders.map(function(s) {
+        var manual = (s.manual_amount || 0);
+        var manualBadge = manual > 0
+          ? '<span class="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700" title="Includes $' + manual.toFixed(2) + ' manual">+$' + manual.toFixed(2) + ' manual</span>'
+          : '';
         return '<tr class="border-b border-gray-100 hover:bg-gray-50">' +
           '<td class="px-4 py-3"><div class="font-semibold text-sm text-gray-900">' + (s.name || '—') + '</div><div class="text-[11px] text-gray-500">' + (s.email || '') + '</div></td>' +
           '<td class="px-4 py-3 text-sm text-gray-700">' + (s.company_name || '—') + '</td>' +
-          '<td class="px-4 py-3 text-sm font-bold text-emerald-600">$' + (s.total_spent || 0).toFixed(2) + '</td>' +
+          '<td class="px-4 py-3 text-sm font-bold text-emerald-600">$' + (s.total_spent || 0).toFixed(2) + manualBadge + '</td>' +
           '<td class="px-4 py-3 text-[11px] text-gray-500">' + (s.order_count || 0) + ' orders · last ' + ccTimeAgo(s.last_order_at) + '</td>' +
+          '<td class="px-4 py-3 text-right"><button onclick="ccOpenAddPayment(' + s.id + ',\'' + (s.name || '').replace(/\'/g, '') + '\')" class="text-[11px] font-semibold text-teal-600 hover:underline whitespace-nowrap"><i class="fas fa-plus text-[9px] mr-1"></i>Add payment</button></td>' +
         '</tr>';
       }).join('');
 
   var spendersCard = '<div class="bg-white rounded-2xl border border-gray-200 mb-6">' +
     '<div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">' +
       '<h3 class="text-sm font-bold text-gray-900"><i class="fas fa-trophy mr-2 text-yellow-500"></i>Top Spenders</h3>' +
-      '<span class="text-[11px] text-gray-500">By total paid revenue</span>' +
+      '<div class="flex items-center gap-3">' +
+        '<span class="text-[11px] text-gray-500">Includes manual payments</span>' +
+        '<button onclick="ccOpenAddPayment(0,\'\')" class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-teal-500 text-white hover:bg-teal-600"><i class="fas fa-plus mr-1"></i>Record offline payment</button>' +
+      '</div>' +
     '</div>' +
     '<table class="w-full"><thead class="bg-gray-50"><tr>' +
       '<th class="px-4 py-2 text-left text-[10px] font-bold uppercase text-gray-500">Customer</th>' +
       '<th class="px-4 py-2 text-left text-[10px] font-bold uppercase text-gray-500">Company</th>' +
       '<th class="px-4 py-2 text-left text-[10px] font-bold uppercase text-gray-500">Total Spent</th>' +
       '<th class="px-4 py-2 text-left text-[10px] font-bold uppercase text-gray-500">Activity</th>' +
+      '<th class="px-4 py-2"></th>' +
     '</tr></thead><tbody>' + spendersRows + '</tbody></table>' +
   '</div>';
 
@@ -11464,6 +11473,105 @@ function renderCommandCenterView() {
 
 window._ccCharts = window._ccCharts || { module: null, signups: null };
 window._ccPoll = window._ccPoll || null;
+
+// Manual-payment modal — record offline / pricing-changed purchases.
+async function ccOpenAddPayment(prefilledCustomerId, prefilledName) {
+  var modal = document.getElementById('cc-payment-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'cc-payment-modal';
+    document.body.appendChild(modal);
+  }
+  // Load customers if not cached.
+  if (!window._ccCustomers) {
+    try {
+      var res = await saFetch('/api/admin/superadmin/people?type=customer&limit=500');
+      if (res && res.ok) {
+        var d = await res.json();
+        window._ccCustomers = (d.people || d.customers || d.results || []).map(function(p) {
+          return { id: p.id, name: p.name || p.email || ('#' + p.id), email: p.email || '' };
+        });
+      } else { window._ccCustomers = []; }
+    } catch(e) { window._ccCustomers = []; }
+  }
+  var options = (window._ccCustomers || []).map(function(c) {
+    var sel = (prefilledCustomerId && c.id === prefilledCustomerId) ? ' selected' : '';
+    return '<option value="' + c.id + '"' + sel + '>' + c.name + (c.email ? ' (' + c.email + ')' : '') + '</option>';
+  }).join('');
+
+  modal.innerHTML =
+    '<div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)ccCloseAddPayment()">' +
+      '<div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">' +
+        '<div class="flex items-center justify-between mb-4">' +
+          '<h3 class="text-lg font-black text-gray-900"><i class="fas fa-dollar-sign mr-2 text-teal-500"></i>Record Offline Payment</h3>' +
+          '<button onclick="ccCloseAddPayment()" class="text-gray-400 hover:text-gray-700"><i class="fas fa-times"></i></button>' +
+        '</div>' +
+        '<p class="text-xs text-gray-500 mb-4">For purchases made outside the app (e-transfer, cash, custom pricing, etc.). Counts toward Total Revenue and Top Spenders.</p>' +
+        '<form onsubmit="event.preventDefault();ccSubmitAddPayment()" class="space-y-3">' +
+          '<div>' +
+            '<label class="block text-[11px] font-bold uppercase text-gray-500 mb-1">Customer</label>' +
+            '<select id="cc-mp-customer" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">' +
+              '<option value="">Select customer…</option>' + options +
+            '</select>' +
+          '</div>' +
+          '<div>' +
+            '<label class="block text-[11px] font-bold uppercase text-gray-500 mb-1">Amount ($)</label>' +
+            '<input id="cc-mp-amount" type="number" step="0.01" min="0.01" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="100.00" />' +
+          '</div>' +
+          '<div>' +
+            '<label class="block text-[11px] font-bold uppercase text-gray-500 mb-1">Paid On</label>' +
+            '<input id="cc-mp-paidat" type="date" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />' +
+          '</div>' +
+          '<div>' +
+            '<label class="block text-[11px] font-bold uppercase text-gray-500 mb-1">Description (optional)</label>' +
+            '<input id="cc-mp-desc" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. e-transfer for 100 reports — pricing exception" />' +
+          '</div>' +
+          '<div id="cc-mp-error" class="hidden text-xs text-red-600"></div>' +
+          '<div class="flex justify-end gap-2 pt-2">' +
+            '<button type="button" onclick="ccCloseAddPayment()" class="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-lg">Cancel</button>' +
+            '<button type="submit" class="px-4 py-2 text-sm font-bold text-white bg-teal-500 hover:bg-teal-600 rounded-lg">Save Payment</button>' +
+          '</div>' +
+        '</form>' +
+      '</div>' +
+    '</div>';
+}
+
+function ccCloseAddPayment() {
+  var m = document.getElementById('cc-payment-modal');
+  if (m) m.innerHTML = '';
+}
+
+async function ccSubmitAddPayment() {
+  var errEl = document.getElementById('cc-mp-error');
+  if (errEl) errEl.classList.add('hidden');
+  var customer_id = parseInt(document.getElementById('cc-mp-customer').value, 10);
+  var amount = parseFloat(document.getElementById('cc-mp-amount').value);
+  var paid_at = document.getElementById('cc-mp-paidat').value;
+  var description = document.getElementById('cc-mp-desc').value;
+  if (!customer_id || !(amount > 0)) {
+    if (errEl) { errEl.textContent = 'Customer and positive amount required.'; errEl.classList.remove('hidden'); }
+    return;
+  }
+  try {
+    var res = await saFetch('/api/admin/bi/manual-payments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customer_id: customer_id, amount: amount, paid_at: paid_at || null, description: description })
+    });
+    if (!res || !res.ok) {
+      var msg = 'Save failed';
+      try { var j = await res.json(); msg = j.error || msg; } catch(e) {}
+      if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
+      return;
+    }
+    ccCloseAddPayment();
+    if (typeof toast === 'function') toast('Payment recorded', 'success');
+    if (typeof loadView === 'function') loadView('command-center');
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message || 'Save failed'; errEl.classList.remove('hidden'); }
+  }
+}
+
 
 function ccInitCharts() {
   try {
