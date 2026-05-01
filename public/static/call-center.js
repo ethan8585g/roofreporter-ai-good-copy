@@ -104,7 +104,12 @@
 
     switch (tab) {
       case 'overview':
-        CC.data.dashboard = await ccFetch('/api/call-center/dashboard');
+        const [oDash, oAgents] = await Promise.all([
+          ccFetch('/api/call-center/dashboard'),
+          ccFetch('/api/call-center/agents'),
+        ]);
+        CC.data.dashboard = oDash;
+        CC.data.agents = oAgents;
         break;
       case 'agents':
         CC.data.agents = await ccFetch('/api/call-center/agents');
@@ -205,7 +210,7 @@
             </select>
           </div>
           <div class="sm:col-span-2 flex items-end gap-2">
-            <button onclick="ccQuickDial()" class="flex-1 py-3 bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl text-sm transition-all shadow-lg hover:shadow-xl active:scale-95">
+            <button onclick="ccQuickDial(event)" class="flex-1 py-3 bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl text-sm transition-all shadow-lg hover:shadow-xl active:scale-95">
               <i class="fas fa-phone-alt mr-2"></i>Dial Now
             </button>
             <button onclick="ccQuickDialPreflight()" title="Run outbound-dial health check" class="px-3 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-xl text-sm transition-all shadow-lg hover:shadow-xl active:scale-95">
@@ -1204,12 +1209,12 @@
     ccLoadTab('outreach');
   };
   // Quick Dial — enter phone number and call immediately
-  window.ccQuickDial = async function() {
+  window.ccQuickDial = async function(ev) {
     const phone = document.getElementById('qd-phone')?.value?.trim();
     if (!phone) { window.rmToast('Enter a phone number to dial', 'info'); return; }
     const agentId = document.getElementById('qd-agent')?.value;
     const company = document.getElementById('qd-company')?.value?.trim() || '';
-    const btn = event?.target;
+    const btn = (ev && (ev.currentTarget || ev.target)) || (typeof window !== 'undefined' && window.event && window.event.target) || null;
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Dialing...'; }
     const data = await ccFetch('/api/call-center/quick-dial', { method: 'POST', body: JSON.stringify({ phone, agent_id: agentId ? parseInt(agentId) : null, company_name: company }) });
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-phone-alt mr-2"></i>Dial Now'; }
