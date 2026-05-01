@@ -40,7 +40,8 @@
   async function ccFetch(url, opts) {
     try {
       const res = await fetch(url, Object.assign({ headers: ccHeaders() }, opts || {}));
-      if (res.status === 401 || res.status === 403) { window.location.href = '/login'; return null; }
+      if (res.status === 401) { localStorage.removeItem('rc_user'); localStorage.removeItem('rc_token'); window.location.href = '/login'; return null; }
+      if (res.status === 403) { console.warn('CC fetch 403:', url); return null; }
       return await res.json();
     } catch (e) { console.error('CC fetch error:', e); return null; }
   }
