@@ -74,7 +74,7 @@ agentsRoutes.post('/leads', async (c) => {
       leadId = (r as any)?.meta?.last_row_id || null
     } catch (insertErr: any) {
       const msg = String(insertErr?.message || insertErr || '')
-      if (/no such column/i.test(msg) && /(lead_type|priority|utm_medium|utm_campaign|utm_content|utm_term|referrer|landing_page)/i.test(msg)) {
+      if (/no such column|no column named/i.test(msg) && /(lead_type|priority|utm_medium|utm_campaign|utm_content|utm_term|referrer|landing_page)/i.test(msg)) {
         console.warn('[leads] falling back to 0156 schema — run migration 0163 to capture lead_type/priority/full UTMs')
         try {
           const r = await c.env.DB.prepare(
@@ -92,7 +92,7 @@ agentsRoutes.post('/leads', async (c) => {
           leadId = (r as any)?.meta?.last_row_id || null
         } catch (err2: any) {
           const msg2 = String(err2?.message || err2 || '')
-          if (/no such column/i.test(msg2) && /(address|utm_source)/i.test(msg2)) {
+          if (/no such column|no column named/i.test(msg2) && /(address|utm_source)/i.test(msg2)) {
             console.warn('[leads] falling back to pre-0156 schema — run migration 0156')
             const r = await c.env.DB.prepare(
               `INSERT INTO leads (name, company_name, phone, email, source_page, message) VALUES (?,?,?,?,?,?)`
@@ -109,7 +109,7 @@ agentsRoutes.post('/leads', async (c) => {
             throw err2
           }
         }
-      } else if (/no such column/i.test(msg) && /(address|utm_source)/i.test(msg)) {
+      } else if (/no such column|no column named/i.test(msg) && /(address|utm_source)/i.test(msg)) {
         console.warn('[leads] falling back to pre-0156 schema — run migration 0156')
         const r = await c.env.DB.prepare(
           `INSERT INTO leads (name, company_name, phone, email, source_page, message) VALUES (?,?,?,?,?,?)`
