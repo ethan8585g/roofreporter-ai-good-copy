@@ -740,10 +740,10 @@ function renderTraceStep(root, progressBar) {
                   <div id="phoneMetricCount" style="font-size:18px; font-weight:700; color:#e5e7eb;">0</div>
                 </div>
               </div>
-              <!-- Primary FAB: drop point at reticle -->
-              <button id="phonePlaceFab" type="button" onclick="placePointAtReticle()"
-                style="position:absolute; bottom:18px; left:50%; transform:translateX(-50%); min-width:160px; padding:14px 22px; border-radius:999px; background:#22c55e; color:white; font-size:15px; font-weight:700; border:none; box-shadow:0 6px 16px rgba(0,0,0,0.4); z-index:7; touch-action:manipulation;">
-                <i class="fas fa-crosshairs" style="margin-right:6px;"></i><span id="phonePlaceFabLabel">Place Point</span>
+              <!-- Primary FAB: drop point at reticle. Starts disabled (opacity 0.55) until map fires its first 'idle' event. -->
+              <button id="phonePlaceFab" type="button" disabled onclick="placePointAtReticle()"
+                style="position:absolute; bottom:18px; left:50%; transform:translateX(-50%); min-width:160px; padding:14px 22px; border-radius:999px; background:#22c55e; color:white; font-size:15px; font-weight:700; border:none; box-shadow:0 6px 16px rgba(0,0,0,0.4); z-index:7; touch-action:manipulation; opacity:0.55; transition:opacity 200ms;">
+                <i class="fas fa-crosshairs" style="margin-right:6px;"></i><span id="phonePlaceFabLabel">Loading map…</span>
               </button>
               <!-- Undo FAB, thumb-reachable bottom-right -->
               <button id="phoneUndoFab" type="button" onclick="undoLastTrace()"
@@ -1029,6 +1029,22 @@ function initTraceMap() {
 
   registerEsriBasemap(orderState.traceMap);
   orderState.traceMap.setMapTypeId('esri');
+
+  // Mark the map "ready" only after the first 'idle' event — i.e. tiles loaded
+  // and the map is interactive. Until then the mobile FAB stays visually
+  // disabled (see Taher Qader 2026-05-02 — tapped FAB before map init, got
+  // silent fails, gave up after 13 minutes).
+  orderState.traceMapReady = false;
+  google.maps.event.addListenerOnce(orderState.traceMap, 'idle', () => {
+    orderState.traceMapReady = true;
+    const fab = document.getElementById('phonePlaceFab');
+    if (fab) {
+      fab.disabled = false;
+      fab.style.opacity = '1';
+      const lbl = document.getElementById('phonePlaceFabLabel');
+      if (lbl) lbl.textContent = 'Place Point';
+    }
+  });
 
   // Nearmap overlay — when the server confirmed coverage and injected a tile
   // template, render Nearmap's 7.5cm-GSD imagery as a higher-resolution overlay
@@ -1374,6 +1390,7 @@ function placePointAtReticle() {
     showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Map still loading — give it a couple seconds, then tap again.');
   };
   if (!orderState.traceMap) return reportFabFail('map_not_ready');
+  if (!orderState.traceMapReady) return reportFabFail('tiles_not_idle');
   const c = orderState.traceMap.getCenter();
   if (!c) return reportFabFail('center_null');
   hapticTick();

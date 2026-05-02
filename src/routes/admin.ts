@@ -1896,6 +1896,47 @@ adminRoutes.get('/superadmin/new-signups-count', async (c) => {
   }
 })
 
+// POST /superadmin/customer-recovery-email — Send a one-off custom HTML email
+// to a customer (or any address) via the existing Gmail integration. Built so
+// we can reach out to users who hit a bug and offer a discount/follow-up.
+// Superadmin only. Rate-limited by the requireSuperadmin gate.
+adminRoutes.post('/superadmin/customer-recovery-email', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  try {
+    const { to, subject, html_body } = await c.req.json<{ to: string; subject: string; html_body: string }>()
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return c.json({ error: 'Invalid recipient email' }, 400)
+    if (!subject || !html_body) return c.json({ error: 'subject and html_body required' }, 400)
+    if (subject.length > 300) return c.json({ error: 'Subject too long' }, 400)
+    if (html_body.length > 200_000) return c.json({ error: 'Body too long' }, 400)
+
+    const env: any = c.env
+    // Production uses Gmail OAuth2 (client_id/secret in env, refresh_token in
+    // D1 settings) per memory_email_credentials_split. Service account is the
+    // fallback for legacy environments.
+    const cid = env.GMAIL_CLIENT_ID
+    const csec = env.GMAIL_CLIENT_SECRET
+    let rtok = env.GMAIL_REFRESH_TOKEN || ''
+    if ((!csec || !rtok) && c.env.DB) {
+      try {
+        const r = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
+        if (r?.setting_value) rtok = r.setting_value
+      } catch (_) {}
+    }
+    if (cid && csec && rtok) {
+      const result = await sendGmailOAuth2(cid, csec, rtok, to, subject, html_body, 'sales@roofmanager.ca')
+      return c.json({ success: true, via: 'gmail_oauth2', message_id: result.id, sent_to: to, sent_at: new Date().toISOString() })
+    }
+    if (env.GCP_SERVICE_ACCOUNT_JSON) {
+      await sendGmailEmail(env.GCP_SERVICE_ACCOUNT_JSON, to, subject, html_body, 'sales@roofmanager.ca')
+      return c.json({ success: true, via: 'gcp_service_account', sent_to: to, sent_at: new Date().toISOString() })
+    }
+    return c.json({ error: 'No Gmail send credentials available (need either GMAIL_CLIENT_ID+SECRET+REFRESH_TOKEN or GCP_SERVICE_ACCOUNT_JSON)' }, 500)
+  } catch (err: any) {
+    return c.json({ error: 'Send failed', details: String(err?.message || err) }, 500)
+  }
+})
+
 // GET /superadmin/inbox/lead/:type/:id — Single lead detail (type = lead|sitelead|contact|demo)
 adminRoutes.get('/superadmin/inbox/lead/:type/:id', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))

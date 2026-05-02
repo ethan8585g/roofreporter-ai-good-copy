@@ -25,7 +25,10 @@ async function getCustomer(c: any): Promise<{ id: number; email: string; ownerId
 // ============================================================
 agentsRoutes.post('/leads', async (c) => {
   try {
-    const body = await c.req.json()
+    let body: any
+    try { body = await c.req.json() } catch (_) {
+      return c.json({ error: 'Invalid JSON body' }, 400)
+    }
     const {
       name, company_name, phone, email, source_page, message, address,
       utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer,
