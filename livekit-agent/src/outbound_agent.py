@@ -33,7 +33,13 @@ class OutboundSalesAgent(Agent):
         self.call_start = None
         self.talk_start = None
         self.is_voicemail = False
-        self.outcome = "no_answer"
+        # Default to "failed" — if the SIP call never connected (Telnyx
+        # rejected, number unreachable, trunk auth failed) on_close fires
+        # with no callee in the room. Reporting "no_answer" in that case
+        # masks infrastructure bugs as user-not-picking-up.
+        # main.py promotes to "no_answer" once a SIP callee actually joins.
+        self.outcome = "failed"
+        self.callee_joined = False
         self.transcript_lines = []
         self.objections = []
         self.sentiment = "neutral"

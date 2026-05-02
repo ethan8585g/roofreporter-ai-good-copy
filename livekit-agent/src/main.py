@@ -182,6 +182,20 @@ async def run_outbound_session(ctx: JobContext, vad):
     await ctx.connect()
     logger.info(f"[Outbound] Agent ready — room={ctx.room.name}, company={prospect_info.get('company')}")
 
+    # Track when the SIP callee actually joins so we can distinguish a real
+    # "no answer" (callee picked up, didn't engage) from infrastructure
+    # failure (Telnyx rejected, number unreachable, trunk auth, etc.).
+    @ctx.room.on("participant_connected")
+    def on_participant_joined(participant):
+        if participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
+            agent.callee_joined = True
+            # Promote default 'failed' (infra error) → 'no_answer' (callee
+            # answered but didn't engage / hung up before any tool-call set
+            # a real outcome). Tool calls override from there.
+            if agent.outcome == "failed":
+                agent.outcome = "no_answer"
+            logger.info(f"[Outbound] SIP callee joined: room={ctx.room.name}")
+
     # Handle call completion — post results to webhook
     @ctx.room.on("participant_disconnected")
     def on_participant_left(participant):
