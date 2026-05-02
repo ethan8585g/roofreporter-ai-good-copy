@@ -245,26 +245,32 @@ ordersRoutes.patch('/:id/status', async (c) => {
   }
 })
 
-// Simulate payment (mark as paid)
+// Manually mark an order as paid (no real charge). SUPERADMIN ONLY — used to
+// reconcile offline / cash / wire payments. Inserts a `manual` payment row so
+// finance can see this wasn't a Stripe/Square charge.
 ordersRoutes.post('/:id/pay', async (c) => {
   try {
+    const admin = c.get('admin' as any) as any
+    if (!admin || admin.role !== 'superadmin') {
+      return c.json({ error: 'Superadmin role required to manually mark orders paid' }, 403)
+    }
+
     const id = c.req.param('id')
     const order = await c.env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first<any>()
 
     if (!order) return c.json({ error: 'Order not found' }, 404)
     if (order.payment_status === 'paid') return c.json({ error: 'Order already paid' }, 400)
 
-    // Commit order-update, payment-record, placeholder-report, and activity-log atomically.
     await c.env.DB.batch([
       c.env.DB.prepare(`UPDATE orders SET payment_status = 'paid', status = 'processing', updated_at = datetime('now') WHERE id = ?`).bind(id),
-      c.env.DB.prepare(`INSERT INTO payments (order_id, amount, currency, status, payment_method) VALUES (?, ?, 'CAD', 'succeeded', 'card_simulated')`).bind(id, order.price),
+      c.env.DB.prepare(`INSERT INTO payments (order_id, amount, currency, status, payment_method) VALUES (?, ?, 'CAD', 'succeeded', 'manual_admin')`).bind(id, order.price),
       c.env.DB.prepare(`INSERT OR IGNORE INTO reports (order_id, status) VALUES (?, 'pending')`).bind(id),
-      c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'payment_received', ?)`).bind(`Payment of $${order.price} for order ${order.order_number}`)
+      c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'manual_payment_marked', ?)`).bind(`Order ${order.order_number} ($${order.price}) marked paid by superadmin ${admin.email || admin.id} — no real charge`)
     ])
 
     return c.json({
       success: true,
-      message: 'Payment processed successfully',
+      message: 'Order marked as paid (manual)',
       order_number: order.order_number,
       amount: order.price,
       status: 'processing'

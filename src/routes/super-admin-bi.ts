@@ -944,4 +944,70 @@ superAdminBi.delete('/manual-payments/:id', async (c) => {
   }
 })
 
+// ── MANUAL PAYMENTS ─────────────────────────────────────────
+// Record an offline / cash / e-transfer / wire payment so it shows up in
+// total_sales, top_spenders, and the revenue waterfall. Superadmin only.
+superAdminBi.post('/manual-payments', async (c) => {
+  try {
+    const admin = c.get('admin' as any) as any
+    const body = await c.req.json().catch(() => ({})) as any
+    const customerId = parseInt(body.customer_id)
+    const amount = parseFloat(body.amount)
+    const description = (body.description || '').toString().slice(0, 500) || null
+    const paidAt = body.paid_at && /^\d{4}-\d{2}-\d{2}/.test(body.paid_at) ? body.paid_at : null
+
+    if (!customerId || customerId <= 0) return c.json({ error: 'customer_id required' }, 400)
+    if (!Number.isFinite(amount) || amount <= 0) return c.json({ error: 'amount must be > 0' }, 400)
+
+    const cust = await c.env.DB.prepare('SELECT id, email FROM customers WHERE id = ?').bind(customerId).first<any>()
+    if (!cust) return c.json({ error: 'Customer not found' }, 404)
+
+    const result = await c.env.DB.prepare(
+      paidAt
+        ? `INSERT INTO manual_payments (customer_id, amount, description, paid_at, recorded_by_admin_id) VALUES (?, ?, ?, ?, ?)`
+        : `INSERT INTO manual_payments (customer_id, amount, description, recorded_by_admin_id) VALUES (?, ?, ?, ?)`
+    ).bind(...(paidAt ? [customerId, amount, description, paidAt, admin.id] : [customerId, amount, description, admin.id])).run()
+
+    await c.env.DB.prepare(
+      `INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'manual_payment_recorded', ?)`
+    ).bind(`Superadmin ${admin.email || admin.id} recorded $${amount} manual payment for customer #${customerId} (${cust.email || ''})`).run()
+
+    return c.json({ success: true, id: result.meta.last_row_id, customer_id: customerId, amount })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+superAdminBi.get('/manual-payments', async (c) => {
+  try {
+    const limit = Math.min(parseInt(c.req.query('limit') || '50'), 200)
+    const rows = await c.env.DB.prepare(
+      `SELECT mp.id, mp.customer_id, c.email, c.name, mp.amount, mp.description, mp.paid_at, mp.recorded_by_admin_id, mp.created_at
+       FROM manual_payments mp
+       LEFT JOIN customers c ON c.id = mp.customer_id
+       ORDER BY mp.paid_at DESC
+       LIMIT ?`
+    ).bind(limit).all() as any
+    return c.json({ payments: rows.results || [] })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+superAdminBi.delete('/manual-payments/:id', async (c) => {
+  try {
+    const admin = c.get('admin' as any) as any
+    const id = parseInt(c.req.param('id'))
+    if (!id) return c.json({ error: 'id required' }, 400)
+    const result = await c.env.DB.prepare('DELETE FROM manual_payments WHERE id = ?').bind(id).run()
+    if (!result.meta.changes) return c.json({ error: 'Not found' }, 404)
+    await c.env.DB.prepare(
+      `INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'manual_payment_deleted', ?)`
+    ).bind(`Superadmin ${admin.email || admin.id} deleted manual_payment #${id}`).run()
+    return c.json({ success: true })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
 export { superAdminBi }

@@ -516,6 +516,34 @@ squareRoutes.post('/use-credit', async (c) => {
     const isTrial = isDev ? true : (freeTrialRemaining > 0)
     const price = (isDev || isTrial) ? 0 : 10  // Single report = $10 CAD flat
     const paymentStatus = isDev ? 'trial' : (isTrial ? 'trial' : 'paid')
+
+    // Anti-abuse: cap how many free trials a single IP can claim across all
+    // customer accounts. Prevents the "delete account, sign up again, repeat"
+    // pattern. Dev account & paid orders bypass.
+    const claimantIp = (c.req.header('cf-connecting-ip')
+      || c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
+      || '').slice(0, 64)
+    const TRIAL_IP_CAP = 5      // distinct customer accounts per IP per window
+    const TRIAL_IP_WINDOW = 30  // days
+    if (!isDev && isTrial && claimantIp) {
+      const recentRow = await c.env.DB.prepare(
+        `SELECT COUNT(DISTINCT customer_id) AS n
+         FROM trial_claims
+         WHERE ip_address = ? AND claimed_at >= datetime('now', ?)`
+      ).bind(claimantIp, `-${TRIAL_IP_WINDOW} days`).first<any>()
+      const n = (recentRow?.n as number) || 0
+      if (n >= TRIAL_IP_CAP) {
+        await c.env.DB.prepare(
+          `INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'trial_claim_blocked', ?)`
+        ).bind(`Blocked trial claim from IP ${claimantIp} — already claimed across ${n} accounts in last ${TRIAL_IP_WINDOW}d. Customer #${customer.customer_id} (${customer.email || ''})`).run().catch(() => {})
+        return c.json({
+          error: 'Free trial limit reached. Please purchase a credit pack to continue.',
+          credits_remaining: paidRemaining,
+          free_trial_remaining: 0,
+          paid_credits_remaining: paidRemaining
+        }, 429)
+      }
+    }
     const notes = isDev
       ? `DEV TEST — free unlimited report (dev@reusecanada.ca)`
       : (isTrial 
@@ -635,6 +663,13 @@ squareRoutes.post('/use-credit', async (c) => {
     }
 
     const newOrderId = result.meta.last_row_id as number
+
+    // Audit trail for trial claims so per-IP rate-limit can see this account.
+    if (!isDev && isTrial) {
+      await c.env.DB.prepare(
+        `INSERT INTO trial_claims (customer_id, order_id, ip_address, email) VALUES (?, ?, ?, ?)`
+      ).bind(customer.customer_id, newOrderId, claimantIp || null, customer.email || null).run().catch((e) => console.warn('[trial_claims] insert failed:', e?.message || e))
+    }
 
     // ============================================================
     // COORDINATES — Use provided lat/lng or fallback to geocoding
@@ -1020,6 +1055,17 @@ squareRoutes.post('/webhook', async (c) => {
               INSERT INTO user_activity_log (company_id, action, details)
               VALUES (1, 'credits_purchased', ?)
             `).bind(`Customer #${customerId} purchased ${credits} credits via Square`).run()
+          } else {
+            // Money was collected but we can't determine fulfillment.
+            // Mark for manual review instead of silently 200-ing.
+            console.error(`[Square Webhook] UNFULFILLED PAYMENT — sq_order=${squareOrderId} payment_type=${pendingPayment.payment_type || 'null'} customer=${customerId}. Money collected, no credits/order created.`)
+            await c.env.DB.prepare(
+              `UPDATE square_payments SET status = 'unmatched', updated_at = datetime('now') WHERE square_order_id = ?`
+            ).bind(squareOrderId).run()
+            await c.env.DB.prepare(`
+              INSERT INTO user_activity_log (company_id, action, details)
+              VALUES (1, 'payment_unmatched_manual_review', ?)
+            `).bind(`URGENT: Square payment ${payment.id} (order ${squareOrderId}) succeeded for customer #${customerId} but payment_type='${pendingPayment.payment_type || 'null'}' could not be fulfilled. Manual review required.`).run()
           }
         }
 

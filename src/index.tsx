@@ -4525,19 +4525,21 @@ export default {
       })())
     }
 
-    // ── User Activity rollup (daily at 7 UTC) ────────────────
-    // Aggregates yesterday's user_module_visits into user_activity_daily
-    // and purges raw rows older than 90 days.
-    if (hour === 7) {
-      ctx.waitUntil((async () => {
-        try {
-          const result = await activityRollupYesterday(env)
+    // ── User Activity rollup ─────────────────────────────────
+    // Runs every hour. The rollup is idempotent (ON CONFLICT DO UPDATE
+    // on user_activity_daily, idempotent purge on user_module_visits),
+    // so an hourly catch-up means a single missed cron tick can't lose
+    // a day's data. Cost is negligible — 2 small queries.
+    ctx.waitUntil((async () => {
+      try {
+        const result = await activityRollupYesterday(env)
+        if (result.rolled || result.purged) {
           console.log(`[CRON:activity] rolled=${result.rolled} purged=${result.purged}`)
-        } catch (err: any) {
-          console.error('[CRON:activity] Error:', err.message)
         }
-      })())
-    }
+      } catch (err: any) {
+        console.error('[CRON:activity] Error:', err.message)
+      }
+    })())
 
   },
 }
