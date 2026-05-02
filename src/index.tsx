@@ -4541,6 +4541,41 @@ export default {
       }
     })())
 
+    // ── Auth cleanup (every cron tick) ───────────────────────
+    // Phase 3 #9: replaces the inline fire-and-forget DELETEs that used to
+    // piggyback on /login and /forgot-password. Each DELETE is a single
+    // index-bounded scan and is safe to retry, so an hourly tick is more
+    // than enough to keep these tables tidy without paying latency on every
+    // request. Errors are logged loudly here (no more silent swallow).
+    ctx.waitUntil((async () => {
+      try {
+        const sessions = await env.DB.prepare(
+          "DELETE FROM customer_sessions WHERE expires_at < datetime('now')"
+        ).run()
+        const adminSessions = await env.DB.prepare(
+          "DELETE FROM admin_sessions WHERE expires_at < datetime('now')"
+        ).run()
+        const codes = await env.DB.prepare(
+          "DELETE FROM email_verification_codes WHERE expires_at < datetime('now') AND used = 1"
+        ).run()
+        const resets = await env.DB.prepare(
+          "DELETE FROM password_reset_tokens WHERE (expires_at < datetime('now') OR used = 1) AND created_at < datetime('now', '-1 day')"
+        ).run()
+        const totals = {
+          customer_sessions: (sessions?.meta as any)?.changes ?? 0,
+          admin_sessions: (adminSessions?.meta as any)?.changes ?? 0,
+          email_verification_codes: (codes?.meta as any)?.changes ?? 0,
+          password_reset_tokens: (resets?.meta as any)?.changes ?? 0,
+        }
+        const total = totals.customer_sessions + totals.admin_sessions + totals.email_verification_codes + totals.password_reset_tokens
+        if (total > 0) {
+          console.log(`[CRON:auth-cleanup] purged ${JSON.stringify(totals)}`)
+        }
+      } catch (err: any) {
+        console.error('[CRON:auth-cleanup] Error:', err?.message || err)
+      }
+    })())
+
   },
 }
 

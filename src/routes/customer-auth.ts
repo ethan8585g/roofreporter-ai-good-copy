@@ -66,6 +66,11 @@ function generateSessionToken(): string {
   return crypto.randomUUID() + '-' + crypto.randomUUID()
 }
 
+// Phase 3 #11: single source of truth for the free-trial grant size. Used by
+// both signup paths (Google + email/password) and the responses that surface
+// it to the client. To change the grant, edit only this constant.
+export const FREE_TRIAL_REPORTS = 4
+
 // Phase 2 #8: validate the Google profile picture URL before we persist it.
 // Google sends `picture` as a URL string in the ID token; reject anything that
 // isn't an https URL (drops javascript:/data:/relative junk that could XSS if
@@ -489,17 +494,17 @@ customerAuthRoutes.post('/google', async (c) => {
         WHERE id = ?
       `).bind(googleId, avatar, name, customer.id).run()
     } else {
-      // Create new customer with 4 free trial reports (NOT paid credits)
+      // Create new customer with the standard free-trial grant (NOT paid credits)
       const result = await c.env.DB.prepare(`
         INSERT INTO customers (email, name, google_id, google_avatar, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, auto_invoice_enabled, last_login)
-        VALUES (?, ?, ?, ?, 1, 1, 0, 0, 4, 0, 0, datetime('now'))
-      `).bind(email, name, googleId, avatar).run()
+        VALUES (?, ?, ?, ?, 1, 1, 0, 0, ?, 0, 0, datetime('now'))
+      `).bind(email, name, googleId, avatar, FREE_TRIAL_REPORTS).run()
 
       customer = {
         id: result.meta.last_row_id,
         email, name, google_id: googleId, google_avatar: avatar,
         report_credits: 0, credits_used: 0,
-        free_trial_total: 4, free_trial_used: 0,
+        free_trial_total: FREE_TRIAL_REPORTS, free_trial_used: 0,
         is_new_signup: true
       }
 
@@ -507,7 +512,7 @@ customerAuthRoutes.post('/google', async (c) => {
       await c.env.DB.prepare(`
         INSERT INTO user_activity_log (company_id, action, details)
         VALUES (1, 'free_trial_granted', ?)
-      `).bind(`4 free trial reports granted to ${email} (Google sign-in)`).run()
+      `).bind(`${FREE_TRIAL_REPORTS} free trial reports granted to ${email} (Google sign-in)`).run()
 
       // Seed default material catalog so new account has context on the section (non-blocking)
       seedDefaultMaterials(c.env.DB, customer.id as number).catch((e) => console.warn('[customer-auth] seedDefaultMaterials failed (google):', e?.message || e))
@@ -554,7 +559,7 @@ customerAuthRoutes.post('/google', async (c) => {
 
     const isNew = customer.is_new_signup || false
     const paidCreditsRemaining = (customer.report_credits || 0) - (customer.credits_used || 0)
-    const freeTrialRemaining = (customer.free_trial_total || 4) - (customer.free_trial_used || 0)
+    const freeTrialRemaining = (customer.free_trial_total || FREE_TRIAL_REPORTS) - (customer.free_trial_used || 0)
     const totalRemaining = Math.max(0, freeTrialRemaining) + Math.max(0, paidCreditsRemaining)
 
     return c.json({
@@ -571,11 +576,11 @@ customerAuthRoutes.post('/google', async (c) => {
         role: 'customer',
         credits_remaining: totalRemaining,
         free_trial_remaining: Math.max(0, freeTrialRemaining),
-        free_trial_total: customer.free_trial_total || 4,
+        free_trial_total: customer.free_trial_total || FREE_TRIAL_REPORTS,
         paid_credits_remaining: Math.max(0, paidCreditsRemaining)
       },
       token,
-      ...(isNew ? { welcome: true, message: 'Welcome! You have 4 free trial roof reports to get started.' } : {})
+      ...(isNew ? { welcome: true, message: `Welcome! You have ${FREE_TRIAL_REPORTS} free trial roof reports to get started.` } : {})
     })
   } catch (err: any) {
     // Phase 2 #7
@@ -675,19 +680,23 @@ customerAuthRoutes.post('/register', async (c) => {
     // Generate referral code
     const refCode = 'REF-' + crypto.randomUUID().replace(/-/g, '').substring(0, 10).toUpperCase()
 
-    // Check for referral — referred_by from request body
+    // Phase 3 #10: validate referral code up front. Silently nulling a typo
+    // hid lost referral credit; now we reject so the user can correct it.
     let referredBy: number | null = null
-    if (referred_by_code) {
-      const referrer = await c.env.DB.prepare('SELECT id FROM customers WHERE referral_code = ? AND is_active = 1').bind(referred_by_code).first<any>()
-      if (referrer) referredBy = referrer.id
+    if (referred_by_code && String(referred_by_code).trim()) {
+      const referrer = await c.env.DB.prepare('SELECT id FROM customers WHERE referral_code = ? AND is_active = 1').bind(String(referred_by_code).trim()).first<any>()
+      if (!referrer) {
+        return c.json({ error: 'Invalid referral code. Please check the code or remove it to continue.' }, 400)
+      }
+      referredBy = referrer.id
     }
 
-    // Insert with 4 free trial reports (NOT paid credits) — email_verified = 1 since we verified
+    // Insert with the standard free-trial grant (NOT paid credits) — email_verified = 1 since we verified
     // conv-v5: persist phone, company_size, primary_use for sales-qualification
     const result = await c.env.DB.prepare(`
       INSERT INTO customers (email, name, phone, company_name, company_size, primary_use, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by, auto_invoice_enabled, last_login)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 0, 0, 4, 0, ?, ?, 0, datetime('now'))
-    `).bind(cleanEmail, name, cleanPhone, cleanCompanyName, cleanCompanySize, cleanPrimaryUse, storedHash, refCode, referredBy).run()
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 0, 0, ?, 0, ?, ?, 0, datetime('now'))
+    `).bind(cleanEmail, name, cleanPhone, cleanCompanyName, cleanCompanySize, cleanPrimaryUse, storedHash, FREE_TRIAL_REPORTS, refCode, referredBy).run()
 
     if (!result.meta.last_row_id) {
       return c.json({ error: 'Failed to create account. Please try again.' }, 500)
@@ -707,7 +716,7 @@ customerAuthRoutes.post('/register', async (c) => {
     await c.env.DB.prepare(`
       INSERT INTO user_activity_log (company_id, action, details)
       VALUES (1, 'customer_registered', ?)
-    `).bind(`New customer: ${name} (${cleanEmail}) — 4 free trial reports granted — email verified`).run()
+    `).bind(`New customer: ${name} (${cleanEmail}) — ${FREE_TRIAL_REPORTS} free trial reports granted — email verified`).run()
 
     // Seed default material catalog so new account has context on the section (non-blocking)
     seedDefaultMaterials(c.env.DB, result.meta.last_row_id as number).catch((e) => console.warn('[customer-auth] seedDefaultMaterials failed (email):', e?.message || e))
@@ -753,14 +762,14 @@ customerAuthRoutes.post('/register', async (c) => {
         company_size: cleanCompanySize,
         primary_use: cleanPrimaryUse,
         role: 'customer',
-        credits_remaining: 4,
-        free_trial_remaining: 4,
-        free_trial_total: 4,
+        credits_remaining: FREE_TRIAL_REPORTS,
+        free_trial_remaining: FREE_TRIAL_REPORTS,
+        free_trial_total: FREE_TRIAL_REPORTS,
         paid_credits_remaining: 0
       },
       token,
       welcome: true,
-      message: 'Welcome! You have 4 free trial roof reports to get started.'
+      message: `Welcome! You have ${FREE_TRIAL_REPORTS} free trial roof reports to get started.`
     })
   } catch (err: any) {
     // Phase 2 #7
@@ -780,9 +789,9 @@ customerAuthRoutes.post('/login', async (c) => {
       return c.json({ error: 'Email and password are required' }, 400)
     }
 
-    // Session + verification code cleanup (piggyback, non-blocking)
-    c.env.DB.prepare("DELETE FROM customer_sessions WHERE expires_at < datetime('now')").run().catch((e) => console.warn('[customer-auth] session cleanup failed:', e?.message || e))
-    c.env.DB.prepare("DELETE FROM email_verification_codes WHERE expires_at < datetime('now') AND used = 1").run().catch((e) => console.warn('[customer-auth] verification-code cleanup failed:', e?.message || e))
+    // Phase 3 #9: cleanup of expired sessions/verification-codes moved to the
+    // hourly scheduled handler (see src/index.tsx → authCleanup). Removed from
+    // this hot login path so a slow DELETE can't add latency to every signin.
 
     const cleanEmail = email.toLowerCase().trim()
 
@@ -1638,8 +1647,10 @@ customerAuthRoutes.post('/forgot-password', async (c) => {
       }
     }
 
-    // Cleanup expired/used tokens (non-blocking)
-    c.env.DB.prepare("DELETE FROM password_reset_tokens WHERE (expires_at < datetime('now') OR used = 1) AND created_at < datetime('now', '-1 day')").run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+    // Phase 3 #9: cleanup of stale password_reset_tokens moved to the hourly
+    // scheduled handler (see src/index.tsx → authCleanup). Removed from this
+    // request path because it ran fire-and-forget and silently left rows
+    // behind on failure.
 
     return c.json({ success: true, message: 'If an account with that email exists, a password reset link has been sent.' })
   } catch (err: any) {

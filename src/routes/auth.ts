@@ -65,9 +65,16 @@ export async function validateAdminSession(
   `).bind(token).first<any>()
 
   // P1-01: rolling renewal also uses the shorter 7-day window.
+  // Phase 3 #9: await the renewal so a failed UPDATE can't quietly let the
+  // session expire without anyone noticing. The latency cost is one indexed
+  // UPDATE on a row we already touched in the SELECT above.
   if (session) {
     const newExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-    db.prepare('UPDATE admin_sessions SET expires_at = ? WHERE session_token = ?').bind(newExpiry, token).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+    try {
+      await db.prepare('UPDATE admin_sessions SET expires_at = ? WHERE session_token = ?').bind(newExpiry, token).run()
+    } catch (e: any) {
+      console.warn('[auth] admin-session renewal failed:', e?.message || e)
+    }
   }
 
   return session
