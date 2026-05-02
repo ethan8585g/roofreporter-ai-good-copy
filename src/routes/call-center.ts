@@ -486,7 +486,10 @@ callCenterRoutes.post('/quick-dial', async (c) => {
     // Step 2: Wait briefly for the agent to auto-join
     await new Promise(r => setTimeout(r, 2000))
 
-    // Step 3: Dial via SIP — this is what makes the phone ring
+    // Step 3: Dial via SIP — this is what makes the phone ring.
+    // wait_until_answered=true makes LiveKit block until the call is actually
+    // answered (or hits ringing_timeout / fails), so we get the real outcome
+    // instead of fire-and-forget "ringing" that immediately closes.
     if (outboundTrunkId) {
       const participantIdentity = 'callee-' + prospect.id + '-' + Date.now()
       const sipRequest = {
@@ -497,18 +500,37 @@ callCenterRoutes.post('/quick-dial', async (c) => {
         participant_name: prospect.contact_name || prospect.company_name || 'Prospect',
         play_dialtone: false,
         krisp_enabled: true,
+        wait_until_answered: true,
+        ringing_timeout: { seconds: 30 },
+        max_call_duration: { seconds: 600 },
       }
       console.log('[QuickDial] CreateSIPParticipant →', { trunk: outboundTrunkId.slice(0, 8) + '…', to: cleanPhone, room: roomName, identity: participantIdentity })
       try {
         const sipResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/CreateSIPParticipant', sipRequest)
-        console.log('[QuickDial] CreateSIPParticipant ←', { ok: !sipResult?.code && !sipResult?.error, err: sipResult?.msg || sipResult?.error || null })
-        if (sipResult?.code || sipResult?.error) {
+        const failed = !!(sipResult?.code || sipResult?.error)
+        console.log('[QuickDial] CreateSIPParticipant ←', {
+          ok: !failed,
+          err: sipResult?.msg || sipResult?.error || null,
+          status: sipResult?.sip_call_status || null,
+          participant: sipResult?.participant_id || null,
+        })
+        if (failed) {
           sipStatus = 'sip_error'
-          sipError = sipResult.msg || sipResult.error || JSON.stringify(sipResult)
-          await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='failed', call_outcome=? WHERE livekit_room_id=?").bind('sip_error: ' + sipError, roomName).run()
+          // Common LiveKit/SIP failure codes — translate to actionable reasons.
+          const rawErr = sipResult.msg || sipResult.error || JSON.stringify(sipResult)
+          const lower = String(rawErr).toLowerCase()
+          let reason = rawErr
+          if (lower.includes('timeout') || lower.includes('no_answer')) reason = 'no_answer (rang ' + 30 + 's, not picked up)'
+          else if (lower.includes('busy')) reason = 'busy'
+          else if (lower.includes('rejected') || lower.includes('decline')) reason = 'rejected_by_callee'
+          else if (lower.includes('unreachable') || lower.includes('not_found') || lower.includes('does not exist')) reason = 'number_unreachable (check trunk + Telnyx routing)'
+          else if (lower.includes('forbidden') || lower.includes('denied') || lower.includes('unauth')) reason = 'trunk_auth_failed (Telnyx credentials?)'
+          sipError = reason
+          await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='failed', call_outcome=? WHERE livekit_room_id=?").bind('sip_error: ' + reason, roomName).run()
         } else {
-          sipStatus = 'ringing'
-          await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='ringing' WHERE livekit_room_id=?").bind(roomName).run()
+          // wait_until_answered=true → success means callee actually answered.
+          sipStatus = 'answered'
+          await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='connected' WHERE livekit_room_id=?").bind(roomName).run()
         }
       } catch (e: any) {
         sipStatus = 'dial_error'
@@ -522,7 +544,7 @@ callCenterRoutes.post('/quick-dial', async (c) => {
   }
 
   const response: any = {
-    success: sipStatus === 'ringing',
+    success: sipStatus === 'answered' || sipStatus === 'ringing',
     call_log_id: logRes.meta.last_row_id,
     room_name: roomName,
     prospect: { id: prospect.id, company_name: prospect.company_name, contact_name: prospect.contact_name, phone: cleanPhone },

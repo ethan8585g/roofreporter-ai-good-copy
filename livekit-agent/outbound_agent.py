@@ -44,7 +44,14 @@ class OutboundSalesAgent(Agent):
         self.call_start = None
         self.talk_start = None
         self.is_voicemail = False
-        self.outcome = "no_answer"
+        # Default to "failed" — if the SIP call never connected (Telnyx
+        # rejected, number unreachable, trunk auth failed) on_close fires
+        # with no callee in the room. Reporting "no_answer" in that case
+        # masks infrastructure bugs as user-not-picking-up.
+        # Once a callee participant joins the room we promote to "answered";
+        # the call-flow tools (mark_interested, etc.) override from there.
+        self.outcome = "failed"
+        self.callee_joined = False
         self.transcript_lines = []
         self.objections = []
         self.sentiment = "neutral"
@@ -106,6 +113,19 @@ VOICEMAIL DETECTION:
         """Called when agent enters the session."""
         self.call_start = datetime.utcnow()
         logger.info(f"Outbound agent entered room for {self.prospect.get('company', 'unknown')}")
+
+    def _on_participant_connected(self, participant):
+        """Track when the SIP-dialed callee actually joins the room.
+        Anyone other than the AI agent joining = the callee picked up."""
+        ident = getattr(participant, "identity", "") or ""
+        if ident.startswith("callee-") or "sip" in ident.lower():
+            self.callee_joined = True
+            # Promote default outcome from 'failed' (infra error) to 'no_answer'
+            # — by the time on_close fires, this means: callee answered but
+            # didn't engage / hung up before any tool-call outcome was set.
+            if self.outcome == "failed":
+                self.outcome = "no_answer"
+            logger.info(f"Callee joined room: {ident}")
 
     @function_tool("book_appointment")
     async def book_appointment(self, date: str = "", time: str = "", notes: str = ""):
@@ -230,6 +250,11 @@ async def entrypoint(ctx: RunContext):
 
     # Enable noise cancellation for telephony
     session.plugins.append(noise_cancellation.NoiseCancellation())
+
+    # Track when the SIP callee actually joins so on_close can distinguish
+    # infrastructure failures from real "no answer" (callee answered but
+    # never said anything before the room ended).
+    ctx.room.on("participant_connected", agent._on_participant_connected)
 
     await session.start(room=ctx.room)
 

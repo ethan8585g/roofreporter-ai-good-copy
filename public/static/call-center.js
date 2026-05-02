@@ -1223,11 +1223,18 @@
       document.getElementById('qd-phone').value = '';
       document.getElementById('qd-company').value = '';
     } else {
-      // Show specific SIP errors
+      // Show specific SIP errors with actionable hints.
       if (data?.sip_dial === 'no_trunk_configured') {
         window.rmToast('SIP outbound trunk not configured. Set SIP_OUTBOUND_TRUNK_ID in environment.', 'info');
       } else if (data?.sip_dial === 'sip_error' || data?.sip_dial === 'dial_error') {
-        window.rmToast('Call failed: ' + (data.sip_error || 'SIP dial error. Check LiveKit trunk configuration.'), 'error');
+        var reason = data.sip_error || 'unknown SIP error';
+        var hint = '';
+        if (reason.indexOf('no_answer') >= 0) hint = ' — phone rang for 30s without being picked up.';
+        else if (reason.indexOf('busy') >= 0) hint = ' — line was busy.';
+        else if (reason.indexOf('rejected') >= 0) hint = ' — callee declined the call.';
+        else if (reason.indexOf('unreachable') >= 0) hint = ' — number invalid or trunk-routing issue. Run preflight.';
+        else if (reason.indexOf('auth_failed') >= 0) hint = ' — Telnyx credentials likely wrong. Check the trunk in LiveKit dashboard.';
+        window.rmToast('Call failed: ' + reason + hint, 'error');
       } else {
         window.rmToast(data?.error || 'Quick dial failed', 'info');
       }
@@ -1291,7 +1298,7 @@
         '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Phone</span><span class="text-sm font-mono">' + (dialData.prospect?.phone || '-') + '</span></div>' +
         '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Agent</span><span class="text-sm font-medium">' + (dialData.agent?.name || '-') + '</span></div>' +
         '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">SIP</span><span class="text-sm font-medium">' + (dialData.sip_dial || '-') + '</span></div>' +
-        '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Status</span><span id="cc-call-live-status" class="text-sm font-bold text-green-400"><i class="fas fa-circle text-[6px] animate-pulse mr-1"></i>Ringing...</span></div>' +
+        '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Status</span><span id="cc-call-live-status" class="text-sm font-bold text-green-400"><i class="fas fa-circle text-[6px] animate-pulse mr-1"></i>' + (dialData.sip_dial === 'answered' ? 'Connected' : 'Ringing...') + '</span></div>' +
         '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Duration</span><span id="cc-call-duration" class="text-sm font-mono text-gray-300">0:00</span></div>' +
       '</div>' +
       '<div class="px-4 pb-3"><span class="text-[10px] text-gray-500">Room: ' + (dialData.room_name || '') + '</span></div>' +
