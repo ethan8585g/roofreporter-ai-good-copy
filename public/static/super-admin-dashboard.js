@@ -11609,18 +11609,24 @@ async function ccOpenAddPayment(prefilledCustomerId, prefilledName) {
   // Load customers if not cached.
   if (!window._ccCustomers) {
     try {
-      var res = await saFetch('/api/admin/superadmin/people?type=customer&limit=500');
+      var res = await saFetch('/api/admin/superadmin/people?type=platform_user&limit=500');
       if (res && res.ok) {
         var d = await res.json();
-        window._ccCustomers = (d.people || d.customers || d.results || []).map(function(p) {
-          return { id: p.id, name: p.name || p.email || ('#' + p.id), email: p.email || '' };
+        window._ccCustomers = (d.people || []).map(function(p) {
+          return {
+            id: p.id,
+            name: p.name || p.email || ('#' + p.id),
+            email: p.email || '',
+            company: p.company_name || ''
+          };
         });
       } else { window._ccCustomers = []; }
     } catch(e) { window._ccCustomers = []; }
   }
   var options = (window._ccCustomers || []).map(function(c) {
     var sel = (prefilledCustomerId && c.id === prefilledCustomerId) ? ' selected' : '';
-    return '<option value="' + c.id + '"' + sel + '>' + c.name + (c.email ? ' (' + c.email + ')' : '') + '</option>';
+    var label = c.name + (c.company ? ' — ' + c.company : '') + (c.email ? ' (' + c.email + ')' : '');
+    return '<option value="' + c.id + '"' + sel + '>' + label + '</option>';
   }).join('');
 
   modal.innerHTML =
