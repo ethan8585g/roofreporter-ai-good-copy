@@ -81,10 +81,11 @@ function renderSettings() {
     return;
   }
 
+  // Material Defaults & Proposal Pricing moved to /customer/profile —
+  // those are per-contractor settings, not platform-wide. Super admin keeps
+  // company profile, API keys, billing, and SIP/telephony only.
   const sections = [
     { id: 'company', label: 'Company Profile', icon: 'fa-building' },
-    { id: 'materials', label: 'Material Defaults', icon: 'fa-layer-group' },
-    { id: 'proposal_pricing', label: 'Proposal Pricing', icon: 'fa-file-invoice-dollar' },
     { id: 'apikeys', label: 'API Keys', icon: 'fa-key' },
     { id: 'pricing', label: 'Pricing & Billing', icon: 'fa-dollar-sign' },
     { id: 'sip', label: 'SIP Bridge / Telephony', icon: 'fa-phone-alt' },

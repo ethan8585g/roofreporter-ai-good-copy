@@ -1095,11 +1095,30 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
     const body = await c.req.json()
     const { trace, address, default_pitch, house_sqft, shingle_type: reqShingleType } = body
 
-    // Load company material preferences for BOM generation
+    // Load material preferences for BOM generation. Prefer the calling
+    // contractor's own settings (resolved through the team owner) and only
+    // fall back to the platform-wide master row when no per-contractor row
+    // is set. This is what makes each contractor's report use their own
+    // prices/waste/tax instead of a single shared default.
     let calcMatPrefs: any = {}
     try {
       const mpRow = await c.env.DB.prepare('SELECT material_preferences FROM master_companies WHERE id = 1').first<any>()
       if (mpRow?.material_preferences) calcMatPrefs = JSON.parse(mpRow.material_preferences)
+    } catch {}
+    try {
+      const callerToken = getCustomerSessionToken(c)
+      if (callerToken) {
+        const sess = await c.env.DB.prepare(
+          "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+        ).bind(callerToken).first<any>()
+        if (sess?.customer_id) {
+          const { ownerId } = await resolveTeamOwner(c.env.DB, sess.customer_id)
+          const custRow = await c.env.DB.prepare('SELECT material_preferences FROM customers WHERE id = ?').bind(ownerId).first<any>()
+          if (custRow?.material_preferences) {
+            try { calcMatPrefs = { ...calcMatPrefs, ...JSON.parse(custRow.material_preferences) } } catch {}
+          }
+        }
+      }
     } catch {}
 
     // Shared validator: structure, coords, self-intersection, degenerate polygons

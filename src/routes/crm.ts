@@ -1179,8 +1179,14 @@ crmRoutes.post('/proposals/from-report-bundle', async (c) => {
       dominant_pitch: km.dominant_pitch_label || '',
     }
 
-    // Load the roofer's saved per-unit price sheet (may be overridden in request body).
+    // Load the roofer's saved per-unit price sheet. Lookup order:
+    //   1. This contractor's own customers.material_preferences (the team owner)
+    //   2. master_companies row 1 (legacy platform default)
+    //   3. DEFAULT_MATERIAL_UNIT_PRICES (hardcoded baseline)
+    // Request body can override on a per-call basis.
     let prices: MaterialUnitPrices = { ...DEFAULT_MATERIAL_UNIT_PRICES }
+    let appliedFrom: 'default' | 'master' | 'customer' = 'default'
+
     const mc = await c.env.DB.prepare(
       'SELECT material_preferences FROM master_companies WHERE id = 1'
     ).first<any>()
@@ -1188,9 +1194,21 @@ crmRoutes.post('/proposals/from-report-bundle', async (c) => {
       try {
         const parsed = JSON.parse(mc.material_preferences)
         const saved = parsed?.proposal_pricing?.material_unit_prices
-        if (saved && typeof saved === 'object') prices = { ...prices, ...saved }
+        if (saved && typeof saved === 'object') { prices = { ...prices, ...saved }; appliedFrom = 'master' }
       } catch {}
     }
+
+    const cust = await c.env.DB.prepare(
+      'SELECT material_preferences FROM customers WHERE id = ?'
+    ).bind(ownerId).first<any>()
+    if (cust?.material_preferences) {
+      try {
+        const parsed = JSON.parse(cust.material_preferences)
+        const saved = parsed?.proposal_pricing?.material_unit_prices
+        if (saved && typeof saved === 'object') { prices = { ...prices, ...saved }; appliedFrom = 'customer' }
+      } catch {}
+    }
+    void appliedFrom // available for debugging if we need to surface it later
     if (body.material_unit_prices && typeof body.material_unit_prices === 'object') {
       prices = { ...prices, ...body.material_unit_prices }
     }

@@ -2241,3 +2241,155 @@ customerAuthRoutes.post('/signup-started', async (c) => {
 
   return c.json({ success: true })
 })
+
+// ============================================================
+// MATERIAL DEFAULTS & PROPOSAL PRICING — per-contractor settings
+// Stored on the team owner's `customers.material_preferences` row.
+// Replaces the old master_companies-scoped storage which forced every
+// contractor on the platform to share one row of pricing.
+// ============================================================
+
+const MATERIAL_DEFAULTS = {
+  shingle_type: 'architectural',
+  waste_factor_pct: 15,
+  include_ventilation: true,
+  include_pipe_boots: true,
+  tax_rate: 0.05,
+}
+
+const PROPOSAL_PRICING_DEFAULTS = {
+  pricing_mode: 'markup',
+  markup_percent: 30,
+  price_per_square: 350,
+  price_per_bundle: 125,
+  include_labor: true,
+  labor_per_square: 180,
+  include_tearoff: true,
+  tearoff_per_square: 45,
+  material_unit_prices: {
+    shingle_bundle: 42,
+    underlayment_roll: 110,
+    ice_water_roll: 90,
+    ridge_cap_bundle: 65,
+    drip_edge_lf: 1.75,
+    starter_strip_lf: 1.25,
+    valley_flashing_lf: 3.25,
+    nails_box: 48,
+    caulk_tube: 8,
+    labor_per_square: 180,
+    tearoff_per_square: 45,
+    dumpster_flat: 450,
+    dumpster_sqft_per_unit: 3000,
+    tax_rate: 0.05,
+  },
+}
+
+async function resolveCustomerOwnerId(c: any): Promise<number | null> {
+  const token = getCustomerSessionToken(c)
+  if (!token) return null
+  const row = await c.env.DB.prepare(
+    "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+  ).bind(token).first<any>()
+  if (!row) return null
+  const { ownerId } = await resolveTeamOwner(c.env.DB, row.customer_id)
+  return ownerId
+}
+
+async function loadCustomerPrefs(db: any, ownerId: number): Promise<any> {
+  const row = await db.prepare('SELECT material_preferences FROM customers WHERE id = ?').bind(ownerId).first<any>()
+  if (!row?.material_preferences) return {}
+  try { return JSON.parse(row.material_preferences) || {} } catch { return {} }
+}
+
+async function saveCustomerPrefs(db: any, ownerId: number, prefs: any): Promise<void> {
+  await db.prepare(
+    "UPDATE customers SET material_preferences = ?, updated_at = datetime('now') WHERE id = ?"
+  ).bind(JSON.stringify(prefs), ownerId).run()
+}
+
+// Bound numeric inputs at API boundary so a contractor can't ship absurd values.
+function clamp(n: any, min: number, max: number, fallback: number): number {
+  const v = Number(n)
+  if (!isFinite(v)) return fallback
+  return Math.max(min, Math.min(max, v))
+}
+
+customerAuthRoutes.get('/material-preferences', async (c) => {
+  const ownerId = await resolveCustomerOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const stored = await loadCustomerPrefs(c.env.DB, ownerId)
+  const prefs: any = { ...MATERIAL_DEFAULTS, ...stored }
+  delete prefs.proposal_pricing
+  if (stored.proposal_pricing) prefs.proposal_pricing = stored.proposal_pricing
+  return c.json({ preferences: prefs })
+})
+
+customerAuthRoutes.put('/material-preferences', async (c) => {
+  const ownerId = await resolveCustomerOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const body = await c.req.json().catch(() => ({}))
+
+  const allowedShingles = new Set(['3tab', 'architectural', 'premium', 'designer', 'impact_resistant', 'metal'])
+  const existing = await loadCustomerPrefs(c.env.DB, ownerId)
+  const next: any = { ...existing }
+
+  if (body.shingle_type !== undefined) {
+    next.shingle_type = allowedShingles.has(String(body.shingle_type)) ? body.shingle_type : 'architectural'
+  }
+  if (body.waste_factor_pct !== undefined) {
+    next.waste_factor_pct = clamp(body.waste_factor_pct, 10, 25, 15)
+  }
+  if (body.tax_rate !== undefined) {
+    // Accept either fraction (0–0.20) or percent (0–20); normalize to fraction.
+    const raw = Number(body.tax_rate)
+    const asFrac = isFinite(raw) ? (raw > 1 ? raw / 100 : raw) : 0.05
+    next.tax_rate = clamp(asFrac, 0, 0.20, 0.05)
+  }
+  if (body.include_ventilation !== undefined) next.include_ventilation = !!body.include_ventilation
+  if (body.include_pipe_boots !== undefined) next.include_pipe_boots = !!body.include_pipe_boots
+
+  await saveCustomerPrefs(c.env.DB, ownerId, next)
+  const out: any = { ...MATERIAL_DEFAULTS, ...next }
+  delete out.proposal_pricing
+  return c.json({ success: true, preferences: out })
+})
+
+customerAuthRoutes.get('/proposal-pricing', async (c) => {
+  const ownerId = await resolveCustomerOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const stored = await loadCustomerPrefs(c.env.DB, ownerId)
+  const saved = stored.proposal_pricing || {}
+  const presets = {
+    ...PROPOSAL_PRICING_DEFAULTS,
+    ...saved,
+    material_unit_prices: { ...PROPOSAL_PRICING_DEFAULTS.material_unit_prices, ...(saved.material_unit_prices || {}) },
+  }
+  return c.json({ presets })
+})
+
+customerAuthRoutes.put('/proposal-pricing', async (c) => {
+  const ownerId = await resolveCustomerOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const body = await c.req.json().catch(() => ({}))
+  const allowed = ['pricing_mode', 'markup_percent', 'price_per_square', 'price_per_bundle',
+    'include_labor', 'labor_per_square', 'include_tearoff', 'tearoff_per_square']
+  const next: any = {}
+  for (const k of allowed) if (body[k] !== undefined) next[k] = body[k]
+
+  if (body.material_unit_prices && typeof body.material_unit_prices === 'object') {
+    const mupAllowed = ['shingle_bundle', 'underlayment_roll', 'ice_water_roll', 'ridge_cap_bundle',
+      'drip_edge_lf', 'starter_strip_lf', 'valley_flashing_lf', 'nails_box', 'caulk_tube',
+      'labor_per_square', 'tearoff_per_square', 'dumpster_flat', 'dumpster_sqft_per_unit', 'tax_rate']
+    const mup: any = {}
+    for (const k of mupAllowed) {
+      const v = body.material_unit_prices[k]
+      if (v !== undefined && v !== null && !isNaN(Number(v))) mup[k] = Number(v)
+    }
+    next.material_unit_prices = mup
+  }
+
+  const existing = await loadCustomerPrefs(c.env.DB, ownerId)
+  existing.proposal_pricing = next
+  await saveCustomerPrefs(c.env.DB, ownerId, existing)
+  return c.json({ success: true, presets: next })
+})

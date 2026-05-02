@@ -90,6 +90,9 @@
       // ── 4. Company Type ───────────────────────────────────
       companyTypeSection() +
 
+      // ── 4b. Material Defaults & Proposal Pricing ──────────
+      materialDefaultsSection() +
+
       // ── 5. Report Preferences ─────────────────────────────
       section('Report Preferences', 'fa-sliders-h', 'gray',
         '<div id="solarWattRow" class="mb-4"' + (profile.company_type !== 'solar' ? ' style="display:none"' : '') + '>' +
@@ -163,6 +166,8 @@
 
     // Load current Square connection status
     refreshSquareStatus();
+    // Load per-contractor material/pricing defaults
+    loadMaterialDefaults();
   }
 
   // ── Payment Integrations Section (Square OAuth) ──────────
@@ -306,6 +311,228 @@
       '</div>' +
     '</div>';
   }
+
+  // ── Material Defaults & Proposal Pricing Section ──────────
+  // Per-contractor; falls back to platform defaults until the user saves once.
+  var materialPrefs = null;
+  var proposalPricing = null;
+
+  var SHINGLE_CATALOG = {
+    '3tab':             { name: '3-Tab Standard',           price: '$32/bdl', warranty: '25-year',       wind: '96 km/h',  weight: '210 lbs/sq', desc: 'Budget-friendly strip shingle. Flat, uniform look.' },
+    'architectural':    { name: 'Architectural (Laminate)', price: '$42/bdl', warranty: '30-year',       wind: '210 km/h', weight: '250 lbs/sq', desc: 'Industry standard. Dimensional shadow lines, enhanced wind resistance.' },
+    'premium':          { name: 'Premium Architectural',    price: '$55/bdl', warranty: 'Ltd. Lifetime', wind: '210 km/h', weight: '280 lbs/sq', desc: 'SBS-modified bitumen, algae resistant, superior flexibility.' },
+    'designer':         { name: 'Designer / Luxury',        price: '$72/bdl', warranty: 'Lifetime',      wind: '210 km/h', weight: '350 lbs/sq', desc: 'Multi-layered premium. Mimics slate or cedar shake.' },
+    'impact_resistant': { name: 'Impact-Resistant (Class 4)', price: '$62/bdl', warranty: 'Ltd. Lifetime', wind: '210 km/h', weight: '290 lbs/sq', desc: 'UL 2218 Class 4 hail rated. May qualify for insurance discounts.' },
+    'metal':            { name: 'Steel / Metal Shingles',   price: '$95/bdl', warranty: '50-year',       wind: '200 km/h', weight: '150 lbs/sq', desc: 'Interlocking steel panels. Fireproof, lightweight, extremely durable.' },
+  };
+
+  function materialDefaultsSection() {
+    return '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">' +
+      '<div class="flex items-center justify-between mb-2">' +
+        '<h2 class="text-base font-bold text-gray-800"><i class="fas fa-layer-group text-blue-500 mr-2"></i>Material Defaults &amp; Proposal Pricing</h2>' +
+        '<span id="mat-saved" class="hidden text-xs text-green-600 font-semibold"><i class="fas fa-check-circle mr-1"></i>Saved</span>' +
+      '</div>' +
+      '<p class="text-sm text-gray-500 mb-4">Your default shingle, waste %, tax, and per-unit prices for reports and proposals. Each contractor sets their own — these only affect your account.</p>' +
+      '<div id="materialPanel" class="text-sm text-gray-500 py-6 text-center"><i class="fas fa-spinner fa-spin mr-2"></i>Loading your pricing&hellip;</div>' +
+    '</div>';
+  }
+
+  async function loadMaterialDefaults() {
+    try {
+      var [mr, pr] = await Promise.all([
+        fetch('/api/customer/material-preferences', { headers: hdrs() }),
+        fetch('/api/customer/proposal-pricing', { headers: hdrs() }),
+      ]);
+      if (mr.ok) materialPrefs   = (await mr.json()).preferences || {};
+      if (pr.ok) proposalPricing = (await pr.json()).presets || {};
+      renderMaterialPanel();
+    } catch (e) {
+      var panel = document.getElementById('materialPanel');
+      if (panel) panel.innerHTML = '<p class="text-red-500">Failed to load your pricing. Refresh to retry.</p>';
+    }
+  }
+
+  function renderMaterialPanel() {
+    var panel = document.getElementById('materialPanel');
+    if (!panel) return;
+    var p   = materialPrefs   || {};
+    var pp  = proposalPricing || {};
+    var mup = pp.material_unit_prices || {};
+    var taxPct = ((p.tax_rate != null ? p.tax_rate : 0.05) * 100).toFixed(1);
+    var wasteOptions = [10, 12, 15, 17, 20];
+
+    var shingleCards = Object.keys(SHINGLE_CATALOG).map(function (key) {
+      var s = SHINGLE_CATALOG[key];
+      var sel = p.shingle_type === key;
+      return '<div onclick="selectShingleCust(\'' + key + '\')" ' +
+        'class="cursor-pointer rounded-xl border-2 p-3 transition-all hover:shadow-md ' +
+        (sel ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : 'border-gray-200 bg-white hover:border-gray-300') + '">' +
+        '<div class="flex items-start justify-between mb-1">' +
+          '<span class="font-bold text-xs text-gray-800">' + esc(s.name) + '</span>' +
+          (sel ? '<i class="fas fa-check-circle text-blue-500 text-xs"></i>' : '') +
+        '</div>' +
+        '<p class="text-[11px] text-gray-500 mb-2 leading-snug">' + esc(s.desc) + '</p>' +
+        '<div class="grid grid-cols-2 gap-1 text-[11px]">' +
+          '<div><i class="fas fa-dollar-sign text-green-500 mr-1"></i>' + esc(s.price) + '</div>' +
+          '<div><i class="fas fa-shield-alt text-blue-500 mr-1"></i>' + esc(s.warranty) + '</div>' +
+          '<div><i class="fas fa-wind text-cyan-500 mr-1"></i>' + esc(s.wind) + '</div>' +
+          '<div><i class="fas fa-weight-hanging text-amber-500 mr-1"></i>' + esc(s.weight) + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    var wasteButtons = wasteOptions.map(function (w) {
+      var on = p.waste_factor_pct === w;
+      return '<button onclick="selectWasteCust(' + w + ')" ' +
+        'class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all ' +
+        (on ? 'bg-blue-500 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200') + '">' + w + '%</button>';
+    }).join('');
+
+    var unitPriceRows = [
+      ['shingle_bundle',     'Shingle Bundle',              '$', '/bdl'],
+      ['underlayment_roll',  'Underlayment Roll',           '$', '/roll'],
+      ['ice_water_roll',     'Ice & Water Shield Roll',     '$', '/roll'],
+      ['ridge_cap_bundle',   'Ridge Cap Bundle',            '$', '/bdl'],
+      ['drip_edge_lf',       'Drip Edge',                   '$', '/lf'],
+      ['starter_strip_lf',   'Starter Strip',               '$', '/lf'],
+      ['valley_flashing_lf', 'Valley Flashing',             '$', '/lf'],
+      ['nails_box',          'Nails (box)',                 '$', '/box'],
+      ['caulk_tube',         'Caulk Tube',                  '$', '/tube'],
+      ['labor_per_square',   'Labor',                       '$', '/sq'],
+      ['tearoff_per_square', 'Tearoff',                     '$', '/sq'],
+      ['dumpster_flat',      'Dumpster (flat)',             '$', ''],
+    ].map(function (r) {
+      var key = r[0], label = r[1], prefix = r[2], suffix = r[3];
+      var v = (mup[key] != null) ? mup[key] : '';
+      return '<div>' +
+        '<label class="block text-[11px] font-semibold text-gray-500 mb-1">' + esc(label) + '</label>' +
+        '<div class="flex items-center gap-1">' +
+          '<span class="text-xs text-gray-400">' + prefix + '</span>' +
+          '<input type="number" step="0.01" min="0" id="mup_' + key + '" value="' + v + '" ' +
+            'class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-blue-400">' +
+          '<span class="text-xs text-gray-400">' + suffix + '</span>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    panel.innerHTML =
+      '<div id="matMsg" class="hidden mb-3"></div>' +
+
+      // Shingle type
+      '<label class="block text-xs font-semibold text-gray-700 mb-2">Shingle Type</label>' +
+      '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-5">' + shingleCards + '</div>' +
+
+      // Waste Factor
+      '<label class="block text-xs font-semibold text-gray-700 mb-2">Default Waste Factor</label>' +
+      '<div class="flex gap-2 mb-5 flex-wrap">' + wasteButtons + '</div>' +
+
+      // Tax + toggles
+      '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">' +
+        '<div><label class="block text-xs font-semibold text-gray-700 mb-1">Tax Rate (%)</label>' +
+          '<input id="custTaxRate" type="number" step="0.5" min="0" max="20" value="' + taxPct + '" ' +
+            'class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-blue-400">' +
+          '<p class="text-[10px] text-gray-400 mt-1">Alberta GST 5%, Ontario HST 13%</p></div>' +
+        '<div><label class="block text-xs font-semibold text-gray-700 mb-1">Include Ridge Vent</label>' +
+          '<button onclick="toggleMatPrefCust(\'include_ventilation\')" ' +
+            'class="px-4 py-2 rounded-lg text-sm font-bold transition-all ' +
+            (p.include_ventilation !== false ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500') + '">' +
+            (p.include_ventilation !== false ? 'Yes' : 'No') + '</button></div>' +
+        '<div><label class="block text-xs font-semibold text-gray-700 mb-1">Include Pipe Boots</label>' +
+          '<button onclick="toggleMatPrefCust(\'include_pipe_boots\')" ' +
+            'class="px-4 py-2 rounded-lg text-sm font-bold transition-all ' +
+            (p.include_pipe_boots !== false ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500') + '">' +
+            (p.include_pipe_boots !== false ? 'Yes' : 'No') + '</button></div>' +
+      '</div>' +
+
+      // Per-unit prices
+      '<details class="mb-5"><summary class="cursor-pointer text-xs font-semibold text-gray-700 mb-3">' +
+        '<i class="fas fa-dollar-sign text-green-500 mr-1"></i>Per-unit prices for proposals (optional)</summary>' +
+        '<p class="text-[11px] text-gray-500 mb-3 mt-2">Used when generating proposals from a report. Leave blank to use defaults.</p>' +
+        '<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">' + unitPriceRows + '</div>' +
+      '</details>' +
+
+      // Save
+      '<button onclick="saveMaterialDefaultsCust()" id="custMatSave" ' +
+        'class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors">' +
+        '<i class="fas fa-save mr-1"></i>Save Material &amp; Pricing Defaults</button>';
+  }
+
+  window.selectShingleCust = function (key) {
+    materialPrefs = materialPrefs || {};
+    materialPrefs.shingle_type = key;
+    renderMaterialPanel();
+  };
+
+  window.selectWasteCust = function (pct) {
+    materialPrefs = materialPrefs || {};
+    materialPrefs.waste_factor_pct = pct;
+    renderMaterialPanel();
+  };
+
+  window.toggleMatPrefCust = function (field) {
+    materialPrefs = materialPrefs || {};
+    materialPrefs[field] = !(materialPrefs[field] !== false);
+    renderMaterialPanel();
+  };
+
+  window.saveMaterialDefaultsCust = async function () {
+    var btn = document.getElementById('custMatSave');
+    var msg = document.getElementById('matMsg');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving...'; }
+
+    var taxInput = document.getElementById('custTaxRate');
+    var taxPct = taxInput ? parseFloat(taxInput.value) : 5;
+    if (!isFinite(taxPct)) taxPct = 5;
+    taxPct = Math.max(0, Math.min(20, taxPct));
+
+    var prefsBody = {
+      shingle_type:        materialPrefs?.shingle_type || 'architectural',
+      waste_factor_pct:    Math.max(10, Math.min(25, materialPrefs?.waste_factor_pct || 15)),
+      tax_rate:            taxPct / 100,
+      include_ventilation: materialPrefs?.include_ventilation !== false,
+      include_pipe_boots:  materialPrefs?.include_pipe_boots  !== false,
+    };
+
+    var pricingBody = { material_unit_prices: {} };
+    var keys = ['shingle_bundle','underlayment_roll','ice_water_roll','ridge_cap_bundle',
+                'drip_edge_lf','starter_strip_lf','valley_flashing_lf','nails_box','caulk_tube',
+                'labor_per_square','tearoff_per_square','dumpster_flat'];
+    keys.forEach(function (k) {
+      var el = document.getElementById('mup_' + k);
+      if (!el) return;
+      var v = parseFloat(el.value);
+      if (isFinite(v) && v >= 0) pricingBody.material_unit_prices[k] = v;
+    });
+    // Mirror tax onto material_unit_prices.tax_rate so proposal engine sees it
+    pricingBody.material_unit_prices.tax_rate = prefsBody.tax_rate;
+
+    try {
+      var [mRes, pRes] = await Promise.all([
+        fetch('/api/customer/material-preferences', { method: 'PUT', headers: hdrs(), body: JSON.stringify(prefsBody) }),
+        fetch('/api/customer/proposal-pricing',     { method: 'PUT', headers: hdrs(), body: JSON.stringify(pricingBody) }),
+      ]);
+      if (!mRes.ok) throw new Error('Material save failed');
+      if (!pRes.ok) throw new Error('Pricing save failed');
+      materialPrefs   = (await mRes.json()).preferences || materialPrefs;
+      proposalPricing = Object.assign({}, proposalPricing || {}, { material_unit_prices: pricingBody.material_unit_prices });
+      var savedBadge = document.getElementById('mat-saved');
+      if (savedBadge) { savedBadge.classList.remove('hidden'); setTimeout(function () { savedBadge.classList.add('hidden'); }, 2500); }
+      if (msg) {
+        msg.className = 'mb-3 p-2 rounded-lg text-xs bg-green-50 text-green-700 border border-green-200';
+        msg.textContent = 'Saved. Future reports & proposals will use your settings automatically.';
+        msg.classList.remove('hidden');
+      }
+      showToast('Material defaults saved', 'success');
+    } catch (e) {
+      if (msg) {
+        msg.className = 'mb-3 p-2 rounded-lg text-xs bg-red-50 text-red-700 border border-red-200';
+        msg.textContent = e.message || 'Save failed';
+        msg.classList.remove('hidden');
+      }
+      showToast(e.message || 'Save failed', 'error');
+    }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i>Save Material &amp; Pricing Defaults'; }
+  };
 
   window.switchCompanyType = async function (type) {
     if (profile.company_type === type) return; // already set
