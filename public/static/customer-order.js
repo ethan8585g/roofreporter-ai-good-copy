@@ -1354,10 +1354,28 @@ function snapToNearbyVertex(pt, tolM) {
 }
 
 // Place a point at the current map center — wired to the mobile reticle FAB.
+// Silent returns previously caused mobile users to tap repeatedly with zero
+// feedback when the map hadn't initialized yet — see Taher Qader 2026-05-02
+// session. We now surface a toast + telemetry beacon for each failure path.
 function placePointAtReticle() {
-  if (!orderState.traceMap) return;
+  const reportFabFail = (reason) => {
+    try { console.warn('[placePointAtReticle] silent-fail', reason); } catch(_) {}
+    try {
+      const payload = JSON.stringify({ events: [{ event_type: 'fab_silent_fail', click_text: 'Place Point', click_element: reason, page_url: location.pathname }] });
+      if (navigator.sendBeacon) navigator.sendBeacon('/api/analytics/track', payload);
+    } catch(_) {}
+    const fab = document.getElementById('phonePlaceFab');
+    if (fab) {
+      fab.style.transition = 'transform 120ms';
+      fab.style.transform = 'translateX(-6px)';
+      setTimeout(() => { fab.style.transform = 'translateX(6px)'; }, 80);
+      setTimeout(() => { fab.style.transform = ''; }, 160);
+    }
+    showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Map still loading — give it a couple seconds, then tap again.');
+  };
+  if (!orderState.traceMap) return reportFabFail('map_not_ready');
   const c = orderState.traceMap.getCenter();
-  if (!c) return;
+  if (!c) return reportFabFail('center_null');
   hapticTick();
   handleTraceClick({ lat: c.lat(), lng: c.lng() });
 }
