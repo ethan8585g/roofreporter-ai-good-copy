@@ -267,7 +267,7 @@ gtag('config', 'AW-18080319225');
 // Conversion labels — replace the XXX strings with the actual labels from Google Ads > Tools > Conversions
 window.GOOGLE_ADS_CONVERSIONS = {
   lead:     'AW-18080319225/XXX_LEAD_LABEL',
-  signup:   'AW-18080319225/XXX_SIGNUP_LABEL',
+  signup:   'AW-18080319225/26MMCMOgxaYcEPmNr61D',
   purchase: 'AW-18080319225/XXX_PURCHASE_LABEL'
 };
 window.trackAdsConversion = function(kind, params) {
