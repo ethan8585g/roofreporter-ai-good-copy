@@ -501,8 +501,8 @@ callCenterRoutes.post('/quick-dial', async (c) => {
         play_dialtone: false,
         krisp_enabled: true,
         wait_until_answered: true,
-        ringing_timeout: { seconds: 30 },
-        max_call_duration: { seconds: 600 },
+        ringing_timeout: '30s',
+        max_call_duration: '600s',
       }
       console.log('[QuickDial] CreateSIPParticipant →', { trunk: outboundTrunkId.slice(0, 8) + '…', to: cleanPhone, room: roomName, identity: participantIdentity })
       try {
