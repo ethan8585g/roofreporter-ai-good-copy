@@ -10848,9 +10848,120 @@ function hubTimeAgo(dateStr) {
 // UNIFIED INBOX — All conversations in one place
 // ============================================================
 
+// SIP-trunk registration modal — records an existing LiveKit/Telnyx trunk
+// in D1 so it shows on the Inbox view. The trunk itself lives in
+// LiveKit/Telnyx; this is just the local mirror.
+function ibOpenRegisterTrunk() {
+  var modal = document.getElementById('ib-trunk-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'ib-trunk-modal';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML =
+    '<div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)ibCloseRegisterTrunk()">' +
+      '<div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">' +
+        '<div class="flex items-center justify-between mb-4">' +
+          '<h3 class="text-lg font-black text-gray-900"><i class="fas fa-network-wired mr-2 text-purple-500"></i>Register SIP Trunk</h3>' +
+          '<button onclick="ibCloseRegisterTrunk()" class="text-gray-400 hover:text-gray-700"><i class="fas fa-times"></i></button>' +
+        '</div>' +
+        '<p class="text-xs text-gray-500 mb-4">Mirror an existing LiveKit/Telnyx trunk in this dashboard. The trunk must already exist in LiveKit — this just records the IDs.</p>' +
+        '<form onsubmit="event.preventDefault();ibSubmitRegisterTrunk()" class="space-y-3">' +
+          '<div>' +
+            '<label class="block text-[11px] font-bold uppercase text-gray-500 mb-1">Trunk ID</label>' +
+            '<input id="ib-tr-id" type="text" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono" placeholder="ST_gs5kgH96FBLB" />' +
+          '</div>' +
+          '<div class="grid grid-cols-2 gap-3">' +
+            '<div>' +
+              '<label class="block text-[11px] font-bold uppercase text-gray-500 mb-1">Type</label>' +
+              '<select id="ib-tr-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">' +
+                '<option value="outbound">Outbound</option>' +
+                '<option value="inbound">Inbound</option>' +
+              '</select>' +
+            '</div>' +
+            '<div>' +
+              '<label class="block text-[11px] font-bold uppercase text-gray-500 mb-1">Status</label>' +
+              '<select id="ib-tr-status" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">' +
+                '<option value="active">Active</option>' +
+                '<option value="disabled">Disabled</option>' +
+              '</select>' +
+            '</div>' +
+          '</div>' +
+          '<div>' +
+            '<label class="block text-[11px] font-bold uppercase text-gray-500 mb-1">Phone Number</label>' +
+            '<input id="ib-tr-phone" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="+18253955356" />' +
+          '</div>' +
+          '<div>' +
+            '<label class="block text-[11px] font-bold uppercase text-gray-500 mb-1">Display Name (optional)</label>' +
+            '<input id="ib-tr-name" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Cold-call outbound" />' +
+          '</div>' +
+          '<div>' +
+            '<label class="block text-[11px] font-bold uppercase text-gray-500 mb-1">Dispatch Rule ID (optional)</label>' +
+            '<input id="ib-tr-dispatch" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono" placeholder="SDR_..." />' +
+          '</div>' +
+          '<div id="ib-tr-error" class="hidden text-xs text-red-600"></div>' +
+          '<div class="flex justify-end gap-2 pt-2">' +
+            '<button type="button" onclick="ibCloseRegisterTrunk()" class="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-lg">Cancel</button>' +
+            '<button type="submit" class="px-4 py-2 text-sm font-bold text-white bg-purple-500 hover:bg-purple-600 rounded-lg">Save Trunk</button>' +
+          '</div>' +
+        '</form>' +
+      '</div>' +
+    '</div>';
+}
+
+function ibCloseRegisterTrunk() {
+  var m = document.getElementById('ib-trunk-modal');
+  if (m) m.innerHTML = '';
+}
+
+async function ibSubmitRegisterTrunk() {
+  var errEl = document.getElementById('ib-tr-error');
+  if (errEl) errEl.classList.add('hidden');
+  var trunk_id = document.getElementById('ib-tr-id').value.trim();
+  var trunk_type = document.getElementById('ib-tr-type').value;
+  var status = document.getElementById('ib-tr-status').value;
+  var phone_number = document.getElementById('ib-tr-phone').value.trim();
+  var name = document.getElementById('ib-tr-name').value.trim();
+  var dispatch_rule_id = document.getElementById('ib-tr-dispatch').value.trim();
+  if (!trunk_id) {
+    if (errEl) { errEl.textContent = 'Trunk ID required.'; errEl.classList.remove('hidden'); }
+    return;
+  }
+  try {
+    var res = await saFetch('/api/admin/superadmin/sip-trunks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trunk_id: trunk_id, trunk_type: trunk_type, phone_number: phone_number, status: status, name: name, dispatch_rule_id: dispatch_rule_id })
+    });
+    if (!res || !res.ok) {
+      var msg = 'Save failed';
+      try { var j = await res.json(); msg = j.error || msg; } catch(e) {}
+      if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
+      return;
+    }
+    ibCloseRegisterTrunk();
+    if (typeof toast === 'function') toast('Trunk registered', 'success');
+    if (typeof loadView === 'function') loadView('inbox');
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message || 'Save failed'; errEl.classList.remove('hidden'); }
+  }
+}
+
+async function ibDeleteTrunk(trunkId) {
+  if (!trunkId) return;
+  if (!confirm('Remove trunk ' + trunkId + ' from the dashboard? This does NOT affect LiveKit/Telnyx.')) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/sip-trunks/' + encodeURIComponent(trunkId), { method: 'DELETE' });
+    if (res && res.ok) {
+      if (typeof toast === 'function') toast('Trunk removed', 'success');
+      if (typeof loadView === 'function') loadView('inbox');
+    }
+  } catch(e) {}
+}
+
 function renderInboxView() {
   var d = SA.data.inbox || {};
-  var summary = d.summary || { active_trials: 0, paid_subscribers: 0, active_sip_trunks: 0, total_call_minutes_30d: 0 };
+  var summary = d.summary || { active_trials: 0, paid_subscribers: 0, pending_setup: 0, active_sip_trunks: 0, total_call_minutes_30d: 0, total_calls_all_time: 0, last_call_at: null, call_window: '30d' };
   var trials = d.trials || [];
   var trunks = d.sip_trunks || [];
   var callVolume = d.call_volume_by_customer || [];
@@ -10860,12 +10971,20 @@ function renderInboxView() {
   function fmtDayTime(s) { return s ? new Date(String(s).replace(' ', 'T') + 'Z').toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' }) : '-'; }
 
   // ── KPI cards ────────────────────────────────────────────────
+  var callWindow = summary.call_window || '30d';
+  var callSubtitle = callWindow === 'all-time'
+    ? 'all-time (no calls in last 30d)' + (summary.last_call_at ? ' — last ' + fmtDayTime(summary.last_call_at) : '')
+    : 'total minutes across all customers';
+  var trialSubtitle = (summary.pending_setup || 0) > 0
+    ? (summary.pending_setup) + ' pending setup'
+    : 'free 1-month AI Secretary trial';
   var cardsHtml =
-    '<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">' +
-      samc('Active Trials', summary.active_trials || 0, 'fa-hourglass-half', 'blue', 'free 1-month AI Secretary trial') +
+    '<div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">' +
+      samc('Active Trials', summary.active_trials || 0, 'fa-hourglass-half', 'blue', trialSubtitle) +
       samc('Paid Subscribers', summary.paid_subscribers || 0, 'fa-check-circle', 'green', 'converted to paid plan') +
+      samc('Pending Setup', summary.pending_setup || 0, 'fa-cog', 'amber', 'subscribed but trunk not configured') +
       samc('Active SIP Trunks', summary.active_sip_trunks || 0, 'fa-network-wired', 'purple', 'LiveKit/Telnyx trunks online') +
-      samc('Call Minutes (30d)', (summary.total_call_minutes_30d || 0).toLocaleString(), 'fa-phone-alt', 'orange', 'total minutes across all customers') +
+      samc('Call Minutes' + (callWindow === '30d' ? ' (30d)' : ''), (summary.total_call_minutes_30d || 0).toLocaleString(), 'fa-phone-alt', 'orange', callSubtitle) +
     '</div>';
 
   // ── Trials table ─────────────────────────────────────────────
@@ -10921,7 +11040,7 @@ function renderInboxView() {
   // ── SIP trunk table ──────────────────────────────────────────
   var trunkRows = '';
   if (trunks.length === 0) {
-    trunkRows = '<tr><td colspan="6" class="text-center py-6 text-gray-400 text-xs">No SIP trunks configured</td></tr>';
+    trunkRows = '<tr><td colspan="7" class="text-center py-6 text-gray-400 text-xs">No SIP trunks configured — click <span class="font-bold text-purple-600">Register trunk</span> above to mirror your LiveKit/Telnyx trunks here.</td></tr>';
   } else {
     trunks.forEach(function(t) {
       var statusColor = (t.status === 'active') ? 'bg-green-100 text-green-700'
@@ -10939,14 +11058,18 @@ function renderInboxView() {
         '<td class="py-2 px-3 text-xs"><span class="px-2 py-0.5 rounded ' + statusColor + ' font-semibold uppercase tracking-wide text-[10px]">' + esc(t.status || '—') + '</span></td>' +
         '<td class="py-2 px-3 text-xs text-gray-700">' + assignee + '</td>' +
         '<td class="py-2 px-3 text-xs text-gray-500">' + fmtDayTime(t.created_at) + '</td>' +
+        '<td class="py-2 px-3 text-xs text-right"><button onclick="ibDeleteTrunk(\'' + esc(t.trunk_id || '') + '\')" class="text-gray-400 hover:text-red-600" title="Remove from dashboard"><i class="fas fa-trash text-[10px]"></i></button></td>' +
       '</tr>';
     });
   }
   var trunksTable =
     '<div class="bg-white rounded-xl border border-gray-200 shadow-sm mb-5">' +
-      '<div class="p-4 border-b border-gray-100">' +
-        '<h3 class="text-sm font-bold text-gray-900"><i class="fas fa-network-wired mr-1.5 text-purple-500"></i>SIP Trunk Connections</h3>' +
-        '<p class="text-[11px] text-gray-500 mt-0.5">LiveKit/Telnyx trunks and their assigned customer</p>' +
+      '<div class="p-4 border-b border-gray-100 flex items-center justify-between">' +
+        '<div>' +
+          '<h3 class="text-sm font-bold text-gray-900"><i class="fas fa-network-wired mr-1.5 text-purple-500"></i>SIP Trunk Connections</h3>' +
+          '<p class="text-[11px] text-gray-500 mt-0.5">LiveKit/Telnyx trunks and their assigned customer</p>' +
+        '</div>' +
+        '<button onclick="ibOpenRegisterTrunk()" class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-purple-500 text-white hover:bg-purple-600"><i class="fas fa-plus mr-1"></i>Register trunk</button>' +
       '</div>' +
       '<div class="overflow-x-auto">' +
         '<table class="w-full">' +
@@ -10957,6 +11080,7 @@ function renderInboxView() {
             '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Status</th>' +
             '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Assigned To</th>' +
             '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Created</th>' +
+            '<th class="py-2 px-3"></th>' +
           '</tr></thead>' +
           '<tbody>' + trunkRows + '</tbody>' +
         '</table>' +

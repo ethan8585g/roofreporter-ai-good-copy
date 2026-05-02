@@ -1616,18 +1616,26 @@ adminRoutes.get('/superadmin/inbox', async (c) => {
 
   try {
     // Summary KPIs
-    const summary = {
+    const summary: any = {
       active_trials: 0,
       paid_subscribers: 0,
+      pending_setup: 0,
       active_sip_trunks: 0,
       total_call_minutes_30d: 0,
+      total_calls_30d: 0,
+      total_calls_all_time: 0,
+      last_call_at: null,
+      call_window: '30d',
     }
 
+    // Active trials: status='trialing' OR explicit trial dates that haven't expired.
     try {
       const r = await c.env.DB.prepare(
         `SELECT COUNT(*) as c FROM secretary_subscriptions
-           WHERE status = 'trialing'
-             AND (trial_ends_at IS NULL OR trial_ends_at > datetime('now'))`
+           WHERE (status = 'trialing'
+                  OR (trial_started_at IS NOT NULL
+                      AND (trial_ends_at IS NULL OR trial_ends_at > datetime('now'))))
+             AND status NOT IN ('cancelled', 'expired')`
       ).first<any>()
       summary.active_trials = r?.c || 0
     } catch {}
@@ -1639,6 +1647,14 @@ adminRoutes.get('/superadmin/inbox', async (c) => {
       summary.paid_subscribers = r?.c || 0
     } catch {}
 
+    // Pending setup — paid for the plan but trunk/config not finished.
+    try {
+      const r = await c.env.DB.prepare(
+        `SELECT COUNT(*) as c FROM secretary_subscriptions WHERE status = 'pending'`
+      ).first<any>()
+      summary.pending_setup = r?.c || 0
+    } catch {}
+
     try {
       const r = await c.env.DB.prepare(
         `SELECT COUNT(*) as c FROM sip_trunks WHERE status = 'active'`
@@ -1646,13 +1662,36 @@ adminRoutes.get('/superadmin/inbox', async (c) => {
       summary.active_sip_trunks = r?.c || 0
     } catch {}
 
+    // Call minutes — try 30d first; if empty, fall back to all-time so the
+    // dashboard always shows real numbers (calls are infrequent).
     try {
-      const r = await c.env.DB.prepare(
-        `SELECT COALESCE(SUM(call_duration_seconds), 0) as s
+      const r30 = await c.env.DB.prepare(
+        `SELECT COALESCE(SUM(call_duration_seconds), 0) as s, COUNT(*) as n
            FROM secretary_call_logs
            WHERE created_at >= datetime('now', '-30 days')`
       ).first<any>()
-      summary.total_call_minutes_30d = Math.round((r?.s || 0) / 60)
+      const minutes30 = Math.round((r30?.s || 0) / 60)
+      const calls30 = r30?.n || 0
+
+      if (minutes30 === 0 && calls30 === 0) {
+        const rAll = await c.env.DB.prepare(
+          `SELECT COALESCE(SUM(call_duration_seconds), 0) as s, COUNT(*) as n, MAX(created_at) as last_at
+             FROM secretary_call_logs`
+        ).first<any>()
+        summary.total_call_minutes_30d = Math.round((rAll?.s || 0) / 60)
+        summary.total_calls_30d = rAll?.n || 0
+        summary.total_calls_all_time = rAll?.n || 0
+        summary.last_call_at = rAll?.last_at || null
+        summary.call_window = 'all-time'
+      } else {
+        summary.total_call_minutes_30d = minutes30
+        summary.total_calls_30d = calls30
+        const rAll = await c.env.DB.prepare(
+          `SELECT COUNT(*) as n, MAX(created_at) as last_at FROM secretary_call_logs`
+        ).first<any>()
+        summary.total_calls_all_time = rAll?.n || 0
+        summary.last_call_at = rAll?.last_at || null
+      }
     } catch {}
 
     // Trials list — every customer currently in or recently in a trial,
@@ -1680,7 +1719,8 @@ adminRoutes.get('/superadmin/inbox', async (c) => {
            FROM secretary_subscriptions s
            LEFT JOIN customers c ON c.id = s.customer_id
            WHERE s.trial_started_at IS NOT NULL
-           ORDER BY s.trial_started_at DESC
+              OR s.status IN ('trialing','pending','active')
+           ORDER BY COALESCE(s.trial_started_at, s.created_at) DESC
            LIMIT 200`
       ).all()
       trials = (res.results || []).map((r: any) => ({
@@ -1763,6 +1803,59 @@ adminRoutes.get('/superadmin/inbox', async (c) => {
     })
   } catch (err: any) {
     return c.json({ error: err.message }, 500)
+  }
+})
+
+// POST /superadmin/sip-trunks — Register an existing LiveKit/Telnyx trunk in D1
+// so it shows up on the Inbox view. Trunks live in LiveKit/Telnyx; this
+// table is a mirror used purely for display + assignment.
+adminRoutes.post('/superadmin/sip-trunks', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  try {
+    const body = await c.req.json<any>().catch(() => ({}))
+    const trunk_id = (body.trunk_id || '').toString().trim()
+    const trunk_type = (body.trunk_type || 'outbound').toString().trim()
+    const phone_number = (body.phone_number || '').toString().trim()
+    const status = (body.status || 'active').toString().trim()
+    const name = (body.name || '').toString().trim().slice(0, 200) || null
+    const dispatch_rule_id = (body.dispatch_rule_id || '').toString().trim() || null
+
+    if (!trunk_id) return c.json({ error: 'trunk_id required' }, 400)
+    if (!['inbound', 'outbound'].includes(trunk_type)) return c.json({ error: "trunk_type must be 'inbound' or 'outbound'" }, 400)
+    if (!['active', 'disabled', 'deleted'].includes(status)) return c.json({ error: "status must be active|disabled|deleted" }, 400)
+
+    const existing = await c.env.DB.prepare(`SELECT id FROM sip_trunks WHERE trunk_id = ?`).bind(trunk_id).first()
+    if (existing) {
+      await c.env.DB.prepare(
+        `UPDATE sip_trunks SET trunk_type=?, phone_number=?, status=?, name=COALESCE(?, name), dispatch_rule_id=COALESCE(?, dispatch_rule_id), updated_at=datetime('now') WHERE trunk_id = ?`
+      ).bind(trunk_type, phone_number, status, name, dispatch_rule_id, trunk_id).run()
+      return c.json({ success: true, updated: true })
+    }
+
+    await c.env.DB.prepare(
+      `INSERT INTO sip_trunks (trunk_id, trunk_type, name, phone_number, status, dispatch_rule_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+    ).bind(trunk_id, trunk_type, name, phone_number, status, dispatch_rule_id).run()
+
+    return c.json({ success: true, created: true })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// DELETE /superadmin/sip-trunks/:trunkId — Remove a registered trunk from D1.
+adminRoutes.delete('/superadmin/sip-trunks/:trunkId', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  try {
+    const trunkId = c.req.param('trunkId')
+    if (!trunkId) return c.json({ error: 'trunkId required' }, 400)
+    await c.env.DB.prepare(`DELETE FROM sip_trunks WHERE trunk_id = ?`).bind(trunkId).run()
+    return c.json({ success: true })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
   }
 })
 
