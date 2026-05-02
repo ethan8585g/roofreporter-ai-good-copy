@@ -66,6 +66,21 @@ function generateSessionToken(): string {
   return crypto.randomUUID() + '-' + crypto.randomUUID()
 }
 
+// Phase 2 #8: validate the Google profile picture URL before we persist it.
+// Google sends `picture` as a URL string in the ID token; reject anything that
+// isn't an https URL (drops javascript:/data:/relative junk that could XSS if
+// rendered unescaped in an <img src="…"> downstream).
+function sanitizeGoogleAvatar(input: unknown): string {
+  if (typeof input !== 'string' || !input) return ''
+  try {
+    const u = new URL(input)
+    if (u.protocol !== 'https:') return ''
+    return u.toString()
+  } catch {
+    return ''
+  }
+}
+
 // ============================================================
 // EMAIL VERIFICATION — 6-digit code sent to email before registration
 // ============================================================
@@ -355,8 +370,9 @@ customerAuthRoutes.post('/send-verification', async (c) => {
       message: `Verification code sent to ${cleanEmail}. Check your inbox (and spam folder).`
     })
   } catch (err: any) {
-    console.error('[Verification] Error:', err.message)
-    return c.json({ error: 'Failed to send verification code', details: err.message }, 500)
+    // Phase 2 #7: log full detail server-side, return a generic message.
+    console.error('[Verification] /send-verification 500:', err?.message || err)
+    return c.json({ error: 'Failed to send verification code.' }, 500)
   }
 })
 
@@ -415,7 +431,9 @@ customerAuthRoutes.post('/verify-code', async (c) => {
       message: 'Email verified! You can now complete your registration.'
     })
   } catch (err: any) {
-    return c.json({ error: 'Verification failed', details: err.message }, 500)
+    // Phase 2 #7
+    console.error('[Verification] /verify-code 500:', err?.message || err)
+    return c.json({ error: 'Verification failed.' }, 500)
   }
 })
 
@@ -448,7 +466,10 @@ customerAuthRoutes.post('/google', async (c) => {
     const email = googleUser.email?.toLowerCase().trim()
     const name = googleUser.name || email.split('@')[0]
     const googleId = googleUser.sub
-    const avatar = googleUser.picture || ''
+    // Phase 2 #8: only persist the picture URL when it parses cleanly and uses
+    // https. Defends against malformed or non-https values being rendered into
+    // an <img src> downstream and turning into XSS / mixed content.
+    const avatar = sanitizeGoogleAvatar(googleUser.picture)
 
     if (!email || !googleId) {
       return c.json({ error: 'Invalid Google profile data' }, 400)
@@ -557,7 +578,9 @@ customerAuthRoutes.post('/google', async (c) => {
       ...(isNew ? { welcome: true, message: 'Welcome! You have 4 free trial roof reports to get started.' } : {})
     })
   } catch (err: any) {
-    return c.json({ error: 'Google sign-in failed', details: err.message }, 500)
+    // Phase 2 #7
+    console.error('[customer-auth] /google 500:', err?.message || err)
+    return c.json({ error: 'Google sign-in failed.' }, 500)
   }
 })
 
@@ -629,8 +652,10 @@ customerAuthRoutes.post('/register', async (c) => {
     if (!verification_token) {
       return c.json({ error: 'Email verification is required. Please verify your email before completing registration.' }, 400)
     }
+    // Phase 2 #6: align with the 10-minute code expiry set in /send-verification.
+    // Was 30 minutes — let an expired code be reused for 20 extra minutes.
     const verified = await c.env.DB.prepare(
-      "SELECT * FROM email_verification_codes WHERE email = ? AND verification_token = ? AND verified_at IS NOT NULL AND created_at > datetime('now', '-30 minutes')"
+      "SELECT * FROM email_verification_codes WHERE email = ? AND verification_token = ? AND verified_at IS NOT NULL AND created_at > datetime('now', '-10 minutes')"
     ).bind(cleanEmail, verification_token).first<any>()
 
     if (!verified) {
@@ -738,7 +763,9 @@ customerAuthRoutes.post('/register', async (c) => {
       message: 'Welcome! You have 4 free trial roof reports to get started.'
     })
   } catch (err: any) {
-    return c.json({ error: 'Registration failed', details: err.message }, 500)
+    // Phase 2 #7
+    console.error('[customer-auth] /register 500:', err?.message || err)
+    return c.json({ error: 'Registration failed.' }, 500)
   }
 })
 
@@ -846,7 +873,9 @@ customerAuthRoutes.post('/login', async (c) => {
       token
     })
   } catch (err: any) {
-    return c.json({ error: 'Login failed', details: err.message }, 500)
+    // Phase 2 #7
+    console.error('[customer-auth] /login 500:', err?.message || err)
+    return c.json({ error: 'Login failed.' }, 500)
   }
 })
 
@@ -1614,7 +1643,9 @@ customerAuthRoutes.post('/forgot-password', async (c) => {
 
     return c.json({ success: true, message: 'If an account with that email exists, a password reset link has been sent.' })
   } catch (err: any) {
-    return c.json({ error: 'Failed to process request', details: err.message }, 500)
+    // Phase 2 #7
+    console.error('[customer-auth] /forgot-password 500:', err?.message || err)
+    return c.json({ error: 'Failed to process request.' }, 500)
   }
 })
 
@@ -1661,7 +1692,9 @@ customerAuthRoutes.post('/reset-password', async (c) => {
 
     return c.json({ success: true, message: 'Password updated successfully. You can now sign in with your new password.' })
   } catch (err: any) {
-    return c.json({ error: 'Failed to reset password', details: err.message }, 500)
+    // Phase 2 #7
+    console.error('[customer-auth] /reset-password 500:', err?.message || err)
+    return c.json({ error: 'Failed to reset password.' }, 500)
   }
 })
 

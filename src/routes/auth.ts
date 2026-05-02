@@ -30,7 +30,9 @@ function readCookieValue(cookieHeader: string | undefined | null, name: string):
   for (const part of cookieHeader.split(/;\s*/)) {
     const eq = part.indexOf('=')
     if (eq < 0) continue
-    if (part.slice(0, eq) === name) return decodeURIComponent(part.slice(eq + 1))
+    // Phase 2 #5: trim the cookie name. Some clients send `; rm_admin_session=…`
+    // with a leading space the `\s*` split misses on the first segment.
+    if (part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1))
   }
   return null
 }
@@ -234,7 +236,9 @@ authRoutes.post('/login', async (c) => {
       token: sessionToken
     })
   } catch (err: any) {
-    return c.json({ error: 'Login failed', details: err.message }, 500)
+    // Phase 2 #7: log full detail server-side, return a generic message.
+    console.error('[auth] /login 500:', err?.message || err)
+    return c.json({ error: 'Login failed. Please try again.' }, 500)
   }
 })
 
@@ -284,7 +288,9 @@ authRoutes.get('/users', async (c) => {
     ).all()
     return c.json({ users: users.results })
   } catch (err: any) {
-    return c.json({ error: 'Failed to list users', details: err.message }, 500)
+    // Phase 2 #7
+    console.error('[auth] /list-users 500:', err?.message || err)
+    return c.json({ error: 'Failed to list users.' }, 500)
   }
 })
 
@@ -326,7 +332,9 @@ authRoutes.post('/change-password', async (c) => {
 
     return c.json({ success: true, message: 'Password changed successfully' })
   } catch (err: any) {
-    return c.json({ error: 'Failed to change password', details: err.message }, 500)
+    // Phase 2 #7
+    console.error('[auth] /change-password 500:', err?.message || err)
+    return c.json({ error: 'Failed to change password.' }, 500)
   }
 })
 
@@ -415,7 +423,9 @@ authRoutes.post('/forgot-password', async (c) => {
     // P1-07: generic message (not "admin account") to avoid email-enumeration.
     return c.json({ success: true, message: "If an account exists, we've sent instructions." })
   } catch (err: any) {
-    return c.json({ error: 'Failed to process request', details: err.message }, 500)
+    // Phase 2 #7
+    console.error('[auth] /forgot-password 500:', err?.message || err)
+    return c.json({ error: 'Failed to process request.' }, 500)
   }
 })
 
@@ -462,7 +472,9 @@ authRoutes.post('/reset-password', async (c) => {
 
     return c.json({ success: true, message: 'Admin password updated. You can now sign in.' })
   } catch (err: any) {
-    return c.json({ error: 'Failed to reset password', details: err.message }, 500)
+    // Phase 2 #7
+    console.error('[auth] /reset-password 500:', err?.message || err)
+    return c.json({ error: 'Failed to reset password.' }, 500)
   }
 })
 
@@ -476,7 +488,9 @@ authRoutes.post('/logout', async (c) => {
   if (authHeader?.startsWith('Bearer ')) token = authHeader.slice(7)
   if (!token) {
     for (const part of cookieHeader.split(/;\s*/)) {
-      if (part.startsWith(`${ADMIN_SESSION_COOKIE}=`)) { token = decodeURIComponent(part.slice(ADMIN_SESSION_COOKIE.length + 1)); break }
+      // Phase 2 #5: trim before comparing so leading-space cookie segments still match.
+      const seg = part.trim()
+      if (seg.startsWith(`${ADMIN_SESSION_COOKIE}=`)) { token = decodeURIComponent(seg.slice(ADMIN_SESSION_COOKIE.length + 1)); break }
     }
   }
   if (token) {
@@ -742,7 +756,9 @@ authRoutes.get('/admin-stats', async (c) => {
       report_stats: reportStats
     })
   } catch (err: any) {
-    return c.json({ error: 'Failed to load admin stats', details: err.message }, 500)
+    // Phase 2 #7
+    console.error('[auth] /admin-stats 500:', err?.message || err)
+    return c.json({ error: 'Failed to load admin stats.' }, 500)
   }
 })
 

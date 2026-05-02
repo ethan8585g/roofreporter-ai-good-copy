@@ -16,7 +16,8 @@ function readCookieValue(cookieHeader: string | undefined | null, name: string):
   for (const part of cookieHeader.split(/;\s*/)) {
     const eq = part.indexOf('=')
     if (eq < 0) continue
-    if (part.slice(0, eq) === name) return decodeURIComponent(part.slice(eq + 1))
+    // Phase 2 #5: trim the cookie name to tolerate leading whitespace.
+    if (part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1))
   }
   return null
 }
