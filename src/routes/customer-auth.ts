@@ -2370,15 +2370,20 @@ async function resolveCustomerOwnerId(c: any): Promise<number | null> {
 }
 
 async function loadCustomerPrefs(db: any, ownerId: number): Promise<any> {
-  const row = await db.prepare('SELECT material_preferences FROM customers WHERE id = ?').bind(ownerId).first<any>()
+  // Migration 0203 split material_preferences out of the customers table
+  // into a side table so the wide customers row stays under D1's 100-column
+  // result-set cap (which broke every SELECT * login path).
+  const row = await db.prepare('SELECT material_preferences FROM customer_material_preferences WHERE customer_id = ?').bind(ownerId).first<any>()
   if (!row?.material_preferences) return {}
   try { return JSON.parse(row.material_preferences) || {} } catch { return {} }
 }
 
 async function saveCustomerPrefs(db: any, ownerId: number, prefs: any): Promise<void> {
   await db.prepare(
-    "UPDATE customers SET material_preferences = ?, updated_at = datetime('now') WHERE id = ?"
-  ).bind(JSON.stringify(prefs), ownerId).run()
+    `INSERT INTO customer_material_preferences (customer_id, material_preferences, updated_at)
+     VALUES (?, ?, datetime('now'))
+     ON CONFLICT(customer_id) DO UPDATE SET material_preferences = excluded.material_preferences, updated_at = datetime('now')`
+  ).bind(ownerId, JSON.stringify(prefs)).run()
 }
 
 // Bound numeric inputs at API boundary so a contractor can't ship absurd values.

@@ -959,6 +959,21 @@ function renderReviewStep(root, progressBar) {
 
           <div id="orderMsg" class="hidden p-4 rounded-xl text-sm"></div>
 
+          <!-- Promo / discount code (optional) -->
+          <div class="flex flex-col gap-1.5 mb-2">
+            <label for="promoCodeInput" class="text-[11px] text-gray-400 font-semibold uppercase tracking-wide flex items-center gap-1.5">
+              <i class="fas fa-ticket-alt text-emerald-400"></i>Promo / discount code
+              <span class="text-[10px] text-gray-500 font-normal normal-case">(optional)</span>
+            </label>
+            <div class="flex gap-2">
+              <input type="text" id="promoCodeInput" placeholder="Enter code"
+                style="flex:1; padding:10px 14px; border-radius:10px; background:#1a1f2e; border:1px solid rgba(255,255,255,0.1); color:#e5e7eb; font-size:13px; letter-spacing:0.5px; text-transform:uppercase;"
+                autocomplete="off" maxlength="50">
+              <button type="button" onclick="validatePromoCode()" style="padding:10px 16px; border-radius:10px; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.35); color:#10b981; font-size:12px; font-weight:700;">Apply</button>
+            </div>
+            <div id="promoCodeStatus" class="text-xs"></div>
+          </div>
+
           <!-- Action Buttons -->
           <div class="flex gap-3">
             <button onclick="backToTrace()" class="py-3 px-5 bg-gray-200 hover:bg-gray-300 text-gray-300 font-semibold rounded-xl transition-all text-sm">
@@ -981,8 +996,11 @@ function renderReviewStep(root, progressBar) {
                 <i class="fas fa-coins mr-2 text-gray-500"></i>No report credits available — contact your team admin to add credits
               </div>
             ` : `
-              <a href="/pricing" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-lg text-base text-center no-underline">
-                <i class="fas fa-tag mr-2"></i>Buy a Credit Pack to Generate Reports
+              <button onclick="payWithSquare()" id="squareBtn" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
+                <i class="fas fa-credit-card mr-2"></i>Pay $7 USD for This Report
+              </button>
+              <a href="/pricing" class="py-3 px-4 bg-white/5 hover:bg-white/10 text-emerald-300 font-semibold rounded-xl transition-all text-sm text-center no-underline border border-emerald-500/30">
+                <i class="fas fa-tag mr-1"></i>Or buy a pack
               </a>
             `}
           </div>
@@ -2708,10 +2726,13 @@ async function payWithSquare() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Redirecting to Square...'; }
 
   try {
+    const payload = buildOrderPayload();
+    const promo = (document.getElementById('promoCodeInput') || {}).value;
+    if (promo && promo.trim()) payload.promo_code = promo.trim();
     const res = await fetch('/api/square/checkout/report', {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify(buildOrderPayload())
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (data.checkout_url) {
@@ -2728,10 +2749,13 @@ async function payWithSquare() {
 
 async function buyPackage(pkgId) {
   try {
+    const payload = { package_id: pkgId };
+    const promo = (document.getElementById('promoCodeInput') || {}).value;
+    if (promo && promo.trim()) payload.promo_code = promo.trim();
     const res = await fetch('/api/square/checkout', {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ package_id: pkgId })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (data.checkout_url) window.location.href = data.checkout_url;
@@ -2740,6 +2764,38 @@ async function buyPackage(pkgId) {
     showMsg('error', 'Network error. Please check your connection and try again.');
   }
 }
+
+// Validate a promo code via the server before checkout. Used by the optional
+// "Apply" button next to the input. Returns the JSON response so the caller
+// can update UI with the discount preview.
+async function validatePromoCode() {
+  const inp = document.getElementById('promoCodeInput');
+  const status = document.getElementById('promoCodeStatus');
+  if (!inp || !status) return;
+  const code = (inp.value || '').trim();
+  if (!code) { status.innerHTML = ''; return; }
+  status.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking…';
+  status.style.color = '#64748b';
+  try {
+    const res = await fetch('/api/square/promo/validate', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ code, original_cents: 700 })
+    });
+    const data = await res.json();
+    if (data.valid) {
+      status.innerHTML = '<i class="fas fa-check-circle mr-1"></i>' + (data.message || 'Code applied');
+      status.style.color = '#15803d';
+    } else {
+      status.innerHTML = '<i class="fas fa-times-circle mr-1"></i>' + (data.error || 'Invalid code');
+      status.style.color = '#dc2626';
+    }
+  } catch (_) {
+    status.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Network error';
+    status.style.color = '#dc2626';
+  }
+}
+window.validatePromoCode = validatePromoCode;
 
 // ============================================================
 // CRM CUSTOMER ATTACHMENT (optional)

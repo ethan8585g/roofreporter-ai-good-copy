@@ -18,6 +18,86 @@ function isValidEmail(email: string): boolean {
 export const squareRoutes = new Hono<{ Bindings: Bindings }>()
 
 // ============================================================
+// PROMO CODE RESOLVER — looks up a promo code and computes the discount
+// against an original price (in cents). Validates: code exists, active, not
+// expired, under max_uses, and (if scoped) the customer's email matches.
+// Returns { valid:true, promoId, finalCents, discountCents } on success,
+// or { valid:false, error } on rejection. Does NOT increment uses_count —
+// caller increments after the order/payment is committed.
+// ============================================================
+async function resolvePromoCode(
+  db: D1Database,
+  code: string | undefined | null,
+  customerEmail: string,
+  originalCents: number
+): Promise<{ valid: true; promoId: number; finalCents: number; discountCents: number; code: string }
+        | { valid: false; error: string }> {
+  if (!code || typeof code !== 'string') return { valid: false, error: 'No code provided' }
+  const codeUpper = code.trim().toUpperCase()
+  if (!codeUpper || codeUpper.length > 50) return { valid: false, error: 'Invalid code format' }
+  const row = await db.prepare(
+    `SELECT id, code, discount_type, discount_value, max_uses, uses_count,
+            customer_email, expires_at, active
+     FROM promo_codes WHERE code = ? LIMIT 1`
+  ).bind(codeUpper).first<any>()
+  if (!row) return { valid: false, error: 'Code not found' }
+  if (!row.active) return { valid: false, error: 'Code is no longer active' }
+  if (row.expires_at && new Date(String(row.expires_at).replace(' ', 'T') + 'Z') < new Date()) {
+    return { valid: false, error: 'Code has expired' }
+  }
+  if (row.max_uses != null && (row.uses_count || 0) >= row.max_uses) {
+    return { valid: false, error: 'Code has reached its usage limit' }
+  }
+  if (row.customer_email && String(row.customer_email).toLowerCase() !== String(customerEmail || '').toLowerCase()) {
+    return { valid: false, error: 'Code is not valid for this account' }
+  }
+  let discountCents = 0
+  if (row.discount_type === 'percent') {
+    const pct = Math.max(0, Math.min(100, Number(row.discount_value) || 0))
+    discountCents = Math.round((originalCents * pct) / 100)
+  } else if (row.discount_type === 'fixed') {
+    discountCents = Math.round((Number(row.discount_value) || 0) * 100) // value stored in dollars for fixed
+  } else {
+    return { valid: false, error: 'Unsupported discount type' }
+  }
+  if (discountCents > originalCents) discountCents = originalCents
+  const finalCents = Math.max(0, originalCents - discountCents)
+  return { valid: true, promoId: row.id, finalCents, discountCents, code: codeUpper }
+}
+
+// POST /promo/validate — UI calls this after the user types a code so we
+// can show the discount preview before they click Pay. Uses a slim
+// customer lookup (email only) so we don't trip D1's 100-column limit
+// the way getCustomerFromToken does on the wide customers table.
+squareRoutes.post('/promo/validate', async (c) => {
+  try {
+    const token = getCustomerSessionToken(c)
+    if (!token) return c.json({ error: 'Not authenticated' }, 401)
+    const sess = await c.env.DB.prepare(
+      `SELECT c.email FROM customer_sessions cs
+       JOIN customers c ON c.id = cs.customer_id
+       WHERE cs.session_token = ? AND cs.expires_at > datetime('now') AND c.is_active = 1
+       LIMIT 1`
+    ).bind(token).first<{ email: string }>()
+    if (!sess) return c.json({ error: 'Not authenticated' }, 401)
+    const { code, original_cents } = await c.req.json<{ code: string; original_cents: number }>()
+    const orig = Number(original_cents) || 700
+    const r = await resolvePromoCode(c.env.DB, code, sess.email || '', orig)
+    if (!r.valid) return c.json({ valid: false, error: r.error }, 200)
+    return c.json({
+      valid: true,
+      code: r.code,
+      original_cents: orig,
+      discount_cents: r.discountCents,
+      final_cents: r.finalCents,
+      message: `${r.code} applied — $${(r.discountCents / 100).toFixed(2)} off`
+    })
+  } catch (err: any) {
+    return c.json({ valid: false, error: 'Validation failed' }, 500)
+  }
+})
+
+// ============================================================
 // GEOCODING HELPER — Convert address to lat/lng
 // Uses Google Maps Geocoding API
 // ============================================================
@@ -166,12 +246,22 @@ export async function verifySquareSignature(body: string, signature: string, sig
 // AUTH MIDDLEWARE — Extract customer from session token
 // Team members resolve to owner's billing & credits
 // ============================================================
+// CUSTOMER_COLS — explicit column list used by getCustomerFromToken. The
+// customers table now has 100+ columns (migration 0198 was the tipping
+// point), and D1 enforces a 100-column cap on result sets, so SELECT * /
+// SELECT c.* throws "too many columns in result set". We pull only the
+// subset that downstream callers in this file actually read.
+const CUSTOMER_COLS = 'c.id, c.email, c.name, c.phone, c.company_name, c.is_active, ' +
+  'c.free_trial_total, c.free_trial_used, c.report_credits, c.credits_used, ' +
+  'c.auto_invoice_enabled, c.square_customer_id, ' +
+  'c.subscription_status, c.subscription_plan, c.subscription_start, c.subscription_end'
+
 async function getCustomerFromToken(db: D1Database, token: string | undefined): Promise<any | null> {
   if (!token) return null
 
   // 1. Try customer session (normal path)
   const session = await db.prepare(`
-    SELECT cs.customer_id, c.* FROM customer_sessions cs
+    SELECT cs.customer_id, ${CUSTOMER_COLS} FROM customer_sessions cs
     JOIN customers c ON c.id = cs.customer_id
     WHERE cs.session_token = ? AND cs.expires_at > datetime('now') AND c.is_active = 1
   `).bind(token).first<any>()
@@ -179,7 +269,7 @@ async function getCustomerFromToken(db: D1Database, token: string | undefined): 
     const teamInfo = await resolveTeamOwner(db, session.customer_id)
     if (teamInfo.isTeamMember) {
       const owner = await db.prepare(`
-        SELECT c.*, ? as real_customer_id FROM customers c WHERE c.id = ? AND c.is_active = 1
+        SELECT ${CUSTOMER_COLS}, ? as real_customer_id FROM customers c WHERE c.id = ? AND c.is_active = 1
       `).bind(session.customer_id, teamInfo.ownerId).first<any>()
       if (owner) {
         owner.customer_id = teamInfo.ownerId
@@ -198,17 +288,22 @@ async function getCustomerFromToken(db: D1Database, token: string | undefined): 
 
   // Look up existing customer by admin email
   let customer = await db.prepare(
-    `SELECT * FROM customers WHERE email = ? AND is_active = 1 LIMIT 1`
+    `SELECT ${CUSTOMER_COLS} FROM customers c WHERE c.email = ? AND c.is_active = 1 LIMIT 1`
   ).bind(admin.email).first<any>()
 
   if (!customer) {
-    // Auto-create a linked customer account with ample free trials
-    const result = await db.prepare(`
+    // Auto-create a linked customer account with ample free trials. RETURNING *
+    // would also blow the column cap, so we capture the new id and re-select
+    // through the same slim CUSTOMER_COLS path.
+    const ins = await db.prepare(`
       INSERT INTO customers (name, email, is_active, free_trial_total, free_trial_used, report_credits, credits_used, auto_invoice_enabled)
       VALUES (?, ?, 1, 999, 0, 0, 0, 0)
-      RETURNING *
-    `).bind(admin.name || admin.email, admin.email).first<any>()
-    customer = result
+    `).bind(admin.name || admin.email, admin.email).run()
+    const newId = (ins as any)?.meta?.last_row_id
+    if (!newId) return null
+    customer = await db.prepare(
+      `SELECT ${CUSTOMER_COLS} FROM customers c WHERE c.id = ? LIMIT 1`
+    ).bind(newId).first<any>()
   }
 
   if (!customer) return null
@@ -288,7 +383,7 @@ squareRoutes.post('/checkout', async (c) => {
     const customer = await getCustomerFromToken(c.env.DB, token)
     if (!customer) return c.json({ error: 'Not authenticated' }, 401)
 
-    const { package_id, order_id, success_url, cancel_url } = await c.req.json()
+    const { package_id, order_id, success_url, cancel_url, promo_code } = await c.req.json()
 
     // Look up package
     const pkg = await c.env.DB.prepare(
@@ -296,6 +391,18 @@ squareRoutes.post('/checkout', async (c) => {
     ).bind(package_id || 1).first<any>()
 
     if (!pkg) return c.json({ error: 'Package not found' }, 404)
+
+    // Apply promo code if supplied — discount is reflected in the Square
+    // payment-link price_money. Reject the checkout if the code is bad so
+    // the user doesn't get charged full price thinking the discount applied.
+    let priceCents = pkg.price_cents
+    let promoApplied: { id: number; code: string; discountCents: number } | null = null
+    if (promo_code) {
+      const r = await resolvePromoCode(c.env.DB, promo_code, customer.email || '', priceCents)
+      if (!r.valid) return c.json({ error: 'Promo code: ' + r.error }, 400)
+      priceCents = r.finalCents
+      promoApplied = { id: r.promoId, code: r.code, discountCents: r.discountCents }
+    }
 
     // Determine URLs — P1-21: constrain to our own origins.
     const origin = new URL(c.req.url).origin
@@ -307,9 +414,11 @@ squareRoutes.post('/checkout', async (c) => {
     const paymentLink = await squareRequest(accessToken, 'POST', '/online-checkout/payment-links', {
       idempotency_key: idempotencyKey,
       quick_pay: {
-        name: `${pkg.name} — Roof Report Credits`,
+        name: promoApplied
+          ? `${pkg.name} — Roof Report Credits (${promoApplied.code} applied)`
+          : `${pkg.name} — Roof Report Credits`,
         price_money: {
-          amount: pkg.price_cents, // Square uses cents (same as our DB)
+          amount: priceCents, // Square uses cents (same as our DB)
           currency: 'USD',
         },
         location_id: locationId,
@@ -318,7 +427,8 @@ squareRoutes.post('/checkout', async (c) => {
         redirect_url: successUrl,
         ask_for_shipping_address: false,
       },
-      payment_note: `${pkg.credits} roof report credits for ${customer.email}`,
+      payment_note: `${pkg.credits} roof report credits for ${customer.email}` +
+        (promoApplied ? ` | Promo: ${promoApplied.code} (-$${(promoApplied.discountCents/100).toFixed(2)})` : ''),
     })
 
     const link = paymentLink.payment_link
@@ -329,11 +439,25 @@ squareRoutes.post('/checkout', async (c) => {
       INSERT INTO square_payments (customer_id, square_order_id, square_payment_link_id, amount, currency, status, payment_type, description, order_id, metadata_json)
       VALUES (?, ?, ?, ?, 'usd', 'pending', 'credit_pack', ?, ?, ?)
     `).bind(
-      customer.customer_id, squareOrderId, link?.id || '', pkg.price_cents,
-      `${pkg.name} (${pkg.credits} credits)`,
+      customer.customer_id, squareOrderId, link?.id || '', priceCents,
+      `${pkg.name} (${pkg.credits} credits)` + (promoApplied ? ` [${promoApplied.code}]` : ''),
       order_id || null,
-      JSON.stringify({ credits: pkg.credits, package_id: pkg.id, package_name: pkg.name })
+      JSON.stringify({ credits: pkg.credits, package_id: pkg.id, package_name: pkg.name, promo_code: promoApplied?.code, promo_discount_cents: promoApplied?.discountCents, original_cents: pkg.price_cents })
     ).run()
+
+    // Bump uses_count + log redemption immediately (the user committed to the
+    // discount by clicking through). Honors the max_uses cap by gating in
+    // resolvePromoCode above. A small race exists where two simultaneous
+    // checkouts could both pass validation — that's acceptable here since
+    // promo codes are rarely high-traffic and overcounting is preferable to
+    // blocking a paying customer.
+    if (promoApplied) {
+      await c.env.DB.prepare(`UPDATE promo_codes SET uses_count = uses_count + 1 WHERE id = ?`).bind(promoApplied.id).run()
+      await c.env.DB.prepare(
+        `INSERT INTO promo_code_redemptions (promo_code_id, customer_id, original_amount, discount_applied, final_amount)
+         VALUES (?, ?, ?, ?, ?)`
+      ).bind(promoApplied.id, customer.customer_id, pkg.price_cents / 100, promoApplied.discountCents / 100, priceCents / 100).run()
+    }
 
     return c.json({
       checkout_url: link?.url || link?.long_url,
@@ -360,13 +484,21 @@ squareRoutes.post('/checkout/report', async (c) => {
     if (!customer) return c.json({ error: 'Not authenticated' }, 401)
 
     const { property_address, property_city, property_province, property_postal_code,
-            service_tier, latitude, longitude, success_url, cancel_url } = await c.req.json()
+            service_tier, latitude, longitude, success_url, cancel_url, promo_code } = await c.req.json()
 
     if (!property_address) return c.json({ error: 'Property address is required' }, 400)
 
     const tier = service_tier || 'standard'
     // Single report = $7 USD flat (700 cents)
-    const priceCents = 700
+    const originalCents = 700
+    let priceCents = originalCents
+    let promoApplied: { id: number; code: string; discountCents: number } | null = null
+    if (promo_code) {
+      const r = await resolvePromoCode(c.env.DB, promo_code, customer.email || '', originalCents)
+      if (!r.valid) return c.json({ error: 'Promo code: ' + r.error }, 400)
+      priceCents = r.finalCents
+      promoApplied = { id: r.promoId, code: r.code, discountCents: r.discountCents }
+    }
     const tierLabels: Record<string, string> = { express: 'Express', standard: 'Standard' }
 
     const origin = new URL(c.req.url).origin
@@ -379,7 +511,9 @@ squareRoutes.post('/checkout/report', async (c) => {
     const paymentLink = await squareRequest(accessToken, 'POST', '/online-checkout/payment-links', {
       idempotency_key: idempotencyKey,
       quick_pay: {
-        name: `Roof Measurement Report — ${tierLabels[tier] || tier}`,
+        name: promoApplied
+          ? `Roof Measurement Report — ${tierLabels[tier] || tier} (${promoApplied.code} applied)`
+          : `Roof Measurement Report — ${tierLabels[tier] || tier}`,
         price_money: {
           amount: priceCents,
           currency: 'USD',
@@ -394,7 +528,8 @@ squareRoutes.post('/checkout/report', async (c) => {
         (latitude ? ` | Lat: ${latitude}` : '') +
         (longitude ? ` | Lng: ${longitude}` : '') +
         (property_city ? ` | City: ${property_city}` : '') +
-        (property_province ? ` | Prov: ${property_province}` : ''),
+        (property_province ? ` | Prov: ${property_province}` : '') +
+        (promoApplied ? ` | Promo: ${promoApplied.code} (-$${(promoApplied.discountCents/100).toFixed(2)})` : ''),
     })
 
     const link = paymentLink.payment_link
@@ -406,7 +541,7 @@ squareRoutes.post('/checkout/report', async (c) => {
       VALUES (?, ?, ?, ?, 'usd', 'pending', 'one_time_report', ?, ?)
     `).bind(
       customer.customer_id, squareOrderId, link?.id || '', priceCents,
-      `Roof report: ${property_address}`,
+      `Roof report: ${property_address}` + (promoApplied ? ` [${promoApplied.code}]` : ''),
       JSON.stringify({
         payment_type: 'one_time_report',
         service_tier: tier,
@@ -416,8 +551,19 @@ squareRoutes.post('/checkout/report', async (c) => {
         property_postal_code: property_postal_code || '',
         latitude: latitude || '',
         longitude: longitude || '',
+        promo_code: promoApplied?.code,
+        promo_discount_cents: promoApplied?.discountCents,
+        original_cents: originalCents,
       })
     ).run()
+
+    if (promoApplied) {
+      await c.env.DB.prepare(`UPDATE promo_codes SET uses_count = uses_count + 1 WHERE id = ?`).bind(promoApplied.id).run()
+      await c.env.DB.prepare(
+        `INSERT INTO promo_code_redemptions (promo_code_id, customer_id, original_amount, discount_applied, final_amount)
+         VALUES (?, ?, ?, ?, ?)`
+      ).bind(promoApplied.id, customer.customer_id, originalCents / 100, promoApplied.discountCents / 100, priceCents / 100).run()
+    }
 
     return c.json({
       checkout_url: link?.url || link?.long_url,

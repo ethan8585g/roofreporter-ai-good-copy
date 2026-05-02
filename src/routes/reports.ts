@@ -1113,7 +1113,7 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
         ).bind(callerToken).first<any>()
         if (sess?.customer_id) {
           const { ownerId } = await resolveTeamOwner(c.env.DB, sess.customer_id)
-          const custRow = await c.env.DB.prepare('SELECT material_preferences FROM customers WHERE id = ?').bind(ownerId).first<any>()
+          const custRow = await c.env.DB.prepare('SELECT material_preferences FROM customer_material_preferences WHERE customer_id = ?').bind(ownerId).first<any>()
           if (custRow?.material_preferences) {
             try { calcMatPrefs = { ...calcMatPrefs, ...JSON.parse(custRow.material_preferences) } } catch {}
           }
