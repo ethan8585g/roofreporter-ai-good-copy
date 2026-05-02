@@ -708,7 +708,11 @@ superAdminBi.get('/overview', async (c) => {
     const [salesRow, usersRow, activeTodayRow, topModulesRow, sessionAvgRow] = await db.batch([
       db.prepare(`SELECT COALESCE(SUM(price),0) as total_sales, COUNT(*) as paid_orders FROM orders WHERE payment_status='paid' AND (is_trial IS NULL OR is_trial=0)`),
       db.prepare(`SELECT COUNT(*) as user_count FROM customers`),
-      db.prepare(`SELECT COUNT(DISTINCT user_id || ':' || user_type) as active_today FROM user_module_visits WHERE started_at >= datetime('now','start of day')`),
+      db.prepare(`SELECT COUNT(*) as active_today FROM (
+                    SELECT user_id, user_type FROM user_module_visits WHERE started_at >= datetime('now','start of day')
+                    UNION
+                    SELECT user_id, user_type FROM active_visits WHERE last_seen_at >= datetime('now','start of day')
+                  )`),
       db.prepare(`SELECT module, COUNT(*) as visits, COALESCE(SUM(duration_seconds),0) as total_seconds FROM user_module_visits WHERE started_at >= datetime('now','-30 days') GROUP BY module ORDER BY visits DESC LIMIT 8`),
       db.prepare(`SELECT ROUND(AVG(duration_seconds),0) as session_avg FROM user_module_visits WHERE started_at >= datetime('now','-30 days') AND duration_seconds > 0`)
     ]) as any[]
@@ -786,7 +790,11 @@ superAdminBi.get('/command-center', async (c) => {
                     (SELECT COUNT(*) FROM orders WHERE payment_status='paid' AND (is_trial IS NULL OR is_trial=0)) AS paid_orders,
                     (SELECT COUNT(*) FROM manual_payments) AS manual_payment_count`),
       db.prepare(`SELECT COUNT(*) as user_count, COUNT(CASE WHEN created_at >= datetime('now','-${days} days') THEN 1 END) as new_users FROM customers`),
-      db.prepare(`SELECT COUNT(DISTINCT user_id || ':' || user_type) as active_today FROM user_module_visits WHERE started_at >= datetime('now','start of day')`),
+      db.prepare(`SELECT COUNT(*) as active_today FROM (
+                    SELECT user_id, user_type FROM user_module_visits WHERE started_at >= datetime('now','start of day')
+                    UNION
+                    SELECT user_id, user_type FROM active_visits WHERE last_seen_at >= datetime('now','start of day')
+                  )`),
       // Defensive cap on read in case any uncapped legacy rows slip through.
       db.prepare(`SELECT ROUND(AVG(MIN(duration_seconds, 1800)),0) as session_avg FROM user_module_visits WHERE started_at >= datetime('now','-${days} days') AND duration_seconds > 0`),
       // Top spenders — orders + manual payments
