@@ -37,7 +37,7 @@ import { estimateMaterials, generateAccuLynxCSV, generateXactimateXML, type Deta
 import { enhanceReportViaGemini } from '../services/gemini-enhance'
 import { segmentWithGemini, geminiOutlineToTracePayload } from '../services/sam3-segmentation'
 import { generateReportImagery, buildAIImageryHTML } from '../services/ai-image-generation'
-import { buildEmailWrapper, sendGmailEmail, sendViaResend, sendGmailOAuth2 } from '../services/email'
+import { buildEmailWrapper, buildReportLinkEmail, sendGmailEmail, sendViaResend, sendGmailOAuth2 } from '../services/email'
 import { signPdfUrl } from '../services/pdf-signing'
 import { debitCredit, refundCredit } from '../services/api-billing'
 import { deliverWebhook, buildWebhookPayload } from '../services/api-webhook'
@@ -685,7 +685,7 @@ reportsRoutes.post('/:orderId/enhance-async', async (c) => {
           const enhReport = await repo.getReportHtml(c.env.DB, orderId)
           if (enhReport?.professional_report_html) {
             const order = await repo.getOrderById(c.env.DB, orderId)
-            const emailHtml = buildEmailWrapper(enhReport.professional_report_html, order?.property_address || '', `RM-${orderId}`, custRow.email)
+            const emailHtml = buildReportLinkEmail(new URL(c.req.url).origin, orderId, order?.property_address || '', `RM-${orderId}`, custRow.email)
             const rt = (c.env as any).GMAIL_REFRESH_TOKEN, ci = (c.env as any).GMAIL_CLIENT_ID, cs = (c.env as any).GMAIL_CLIENT_SECRET
             if (rt && ci && cs) {
               await sendGmailOAuth2(ci, cs, rt, custRow.email, `Roof Report - ${order?.property_address || 'Property'}`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
@@ -1964,7 +1964,7 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
           const recipient = to_email || order.send_report_to_email || (autoEmailEnabled ? autoEmailRecipient : '') || order.homeowner_email || order.requester_email
           if (recipient) {
             try {
-              const emailHtml = buildEmailWrapper(enhHtml, order.property_address, `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`, recipient)
+              const emailHtml = buildReportLinkEmail(new URL(c.req.url).origin, orderId, order.property_address, `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`, recipient)
               const ci = (c.env as any).GMAIL_CLIENT_ID
               let cs = (c.env as any).GMAIL_CLIENT_SECRET
               if (!cs) try { cs = (await repo.getSettingValue(c.env.DB, 'gmail_client_secret')) || '' } catch {}
@@ -2023,7 +2023,7 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
     const recipient = to_email || order.send_report_to_email || (autoEmailEnabled ? autoEmailRecipient : '') || order.homeowner_email || order.requester_email
     if (recipient) {
       try {
-        const emailHtml = buildEmailWrapper(baseHtml, order.property_address, `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`, recipient)
+        const emailHtml = buildReportLinkEmail(new URL(c.req.url).origin, orderId, order.property_address, `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`, recipient)
         const rt = (c.env as any).GMAIL_REFRESH_TOKEN, ci = (c.env as any).GMAIL_CLIENT_ID, cs = (c.env as any).GMAIL_CLIENT_SECRET
         if (rt && ci && cs) {
           await sendGmailOAuth2(ci, cs, rt, recipient, `Roof Report - ${order.property_address}`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
@@ -2209,7 +2209,7 @@ reportsRoutes.post('/:orderId/email', async (c) => {
 
   const reportNum = `RM-${orderId}`
   const subject = body?.subject_override || `Roof Measurement Report - ${order.property_address} [${reportNum}]`
-  const emailHtml = buildEmailWrapper(reportHtml, order.property_address || 'Property', reportNum, recipient, customerHtml)
+  const emailHtml = buildReportLinkEmail(new URL(c.req.url).origin, orderId, order.property_address || 'Property', reportNum, recipient, !!customerHtml)
 
   // Create a pending delivery row up front so every send attempt is auditable,
   // even if the request crashes or times out between here and the provider call.
@@ -3497,7 +3497,7 @@ async function _generateReportForOrderInner(
         try {
           const recipient = autoRecipient
           const reportNum = `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`
-          const emailHtml = buildEmailWrapper(html, order.property_address || 'Property', reportNum, recipient, customerHtml)
+          const emailHtml = buildReportLinkEmail('https://www.roofmanager.ca', orderId, order.property_address || 'Property', reportNum, recipient, !!customerHtml)
           const ci = (env as any).GMAIL_CLIENT_ID
           let cs = (env as any).GMAIL_CLIENT_SECRET
           let rt = (env as any).GMAIL_REFRESH_TOKEN

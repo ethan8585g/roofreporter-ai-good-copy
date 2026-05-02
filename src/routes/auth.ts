@@ -104,7 +104,9 @@ async function ensureBootstrapAdmin(db: D1Database, env: any): Promise<void> {
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_admin_sessions_admin ON admin_sessions(admin_id)').run()
   }
 
-  // Check if any admin exists
+  // Phase 1 #4: race-safe bootstrap. Two concurrent Workers requests can both
+  // see count=0; the conditional INSERT below makes the create atomic at the
+  // SQL layer so only one superadmin ever gets seeded.
   const adminCount = await db.prepare('SELECT COUNT(*) as count FROM admin_users').first<any>()
   if (adminCount && adminCount.count > 0) return // Already have admins
 
@@ -120,12 +122,21 @@ async function ensureBootstrapAdmin(db: D1Database, env: any): Promise<void> {
 
   const storedHash = await hashPassword(bootstrapPassword)
 
-  await db.prepare(`
+  // INSERT … SELECT WHERE NOT EXISTS makes the "no admins yet" check and the
+  // insert one atomic statement. If another request races and seeds first,
+  // this insert produces 0 rows and we leave the existing superadmin in place.
+  const result = await db.prepare(`
     INSERT INTO admin_users (email, password_hash, name, role, company_name, is_active)
-    VALUES (?, ?, ?, 'superadmin', 'Roof Manager', 1)
+    SELECT ?, ?, ?, 'superadmin', 'Roof Manager', 1
+    WHERE NOT EXISTS (SELECT 1 FROM admin_users)
   `).bind(bootstrapEmail.toLowerCase().trim(), storedHash, bootstrapName).run()
 
-  console.log(`[Auth] Bootstrap admin created: ${bootstrapEmail}`)
+  const inserted = (result?.meta as any)?.changes ?? 0
+  if (inserted > 0) {
+    console.log(`[Auth] Bootstrap admin created: ${bootstrapEmail}`)
+  } else {
+    console.log('[Auth] Bootstrap admin not created — another request seeded first')
+  }
 }
 
 // ============================================================
@@ -347,9 +358,10 @@ authRoutes.post('/forgot-password', async (c) => {
           "UPDATE password_reset_tokens SET used = 1 WHERE email = ? AND account_type = 'admin' AND used = 0"
         ).bind(cleanEmail).run()
 
+        // Phase 1 #2: bind admin_id so reset consumes by ID, not email.
         await c.env.DB.prepare(
-          "INSERT INTO password_reset_tokens (email, token, account_type, expires_at) VALUES (?, ?, 'admin', ?)"
-        ).bind(cleanEmail, token, expiresAt).run()
+          "INSERT INTO password_reset_tokens (email, token, account_type, expires_at, admin_id) VALUES (?, ?, 'admin', ?, ?)"
+        ).bind(cleanEmail, token, expiresAt, admin.id).run()
 
         const baseUrl = (c.env as any).APP_BASE_URL || 'https://www.roofmanager.ca'
         const resetUrl = `${baseUrl}/reset-password?token=${token}`
@@ -424,21 +436,29 @@ authRoutes.post('/reset-password', async (c) => {
       return c.json({ error: 'This reset link is invalid or has expired. Please request a new one.' }, 400)
     }
 
+    // Phase 1 #2: prefer admin_id from the token row. Tokens issued before
+    // migration 0200 won't have it; fall back to email lookup for those.
+    let targetAdminId: number | null = record.admin_id ? Number(record.admin_id) : null
+    if (!targetAdminId) {
+      const admin = await c.env.DB.prepare('SELECT id FROM admin_users WHERE email = ?').bind(record.email).first<any>()
+      targetAdminId = admin?.id ? Number(admin.id) : null
+    }
+    if (!targetAdminId) {
+      return c.json({ error: 'This reset link is invalid or has expired. Please request a new one.' }, 400)
+    }
+
     const storedHash = await hashPassword(new_password)
 
     await c.env.DB.prepare(
-      "UPDATE admin_users SET password_hash = ?, updated_at = datetime('now') WHERE email = ?"
-    ).bind(storedHash, record.email).run()
+      "UPDATE admin_users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?"
+    ).bind(storedHash, targetAdminId).run()
 
     await c.env.DB.prepare(
       'UPDATE password_reset_tokens SET used = 1 WHERE token = ?'
     ).bind(token).run()
 
     // P1-03: invalidate all sessions for this admin on password reset
-    const admin = await c.env.DB.prepare('SELECT id FROM admin_users WHERE email = ?').bind(record.email).first<any>()
-    if (admin?.id) {
-      await c.env.DB.prepare('DELETE FROM admin_sessions WHERE admin_id = ?').bind(admin.id).run().catch(() => {})
-    }
+    await c.env.DB.prepare('DELETE FROM admin_sessions WHERE admin_id = ?').bind(targetAdminId).run().catch(() => {})
 
     return c.json({ success: true, message: 'Admin password updated. You can now sign in.' })
   } catch (err: any) {

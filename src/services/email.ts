@@ -3,6 +3,49 @@
 // Supports: Gmail Service Account, Gmail OAuth2, Resend API
 // ============================================================
 
+// Short link-style email for completed reports — two buttons that open
+// the full professional report and the customer-facing copy in a browser.
+// Replaces the older inline-HTML wrapper for customer report deliveries.
+export function buildReportLinkEmail(
+  baseUrl: string,
+  orderId: number | string,
+  address: string,
+  reportNum: string,
+  recipient: string,
+  hasCustomerCopy: boolean = true,
+): string {
+  const root = (baseUrl || 'https://www.roofmanager.ca').replace(/\/$/, '')
+  const fullUrl = `${root}/api/reports/${orderId}/html`
+  const customerUrl = `${root}/api/reports/${orderId}/customer-html`
+  const customerButton = hasCustomerCopy
+    ? `<a href="${customerUrl}" style="display:inline-block;background:#fff;color:#1E3A5F;font-weight:700;font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none;border:2px solid #1E3A5F;margin:6px">View Customer Report</a>`
+    : ''
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif">
+<div style="max-width:560px;margin:0 auto;padding:24px">
+  <div style="background:#1E3A5F;color:#fff;padding:24px 28px;border-radius:12px 12px 0 0;text-align:center">
+    <div style="font-size:22px;font-weight:800;letter-spacing:1px">ROOF MANAGER</div>
+    <div style="font-size:12px;color:#93C5FD;margin-top:4px">Roof Report Ready</div>
+  </div>
+  <div style="background:#fff;padding:28px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
+    <p style="font-size:15px;color:#1a1a2e;margin:0 0 12px">Your roof report for <strong>${address}</strong> is ready.</p>
+    <p style="font-size:13px;color:#6B7280;margin:0 0 22px">Report ${reportNum}</p>
+    <div style="text-align:center;margin:8px 0 4px">
+      <a href="${fullUrl}" style="display:inline-block;background:#1E3A5F;color:#fff;font-weight:700;font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none;margin:6px">View Full Report</a>
+      ${customerButton}
+    </div>
+    <p style="font-size:12px;color:#9CA3AF;margin:20px 0 0;text-align:center">Click either button to open the document in your browser. The full report has all measurements; the customer report is the homeowner-friendly copy with diagrams only.</p>
+  </div>
+  <div style="text-align:center;padding:16px;color:#9CA3AF;font-size:11px">
+    <p style="margin:0">Sent to ${recipient} &middot; Questions? sales@roofmanager.ca</p>
+  </div>
+</div>
+</body>
+</html>`
+}
+
 export function buildEmailWrapper(reportHtml: string, address: string, reportNum: string, recipient: string, customerReportHtml?: string | null): string {
   const customerBlock = customerReportHtml
     ? `

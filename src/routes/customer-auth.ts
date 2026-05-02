@@ -369,14 +369,33 @@ customerAuthRoutes.post('/verify-code', async (c) => {
     if (!email || !code) return c.json({ error: 'Email and verification code are required' }, 400)
 
     const cleanEmail = email.toLowerCase().trim()
+    const clientIp = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+
+    // Phase 1 #3: rate-limit /verify-code to defeat brute-force of the 6-digit code.
+    // Policy: max 5 failed attempts per email per 15-minute rolling window.
+    const RATE_LIMIT_WINDOW_MIN = 15
+    const RATE_LIMIT_MAX_FAILURES = 5
+    const failures = await c.env.DB.prepare(
+      "SELECT COUNT(*) as cnt FROM verify_code_attempts WHERE email = ? AND succeeded = 0 AND created_at > datetime('now', '-' || ? || ' minutes')"
+    ).bind(cleanEmail, RATE_LIMIT_WINDOW_MIN).first<any>().catch(() => ({ cnt: 0 }))
+    if (failures && failures.cnt >= RATE_LIMIT_MAX_FAILURES) {
+      return c.json({ error: 'Too many verification attempts. Please request a new code and wait 15 minutes before trying again.' }, 429)
+    }
 
     const record = await c.env.DB.prepare(
       "SELECT * FROM email_verification_codes WHERE email = ? AND code = ? AND used = 0 AND expires_at > datetime('now') ORDER BY created_at DESC LIMIT 1"
     ).bind(cleanEmail, code.trim()).first<any>()
 
     if (!record) {
+      await c.env.DB.prepare(
+        "INSERT INTO verify_code_attempts (email, ip, succeeded) VALUES (?, ?, 0)"
+      ).bind(cleanEmail, clientIp).run().catch((e) => console.warn('[verify-code] attempt log failed:', e?.message || e))
       return c.json({ error: 'Invalid or expired verification code. Please request a new one.' }, 400)
     }
+
+    await c.env.DB.prepare(
+      "INSERT INTO verify_code_attempts (email, ip, succeeded) VALUES (?, ?, 1)"
+    ).bind(cleanEmail, clientIp).run().catch((e) => console.warn('[verify-code] attempt log failed:', e?.message || e))
 
     // Mark code as used
     await c.env.DB.prepare(
@@ -605,15 +624,17 @@ customerAuthRoutes.post('/register', async (c) => {
       await c.env.DB.prepare("INSERT INTO register_attempts (ip, email) VALUES (?, ?)").bind(clientIp, cleanEmail).run()
     } catch (e: any) { console.warn('[register] log insert failed:', e?.message || e) }
 
-    // If a verification_token was supplied, validate it. If not, skip — email verification is optional.
-    if (verification_token) {
-      const verified = await c.env.DB.prepare(
-        "SELECT * FROM email_verification_codes WHERE email = ? AND verification_token = ? AND verified_at IS NOT NULL AND created_at > datetime('now', '-30 minutes')"
-      ).bind(cleanEmail, verification_token).first<any>()
+    // Phase 1 #1: email verification is REQUIRED. Reject when token is missing
+    // so the API cannot be hit directly to bypass the verification flow.
+    if (!verification_token) {
+      return c.json({ error: 'Email verification is required. Please verify your email before completing registration.' }, 400)
+    }
+    const verified = await c.env.DB.prepare(
+      "SELECT * FROM email_verification_codes WHERE email = ? AND verification_token = ? AND verified_at IS NOT NULL AND created_at > datetime('now', '-30 minutes')"
+    ).bind(cleanEmail, verification_token).first<any>()
 
-      if (!verified) {
-        return c.json({ error: 'Email verification expired or invalid. Please verify your email again.' }, 400)
-      }
+    if (!verified) {
+      return c.json({ error: 'Email verification expired or invalid. Please verify your email again.' }, 400)
     }
 
     const existing = await c.env.DB.prepare(
@@ -1576,9 +1597,10 @@ customerAuthRoutes.post('/forgot-password', async (c) => {
           "UPDATE password_reset_tokens SET used = 1 WHERE email = ? AND account_type = 'customer' AND used = 0"
         ).bind(cleanEmail).run()
 
+        // Phase 1 #2: bind customer_id so reset consumes by ID, not email.
         await c.env.DB.prepare(
-          "INSERT INTO password_reset_tokens (email, token, account_type, expires_at) VALUES (?, ?, 'customer', ?)"
-        ).bind(cleanEmail, token, expiresAt).run()
+          "INSERT INTO password_reset_tokens (email, token, account_type, expires_at, customer_id) VALUES (?, ?, 'customer', ?, ?)"
+        ).bind(cleanEmail, token, expiresAt, customer.id).run()
 
         const baseUrl = (c.env as any).APP_BASE_URL || 'https://www.roofmanager.ca'
         const resetUrl = `${baseUrl}/customer/reset-password?token=${token}`
@@ -1613,21 +1635,29 @@ customerAuthRoutes.post('/reset-password', async (c) => {
       return c.json({ error: 'This reset link is invalid or has expired. Please request a new one.' }, 400)
     }
 
+    // Phase 1 #2: prefer customer_id from the token row. Tokens issued before
+    // migration 0200 won't have it; fall back to email lookup for those.
+    let targetCustomerId: number | null = record.customer_id ? Number(record.customer_id) : null
+    if (!targetCustomerId) {
+      const cust = await c.env.DB.prepare('SELECT id FROM customers WHERE email = ?').bind(record.email).first<any>()
+      targetCustomerId = cust?.id ? Number(cust.id) : null
+    }
+    if (!targetCustomerId) {
+      return c.json({ error: 'This reset link is invalid or has expired. Please request a new one.' }, 400)
+    }
+
     const storedHash = await hashPassword(new_password)
 
     await c.env.DB.prepare(
-      "UPDATE customers SET password_hash = ?, updated_at = datetime('now') WHERE email = ?"
-    ).bind(storedHash, record.email).run()
+      "UPDATE customers SET password_hash = ?, updated_at = datetime('now') WHERE id = ?"
+    ).bind(storedHash, targetCustomerId).run()
 
     await c.env.DB.prepare(
       'UPDATE password_reset_tokens SET used = 1 WHERE token = ?'
     ).bind(token).run()
 
     // P1-04: invalidate all sessions for this customer on password reset
-    const cust = await c.env.DB.prepare('SELECT id FROM customers WHERE email = ?').bind(record.email).first<any>()
-    if (cust?.id) {
-      await c.env.DB.prepare('DELETE FROM customer_sessions WHERE customer_id = ?').bind(cust.id).run().catch(() => {})
-    }
+    await c.env.DB.prepare('DELETE FROM customer_sessions WHERE customer_id = ?').bind(targetCustomerId).run().catch(() => {})
 
     return c.json({ success: true, message: 'Password updated successfully. You can now sign in with your new password.' })
   } catch (err: any) {
