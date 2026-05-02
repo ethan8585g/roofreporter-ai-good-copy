@@ -1035,7 +1035,8 @@ function initTraceMap() {
   // disabled (see Taher Qader 2026-05-02 — tapped FAB before map init, got
   // silent fails, gave up after 13 minutes).
   orderState.traceMapReady = false;
-  google.maps.event.addListenerOnce(orderState.traceMap, 'idle', () => {
+  const enableFab = (reason) => {
+    if (orderState.traceMapReady) return;
     orderState.traceMapReady = true;
     const fab = document.getElementById('phonePlaceFab');
     if (fab) {
@@ -1044,7 +1045,13 @@ function initTraceMap() {
       const lbl = document.getElementById('phonePlaceFabLabel');
       if (lbl) lbl.textContent = 'Place Point';
     }
-  });
+    try { console.log('[trace-map] ready via', reason); } catch(_) {}
+  };
+  google.maps.event.addListenerOnce(orderState.traceMap, 'idle', () => enableFab('idle'));
+  google.maps.event.addListenerOnce(orderState.traceMap, 'tilesloaded', () => enableFab('tilesloaded'));
+  // Hard fallback: if neither event fires within 10s (very slow mobile network
+  // or rare gmaps init bug), enable the FAB anyway so the user is never stuck.
+  setTimeout(() => enableFab('timeout_fallback'), 10000);
 
   // Nearmap overlay — when the server confirmed coverage and injected a tile
   // template, render Nearmap's 7.5cm-GSD imagery as a higher-resolution overlay

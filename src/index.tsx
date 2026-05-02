@@ -1779,6 +1779,9 @@ app.get('/services', (c) => {
 })
 
 // Feature Hub Pages — dedicated SEO landing pages per product (hub-and-spoke architecture)
+// Plain /features had no handler and 404'd — redirect to the measurements hub
+// (the main product surface) so old links / footer / nav references resolve.
+app.get('/features', (c) => c.redirect('/features/measurements', 302))
 app.get('/features/measurements', (c) => { return c.html(getFeatureHubPageHTML('measurements')) })
 app.get('/features/crm', (c) => { return c.html(getFeatureHubPageHTML('crm')) })
 app.get('/features/ai-secretary', (c) => { return c.html(getFeatureHubPageHTML('ai-secretary')) })

@@ -11168,32 +11168,38 @@ function renderInboxDetail(conv) {
   var existing = document.getElementById('inbox-detail-pane');
   if (existing) existing.remove();
 
+  // HTML-escape any conv field that lands in innerHTML — contact_name / email
+  // / phone / company / preferred_time / preview can all be attacker-controlled
+  // strings (e.g. "<script>alert(1)</script>" stored via /api/agents/leads).
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function escJs(s) { return String(s == null ? '' : s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"').replace(/[\r\n]/g,''); }
+
   var channelLabel = { web_chat: 'Web Chat', voice: 'Phone Call', sms: 'Message', voicemail: 'Callback', form: 'Lead Form', cold_call: 'Cold Call', job_message: 'Job Message' };
   var name = conv.contact_name || conv.contact_email || conv.contact_phone || 'Unknown';
   var canReply = conv.channel === 'web_chat' || conv.channel === 'job_message';
 
   var html = '<div class="p-4 border-b border-gray-100 flex items-center justify-between">' +
-    '<h3 class="font-bold text-sm text-gray-900 truncate">' + name + '</h3>' +
+    '<h3 class="font-bold text-sm text-gray-900 truncate">' + esc(name) + '</h3>' +
     '<button onclick="inboxCloseDetail()" class="text-gray-400 hover:text-gray-600 flex-shrink-0"><i class="fas fa-times"></i></button>' +
   '</div>' +
   '<div class="p-4 space-y-3">' +
-    '<div class="text-xs text-gray-500"><i class="fas fa-tag mr-1"></i>' + (channelLabel[conv.channel] || conv.channel) + '</div>' +
-    (conv.contact_email ? '<div class="text-xs text-gray-500"><i class="fas fa-envelope mr-1"></i>' + conv.contact_email + '</div>' : '') +
-    (conv.contact_phone ? '<div class="text-xs text-gray-500"><i class="fas fa-phone mr-1"></i>' + conv.contact_phone + '</div>' : '') +
-    (conv.customer_company ? '<div class="text-xs text-gray-500"><i class="fas fa-building mr-1"></i>' + conv.customer_company + '</div>' : '') +
+    '<div class="text-xs text-gray-500"><i class="fas fa-tag mr-1"></i>' + esc(channelLabel[conv.channel] || conv.channel) + '</div>' +
+    (conv.contact_email ? '<div class="text-xs text-gray-500"><i class="fas fa-envelope mr-1"></i>' + esc(conv.contact_email) + '</div>' : '') +
+    (conv.contact_phone ? '<div class="text-xs text-gray-500"><i class="fas fa-phone mr-1"></i>' + esc(conv.contact_phone) + '</div>' : '') +
+    (conv.customer_company ? '<div class="text-xs text-gray-500"><i class="fas fa-building mr-1"></i>' + esc(conv.customer_company) + '</div>' : '') +
     (conv.call_duration_seconds ? '<div class="text-xs text-gray-500"><i class="fas fa-clock mr-1"></i>' + fmtSeconds(conv.call_duration_seconds) + '</div>' : '') +
-    (conv.preferred_time ? '<div class="text-xs text-gray-500"><i class="fas fa-calendar mr-1"></i>Preferred: ' + conv.preferred_time + '</div>' : '') +
-    '<div class="text-xs text-gray-400"><i class="fas fa-clock mr-1"></i>' + hubTimeAgo(conv.last_activity_at || conv.created_at) + '</div>' +
+    (conv.preferred_time ? '<div class="text-xs text-gray-500"><i class="fas fa-calendar mr-1"></i>Preferred: ' + esc(conv.preferred_time) + '</div>' : '') +
+    '<div class="text-xs text-gray-400"><i class="fas fa-clock mr-1"></i>' + esc(hubTimeAgo(conv.last_activity_at || conv.created_at)) + '</div>' +
     (conv.channel === 'web_chat'
       ? '<div id="inbox-messages" class="mt-4 space-y-2 max-h-[55vh] overflow-y-auto"><div class="text-xs text-gray-400 text-center py-4"><i class="fas fa-spinner fa-spin mr-1"></i>Loading messages...</div></div>'
-      : '<div class="mt-4 p-3 bg-gray-50 rounded-lg"><p class="text-sm text-gray-700 whitespace-pre-wrap">' + (conv.preview || 'No preview available') + '</p></div>'
+      : '<div class="mt-4 p-3 bg-gray-50 rounded-lg"><p class="text-sm text-gray-700 whitespace-pre-wrap">' + esc(conv.preview || 'No preview available') + '</p></div>'
     ) +
   '</div>';
 
   if (canReply) {
     html += '<div class="p-4 border-t border-gray-100">' +
       '<textarea id="inbox-reply-text" rows="3" placeholder="Type a reply..." class="w-full text-sm border border-gray-200 rounded-lg p-2 focus:ring-2 focus:ring-slate-500 focus:border-slate-500 resize-none"></textarea>' +
-      '<button onclick="inboxSendReply(\'' + conv.source_id + '\',\'' + conv.channel + '\')" class="mt-2 w-full px-3 py-2 bg-slate-800 text-white rounded-lg text-xs font-semibold hover:bg-slate-700"><i class="fas fa-paper-plane mr-1"></i>Send Reply</button>' +
+      '<button onclick="inboxSendReply(\'' + escJs(conv.source_id) + '\',\'' + escJs(conv.channel) + '\')" class="mt-2 w-full px-3 py-2 bg-slate-800 text-white rounded-lg text-xs font-semibold hover:bg-slate-700"><i class="fas fa-paper-plane mr-1"></i>Send Reply</button>' +
     '</div>';
   } else {
     html += '<div class="p-4 border-t border-gray-100 text-center text-xs text-gray-400"><i class="fas fa-info-circle mr-1"></i>Direct reply not available for this channel</div>';
@@ -11282,6 +11288,13 @@ async function openLeadDetailPane(type, id) {
   var existing = document.getElementById('lead-detail-pane');
   if (existing) existing.remove();
 
+  // HTML-escape any string going into innerHTML — leads can store arbitrary
+  // text (incl. payloads like "<script>alert(1)</script>") and this admin
+  // pane was previously concatenating raw values straight into innerHTML,
+  // making it stored-XSS-vulnerable.
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function escAttr(s) { return esc(s).replace(/[\r\n]/g,''); }
+
   var overlay = document.createElement('div');
   overlay.id = 'lead-detail-pane';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5)';
@@ -11319,8 +11332,8 @@ async function openLeadDetailPane(type, id) {
       var isMessage = r.label === 'Message';
       return '<div style="display:flex;align-items:' + (isMessage ? 'flex-start' : 'center') + ';gap:12px;padding:12px 0;border-bottom:1px solid #f3f4f6">' +
         '<i class="fas ' + r.icon + '" style="color:#14b8a6;width:16px;text-align:center;font-size:13px;margin-top:' + (isMessage ? '3px' : '0') + '"></i>' +
-        '<span style="color:#6b7280;font-size:13px;min-width:100px;flex-shrink:0">' + r.label + '</span>' +
-        '<span style="color:#111;font-size:14px;font-weight:' + (isMessage ? '400' : '600') + ';word-break:break-word;' + (isMessage ? 'line-height:1.5;white-space:pre-wrap' : '') + '">' + r.value + '</span>' +
+        '<span style="color:#6b7280;font-size:13px;min-width:100px;flex-shrink:0">' + esc(r.label) + '</span>' +
+        '<span style="color:#111;font-size:14px;font-weight:' + (isMessage ? '400' : '600') + ';word-break:break-word;' + (isMessage ? 'line-height:1.5;white-space:pre-wrap' : '') + '">' + esc(r.value) + '</span>' +
       '</div>';
     }).join('');
 
@@ -11330,20 +11343,21 @@ async function openLeadDetailPane(type, id) {
     var typeLabels = { asset_report: 'Asset Report Lead', site_form: 'Website Form', contact_form: 'Contact Inquiry', demo_request: 'Demo Request' };
     var typeLabel = typeLabels[lead.lead_type] || 'Lead';
     var sourceBadge = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">' +
-      '<span style="display:inline-block;background:#f0fdf4;color:#15803d;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600"><i class="fas fa-tag" style="margin-right:4px"></i>' + typeLabel + '</span>' +
-      (sourceDisplay ? '<span style="display:inline-block;background:#e0f2fe;color:#0369a1;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600"><i class="fas fa-globe" style="margin-right:4px"></i>' + sourceDisplay + '</span>' : '') +
+      '<span style="display:inline-block;background:#f0fdf4;color:#15803d;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600"><i class="fas fa-tag" style="margin-right:4px"></i>' + esc(typeLabel) + '</span>' +
+      (sourceDisplay ? '<span style="display:inline-block;background:#e0f2fe;color:#0369a1;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600"><i class="fas fa-globe" style="margin-right:4px"></i>' + esc(sourceDisplay) + '</span>' : '') +
     '</div>';
 
+    var headerName = lead.name || lead.email || ('Lead #' + id);
     card.innerHTML =
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-        '<h2 style="margin:0;font-size:20px;font-weight:700;color:#111"><i class="fas fa-wpforms" style="color:#14b8a6;margin-right:8px"></i>' + (lead.name || lead.email || 'Lead #' + id) + '</h2>' +
+        '<h2 style="margin:0;font-size:20px;font-weight:700;color:#111"><i class="fas fa-wpforms" style="color:#14b8a6;margin-right:8px"></i>' + esc(headerName) + '</h2>' +
         '<button onclick="document.getElementById(\'lead-detail-pane\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;padding:4px">&times;</button>' +
       '</div>' +
       sourceBadge +
       '<div style="margin-top:16px">' + rowsHtml + '</div>' +
       (lead.email ? '<div style="margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">' +
-        '<a href="mailto:' + lead.email + '" style="display:inline-flex;align-items:center;gap:6px;background:#00FF88;color:#0A0A0A;padding:10px 24px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px"><i class="fas fa-envelope"></i>Email Lead</a>' +
-        (lead.phone ? '<a href="tel:' + lead.phone + '" style="display:inline-flex;align-items:center;gap:6px;background:#f3f4f6;color:#374151;padding:10px 20px;border-radius:10px;text-decoration:none;font-weight:600;font-size:13px"><i class="fas fa-phone"></i>Call</a>' : '') +
+        '<a href="mailto:' + escAttr(lead.email) + '" style="display:inline-flex;align-items:center;gap:6px;background:#00FF88;color:#0A0A0A;padding:10px 24px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px"><i class="fas fa-envelope"></i>Email Lead</a>' +
+        (lead.phone ? '<a href="tel:' + escAttr(lead.phone) + '" style="display:inline-flex;align-items:center;gap:6px;background:#f3f4f6;color:#374151;padding:10px 20px;border-radius:10px;text-decoration:none;font-weight:600;font-size:13px"><i class="fas fa-phone"></i>Call</a>' : '') +
       '</div>' : '');
   } catch (e) {
     var card = overlay.querySelector('div');
