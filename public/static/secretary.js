@@ -241,7 +241,7 @@
         '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-4 sm:p-6 mb-6">' +
           '<h3 class="font-bold text-gray-100 text-lg mb-4"><i class="fas fa-check-circle text-green-500 mr-2"></i>What You Get</h3>' +
           '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
-            feature('fa-phone-alt', 'Keep Your Number', 'Or pick a new one from our inventory ($1/mo add-on)') +
+            feature('fa-phone-alt', 'Keep Your Number', 'Or pick a new AI number from our inventory — included with your subscription') +
             feature('fa-user-clock', 'Answers When You Can\'t', 'Your phone rings first. AI picks up only when you miss the call') +
             feature('fa-sms', 'SMS Call Summary', 'Full transcript and summary texted after every AI-handled call') +
             feature('fa-route', 'Smart Routing', 'Route callers to Parts, Sales, Service, or any custom department') +
@@ -253,7 +253,7 @@
         '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-4 sm:p-6 mb-6">' +
           '<h3 class="font-bold text-gray-100 text-lg mb-4"><i class="fas fa-plug text-sky-500 mr-2"></i>How It Works</h3>' +
           '<div class="space-y-4">' +
-            howStep(1, 'Pick a Phone Number', 'Search our inventory and grab a local AI number for $1/mo, or skip and forward your existing line.') +
+            howStep(1, 'Pick a Phone Number', 'Search our inventory and grab a local AI number — included with your subscription. Or skip and use your existing line.') +
             howStep(2, 'Add Your Card', 'We need a card on file to start the free trial. You won\'t be charged the $199 plan fee until day 31.') +
             howStep(3, 'Configure Your Agent', 'Set your greeting, agent voice, FAQ answers, and routing directly in your dashboard.') +
             howStep(4, 'Go Live', 'Forward unanswered calls to your Secretary. AI handles them with your voice and brand.') +
@@ -329,7 +329,7 @@
       if (btn) {
         btn.disabled = false;
         btn.innerHTML = state.selectedSignupNumber
-          ? '<i class="fas fa-gift mr-2"></i>Start Free Trial + Add Number ($1)'
+          ? '<i class="fas fa-gift mr-2"></i>Start Free Trial with Number'
           : '<i class="fas fa-gift mr-2"></i>Start 1-Month Free Trial';
       }
     } catch (e) {
@@ -393,15 +393,15 @@
       if (err) { err.textContent = e.message || String(e); err.classList.remove('hidden'); }
       btn.disabled = false;
       btn.innerHTML = state.selectedSignupNumber
-        ? '<i class="fas fa-gift mr-2"></i>Start Free Trial + Add Number ($1)'
+        ? '<i class="fas fa-gift mr-2"></i>Start Free Trial with Number'
         : '<i class="fas fa-gift mr-2"></i>Start 1-Month Free Trial';
     }
   };
 
   function feature(icon, title, desc) {
-    return '<div class="flex items-start gap-3 p-3 bg-[#0A0A0A] rounded-xl">' +
+    return '<div class="flex items-start gap-3 p-3 rounded-xl" style="background:#DBEAFE">' +
       '<div style="background:rgba(14,165,233,0.15)" class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"><i class="fas ' + icon + ' text-sky-400 text-sm"></i></div>' +
-      '<div><p class="font-semibold text-gray-100 text-sm">' + title + '</p><p class="text-gray-300 text-xs">' + desc + '</p></div></div>';
+      '<div><p class="font-semibold text-sm" style="color:#000">' + title + '</p><p class="text-xs" style="color:#000">' + desc + '</p></div></div>';
   }
 
   function howStep(num, title, desc) {
@@ -425,9 +425,9 @@
     return '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-4 sm:p-6 mb-6">' +
       '<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">' +
         '<div><h3 class="font-bold text-gray-100 text-xl"><i class="fas fa-phone-alt text-sky-400 mr-2"></i>Pick Your Phone Number</h3>' +
-          '<p class="text-gray-300 text-sm mt-1">$1/mo &bull; we wire it to your AI agent automatically</p></div>' +
-        '<div class="text-right"><div class="text-2xl sm:text-3xl font-extrabold text-sky-400">$1<span class="text-sm font-normal text-gray-300"> today</span></div>' +
-          '<div class="text-xs text-gray-300">monthly thereafter</div></div>' +
+          '<p class="text-gray-300 text-sm mt-1">Included with your subscription &bull; we wire it to your AI agent automatically</p></div>' +
+        '<div class="text-right"><div class="text-2xl sm:text-3xl font-extrabold text-emerald-400">FREE<span class="text-sm font-normal text-gray-300"> with plan</span></div>' +
+          '<div class="text-xs text-gray-300">no extra charge</div></div>' +
       '</div>' +
       '<div class="flex flex-col sm:flex-row gap-2 mb-3">' +
         '<select id="npInlineCountry" class="px-3 py-2 bg-[#0A0A0A] border border-white/15 rounded-lg text-sm text-gray-100">' +
@@ -440,7 +440,7 @@
       '<div id="npInlineSummary" class="flex items-center justify-between gap-2 p-3 rounded-xl border border-white/10" style="background:#0A0A0A">' +
         '<div class="text-sm" id="npInlineSummaryText" style="color:' + (hasSelection ? '#a7f3d0' : '#d1d5db') + '">' +
           (hasSelection
-            ? '<i class="fas fa-check-circle mr-1"></i>Selected: <strong>' + pretty + '</strong> &bull; $1 today'
+            ? '<i class="fas fa-check-circle mr-1"></i>Selected: <strong>' + pretty + '</strong> &bull; included'
             : '<i class="fas fa-info-circle mr-1"></i>No number selected — you can add one later from the Connect tab') + '</div>' +
         (hasSelection
           ? '<button onclick="secInlineClearNumber()" class="text-xs text-gray-300 hover:text-white underline whitespace-nowrap">Skip / clear</button>'
@@ -464,7 +464,7 @@
       var pn = String(n.phone_number).replace(/'/g, '');
       return '<div class="flex items-center justify-between rounded-xl px-4 py-3 border ' + (isSelected ? 'border-emerald-400' : 'border-white/10') + '" style="background:' + (isSelected ? 'rgba(16,185,129,0.08)' : '#0A0A0A') + '">' +
         '<div><div class="font-mono text-gray-100">' + pretty + '</div>' +
-        '<div class="text-xs text-gray-300">' + (locality || 'Available') + ' &bull; $1/mo</div></div>' +
+        '<div class="text-xs text-gray-300">' + (locality || 'Available') + ' &bull; included</div></div>' +
         (isSelected
           ? '<span class="text-sm text-emerald-400 font-semibold"><i class="fas fa-check-circle mr-1"></i>Selected</span>'
           : '<button onclick="secInlineSelectNumber(\'' + pn + '\')" style="background:#10b981;color:#fff" class="text-sm hover:opacity-90 rounded-lg px-3 py-1.5 font-semibold">Select</button>') +
@@ -482,7 +482,7 @@
       summaryWrap.innerHTML =
         '<div class="text-sm" id="npInlineSummaryText" style="color:' + (hasSelection ? '#a7f3d0' : '#d1d5db') + '">' +
           (hasSelection
-            ? '<i class="fas fa-check-circle mr-1"></i>Selected: <strong>' + pretty + '</strong> &bull; $1 today'
+            ? '<i class="fas fa-check-circle mr-1"></i>Selected: <strong>' + pretty + '</strong> &bull; included'
             : '<i class="fas fa-info-circle mr-1"></i>No number selected — you can add one later from the Connect tab') + '</div>' +
         (hasSelection
           ? '<button onclick="secInlineClearNumber()" class="text-xs text-gray-300 hover:text-white underline whitespace-nowrap">Skip / clear</button>'
@@ -491,11 +491,11 @@
     var btn = document.getElementById('trialBtn');
     if (btn && !btn.disabled) {
       btn.innerHTML = state.selectedSignupNumber
-        ? '<i class="fas fa-gift mr-2"></i>Start Free Trial + Add Number ($1)'
+        ? '<i class="fas fa-gift mr-2"></i>Start Free Trial with Number'
         : '<i class="fas fa-gift mr-2"></i>Start 1-Month Free Trial';
     }
     var costBlurb = document.getElementById('trialCostBlurb');
-    if (costBlurb) costBlurb.textContent = state.selectedSignupNumber ? '+ $1 today (number) · then $199/mo' : 'then $199/mo';
+    if (costBlurb) costBlurb.textContent = state.selectedSignupNumber ? 'Number included · then $199/mo' : 'then $199/mo';
   }
 
   window.secInlineSearchNumbers = async function() {
@@ -1018,21 +1018,21 @@
             '<div class="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
               '<i class="fas fa-mobile-alt text-sky-500 text-2xl"></i></div>' +
             '<h4 class="text-xl font-extrabold text-gray-100 mb-2">Set Up Your Phone Numbers</h4>' +
-            '<p class="text-gray-500 text-sm">Get a new number from our inventory for $1/mo, or bring your own from Twilio / Vonage / Telnyx.</p>' +
+            '<p class="text-gray-500 text-sm">Get a new AI number from our LiveKit-managed inventory — included with your Secretary subscription.</p>' +
           '</div>' +
 
-          // Self-serve number picker (Telnyx)
+          // Self-serve number picker (LiveKit Cloud)
           '<div class="mb-5 bg-gradient-to-br from-[#0b2237] to-[#0a1525] border border-sky-500/30 rounded-2xl p-4">' +
             '<div class="flex items-center justify-between mb-2">' +
-              '<div><div class="text-sm font-bold text-sky-200"><i class="fas fa-bolt mr-1"></i>Get a new number — $1/mo</div>' +
-              '<div class="text-xs text-gray-400">We handle the provider, routing, and LiveKit wiring. Just pick one.</div></div>' +
+              '<div><div class="text-sm font-bold text-sky-200"><i class="fas fa-bolt mr-1"></i>Get a new number — included</div>' +
+              '<div class="text-xs text-gray-400">We handle provisioning, routing, and the LiveKit trunk. Just pick one.</div></div>' +
               '<button onclick="secOpenNumberPicker()" class="text-xs bg-sky-500 hover:bg-sky-600 text-white rounded-lg px-3 py-2 font-semibold"><i class="fas fa-search mr-1"></i>Browse Numbers</button>' +
             '</div>' +
             '<details class="mt-2"><summary class="text-xs text-gray-400 cursor-pointer hover:text-gray-200">How does this work?</summary>' +
               '<div class="text-xs text-gray-400 mt-2 space-y-1">' +
                 '<p>1. Pick a number in any area code.</p>' +
-                '<p>2. We buy it from our provider and attach it to your AI agent automatically — no SIP config needed on your end.</p>' +
-                '<p>3. The $1/mo number fee is added to your Secretary subscription. First month is covered by your free trial.</p>' +
+                '<p>2. We allocate it from LiveKit Cloud and bind it to your AI agent automatically — no SIP config on your end.</p>' +
+                '<p>3. The number is included in your Secretary subscription — no per-number fee.</p>' +
               '</div></details>' +
           '</div>' +
 
@@ -2637,7 +2637,7 @@
       '<div class="bg-[#0A0A0A] border border-white/10 rounded-2xl max-w-xl w-full p-6 max-h-[85vh] overflow-y-auto">' +
         '<div class="flex items-center justify-between mb-4">' +
           '<div><h3 class="text-lg font-bold text-gray-100"><i class="fas fa-phone-alt text-sky-400 mr-2"></i>Pick a Phone Number</h3>' +
-          '<p class="text-xs text-gray-400">$1/mo &bull; wired to your AI agent automatically</p></div>' +
+          '<p class="text-xs text-gray-400">Included with your subscription &bull; wired to your AI agent automatically</p></div>' +
           '<button onclick="document.getElementById(\'numberPickerModal\').remove()" class="text-gray-400 hover:text-gray-200"><i class="fas fa-times text-xl"></i></button>' +
         '</div>' +
         '<div class="flex gap-2 mb-3">' +
@@ -2671,8 +2671,8 @@
         var pretty = n.phone_number.replace(/^\+?1?(\d{3})(\d{3})(\d{4})$/, '+1 ($1) $2-$3');
         return '<div class="flex items-center justify-between bg-[#111111] border border-white/10 rounded-xl px-4 py-3">' +
           '<div><div class="font-mono text-gray-100">' + pretty + '</div>' +
-          '<div class="text-xs text-gray-400">' + (n.locality || '') + (n.region ? (n.locality ? ', ' : '') + n.region : '') + ' &bull; $1/mo</div></div>' +
-          '<button onclick="secBuyNumber(\'' + n.phone_number + '\')" class="text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-3 py-1.5 font-semibold">Buy & attach</button>' +
+          '<div class="text-xs text-gray-400">' + (n.locality || '') + (n.region ? (n.locality ? ', ' : '') + n.region : '') + ' &bull; included</div></div>' +
+          '<button onclick="secBuyNumber(\'' + n.phone_number + '\')" class="text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-3 py-1.5 font-semibold">Select &amp; attach</button>' +
         '</div>';
       }).join('');
     } catch (e) {
@@ -2681,7 +2681,7 @@
   };
 
   window.secBuyNumber = async function(phoneNumber) {
-    if (!confirm('Purchase ' + phoneNumber + ' for $1 one-time? This becomes your AI receptionist number and attaches to LiveKit automatically.')) return;
+    if (!confirm('Allocate ' + phoneNumber + ' as your AI receptionist number? It is included with your Secretary subscription and attaches to LiveKit automatically.')) return;
     try {
       var res = await fetch('/api/secretary/numbers/purchase', {
         method: 'POST', headers: authHeaders(),
