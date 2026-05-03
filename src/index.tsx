@@ -270,6 +270,39 @@ window.GOOGLE_ADS_CONVERSIONS = {
   signup:   'AW-18080319225/26MMCMOgxaYcEPmNr61D',
   purchase: 'AW-18080319225/XXX_PURCHASE_LABEL'
 };
+// Enhanced Conversions: SHA-256 hash for first-party user data per Google spec
+// (lowercase + trimmed). Improves match rate by 10-30% on iOS/Safari/ITP.
+window.__sha256Lower = async function(s) {
+  if (!s || !window.crypto || !window.crypto.subtle) return undefined;
+  try {
+    var norm = String(s).trim().toLowerCase();
+    var buf = new TextEncoder().encode(norm);
+    var h = await window.crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(h)).map(function(b){return b.toString(16).padStart(2,'0')}).join('');
+  } catch(e) { return undefined; }
+};
+// Set first-party user_data for Enhanced Conversions. Call before firing the conversion.
+window.setAdsUserData = async function(email, phone, name) {
+  try {
+    if (typeof gtag !== 'function') return;
+    var ud = {};
+    if (email) ud.sha256_email_address = await window.__sha256Lower(email);
+    if (phone) {
+      // Phone must be E.164 (+1...) before hashing per Google spec
+      var p = String(phone).replace(/[^0-9+]/g, '');
+      if (p && p[0] !== '+') p = (p.length === 10 ? '+1' : '+') + p;
+      ud.sha256_phone_number = await window.__sha256Lower(p);
+    }
+    if (name) {
+      var parts = String(name).trim().split(/\s+/);
+      ud.address = {
+        sha256_first_name: await window.__sha256Lower(parts[0] || ''),
+        sha256_last_name:  await window.__sha256Lower(parts.slice(1).join(' ') || '')
+      };
+    }
+    gtag('set', 'user_data', ud);
+  } catch(e) { /* no-op */ }
+};
 window.trackAdsConversion = function(kind, params) {
   try {
     var sendTo = window.GOOGLE_ADS_CONVERSIONS && window.GOOGLE_ADS_CONVERSIONS[kind];
@@ -7182,7 +7215,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 
             <!-- Primary CTA (ONE) -->
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 mb-4">
-              <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_primary'});gtag&amp;&amp;gtag('event','conversion',{send_to:'AW-18080319225'})}catch(e){}" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px] whitespace-nowrap"><i class="fas fa-gift" aria-hidden="true"></i>Start free — 4 roof reports, no card<i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform" aria-hidden="true"></i></a>
+              <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_primary'});window.trackAdsConversion&amp;&amp;window.trackAdsConversion('lead',{value:5,currency:'CAD'})}catch(e){}" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px] whitespace-nowrap"><i class="fas fa-gift" aria-hidden="true"></i>Start free — 4 roof reports, no card<i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform" aria-hidden="true"></i></a>
               <a href="#hero-preview-form" onclick="try{rrTrack('cta_click',{location:'hero_secondary_preview'});var i=document.getElementById('hero-address');if(i){i.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(function(){i.focus()},400)}}catch(e){}" class="text-sm text-gray-300 hover:text-white inline-flex items-center gap-1.5 whitespace-nowrap">Or try a free preview with any address <i class="fas fa-arrow-right text-[10px]" aria-hidden="true"></i></a>
             </div>
             <a href="/contact" onclick="try{rrTrack('cta_click',{location:'hero_tertiary_contact'})}catch(e){}" class="text-xs text-gray-500 hover:text-gray-300 inline-block mb-5">Talk to sales</a>
@@ -7228,7 +7261,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 
             <!-- Mobile-only primary CTA mirror (desktop has it above) -->
             <div class="lg:hidden mt-8">
-              <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_mobile_primary'});gtag&amp;&amp;gtag('event','conversion',{send_to:'AW-18080319225'})}catch(e){}" class="flex items-center justify-center gap-3 bg-[#00FF88] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px]"><i class="fas fa-gift" aria-hidden="true"></i>Start free — 4 roof reports, no card<i class="fas fa-arrow-right text-sm" aria-hidden="true"></i></a>
+              <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_mobile_primary'});window.trackAdsConversion&amp;&amp;window.trackAdsConversion('lead',{value:5,currency:'CAD'})}catch(e){}" class="flex items-center justify-center gap-3 bg-[#00FF88] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px]"><i class="fas fa-gift" aria-hidden="true"></i>Start free — 4 roof reports, no card<i class="fas fa-arrow-right text-sm" aria-hidden="true"></i></a>
             </div>
           </div>
           <div class="hidden lg:block">
@@ -9325,13 +9358,20 @@ ${previewId ? `
     }
 
     // conv-v5: fire GA4 + Google Ads + Meta + rrTrack sign_up events
-    function fireSignupEvents(method, companySize, primaryUse) {
+    // Value of 50 is an estimated avg LTV for a free→paid signup (tune in Google Ads if you have real LTV data).
+    async function fireSignupEvents(method, companySize, primaryUse) {
       try {
+        var email = (document.getElementById('reg-email') || {}).value || '';
+        var phone = (document.getElementById('reg-phone') || {}).value || '';
+        var name  = (document.getElementById('reg-name')  || {}).value || '';
+        if (typeof window.setAdsUserData === 'function') {
+          await window.setAdsUserData(email, phone, name);
+        }
         if (typeof gtag === 'function') {
           gtag('event', 'sign_up', { method: method, company_size: companySize || '', primary_use: primaryUse || '' });
         }
         if (typeof window.trackAdsConversion === 'function') {
-          window.trackAdsConversion('signup', { value: 1.0, currency: 'USD' });
+          window.trackAdsConversion('signup', { value: 50.0, currency: 'CAD' });
         }
         if (typeof fbq === 'function') {
           fbq('track', 'CompleteRegistration');
@@ -9755,7 +9795,7 @@ function getCustomerLoginHTML(googleClientId = '') {
           // rides on the HttpOnly rm_customer_session cookie.
           try { localStorage.setItem('rc_customer', JSON.stringify(data.customer)); } catch(e) {}
           if (btn) btn.innerHTML = '<i class="fas fa-check mr-2"></i>Success!';
-          if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 1.0, currency: 'USD' });
+          // Login is NOT a signup — firing a conversion here inflates Smart Bidding's signal and tanks ROAS.
           window.location.href = '/customer/dashboard';
         } else {
           if (err) { err.textContent = data.error || 'Login failed.'; err.classList.remove('hidden'); }
@@ -9883,7 +9923,10 @@ function getCustomerLoginHTML(googleClientId = '') {
         if (res.ok && data.success) {
           // P1-31: cache profile only; session rides on the HttpOnly cookie.
           try { localStorage.setItem('rc_customer', JSON.stringify(data.customer)); } catch(e) {}
-          if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 1.0, currency: 'USD' });
+          if (typeof window.setAdsUserData === 'function') {
+            try { await window.setAdsUserData(email, phone, name); } catch(_) {}
+          }
+          if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 50.0, currency: 'CAD' });
           // P2: stop any dirty-form beforeunload warning before redirecting.
           try { window.onbeforeunload = null; } catch(_) {}
           window.location.href = '/customer/dashboard';
