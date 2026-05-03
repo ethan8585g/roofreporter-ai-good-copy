@@ -516,7 +516,7 @@ function renderPinStep(root, progressBar) {
 
           <div>
             <label class="block text-sm font-semibold text-gray-300 mb-2"><i class="fas fa-map mr-1"></i>Click Map to Place Roof Pin *</label>
-            <div id="orderMap" class="w-full h-80 rounded-xl border-2 border-white/15 overflow-hidden" style="min-height: 320px;"></div>
+            <div id="orderMap" class="w-full h-64 rounded-xl border-2 border-white/15 overflow-hidden" style="min-height: 256px;"></div>
             <p class="text-xs text-gray-400 mt-1"><i class="fas fa-info-circle mr-1"></i>Click directly on the roof. Drag the pin to adjust.</p>
           </div>
 
