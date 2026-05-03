@@ -178,7 +178,7 @@
       banner = '<div class="bg-gradient-to-r from-[#0e1d34] to-[#0b1628] border border-sky-500/40 rounded-xl p-4 mb-4 flex items-center justify-between gap-3">' +
         '<div class="flex items-center gap-3"><i class="fas fa-gift text-sky-400 text-xl"></i>' +
         '<div><div class="text-sm font-bold text-sky-200">Free trial active — ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' left</div>' +
-        '<div class="text-xs text-gray-400">Your card ending in ' + (trial.card_last4 || '••••') + ' will be charged $199 on ' + (trial.next_charge_date || trial.trial_ends_at) + '.</div></div></div>' +
+        '<div class="text-xs text-black">Your card ending in ' + (trial.card_last4 || '••••') + ' will be charged $199 on ' + (trial.next_charge_date || trial.trial_ends_at) + '.</div></div></div>' +
         '<button onclick="secCancelSubscription()" class="text-xs text-red-300 hover:text-red-200 underline">Cancel before renewal</button></div>';
     } else if (trial.status === 'past_due') {
       banner = '<div class="bg-red-500/10 border border-red-500/40 rounded-xl p-4 mb-4 text-red-200 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Your last payment failed. Please update your card to avoid cancellation.</div>';
@@ -214,8 +214,8 @@
     var needsAttention = isConnect && state.phoneSetup && state.phoneSetup.connection_status !== 'connected';
     return '<button onclick="secSetTab(\'' + id + '\')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all ' +
       (active ? 'bg-gradient-to-r from-[#111111] to-[#1a1a1a] text-white shadow-lg' :
-       needsAttention ? 'bg-blue-500/15/10 text-gray-400 border-2 border-white/15 animate-pulse' :
-       'bg-[#111111] text-gray-400 hover:bg-[#111111]/5 border border-white/10') +
+       needsAttention ? 'bg-blue-500/15/10 text-black border-2 border-white/15 animate-pulse' :
+       'bg-[#DBEAFE] text-black hover:bg-[#DBEAFE]/5 border border-white/10') +
       '"><i class="fas ' + icon + ' text-xs"></i>' + label +
       (needsAttention ? ' <span class="w-2 h-2 bg-blue-500/15/100 rounded-full"></span>' : '') +
       '</button>';
@@ -551,9 +551,9 @@
         document.getElementById('enrollFormContainer').innerHTML =
           '<div class="text-center py-8">' +
             '<div class="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-check-circle text-green-500 text-3xl"></i></div>' +
-            '<h3 class="text-xl font-bold text-gray-100 mb-2">Enrolment Request Received!</h3>' +
+            '<h3 class="text-xl font-bold text-black mb-2">Enrolment Request Received!</h3>' +
             '<p class="text-gray-500">Thank you, ' + name + '. Our team will contact you within 24 hours to set up your AI Secretary service.</p>' +
-            '<p class="text-gray-400 text-sm mt-4"><i class="fas fa-phone mr-1"></i>Questions? Call us anytime.</p>' +
+            '<p class="text-black text-sm mt-4"><i class="fas fa-phone mr-1"></i>Questions? Call us anytime.</p>' +
           '</div>';
       } else {
         window.rmToast(data.error || 'Failed to submit. Please try again.', 'info');
@@ -577,19 +577,19 @@
     if (!content) return;
 
     // Status bar
-    var statusHtml = '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-4 mb-6">' +
+    var statusHtml = '<div class="bg-[#DBEAFE] rounded-2xl border border-white/10 shadow-sm p-4 mb-6">' +
       '<div class="flex items-center justify-between flex-wrap gap-3">' +
         '<div class="flex items-center gap-3">' +
           '<div class="w-10 h-10 rounded-full flex items-center justify-center ' + (state.isActive ? 'bg-green-100' : 'bg-white/5') + '">' +
-            '<i class="fas ' + (state.isActive ? 'fa-check-circle text-emerald-400' : 'fa-pause-circle text-gray-400') + ' text-lg"></i></div>' +
-          '<div><p class="font-bold text-gray-100">' + (state.isActive ? 'Service ACTIVE' : 'Service PAUSED') + '</p>' +
+            '<i class="fas ' + (state.isActive ? 'fa-check-circle text-emerald-400' : 'fa-pause-circle text-black') + ' text-lg"></i></div>' +
+          '<div><p class="font-bold text-black">' + (state.isActive ? 'Service ACTIVE' : 'Service PAUSED') + '</p>' +
             '<p class="text-xs text-gray-500">' +
               (state.phoneSetup?.connection_status === 'connected' ? '<span class="text-emerald-400"><i class="fas fa-link mr-1"></i>Phone Connected</span>' :
                state.phoneSetup?.assigned_phone_number ? '<span class="text-blue-400"><i class="fas fa-exclamation-triangle mr-1"></i>Phone Setup Incomplete</span>' :
-               '<span class="text-gray-400"><i class="fas fa-phone-slash mr-1"></i>No Phone Connected</span>') +
+               '<span class="text-black"><i class="fas fa-phone-slash mr-1"></i>No Phone Connected</span>') +
               ' &bull; ' + (state.subscription?.status || 'unknown') + '</p></div></div>' +
         '<div class="flex gap-2">' +
-          (state.phoneSetup?.connection_status !== 'connected' ? '<button onclick="secSetTab(\'connect\')" class="px-4 py-2 rounded-xl text-sm font-semibold bg-blue-500/15/10 text-gray-400 border border-white/15 hover:bg-white/10 transition-all"><i class="fas fa-phone-alt mr-1"></i>Connect Phone</button>' : '') +
+          (state.phoneSetup?.connection_status !== 'connected' ? '<button onclick="secSetTab(\'connect\')" class="px-4 py-2 rounded-xl text-sm font-semibold bg-blue-500/15/10 text-black border border-white/15 hover:bg-white/10 transition-all"><i class="fas fa-phone-alt mr-1"></i>Connect Phone</button>' : '') +
           '<button onclick="secToggle()" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all ' +
             (state.isActive ? 'bg-red-500/10 text-red-400 hover:bg-red-100 border border-red-200' : 'bg-emerald-500/10 text-emerald-400 hover:bg-green-100 border border-green-200') + '">' +
             '<i class="fas ' + (state.isActive ? 'fa-pause' : 'fa-play') + ' mr-1"></i>' + (state.isActive ? 'Pause' : 'Activate') + '</button>' +
@@ -599,18 +599,18 @@
     var hasGreeting = !!(state.config && state.config.greeting_script);
     var hasDirs = !!(state.directories && state.directories.length >= 2);
     var hasPhone = !!(state.phoneSetup && state.phoneSetup.connection_status === 'connected');
-    var checkDone = function(done) { return done ? '<i class="fas fa-check-circle text-green-500 mr-2"></i>' : '<i class="far fa-circle text-gray-300 mr-2"></i>'; };
+    var checkDone = function(done) { return done ? '<i class="fas fa-check-circle text-green-500 mr-2"></i>' : '<i class="far fa-circle text-black mr-2"></i>'; };
     var stepsComplete = 2 + (hasGreeting ? 1 : 0) + (hasDirs ? 1 : 0) + (hasPhone ? 1 : 0);
     var checklistHtml = '';
     if (stepsComplete < 5) {
       checklistHtml = '<div class="bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200 rounded-2xl p-5 mb-6">' +
         '<div class="flex items-center justify-between mb-3"><h3 class="font-bold text-sky-800 text-sm"><i class="fas fa-tasks mr-2"></i>Getting Started</h3><span class="text-xs font-bold text-sky-600 bg-sky-100 px-2 py-0.5 rounded-full">' + stepsComplete + ' of 5 complete</span></div>' +
         '<div class="space-y-2 text-sm">' +
-          '<div class="flex items-center text-gray-300">' + checkDone(true) + '<span class="' + (true ? 'text-gray-400 line-through' : '') + '">Account created</span></div>' +
-          '<div class="flex items-center text-gray-300">' + checkDone(true) + '<span class="' + (true ? 'text-gray-400 line-through' : '') + '">Secretary subscription active</span></div>' +
-          '<div class="flex items-center text-gray-300">' + checkDone(hasGreeting) + '<span class="' + (hasGreeting ? 'text-gray-400 line-through' : 'font-medium') + '">Customize greeting script</span>' + (!hasGreeting ? ' <button onclick="document.getElementById(\'secGreeting\')?.focus()" class="ml-2 text-xs text-sky-600 hover:underline">Set up</button>' : '') + '</div>' +
-          '<div class="flex items-center text-gray-300">' + checkDone(hasDirs) + '<span class="' + (hasDirs ? 'text-gray-400 line-through' : 'font-medium') + '">Set up call directories (2-4 depts)</span>' + (!hasDirs ? ' <button onclick="document.getElementById(\'secDirs\')?.scrollIntoView({behavior:\'smooth\'})" class="ml-2 text-xs text-sky-600 hover:underline">Set up</button>' : '') + '</div>' +
-          '<div class="flex items-center text-gray-300">' + checkDone(hasPhone) + '<span class="' + (hasPhone ? 'text-gray-400 line-through' : 'font-medium') + '">Connect phone (call forwarding)</span>' + (!hasPhone ? ' <button onclick="secSetTab(\'connect\')" class="ml-2 text-xs text-sky-600 hover:underline">Connect</button>' : '') + '</div>' +
+          '<div class="flex items-center text-black">' + checkDone(true) + '<span class="' + (true ? 'text-black line-through' : '') + '">Account created</span></div>' +
+          '<div class="flex items-center text-black">' + checkDone(true) + '<span class="' + (true ? 'text-black line-through' : '') + '">Secretary subscription active</span></div>' +
+          '<div class="flex items-center text-black">' + checkDone(hasGreeting) + '<span class="' + (hasGreeting ? 'text-black line-through' : 'font-medium') + '">Customize greeting script</span>' + (!hasGreeting ? ' <button onclick="document.getElementById(\'secGreeting\')?.focus()" class="ml-2 text-xs text-sky-600 hover:underline">Set up</button>' : '') + '</div>' +
+          '<div class="flex items-center text-black">' + checkDone(hasDirs) + '<span class="' + (hasDirs ? 'text-black line-through' : 'font-medium') + '">Set up call directories (2-4 depts)</span>' + (!hasDirs ? ' <button onclick="document.getElementById(\'secDirs\')?.scrollIntoView({behavior:\'smooth\'})" class="ml-2 text-xs text-sky-600 hover:underline">Set up</button>' : '') + '</div>' +
+          '<div class="flex items-center text-black">' + checkDone(hasPhone) + '<span class="' + (hasPhone ? 'text-black line-through' : 'font-medium') + '">Connect phone (call forwarding)</span>' + (!hasPhone ? ' <button onclick="secSetTab(\'connect\')" class="ml-2 text-xs text-sky-600 hover:underline">Connect</button>' : '') + '</div>' +
         '</div>' +
         '<div class="mt-3 bg-sky-100 rounded-lg h-2"><div class="bg-sky-500 rounded-lg h-2 transition-all" style="width:' + (stepsComplete / 5 * 100) + '%"></div></div>' +
       '</div>';
@@ -619,8 +619,8 @@
     content.innerHTML = statusHtml + checklistHtml +
 
       // MODE SELECTOR — 3 Secretary Modes
-      '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-6 mb-6">' +
-        '<h3 class="font-bold text-gray-100 text-lg mb-1"><i class="fas fa-sliders-h text-sky-500 mr-2"></i>Secretary Mode</h3>' +
+      '<div class="bg-[#DBEAFE] rounded-2xl border border-white/10 shadow-sm p-6 mb-6">' +
+        '<h3 class="font-bold text-black text-lg mb-1"><i class="fas fa-sliders-h text-sky-500 mr-2"></i>Secretary Mode</h3>' +
         '<p class="text-gray-500 text-sm mb-4">Choose how your AI secretary operates</p>' +
         '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
           modeCard('directory', 'fa-sitemap', 'Directory Service',
@@ -639,24 +639,24 @@
       renderAgentPersonaSelector(c) +
 
       // STEP 1: Phone & Greeting
-      '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-6 mb-6">' +
-        '<h3 class="font-bold text-gray-100 text-lg mb-1"><span class="inline-flex items-center justify-center w-7 h-7 bg-sky-500 text-white rounded-full text-sm font-bold mr-2">1</span>Phone & Greeting Setup</h3>' +
+      '<div class="bg-[#DBEAFE] rounded-2xl border border-white/10 shadow-sm p-6 mb-6">' +
+        '<h3 class="font-bold text-black text-lg mb-1"><span class="inline-flex items-center justify-center w-7 h-7 bg-sky-500 text-white rounded-full text-sm font-bold mr-2">1</span>Phone & Greeting Setup</h3>' +
         '<p class="text-gray-500 text-sm mb-4 ml-9">How should your AI secretary answer the phone?</p>' +
         '<div class="space-y-4 ml-9">' +
           '<div>' +
-            '<label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-phone mr-1 text-sky-500"></i>Your Business Phone Number</label>' +
+            '<label class="block text-sm font-semibold text-black mb-1"><i class="fas fa-phone mr-1 text-sky-500"></i>Your Business Phone Number</label>' +
             '<input type="tel" id="secPhone" value="' + esc(c.business_phone || '') + '" placeholder="(780) 983-3335" class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
-            '<p class="text-xs text-gray-400 mt-1">Your existing business line — the AI only answers when you don\'t pick up. SMS summaries sent to this number after each call.</p></div>' +
+            '<p class="text-xs text-black mt-1">Your existing business line — the AI only answers when you don\'t pick up. SMS summaries sent to this number after each call.</p></div>' +
           '<div>' +
-            '<label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-hand-sparkles mr-1 text-sky-500"></i>Opening Greeting — How Should ' + esc(c.agent_name || 'Sarah') + ' Address Callers?</label>' +
-            '<p class="text-xs text-gray-400 mb-2">This is the <strong>first thing your AI says</strong> when answering a call. Include your company name so callers know they reached the right place.</p>' +
+            '<label class="block text-sm font-semibold text-black mb-1"><i class="fas fa-hand-sparkles mr-1 text-sky-500"></i>Opening Greeting — How Should ' + esc(c.agent_name || 'Sarah') + ' Address Callers?</label>' +
+            '<p class="text-xs text-black mb-2">This is the <strong>first thing your AI says</strong> when answering a call. Include your company name so callers know they reached the right place.</p>' +
             '<textarea id="secGreeting" rows="4" maxlength="3000" placeholder="Hey thanks so much for calling ' + esc(state.customerCompany || 'Your Company') + '! My name is ' + esc(c.agent_name || 'Sarah') + ', how can I help you today?" class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 resize-none">' + esc(c.greeting_script || '') + '</textarea>' +
-            '<p class="text-xs text-gray-400 mt-1"><strong>Examples:</strong> "Hey thanks so much for calling JPG Roofing! My name is Sarah, how can I help?" · "Good morning, you\'ve reached ABC Roofing, this is Sarah speaking. How can I assist you today?"</p></div>' +
+            '<p class="text-xs text-black mt-1"><strong>Examples:</strong> "Hey thanks so much for calling JPG Roofing! My name is Sarah, how can I help?" · "Good morning, you\'ve reached ABC Roofing, this is Sarah speaking. How can I assist you today?"</p></div>' +
           '<div>' +
-            '<label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-question-circle mr-1 text-sky-500"></i>Common Q&A\'s</label>' +
+            '<label class="block text-sm font-semibold text-black mb-1"><i class="fas fa-question-circle mr-1 text-sky-500"></i>Common Q&A\'s</label>' +
             '<textarea id="secQA" rows="5" maxlength="3000" placeholder="Q: What areas do you serve?\nA: We serve Edmonton, Sherwood Park, St. Albert, Spruce Grove, Leduc, Fort Saskatchewan, Beaumont, and all surrounding areas within 100km of Edmonton.\n\nQ: Do you offer free estimates?\nA: Absolutely! We provide free no-obligation on-site estimates. We can usually get someone out within 1-2 business days.\n\nQ: Do you handle insurance claims?\nA: Yes, we work directly with all major insurance companies on storm damage and hail claims. We\'ll help you through the entire claims process.\n\nQ: What types of roofing do you do?\nA: We do asphalt shingles, metal roofing, flat roofs (TPO/EPDM), cedar shakes, and rubber roofing. Residential and commercial.\n\nQ: Are you licensed and insured?\nA: Yes, fully licensed, insured, and WCB covered. We\'re also a certified CertainTeed and GAF installer." class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 resize-none font-mono text-xs">' + esc(c.common_qa || '') + '</textarea></div>' +
           '<div>' +
-            '<label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-sticky-note mr-1 text-sky-500"></i>General Notes</label>' +
+            '<label class="block text-sm font-semibold text-black mb-1"><i class="fas fa-sticky-note mr-1 text-sky-500"></i>General Notes</label>' +
             '<textarea id="secNotes" rows="3" maxlength="3000" placeholder="Spring Special: 10% off all full roof replacements booked before June 30th. Mention this offer!\n\nWe\'re currently booking estimates 3-5 business days out due to high demand from recent hail storms.\n\nEmergency repairs (active leaks) — tell callers we offer same-day emergency service, have them press 2 for Service/Repairs.\n\nAfter hours: Take a detailed message with their name, phone, address, and description of the issue. Let them know we\'ll call back first thing next business day." class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 resize-none">' + esc(c.general_notes || '') + '</textarea></div>' +
           '<div class="flex gap-3 flex-wrap">' +
           '<button onclick="secSaveConfig()" id="saveConfigBtn" class="px-6 py-3 bg-sky-500 text-white rounded-xl font-semibold text-sm hover:bg-sky-600 transition-all shadow"><i class="fas fa-save mr-2"></i>Save Configuration</button>' +
@@ -665,14 +665,14 @@
         '</div></div>' +
 
       // STEP 2: Directories
-      '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-6 mb-6">' +
-        '<h3 class="font-bold text-gray-100 text-lg mb-1"><span class="inline-flex items-center justify-center w-7 h-7 bg-sky-500 text-white rounded-full text-sm font-bold mr-2">2</span>Call Routing Directories</h3>' +
+      '<div class="bg-[#DBEAFE] rounded-2xl border border-white/10 shadow-sm p-6 mb-6">' +
+        '<h3 class="font-bold text-black text-lg mb-1"><span class="inline-flex items-center justify-center w-7 h-7 bg-sky-500 text-white rounded-full text-sm font-bold mr-2">2</span>Call Routing Directories</h3>' +
         '<p class="text-gray-500 text-sm mb-4 ml-9">Set up 2-4 departments the AI can route callers to</p>' +
         '<div id="directoriesList" class="space-y-3 ml-9">' +
           dirs.map(function(d, i) { return dirCard(d, i); }).join('') +
         '</div>' +
         '<div class="ml-9 mt-4 flex gap-3">' +
-          '<button onclick="secAddDir()" id="addDirBtn" class="px-4 py-2 bg-white/5 text-gray-400 rounded-xl text-sm font-medium hover:bg-gray-200 transition-all ' + (dirs.length >= 4 ? 'opacity-50 cursor-not-allowed' : '') + '" ' + (dirs.length >= 4 ? 'disabled' : '') + '><i class="fas fa-plus mr-1"></i>Add Directory</button>' +
+          '<button onclick="secAddDir()" id="addDirBtn" class="px-4 py-2 bg-white/5 text-black rounded-xl text-sm font-medium hover:bg-gray-200 transition-all ' + (dirs.length >= 4 ? 'opacity-50 cursor-not-allowed' : '') + '" ' + (dirs.length >= 4 ? 'disabled' : '') + '><i class="fas fa-plus mr-1"></i>Add Directory</button>' +
           '<button onclick="secSaveDirs()" id="saveDirsBtn" class="px-6 py-2 bg-sky-500 text-white rounded-xl text-sm font-semibold hover:bg-sky-600 transition-all shadow"><i class="fas fa-save mr-2"></i>Save Directories</button>' +
         '</div></div>' +
 
@@ -696,21 +696,21 @@
     var canDeploy = hasAi && hasCell;
     var connected = state.phoneSetup && state.phoneSetup.connection_status === 'connected';
 
-    return '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-6 mb-6">' +
-      '<h3 class="font-bold text-gray-100 text-lg mb-1"><span class="inline-flex items-center justify-center w-7 h-7 bg-sky-500 text-white rounded-full text-sm font-bold mr-2">3</span>SIP Pairing &amp; Deploy</h3>' +
-      '<p class="text-gray-300 text-sm mb-4 ml-9">Confirm your call path, then deploy your agent to LiveKit. Last step is turning on cell forwarding.</p>' +
+    return '<div class="bg-[#DBEAFE] rounded-2xl border border-white/10 shadow-sm p-6 mb-6">' +
+      '<h3 class="font-bold text-black text-lg mb-1"><span class="inline-flex items-center justify-center w-7 h-7 bg-sky-500 text-white rounded-full text-sm font-bold mr-2">3</span>SIP Pairing &amp; Deploy</h3>' +
+      '<p class="text-black text-sm mb-4 ml-9">Confirm your call path, then deploy your agent to LiveKit. Last step is turning on cell forwarding.</p>' +
       '<div class="ml-9 grid grid-cols-1 md:grid-cols-3 gap-3 items-center mb-5">' +
         // From (cell)
-        '<div class="rounded-xl p-4 border border-white/10" style="background:#0A0A0A">' +
-          '<div class="text-xs text-gray-300 mb-1"><i class="fas fa-mobile-alt text-sky-400 mr-1"></i>Your cell (forwarding from)</div>' +
-          '<div class="font-mono text-gray-100 text-base">' + (hasCell ? cellPretty : '<span class="text-gray-300 text-sm">Set in field above</span>') + '</div>' +
+        '<div class="rounded-xl p-4 border border-white/10" style="background:#DBEAFE">' +
+          '<div class="text-xs text-black mb-1"><i class="fas fa-mobile-alt text-sky-400 mr-1"></i>Your cell (forwarding from)</div>' +
+          '<div class="font-mono text-black text-base">' + (hasCell ? cellPretty : '<span class="text-black text-sm">Set in field above</span>') + '</div>' +
         '</div>' +
         // Arrow
-        '<div class="text-center text-gray-300"><i class="fas fa-arrow-right text-2xl"></i></div>' +
+        '<div class="text-center text-black"><i class="fas fa-arrow-right text-2xl"></i></div>' +
         // To (AI number)
-        '<div class="rounded-xl p-4 border border-white/10" style="background:#0A0A0A">' +
-          '<div class="text-xs text-gray-300 mb-1"><i class="fas fa-headset text-emerald-400 mr-1"></i>Your AI receptionist (calls land here)</div>' +
-          '<div class="font-mono text-gray-100 text-base">' + (hasAi ? aiPretty : '<span class="text-gray-300 text-sm">No AI number — <button onclick="secSetTab(\'connect\')" class="text-sky-400 underline">pick one</button></span>') + '</div>' +
+        '<div class="rounded-xl p-4 border border-white/10" style="background:#DBEAFE">' +
+          '<div class="text-xs text-black mb-1"><i class="fas fa-headset text-emerald-400 mr-1"></i>Your AI receptionist (calls land here)</div>' +
+          '<div class="font-mono text-black text-base">' + (hasAi ? aiPretty : '<span class="text-black text-sm">No AI number — <button onclick="secSetTab(\'connect\')" class="text-sky-400 underline">pick one</button></span>') + '</div>' +
         '</div>' +
       '</div>' +
       '<div class="ml-9 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">' +
@@ -719,7 +719,7 @@
         '</button>' +
         (connected
           ? '<div class="text-emerald-400 text-sm self-center"><i class="fas fa-check-circle mr-1"></i>Forwarding live</div>'
-          : '<button onclick="secShowForwardingWizard(\'' + (aiNumber || '') + '\', null)" class="px-4 py-4 rounded-xl font-semibold text-sm border border-white/15 text-gray-100 hover:bg-white/5"><i class="fas fa-phone-volume mr-1"></i>Forwarding instructions</button>') +
+          : '<button onclick="secShowForwardingWizard(\'' + (aiNumber || '') + '\', null)" class="px-4 py-4 rounded-xl font-semibold text-sm border border-white/15 text-black hover:bg-white/5"><i class="fas fa-phone-volume mr-1"></i>Forwarding instructions</button>') +
       '</div>' +
       (!canDeploy ? '<p class="ml-9 mt-3 text-xs text-amber-400"><i class="fas fa-exclamation-triangle mr-1"></i>Add ' + (!hasCell ? 'your cell number above' : '') + (!hasCell && !hasAi ? ' and ' : '') + (!hasAi ? 'an AI number from the Connect tab' : '') + ' before deploying.</p>' : '') +
     '</div>';
@@ -745,14 +745,14 @@
                      (!agents.some(function(a) { return a.voice === currentVoice && a.name === currentName; }) && agent.id === 'sarah');
       return '<div onclick="secSelectAgent(\'' + agent.name + '\', \'' + agent.voice + '\')" ' +
         'class="cursor-pointer border-2 rounded-xl p-4 transition-all hover:shadow-lg ' +
-        (selected ? 'border-sky-500 shadow-lg ring-2 ring-sky-400/30 bg-sky-50' : 'border-white/10 hover:border-white/15 bg-[#111111]') + '">' +
+        (selected ? 'border-sky-500 shadow-lg ring-2 ring-sky-400/30 bg-sky-50' : 'border-white/10 hover:border-white/15 bg-[#DBEAFE]') + '">' +
         '<div class="flex items-center gap-3 mb-2">' +
           '<div class="w-11 h-11 bg-gradient-to-br ' + agent.color + ' rounded-full flex items-center justify-center shadow-lg flex-shrink-0">' +
             '<i class="fas ' + agent.icon + ' text-white text-sm"></i>' +
           '</div>' +
           '<div class="flex-1 min-w-0">' +
             '<div class="flex items-center gap-2">' +
-              '<p class="font-bold text-gray-100 text-sm">' + agent.name + '</p>' +
+              '<p class="font-bold text-black text-sm">' + agent.name + '</p>' +
               '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ' + (agent.gender === 'Female' ? 'bg-blue-500/15 text-blue-400' : 'bg-blue-500/100/15 text-blue-400') + '">' + agent.gender + '</span>' +
               (agent.badge ? '<span class="px-1.5 py-0.5 bg-blue-500/15/15 text-blue-400 rounded text-[9px] font-bold">' + agent.badge + '</span>' : '') +
             '</div>' +
@@ -763,19 +763,19 @@
       '</div>';
     }).join('');
 
-    return '<div class="bg-[#111111] rounded-2xl border-2 border-sky-200 shadow-sm p-6 mb-6">' +
+    return '<div class="bg-[#DBEAFE] rounded-2xl border-2 border-sky-200 shadow-sm p-6 mb-6">' +
       '<div class="flex items-center gap-3 mb-1">' +
         '<div class="w-10 h-10 bg-gradient-to-br from-[#111111] to-[#1a1a1a] rounded-xl flex items-center justify-center shadow"><i class="fas fa-user-astronaut text-white"></i></div>' +
-        '<div><h3 class="font-bold text-gray-100 text-lg">Choose Your AI Secretary Agent</h3>' +
+        '<div><h3 class="font-bold text-black text-lg">Choose Your AI Secretary Agent</h3>' +
         '<p class="text-gray-500 text-sm">Select the voice and personality that represents your business</p></div>' +
       '</div>' +
       '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">' + agentCards + '</div>' +
       '<div class="mt-3 flex items-center gap-2">' +
         '<div class="flex-1">' +
-          '<label class="block text-xs font-semibold text-gray-400 mb-1">Custom Agent Name</label>' +
+          '<label class="block text-xs font-semibold text-black mb-1">Custom Agent Name</label>' +
           '<input type="text" id="agentNameInput" value="' + esc(currentName) + '" placeholder="Sarah" class="w-full border border-white/15 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
         '</div>' +
-        '<div class="text-xs text-gray-400 self-end pb-2"><i class="fas fa-info-circle mr-1"></i>Your agent will introduce themselves with this name</div>' +
+        '<div class="text-xs text-black self-end pb-2"><i class="fas fa-info-circle mr-1"></i>Your agent will introduce themselves with this name</div>' +
       '</div>' +
     '</div>';
   }
@@ -805,12 +805,12 @@
     var fallback = c.answering_fallback_action || 'take_message';
     var fwdNum = c.answering_forward_number || '';
     var notifyEmail = c.answering_notify_email || '';
-    return '<div class="bg-[#111111] rounded-2xl border-2 border-blue-500/20 shadow-sm p-6 mb-6">' +
-      '<h3 class="font-bold text-gray-100 text-lg mb-1"><span class="inline-flex items-center justify-center w-7 h-7 bg-blue-500/15 text-white rounded-full text-sm font-bold mr-2"><i class="fas fa-phone-volume text-xs"></i></span>Never-Voicemail Answering Settings</h3>' +
+    return '<div class="bg-[#DBEAFE] rounded-2xl border-2 border-blue-500/20 shadow-sm p-6 mb-6">' +
+      '<h3 class="font-bold text-black text-lg mb-1"><span class="inline-flex items-center justify-center w-7 h-7 bg-blue-500/15 text-white rounded-full text-sm font-bold mr-2"><i class="fas fa-phone-volume text-xs"></i></span>Never-Voicemail Answering Settings</h3>' +
       '<p class="text-gray-500 text-sm mb-4 ml-9">Configure how the AI handles calls when you can\'t answer</p>' +
       '<div class="space-y-4 ml-9">' +
         '<div>' +
-          '<label class="block text-sm font-semibold text-gray-300 mb-2"><i class="fas fa-route mr-1 text-blue-400"></i>When a caller reaches the AI:</label>' +
+          '<label class="block text-sm font-semibold text-black mb-2"><i class="fas fa-route mr-1 text-blue-400"></i>When a caller reaches the AI:</label>' +
           '<div class="space-y-2">' +
             radioOpt('answering_fallback', 'take_message', 'Take a detailed message', fallback) +
             radioOpt('answering_fallback', 'forward_urgent', 'Take message — forward URGENT calls to a number', fallback) +
@@ -818,16 +818,16 @@
           '</div>' +
         '</div>' +
         '<div id="answeringFwdWrap" class="' + (fallback === 'take_message' ? 'hidden' : '') + '">' +
-          '<label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-phone mr-1 text-blue-400"></i>Forward-to Number</label>' +
+          '<label class="block text-sm font-semibold text-black mb-1"><i class="fas fa-phone mr-1 text-blue-400"></i>Forward-to Number</label>' +
           '<input type="tel" id="answeringFwdNum" value="' + esc(fwdNum) + '" placeholder="(780) 555-0199" class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400">' +
-          '<p class="text-xs text-gray-400 mt-1">For urgent/emergency calls that need to be forwarded immediately</p>' +
+          '<p class="text-xs text-black mt-1">For urgent/emergency calls that need to be forwarded immediately</p>' +
         '</div>' +
         '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
-          '<label class="flex items-center gap-3 p-3 bg-blue-500/15 rounded-xl cursor-pointer"><input type="checkbox" id="answeringSms" ' + (c.answering_sms_notify !== 0 ? 'checked' : '') + ' class="w-4 h-4 text-blue-400 rounded"><span class="text-sm text-gray-300"><i class="fas fa-sms text-blue-400 mr-1"></i>SMS notify after each call</span></label>' +
-          '<label class="flex items-center gap-3 p-3 bg-blue-500/15 rounded-xl cursor-pointer"><input type="checkbox" id="answeringEmail" ' + (c.answering_email_notify !== 0 ? 'checked' : '') + ' class="w-4 h-4 text-blue-400 rounded"><span class="text-sm text-gray-300"><i class="fas fa-envelope text-blue-400 mr-1"></i>Email notify after each call</span></label>' +
+          '<label class="flex items-center gap-3 p-3 bg-blue-500/15 rounded-xl cursor-pointer"><input type="checkbox" id="answeringSms" ' + (c.answering_sms_notify !== 0 ? 'checked' : '') + ' class="w-4 h-4 text-blue-400 rounded"><span class="text-sm text-black"><i class="fas fa-sms text-blue-400 mr-1"></i>SMS notify after each call</span></label>' +
+          '<label class="flex items-center gap-3 p-3 bg-blue-500/15 rounded-xl cursor-pointer"><input type="checkbox" id="answeringEmail" ' + (c.answering_email_notify !== 0 ? 'checked' : '') + ' class="w-4 h-4 text-blue-400 rounded"><span class="text-sm text-black"><i class="fas fa-envelope text-blue-400 mr-1"></i>Email notify after each call</span></label>' +
         '</div>' +
         '<div>' +
-          '<label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-at mr-1 text-blue-400"></i>Notification Email</label>' +
+          '<label class="block text-sm font-semibold text-black mb-1"><i class="fas fa-at mr-1 text-blue-400"></i>Notification Email</label>' +
           '<input type="email" id="answeringNotifyEmail" value="' + esc(notifyEmail) + '" placeholder="owner@yourroofing.ca" class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400">' +
         '</div>' +
         '<button onclick="secSaveConfig()" class="px-6 py-3 bg-blue-500/15 text-white rounded-xl font-semibold text-sm hover:bg-blue-500/15 transition-all shadow"><i class="fas fa-save mr-2"></i>Save Answering Settings</button>' +
@@ -839,13 +839,13 @@
     try { hrs = JSON.parse(c.full_business_hours || '{}'); } catch(e) {}
     var days = [['mon','Monday'],['tue','Tuesday'],['wed','Wednesday'],['thu','Thursday'],['fri','Friday'],['sat','Saturday'],['sun','Sunday']];
 
-    return '<div class="bg-[#111111] rounded-2xl border-2 border-emerald-200 shadow-sm p-6 mb-6">' +
-      '<h3 class="font-bold text-gray-100 text-lg mb-1"><span class="inline-flex items-center justify-center w-7 h-7 bg-emerald-500 text-white rounded-full text-sm font-bold mr-2"><i class="fas fa-user-tie text-xs"></i></span>Full AI Secretary Settings</h3>' +
+    return '<div class="bg-[#DBEAFE] rounded-2xl border-2 border-emerald-200 shadow-sm p-6 mb-6">' +
+      '<h3 class="font-bold text-black text-lg mb-1"><span class="inline-flex items-center justify-center w-7 h-7 bg-emerald-500 text-white rounded-full text-sm font-bold mr-2"><i class="fas fa-user-tie text-xs"></i></span>Full AI Secretary Settings</h3>' +
       '<p class="text-gray-500 text-sm mb-4 ml-9">Your AI secretary\'s full capabilities — it can do everything a real secretary does</p>' +
       '<div class="space-y-4 ml-9">' +
 
         // Capabilities toggles
-        '<div><label class="block text-sm font-semibold text-gray-300 mb-2"><i class="fas fa-tasks mr-1 text-emerald-500"></i>Capabilities</label>' +
+        '<div><label class="block text-sm font-semibold text-black mb-2"><i class="fas fa-tasks mr-1 text-emerald-500"></i>Capabilities</label>' +
         '<div class="grid grid-cols-1 md:grid-cols-2 gap-2">' +
           capToggle('fullBookAppts', 'fa-calendar-check', 'Book appointments & estimates', c.full_can_book_appointments !== 0) +
           capToggle('fullAnswerFaq', 'fa-question-circle', 'Answer FAQs about your business', c.full_can_answer_faq !== 0) +
@@ -855,11 +855,11 @@
         '</div></div>' +
 
         // Business hours
-        '<div><label class="block text-sm font-semibold text-gray-300 mb-2"><i class="fas fa-clock mr-1 text-emerald-500"></i>Business Hours</label>' +
+        '<div><label class="block text-sm font-semibold text-black mb-2"><i class="fas fa-clock mr-1 text-emerald-500"></i>Business Hours</label>' +
         '<div class="grid grid-cols-2 md:grid-cols-4 gap-2">' +
           days.map(function(d) {
-            return '<div class="bg-[#0A0A0A] rounded-lg p-2">' +
-              '<label class="block text-xs font-medium text-gray-400 mb-1">' + d[1] + '</label>' +
+            return '<div class="bg-[#DBEAFE] rounded-lg p-2">' +
+              '<label class="block text-xs font-medium text-black mb-1">' + d[1] + '</label>' +
               '<input type="text" id="fullHrs_' + d[0] + '" value="' + esc(hrs[d[0]] || (d[0] === 'sat' || d[0] === 'sun' ? 'closed' : '9:00-17:00')) + '" placeholder="9:00-17:00 or closed" class="w-full border border-white/15 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-emerald-400">' +
             '</div>';
           }).join('') +
@@ -867,24 +867,24 @@
 
         // Services & info
         '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
-          '<div><label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-tools mr-1 text-emerald-500"></i>Services Offered</label>' +
+          '<div><label class="block text-sm font-semibold text-black mb-1"><i class="fas fa-tools mr-1 text-emerald-500"></i>Services Offered</label>' +
             '<textarea id="fullServices" rows="4" placeholder="Free roof estimates and inspections\nShingle repair and replacement\nFlat roof systems (TPO, EPDM)\nMetal roofing installation\nEmergency leak repairs (same-day)\nGutter installation and repair\nStorm damage assessment\nInsurance claim assistance" class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-400 resize-none">' + esc(c.full_services_offered || '') + '</textarea></div>' +
-          '<div><label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-dollar-sign mr-1 text-emerald-500"></i>Pricing Info (what AI can share)</label>' +
+          '<div><label class="block text-sm font-semibold text-black mb-1"><i class="fas fa-dollar-sign mr-1 text-emerald-500"></i>Pricing Info (what AI can share)</label>' +
             '<textarea id="fullPricing" rows="4" placeholder="Free estimates — we come to you\nRoof inspections: Free\nMinor repairs: Starting from $250\nFull replacements: Starting from $5,000\nWe match any written quote\nFinancing available OAC" class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-400 resize-none">' + esc(c.full_pricing_info || '') + '</textarea></div>' +
         '</div>' +
 
         '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
-          '<div><label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-map-marker-alt mr-1 text-emerald-500"></i>Service Area</label>' +
+          '<div><label class="block text-sm font-semibold text-black mb-1"><i class="fas fa-map-marker-alt mr-1 text-emerald-500"></i>Service Area</label>' +
             '<input type="text" id="fullServiceArea" value="' + esc(c.full_service_area || '') + '" placeholder="Edmonton, Sherwood Park, St. Albert, Spruce Grove, Leduc + 100km" class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-400"></div>' +
-          '<div><label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-link mr-1 text-emerald-500"></i>Online Booking Link (optional)</label>' +
+          '<div><label class="block text-sm font-semibold text-black mb-1"><i class="fas fa-link mr-1 text-emerald-500"></i>Online Booking Link (optional)</label>' +
             '<input type="text" id="fullBookingLink" value="' + esc(c.full_booking_link || '') + '" placeholder="https://calendly.com/yourbusiness" class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-400"></div>' +
         '</div>' +
 
         // Email settings
         '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
-          '<div><label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-signature mr-1 text-emerald-500"></i>Email From Name</label>' +
+          '<div><label class="block text-sm font-semibold text-black mb-1"><i class="fas fa-signature mr-1 text-emerald-500"></i>Email From Name</label>' +
             '<input type="text" id="fullEmailFromName" value="' + esc(c.full_email_from_name || '') + '" placeholder="Reuse Canada Roofing" class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-400"></div>' +
-          '<div><label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-file-signature mr-1 text-emerald-500"></i>Email Signature</label>' +
+          '<div><label class="block text-sm font-semibold text-black mb-1"><i class="fas fa-file-signature mr-1 text-emerald-500"></i>Email Signature</label>' +
             '<input type="text" id="fullEmailSig" value="' + esc(c.full_email_signature || '') + '" placeholder="Best regards, The Reuse Canada Roofing Team" class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-400"></div>' +
         '</div>' +
 
@@ -893,29 +893,29 @@
   }
 
   function radioOpt(name, value, label, current) {
-    return '<label class="flex items-center gap-3 p-2 rounded-lg hover:bg-[#111111]/5 cursor-pointer">' +
+    return '<label class="flex items-center gap-3 p-2 rounded-lg hover:bg-[#DBEAFE]/5 cursor-pointer">' +
       '<input type="radio" name="' + name + '" value="' + value + '" ' + (current === value ? 'checked' : '') + ' onchange="document.getElementById(\'answeringFwdWrap\').classList.toggle(\'hidden\', this.value===\'take_message\')" class="w-4 h-4 text-blue-400">' +
-      '<span class="text-sm text-gray-300">' + label + '</span></label>';
+      '<span class="text-sm text-black">' + label + '</span></label>';
   }
 
   function capToggle(id, icon, label, checked) {
     return '<label class="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl cursor-pointer">' +
       '<input type="checkbox" id="' + id + '" ' + (checked ? 'checked' : '') + ' class="w-4 h-4 text-emerald-500 rounded">' +
-      '<span class="text-sm text-gray-300"><i class="fas ' + icon + ' text-emerald-400 mr-1"></i>' + label + '</span></label>';
+      '<span class="text-sm text-black"><i class="fas ' + icon + ' text-emerald-400 mr-1"></i>' + label + '</span></label>';
   }
 
   function dirCard(d, i) {
-    return '<div class="border border-white/10 rounded-xl p-4 bg-[#0A0A0A]" data-dir="' + i + '">' +
+    return '<div class="border border-white/10 rounded-xl p-4 bg-[#DBEAFE]" data-dir="' + i + '">' +
       '<div class="flex items-center justify-between mb-2">' +
-        '<span class="font-semibold text-gray-300 text-sm"><i class="fas fa-folder text-gray-400 mr-1"></i>Directory ' + (i+1) + '</span>' +
+        '<span class="font-semibold text-black text-sm"><i class="fas fa-folder text-black mr-1"></i>Directory ' + (i+1) + '</span>' +
         (i >= 2 ? '<button onclick="secRemoveDir(' + i + ')" class="text-red-400 hover:text-red-400 text-xs"><i class="fas fa-trash mr-1"></i>Remove</button>' : '') +
       '</div>' +
       '<div class="grid grid-cols-1 md:grid-cols-3 gap-3">' +
-        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Department Name</label>' +
+        '<div><label class="block text-xs font-medium text-black mb-1">Department Name</label>' +
           '<input type="text" id="dirName' + i + '" value="' + esc(d.name || '') + '" placeholder="e.g. Sales / Estimates" class="w-full border border-white/15 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-400"></div>' +
-        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Transfer To</label>' +
+        '<div><label class="block text-xs font-medium text-black mb-1">Transfer To</label>' +
           '<input type="text" id="dirAction' + i + '" value="' + esc(d.phone_or_action || '') + '" placeholder="(780) 555-0101 or Take a message" class="w-full border border-white/15 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-400"></div>' +
-        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Special Notes</label>' +
+        '<div><label class="block text-xs font-medium text-black mb-1">Special Notes</label>' +
           '<input type="text" id="dirNotes' + i + '" value="' + esc(d.special_notes || '') + '" placeholder="Hours, key info, special instructions..." class="w-full border border-white/15 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-400"></div>' +
       '</div></div>';
   }
@@ -927,7 +927,7 @@
       'style="' + (selected ? 'border-color:' + color + ';background:' + bg : '') + '">' +
       '<div class="flex items-center gap-3 mb-2">' +
         '<div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:' + color + '20"><i class="fas ' + icon + '" style="color:' + color + ';font-size:16px"></i></div>' +
-        '<div class="flex-1"><p class="font-bold text-gray-100 text-sm">' + title + '</p></div>' +
+        '<div class="flex-1"><p class="font-bold text-black text-sm">' + title + '</p></div>' +
         (selected ? '<span class="w-5 h-5 bg-emerald-500/100 rounded-full flex items-center justify-center"><i class="fas fa-check text-white text-[10px]"></i></span>' : '<span class="w-5 h-5 border-2 border-white/15 rounded-full"></span>') +
       '</div>' +
       '<p class="text-xs text-gray-500 leading-relaxed">' + desc + '</p>' +
@@ -969,9 +969,9 @@
       { num: 3, label: 'Live!', icon: 'fa-bolt', done: step >= 3 },
     ];
 
-    var html = '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-5 mb-6">' +
+    var html = '<div class="bg-[#DBEAFE] rounded-2xl border border-white/10 shadow-sm p-5 mb-6">' +
       '<div class="flex items-center justify-between mb-2">' +
-        '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-phone-alt text-sky-500 mr-2"></i>Connect Your Phone</h3>' +
+        '<h3 class="font-bold text-black text-lg"><i class="fas fa-phone-alt text-sky-500 mr-2"></i>Connect Your Phone</h3>' +
         (isConnected ? '<span class="px-3 py-1 bg-emerald-500/15 text-emerald-400 rounded-full text-sm font-semibold"><i class="fas fa-check-circle mr-1"></i>Connected</span>' :
          '<span class="px-3 py-1 bg-sky-50 text-sky-600 rounded-full text-sm font-medium">3 easy steps</span>') +
       '</div>' +
@@ -983,9 +983,9 @@
       html += '<div class="flex-1">' +
         '<div class="flex items-center gap-2 mb-1">' +
           '<div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ' +
-            (s.done ? 'bg-emerald-500/100 text-white' : isCurrent ? 'bg-sky-500 text-white ring-4 ring-sky-100' : 'bg-gray-200 text-gray-400') + '">' +
+            (s.done ? 'bg-emerald-500/100 text-white' : isCurrent ? 'bg-sky-500 text-white ring-4 ring-sky-100' : 'bg-gray-200 text-black') + '">' +
             (s.done ? '<i class="fas fa-check text-xs"></i>' : '<i class="fas ' + s.icon + ' text-xs"></i>') + '</div>' +
-          '<span class="text-xs font-semibold ' + (s.done ? 'text-emerald-400' : isCurrent ? 'text-sky-600' : 'text-gray-400') + '">' + s.label + '</span>' +
+          '<span class="text-xs font-semibold ' + (s.done ? 'text-emerald-400' : isCurrent ? 'text-sky-600' : 'text-black') + '">' + s.label + '</span>' +
         '</div>' +
         '<div class="h-1.5 rounded-full ' + (s.done ? 'bg-green-400' : isCurrent ? 'bg-sky-400' : 'bg-gray-200') + '"></div>' +
       '</div>';
@@ -1012,12 +1012,12 @@
     if (existingAiPhone && existingAiPhone.includes('0000')) existingAiPhone = '';
 
     el.innerHTML =
-      '<div class="bg-[#111111] rounded-2xl border-2 border-sky-100 shadow-sm p-8">' +
+      '<div class="bg-[#DBEAFE] rounded-2xl border-2 border-sky-100 shadow-sm p-8">' +
         '<div class="max-w-lg mx-auto">' +
           '<div class="text-center mb-6">' +
             '<div class="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
               '<i class="fas fa-mobile-alt text-sky-500 text-2xl"></i></div>' +
-            '<h4 class="text-xl font-extrabold text-gray-100 mb-2">Set Up Your Phone Numbers</h4>' +
+            '<h4 class="text-xl font-extrabold text-black mb-2">Set Up Your Phone Numbers</h4>' +
             '<p class="text-gray-500 text-sm">Get a new AI number from our LiveKit-managed inventory — included with your Secretary subscription.</p>' +
           '</div>' +
 
@@ -1025,11 +1025,11 @@
           '<div class="mb-5 bg-gradient-to-br from-[#0b2237] to-[#0a1525] border border-sky-500/30 rounded-2xl p-4">' +
             '<div class="flex items-center justify-between mb-2">' +
               '<div><div class="text-sm font-bold text-sky-200"><i class="fas fa-bolt mr-1"></i>Get a new number — included</div>' +
-              '<div class="text-xs text-gray-400">We handle provisioning, routing, and the LiveKit trunk. Just pick one.</div></div>' +
+              '<div class="text-xs text-black">We handle provisioning, routing, and the LiveKit trunk. Just pick one.</div></div>' +
               '<button onclick="secOpenNumberPicker()" class="text-xs bg-sky-500 hover:bg-sky-600 text-white rounded-lg px-3 py-2 font-semibold"><i class="fas fa-search mr-1"></i>Browse Numbers</button>' +
             '</div>' +
-            '<details class="mt-2"><summary class="text-xs text-gray-400 cursor-pointer hover:text-gray-200">How does this work?</summary>' +
-              '<div class="text-xs text-gray-400 mt-2 space-y-1">' +
+            '<details class="mt-2"><summary class="text-xs text-black cursor-pointer hover:text-black">How does this work?</summary>' +
+              '<div class="text-xs text-black mt-2 space-y-1">' +
                 '<p>1. Pick a number in any area code.</p>' +
                 '<p>2. We allocate it from LiveKit Cloud and bind it to your AI agent automatically — no SIP config on your end.</p>' +
                 '<p>3. The number is included in your Secretary subscription — no per-number fee.</p>' +
@@ -1038,11 +1038,11 @@
 
           // Business Phone Number
           '<div class="mb-5">' +
-            '<label class="block text-sm font-semibold text-gray-300 mb-2"><i class="fas fa-phone text-sky-500 mr-1"></i>Your Business Phone Number</label>' +
-            '<p class="text-xs text-gray-400 mb-2">This is your regular cell phone number — the one your customers call. You\'ll forward unanswered calls from this number to the AI.</p>' +
+            '<label class="block text-sm font-semibold text-black mb-2"><i class="fas fa-phone text-sky-500 mr-1"></i>Your Business Phone Number</label>' +
+            '<p class="text-xs text-black mb-2">This is your regular cell phone number — the one your customers call. You\'ll forward unanswered calls from this number to the AI.</p>' +
             '<div class="relative">' +
               '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">' +
-                '<span class="text-gray-400 font-mono text-lg">+1</span></div>' +
+                '<span class="text-black font-mono text-lg">+1</span></div>' +
               '<input type="tel" id="qcBizPhoneInput" value="' + esc(existingBizPhone.replace(/^\+1/, '')) + '" placeholder="(780) 983-3335" ' +
                 'class="w-full pl-14 pr-4 py-4 text-lg font-mono border-2 border-white/15 rounded-2xl focus:ring-4 focus:ring-sky-200 focus:border-sky-500 transition-all text-center" ' +
                 'maxlength="14" autocomplete="tel">' +
@@ -1051,11 +1051,11 @@
 
           // AI Phone Number (purchased from Twilio/Vonage/Telnyx)
           '<div class="mb-5">' +
-            '<label class="block text-sm font-semibold text-gray-300 mb-2"><i class="fas fa-robot text-emerald-500 mr-1"></i>AI Phone Number (Purchased for the AI)</label>' +
-            '<p class="text-xs text-gray-400 mb-2">This is the phone number you purchased from <strong>Twilio</strong>, <strong>Vonage</strong>, or <strong>Telnyx</strong> for the AI to answer calls on. You\'ll forward your cell to this number.</p>' +
+            '<label class="block text-sm font-semibold text-black mb-2"><i class="fas fa-robot text-emerald-500 mr-1"></i>AI Phone Number (Purchased for the AI)</label>' +
+            '<p class="text-xs text-black mb-2">This is the phone number you purchased from <strong>Twilio</strong>, <strong>Vonage</strong>, or <strong>Telnyx</strong> for the AI to answer calls on. You\'ll forward your cell to this number.</p>' +
             '<div class="relative">' +
               '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">' +
-                '<span class="text-gray-400 font-mono text-lg">+1</span></div>' +
+                '<span class="text-black font-mono text-lg">+1</span></div>' +
               '<input type="tel" id="qcAiPhoneInput" value="' + esc(existingAiPhone.replace(/^\+1/, '')) + '" placeholder="(484) 964-9758" ' +
                 'class="w-full pl-14 pr-4 py-4 text-lg font-mono border-2 border-emerald-300 rounded-2xl focus:ring-4 focus:ring-emerald-200 focus:border-emerald-500 transition-all text-center bg-emerald-50/50" ' +
                 'maxlength="14" autocomplete="tel">' +
@@ -1064,13 +1064,13 @@
 
           // Purchase help
           '<div class="bg-blue-500/15/10 border border-white/15 rounded-xl p-4 mb-6">' +
-            '<p class="text-sm font-semibold text-gray-400 mb-2"><i class="fas fa-lightbulb text-gray-400 mr-1"></i>Don\'t have an AI phone number yet?</p>' +
-            '<p class="text-xs text-gray-400 mb-2">You need to purchase a phone number from one of these VoIP/SIP providers to use with LiveKit:</p>' +
+            '<p class="text-sm font-semibold text-black mb-2"><i class="fas fa-lightbulb text-black mr-1"></i>Don\'t have an AI phone number yet?</p>' +
+            '<p class="text-xs text-black mb-2">You need to purchase a phone number from one of these VoIP/SIP providers to use with LiveKit:</p>' +
             '<div class="flex flex-wrap gap-2">' +
-              '<a href="https://www.twilio.com/phone-numbers" target="_blank" class="text-xs bg-[#111111] border border-white/15 rounded-lg px-3 py-1.5 text-gray-400 hover:bg-white/10 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Twilio</a>' +
-              '<a href="https://www.vonage.com/communications-apis/numbers/" target="_blank" class="text-xs bg-[#111111] border border-white/15 rounded-lg px-3 py-1.5 text-gray-400 hover:bg-white/10 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Vonage</a>' +
-              '<a href="https://telnyx.com/products/phone-numbers" target="_blank" class="text-xs bg-[#111111] border border-white/15 rounded-lg px-3 py-1.5 text-gray-400 hover:bg-white/10 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Telnyx</a>' +
-              '<a href="https://docs.livekit.io/agents/quickstarts/sip/" target="_blank" class="text-xs bg-[#111111] border border-white/15 rounded-lg px-3 py-1.5 text-gray-400 hover:bg-white/10 font-medium"><i class="fas fa-external-link-alt mr-1"></i>LiveKit SIP</a>' +
+              '<a href="https://www.twilio.com/phone-numbers" target="_blank" class="text-xs bg-[#DBEAFE] border border-white/15 rounded-lg px-3 py-1.5 text-black hover:bg-white/10 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Twilio</a>' +
+              '<a href="https://www.vonage.com/communications-apis/numbers/" target="_blank" class="text-xs bg-[#DBEAFE] border border-white/15 rounded-lg px-3 py-1.5 text-black hover:bg-white/10 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Vonage</a>' +
+              '<a href="https://telnyx.com/products/phone-numbers" target="_blank" class="text-xs bg-[#DBEAFE] border border-white/15 rounded-lg px-3 py-1.5 text-black hover:bg-white/10 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Telnyx</a>' +
+              '<a href="https://docs.livekit.io/agents/quickstarts/sip/" target="_blank" class="text-xs bg-[#DBEAFE] border border-white/15 rounded-lg px-3 py-1.5 text-black hover:bg-white/10 font-medium"><i class="fas fa-external-link-alt mr-1"></i>LiveKit SIP</a>' +
             '</div>' +
             '<p class="text-xs text-blue-400 mt-2">Pre-configured dev number: <strong class="font-mono">+1 (484) 964-9758</strong> (LiveKit-provided)</p>' +
           '</div>' +
@@ -1078,7 +1078,7 @@
           '<button onclick="qcSavePhones()" id="qcSaveBtn" class="w-full py-4 bg-sky-500 text-white rounded-2xl font-bold text-base hover:bg-sky-600 transition-all shadow-lg hover:shadow-xl">' +
             '<i class="fas fa-save mr-2"></i>Save Phone Numbers & Continue</button>' +
 
-          '<p class="text-xs text-gray-400 mt-4 text-center"><i class="fas fa-lock mr-1"></i>Your phone numbers are stored securely and used only for call forwarding setup.</p>' +
+          '<p class="text-xs text-black mt-4 text-center"><i class="fas fa-lock mr-1"></i>Your phone numbers are stored securely and used only for call forwarding setup.</p>' +
         '</div>' +
       '</div>';
 
@@ -1191,21 +1191,21 @@
     var carrierFormHtml = renderCarrierForwardingForm(aiPhoneRaw, false);
 
     el.innerHTML =
-      '<div class="bg-[#111111] rounded-2xl border-2 border-white/15 shadow-sm p-8">' +
+      '<div class="bg-[#DBEAFE] rounded-2xl border-2 border-white/15 shadow-sm p-8">' +
         '<div class="max-w-lg mx-auto">' +
           '<div class="text-center mb-6">' +
             '<div class="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">' +
-              '<i class="fas fa-random text-gray-400 text-2xl"></i></div>' +
-            '<h4 class="text-xl font-extrabold text-gray-100 mb-2">Set Up Call Forwarding</h4>' +
+              '<i class="fas fa-random text-black text-2xl"></i></div>' +
+            '<h4 class="text-xl font-extrabold text-black mb-2">Set Up Call Forwarding</h4>' +
             '<p class="text-gray-500 text-sm">Forward unanswered calls from your business phone to your AI number so the AI secretary can pick up when you can\'t.</p>' +
           '</div>' +
 
           // Both phone numbers display
           '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">' +
-            '<div class="bg-[#0A0A0A] border border-white/10 rounded-xl p-4 text-center">' +
+            '<div class="bg-[#DBEAFE] border border-white/10 rounded-xl p-4 text-center">' +
               '<p class="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Your Business Phone</p>' +
-              '<p class="font-mono font-bold text-gray-100 text-lg">' + bizPhone + '</p>' +
-              '<p class="text-xs text-gray-400 mt-1">Forwards unanswered calls →</p>' +
+              '<p class="font-mono font-bold text-black text-lg">' + bizPhone + '</p>' +
+              '<p class="text-xs text-black mt-1">Forwards unanswered calls →</p>' +
             '</div>' +
             '<div class="bg-sky-50 border-2 border-sky-200 rounded-xl p-4 text-center">' +
               '<p class="text-xs text-sky-600 uppercase tracking-wide font-semibold mb-1">AI Secretary Number</p>' +
@@ -1228,11 +1228,11 @@
           '<div class="mt-6 text-center">' +
             '<button onclick="qcActivate()" id="qcActivateBtn" class="w-full py-4 bg-emerald-500/100 text-white rounded-2xl font-bold text-base hover:bg-green-600 transition-all shadow-lg hover:shadow-xl">' +
               '<i class="fas fa-check-circle mr-2"></i>I\'ve Set Up Call Forwarding — Confirm & Activate</button>' +
-            '<p class="text-xs text-gray-400 mt-3">This will save your configuration and deploy the AI agent to your LiveKit account.</p>' +
+            '<p class="text-xs text-black mt-3">This will save your configuration and deploy the AI agent to your LiveKit account.</p>' +
           '</div>' +
 
           '<div class="mt-4 text-center">' +
-            '<button onclick="qcGoBack()" class="text-sm text-gray-500 hover:text-gray-400 font-semibold"><i class="fas fa-arrow-left mr-1"></i>Go Back & Edit Phone Numbers</button>' +
+            '<button onclick="qcGoBack()" class="text-sm text-gray-500 hover:text-black font-semibold"><i class="fas fa-arrow-left mr-1"></i>Go Back & Edit Phone Numbers</button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -1268,7 +1268,7 @@
           '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">1</span>' +
           '<div><p class="text-sm text-emerald-800 font-semibold">Forward when busy or no answer</p>' +
             '<p class="text-xs text-emerald-600 mt-1">From your Telus phone, dial:</p>' +
-            '<div class="bg-[#111111] border border-emerald-300 rounded-lg p-3 mt-2 font-mono text-lg text-center">' +
+            '<div class="bg-[#DBEAFE] border border-emerald-300 rounded-lg p-3 mt-2 font-mono text-lg text-center">' +
               '<span class="text-emerald-700 font-black">*92 ' + digits + '</span>' +
               '<button onclick="copyToClipboard(\'*92' + digits + '\')" class="ml-2 text-xs text-emerald-500 hover:text-emerald-700"><i class="fas fa-copy"></i></button>' +
             '</div>' +
@@ -1279,8 +1279,8 @@
           '<div><p class="text-sm text-emerald-800 font-semibold">Wait for confirmation tone</p>' +
             '<p class="text-xs text-emerald-600 mt-1">You\'ll hear a confirmation tone or see a notification that call forwarding is active.</p></div></div>' +
         '<div class="flex items-start gap-3">' +
-          '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-gray-300 text-gray-400 flex items-center justify-center text-xs font-bold"><i class="fas fa-undo text-xs"></i></span>' +
-          '<div><p class="text-sm text-gray-300 font-semibold">To deactivate later</p>' +
+          '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-gray-300 text-black flex items-center justify-center text-xs font-bold"><i class="fas fa-undo text-xs"></i></span>' +
+          '<div><p class="text-sm text-black font-semibold">To deactivate later</p>' +
             '<p class="text-xs text-gray-500 mt-1">Dial <span class="font-mono font-bold">*93</span> from your Telus phone to cancel forwarding.</p></div></div>' +
       '</div>' +
     '</div>';
@@ -1298,20 +1298,20 @@
           '<div><p class="text-sm text-blue-800 font-semibold">Find your carrier\'s forwarding instructions</p>' +
             '<p class="text-xs text-blue-400 mt-1">Search: <em>"[Your Carrier] set up conditional call forwarding"</em> or call your carrier\'s customer service line.</p>' +
             '<div class="flex flex-wrap gap-2 mt-2">' +
-              '<a href="https://www.google.com/search?q=Telus+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Telus</a>' +
-              '<a href="https://www.google.com/search?q=Rogers+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Rogers</a>' +
-              '<a href="https://www.google.com/search?q=Bell+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Bell</a>' +
-              '<a href="https://www.google.com/search?q=Koodo+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Koodo</a>' +
-              '<a href="https://www.google.com/search?q=Fido+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Fido</a>' +
-              '<a href="https://www.google.com/search?q=Freedom+Mobile+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Freedom</a>' +
-              '<a href="https://www.google.com/search?q=AT%26T+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">AT&T</a>' +
-              '<a href="https://www.google.com/search?q=T-Mobile+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">T-Mobile</a>' +
-              '<a href="https://www.google.com/search?q=Verizon+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Verizon</a>' +
+              '<a href="https://www.google.com/search?q=Telus+conditional+call+forwarding" target="_blank" class="text-xs bg-[#DBEAFE] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Telus</a>' +
+              '<a href="https://www.google.com/search?q=Rogers+conditional+call+forwarding" target="_blank" class="text-xs bg-[#DBEAFE] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Rogers</a>' +
+              '<a href="https://www.google.com/search?q=Bell+conditional+call+forwarding" target="_blank" class="text-xs bg-[#DBEAFE] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Bell</a>' +
+              '<a href="https://www.google.com/search?q=Koodo+conditional+call+forwarding" target="_blank" class="text-xs bg-[#DBEAFE] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Koodo</a>' +
+              '<a href="https://www.google.com/search?q=Fido+conditional+call+forwarding" target="_blank" class="text-xs bg-[#DBEAFE] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Fido</a>' +
+              '<a href="https://www.google.com/search?q=Freedom+Mobile+conditional+call+forwarding" target="_blank" class="text-xs bg-[#DBEAFE] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Freedom</a>' +
+              '<a href="https://www.google.com/search?q=AT%26T+conditional+call+forwarding" target="_blank" class="text-xs bg-[#DBEAFE] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">AT&T</a>' +
+              '<a href="https://www.google.com/search?q=T-Mobile+conditional+call+forwarding" target="_blank" class="text-xs bg-[#DBEAFE] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">T-Mobile</a>' +
+              '<a href="https://www.google.com/search?q=Verizon+conditional+call+forwarding" target="_blank" class="text-xs bg-[#DBEAFE] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Verizon</a>' +
             '</div></div></div>' +
         '<div class="flex items-start gap-3">' +
           '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500/100 text-white flex items-center justify-center text-xs font-bold">2</span>' +
           '<div><p class="text-sm text-blue-800 font-semibold">Set the forwarding number to:</p>' +
-            '<div class="bg-[#111111] border border-blue-300 rounded-lg p-3 mt-2 font-mono text-lg text-center">' +
+            '<div class="bg-[#DBEAFE] border border-blue-300 rounded-lg p-3 mt-2 font-mono text-lg text-center">' +
               '<span class="text-blue-700 font-black">' + formattedNum + '</span>' +
               '<button onclick="copyToClipboard(\'' + esc(aiNumber) + '\')" class="ml-2 text-xs text-blue-500 hover:text-blue-700"><i class="fas fa-copy"></i></button>' +
             '</div></div></div>' +
@@ -1321,7 +1321,7 @@
             '<p class="text-xs text-blue-400 mt-1">This way your phone rings first. If you don\'t answer, the AI picks up. You stay in control.</p></div></div>' +
       '</div>' +
       '<div class="mt-4 bg-blue-500/15/10 border border-white/15 rounded-lg p-3">' +
-        '<p class="text-xs text-gray-400"><i class="fas fa-lightbulb text-gray-400 mr-1"></i><strong>Tip:</strong> Most carriers let you do this from your phone by dialing a short code (like *92 or **62*). Check with your carrier for the exact code.</p>' +
+        '<p class="text-xs text-black"><i class="fas fa-lightbulb text-black mr-1"></i><strong>Tip:</strong> Most carriers let you do this from your phone by dialing a short code (like *92 or **62*). Check with your carrier for the exact code.</p>' +
       '</div>' +
     '</div>';
   }
@@ -1329,8 +1329,8 @@
   // Carrier-specific forwarding form (only for Directory mode)
   function renderCarrierForwardingForm(aiNumber, isDev) {
     if (isDev) return ''; // Dev account already has Telus instructions
-    return '<div class="bg-[#0A0A0A] border border-white/10 rounded-xl p-4 mb-4">' +
-      '<p class="text-sm font-semibold text-gray-300 mb-2"><i class="fas fa-question-circle text-sky-500 mr-1"></i>Need help finding your carrier\'s forwarding code?</p>' +
+    return '<div class="bg-[#DBEAFE] border border-white/10 rounded-xl p-4 mb-4">' +
+      '<p class="text-sm font-semibold text-black mb-2"><i class="fas fa-question-circle text-sky-500 mr-1"></i>Need help finding your carrier\'s forwarding code?</p>' +
       '<p class="text-xs text-gray-500 mb-3">Select your carrier below for specific dial codes:</p>' +
       '<select id="qcCarrierSelect" onchange="qcShowCarrierCode()" class="w-full border border-white/15 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-400 mb-2">' +
         '<option value="">Select your carrier...</option>' +
@@ -1368,14 +1368,14 @@
     var c = codes[sel.value];
     if (!c) { result.innerHTML = ''; return; }
     result.innerHTML =
-      '<div class="bg-[#111111] border border-sky-200 rounded-lg p-3 mt-2">' +
+      '<div class="bg-[#DBEAFE] border border-sky-200 rounded-lg p-3 mt-2">' +
         '<p class="text-xs text-gray-500 mb-1">' + c.note + '</p>' +
         '<div class="flex items-center gap-2">' +
-          '<span class="text-sm font-semibold text-gray-300">Dial:</span>' +
+          '<span class="text-sm font-semibold text-black">Dial:</span>' +
           '<span class="font-mono font-bold text-sky-700 text-lg">' + c.activate + '</span>' +
           '<button onclick="copyToClipboard(\'' + c.activate + '\')" class="text-xs text-sky-500 hover:text-sky-700"><i class="fas fa-copy"></i></button>' +
         '</div>' +
-        '<p class="text-xs text-gray-400 mt-1">To deactivate: <span class="font-mono">' + c.deactivate + '</span></p>' +
+        '<p class="text-xs text-black mt-1">To deactivate: <span class="font-mono">' + c.deactivate + '</span></p>' +
       '</div>';
   };
 
@@ -1424,10 +1424,10 @@
     var aiPhoneRaw = qc.ai_phone_number || ps.assigned_phone_number || '';
 
     el.innerHTML =
-      '<div class="bg-[#111111] rounded-2xl border-2 border-green-200 shadow-sm p-8 text-center">' +
+      '<div class="bg-[#DBEAFE] rounded-2xl border-2 border-green-200 shadow-sm p-8 text-center">' +
         '<div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
           '<i class="fas fa-check-circle text-green-500 text-4xl"></i></div>' +
-        '<h3 class="text-2xl font-extrabold text-gray-100 mb-2">Your AI Secretary is LIVE!</h3>' +
+        '<h3 class="text-2xl font-extrabold text-black mb-2">Your AI Secretary is LIVE!</h3>' +
         '<p class="text-gray-500 mb-6">Every call to your business number is now backed by AI. Powered by LiveKit — never miss a lead again.</p>' +
 
         '<div class="bg-sky-50 border border-sky-200 rounded-xl p-4 mb-6 text-left max-w-lg mx-auto">' +
@@ -1436,9 +1436,9 @@
         '</div>' +
 
         '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-lg mx-auto mb-6">' +
-          '<div class="bg-[#0A0A0A] rounded-xl p-4">' +
+          '<div class="bg-[#DBEAFE] rounded-xl p-4">' +
             '<p class="text-xs text-gray-500 uppercase tracking-wide">Your Business Number</p>' +
-            '<p class="font-mono font-bold text-gray-100 text-lg mt-1">' + bizPhone + '</p></div>' +
+            '<p class="font-mono font-bold text-black text-lg mt-1">' + bizPhone + '</p></div>' +
           '<div class="bg-sky-50 rounded-xl p-4">' +
             '<p class="text-xs text-sky-600 uppercase tracking-wide">AI Secretary Number</p>' +
             '<p class="font-mono font-bold text-sky-800 text-lg mt-1">' + aiPhone + '</p>' +
@@ -1465,15 +1465,15 @@
 
         '<div class="flex justify-center gap-3 mb-6 flex-wrap">' +
           '<button onclick="qcOpenPhoneConfig()" class="px-6 py-3 bg-sky-500 text-white rounded-xl font-semibold text-sm hover:bg-sky-600 transition-all shadow"><i class="fas fa-edit mr-2"></i>Edit Phone Configuration</button>' +
-          '<button onclick="secSetTab(\'setup\')" class="px-6 py-3 bg-white/5 text-gray-300 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-all"><i class="fas fa-cog mr-2"></i>Edit AI Settings</button>' +
-          '<button onclick="secSetTab(\'calls\')" class="px-6 py-3 bg-white/5 text-gray-300 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-all"><i class="fas fa-phone-volume mr-2"></i>View Call Log</button>' +
+          '<button onclick="secSetTab(\'setup\')" class="px-6 py-3 bg-white/5 text-black rounded-xl font-semibold text-sm hover:bg-gray-200 transition-all"><i class="fas fa-cog mr-2"></i>Edit AI Settings</button>' +
+          '<button onclick="secSetTab(\'calls\')" class="px-6 py-3 bg-white/5 text-black rounded-xl font-semibold text-sm hover:bg-gray-200 transition-all"><i class="fas fa-phone-volume mr-2"></i>View Call Log</button>' +
         '</div>' +
 
         '<div class="text-center mb-4">' +
           '<button onclick="qcDisconnect()" class="text-sm text-red-400 hover:text-red-400 font-medium"><i class="fas fa-unlink mr-1"></i>Disconnect AI Secretary</button>' +
         '</div>' +
 
-        '<p class="text-xs text-gray-400 text-center">Need help? Contact support. Your AI secretary is powered by LiveKit voice AI.</p>' +
+        '<p class="text-xs text-black text-center">Need help? Contact support. Your AI secretary is powered by LiveKit voice AI.</p>' +
       '</div>';
   }
 
@@ -1491,36 +1491,36 @@
     modal.id = 'phoneConfigModal';
     modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm';
     modal.innerHTML =
-      '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">' +
+      '<div class="bg-[#DBEAFE] rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">' +
         '<div class="bg-gradient-to-r from-[#111111] to-[#1a1a1a] p-5 text-white">' +
           '<div class="flex items-center justify-between">' +
             '<div><h2 class="text-lg font-bold"><i class="fas fa-phone-alt mr-2"></i>Edit Phone Configuration</h2>' +
             '<p class="text-sky-100 text-xs mt-1">Update your business phone and AI phone numbers</p></div>' +
-            '<button onclick="document.getElementById(\'phoneConfigModal\').remove()" class="w-8 h-8 rounded-full bg-[#111111]/20 flex items-center justify-center hover:bg-[#111111]/30 transition-all"><i class="fas fa-times text-sm"></i></button>' +
+            '<button onclick="document.getElementById(\'phoneConfigModal\').remove()" class="w-8 h-8 rounded-full bg-[#DBEAFE]/20 flex items-center justify-center hover:bg-[#DBEAFE]/30 transition-all"><i class="fas fa-times text-sm"></i></button>' +
           '</div>' +
         '</div>' +
         '<div class="p-6">' +
           '<div class="mb-5">' +
-            '<label class="block text-sm font-semibold text-gray-300 mb-2"><i class="fas fa-phone text-sky-500 mr-1"></i>Your Business Phone Number</label>' +
-            '<p class="text-xs text-gray-400 mb-2">Your regular cell number that customers call</p>' +
+            '<label class="block text-sm font-semibold text-black mb-2"><i class="fas fa-phone text-sky-500 mr-1"></i>Your Business Phone Number</label>' +
+            '<p class="text-xs text-black mb-2">Your regular cell number that customers call</p>' +
             '<div class="relative">' +
-              '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none"><span class="text-gray-400 font-mono">+1</span></div>' +
+              '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none"><span class="text-black font-mono">+1</span></div>' +
               '<input type="tel" id="pcBizPhone" value="' + esc(bizPhone.replace(/^\+1/, '')) + '" placeholder="(780) 983-3335" ' +
                 'class="w-full pl-12 pr-4 py-3 font-mono border-2 border-white/15 rounded-xl focus:ring-4 focus:ring-sky-200 focus:border-sky-500 text-center" maxlength="14">' +
             '</div>' +
           '</div>' +
           '<div class="mb-5">' +
-            '<label class="block text-sm font-semibold text-gray-300 mb-2"><i class="fas fa-robot text-emerald-500 mr-1"></i>AI Phone Number (Purchased)</label>' +
-            '<p class="text-xs text-gray-400 mb-2">Phone number purchased from Twilio/Vonage/Telnyx for the AI</p>' +
+            '<label class="block text-sm font-semibold text-black mb-2"><i class="fas fa-robot text-emerald-500 mr-1"></i>AI Phone Number (Purchased)</label>' +
+            '<p class="text-xs text-black mb-2">Phone number purchased from Twilio/Vonage/Telnyx for the AI</p>' +
             '<div class="relative">' +
-              '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none"><span class="text-gray-400 font-mono">+1</span></div>' +
+              '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none"><span class="text-black font-mono">+1</span></div>' +
               '<input type="tel" id="pcAiPhone" value="' + esc(aiPhone.replace(/^\+1/, '')) + '" placeholder="(484) 964-9758" ' +
                 'class="w-full pl-12 pr-4 py-3 font-mono border-2 border-emerald-300 rounded-xl focus:ring-4 focus:ring-emerald-200 focus:border-emerald-500 text-center bg-emerald-50/50" maxlength="14">' +
             '</div>' +
           '</div>' +
           '<div class="flex gap-3">' +
             '<button onclick="qcSavePhoneConfig()" id="pcSaveBtn" class="flex-1 py-3 bg-sky-500 text-white rounded-xl font-bold hover:bg-sky-600 transition-all shadow"><i class="fas fa-save mr-2"></i>Save Changes</button>' +
-            '<button onclick="document.getElementById(\'phoneConfigModal\').remove()" class="px-6 py-3 bg-white/5 text-gray-300 rounded-xl font-semibold hover:bg-gray-200 transition-all">Cancel</button>' +
+            '<button onclick="document.getElementById(\'phoneConfigModal\').remove()" class="px-6 py-3 bg-white/5 text-black rounded-xl font-semibold hover:bg-gray-200 transition-all">Cancel</button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -1646,15 +1646,15 @@
 
     if (state.calls.length === 0 && !state.callSearch) {
       content.innerHTML =
-        '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-12 text-center">' +
-          '<div class="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-phone-slash text-gray-400 text-2xl"></i></div>' +
-          '<h3 class="font-bold text-gray-100 text-lg mb-1">No Calls Yet</h3>' +
+        '<div class="bg-[#DBEAFE] rounded-2xl border border-white/10 shadow-sm p-12 text-center">' +
+          '<div class="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-phone-slash text-black text-2xl"></i></div>' +
+          '<h3 class="font-bold text-black text-lg mb-1">No Calls Yet</h3>' +
           '<p class="text-gray-500 text-sm">When your AI secretary handles calls, they\'ll appear here with full transcripts, lead info, and conversation summaries.</p>' +
           '<div class="flex flex-wrap gap-3 justify-center mt-4">' +
             (state.phoneSetup?.connection_status !== 'connected' ? '<button onclick="secSetTab(\'connect\')" class="px-6 py-3 bg-sky-500 text-white rounded-xl font-semibold text-sm hover:bg-sky-600 transition-all"><i class="fas fa-phone-alt mr-2"></i>Connect Your Phone First</button>' : '') +
             (state.isDev ? '<button onclick="secSimulateCall()" class="px-6 py-3 bg-blue-500/15 text-white rounded-xl font-semibold text-sm hover:bg-blue-500/15 transition-all"><i class="fas fa-vial mr-2"></i>Simulate Test Call</button>' : '') +
           '</div>' +
-          (state.isDev ? '<p class="text-xs text-gray-400 mt-3"><i class="fas fa-flask mr-1"></i>Dev mode: Use "Simulate Test Call" to generate sample call data and verify the UI.</p>' : '') +
+          (state.isDev ? '<p class="text-xs text-black mt-3"><i class="fas fa-flask mr-1"></i>Dev mode: Use "Simulate Test Call" to generate sample call data and verify the UI.</p>' : '') +
         '</div>';
       return;
     }
@@ -1664,33 +1664,33 @@
       var labels = { all: 'All Calls', leads: 'Leads Only', follow_up: 'Needs Follow-Up' };
       var icons = { all: 'fa-list', leads: 'fa-fire', follow_up: 'fa-exclamation-circle' };
       return '<button onclick="secFilterCalls(\'' + f + '\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ' +
-        (active ? 'bg-blue-500/15 text-white shadow' : 'bg-white/5 text-gray-400 hover:bg-gray-200') + '">' +
+        (active ? 'bg-blue-500/15 text-white shadow' : 'bg-white/5 text-black hover:bg-gray-200') + '">' +
         '<i class="fas ' + icons[f] + ' mr-1"></i>' + labels[f] + '</button>';
     }).join('');
 
     content.innerHTML =
-      '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">' +
+      '<div class="bg-[#DBEAFE] rounded-2xl border border-white/10 shadow-sm overflow-hidden">' +
         '<div class="px-6 py-4 border-b border-white/5">' +
           '<div class="flex flex-col md:flex-row md:items-center justify-between gap-3">' +
-            '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-history text-blue-400 mr-2"></i>Call Log <span class="text-gray-400 font-normal text-sm">(' + state.totalCalls + ')</span></h3>' +
+            '<h3 class="font-bold text-black text-lg"><i class="fas fa-history text-blue-400 mr-2"></i>Call Log <span class="text-black font-normal text-sm">(' + state.totalCalls + ')</span></h3>' +
             '<div class="flex items-center gap-2">' +
               '<div class="relative">' +
                 '<input type="text" id="callSearchInput" placeholder="Search calls..." value="' + esc(state.callSearch || '') + '" class="pl-8 pr-3 py-1.5 border border-white/10 rounded-lg text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-500/20 w-44" onkeyup="if(event.key===\'Enter\')secSearchCalls()">' +
-                '<i class="fas fa-search absolute left-2.5 top-2 text-gray-400 text-xs"></i>' +
+                '<i class="fas fa-search absolute left-2.5 top-2 text-black text-xs"></i>' +
               '</div>' +
               filterBtns +
             '</div>' +
           '</div>' +
         '</div>' +
         '<div class="divide-y divide-gray-100">' +
-          (state.calls.length === 0 ? '<div class="p-8 text-center text-gray-400 text-sm"><i class="fas fa-search mr-2"></i>No calls match your filter</div>' :
+          (state.calls.length === 0 ? '<div class="p-8 text-center text-black text-sm"><i class="fas fa-search mr-2"></i>No calls match your filter</div>' :
           state.calls.map(function(call) {
             var oc = call.call_outcome === 'answered' ? 'text-emerald-400 bg-emerald-500/10' :
               call.call_outcome === 'transferred' ? 'text-blue-400 bg-blue-500/10' :
-              call.call_outcome === 'voicemail' ? 'text-blue-400 bg-blue-500/15/10' : 'text-gray-400 bg-[#0A0A0A]';
-            var sentimentIcon = call.sentiment === 'positive' ? 'fa-smile text-green-500' : (call.sentiment === 'negative' ? 'fa-frown text-red-500' : 'fa-meh text-gray-400');
+              call.call_outcome === 'voicemail' ? 'text-blue-400 bg-blue-500/15/10' : 'text-black bg-[#DBEAFE]';
+            var sentimentIcon = call.sentiment === 'positive' ? 'fa-smile text-green-500' : (call.sentiment === 'negative' ? 'fa-frown text-red-500' : 'fa-meh text-black');
             var isLead = call.is_lead;
-            return '<div class="px-6 py-4 hover:bg-[#111111]/5 transition-colors cursor-pointer" onclick="secViewCall(' + call.id + ')">' +
+            return '<div class="px-6 py-4 hover:bg-[#DBEAFE]/5 transition-colors cursor-pointer" onclick="secViewCall(' + call.id + ')">' +
               '<div class="flex items-center justify-between mb-2">' +
                 '<div class="flex items-center gap-3">' +
                   '<div class="w-10 h-10 rounded-full flex items-center justify-center ' + (isLead ? 'bg-white/10' : 'bg-sky-100') + '">' +
@@ -1698,7 +1698,7 @@
                   '</div>' +
                   '<div>' +
                     '<div class="flex items-center gap-2">' +
-                      '<p class="font-semibold text-gray-100 text-sm">' + esc(call.caller_name || 'Unknown Caller') + '</p>' +
+                      '<p class="font-semibold text-black text-sm">' + esc(call.caller_name || 'Unknown Caller') + '</p>' +
                       (isLead ? '<span class="px-1.5 py-0.5 bg-blue-500/15/15 text-blue-400 rounded text-[9px] font-bold">LEAD</span>' : '') +
                       (call.follow_up_required && !call.follow_up_completed ? '<span class="px-1.5 py-0.5 bg-red-500/100/15 text-red-400 rounded text-[9px] font-bold">FOLLOW UP</span>' : '') +
                     '</div>' +
@@ -1713,10 +1713,10 @@
                     '<i class="fas ' + sentimentIcon + ' text-xs"></i>' +
                     '<span class="px-2 py-0.5 rounded-full text-xs font-semibold ' + oc + '">' + (call.call_outcome || 'unknown') + '</span>' +
                   '</div>' +
-                  '<p class="text-xs text-gray-400 mt-1">' + formatDuration(call.call_duration_seconds) + ' — ' + formatTimeAgo(call.created_at) + '</p>' +
+                  '<p class="text-xs text-black mt-1">' + formatDuration(call.call_duration_seconds) + ' — ' + formatTimeAgo(call.created_at) + '</p>' +
                 '</div>' +
               '</div>' +
-              (call.call_summary ? '<p class="text-sm text-gray-400 ml-13 bg-[#0A0A0A] rounded-lg p-3 line-clamp-2"><i class="fas fa-robot text-gray-400 mr-1"></i>' + esc(call.call_summary) + '</p>' : '') +
+              (call.call_summary ? '<p class="text-sm text-black ml-13 bg-[#DBEAFE] rounded-lg p-3 line-clamp-2"><i class="fas fa-robot text-black mr-1"></i>' + esc(call.call_summary) + '</p>' : '') +
               (call.conversation_highlights ? '<p class="text-xs text-blue-400 ml-13 mt-1"><i class="fas fa-star text-blue-400 mr-1"></i>' + esc(call.conversation_highlights).substring(0, 120) + '</p>' : '') +
               '<div class="flex items-center gap-2 ml-13 mt-2">' +
                 '<button onclick="event.stopPropagation(); secViewCall(' + call.id + ')" class="text-xs text-blue-400 hover:text-blue-400 font-medium"><i class="fas fa-file-alt mr-1"></i>Full Transcript</button>' +
@@ -1736,9 +1736,9 @@
 
     if (state.leads.length === 0 && state.leadsCount === 0) {
       content.innerHTML =
-        '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-12 text-center">' +
-          '<div class="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-fire text-gray-400 text-2xl"></i></div>' +
-          '<h3 class="font-bold text-gray-100 text-lg mb-1">No Leads Yet</h3>' +
+        '<div class="bg-[#DBEAFE] rounded-2xl border border-white/10 shadow-sm p-12 text-center">' +
+          '<div class="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-fire text-black text-2xl"></i></div>' +
+          '<h3 class="font-bold text-black text-lg mb-1">No Leads Yet</h3>' +
           '<p class="text-gray-500 text-sm">When callers provide their name, phone, and address, they\'re automatically captured as leads. The AI marks callers as leads when they request an estimate, repair, or service.</p>' +
         '</div>';
       return;
@@ -1760,24 +1760,24 @@
       var cnt = s.id ? (stageCountMap[s.id] || 0) : state.leadsCount;
       var active = (state.leadStatusFilter || '') === s.id;
       return '<button onclick="secFilterLeads(\'' + s.id + '\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ' +
-        (active ? 'bg-' + s.color + '-600 text-white shadow' : 'bg-white/5 text-gray-400 hover:bg-gray-200') + '">' +
+        (active ? 'bg-' + s.color + '-600 text-white shadow' : 'bg-white/5 text-black hover:bg-gray-200') + '">' +
         '<i class="fas ' + s.icon + ' mr-1"></i>' + s.label + (cnt > 0 ? ' (' + cnt + ')' : '') + '</button>';
     }).join('');
 
     content.innerHTML =
-      '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">' +
+      '<div class="bg-[#DBEAFE] rounded-2xl border border-white/10 shadow-sm overflow-hidden">' +
         '<div class="px-6 py-4 border-b border-white/5">' +
           '<div class="flex flex-col md:flex-row md:items-center justify-between gap-3">' +
-            '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-fire text-gray-400 mr-2"></i>Leads <span class="text-gray-400 font-normal text-sm">(' + state.leadsCount + ')</span></h3>' +
+            '<h3 class="font-bold text-black text-lg"><i class="fas fa-fire text-black mr-2"></i>Leads <span class="text-black font-normal text-sm">(' + state.leadsCount + ')</span></h3>' +
             '<div class="flex flex-wrap items-center gap-2">' + stageFilter + '</div>' +
           '</div>' +
         '</div>' +
         '<div class="divide-y divide-gray-100">' +
           state.leads.map(function(lead) {
             var statusColors = { new: 'bg-blue-500/15/15 text-blue-400', contacted: 'bg-blue-500/100/15 text-blue-400', qualified: 'bg-emerald-500/15 text-emerald-400', converted: 'bg-emerald-100 text-emerald-800', lost: 'bg-red-500/100/15 text-red-400' };
-            var sc = statusColors[lead.lead_status] || 'bg-white/5 text-gray-400';
+            var sc = statusColors[lead.lead_status] || 'bg-white/5 text-black';
             var qualityStars = lead.lead_quality === 'hot' ? 3 : (lead.lead_quality === 'warm' ? 2 : 1);
-            return '<div class="px-6 py-4 hover:bg-[#111111]/5 transition-colors cursor-pointer" onclick="secViewCall(' + lead.id + ')">' +
+            return '<div class="px-6 py-4 hover:bg-[#DBEAFE]/5 transition-colors cursor-pointer" onclick="secViewCall(' + lead.id + ')">' +
               '<div class="flex items-center justify-between">' +
                 '<div class="flex items-center gap-3">' +
                   '<div class="w-11 h-11 bg-gradient-to-br from-gray-400 to-emerald-500 rounded-full flex items-center justify-center shadow">' +
@@ -1785,21 +1785,21 @@
                   '</div>' +
                   '<div>' +
                     '<div class="flex items-center gap-2">' +
-                      '<p class="font-bold text-gray-100">' + esc(lead.caller_name || 'Unknown') + '</p>' +
+                      '<p class="font-bold text-black">' + esc(lead.caller_name || 'Unknown') + '</p>' +
                       '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + sc + '">' + (lead.lead_status || 'new').toUpperCase() + '</span>' +
-                      '<span class="text-gray-400 text-xs">' + '★'.repeat(qualityStars) + '<span class="text-gray-300">' + '★'.repeat(3 - qualityStars) + '</span></span>' +
+                      '<span class="text-black text-xs">' + '★'.repeat(qualityStars) + '<span class="text-black">' + '★'.repeat(3 - qualityStars) + '</span></span>' +
                     '</div>' +
                     '<p class="text-xs text-gray-500 mt-0.5">' +
-                      '<i class="fas fa-phone text-gray-400 mr-1"></i>' + esc(lead.caller_phone || '') +
-                      (lead.caller_email ? ' &middot; <i class="fas fa-envelope text-gray-400 mr-1"></i>' + esc(lead.caller_email) : '') +
+                      '<i class="fas fa-phone text-black mr-1"></i>' + esc(lead.caller_phone || '') +
+                      (lead.caller_email ? ' &middot; <i class="fas fa-envelope text-black mr-1"></i>' + esc(lead.caller_email) : '') +
                     '</p>' +
                     (lead.property_address ? '<p class="text-xs text-gray-500"><i class="fas fa-map-marker-alt text-red-400 mr-1"></i>' + esc(lead.property_address) + '</p>' : '') +
                     (lead.service_type ? '<p class="text-xs text-blue-400 font-medium mt-0.5"><i class="fas fa-tools mr-1"></i>' + esc(lead.service_type) + '</p>' : '') +
                   '</div>' +
                 '</div>' +
                 '<div class="text-right flex-shrink-0">' +
-                  '<p class="text-xs text-gray-400">' + formatTimeAgo(lead.created_at) + '</p>' +
-                  '<p class="text-xs text-gray-400 mt-0.5">' + formatDuration(lead.call_duration_seconds) + '</p>' +
+                  '<p class="text-xs text-black">' + formatTimeAgo(lead.created_at) + '</p>' +
+                  '<p class="text-xs text-black mt-0.5">' + formatDuration(lead.call_duration_seconds) + '</p>' +
                   '<div class="flex items-center gap-1 mt-1 justify-end">' +
                     '<select onclick="event.stopPropagation()" onchange="secUpdateLeadStatus(' + lead.id + ', this.value)" class="text-[10px] border border-white/10 rounded px-1 py-0.5">' +
                       '<option value="new"' + (lead.lead_status === 'new' ? ' selected' : '') + '>New</option>' +
@@ -1811,7 +1811,7 @@
                   '</div>' +
                 '</div>' +
               '</div>' +
-              (lead.call_summary ? '<p class="text-sm text-gray-400 mt-2 bg-[#0A0A0A] rounded-lg p-3 line-clamp-2"><i class="fas fa-robot text-gray-400 mr-1"></i>' + esc(lead.call_summary) + '</p>' : '') +
+              (lead.call_summary ? '<p class="text-sm text-black mt-2 bg-[#DBEAFE] rounded-lg p-3 line-clamp-2"><i class="fas fa-robot text-black mr-1"></i>' + esc(lead.call_summary) + '</p>' : '') +
             '</div>';
           }).join('') +
         '</div>' +
@@ -1837,7 +1837,7 @@
 
     var isLead = call.is_lead;
     var sentimentLabel = call.sentiment === 'positive' ? 'Positive' : (call.sentiment === 'negative' ? 'Negative' : 'Neutral');
-    var sentimentColor = call.sentiment === 'positive' ? 'text-emerald-400 bg-emerald-500/10' : (call.sentiment === 'negative' ? 'text-red-400 bg-red-500/10' : 'text-gray-400 bg-[#0A0A0A]');
+    var sentimentColor = call.sentiment === 'positive' ? 'text-emerald-400 bg-emerald-500/10' : (call.sentiment === 'negative' ? 'text-red-400 bg-red-500/10' : 'text-black bg-[#DBEAFE]');
 
     var transcript = call.call_transcript || 'No transcript available for this call.';
     // Format transcript lines
@@ -1848,12 +1848,12 @@
     modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
     modal.innerHTML =
       '<div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="document.getElementById(\'callDetailModal\').remove()"></div>' +
-      '<div class="relative bg-[#111111] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">' +
+      '<div class="relative bg-[#DBEAFE] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">' +
         // Header
         '<div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between">' +
           '<div class="flex items-center gap-3">' +
-            '<div class="w-10 h-10 bg-[#111111]/20 rounded-full flex items-center justify-center">' +
-              '<i class="fas ' + (isLead ? 'fa-fire text-gray-400' : 'fa-phone text-white') + '"></i>' +
+            '<div class="w-10 h-10 bg-[#DBEAFE]/20 rounded-full flex items-center justify-center">' +
+              '<i class="fas ' + (isLead ? 'fa-fire text-black' : 'fa-phone text-white') + '"></i>' +
             '</div>' +
             '<div>' +
               '<h3 class="text-white font-bold">' + esc(call.caller_name || 'Unknown Caller') + '</h3>' +
@@ -1863,8 +1863,8 @@
           '<button onclick="document.getElementById(\'callDetailModal\').remove()" class="text-white/70 hover:text-white text-lg"><i class="fas fa-times"></i></button>' +
         '</div>' +
         // Info bar
-        '<div class="px-6 py-3 bg-[#0A0A0A] border-b border-white/10 flex flex-wrap gap-3">' +
-          '<span class="px-2.5 py-1 rounded-full text-xs font-bold ' + (call.call_outcome === 'answered' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-gray-400') + '"><i class="fas fa-phone-alt mr-1"></i>' + (call.call_outcome || 'unknown') + '</span>' +
+        '<div class="px-6 py-3 bg-[#DBEAFE] border-b border-white/10 flex flex-wrap gap-3">' +
+          '<span class="px-2.5 py-1 rounded-full text-xs font-bold ' + (call.call_outcome === 'answered' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-black') + '"><i class="fas fa-phone-alt mr-1"></i>' + (call.call_outcome || 'unknown') + '</span>' +
           '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-500/15 text-blue-400"><i class="fas fa-clock mr-1"></i>' + formatDuration(call.call_duration_seconds) + '</span>' +
           '<span class="px-2.5 py-1 rounded-full text-xs font-bold ' + sentimentColor + '"><i class="fas fa-' + (call.sentiment === 'positive' ? 'smile' : call.sentiment === 'negative' ? 'frown' : 'meh') + ' mr-1"></i>' + sentimentLabel + '</span>' +
           (isLead ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-500/15/15 text-blue-400"><i class="fas fa-fire mr-1"></i>Lead — ' + (call.lead_status || 'new') + '</span>' : '') +
@@ -1873,15 +1873,15 @@
         // Scrollable body
         '<div class="flex-1 overflow-y-auto px-6 py-4 space-y-4">' +
           // Contact info
-          (call.property_address ? '<div class="flex items-center gap-2 text-sm text-gray-400"><i class="fas fa-map-marker-alt text-red-400 w-5"></i><strong>Address:</strong> ' + esc(call.property_address) + '</div>' : '') +
-          (call.caller_email ? '<div class="flex items-center gap-2 text-sm text-gray-400"><i class="fas fa-envelope text-gray-400 w-5"></i><strong>Email:</strong> ' + esc(call.caller_email) + '</div>' : '') +
-          (call.directory_routed ? '<div class="flex items-center gap-2 text-sm text-gray-400"><i class="fas fa-arrow-right text-gray-400 w-5"></i><strong>Routed to:</strong> ' + esc(call.directory_routed) + '</div>' : '') +
+          (call.property_address ? '<div class="flex items-center gap-2 text-sm text-black"><i class="fas fa-map-marker-alt text-red-400 w-5"></i><strong>Address:</strong> ' + esc(call.property_address) + '</div>' : '') +
+          (call.caller_email ? '<div class="flex items-center gap-2 text-sm text-black"><i class="fas fa-envelope text-black w-5"></i><strong>Email:</strong> ' + esc(call.caller_email) + '</div>' : '') +
+          (call.directory_routed ? '<div class="flex items-center gap-2 text-sm text-black"><i class="fas fa-arrow-right text-black w-5"></i><strong>Routed to:</strong> ' + esc(call.directory_routed) + '</div>' : '') +
 
           // AI Summary
           (call.call_summary ? '<div class="bg-blue-500/15 border border-blue-500/20 rounded-xl p-4"><h4 class="font-bold text-blue-400 text-sm mb-1"><i class="fas fa-robot mr-1"></i>AI Call Summary</h4><p class="text-sm text-blue-400">' + esc(call.call_summary) + '</p></div>' : '') +
 
           // Highlights
-          (call.conversation_highlights ? '<div class="bg-blue-500/15/10 border border-white/15 rounded-xl p-4"><h4 class="font-bold text-gray-400 text-sm mb-1"><i class="fas fa-star mr-1"></i>Key Highlights</h4><p class="text-sm text-gray-400">' + esc(call.conversation_highlights) + '</p></div>' : '') +
+          (call.conversation_highlights ? '<div class="bg-blue-500/15/10 border border-white/15 rounded-xl p-4"><h4 class="font-bold text-black text-sm mb-1"><i class="fas fa-star mr-1"></i>Key Highlights</h4><p class="text-sm text-black">' + esc(call.conversation_highlights) + '</p></div>' : '') +
 
           // Follow-up notes
           (call.follow_up_notes ? '<div class="bg-red-500/10 border border-red-200 rounded-xl p-4"><h4 class="font-bold text-red-800 text-sm mb-1"><i class="fas fa-exclamation-circle mr-1"></i>Follow-Up Notes</h4><p class="text-sm text-red-700">' + esc(call.follow_up_notes) + '</p></div>' : '') +
@@ -1897,15 +1897,15 @@
           '</div>' : '') +
 
           // Full Transcript
-          '<div class="bg-[#0A0A0A] border border-white/10 rounded-xl p-4">' +
-            '<h4 class="font-bold text-gray-100 text-sm mb-3"><i class="fas fa-file-alt mr-1"></i>Full Call Transcript</h4>' +
-            '<div class="text-sm text-gray-300 leading-relaxed font-mono bg-[#111111] rounded-lg p-4 border border-white/5 max-h-64 overflow-y-auto">' +
+          '<div class="bg-[#DBEAFE] border border-white/10 rounded-xl p-4">' +
+            '<h4 class="font-bold text-black text-sm mb-3"><i class="fas fa-file-alt mr-1"></i>Full Call Transcript</h4>' +
+            '<div class="text-sm text-black leading-relaxed font-mono bg-[#DBEAFE] rounded-lg p-4 border border-white/5 max-h-64 overflow-y-auto">' +
               transcriptHtml +
             '</div>' +
           '</div>' +
         '</div>' +
         // Footer actions
-        '<div class="px-6 py-3 border-t border-white/10 bg-[#0A0A0A] flex items-center justify-between">' +
+        '<div class="px-6 py-3 border-t border-white/10 bg-[#DBEAFE] flex items-center justify-between">' +
           '<div class="flex gap-2">' +
             (isLead ? '<select id="modalLeadStatus" onchange="secUpdateLeadStatus(' + call.id + ', this.value)" class="text-xs border border-white/10 rounded-lg px-2 py-1.5">' +
               '<option value="new"' + (call.lead_status === 'new' ? ' selected' : '') + '>New</option>' +
@@ -1915,7 +1915,7 @@
               '<option value="lost"' + (call.lead_status === 'lost' ? ' selected' : '') + '>Lost</option>' +
             '</select>' : '') +
           '</div>' +
-          '<button onclick="document.getElementById(\'callDetailModal\').remove()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-300 rounded-lg text-sm font-medium transition-all">Close</button>' +
+          '<button onclick="document.getElementById(\'callDetailModal\').remove()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-black rounded-lg text-sm font-medium transition-all">Close</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(modal);
@@ -2221,29 +2221,29 @@
     var msgs = state.messages;
 
     content.innerHTML =
-      '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-6">' +
+      '<div class="bg-[#DBEAFE] rounded-2xl border border-white/10 shadow-sm p-6">' +
         '<div class="flex items-center justify-between mb-4">' +
-          '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-envelope text-blue-400 mr-2"></i>Messages' +
+          '<h3 class="font-bold text-black text-lg"><i class="fas fa-envelope text-blue-400 mr-2"></i>Messages' +
             (state.unreadCount > 0 ? ' <span class="px-2 py-0.5 bg-blue-500/15 text-blue-400 rounded-full text-xs font-bold">' + state.unreadCount + ' unread</span>' : '') + '</h3>' +
           (state.unreadCount > 0 ? '<button onclick="secMarkAllRead()" class="text-xs text-blue-400 hover:text-blue-400 font-semibold"><i class="fas fa-check-double mr-1"></i>Mark All Read</button>' : '') +
         '</div>' +
-        (msgs.length === 0 ? '<p class="text-gray-400 text-center py-8"><i class="fas fa-inbox text-3xl block mb-2"></i>No messages yet. When callers leave messages, they\'ll appear here.</p>' :
+        (msgs.length === 0 ? '<p class="text-black text-center py-8"><i class="fas fa-inbox text-3xl block mb-2"></i>No messages yet. When callers leave messages, they\'ll appear here.</p>' :
           '<div class="space-y-3">' +
             msgs.map(function(m) {
               var unread = !m.is_read;
               var urgentBadge = m.urgency === 'urgent' ? '<span class="px-2 py-0.5 bg-red-500/100/15 text-red-400 rounded-full text-[10px] font-bold">URGENT</span>' :
                 m.urgency === 'emergency' ? '<span class="px-2 py-0.5 bg-red-600 text-white rounded-full text-[10px] font-bold">EMERGENCY</span>' : '';
-              return '<div class="border ' + (unread ? 'border-blue-500/20 bg-blue-500/15' : 'border-white/10 bg-[#0A0A0A]') + ' rounded-xl p-4 ' + (unread ? 'ring-1 ring-blue-400' : '') + '">' +
+              return '<div class="border ' + (unread ? 'border-blue-500/20 bg-blue-500/15' : 'border-white/10 bg-[#DBEAFE]') + ' rounded-xl p-4 ' + (unread ? 'ring-1 ring-blue-400' : '') + '">' +
                 '<div class="flex items-start justify-between mb-2">' +
                   '<div class="flex items-center gap-2">' +
                     (unread ? '<span class="w-2 h-2 bg-blue-500/15 rounded-full"></span>' : '') +
-                    '<span class="font-semibold text-gray-100 text-sm">' + esc(m.caller_name || 'Unknown Caller') + '</span>' +
-                    '<span class="text-gray-400 text-xs">' + esc(m.caller_phone || '') + '</span>' +
+                    '<span class="font-semibold text-black text-sm">' + esc(m.caller_name || 'Unknown Caller') + '</span>' +
+                    '<span class="text-black text-xs">' + esc(m.caller_phone || '') + '</span>' +
                     urgentBadge +
                   '</div>' +
-                  '<span class="text-gray-400 text-xs">' + new Date(m.created_at).toLocaleString() + '</span>' +
+                  '<span class="text-black text-xs">' + new Date(m.created_at).toLocaleString() + '</span>' +
                 '</div>' +
-                '<p class="text-sm text-gray-300 leading-relaxed">' + esc(m.message_text) + '</p>' +
+                '<p class="text-sm text-black leading-relaxed">' + esc(m.message_text) + '</p>' +
                 (unread ? '<button onclick="secMarkRead(' + m.id + ')" class="mt-2 text-xs text-blue-400 hover:text-blue-400 font-semibold"><i class="fas fa-check mr-1"></i>Mark Read</button>' : '') +
               '</div>';
             }).join('') +
@@ -2289,21 +2289,21 @@
     };
 
     content.innerHTML =
-      '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-6">' +
+      '<div class="bg-[#DBEAFE] rounded-2xl border border-white/10 shadow-sm p-6">' +
         '<div class="flex items-center justify-between mb-4">' +
-          '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-calendar-check text-emerald-500 mr-2"></i>Appointments' +
+          '<h3 class="font-bold text-black text-lg"><i class="fas fa-calendar-check text-emerald-500 mr-2"></i>Appointments' +
             (state.pendingAppts > 0 ? ' <span class="px-2 py-0.5 bg-blue-500/15/15 text-blue-400 rounded-full text-xs font-bold">' + state.pendingAppts + ' pending</span>' : '') + '</h3>' +
         '</div>' +
-        (appts.length === 0 ? '<p class="text-gray-400 text-center py-8"><i class="fas fa-calendar text-3xl block mb-2"></i>No appointments yet. When the AI books appointments, they\'ll appear here.</p>' :
+        (appts.length === 0 ? '<p class="text-black text-center py-8"><i class="fas fa-calendar text-3xl block mb-2"></i>No appointments yet. When the AI books appointments, they\'ll appear here.</p>' :
           '<div class="overflow-x-auto"><table class="w-full text-sm">' +
             '<thead><tr class="border-b border-white/10"><th class="text-left py-2 px-3 text-xs font-semibold text-gray-500 uppercase">Caller</th><th class="text-left py-2 px-3 text-xs font-semibold text-gray-500 uppercase">Date/Time</th><th class="text-left py-2 px-3 text-xs font-semibold text-gray-500 uppercase">Type</th><th class="text-left py-2 px-3 text-xs font-semibold text-gray-500 uppercase">Address</th><th class="text-left py-2 px-3 text-xs font-semibold text-gray-500 uppercase">Status</th><th class="text-left py-2 px-3 text-xs font-semibold text-gray-500 uppercase">Actions</th></tr></thead>' +
             '<tbody>' + appts.map(function(a) {
-              return '<tr class="border-b border-white/5 hover:bg-[#111111]/5">' +
-                '<td class="py-3 px-3"><div class="font-semibold text-gray-100">' + esc(a.caller_name || 'Unknown') + '</div><div class="text-xs text-gray-400">' + esc(a.caller_phone || '') + '</div></td>' +
-                '<td class="py-3 px-3 text-gray-300">' + esc(a.appointment_date || '—') + ' ' + esc(a.appointment_time || '') + '</td>' +
+              return '<tr class="border-b border-white/5 hover:bg-[#DBEAFE]/5">' +
+                '<td class="py-3 px-3"><div class="font-semibold text-black">' + esc(a.caller_name || 'Unknown') + '</div><div class="text-xs text-black">' + esc(a.caller_phone || '') + '</div></td>' +
+                '<td class="py-3 px-3 text-black">' + esc(a.appointment_date || '—') + ' ' + esc(a.appointment_time || '') + '</td>' +
                 '<td class="py-3 px-3"><span class="px-2 py-0.5 bg-sky-100 text-sky-700 rounded text-xs">' + esc(a.appointment_type || 'estimate') + '</span></td>' +
-                '<td class="py-3 px-3 text-gray-400 text-xs">' + esc(a.property_address || '—') + '</td>' +
-                '<td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-xs font-semibold ' + (statusColors[a.status] || 'bg-white/5 text-gray-400') + '">' + esc(a.status) + '</span></td>' +
+                '<td class="py-3 px-3 text-black text-xs">' + esc(a.property_address || '—') + '</td>' +
+                '<td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-xs font-semibold ' + (statusColors[a.status] || 'bg-white/5 text-black') + '">' + esc(a.status) + '</span></td>' +
                 '<td class="py-3 px-3">' +
                   (a.status === 'pending' ? '<button onclick="secUpdateAppt(' + a.id + ',\'confirmed\')" class="text-xs text-emerald-400 hover:text-green-800 font-semibold mr-2"><i class="fas fa-check mr-1"></i>Confirm</button>' +
                     '<button onclick="secUpdateAppt(' + a.id + ',\'cancelled\')" class="text-xs text-red-500 hover:text-red-700 font-semibold"><i class="fas fa-times mr-1"></i>Cancel</button>' :
@@ -2340,24 +2340,24 @@
     var cbs = state.callbacks;
 
     content.innerHTML =
-      '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-6">' +
+      '<div class="bg-[#DBEAFE] rounded-2xl border border-white/10 shadow-sm p-6">' +
         '<div class="flex items-center justify-between mb-4">' +
-          '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-phone-volume text-sky-500 mr-2"></i>Scheduled Callbacks' +
+          '<h3 class="font-bold text-black text-lg"><i class="fas fa-phone-volume text-sky-500 mr-2"></i>Scheduled Callbacks' +
             (state.pendingCallbacks > 0 ? ' <span class="px-2 py-0.5 bg-blue-500/15/15 text-blue-400 rounded-full text-xs font-bold">' + state.pendingCallbacks + ' pending</span>' : '') + '</h3>' +
         '</div>' +
-        (cbs.length === 0 ? '<p class="text-gray-400 text-center py-8"><i class="fas fa-phone text-3xl block mb-2"></i>No callbacks yet. When the AI schedules callbacks, they\'ll appear here.</p>' :
+        (cbs.length === 0 ? '<p class="text-black text-center py-8"><i class="fas fa-phone text-3xl block mb-2"></i>No callbacks yet. When the AI schedules callbacks, they\'ll appear here.</p>' :
           '<div class="space-y-3">' + cbs.map(function(cb) {
             var isPending = cb.status === 'pending';
-            return '<div class="border ' + (isPending ? 'border-white/15 bg-blue-500/15/10' : 'border-white/10 bg-[#0A0A0A]') + ' rounded-xl p-4">' +
+            return '<div class="border ' + (isPending ? 'border-white/15 bg-blue-500/15/10' : 'border-white/10 bg-[#DBEAFE]') + ' rounded-xl p-4">' +
               '<div class="flex items-start justify-between">' +
                 '<div>' +
-                  '<div class="font-semibold text-gray-100 text-sm">' + esc(cb.caller_name || 'Unknown') + ' — <a href="tel:' + esc(cb.caller_phone) + '" class="text-sky-600 hover:underline">' + formatPhone(cb.caller_phone) + '</a></div>' +
+                  '<div class="font-semibold text-black text-sm">' + esc(cb.caller_name || 'Unknown') + ' — <a href="tel:' + esc(cb.caller_phone) + '" class="text-sky-600 hover:underline">' + formatPhone(cb.caller_phone) + '</a></div>' +
                   (cb.preferred_time ? '<div class="text-xs text-gray-500 mt-1"><i class="fas fa-clock mr-1"></i>Preferred: ' + esc(cb.preferred_time) + '</div>' : '') +
-                  (cb.reason ? '<div class="text-sm text-gray-400 mt-1">' + esc(cb.reason) + '</div>' : '') +
-                  '<div class="text-xs text-gray-400 mt-1">' + new Date(cb.created_at).toLocaleString() + '</div>' +
+                  (cb.reason ? '<div class="text-sm text-black mt-1">' + esc(cb.reason) + '</div>' : '') +
+                  '<div class="text-xs text-black mt-1">' + new Date(cb.created_at).toLocaleString() + '</div>' +
                 '</div>' +
                 '<div class="flex items-center gap-2">' +
-                  '<span class="px-2 py-0.5 rounded text-xs font-semibold ' + (isPending ? 'bg-blue-500/15/15 text-blue-400' : cb.status === 'completed' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gray-200 text-gray-400') + '">' + esc(cb.status) + '</span>' +
+                  '<span class="px-2 py-0.5 rounded text-xs font-semibold ' + (isPending ? 'bg-blue-500/15/15 text-blue-400' : cb.status === 'completed' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gray-200 text-black') + '">' + esc(cb.status) + '</span>' +
                   (isPending ? '<button onclick="secUpdateCallback(' + cb.id + ',\'completed\')" class="text-xs text-emerald-400 hover:text-green-800 font-semibold px-2 py-1 bg-emerald-500/10 rounded"><i class="fas fa-check mr-1"></i>Done</button>' : '') +
                 '</div>' +
               '</div>' +
@@ -2390,12 +2390,12 @@
     modal.id = 'voiceTestModal';
     modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm';
     modal.innerHTML =
-      '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">' +
+      '<div class="bg-[#DBEAFE] rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">' +
         '<div class="bg-gradient-to-r from-emerald-500 to-emerald-600 p-5 text-white">' +
           '<div class="flex items-center justify-between">' +
             '<div><h2 class="text-lg font-bold"><i class="fas fa-comment-dots mr-2"></i>Test Your AI Secretary</h2>' +
             '<p class="text-emerald-100 text-xs mt-1">Preview how your AI responds to questions. Type a message below to test.</p></div>' +
-            '<button onclick="secCloseTestModal()" class="w-8 h-8 rounded-full bg-[#111111]/20 flex items-center justify-center hover:bg-[#111111]/30 transition-all"><i class="fas fa-times text-sm"></i></button>' +
+            '<button onclick="secCloseTestModal()" class="w-8 h-8 rounded-full bg-[#DBEAFE]/20 flex items-center justify-center hover:bg-[#DBEAFE]/30 transition-all"><i class="fas fa-times text-sm"></i></button>' +
           '</div>' +
         '</div>' +
         '<div class="p-5">' +
@@ -2405,19 +2405,19 @@
             (state.config && state.config.assigned_phone_number ? '<div class="mt-1.5 flex items-center gap-2"><i class="fas fa-phone-alt text-emerald-600"></i><strong class="text-emerald-700">Call ' + state.config.assigned_phone_number + ' to hear the real voice.</strong></div>' : '') +
             '</div>' +
           '</div>' +
-          '<div id="vtConversation" class="h-56 overflow-y-auto mb-3 space-y-3 p-3 bg-[#0A0A0A] rounded-xl border border-white/10">' +
-            '<div class="text-center text-gray-400 text-sm py-6"><i class="fas fa-robot text-3xl block mb-2 text-emerald-300"></i>' +
+          '<div id="vtConversation" class="h-56 overflow-y-auto mb-3 space-y-3 p-3 bg-[#DBEAFE] rounded-xl border border-white/10">' +
+            '<div class="text-center text-black text-sm py-6"><i class="fas fa-robot text-3xl block mb-2 text-emerald-300"></i>' +
             'Type a message below to test your AI secretary.<br><span class="text-xs">The AI responds based on your saved greeting, Q&A, and notes.</span>' +
             '</div>' +
           '</div>' +
-          '<div id="vtStatus" class="text-center text-xs text-gray-400 mb-2 h-4"></div>' +
+          '<div id="vtStatus" class="text-center text-xs text-black mb-2 h-4"></div>' +
           '<div class="flex items-center gap-2 mb-3">' +
             '<input type="text" id="vtTextInput" placeholder="Type a caller question... e.g. \'Do you do free estimates?\'" class="flex-1 border border-white/15 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400" onkeydown="if(event.key===\'Enter\')secSendText()">' +
             '<button onclick="secSendText()" class="px-4 py-2.5 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 transition-all"><i class="fas fa-paper-plane"></i></button>' +
           '</div>' +
           '<div class="flex items-center justify-center gap-3">' +
             (hasSpeechAPI ?
-              '<button onclick="secStartRecording()" id="vtRecordBtn" class="w-10 h-10 rounded-full bg-gray-200 text-gray-400 flex items-center justify-center hover:bg-gray-300 transition-all" title="Use microphone">' +
+              '<button onclick="secStartRecording()" id="vtRecordBtn" class="w-10 h-10 rounded-full bg-gray-200 text-black flex items-center justify-center hover:bg-gray-300 transition-all" title="Use microphone">' +
                 '<i class="fas fa-microphone text-sm"></i>' +
               '</button>' +
               '<button onclick="secStopRecording()" id="vtStopBtn" class="w-10 h-10 rounded-full bg-red-500/100 text-white flex items-center justify-center hover:bg-red-600 transition-all hidden animate-pulse" title="Stop recording">' +
@@ -2434,7 +2434,7 @@
               '<p class="text-lg font-black text-emerald-700 mt-1">' + state.config.assigned_phone_number + '</p>' +
               '<p class="text-[10px] text-emerald-600 mt-0.5">Call this number from your phone — the AI will answer exactly as it would for your customers.</p>' +
             '</div>'
-            : '<p class="text-center text-xs text-gray-400 mt-3">Connect a phone number to test the real voice experience.</p>') +
+            : '<p class="text-center text-xs text-black mt-3">Connect a phone number to test the real voice experience.</p>') +
         '</div>' +
       '</div>';
     document.body.appendChild(modal);
@@ -2456,7 +2456,7 @@
   window.secResetTest = function() {
     testState.conversationHistory = [];
     var conv = document.getElementById('vtConversation');
-    if (conv) conv.innerHTML = '<div class="text-center text-gray-400 text-sm py-8"><i class="fas fa-robot text-3xl block mb-2 text-emerald-300"></i>Conversation reset. Press the microphone or type to start again.</div>';
+    if (conv) conv.innerHTML = '<div class="text-center text-black text-sm py-8"><i class="fas fa-robot text-3xl block mb-2 text-emerald-300"></i>Conversation reset. Press the microphone or type to start again.</div>';
   };
 
   // Text input method (always works)
@@ -2513,7 +2513,7 @@
         processAIChat(testState._lastTranscript.trim());
         testState._lastTranscript = '';
       } else {
-        if (statusEl) { statusEl.textContent = 'No speech detected. Try again or type your message.'; statusEl.className = 'text-center text-xs text-gray-400 mb-3 h-4'; }
+        if (statusEl) { statusEl.textContent = 'No speech detected. Try again or type your message.'; statusEl.className = 'text-center text-xs text-black mb-3 h-4'; }
       }
     };
 
@@ -2577,7 +2577,7 @@
     // Show AI thinking
     conv.innerHTML += '<div class="flex justify-start" id="vtThinking"><div class="bg-emerald-50 text-emerald-800 rounded-xl rounded-tl-sm px-3 py-2 max-w-xs text-sm"><i class="fas fa-robot mr-1"></i><i class="fas fa-spinner fa-spin ml-1 text-xs"></i> Thinking...</div></div>';
     conv.scrollTop = conv.scrollHeight;
-    if (statusEl) { statusEl.textContent = 'AI is responding...'; statusEl.className = 'text-center text-xs text-gray-400 mb-3 h-4 font-semibold'; }
+    if (statusEl) { statusEl.textContent = 'AI is responding...'; statusEl.className = 'text-center text-xs text-black mb-3 h-4 font-semibold'; }
 
     try {
       // Get AI response
@@ -2634,20 +2634,20 @@
     modal.id = 'numberPickerModal';
     modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4';
     modal.innerHTML =
-      '<div class="bg-[#0A0A0A] border border-white/10 rounded-2xl max-w-xl w-full p-6 max-h-[85vh] overflow-y-auto">' +
+      '<div class="bg-[#DBEAFE] border border-white/10 rounded-2xl max-w-xl w-full p-6 max-h-[85vh] overflow-y-auto">' +
         '<div class="flex items-center justify-between mb-4">' +
-          '<div><h3 class="text-lg font-bold text-gray-100"><i class="fas fa-phone-alt text-sky-400 mr-2"></i>Pick a Phone Number</h3>' +
-          '<p class="text-xs text-gray-400">Included with your subscription &bull; wired to your AI agent automatically</p></div>' +
-          '<button onclick="document.getElementById(\'numberPickerModal\').remove()" class="text-gray-400 hover:text-gray-200"><i class="fas fa-times text-xl"></i></button>' +
+          '<div><h3 class="text-lg font-bold text-black"><i class="fas fa-phone-alt text-sky-400 mr-2"></i>Pick a Phone Number</h3>' +
+          '<p class="text-xs text-black">Included with your subscription &bull; wired to your AI agent automatically</p></div>' +
+          '<button onclick="document.getElementById(\'numberPickerModal\').remove()" class="text-black hover:text-black"><i class="fas fa-times text-xl"></i></button>' +
         '</div>' +
         '<div class="flex gap-2 mb-3">' +
-          '<select id="npCountry" class="px-3 py-2 bg-[#111111] border border-white/15 rounded-lg text-sm text-gray-100">' +
+          '<select id="npCountry" class="px-3 py-2 bg-[#DBEAFE] border border-white/15 rounded-lg text-sm text-black">' +
             '<option value="US">United States</option><option value="CA">Canada</option>' +
           '</select>' +
-          '<input id="npAreaCode" type="text" maxlength="3" placeholder="Area code (optional)" class="flex-1 px-3 py-2 bg-[#111111] border border-white/15 rounded-lg text-sm text-gray-100">' +
+          '<input id="npAreaCode" type="text" maxlength="3" placeholder="Area code (optional)" class="flex-1 px-3 py-2 bg-[#DBEAFE] border border-white/15 rounded-lg text-sm text-black">' +
           '<button onclick="secSearchNumbers()" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-sm font-semibold"><i class="fas fa-search mr-1"></i>Search</button>' +
         '</div>' +
-        '<div id="npResults" class="space-y-2"><div class="text-xs text-gray-400 text-center py-6">Choose a country and optional area code, then search.</div></div>' +
+        '<div id="npResults" class="space-y-2"><div class="text-xs text-black text-center py-6">Choose a country and optional area code, then search.</div></div>' +
       '</div>';
     document.body.appendChild(modal);
   };
@@ -2664,14 +2664,14 @@
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Search failed');
       if (!data.items || !data.items.length) {
-        resultsEl.innerHTML = '<div class="text-center py-6 text-gray-400 text-sm">No numbers available for that area. Try another area code.</div>';
+        resultsEl.innerHTML = '<div class="text-center py-6 text-black text-sm">No numbers available for that area. Try another area code.</div>';
         return;
       }
       resultsEl.innerHTML = data.items.map(function(n) {
         var pretty = n.phone_number.replace(/^\+?1?(\d{3})(\d{3})(\d{4})$/, '+1 ($1) $2-$3');
-        return '<div class="flex items-center justify-between bg-[#111111] border border-white/10 rounded-xl px-4 py-3">' +
-          '<div><div class="font-mono text-gray-100">' + pretty + '</div>' +
-          '<div class="text-xs text-gray-400">' + (n.locality || '') + (n.region ? (n.locality ? ', ' : '') + n.region : '') + ' &bull; included</div></div>' +
+        return '<div class="flex items-center justify-between bg-[#DBEAFE] border border-white/10 rounded-xl px-4 py-3">' +
+          '<div><div class="font-mono text-black">' + pretty + '</div>' +
+          '<div class="text-xs text-black">' + (n.locality || '') + (n.region ? (n.locality ? ', ' : '') + n.region : '') + ' &bull; included</div></div>' +
           '<button onclick="secBuyNumber(\'' + n.phone_number + '\')" class="text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-3 py-1.5 font-semibold">Select &amp; attach</button>' +
         '</div>';
       }).join('');
@@ -2732,7 +2732,7 @@
     var modal = document.createElement('div');
     modal.id = 'fwdWizardModal';
     modal.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4';
-    modal.innerHTML = '<div class="bg-[#111111] border border-white/10 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">' +
+    modal.innerHTML = '<div class="bg-[#DBEAFE] border border-white/10 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">' +
       '<div id="fwdWizBody" class="overflow-y-auto"></div>' +
       '</div>';
     document.body.appendChild(modal);
@@ -2743,8 +2743,8 @@
     function header(stepNum, title) {
       return '<div class="flex items-center justify-between p-5 border-b border-white/10">' +
         '<div><div class="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-0.5">Step ' + stepNum + ' of 4</div>' +
-        '<h3 class="text-lg font-bold text-gray-100">' + title + '</h3></div>' +
-        '<button onclick="document.getElementById(\'fwdWizardModal\').remove()" class="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 flex items-center justify-center"><i class="fas fa-times"></i></button>' +
+        '<h3 class="text-lg font-bold text-black">' + title + '</h3></div>' +
+        '<button onclick="document.getElementById(\'fwdWizardModal\').remove()" class="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 text-black flex items-center justify-center"><i class="fas fa-times"></i></button>' +
         '</div>';
     }
     function footer(backBtn, nextBtn) {
@@ -2760,15 +2760,15 @@
     function renderStep1() {
       document.getElementById('fwdWizBody').innerHTML =
         header(1, 'Your AI number is live') +
-        '<div class="p-6 space-y-4 text-gray-200">' +
+        '<div class="p-6 space-y-4 text-black">' +
         '<div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-start gap-3">' +
         '<i class="fas fa-check-circle text-emerald-400 text-xl mt-0.5"></i>' +
         '<div><div class="font-bold text-emerald-300 mb-1">Number purchased: ' + displayNum + '</div>' +
         '<div class="text-sm text-emerald-200/80">SIP trunk and dispatch rule are wired up. Now forward your existing business line to this number so the AI answers when you can\'t.</div></div></div>' +
-        '<p class="text-sm text-gray-300">Take 2 minutes now to set up call forwarding. We\'ll show you the exact steps for your phone.</p>' +
+        '<p class="text-sm text-black">Take 2 minutes now to set up call forwarding. We\'ll show you the exact steps for your phone.</p>' +
         '</div>' +
         footer(
-          '<button onclick="document.getElementById(\'fwdWizardModal\').remove()" class="px-4 py-2 text-sm text-gray-400 hover:text-gray-200">Skip for now</button>',
+          '<button onclick="document.getElementById(\'fwdWizardModal\').remove()" class="px-4 py-2 text-sm text-black hover:text-black">Skip for now</button>',
           '<button onclick="window.__fwdNext(2)" class="px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-sm font-bold"><i class="fas fa-arrow-right mr-1"></i>Continue</button>'
         );
     }
@@ -2781,24 +2781,24 @@
         { id: 'voip', label: 'VoIP / PBX', icon: 'fa-network-wired' },
       ];
       var cards = opts.map(function(o) {
-        return '<button onclick="window.__fwdPickType(\'' + o.id + '\')" class="bg-[#0A0A0A] border-2 ' +
+        return '<button onclick="window.__fwdPickType(\'' + o.id + '\')" class="bg-[#DBEAFE] border-2 ' +
           (phoneType === o.id ? 'border-sky-500 ring-2 ring-sky-500/30' : 'border-white/10 hover:border-sky-400') +
           ' rounded-xl p-5 text-left transition-all">' +
           '<i class="fas ' + o.icon + ' text-2xl text-sky-400 mb-3"></i>' +
-          '<div class="text-base font-bold text-gray-100">' + o.label + '</div>' +
+          '<div class="text-base font-bold text-black">' + o.label + '</div>' +
           '</button>';
       }).join('');
       document.getElementById('fwdWizBody').innerHTML =
         header(2, 'What kind of phone is your business line?') +
         '<div class="p-6 space-y-4">' +
-        '<p class="text-sm text-gray-400">Pick the device or system that currently rings when customers call your business.</p>' +
+        '<p class="text-sm text-black">Pick the device or system that currently rings when customers call your business.</p>' +
         '<div class="grid grid-cols-2 gap-3">' + cards + '</div>' +
         '</div>' +
         footer(
-          '<button onclick="window.__fwdNext(1)" class="px-4 py-2 text-sm text-gray-400 hover:text-gray-200"><i class="fas fa-arrow-left mr-1"></i>Back</button>',
+          '<button onclick="window.__fwdNext(1)" class="px-4 py-2 text-sm text-black hover:text-black"><i class="fas fa-arrow-left mr-1"></i>Back</button>',
           phoneType
             ? '<button onclick="window.__fwdNext(3)" class="px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-sm font-bold">Continue<i class="fas fa-arrow-right ml-1"></i></button>'
-            : '<button disabled class="px-5 py-2.5 bg-gray-600 text-gray-400 rounded-xl text-sm font-bold cursor-not-allowed">Pick a phone type</button>'
+            : '<button disabled class="px-5 py-2.5 bg-gray-600 text-black rounded-xl text-sm font-bold cursor-not-allowed">Pick a phone type</button>'
         );
     }
 
@@ -2807,18 +2807,18 @@
       // Universal *72 block (always shown for mobile + landline).
       var showUniversal = (phoneType === 'iphone' || phoneType === 'android' || phoneType === 'landline');
       if (showUniversal) {
-        blocks += '<div class="bg-[#0A0A0A] border border-white/10 rounded-xl p-4">' +
+        blocks += '<div class="bg-[#DBEAFE] border border-white/10 rounded-xl p-4">' +
           '<div class="text-sm font-bold text-sky-300 mb-2"><i class="fas fa-bolt mr-1"></i>Universal carrier code (works on most North American carriers)</div>' +
-          '<div class="text-sm text-gray-300 mb-2">From your business phone, dial:</div>' +
+          '<div class="text-sm text-black mb-2">From your business phone, dial:</div>' +
           '<div class="font-mono text-xl text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-4 py-3 inline-flex items-center">' +
           dialCode + copyBtn(dialCode) + '</div>' +
-          '<div class="text-xs text-gray-400 mt-2">Wait for the confirmation tone, then hang up. To turn forwarding off later: dial <span class="font-mono text-gray-200">' + disableCode + '</span>.</div>' +
+          '<div class="text-xs text-black mt-2">Wait for the confirmation tone, then hang up. To turn forwarding off later: dial <span class="font-mono text-black">' + disableCode + '</span>.</div>' +
           '</div>';
       }
       if (phoneType === 'iphone') {
-        blocks += '<div class="bg-[#0A0A0A] border border-white/10 rounded-xl p-4">' +
+        blocks += '<div class="bg-[#DBEAFE] border border-white/10 rounded-xl p-4">' +
           '<div class="text-sm font-bold text-blue-300 mb-2"><i class="fab fa-apple mr-1"></i>iPhone settings (alternative)</div>' +
-          '<ol class="text-sm text-gray-300 space-y-1.5 list-decimal list-inside">' +
+          '<ol class="text-sm text-black space-y-1.5 list-decimal list-inside">' +
           '<li>Open <strong>Settings</strong></li>' +
           '<li>Tap <strong>Phone</strong></li>' +
           '<li>Tap <strong>Call Forwarding</strong></li>' +
@@ -2827,9 +2827,9 @@
           '</ol></div>';
       }
       if (phoneType === 'android') {
-        blocks += '<div class="bg-[#0A0A0A] border border-white/10 rounded-xl p-4">' +
+        blocks += '<div class="bg-[#DBEAFE] border border-white/10 rounded-xl p-4">' +
           '<div class="text-sm font-bold text-green-300 mb-2"><i class="fab fa-android mr-1"></i>Android settings (alternative)</div>' +
-          '<ol class="text-sm text-gray-300 space-y-1.5 list-decimal list-inside">' +
+          '<ol class="text-sm text-black space-y-1.5 list-decimal list-inside">' +
           '<li>Open the <strong>Phone</strong> app</li>' +
           '<li>Tap the <strong>⋮</strong> menu (top-right)</li>' +
           '<li>Tap <strong>Settings</strong> → <strong>Calls</strong> → <strong>Call forwarding</strong></li>' +
@@ -2838,35 +2838,35 @@
           '</ol></div>';
       }
       if (phoneType === 'landline') {
-        blocks += '<div class="bg-[#0A0A0A] border border-white/10 rounded-xl p-4">' +
+        blocks += '<div class="bg-[#DBEAFE] border border-white/10 rounded-xl p-4">' +
           '<div class="text-sm font-bold text-amber-300 mb-2"><i class="fas fa-phone mr-1"></i>Landline tone-based forwarding</div>' +
-          '<ol class="text-sm text-gray-300 space-y-1.5 list-decimal list-inside">' +
+          '<ol class="text-sm text-black space-y-1.5 list-decimal list-inside">' +
           '<li>Pick up the handset, listen for a dial tone</li>' +
           '<li>Dial <span class="font-mono text-emerald-300">*72</span></li>' +
           '<li>Wait for the confirmation tone</li>' +
           '<li>Dial <span class="font-mono text-emerald-300">' + aiDigits + '</span></li>' +
           '<li>Wait for the second confirmation tone, then hang up</li>' +
           '</ol>' +
-          '<div class="text-xs text-gray-400 mt-2">To cancel forwarding later, dial <span class="font-mono text-gray-200">*73</span> from the same handset.</div>' +
+          '<div class="text-xs text-black mt-2">To cancel forwarding later, dial <span class="font-mono text-black">*73</span> from the same handset.</div>' +
           '</div>';
       }
       if (phoneType === 'voip') {
-        blocks += '<div class="bg-[#0A0A0A] border border-white/10 rounded-xl p-4">' +
+        blocks += '<div class="bg-[#DBEAFE] border border-white/10 rounded-xl p-4">' +
           '<div class="text-sm font-bold text-violet-300 mb-2"><i class="fas fa-network-wired mr-1"></i>VoIP / PBX (RingCentral, 3CX, Vonage Business, Grasshopper)</div>' +
-          '<ol class="text-sm text-gray-300 space-y-1.5 list-decimal list-inside">' +
+          '<ol class="text-sm text-black space-y-1.5 list-decimal list-inside">' +
           '<li>Sign in to your VoIP/PBX admin console</li>' +
           '<li>Open the inbound call rules for your business number</li>' +
           '<li>Set <strong>"Forward unanswered calls"</strong> after 4 rings to <span class="font-mono text-emerald-300">' + displayNum + '</span></li>' +
           '<li>Save the rule</li>' +
           '</ol>' +
-          '<div class="text-xs text-gray-400 mt-2">Search your provider\'s help docs for "conditional call forwarding" if the option name differs.</div>' +
+          '<div class="text-xs text-black mt-2">Search your provider\'s help docs for "conditional call forwarding" if the option name differs.</div>' +
           '</div>';
       }
       document.getElementById('fwdWizBody').innerHTML =
         header(3, 'Set up forwarding') +
         '<div class="p-6 space-y-4">' + blocks + '</div>' +
         footer(
-          '<button onclick="window.__fwdNext(2)" class="px-4 py-2 text-sm text-gray-400 hover:text-gray-200"><i class="fas fa-arrow-left mr-1"></i>Back</button>',
+          '<button onclick="window.__fwdNext(2)" class="px-4 py-2 text-sm text-black hover:text-black"><i class="fas fa-arrow-left mr-1"></i>Back</button>',
           '<button onclick="window.__fwdNext(4)" class="px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-sm font-bold">I followed the steps<i class="fas fa-arrow-right ml-1"></i></button>'
         );
     }
@@ -2874,18 +2874,18 @@
     function renderStep4() {
       document.getElementById('fwdWizBody').innerHTML =
         header(4, 'Test it') +
-        '<div class="p-6 space-y-4 text-gray-200">' +
+        '<div class="p-6 space-y-4 text-black">' +
         '<div class="bg-sky-500/10 border border-sky-500/30 rounded-xl p-4">' +
         '<div class="text-sm font-bold text-sky-300 mb-2"><i class="fas fa-vial mr-1"></i>Quick test</div>' +
-        '<ol class="text-sm text-gray-300 space-y-1.5 list-decimal list-inside">' +
+        '<ol class="text-sm text-black space-y-1.5 list-decimal list-inside">' +
         '<li>From a different phone, call your <strong>existing business line</strong></li>' +
         '<li>Don\'t answer — let it ring at least 4 times</li>' +
         '<li>You should hear your AI receptionist greet the caller</li>' +
         '</ol></div>' +
-        '<p class="text-sm text-gray-400">Once it works, mark this connection as Connected. The Secretary tab will then show "Live" instead of "Pending forwarding".</p>' +
+        '<p class="text-sm text-black">Once it works, mark this connection as Connected. The Secretary tab will then show "Live" instead of "Pending forwarding".</p>' +
         '</div>' +
         footer(
-          '<button onclick="window.__fwdNext(3)" class="px-4 py-2 text-sm text-gray-400 hover:text-gray-200"><i class="fas fa-arrow-left mr-1"></i>Back</button>',
+          '<button onclick="window.__fwdNext(3)" class="px-4 py-2 text-sm text-black hover:text-black"><i class="fas fa-arrow-left mr-1"></i>Back</button>',
           '<button onclick="window.__fwdMarkConnected()" class="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold"><i class="fas fa-check-circle mr-1"></i>I set it up — mark as Connected</button>'
         );
     }
