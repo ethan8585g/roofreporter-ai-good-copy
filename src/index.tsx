@@ -2223,12 +2223,12 @@ app.get('/roof-measurement/:city', (c) => {
   <meta property="og:description" content="AI-powered satellite roof measurements for roofing contractors in ${country.name}. Full CRM, proposals, invoicing included.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/roof-measurement/${slug}">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png">
   <meta property="og:image:alt" content="Satellite roof measurement reports in ${country.name}">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Measurements in ${country.name} — Roof Manager">
-  <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png">
   <meta name="geo.region" content="${country.iso}">
   <script type="application/ld+json">
   {
@@ -2356,13 +2356,13 @@ app.get('/roof-measurement/:city', (c) => {
   <meta property="og:description" content="AI-powered satellite roof measurements for ${city.name} roofing contractors. Full CRM, proposals, invoicing included.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/roof-measurement/${citySlug}">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png">
   <meta property="og:image:alt" content="Roof measurement report for ${city.name}, ${city.province}">
   <meta property="og:site_name" content="Roof Manager">
   <meta property="og:locale" content="${isUS ? 'en_US' : 'en_CA'}">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Measurements in ${city.name} — Roof Manager">
-  <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png">
   ${geoRegion ? `<meta name="geo.region" content="${geoRegion}">` : ''}
   <meta name="geo.placename" content="${city.name}, ${city.province}${countryLabel ? ', ' + countryLabel : ''}">
   <meta name="geo.position" content="${city.lat};${city.lng}">
@@ -2669,7 +2669,7 @@ app.get('/roof-replacement-cost/:city', (c) => {
   <meta property="og:description" content="${metaDesc}">
   <meta property="og:type" content="article">
   <meta property="og:url" content="${canonical}">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${pageTitle}">
@@ -6967,16 +6967,16 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   <meta property="og:description" content="Contractor-grade roof measurement reports from satellite imagery in under 60 seconds. Full CRM, AI condition analysis, instant PDF delivery.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
-  <meta property="og:image:width" content="512">
-  <meta property="og:image:height" content="512">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
   <meta property="og:site_name" content="Roof Manager">
   <meta property="og:locale" content="en_US">
   <meta property="og:locale:alternate" content="en_CA">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Measurement Report Software — Roof Manager">
   <meta name="twitter:description" content="Satellite roof measurement reports in 60 seconds. Full CRM & AI condition analysis. 4 free reports, no credit card.">
-  <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png">
   <meta name="keywords" content="roof measurement software, roofing CRM, satellite roof reports, roof area calculator, roofing estimate tool, roof pitch analysis, material takeoff, roofing contractor software, AI roof measurement, Canadian roofing software">
   <link rel="canonical" href="https://www.roofmanager.ca/">
   <link rel="alternate" hreflang="en-ca" href="https://www.roofmanager.ca/ca">
@@ -11993,7 +11993,7 @@ function getFeatureCityPageHTML(slug: string, city: { name: string; province: st
   <meta property="og:description" content="${desc}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${base}/features/measurements/${slug}">
-  <meta property="og:image" content="${base}/static/logo.png">
+  <meta property="og:image" content="${base}/static/og-image.png">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="geo.region" content="${city.province}">
   <meta name="geo.placename" content="${city.name}, ${city.province}">
@@ -12816,7 +12816,7 @@ function getAuthorPageHTML(): string {
   <meta property="og:description" content="Roofing-domain engineers and measurement specialists behind Roof Manager's blog, help center, and technical documentation.">
   <meta property="og:type" content="profile">
   <meta property="og:url" content="${base}/authors/roof-manager-editorial-team">
-  <meta property="og:image" content="${base}/static/logo.png">
+  <meta property="og:image" content="${base}/static/og-image.png">
   <script type="application/ld+json">${personSchema}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Authors","item":"${base}/authors/roof-manager-editorial-team"}]}</script>
 </head>
@@ -12935,7 +12935,7 @@ function getBestContractorsHubHTML(): string {
   <meta property="og:description" content="City-by-city directory of the best roofing contractors, with selection criteria and verifiable data.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${base}/best-roofing-contractors">
-  <meta property="og:image" content="${base}/static/logo.png">
+  <meta property="og:image" content="${base}/static/og-image.png">
   <script type="application/ld+json">${listSchema}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Best Roofing Contractors","item":"${base}/best-roofing-contractors"}]}</script>
 </head>
@@ -13023,7 +13023,7 @@ function getBestContractorsCityHTML(opts: { kind: 'us'; city: USCityData } | { k
   <meta property="og:description" content="${desc.replace(/"/g, '&quot;')}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${base}/best-roofing-contractors/${slug}">
-  <meta property="og:image" content="${base}/static/logo.png">
+  <meta property="og:image" content="${base}/static/og-image.png">
   ${regionCode ? `<meta name="geo.region" content="US-${regionCode}">` : ''}
   <meta name="geo.placename" content="${cityName}, ${region}">
   <meta name="geo.position" content="${opts.city.lat};${opts.city.lng}">
@@ -13136,7 +13136,7 @@ function getXactimateAlternativeHTML(): string {
   <meta property="og:description" content="Pitch-corrected measurement reports compatible with Xactimate F9 line items. $8/report vs $155+/month subscription.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${base}/xactimate-alternative">
-  <meta property="og:image" content="${base}/static/logo.png">
+  <meta property="og:image" content="${base}/static/og-image.png">
   <meta property="og:locale" content="en_US">
   <script type="application/ld+json">${productSchema}</script>
   <script type="application/ld+json">${faqSchema}</script>
@@ -13277,7 +13277,7 @@ function getRoofingSoftwareComparisonHubHTML(): string {
   <meta property="og:description" content="Side-by-side comparisons against every major roofing software.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${base}/roofing-software-comparison">
-  <meta property="og:image" content="${base}/static/logo.png">
+  <meta property="og:image" content="${base}/static/og-image.png">
   <script type="application/ld+json">${itemList}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Roofing Software Comparisons","item":"${base}/roofing-software-comparison"}]}</script>
 </head>
@@ -13381,7 +13381,7 @@ function getHelpHubHTML(): string {
   <meta property="og:description" content="How-to articles for every part of the platform.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${base}/help">
-  <meta property="og:image" content="${base}/static/logo.png">
+  <meta property="og:image" content="${base}/static/og-image.png">
   <script type="application/ld+json">${faqSchema}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Help","item":"${base}/help"}]}</script>
 </head>
@@ -13528,7 +13528,7 @@ function getHelpArticleHTML(slug: string, article: HelpArticle): string {
   <meta property="og:title" content="${article.title} | Roof Manager Help">
   <meta property="og:type" content="article">
   <meta property="og:url" content="${base}/help/${slug}">
-  <meta property="og:image" content="${base}/static/logo.png">
+  <meta property="og:image" content="${base}/static/og-image.png">
   <script type="application/ld+json">${schema}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Help","item":"${base}/help"},{"@type":"ListItem","position":3,"name":"${article.category}","item":"${base}/help"},{"@type":"ListItem","position":4,"name":"${article.title.replace(/"/g, '\\"')}","item":"${base}/help/${slug}"}]}</script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tailwindcss/typography@0.5.0/dist/typography.min.css">
@@ -13577,7 +13577,7 @@ function getServicesPageHTML() {
   <meta property="og:description" content="12+ integrated tools for roofing contractors: measurement reports, CRM, AI secretary, website builder, invoicing, D2D sales, and more.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/services">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <link rel="canonical" href="https://www.roofmanager.ca/services">
@@ -14147,7 +14147,7 @@ function getCoveragePageHTML() {
   <meta property="og:description" content="Satellite-powered roof measurement reports available in the United States, Canada, UK, Australia, Germany, France, Japan, Brazil and 30+ more countries.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/coverage">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Manager — Available in 40+ Countries">
@@ -14354,12 +14354,12 @@ function getPricingPageHTML() {
   <meta property="og:description" content="AI-powered roof measurement reports with full CRM. 4 free reports, then save with 10, 25, 50, or 100 report credit packs.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/pricing">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Manager Pricing — From $5.95/Report"> <!-- conv-v5: $5 was a lie -->
   <meta name="twitter:description" content="AI roof measurements with full CRM. 4 free reports included.">
-  <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -14666,7 +14666,7 @@ function getSocialLandingHTML() {
   <meta name="robots" content="noindex">
   <meta property="og:title" content="Free Roof Measurement Report — Roof Manager">
   <meta property="og:description" content="Get a professional satellite roof report in 60 seconds. Free for Instagram & Facebook followers.">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png">
   <link rel="canonical" href="https://www.roofmanager.ca/get-started">
 </head>
 <body style="background:#0A0A0A;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px">
@@ -14715,12 +14715,12 @@ function getBlogListingHTML(posts: any[] = []) {
   <meta property="og:title" content="Roof Manager Blog - Roofing Industry Insights">
   <meta property="og:description" content="Expert roofing industry insights, measurement technology tips, contractor business guides, and more.">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Manager Blog — Roofing Industry Insights">
   <meta name="twitter:description" content="Expert roofing industry insights, measurement tips, and contractor business guides.">
-  <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png">
   <link rel="canonical" href="https://www.roofmanager.ca/blog">
   <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Blog","item":"https://www.roofmanager.ca/blog"}]}
@@ -15261,13 +15261,13 @@ function getLanderFunnelHTML() {
   <meta property="og:description" content="Get accurate roof area, pitch, material BOM, and more in 60 seconds. 4 free reports. No credit card.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/lander">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png">
   <meta property="og:site_name" content="Roof Manager">
   <link rel="canonical" href="https://www.roofmanager.ca/lander">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Free Roof Measurement Reports — Roof Manager">
   <meta name="twitter:description" content="Get accurate roof area, pitch, material BOM in 60 seconds. 4 free reports, no credit card.">
-  <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png">
   <style>
     html { scroll-behavior: smooth; }
     .scroll-animate { opacity: 1; transform: translateY(16px); transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -15537,7 +15537,7 @@ function getDemoLandingPageHTML() {
   <meta property="og:description" content="See Roof Manager live in 20 minutes on a real address you pick.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/demo">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png">
   <meta property="og:site_name" content="Roof Manager">
   <link rel="canonical" href="https://www.roofmanager.ca/demo">
   <style>
@@ -19547,7 +19547,7 @@ function getShingleCalculatorHTML(isEmbed = false): string {
   <meta property="og:description" content="Bundles, squares, and underlayment rolls — instant calculations.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${canonical}">
-  <meta property="og:image" content="${base}/static/logo.png">
+  <meta property="og:image" content="${base}/static/og-image.png">
   <script type="application/ld+json">${schema}</script>
 </head>
 <body style="background:#0A0A0A;color:#fff">
@@ -19604,7 +19604,7 @@ function getDeductibleEstimatorHTML(isEmbed = false): string {
   <meta property="og:description" content="Out-of-pocket cost on a roof claim &mdash; instant estimator.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${canonical}">
-  <meta property="og:image" content="${base}/static/logo.png">
+  <meta property="og:image" content="${base}/static/og-image.png">
   <script type="application/ld+json">${schema}</script>
 </head>
 <body style="background:#0A0A0A;color:#fff">
@@ -19661,7 +19661,7 @@ function getSolarProductionEstimatorHTML(isEmbed = false): string {
   <meta property="og:description" content="Annual kWh + est. savings from system size and sun hours.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${canonical}">
-  <meta property="og:image" content="${base}/static/logo.png">
+  <meta property="og:image" content="${base}/static/og-image.png">
   <script type="application/ld+json">${schema}</script>
 </head>
 <body style="background:#0A0A0A;color:#fff">
@@ -19689,7 +19689,7 @@ function getToolsHubHTML(): string {
   <meta property="og:type" content="website">
   <meta property="og:title" content="Free Roofing Tools & Calculators | Roof Manager">
   <meta property="og:description" content="Free roofing tools for contractors, estimators, and homeowners. Pitch calculator, area estimator, and more — no account required.">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png">
   <meta property="og:url" content="https://www.roofmanager.ca/tools">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://www.roofmanager.ca/tools">
@@ -19845,7 +19845,7 @@ function getPitchCalculatorHTML(): string {
   <meta property="og:type" content="website">
   <meta property="og:title" content="Free Roof Pitch Calculator | Roof Manager">
   <meta property="og:description" content="Convert any roof pitch to degrees and calculate the pitch multiplier for sloped area. Free, embeddable, no account required.">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png">
   <meta property="og:url" content="https://www.roofmanager.ca/tools/pitch-calculator">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://www.roofmanager.ca/tools/pitch-calculator">
@@ -20140,7 +20140,7 @@ function i18nHead(locale: I18NLocale, title: string, desc: string, canonicalPath
   <meta property="og:description" content="${desc}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${base}${canonicalPath}">
-  <meta property="og:image" content="${base}/static/logo.png">`
+  <meta property="og:image" content="${base}/static/og-image.png">`
 }
 
 function i18nNav(locale: I18NLocale): string {
@@ -20346,13 +20346,13 @@ function getAboutPageHTML(): string {
   <meta property="og:type" content="website">
   <meta property="og:title" content="About Roof Manager — The Roof Measurement & CRM Platform">
   <meta property="og:description" content="Satellite roof measurement reports, CRM, and AI voice receptionist — built by roofing-domain engineers for contractors across North America.">
-  <meta property="og:image" content="${base}/static/logo.png">
+  <meta property="og:image" content="${base}/static/og-image.png">
   <meta property="og:url" content="${base}/about">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="About Roof Manager">
   <meta name="twitter:description" content="The roof measurement & CRM platform trusted by 5,000+ contractors.">
-  <meta name="twitter:image" content="${base}/static/logo.png">
+  <meta name="twitter:image" content="${base}/static/og-image.png">
   <script type="application/ld+json">${aboutSchema}</script>
   <script type="application/ld+json">${breadcrumbSchema}</script>
 </head>
@@ -20519,7 +20519,7 @@ function getPressPageHTML(): string {
   <meta property="og:type" content="website">
   <meta property="og:title" content="Press & Media Kit | Roof Manager">
   <meta property="og:description" content="Company overview, key stats, brand assets, and press contact for Roof Manager — Canada's AI-powered roofing measurement platform.">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png">
   <meta property="og:url" content="https://www.roofmanager.ca/press">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://www.roofmanager.ca/press">
@@ -20677,7 +20677,7 @@ function getMaterialEstimatorHTML(): string {
   <meta property="og:type" content="website">
   <meta property="og:title" content="Free Roofing Material Estimator | Roof Manager">
   <meta property="og:description" content="Calculate shingles, bundles, squares, underlayment, and ridge cap from roof area and pitch. Free, embeddable, no account required.">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png">
   <meta property="og:url" content="https://www.roofmanager.ca/tools/material-estimator">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://www.roofmanager.ca/tools/material-estimator">
