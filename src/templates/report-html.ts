@@ -153,7 +153,6 @@ function renderInsuranceExtras(report: RoofReport): string {
     </div>`
 
   const tiles: string[] = []
-  if (imgDate) tiles.push(tile('Imagery Date', imgDate, shingleAge != null ? `≥${shingleAge} yrs since survey` : ''))
   if (wr) tiles.push(tile('Hail Risk', `${wr.hail_score}/100`, `${wr.hail_event_count} events ≤${wr.sample_radius_km}km, max ${wr.largest_hail_inches.toFixed(2)}"`))
   if (wr) tiles.push(tile('Wind Risk', `${wr.wind_score}/100`, wr.peak_wind_kmh > 0 ? `peak ${wr.peak_wind_kmh} km/h` : 'no recent events'))
   if (band && costMid != null) tiles.push(tile('Replacement (CAD)', `$${costMid.toLocaleString()}`, `range $${costLow!.toLocaleString()}–$${costHigh!.toLocaleString()}`))
@@ -538,7 +537,7 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=900">
 <title>Roof Manager Roof Report | ${fullAddress}</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
@@ -1271,7 +1270,7 @@ export function generateSimpleTwoPageReport(report: RoofReport): string {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=900">
 <title>Roof Measurement Report | ${fullAddress}</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
