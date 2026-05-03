@@ -9228,6 +9228,29 @@ ${previewId ? `
       var d = document.getElementById('step2-email-display');
       if (d) d.textContent = '\uD83D\uDCE7 ' + (email || document.getElementById('reg-email').value);
       if (!silent) rrTrack('signup_field_complete', {field: 'email'});
+
+      // Fire the verification email + reveal the code-entry block. Without
+      // this, the backend rejects the final submit with "Email verification
+      // is required" — users hit Continue, fill out the form, click Create
+      // Account, and get a 400. (Bug found 2026-05-02 with 54 ad clicks / 0
+      // signups in flight.)
+      if (!silent && email) {
+        var vb = document.getElementById('reg-verify-block');
+        if (vb) vb.style.display = 'block';
+        setSubmitEnabled(false);
+        fetch('/api/customer-auth/send-verification', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({email: email})
+        }).then(function(r){ return r.json().catch(function(){ return {}; }); })
+          .then(function(j){
+            if (j && j.success) {
+              try { rrTrack('signup_code_sent', {}); } catch(_){}
+            } else if (j && j.error) {
+              setRegError(j.error);
+            }
+          })
+          .catch(function(){ setRegError('Could not send verification code. Try again.'); });
+      }
     }
     function goToStep1() {
       document.getElementById('step2').style.display = 'none';
@@ -9264,7 +9287,11 @@ ${previewId ? `
       bar.style.background = colors[score];
     }
     // On page load: rehydrate draft (email only; user clicks Continue to receive a new verification code)
+    // and DISABLE the submit button until the user verifies their email code.
+    // The backend requires verification_token; before this guard the button
+    // was clickable on first paint and every email signup hit a 400.
     (function() {
+      try { setSubmitEnabled(false); } catch(_) {}
       var draft = JSON.parse(localStorage.getItem('rr_signup_draft') || '{}');
       if (draft.email) {
         var el = document.getElementById('reg-email');
