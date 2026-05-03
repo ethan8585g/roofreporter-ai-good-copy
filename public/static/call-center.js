@@ -1234,6 +1234,9 @@
         else if (reason.indexOf('rejected') >= 0) hint = ' — callee declined the call.';
         else if (reason.indexOf('unreachable') >= 0) hint = ' — number invalid or trunk-routing issue. Run preflight.';
         else if (reason.indexOf('auth_failed') >= 0) hint = ' — Telnyx credentials likely wrong. Check the trunk in LiveKit dashboard.';
+        else if (reason.indexOf('livekit_server_error') >= 0) hint = ' — LiveKit returned 5xx. Check status.livekit.io.';
+        else if (reason.indexOf('livekit_request_rejected') >= 0) hint = ' — LiveKit rejected the request. Verify trunk id + API key/secret.';
+        else if (reason.length < 12) hint = ' — opaque error. Click "Run Preflight" below for diagnostics.';
         window.rmToast('Call failed: ' + reason + hint, 'error');
       } else {
         window.rmToast(data?.error || 'Quick dial failed', 'info');

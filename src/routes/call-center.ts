@@ -507,24 +507,43 @@ callCenterRoutes.post('/quick-dial', async (c) => {
       console.log('[QuickDial] CreateSIPParticipant →', { trunk: outboundTrunkId.slice(0, 8) + '…', to: cleanPhone, room: roomName, identity: participantIdentity })
       try {
         const sipResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/CreateSIPParticipant', sipRequest)
-        const failed = !!(sipResult?.code || sipResult?.error)
+        // LiveKit can fail in three shapes:
+        //  (a) Twirp-style error: { code, msg }
+        //  (b) Plain error envelope: { error: "..." }
+        //  (c) HTTP 200 with SIPParticipantInfo but a terminal sip_call_status
+        //      like SCS_HANGUP / SCS_ERROR (call never connected).
+        const sipCallStatus = sipResult?.sip_call_status || ''
+        const badStatus = sipCallStatus && !['SCS_ACTIVE', 'SCS_RINGING', 'SCS_DIALING'].includes(sipCallStatus)
+        const failed = !!(sipResult?.code || sipResult?.error || badStatus)
         console.log('[QuickDial] CreateSIPParticipant ←', {
           ok: !failed,
+          code: sipResult?.code || null,
           err: sipResult?.msg || sipResult?.error || null,
-          status: sipResult?.sip_call_status || null,
+          status: sipCallStatus || null,
           participant: sipResult?.participant_id || null,
         })
         if (failed) {
           sipStatus = 'sip_error'
-          // Common LiveKit/SIP failure codes — translate to actionable reasons.
-          const rawErr = sipResult.msg || sipResult.error || JSON.stringify(sipResult)
-          const lower = String(rawErr).toLowerCase()
+          // Build the rawest possible error string so the caller can always
+          // see *something* actionable, even when LiveKit returns a terse
+          // "error" or an unfamiliar code.
+          const parts = [
+            sipResult?.code ? `code=${sipResult.code}` : '',
+            sipResult?.msg || sipResult?.error || '',
+            badStatus ? `sip_call_status=${sipCallStatus}` : '',
+          ].filter(Boolean)
+          const rawErr = parts.length ? parts.join(' | ') : JSON.stringify(sipResult).slice(0, 300)
+          const lower = rawErr.toLowerCase()
           let reason = rawErr
-          if (lower.includes('timeout') || lower.includes('no_answer')) reason = 'no_answer (rang ' + 30 + 's, not picked up)'
+          if (lower.includes('timeout') || lower.includes('no_answer') || lower.includes('deadline_exceeded')) reason = 'no_answer (rang 30s, not picked up)'
           else if (lower.includes('busy')) reason = 'busy'
-          else if (lower.includes('rejected') || lower.includes('decline')) reason = 'rejected_by_callee'
+          else if (lower.includes('rejected') || lower.includes('decline') || lower.includes('scs_hangup')) reason = 'rejected_by_callee_or_carrier'
           else if (lower.includes('unreachable') || lower.includes('not_found') || lower.includes('does not exist')) reason = 'number_unreachable (check trunk + Telnyx routing)'
           else if (lower.includes('forbidden') || lower.includes('denied') || lower.includes('unauth')) reason = 'trunk_auth_failed (Telnyx credentials?)'
+          else if (lower.startsWith('http_5')) reason = 'livekit_server_error (' + rawErr + ') — try preflight'
+          else if (lower.startsWith('http_4')) reason = 'livekit_request_rejected (' + rawErr + ') — check trunk id + JWT scopes'
+          // Always tag short/opaque reasons so the client gets a hint instead of "error".
+          if (!reason || reason.length < 6) reason = (reason || 'unknown') + ' — run /api/call-center/quick-dial/preflight'
           sipError = reason
           await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='failed', call_outcome=? WHERE livekit_room_id=?").bind('sip_error: ' + reason, roomName).run()
         } else {
@@ -534,9 +553,12 @@ callCenterRoutes.post('/quick-dial', async (c) => {
         }
       } catch (e: any) {
         sipStatus = 'dial_error'
-        sipError = e.message
-        console.warn('[QuickDial] SIP dial threw:', e.message)
-        await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='failed', call_outcome=? WHERE livekit_room_id=?").bind('dial_error: ' + e.message, roomName).run()
+        // e.message is sometimes empty or just "error" for fetch/abort failures.
+        // Stitch together everything we have so the toast is always meaningful.
+        const detail = [e?.name, e?.message, !e?.message ? String(e) : ''].filter(Boolean).join(': ') || 'fetch failed (no detail)'
+        sipError = detail
+        console.warn('[QuickDial] SIP dial threw:', detail, e?.stack || '')
+        await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='failed', call_outcome=? WHERE livekit_room_id=?").bind('dial_error: ' + detail, roomName).run()
       }
     } else {
       sipStatus = 'no_trunk_configured'
@@ -1443,7 +1465,18 @@ async function ccLivekitSipAPI(apiKey: string, apiSecret: string, livekitUrl: st
     headers: { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
   })
-  return resp.json() as Promise<any>
+  // Read body once and parse defensively. LiveKit Twirp returns JSON for both
+  // success and error, but transport-level failures (5xx, gateway timeouts)
+  // can return empty bodies or non-JSON. Surface those as a Twirp-shaped error
+  // so callers see a real reason instead of a silent {} or generic "error".
+  const text = await resp.text()
+  let json: any = null
+  if (text) { try { json = JSON.parse(text) } catch { /* non-JSON body */ } }
+  if (!resp.ok) {
+    const detail = (json?.msg || json?.error || text || `HTTP ${resp.status}`).toString().slice(0, 500)
+    return { code: `http_${resp.status}`, msg: detail }
+  }
+  return json ?? {}
 }
 
 // GET /quick-connect/status — Get call center phone setup status
