@@ -708,7 +708,7 @@ function renderTraceStep(root, progressBar) {
             <span id="traceModeDesc" class="text-xs text-gray-400">${m.desc}</span>
           </div>
           <div style="position:relative; flex: 1; display:flex; flex-direction:column;">
-            <div id="traceMap" style="min-height: 500px; cursor: crosshair; flex: 1;"></div>
+            <div id="traceMap" style="min-height: 360px; cursor: crosshair; flex: 1;"></div>
             <!-- Phone-only overlays: hidden by default, unhidden by enablePhoneTraceUI() after initTraceMap -->
             <div id="phoneTraceOverlay" style="display:none;">
               <!-- Center reticle — points are placed at its center via the FAB or long-press -->
