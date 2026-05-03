@@ -216,10 +216,16 @@ const DRIP_EDGE_EAVE_COST_CAD = 8.50         // Type C drip edge (eave)
 const DRIP_EDGE_RAKE_COST_CAD = 9.50         // Type D drip edge (rake/gable)
 
 // Ice & Water Barrier — 200 sqft rolls (2 squares)
+// Code triggers per IRC R905.1.2 / NBC:
+//   • pitch < 2:12  → full sloped-area coverage
+//   • pitch ≥ 2:12  → eave strip = (overhang + 24" past heated wall)
+//   • valleys       → 3 ft × 2 sides
 const ICE_WATER_ROLL_SQFT = 200
-const ICE_WATER_WIDTH_FT = 3.0               // 3ft overhang from eave
-const ICE_WATER_VALLEY_WIDTH_FT = 3.0        // 3ft each side of valley
-const ICE_WATER_COST_PER_ROLL_CAD = 165.00   // Grace Ice & Water Shield
+const ICE_WATER_LOW_SLOPE_RISE_THRESHOLD = 2.0  // < 2:12 = full coverage
+const ICE_WATER_EAVE_PAST_WALL_FT = 2.0         // 24" past heated-wall line
+const ICE_WATER_EAVE_OVERHANG_FT = 1.0          // assumed 12" overhang
+const ICE_WATER_VALLEY_WIDTH_FT = 3.0           // 3ft each side of valley
+const ICE_WATER_COST_PER_ROLL_CAD = 165.00      // Grace Ice & Water Shield
 
 // Underlayment — Synthetic (4 squares per roll = 400 sqft)
 const UNDERLAY_SQFT_PER_ROLL = 400
@@ -367,24 +373,58 @@ export function estimateMaterials(input: MaterialEstimationInput): DetailedMater
     })
   }
 
-  // ── 6. ICE & WATER BARRIER ──
-  // Required: 3ft overhang on all eaves + valley centers
-  const iceWaterEaveSqft = eaveLF * ICE_WATER_WIDTH_FT
-  const iceWaterValleySqft = valleyLF * ICE_WATER_VALLEY_WIDTH_FT * 2  // both sides
-  const iceWaterTotalSqft = iceWaterEaveSqft + iceWaterValleySqft
+  // ── 6. ICE & WATER BARRIER (IRC R905.1.2 / NBC) ──
+  // Low-slope (pitch < 2:12) requires full sloped-area coverage.
+  // Standard pitch only needs an eave strip extending 24" past the
+  // heated interior wall line, plus 3 ft on each side of every valley.
+  const isLowSlope = pitchRise > 0 && pitchRise < ICE_WATER_LOW_SLOPE_RISE_THRESHOLD
+  const iceWaterFullSqft = isLowSlope ? netArea : 0
+  const iceWaterEaveSqft = isLowSlope
+    ? 0
+    : eaveLF * (ICE_WATER_EAVE_OVERHANG_FT + ICE_WATER_EAVE_PAST_WALL_FT)
+  const iceWaterValleySqft = valleyLF * ICE_WATER_VALLEY_WIDTH_FT * 2
+
+  if (iceWaterFullSqft > 0) {
+    const fullRolls = Math.ceil(iceWaterFullSqft / ICE_WATER_ROLL_SQFT)
+    lineItems.push({
+      category: 'ice_water',
+      name: 'Ice & Water Barrier — Full Roof Coverage (Low Slope)',
+      description: `${Math.round(iceWaterFullSqft)} sqft full coverage (pitch ${pitchRise}:12 < 2:12)`,
+      quantity: fullRolls,
+      unit: 'rolls (200 sqft each)',
+      coverage_per_unit: `${ICE_WATER_ROLL_SQFT} sqft / roll`,
+      unit_cost_cad: ICE_WATER_COST_PER_ROLL_CAD,
+      total_cost_cad: round2(fullRolls * ICE_WATER_COST_PER_ROLL_CAD),
+      notes: 'IRC R905.1.2: roofs with rise <2:12 require self-adhered membrane over the entire roof.'
+    })
+  }
+
+  const iceWaterEaveValleySqft = iceWaterEaveSqft + iceWaterValleySqft
+  if (iceWaterEaveValleySqft > 0) {
+    const eaveValleyRolls = Math.ceil(iceWaterEaveValleySqft / ICE_WATER_ROLL_SQFT)
+    const stripDepthFt = ICE_WATER_EAVE_OVERHANG_FT + ICE_WATER_EAVE_PAST_WALL_FT
+    lineItems.push({
+      category: 'ice_water',
+      name: 'Ice & Water Barrier — Eave & Valley',
+      description:
+        (iceWaterEaveSqft > 0
+          ? `Eave: ${Math.round(iceWaterEaveSqft)} sqft (${Math.round(eaveLF)} LF × ${stripDepthFt}ft)`
+          : '') +
+        (iceWaterEaveSqft > 0 && iceWaterValleySqft > 0 ? ' + ' : '') +
+        (iceWaterValleySqft > 0
+          ? `Valley: ${Math.round(iceWaterValleySqft)} sqft (${Math.round(valleyLF)} LF × ${ICE_WATER_VALLEY_WIDTH_FT}ft × 2 sides)`
+          : ''),
+      quantity: eaveValleyRolls,
+      unit: 'rolls (200 sqft each)',
+      coverage_per_unit: `${ICE_WATER_ROLL_SQFT} sqft / roll`,
+      unit_cost_cad: ICE_WATER_COST_PER_ROLL_CAD,
+      total_cost_cad: round2(eaveValleyRolls * ICE_WATER_COST_PER_ROLL_CAD),
+      notes: 'IRC R905.1.2: extend from eave edge to 24" past the interior heated-wall line; 3 ft on each side of valleys.'
+    })
+  }
+
+  const iceWaterTotalSqft = iceWaterFullSqft + iceWaterEaveSqft + iceWaterValleySqft
   const iceWaterRolls = Math.ceil(iceWaterTotalSqft / ICE_WATER_ROLL_SQFT)
-  lineItems.push({
-    category: 'ice_water',
-    name: 'Ice & Water Barrier (Self-Adhered)',
-    description: `Eave: ${Math.round(iceWaterEaveSqft)} sqft (${Math.round(eaveLF)} LF × ${ICE_WATER_WIDTH_FT}ft)` +
-      (iceWaterValleySqft > 0 ? ` + Valley: ${Math.round(iceWaterValleySqft)} sqft` : ''),
-    quantity: iceWaterRolls,
-    unit: 'rolls (200 sqft each)',
-    coverage_per_unit: `${ICE_WATER_ROLL_SQFT} sqft / roll`,
-    unit_cost_cad: ICE_WATER_COST_PER_ROLL_CAD,
-    total_cost_cad: round2(iceWaterRolls * ICE_WATER_COST_PER_ROLL_CAD),
-    notes: 'NBC/IRC required: minimum 36" up from eave in climate zones with freeze-thaw'
-  })
 
   // ── 7. SYNTHETIC UNDERLAYMENT ──
   // Covers entire roof area minus ice & water zones

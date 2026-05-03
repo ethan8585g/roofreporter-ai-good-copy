@@ -63,7 +63,7 @@ import sys
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -77,6 +77,12 @@ FT2_PER_SQUARE       = 100
 BUNDLES_PER_SQUARE   = 3
 ROLLS_PER_4_SQUARES  = 1               # underlayment roll covers 4 squares
 ICE_SHIELD_WIDTH_FT  = 3.0
+# Ice & Water Barrier — IRC R905.1.2 / NBC code triggers
+LOW_SLOPE_RISE_THRESHOLD     = 2.0    # < 2:12 = full-roof I&W
+EAVE_PAST_WALL_FT            = 2.0    # 24" past interior heated-wall line
+EAVE_OVERHANG_DEFAULT_FT     = 1.0    # assumed 12" overhang
+IW_VALLEY_HALF_WIDTH_FT      = 3.0    # 3 ft each side of valley
+IW_ROLL_SQFT                 = 200
 NAIL_LBS_PER_SQ      = 2.5
 LF_PER_RIDGE_BUNDLE  = 35.0
 
@@ -139,6 +145,18 @@ class FaceDetail:
 
 
 @dataclass
+class IceWaterBreakdown:
+    low_slope_full_coverage_sqft: float = 0.0
+    low_slope_face_count: int = 0
+    eave_strip_sqft: float = 0.0
+    eave_strip_depth_ft: float = 0.0
+    valley_sqft: float = 0.0
+    total_sqft: float = 0.0
+    total_rolls_2sq: int = 0
+    trigger_notes: List[str] = field(default_factory=list)
+
+
+@dataclass
 class MaterialEstimate:
     shingles_squares_net: float = 0.0
     shingles_squares_gross: float = 0.0
@@ -146,6 +164,7 @@ class MaterialEstimate:
     underlayment_rolls: int = 0
     ice_water_shield_sqft: float = 0.0
     ice_water_shield_rolls_2sq: int = 0
+    ice_water_breakdown: Optional[IceWaterBreakdown] = None
     ridge_cap_lf: float = 0.0
     ridge_cap_bundles: int = 0
     starter_strip_lf: float = 0.0
@@ -313,6 +332,55 @@ def waste_pct(rise: float, complexity: str = "medium") -> float:
 #  MATERIAL TAKE-OFF
 # ═══════════════════════════════════════════════════════════════════════
 
+def compute_ice_water_breakdown(
+    faces: List[FaceDetail],
+    total_eave_ft: float,
+    total_valley_ft: float,
+    eave_depths_ft: Optional[List[float]] = None,
+) -> IceWaterBreakdown:
+    """IRC R905.1.2 / NBC ice & water barrier breakdown.
+
+    Faces below 2:12 require full sloped-area coverage; standard-pitch faces
+    only need an eave strip extending 24" past the heated wall, plus 3 ft
+    on each side of every valley.
+    """
+    eave_depths_ft = eave_depths_ft or []
+    low_slope = [f for f in faces if f.pitch_rise > 0 and f.pitch_rise < LOW_SLOPE_RISE_THRESHOLD]
+    low_slope_sqft = sum(f.sloped_area_ft2 for f in low_slope)
+    n_faces = len(faces)
+    n_low = len(low_slope)
+
+    # Eave LF on standard-pitch faces (proportional approximation)
+    standard_eave_ft = total_eave_ft * (1 - n_low / n_faces) if n_faces > 0 else total_eave_ft
+
+    overhang_ft = max(eave_depths_ft + [EAVE_OVERHANG_DEFAULT_FT]) if eave_depths_ft else EAVE_OVERHANG_DEFAULT_FT
+    strip_depth_ft = overhang_ft + EAVE_PAST_WALL_FT
+    eave_strip_sqft = standard_eave_ft * strip_depth_ft
+    valley_sqft = total_valley_ft * IW_VALLEY_HALF_WIDTH_FT * 2
+
+    total_sqft = low_slope_sqft + eave_strip_sqft + valley_sqft
+    rolls = math.ceil(total_sqft / IW_ROLL_SQFT) if total_sqft > 0 else 0
+
+    notes: List[str] = []
+    if low_slope_sqft > 0:
+        notes.append(f"Low-slope coverage: {n_low} face(s) below 2:12 -> {round(low_slope_sqft)} sqft full I&W per IRC R905.1.2.")
+    if eave_strip_sqft > 0:
+        notes.append(f"Eave strip: {round(standard_eave_ft)} LF x {round(strip_depth_ft, 1)} ft (overhang {round(overhang_ft, 1)} + 24\" past heated wall) = {round(eave_strip_sqft)} sqft.")
+    if valley_sqft > 0:
+        notes.append(f"Valley coverage: {round(total_valley_ft)} LF x 3 ft x 2 sides = {round(valley_sqft)} sqft.")
+
+    return IceWaterBreakdown(
+        low_slope_full_coverage_sqft=round(low_slope_sqft, 1),
+        low_slope_face_count=n_low,
+        eave_strip_sqft=round(eave_strip_sqft, 1),
+        eave_strip_depth_ft=round(strip_depth_ft, 2),
+        valley_sqft=round(valley_sqft, 1),
+        total_sqft=round(total_sqft, 1),
+        total_rolls_2sq=rolls,
+        trigger_notes=notes,
+    )
+
+
 def compute_materials(
     net_squares: float,
     waste_frac: float,
@@ -321,15 +389,19 @@ def compute_materials(
     hip_ft: float,
     valley_ft: float,
     rake_ft: float,
+    faces: Optional[List[FaceDetail]] = None,
+    eave_depths_ft: Optional[List[float]] = None,
 ) -> MaterialEstimate:
     gross = net_squares * (1 + waste_frac)
+    iw = compute_ice_water_breakdown(faces or [], eave_ft, valley_ft, eave_depths_ft)
     return MaterialEstimate(
         shingles_squares_net=round(net_squares, 2),
         shingles_squares_gross=round(gross, 2),
         shingles_bundles=math.ceil(gross * BUNDLES_PER_SQUARE),
         underlayment_rolls=math.ceil(gross / 4),
-        ice_water_shield_sqft=round(eave_ft * ICE_SHIELD_WIDTH_FT, 1),
-        ice_water_shield_rolls_2sq=math.ceil((eave_ft * ICE_SHIELD_WIDTH_FT) / 200),
+        ice_water_shield_sqft=iw.total_sqft,
+        ice_water_shield_rolls_2sq=iw.total_rolls_2sq,
+        ice_water_breakdown=iw,
         ridge_cap_lf=round(ridge_ft + hip_ft, 1),
         ridge_cap_bundles=math.ceil((ridge_ft + hip_ft) / LF_PER_RIDGE_BUNDLE),
         starter_strip_lf=round(eave_ft + rake_ft, 1),
@@ -578,6 +650,7 @@ class RoofMeasurementEngine:
             net_squares, w_frac,
             total_eave_ft, total_ridge_ft, total_hip_ft,
             total_valley_ft, total_rake_ft,
+            faces=faces,
         )
 
         # ──────────────────────────────────────────────────────────
@@ -809,6 +882,13 @@ def print_report(report: MeasurementReport):
         print(f"    Underlayment rolls .......... {mat.get('underlayment_rolls', 0)}")
         print(f"    Ice & water shield .......... {mat.get('ice_water_shield_sqft', 0):.1f} ft² "
               f"({mat.get('ice_water_shield_rolls_2sq', 0)} rolls)")
+        iw = mat.get('ice_water_breakdown') or {}
+        if iw:
+            print(f"      • Low-slope full coverage ... {iw.get('low_slope_full_coverage_sqft', 0):.1f} ft² "
+                  f"({iw.get('low_slope_face_count', 0)} face(s))")
+            print(f"      • Eave strip ................ {iw.get('eave_strip_sqft', 0):.1f} ft² "
+                  f"(depth {iw.get('eave_strip_depth_ft', 0):.1f} ft)")
+            print(f"      • Valley coverage ........... {iw.get('valley_sqft', 0):.1f} ft²")
         print(f"    Ridge cap ................... {mat.get('ridge_cap_lf', 0):.1f} lf "
               f"({mat.get('ridge_cap_bundles', 0)} bundles)")
         print(f"    Starter strip ............... {mat.get('starter_strip_lf', 0):.1f} lf")

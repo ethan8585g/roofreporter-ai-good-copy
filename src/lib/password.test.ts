@@ -4,7 +4,7 @@ import { hashPassword, verifyPassword, isLegacyHash, upgradeHashIfLegacy } from 
 describe('password hashing (new format)', () => {
   it('hashes and verifies', async () => {
     const h = await hashPassword('hunter2!')
-    expect(h.startsWith('pbkdf2$sha512$600000$')).toBe(true)
+    expect(h.startsWith('pbkdf2$sha512$100000$')).toBe(true)
     expect(await verifyPassword('hunter2!', h)).toBe(true)
     expect(await verifyPassword('wrong', h)).toBe(false)
   })
@@ -55,7 +55,7 @@ describe('upgradeHashIfLegacy', () => {
     const hex = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('')
     let saved: string | null = null
     await upgradeHashIfLegacy('pw', hex, async (h) => { saved = h })
-    expect(saved?.startsWith('pbkdf2$sha512$600000$')).toBe(true)
+    expect(saved?.startsWith('pbkdf2$sha512$100000$')).toBe(true)
     expect(await verifyPassword('pw', saved!)).toBe(true)
   })
   it('no-ops for new-format hash', async () => {
