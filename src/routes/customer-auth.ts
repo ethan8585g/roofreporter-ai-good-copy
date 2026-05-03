@@ -607,11 +607,17 @@ customerAuthRoutes.post('/register', async (c) => {
       website, // honeypot — bots fill this, humans don't
       verification_token,
       referred_by_code,
+      gclid, // Google Ads click ID — for offline conversion uploads on later upgrade-to-paid
     } = body as {
       email?: string; password?: string; name?: string; phone?: string;
       company_name?: string; company_size?: string; primary_use?: string;
       website?: string; verification_token?: string; referred_by_code?: string;
+      gclid?: string;
     }
+    // Sanitize gclid — keep only the URL-safe character set Google emits.
+    const cleanGclid = (gclid && /^[A-Za-z0-9_-]{10,200}$/.test(String(gclid).trim()))
+      ? String(gclid).trim()
+      : null
 
     if (!email || !password || !name) {
       return c.json({ error: 'Email, password, and name are required' }, 400)
@@ -694,9 +700,9 @@ customerAuthRoutes.post('/register', async (c) => {
     // Insert with the standard free-trial grant (NOT paid credits) — email_verified = 1 since we verified
     // conv-v5: persist phone, company_size, primary_use for sales-qualification
     const result = await c.env.DB.prepare(`
-      INSERT INTO customers (email, name, phone, company_name, company_size, primary_use, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by, auto_invoice_enabled, last_login)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 0, 0, ?, 0, ?, ?, 0, datetime('now'))
-    `).bind(cleanEmail, name, cleanPhone, cleanCompanyName, cleanCompanySize, cleanPrimaryUse, storedHash, FREE_TRIAL_REPORTS, refCode, referredBy).run()
+      INSERT INTO customers (email, name, phone, company_name, company_size, primary_use, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by, auto_invoice_enabled, last_login, gclid)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 0, 0, ?, 0, ?, ?, 0, datetime('now'), ?)
+    `).bind(cleanEmail, name, cleanPhone, cleanCompanyName, cleanCompanySize, cleanPrimaryUse, storedHash, FREE_TRIAL_REPORTS, refCode, referredBy, cleanGclid).run()
 
     if (!result.meta.last_row_id) {
       return c.json({ error: 'Failed to create account. Please try again.' }, 500)

@@ -279,6 +279,35 @@ window.GOOGLE_ADS_CONVERSIONS = {
 // Phone tracking removed — phone is not a lead source for this business and
 // the Call-from-Ads gtag('config') was causing repeated failed "Calls (uploads)"
 // in Tag Assistant on every page load.
+
+// Persist Google Ads click ID + UTMs from the URL into localStorage so they
+// survive across navigation and can be sent at register time. Stored for 90
+// days (matches Google Ads default click-attribution window). gtag's _gcl_aw
+// cookie does this for client-side conversions automatically; this duplicate
+// localStorage capture is what feeds the BACKEND register handler so the gclid
+// can be persisted on the customers row — required for future offline conversion
+// uploads when free signups convert to paid.
+(function captureAdsAttribution(){
+  try {
+    var p = new URLSearchParams(location.search);
+    var gclid = p.get('gclid');
+    if (gclid) {
+      var record = { gclid: gclid, captured_at: new Date().toISOString() };
+      localStorage.setItem('rm_ads_gclid', JSON.stringify(record));
+    }
+    // UTMs — captured the same way for consistency. analytics_attribution
+    // handles first-touch UTMs server-side too, but having them here means
+    // the register API call carries them on first hit, no rollup wait.
+    var utms = ['utm_source','utm_medium','utm_campaign','utm_content','utm_term'];
+    var utmRecord = {};
+    var anyUtm = false;
+    utms.forEach(function(k){ var v = p.get(k); if (v) { utmRecord[k] = v; anyUtm = true; } });
+    if (anyUtm) {
+      utmRecord.captured_at = new Date().toISOString();
+      localStorage.setItem('rm_ads_utm', JSON.stringify(utmRecord));
+    }
+  } catch(e) { /* localStorage may be disabled in private mode */ }
+})();
 // Enhanced Conversions: SHA-256 hash for first-party user data per Google spec
 // (lowercase + trimmed). Improves match rate by 10-30% on iOS/Safari/ITP.
 window.__sha256Lower = async function(s) {
@@ -9495,6 +9524,9 @@ ${previewId ? `
 
       rrTrack('signup_submit_attempt', { company_size: companySize, primary_use: primaryUse });
       var refCode = localStorage.getItem('rr_ref_code') || new URLSearchParams(window.location.search).get('ref') || '';
+      // Pull persisted Google Ads click ID + UTMs (captured on landing).
+      var gclidRecord = null;
+      try { var gr = localStorage.getItem('rm_ads_gclid'); if (gr) gclidRecord = JSON.parse(gr); } catch(_) {}
       var res = await fetch('/api/customer-auth/register', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -9508,7 +9540,8 @@ ${previewId ? `
           primary_use: primaryUse,
           website: honeypot,
           verification_token: verificationToken,
-          referred_by_code: refCode
+          referred_by_code: refCode,
+          gclid: (gclidRecord && gclidRecord.gclid) || null
         })
       });
       var data = await res.json();

@@ -1045,6 +1045,28 @@ squareRoutes.post('/webhook', async (c) => {
 
         const customerId = pendingPayment.customer_id
 
+        // Server-side GA4 conversion fire — fires even if the customer never
+        // returns to the success page (closed tab, slow network, mobile).
+        // GA4 with Google Ads link will then export this as a purchase
+        // conversion to the linked Google Ads account, attributed to the
+        // original gclid via the GA4 client session. amount is REAL dollars
+        // in square_payments, but trackPaymentCompleted takes cents — *100.
+        if (customerId) {
+          const ga4Promise = trackPaymentCompleted(
+            c.env as any,
+            pendingPayment.square_order_id || `square_${payment.id}`,
+            Math.round(Number(pendingPayment.amount || 0) * 100),
+            {
+              payment_type: pendingPayment.payment_type || 'unknown',
+              customer_id: String(customerId),
+              source: 'square_webhook'
+            }
+          ).catch((e) => console.warn('[ga4-server] webhook fire failed:', (e && e.message) || e))
+          if ((c as any).executionCtx?.waitUntil) {
+            ;(c as any).executionCtx.waitUntil(ga4Promise)
+          }
+        }
+
         if (pendingPayment.payment_type === 'one_time_report') {
           // Single report purchase — create order automatically
           let meta: any = {}

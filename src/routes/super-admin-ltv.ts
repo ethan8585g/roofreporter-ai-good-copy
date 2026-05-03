@@ -312,6 +312,30 @@ superAdminLtv.get('/', async (c) => {
       (computed by the nightly rollup — run "Run nightly rollup now" on
       <a href="/super-admin/attribution" style="color:#60A5FA;">Attribution</a> if today's data looks stale).
     </p>
+
+    <!-- Test conversions panel -->
+    <h2 style="font-size:18px; font-weight:700; margin:48px 0 8px;">🧪 Test Conversions</h2>
+    <p style="font-size:13px; color:#9CA3AF; margin-bottom:12px;">
+      Click any button to fire the conversion event from this browser. Open
+      <a href="https://tagassistant.google.com" target="_blank" style="color:#60A5FA;">Tag Assistant</a>
+      on this domain first to verify the conversion is sent. Use this to debug Google Ads + Meta Pixel wiring
+      without needing to complete real signup/contact/payment flows.
+      <strong style="color:#FBBF24;">Note:</strong> these fires DO get reported to Google Ads —
+      don't spam them or you'll pollute your conversion numbers.
+    </p>
+    <div class="card">
+      <div id="test-status" style="font-size:12px; color:#9CA3AF; margin-bottom:14px;">Ready. Pick a conversion below to fire it.</div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px;">
+        <button onclick="fireTest('signup')"       style="padding:10px; background:#1F2937; color:#E5E7EB; border:1px solid #374151; border-radius:8px; font-size:13px; cursor:pointer;">⚡ Fire signup</button>
+        <button onclick="fireTest('lead')"         style="padding:10px; background:#1F2937; color:#E5E7EB; border:1px solid #374151; border-radius:8px; font-size:13px; cursor:pointer;">🎯 Fire lead</button>
+        <button onclick="fireTest('contact_lead')" style="padding:10px; background:#1F2937; color:#E5E7EB; border:1px solid #374151; border-radius:8px; font-size:13px; cursor:pointer;">📝 Fire contact_lead</button>
+        <button onclick="fireTest('demo')"         style="padding:10px; background:#1F2937; color:#E5E7EB; border:1px solid #374151; border-radius:8px; font-size:13px; cursor:pointer;">📅 Fire demo</button>
+        <button onclick="fireTest('purchase')"     style="padding:10px; background:#1F2937; color:#E5E7EB; border:1px solid #374151; border-radius:8px; font-size:13px; cursor:pointer;">💰 Fire purchase</button>
+      </div>
+      <div style="margin-top:18px; padding:12px; background:#0F172A; border-radius:8px; font-size:12px; color:#9CA3AF; font-family:monospace;">
+        <div id="test-log">No fires yet.</div>
+      </div>
+    </div>
   </main>
 <script>
 function fmtMoney(cents){ if(!cents && cents !== 0) return '—'; var d = Number(cents)/100; if (d >= 10000) return '$' + (d/1000).toFixed(1) + 'k'; return '$' + d.toLocaleString(undefined, {maximumFractionDigits: d < 100 ? 2 : 0}); }
@@ -374,6 +398,31 @@ async function loadAll(){
 
 document.getElementById('period').addEventListener('change', loadAll);
 loadAll();
+
+// ── Test conversions panel ──
+window.fireTest = function(kind){
+  var status = document.getElementById('test-status');
+  var log = document.getElementById('test-log');
+  if (typeof window.trackAdsConversion !== 'function') {
+    status.textContent = '❌ window.trackAdsConversion not loaded — check that the Google Ads tag is present on this page.';
+    return;
+  }
+  var labels = (window.GOOGLE_ADS_CONVERSIONS || {});
+  var sendTo = labels[kind] || '';
+  var isPlaceholder = sendTo.indexOf('XXX_') !== -1;
+  var values = { signup: 50, lead: 5, contact_lead: 10, demo: 25, purchase: 50 };
+  var params = { value: values[kind] || 1, currency: 'CAD' };
+  // Add a fake transaction_id for purchase fires so Google Ads doesn't dedupe.
+  if (kind === 'purchase') params.transaction_id = 'TEST_' + Date.now();
+  window.trackAdsConversion(kind, params);
+  var line = '[' + new Date().toLocaleTimeString() + '] fire ' + kind + ' → ' + (sendTo || 'no label');
+  if (isPlaceholder) line += '  ⚠️ PLACEHOLDER — no real fire (label not set in Google Ads yet)';
+  if (log.textContent === 'No fires yet.') log.textContent = line;
+  else log.textContent = line + '\\n' + log.textContent;
+  status.textContent = isPlaceholder
+    ? '⚠️  Fire skipped: ' + kind + ' has no real label in code yet. Paste the label from Google Ads to enable.'
+    : '✅  Fired ' + kind + ' → ' + sendTo + '. Check Tag Assistant for the conversion hit.';
+};
 </script>
 </body>
 </html>`
