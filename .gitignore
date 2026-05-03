@@ -32,3 +32,11 @@ Thumbs.db
 __pycache__/
 .pytest_cache/
 core
+
+# Claude Code scratch / worktrees
+.scratch/
+.claude/worktrees/
+
+# Local dev databases
+roofreporter.db
+src/db.sqlite3

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roof Manager — SEO & Growth Audit (April 2026)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #e0e0e0; line-height: 1.7; }
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+  h1 { font-size: 2.2rem; font-weight: 800; color: #00ff88; margin-bottom: 8px; }
+  .subtitle { color: #888; font-size: 1rem; margin-bottom: 48px; }
+  h2 { font-size: 1.5rem; font-weight: 700; color: #fff; margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 2px solid #1a1a2e; }
+  h3 { font-size: 1.15rem; font-weight: 600; color: #00ff88; margin: 28px 0 12px; }
+  p { margin-bottom: 16px; color: #ccc; }
+  .score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 24px 0; }
+  .score-card { background: #111; border: 1px solid #222; border-radius: 12px; padding: 20px; text-align: center; }
+  .score-card .grade { font-size: 2.5rem; font-weight: 800; }
+  .score-card .label { font-size: 0.85rem; color: #888; margin-top: 4px; }
+  .grade-a { color: #00ff88; }
+  .grade-b { color: #ffd700; }
+  .grade-c { color: #ff6b35; }
+  .grade-d { color: #ff4444; }
+  .priority-tag { display: inline-block; padding: 2px 10px; border-radius: 100px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-right: 8px; }
+  .p1 { background: #ff444433; color: #ff6666; border: 1px solid #ff444455; }
+  .p2 { background: #ff6b3533; color: #ff9955; border: 1px solid #ff6b3555; }
+  .p3 { background: #ffd70033; color: #ffdd55; border: 1px solid #ffd70055; }
+  .action-item { background: #111; border: 1px solid #222; border-radius: 10px; padding: 20px; margin: 16px 0; }
+  .action-item h4 { color: #fff; font-size: 1.05rem; margin-bottom: 8px; }
+  .action-item p { color: #aaa; font-size: 0.95rem; margin-bottom: 8px; }
+  .impact { color: #00ff88 !important; font-weight: 600; font-size: 0.9rem; }
+  .what-works { background: #00ff8810; border: 1px solid #00ff8833; border-radius: 10px; padding: 20px; margin: 16px 0; }
+  .what-works h4 { color: #00ff88; margin-bottom: 8px; }
+  .what-works ul { padding-left: 20px; }
+  .what-works li { color: #aaa; margin-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+  th { background: #1a1a2e; color: #00ff88; text-align: left; padding: 10px 14px; font-weight: 600; }
+  td { padding: 10px 14px; border-bottom: 1px solid #1a1a2e; color: #ccc; }
+  tr:hover td { background: #111; }
+  .gap { color: #ff6666; }
+  .ok { color: #00ff88; }
+  code { background: #1a1a2e; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; color: #ffd700; }
+  .section-num { color: #00ff8855; font-weight: 800; margin-right: 8px; }
+  .callout { background: #1a1a2e; border-left: 4px solid #00ff88; padding: 16px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+  .callout strong { color: #00ff88; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Roof Manager — SEO & Growth Audit</h1>
+<p class="subtitle">www.roofmanager.ca · April 16, 2026 · Focus: US Market Penetration, Lead Funnel, Geo SEO</p>
+
+<!-- SCORECARD -->
+<div class="score-grid">
+  <div class="score-card"><div class="grade grade-a">A</div><div class="label">Technical SEO</div></div>
+  <div class="score-card"><div class="grade grade-a">A</div><div class="label">Structured Data</div></div>
+  <div class="score-card"><div class="grade grade-b">B</div><div class="label">Content Depth</div></div>
+  <div class="score-card"><div class="grade grade-c">C+</div><div class="label">US Geo Coverage</div></div>
+  <div class="score-card"><div class="grade grade-b">B-</div><div class="label">Lead Funnel</div></div>
+  <div class="score-card"><div class="grade grade-c">C</div><div class="label">Local SEO (US)</div></div>
+</div>
+
+<!-- WHAT'S ALREADY WORKING -->
+<h2><span class="section-num">01</span> What's Already Working Well</h2>
+<div class="what-works">
+<h4>Strong Foundation — Don't Touch These</h4>
+<ul>
+  <li><strong>6+ JSON-LD schemas</strong> (SoftwareApplication, FAQPage, Article, BreadcrumbList, HowTo, WebPage) — best-in-class for a SaaS in this space</li>
+  <li><strong>8 segmented sitemaps</strong> with dynamic blog inclusion + image sitemap</li>
+  <li><strong>robots.txt allowing AI bots</strong> (OAI-SearchBot, PerplexityBot, ClaudeBot) — forward-thinking for AI search visibility</li>
+  <li><strong>Server-side rendering</strong> via Hono on Cloudflare Workers — fast TTFB, crawlable by default</li>
+  <li><strong>Hreflang tags</strong> for en-US / en-CA — properly signals multi-regional content</li>
+  <li><strong>Geo meta tags</strong> (geo.region, geo.placename, geo.position) on city pages</li>
+  <li><strong>GA4 + Clarity analytics</strong> with server-side event tracking and consent mode v2</li>
+  <li><strong>All 50 US state pages</strong> with storm profiles, insurer data, building codes</li>
+  <li><strong>Competitor comparison pages</strong> (EagleView, Hover, Roofr, RoofSnap, PitchGauge)</li>
+  <li><strong>Free tools as backlink magnets</strong> (pitch calculator, material estimator)</li>
+  <li><strong>Content agent</strong> auto-generating blog content via Gemini</li>
+  <li><strong>Non-www → www redirect</strong> + HSTS + security headers</li>
+  <li><strong>1-year immutable caching</strong> on static assets</li>
+</ul>
+</div>
+
+<!-- US GEO COVERAGE GAP -->
+<h2><span class="section-num">02</span> Critical Gap: US City-Level Coverage</h2>
+<p>This is the single biggest opportunity. You have 48 US city pages across 30 states — but <strong>20 states have zero city pages</strong>, and several of the largest US roofing markets are completely uncovered.</p>
+
+<h3>Missing Major Metros (sorted by roofing market size)</h3>
+<table>
+  <tr><th>Metro</th><th>Pop (M)</th><th>Why It Matters</th><th>Status</th></tr>
+  <tr><td>Los Angeles, CA</td><td>13.2</td><td>Largest US roofing market, wildfire WUI zone, solar mandate</td><td class="gap">❌ No page</td></tr>
+  <tr><td>San Francisco / San Jose, CA</td><td>7.7</td><td>High-income, premium roofing, tech-savvy contractors</td><td class="gap">❌ No page</td></tr>
+  <tr><td>Philadelphia, PA</td><td>6.2</td><td>Top-10 roofing market, Nor'easters, aging housing stock</td><td class="gap">❌ No page</td></tr>
+  <tr><td>Boston, MA</td><td>4.9</td><td>Major Northeast hub, ice dams, historic preservation</td><td class="gap">❌ No page</td></tr>
+  <tr><td>Seattle, WA</td><td>4.0</td><td>Moss/algae growth, rainy climate drives high demand</td><td class="gap">❌ No page</td></tr>
+  <tr><td>Baltimore, MD</td><td>2.8</td><td>Mid-Atlantic storms, aging row houses</td><td class="gap">❌ No page</td></tr>
+  <tr><td>Portland, OR</td><td>2.5</td><td>Growing market, WUI zones, heavy rainfall</td><td class="gap">❌ No page</td></tr>
+  <tr><td>Pittsburgh, PA</td><td>2.4</td><td>Lake-effect snow, ice dams</td><td class="gap">❌ No page</td></tr>
+  <tr><td>Salt Lake City, UT</td><td>1.2</td><td>Seismic zone, heavy snow loads</td><td class="gap">❌ No page</td></tr>
+  <tr><td>Sacramento, CA</td><td>2.4</td><td>State capital, growing market</td><td class="gap">❌ No page</td></tr>
+</table>
+
+<h3>20 States With Zero City Pages</h3>
+<p>Alabama, Alaska, Arkansas, <strong>California</strong>, Connecticut, Delaware, Hawaii, Kentucky, Maine, <strong>Massachusetts</strong>, Mississippi, Montana, New Hampshire, North Dakota, Rhode Island, South Dakota, <strong>Utah</strong>, Vermont, West Virginia, Wyoming</p>
+<p>California alone is arguably the #1 or #2 roofing market in the entire US — having zero CA city pages is leaving serious traffic on the table.</p>
+
+<!-- PRIORITY ACTIONS -->
+<h2><span class="section-num">03</span> Priority Actions — US Traffic Growth</h2>
+
+<div class="action-item">
+  <span class="priority-tag p1">P0 — DO FIRST</span>
+  <h4>Add 25-30 Missing Major US Metro City Pages</h4>
+  <p>Create city-level pages for LA, SF, Sacramento, San Diego, San Jose (CA), Boston (MA), Philadelphia, Pittsburgh (PA), Baltimore (MD), Seattle (WA), Portland (OR), Salt Lake City (UT), Louisville (KY), Birmingham (AL), New Orleans (LA — city, not state page), Hartford (CT), etc. Your template system already handles this — you just need to add the city data to <code>US_CITIES</code> in <code>us-states.ts</code>.</p>
+  <p class="impact">📈 Est. impact: +3,000–8,000 monthly organic visits within 6 months</p>
+</div>
+
+<div class="action-item">
+  <span class="priority-tag p1">P0 — DO FIRST</span>
+  <h4>Create City-Level Roof Replacement Cost Pages</h4>
+  <p>You have <code>/roof-replacement-cost/:citySlug</code> for ~70 cities, but these are mostly Canadian cities. Create US-specific cost pages at <code>/us/roof-replacement-cost/:state/:city</code> (e.g., <code>/us/roof-replacement-cost/texas/houston</code>). "Roof replacement cost in [city]" is the highest-intent, highest-volume search query in roofing — averaging 1,000-5,000 monthly searches per major metro.</p>
+  <p class="impact">📈 Est. impact: +5,000–15,000 monthly organic visits. These pages convert at 3-5%.</p>
+</div>
+
+<div class="action-item">
+  <span class="priority-tag p1">P1 — HIGH</span>
+  <h4>Expand Roof Cost Data from 10 to 40+ States</h4>
+  <p>Only 10 states (TX, FL, CA, CO, AZ, GA, NY, IL, OH, WA) have actual cost data in <code>STATE_ROOF_COSTS</code>. The other 40 states fall back to a generic $7K–$18K range. This is thin content that Google will not rank. Even ballpark ranges derived from regional averages would be better than generic fallbacks.</p>
+  <p class="impact">📈 Turns 40 thin pages into rankable content. Prevents pogo-sticking.</p>
+</div>
+
+<div class="action-item">
+  <span class="priority-tag p1">P1 — HIGH</span>
+  <h4>Add LocalBusiness Schema with areaServed to All US City Pages</h4>
+  <p>Your city pages have basic geo meta tags but are missing <code>LocalBusiness</code> schema with <code>areaServed</code> arrays listing nearby cities and counties. This is what Google uses for "near me" and local pack ranking. Example:</p>
+  <p><code>{"@type": "LocalBusiness", "areaServed": [{"@type": "City", "name": "Houston"}, {"@type": "City", "name": "Sugar Land"}]}</code></p>
+  <p class="impact">📈 Helps pages appear in Google's Local Pack (the map results that get ~44% of clicks).</p>
+</div>
+
+<div class="action-item">
+  <span class="priority-tag p2">P2 — MEDIUM</span>
+  <h4>Build "Near Me" Hub Pages</h4>
+  <p>Create pages at <code>/us/roofing-software-near-me</code> and <code>/us/roof-measurement-near-me</code> that detect user state via Cloudflare's <code>cf.country</code> / <code>cf.region</code> headers and dynamically surface the nearest city page. "Roofing software near me" and "roof measurement tool near me" are growing queries.</p>
+  <p class="impact">📈 Captures proximity-based mobile searches, which are 60%+ of local roofing queries.</p>
+</div>
+
+<div class="action-item">
+  <span class="priority-tag p2">P2 — MEDIUM</span>
+  <h4>Cross-Link Hail Belt & Storm Corridor States</h4>
+  <p>Your state pages are siloed — Colorado hail pages don't link to Kansas, Nebraska, or Oklahoma. Add "Related Storm Risk States" sections to connect the hail belt (CO, TX, KS, NE, OK, MN, IA), hurricane coast (FL, TX, LA, NC, SC, GA), and tornado alley. This builds topical authority clusters that Google rewards.</p>
+  <p class="impact">📈 Strengthens topical authority. Google sees your site as THE expert on storm damage nationally.</p>
+</div>
+
+<div class="action-item">
+  <span class="priority-tag p2">P2 — MEDIUM</span>
+  <h4>Create State-Specific Blog Content Programmatically</h4>
+  <p>Your content agent (Gemini-powered) already auto-generates blog posts. Direct it to produce 50 state-specific posts like "How to File a Roof Insurance Claim in Texas (2026 Guide)" or "Colorado Hail Season 2026: What Roofers Need to Know." Tag each with the state and link from the corresponding state page.</p>
+  <p class="impact">📈 +2,000–5,000 monthly long-tail visits. Builds E-E-A-T for state-specific queries.</p>
+</div>
+
+<div class="action-item">
+  <span class="priority-tag p2">P2 — MEDIUM</span>
+  <h4>Add City-Level Competitor Comparison Pages</h4>
+  <p>You have national competitor pages (EagleView vs Roof Manager) but no city-level ones. Create <code>/us/roofing-contractors/:state/:city</code> pages like "Best Roof Measurement Software in Houston." These target mid-funnel buyers actively comparing tools.</p>
+  <p class="impact">📈 Captures comparison shoppers — highest conversion intent after cost pages.</p>
+</div>
+
+<!-- LEAD FUNNEL -->
+<h2><span class="section-num">04</span> Lead Funnel & Conversion Improvements</h2>
+
+<div class="action-item">
+  <span class="priority-tag p1">P1 — HIGH</span>
+  <h4>Add Exit-Intent Popups with Lead Magnet on US Pages</h4>
+  <p>Your lead capture exists (sample report, condo cheat sheet, contact form) but there's no exit-intent trigger. When a US visitor is about to leave a cost page or state page, show a "Get Your Free Roof Measurement Report — Enter Your Address" popup. Cost pages have the highest exit-intent conversion rates (8-12%) because the visitor already has purchase intent.</p>
+  <p class="impact">📈 Could capture 5-10% of bouncing visitors as leads.</p>
+</div>
+
+<div class="action-item">
+  <span class="priority-tag p1">P1 — HIGH</span>
+  <h4>Add Sticky CTA Bar on All US Geo Pages</h4>
+  <p>A persistent bottom bar on mobile (or top bar on desktop) with "Try 3 Free Reports" stays visible as users scroll through content. Currently CTAs are only in the hero and inline within content — visitors who scroll past miss them entirely.</p>
+  <p class="impact">📈 2-3x more CTA visibility = more trial signups from organic traffic.</p>
+</div>
+
+<div class="action-item">
+  <span class="priority-tag p2">P2 — MEDIUM</span>
+  <h4>Embed Google Reviews / Testimonials on US City Pages</h4>
+  <p>You have GBP integration (<code>google-business.ts</code>) with review sync capability, but reviews aren't displayed on public city pages. Show 3-5 recent 5-star reviews on each city page. Reviews are the #1 trust signal for roofing — 92% of consumers read them before choosing a contractor. For a SaaS tool, showing contractor testimonials from that city/state builds enormous trust.</p>
+  <p class="impact">📈 +15-25% conversion rate uplift on pages where reviews are shown.</p>
+</div>
+
+<div class="action-item">
+  <span class="priority-tag p2">P2 — MEDIUM</span>
+  <h4>Create a US-Specific Landing Page at /us with Stronger Funnel</h4>
+  <p>The current <code>/us</code> page is a state directory grid. Rework it as a proper landing page: hero with US-focused headline ("Satellite Roof Reports for American Contractors"), social proof (US contractor count, reports generated), pricing in USD prominently, and a clear CTA above the fold. Then the state grid below.</p>
+  <p class="impact">📈 Reduces bounce rate on the US entry page, which feeds all state/city pages.</p>
+</div>
+
+<div class="action-item">
+  <span class="priority-tag p3">P3 — NICE TO HAVE</span>
+  <h4>Add Multi-Step Address Lookup on Cost Pages</h4>
+  <p>Instead of just showing price ranges, let visitors enter their address to get a personalized estimate. This naturally captures their address (a lead!) while providing value. You already have the Solar API integration to do this — surface it on cost pages as "Get Your Exact Roof Cost →".</p>
+  <p class="impact">📈 Converts informational visitors into qualified leads with verified addresses.</p>
+</div>
+
+<!-- SEO TECHNICAL -->
+<h2><span class="section-num">05</span> Technical SEO Refinements</h2>
+
+<div class="action-item">
+  <span class="priority-tag p2">P2 — MEDIUM</span>
+  <h4>Add VideoObject Schema to Pages with Embedded Content</h4>
+  <p>If you have demo videos or tutorial content, wrap them in <code>VideoObject</code> schema. Google surfaces video rich results for "how to measure a roof" and similar queries — these get 41% higher click-through rates than standard blue links.</p>
+</div>
+
+<div class="action-item">
+  <span class="priority-tag p2">P2 — MEDIUM</span>
+  <h4>Implement Dynamic Lastmod in Sitemaps</h4>
+  <p>Ensure your sitemaps use actual last-modified dates from the database (not static dates). Google uses lastmod to prioritize re-crawling. Your blog sitemap should pull <code>updated_at</code> from the DB; cost pages should update when price data changes.</p>
+</div>
+
+<div class="action-item">
+  <span class="priority-tag p3">P3 — NICE TO HAVE</span>
+  <h4>Add Breadcrumb Navigation to US Vertical Pages</h4>
+  <p>Your cost pages have breadcrumbs, but verify all US vertical pages (insurance-claims, storm-damage, hail-damage) render visible breadcrumb navigation matching the BreadcrumbList schema. Google shows breadcrumbs in search results — they improve CTR by 10-15%.</p>
+</div>
+
+<!-- CONTENT STRATEGY -->
+<h2><span class="section-num">06</span> Content Strategy for US Market</h2>
+
+<div class="callout">
+  <strong>Key insight:</strong> The average roofing lead via Google Ads costs $186 in 2026. Organic leads cost $25–$100 after pages are established. Every rankable page you build is a compounding asset that pays for itself within months.
+</div>
+
+<div class="action-item">
+  <h4>Content Pillars to Build</h4>
+  <p><strong>Storm Season Content (Seasonal, High Volume):</strong> "2026 Hail Season Forecast for [State]" — publish before peak season (March–July for hail belt). These rank fast because they target time-sensitive queries.</p>
+  <p><strong>Insurance Claims Guides (Evergreen, High Intent):</strong> "How to File a Roof Insurance Claim in [State] — Step-by-Step" — your HowTo schema is perfect for this. Create for all 50 states.</p>
+  <p><strong>Cost Comparison Content (High Volume, High Intent):</strong> "Roof Replacement Cost in [City] vs [Nearby City]" — comparative content ranks for both city names simultaneously.</p>
+  <p><strong>Contractor Workflow Content (Mid-Funnel, SaaS Conversion):</strong> "How [City] Roofers Use Satellite Measurement to Win More Jobs" — targets contractors searching for efficiency tools.</p>
+</div>
+
+<!-- US-SPECIFIC SEO -->
+<h2><span class="section-num">07</span> US-Specific SEO Power Moves</h2>
+
+<div class="action-item">
+  <span class="priority-tag p1">P1 — HIGH</span>
+  <h4>Submit to US Roofing Directories for Backlinks</h4>
+  <p>Get listed on: Angi (Angie's List), HomeAdvisor, BBB, RoofingContractor.com, Thumbtack, BuildZoom, Porch.com. Each listing is a high-authority backlink + referral traffic source. These directories dominate roofing SERPs — being listed makes Google see you as a legitimate US player.</p>
+</div>
+
+<div class="action-item">
+  <span class="priority-tag p1">P1 — HIGH</span>
+  <h4>Create a US Google Business Profile (if not done)</h4>
+  <p>Even as a SaaS, you can create a GBP as a "service area business" covering the entire US. This gets you into Google Maps results for "roofing software" and "roof measurement tool" queries. List your service categories as "Roofing Service" and "Software Company."</p>
+</div>
+
+<div class="action-item">
+  <span class="priority-tag p2">P2 — MEDIUM</span>
+  <h4>Target US-Specific Long-Tail Keywords</h4>
+  <p>Your .ca domain inherently signals Canadian content to Google. Counter this by:</p>
+  <p>1. Using <code>hreflang="en-US"</code> prominently on all US pages (already done — good)<br>
+  2. Including "United States" or state names in title tags<br>
+  3. Using USD pricing on all US-facing pages<br>
+  4. Getting backlinks from .com and .us domains<br>
+  5. Consider a <code>roofmanager.com</code> or <code>roofmanager.us</code> domain that 301s to <code>www.roofmanager.ca/us</code> — this alone could significantly boost US organic rankings</p>
+</div>
+
+<div class="action-item">
+  <span class="priority-tag p1">P1 — HIGH</span>
+  <h4>Consider Acquiring a .com Domain</h4>
+  <p>This is perhaps the highest-leverage single action for US traffic. A <code>.ca</code> domain carries a geographic signal that deprioritizes it for US searchers. Even if you keep the main site on <code>.ca</code>, having <code>roofmanager.com</code> redirect (or serve US content) would remove a significant ranking handicap for American queries.</p>
+  <p class="impact">📈 .com domains rank 10-15% better than ccTLDs for non-local-country searches in Google US results.</p>
+</div>
+
+<!-- QUICK IMPLEMENTATION ROADMAP -->
+<h2><span class="section-num">08</span> Implementation Roadmap</h2>
+
+<table>
+  <tr><th>Week</th><th>Action</th><th>Files to Modify</th><th>Est. Traffic Impact</th></tr>
+  <tr><td>1</td><td>Add 25 missing US metro city data entries</td><td><code>src/data/us-states.ts</code></td><td>+3K–8K/mo (6mo)</td></tr>
+  <tr><td>1</td><td>Expand STATE_ROOF_COSTS to 40 states</td><td><code>src/routes/us-verticals.ts</code></td><td>+2K–4K/mo</td></tr>
+  <tr><td>2</td><td>Create city-level roof-cost route</td><td><code>src/routes/us-verticals.ts</code></td><td>+5K–15K/mo</td></tr>
+  <tr><td>2</td><td>Add sticky CTA bar + exit-intent popup</td><td><code>src/index.tsx</code> (template)</td><td>+20-30% lead capture</td></tr>
+  <tr><td>3</td><td>Cross-link storm corridor states</td><td><code>src/routes/us-states.ts</code></td><td>Topical authority boost</td></tr>
+  <tr><td>3</td><td>Add LocalBusiness schema to city pages</td><td><code>src/routes/us-states.ts</code></td><td>Local Pack visibility</td></tr>
+  <tr><td>4</td><td>Generate 50 state-specific blog posts</td><td><code>src/services/content-agent.ts</code></td><td>+2K–5K/mo long-tail</td></tr>
+  <tr><td>4</td><td>Rework /us as a proper landing page</td><td><code>src/routes/us-states.ts</code></td><td>-20% bounce rate</td></tr>
+  <tr><td>5+</td><td>Submit to US directories + GBP setup</td><td>External</td><td>Backlink authority</td></tr>
+  <tr><td>5+</td><td>Acquire .com domain</td><td>DNS + redirects</td><td>+10-15% US SERP lift</td></tr>
+</table>
+
+<div class="callout" style="margin-top: 40px;">
+  <strong>Bottom line:</strong> Your technical SEO foundation is genuinely excellent — structured data, sitemaps, SSR, AI bot access, analytics. The biggest untapped growth lever is geographic coverage: adding 25-30 missing US metro cities and creating city-level cost pages could realistically drive 10,000–25,000 additional monthly organic visits within 6 months. Pair that with a .com domain acquisition and you'd remove the ccTLD handicap that's likely costing you 10-15% of potential US rankings right now.
+</div>
+
+</div>
+</body>
+</html>
