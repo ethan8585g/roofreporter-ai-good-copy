@@ -492,10 +492,10 @@ function renderPinStep(root, progressBar) {
               <div class="w-12 h-12 bg-blue-500/15/100 rounded-xl flex items-center justify-center shadow"><i class="fas fa-coins text-white text-xl"></i></div>
               <div>
                 <p class="font-bold text-white text-base">Your 4 Free Reports Are Used Up!</p>
-                <p class="text-sm text-brand-200 mt-0.5">Buy a <strong class="text-emerald-300">credit pack</strong> to keep ordering reports.</p>
+                <p class="text-sm text-brand-200 mt-0.5">Buy a <strong class="text-emerald-300">report pack</strong> to keep ordering reports.</p>
               </div>
             </div>
-            <a href="/pricing" class="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg border-0 cursor-pointer no-underline"><i class="fas fa-tag mr-1.5"></i>Buy Credits</a>
+            <a href="/customer/buy-reports" class="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg border-0 cursor-pointer no-underline"><i class="fas fa-tag mr-1.5"></i>Buy Reports</a>
           </div>
         </div>
       `}
@@ -959,21 +959,6 @@ function renderReviewStep(root, progressBar) {
 
           <div id="orderMsg" class="hidden p-4 rounded-xl text-sm"></div>
 
-          <!-- Promo / discount code (optional) -->
-          <div class="flex flex-col gap-1.5 mb-2">
-            <label for="promoCodeInput" class="text-[11px] text-gray-400 font-semibold uppercase tracking-wide flex items-center gap-1.5">
-              <i class="fas fa-ticket-alt text-emerald-400"></i>Promo / discount code
-              <span class="text-[10px] text-gray-500 font-normal normal-case">(optional)</span>
-            </label>
-            <div class="flex gap-2">
-              <input type="text" id="promoCodeInput" placeholder="Enter code"
-                style="flex:1; padding:10px 14px; border-radius:10px; background:#1a1f2e; border:1px solid rgba(255,255,255,0.1); color:#e5e7eb; font-size:13px; letter-spacing:0.5px; text-transform:uppercase;"
-                autocomplete="off" maxlength="50">
-              <button type="button" onclick="validatePromoCode()" style="padding:10px 16px; border-radius:10px; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.35); color:#10b981; font-size:12px; font-weight:700;">Apply</button>
-            </div>
-            <div id="promoCodeStatus" class="text-xs"></div>
-          </div>
-
           <!-- Action Buttons -->
           <div class="flex gap-3">
             <button onclick="backToTrace()" class="py-3 px-5 bg-gray-200 hover:bg-gray-300 text-gray-300 font-semibold rounded-xl transition-all text-sm">
@@ -999,7 +984,7 @@ function renderReviewStep(root, progressBar) {
               <button onclick="payWithSquare()" id="squareBtn" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
                 <i class="fas fa-credit-card mr-2"></i>Pay $7 USD for This Report
               </button>
-              <a href="/pricing" class="py-3 px-4 bg-white/5 hover:bg-white/10 text-emerald-300 font-semibold rounded-xl transition-all text-sm text-center no-underline border border-emerald-500/30">
+              <a href="/customer/buy-reports" class="py-3 px-4 bg-white/5 hover:bg-white/10 text-emerald-300 font-semibold rounded-xl transition-all text-sm text-center no-underline border border-emerald-500/30">
                 <i class="fas fa-tag mr-1"></i>Or buy a pack
               </a>
             `}
