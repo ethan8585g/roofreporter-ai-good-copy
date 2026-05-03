@@ -2354,6 +2354,17 @@ async function confirmTrace() {
     showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Close the eaves polygon by clicking the first point.');
     return;
   }
+  // Block submit if the user has an unclosed building draft — otherwise it gets
+  // silently discarded and the report ships short a structure.
+  const draftPts = (orderState.traceEavesPoints || []).length;
+  if (draftPts >= 3) {
+    showMsg('error', `<i class="fas fa-exclamation-triangle mr-1"></i>You have an unclosed building outline (${draftPts} points). Click back to the first green point to close it, or use Clear Last to discard it.`);
+    return;
+  }
+  if (draftPts >= 1) {
+    showMsg('error', `<i class="fas fa-exclamation-triangle mr-1"></i>You have ${draftPts} unfinished point${draftPts === 1 ? '' : 's'} on a new building. Finish the outline (3+ points, click first point to close) or use Clear Last to discard.`);
+    return;
+  }
   // Pick the largest closed section (by point count) as the primary `eaves` for back-compat.
   // The backend prefers `eaves_sections` when present, so every traced building is included regardless.
   const _sections = orderState.traceEavesSections.map(s => s.points);
