@@ -722,6 +722,9 @@ squareRoutes.post('/use-credit', async (c) => {
     // we catch that and return the already-created order without deducting.
     let result: any
     try {
+      // trace_source: 'self' when the customer submitted their own trace
+      // (roof_trace_json populated AND not queued for admin trace).
+      const traceSource = (roof_trace_json && !needs_admin_trace) ? 'self' : null
       result = await c.env.DB.prepare(`
         INSERT INTO orders (
           order_number, master_company_id, customer_id,
@@ -731,10 +734,11 @@ squareRoutes.post('/use-credit', async (c) => {
           requester_name, requester_email,
           service_tier, price, status, payment_status, estimated_delivery,
           notes, is_trial, roof_trace_json, price_per_bundle, trace_measurement_json, needs_admin_trace,
+          trace_source,
           crm_customer_id,
           invoice_customer_name, invoice_customer_email, invoice_customer_phone,
           idempotency_key
-        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         orderNumber, customer.customer_id,
         property_address, property_city || null, property_province || null, property_postal_code || null,
@@ -747,6 +751,7 @@ squareRoutes.post('/use-credit', async (c) => {
         price_per_bundle || null,
         trace_measurement_json ? (typeof trace_measurement_json === 'string' ? trace_measurement_json : JSON.stringify(trace_measurement_json)) : null,
         needs_admin_trace ? 1 : 0,
+        traceSource,
         attachedCrmCustomerId,
         autoInvName, autoInvEmail, autoInvPhone,
         idemKey

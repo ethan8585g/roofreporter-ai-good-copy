@@ -837,7 +837,7 @@ function renderContent() {
   var tabBar = renderSectionTabs();
 
   switch (SA.view) {
-    case 'inbox': root.innerHTML = tabBar + renderInboxView(); break;
+    case 'inbox': root.innerHTML = tabBar + renderInboxView(); loadRoverChatPanel(); break;
     case 'leads-inbox':
       if (typeof window.renderSuperAdminLeadsView === 'function') {
         window.renderSuperAdminLeadsView();
@@ -1206,8 +1206,8 @@ function renderReportRequestsView() {
     '<button onclick="saOpenCreateOrderModal()" style="padding:10px 22px;background:#fff;color:#0369a1;font-size:13px;font-weight:800;border:none;border-radius:10px;cursor:pointer;white-space:nowrap"><i class="fas fa-plus mr-1.5"></i>New Report Order</button>' +
   '</div>';
 
-  // Stat cards
-  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:24px">';
+  // Stat cards — status row
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:12px">';
   [['Total', counts.total || 0, '#0ea5e9', 'fa-clipboard-list'],
    ['Completed', counts.completed || 0, '#22c55e', 'fa-check-circle'],
    ['Processing', counts.processing || 0, '#0ea5e9', 'fa-spinner'],
@@ -1219,6 +1219,23 @@ function renderReportRequestsView() {
       '<i class="fas ' + c[3] + '" style="color:' + c[2] + ';font-size:18px;margin-bottom:6px;display:block"></i>' +
       '<div style="font-size:22px;font-weight:800;color:#f9fafb">' + c[1] + '</div>' +
       '<div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">' + c[0] + '</div>' +
+    '</div>';
+  });
+  html += '</div>';
+
+  // Stat cards — trace-source breakdown (charged the same regardless of source)
+  var selfRev = counts.self_traced_revenue || 0;
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px">';
+  [['Self-Traced', counts.self_traced || 0, '#22c55e', 'fa-user-pen', (counts.self_traced_paid || 0) + ' paid · $' + Number(selfRev).toFixed(2)],
+   ['Admin-Traced', counts.admin_traced || 0, '#0ea5e9', 'fa-user-shield', ''],
+   ['AI-Traced', counts.ai_traced || 0, '#a78bfa', 'fa-robot', ''],
+   ['No Trace', counts.no_trace || 0, '#6b7280', 'fa-circle-question', '']
+  ].forEach(function(c) {
+    html += '<div style="background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px;text-align:center">' +
+      '<i class="fas ' + c[3] + '" style="color:' + c[2] + ';font-size:18px;margin-bottom:6px;display:block"></i>' +
+      '<div style="font-size:22px;font-weight:800;color:#f9fafb">' + c[1] + '</div>' +
+      '<div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">' + c[0] + '</div>' +
+      (c[4] ? '<div style="font-size:10px;color:#94a3b8;margin-top:4px">' + c[4] + '</div>' : '') +
     '</div>';
   });
   html += '</div>';
@@ -1257,7 +1274,7 @@ function renderReportRequestsView() {
     html += '<div style="background:#1e293b;border:1px solid #334155;border-radius:14px;overflow:hidden">' +
       '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">' +
         '<thead><tr style="background:#0f172a;border-bottom:1px solid #334155">' +
-          ['Order #', 'Customer', 'Property Address', 'Date', 'Status', 'Report', 'Share Views', 'Actions'].map(function(h) {
+          ['Order #', 'Customer', 'Property Address', 'Date', 'Status', 'Report', 'Trace', 'Share Views', 'Actions'].map(function(h) {
             return '<th style="padding:12px 14px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap">' + h + '</th>';
           }).join('') +
         '</tr></thead><tbody>';
@@ -1283,6 +1300,14 @@ function renderReportRequestsView() {
         '<td style="padding:11px 14px;color:#64748b;white-space:nowrap;font-size:12px">' + (o.created_at || '').slice(0, 10) + '</td>' +
         '<td style="padding:11px 14px"><span style="padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;background:' + statusBg(os) + ';color:' + statusColor(os) + '">' + os + '</span></td>' +
         '<td style="padding:11px 14px"><span style="padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;background:' + statusBg(rs) + ';color:' + statusColor(rs) + '">' + rs + '</span></td>' +
+        '<td style="padding:11px 14px">' + (function(){
+          var ts = o.trace_source;
+          if (ts === 'self')     return '<span title="Customer drew their own trace" style="padding:3px 8px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(34,197,94,0.15);color:#22c55e"><i class="fas fa-user-pen mr-1"></i>Self</span>';
+          if (ts === 'admin')    return '<span title="Admin manually traced" style="padding:3px 8px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(14,165,233,0.15);color:#38bdf8"><i class="fas fa-user-shield mr-1"></i>Admin</span>';
+          if (ts === 'ai_agent') return '<span title="AI agent auto-traced" style="padding:3px 8px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(167,139,250,0.18);color:#a78bfa"><i class="fas fa-robot mr-1"></i>AI</span>';
+          if (o.needs_admin_trace) return '<span style="padding:3px 8px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(245,158,11,0.15);color:#f59e0b"><i class="fas fa-clock mr-1"></i>Pending</span>';
+          return '<span style="color:#4b5563;font-size:11px">—</span>';
+        })() + '</td>' +
         '<td style="padding:11px 14px">' + shareCell + '</td>' +
         '<td style="padding:11px 14px;white-space:nowrap">' +
           (o.needs_admin_trace ?
@@ -11132,6 +11157,7 @@ function renderInboxView() {
     '</div>' +
     '<p class="text-sm text-gray-500">AI Secretary platform metrics — trials, SIP trunks, and per-customer call usage</p>' +
   '</div>' +
+  '<div id="rover-chat-panel" class="mb-6"><div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-xs text-gray-400"><i class="fas fa-spinner fa-spin mr-1"></i>Loading Rover web chat conversations…</div></div>' +
   cardsHtml + trialsTable + trunksTable + volTable;
 }
 
@@ -11284,6 +11310,143 @@ async function inboxSendReply(sourceId, channel) {
       alert('Failed: ' + (err.error || 'Unknown error'));
     }
   } catch(e) { textarea.disabled = false; alert('Failed to send reply'); }
+}
+
+// ── Rover web chat panel (super admin Inbox) ──────────────────────────────
+// Pulls from /api/rover/admin/stats + /api/rover/admin/conversations.
+// Reuses the existing inbox detail pane via renderInboxDetail with channel='web_chat'.
+async function loadRoverChatPanel() {
+  var mount = document.getElementById('rover-chat-panel');
+  if (!mount) return;
+  try {
+    var results = await Promise.all([
+      saFetch('/api/rover/admin/stats').then(function(r) { return r && r.ok ? r.json() : null; }).catch(function() { return null; }),
+      saFetch('/api/rover/admin/conversations?limit=50').then(function(r) { return r && r.ok ? r.json() : null; }).catch(function() { return null; })
+    ]);
+    var statsResp = results[0] || {};
+    var listResp = results[1] || {};
+    var stats = statsResp.stats || {};
+    var tokenStats = statsResp.token_stats || {};
+    var conversations = listResp.conversations || [];
+    var total = listResp.total || 0;
+    SA.data = SA.data || {};
+    SA.data.roverChat = { stats: stats, token_stats: tokenStats, conversations: conversations, total: total };
+    mount.innerHTML = renderRoverChatPanel(stats, tokenStats, conversations, total);
+  } catch (e) {
+    mount.innerHTML = '<div class="bg-white rounded-xl border border-red-200 shadow-sm p-4 text-xs text-red-500"><i class="fas fa-exclamation-circle mr-1"></i>Failed to load Rover web chat conversations.</div>';
+  }
+}
+
+function renderRoverChatPanel(stats, tokenStats, conversations, total) {
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function fmtTime(s) { return s ? new Date(String(s).replace(' ', 'T') + 'Z').toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' }) : '—'; }
+  function num(n) { return (n == null ? 0 : Number(n)).toLocaleString(); }
+
+  var totalConv = num(stats.total_conversations);
+  var todayConv = num(stats.today_conversations);
+  var weekConv = num(stats.week_conversations);
+  var monthConv = num(stats.month_conversations);
+  var activeConv = num(stats.active_conversations);
+  var endedConv = num(stats.ended_conversations);
+  var qualified = num(stats.qualified_leads);
+  var converted = num(stats.converted_leads);
+  var emails = num(stats.emails_collected);
+  var phones = num(stats.phones_collected);
+  var totalMsgs = num(stats.total_messages);
+  var avgMsgs = stats.avg_messages_per_conversation != null ? Number(stats.avg_messages_per_conversation).toFixed(1) : '0';
+  var avgRespMs = tokenStats.avg_response_time != null ? Math.round(Number(tokenStats.avg_response_time)) : 0;
+  var totalTokens = num(tokenStats.total_tokens);
+
+  var kpis =
+    '<div class="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-4">' +
+      samc('Total Conversations', totalConv, 'fa-comments', 'blue', 'all-time Rover sessions') +
+      samc('Today', todayConv, 'fa-bolt', 'teal', 'last 24h') +
+      samc('7-Day', weekConv, 'fa-calendar-week', 'indigo', 'rolling 7 days') +
+      samc('30-Day', monthConv, 'fa-calendar-alt', 'purple', 'rolling 30 days') +
+      samc('Qualified Leads', qualified, 'fa-star', 'amber', converted + ' converted') +
+      samc('Avg Msgs / Conv', avgMsgs, 'fa-comment-dots', 'green', totalMsgs + ' total messages') +
+    '</div>' +
+    '<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">' +
+      samc('Active', activeConv, 'fa-circle', 'green', 'currently open') +
+      samc('Ended', endedConv, 'fa-flag-checkered', 'gray', 'closed sessions') +
+      samc('Contacts Captured', emails + ' emails', 'fa-envelope', 'blue', phones + ' phone numbers') +
+      samc('AI Response Time', avgRespMs + 'ms', 'fa-stopwatch', 'orange', totalTokens + ' tokens used') +
+    '</div>';
+
+  var rows = '';
+  if (!conversations.length) {
+    rows = '<tr><td colspan="7" class="text-center py-8 text-gray-400 text-xs">No Rover web chat conversations yet — when visitors chat with Rover on the website, they\'ll appear here.</td></tr>';
+  } else {
+    conversations.forEach(function(c) {
+      var name = c.visitor_name || c.visitor_email || c.visitor_phone || ('Anonymous #' + c.id);
+      var leadStatus = c.lead_status || 'new';
+      var leadColor = leadStatus === 'qualified' ? 'bg-amber-100 text-amber-700'
+        : leadStatus === 'converted' ? 'bg-green-100 text-green-700'
+        : leadStatus === 'engaged' ? 'bg-blue-100 text-blue-700'
+        : 'bg-gray-100 text-gray-600';
+      var statusColor = c.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600';
+      var preview = c.summary || c.first_user_message || '';
+      if (preview.length > 80) preview = preview.substring(0, 80) + '…';
+      var score = (c.lead_score == null) ? 0 : c.lead_score;
+      var scoreColor = score >= 70 ? 'text-green-600 font-bold' : score >= 40 ? 'text-amber-600 font-semibold' : 'text-gray-500';
+      rows += '<tr class="border-b border-gray-100 hover:bg-slate-50 cursor-pointer" onclick="roverChatOpenConv(' + Number(c.id) + ')">' +
+        '<td class="py-2 px-3 text-xs font-semibold text-gray-900">' + esc(name) + '</td>' +
+        '<td class="py-2 px-3 text-xs text-gray-600 truncate max-w-[280px]">' + esc(preview) + '</td>' +
+        '<td class="py-2 px-3 text-xs text-gray-700 text-center">' + (c.message_count || 0) + '</td>' +
+        '<td class="py-2 px-3 text-xs text-center ' + scoreColor + '">' + score + '</td>' +
+        '<td class="py-2 px-3 text-xs"><span class="px-2 py-0.5 rounded ' + leadColor + ' font-semibold uppercase tracking-wide text-[10px]">' + esc(leadStatus) + '</span></td>' +
+        '<td class="py-2 px-3 text-xs"><span class="px-2 py-0.5 rounded ' + statusColor + ' font-semibold uppercase tracking-wide text-[10px]">' + esc(c.status || 'active') + '</span></td>' +
+        '<td class="py-2 px-3 text-xs text-gray-500">' + fmtTime(c.last_message_at || c.created_at) + '</td>' +
+      '</tr>';
+    });
+  }
+
+  var tableLabel = total > conversations.length
+    ? 'Showing ' + conversations.length + ' of ' + total + ' conversations'
+    : conversations.length + ' conversation' + (conversations.length === 1 ? '' : 's');
+
+  var table =
+    '<div class="bg-white rounded-xl border border-gray-200 shadow-sm">' +
+      '<div class="p-4 border-b border-gray-100 flex items-center justify-between">' +
+        '<div>' +
+          '<h3 class="text-sm font-bold text-gray-900"><i class="fas fa-robot mr-1.5 text-slate-600"></i>Rover Web Chat Conversations</h3>' +
+          '<p class="text-[11px] text-gray-500 mt-0.5">' + tableLabel + ' — click a row to view the full conversation</p>' +
+        '</div>' +
+        '<button onclick="loadRoverChatPanel()" class="px-3 py-1.5 text-xs font-medium bg-white border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>' +
+      '</div>' +
+      '<div class="overflow-x-auto">' +
+        '<table class="w-full">' +
+          '<thead><tr class="bg-gray-50 border-b border-gray-200">' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Visitor</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Preview</th>' +
+            '<th class="py-2 px-3 text-center text-[10px] font-bold uppercase tracking-wide text-gray-500">Msgs</th>' +
+            '<th class="py-2 px-3 text-center text-[10px] font-bold uppercase tracking-wide text-gray-500">Score</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Lead</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Status</th>' +
+            '<th class="py-2 px-3 text-left text-[10px] font-bold uppercase tracking-wide text-gray-500">Last Activity</th>' +
+          '</tr></thead>' +
+          '<tbody>' + rows + '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</div>';
+
+  return '<div class="mb-2"><h2 class="text-lg font-bold text-gray-900"><i class="fas fa-comments mr-2 text-slate-600"></i>Rover Web Chat Analytics</h2><p class="text-[11px] text-gray-500 mt-0.5">Conversations from the public-facing Rover chatbot on www.roofmanager.ca</p></div>' + kpis + table;
+}
+
+function roverChatOpenConv(id) {
+  var conv = ((SA.data && SA.data.roverChat && SA.data.roverChat.conversations) || []).find(function(c) { return Number(c.id) === Number(id); });
+  if (!conv) return;
+  var paneConv = {
+    source_id: 'rover_' + conv.id,
+    channel: 'web_chat',
+    contact_name: conv.visitor_name || '',
+    contact_email: conv.visitor_email || '',
+    contact_phone: conv.visitor_phone || '',
+    last_activity_at: conv.last_message_at || conv.created_at,
+    created_at: conv.created_at,
+    preview: conv.summary || conv.first_user_message || ''
+  };
+  renderInboxDetail(paneConv);
 }
 
 async function openLeadDetailPane(type, id) {

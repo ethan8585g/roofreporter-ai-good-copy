@@ -136,7 +136,7 @@ export async function autoProcessOrder(
       await logAgentAction(env.DB, orderId, 'flagged_for_review',
         `Confidence ${autoTraceResult.confidence}/100 below threshold ${threshold}`)
       await env.DB.prepare(
-        "UPDATE orders SET roof_trace_json = ?, needs_admin_trace = 1, notes = COALESCE(notes, '') || '\n[AI Agent] Low confidence (' || ? || '/100, threshold ' || ? || ') — auto-trace saved but flagged for review' WHERE id = ?"
+        "UPDATE orders SET roof_trace_json = ?, needs_admin_trace = 1, trace_source = 'ai_agent', notes = COALESCE(notes, '') || '\n[AI Agent] Low confidence (' || ? || '/100, threshold ' || ? || ') — auto-trace saved but flagged for review' WHERE id = ?"
       ).bind(
         JSON.stringify(autoTraceResult.trace),
         String(autoTraceResult.confidence),
@@ -154,7 +154,7 @@ export async function autoProcessOrder(
 
     // ── Step 4: Save the auto-trace to the order ──
     await env.DB.prepare(
-      "UPDATE orders SET roof_trace_json = ?, trace_measurement_json = ?, needs_admin_trace = 0 WHERE id = ?"
+      "UPDATE orders SET roof_trace_json = ?, trace_measurement_json = ?, needs_admin_trace = 0, trace_source = 'ai_agent' WHERE id = ?"
     ).bind(
       JSON.stringify(autoTraceResult.trace),
       JSON.stringify(autoTraceResult.measurements),
