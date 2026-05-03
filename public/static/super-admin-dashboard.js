@@ -66,6 +66,7 @@ const SA_SECTIONS = {
       { id: 'growth-overview', label: 'Overview', icon: 'fa-tachometer-alt' },
       { id: 'growth-traffic', label: 'Traffic', icon: 'fa-chart-area' },
       { id: 'command-center', label: 'Command Center', icon: 'fa-satellite-dish' },
+      { id: 'growth-ltv', label: 'LTV & Cohorts', icon: 'fa-coins' },
       { id: 'user-activity', label: 'User Activity', icon: 'fa-user-clock' },
       { id: 'growth-marketing', label: 'Marketing', icon: 'fa-bullhorn' },
       { id: 'growth-seo', label: 'SEO & Blog', icon: 'fa-pen-nib' },
@@ -366,6 +367,8 @@ async function saFetch(url, opts) {
 }
 
 async function loadView(view) {
+  // External standalone pages — leave the SPA before any data fetching.
+  if (view === 'growth-ltv') { window.location.href = '/super-admin/ltv'; return; }
   SA.loading = true;
   renderContent();
   try {
