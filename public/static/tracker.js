@@ -55,11 +55,35 @@
   sessionStorage.setItem('_rc_pc', String(pageCount));
   
   // ── UTM parameters (persist for session) ──
+  // Google Ads / Microsoft Ads landing pages don't always include utm_*
+  // params — Google sets gclid + gad_source + gad_campaignid, Microsoft sets
+  // msclkid. We normalize those to utm_source='google'/'bing', medium='cpc',
+  // campaign=gad_campaignid (when present) so paid traffic shows up in our
+  // attribution dashboard instead of looking like "(no source)" traffic.
   var params = new URLSearchParams(location.search);
+  var hasGclid = !!params.get('gclid') || !!params.get('gad_source');
+  var hasMsclkid = !!params.get('msclkid');
+  var hasFbclid = !!params.get('fbclid');
+  function adFallback(key, gAdsValue) {
+    if (params.get(key)) return params.get(key);
+    if (key === 'utm_source') {
+      if (hasGclid) return 'google';
+      if (hasMsclkid) return 'bing';
+      if (hasFbclid) return 'facebook';
+    }
+    if (key === 'utm_medium') {
+      if (hasGclid || hasMsclkid) return 'cpc';
+      if (hasFbclid) return 'paid_social';
+    }
+    if (key === 'utm_campaign') {
+      if (hasGclid && params.get('gad_campaignid')) return params.get('gad_campaignid');
+    }
+    return null;
+  }
   var utm = {
-    source: params.get('utm_source') || sessionStorage.getItem('_rc_utm_s') || null,
-    medium: params.get('utm_medium') || sessionStorage.getItem('_rc_utm_m') || null,
-    campaign: params.get('utm_campaign') || sessionStorage.getItem('_rc_utm_c') || null,
+    source: adFallback('utm_source') || sessionStorage.getItem('_rc_utm_s') || null,
+    medium: adFallback('utm_medium') || sessionStorage.getItem('_rc_utm_m') || null,
+    campaign: adFallback('utm_campaign') || sessionStorage.getItem('_rc_utm_c') || null,
     term: params.get('utm_term') || sessionStorage.getItem('_rc_utm_t') || null,
     content: params.get('utm_content') || sessionStorage.getItem('_rc_utm_co') || null
   };
@@ -68,6 +92,15 @@
   if (utm.campaign) sessionStorage.setItem('_rc_utm_c', utm.campaign);
   if (utm.term) sessionStorage.setItem('_rc_utm_t', utm.term);
   if (utm.content) sessionStorage.setItem('_rc_utm_co', utm.content);
+  // Persist gclid/msclkid/fbclid separately so server-side conversion
+  // uploads (Google Ads offline conversions, Meta CAPI) can stitch a signup
+  // back to the click that originated it.
+  var gclid = params.get('gclid');
+  var msclkid = params.get('msclkid');
+  var fbclid = params.get('fbclid');
+  if (gclid) sessionStorage.setItem('_rc_gclid', gclid);
+  if (msclkid) sessionStorage.setItem('_rc_msclkid', msclkid);
+  if (fbclid) sessionStorage.setItem('_rc_fbclid', fbclid);
   
   // ── Get logged-in user ID if available ──
   function getUserId() {
