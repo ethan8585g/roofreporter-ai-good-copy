@@ -185,10 +185,14 @@ async def run_outbound_session(ctx: JobContext, vad):
     # Track when the SIP callee actually joins so we can distinguish a real
     # "no answer" (callee picked up, didn't engage) from infrastructure
     # failure (Telnyx rejected, number unreachable, trunk auth, etc.).
+    import time as _t
+    sip_join_ts = {"v": 0.0}
+
     @ctx.room.on("participant_connected")
     def on_participant_joined(participant):
         if participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
             agent.callee_joined = True
+            sip_join_ts["v"] = _t.monotonic()
             # Promote default 'failed' (infra error) → 'no_answer' (callee
             # answered but didn't engage / hung up before any tool-call set
             # a real outcome). Tool calls override from there.
@@ -200,7 +204,16 @@ async def run_outbound_session(ctx: JobContext, vad):
     @ctx.room.on("participant_disconnected")
     def on_participant_left(participant):
         if participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
-            logger.info(f"[Outbound] SIP participant disconnected: room={ctx.room.name}")
+            elapsed = _t.monotonic() - sip_join_ts["v"] if sip_join_ts["v"] else 0.0
+            # If the SIP leg ends in <8s with zero talk time, this isn't a
+            # real "no answer" — Telnyx rejected the outbound INVITE before
+            # the callee's phone ever rang. Override so the UI/log reflects
+            # reality. Real "no_answer" rings ~30s before timeout.
+            if 0 < elapsed < 8 and agent.outcome == "no_answer":
+                agent.outcome = "trunk_rejected"
+                logger.warning(f"[Outbound] SIP leg ended in {elapsed:.1f}s — relabeling as trunk_rejected (room={ctx.room.name})")
+            else:
+                logger.info(f"[Outbound] SIP participant disconnected after {elapsed:.1f}s: room={ctx.room.name}")
             asyncio.create_task(post_call_results(agent, ctx.room.name))
 
 

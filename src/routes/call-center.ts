@@ -546,11 +546,43 @@ callCenterRoutes.post('/quick-dial', async (c) => {
           sipError = reason
           await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='failed', call_outcome=? WHERE livekit_room_id=?").bind('sip_error: ' + reason, roomName).run()
         } else {
-          // Fire-and-forget: SIP INVITE accepted. Real outcome (answered /
-          // no_answer / busy) arrives via the /call-complete webhook from the
-          // Python agent, which updates cc_call_logs.call_status accordingly.
+          // SIP INVITE accepted by LiveKit. But Telnyx may still reject the
+          // outbound leg within a few seconds (international not enabled,
+          // OVP rejected, billing, dest_unreachable). Poll the participant
+          // briefly so a fast hangup is surfaced as a real error instead of
+          // being mislabeled "no_answer" by the agent webhook later.
           sipStatus = 'ringing'
           await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='ringing' WHERE livekit_room_id=?").bind(roomName).run()
+
+          const pollIdentity = sipResult?.participant_identity || participantIdentity
+          let earlyHangup: { status: string; reason: string } | null = null
+          for (let i = 0; i < 4; i++) {
+            await new Promise(r => setTimeout(r, 1500))
+            try {
+              const info = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.RoomService/GetParticipant', {
+                room: roomName,
+                identity: pollIdentity,
+              })
+              const status = info?.sip_call_status || info?.attributes?.['sip.callStatus'] || ''
+              if (status === 'SCS_ACTIVE') break
+              if (status === 'SCS_HANGUP' || status === 'SCS_ERROR' || status === 'SCS_DISCONNECTED') {
+                earlyHangup = { status, reason: 'trunk_rejected (Telnyx hung up in <6s — check Mission Control → Reporting → Calls for hangup_cause)' }
+                break
+              }
+            } catch (e: any) {
+              const msg = (e?.message || '').toLowerCase()
+              if (msg.includes('not_found') || msg.includes('does not exist')) {
+                earlyHangup = { status: 'gone', reason: 'trunk_rejected (SIP participant gone in <6s — Telnyx never connected the call)' }
+                break
+              }
+            }
+          }
+          if (earlyHangup) {
+            sipStatus = 'sip_error'
+            sipError = earlyHangup.reason
+            console.warn('[QuickDial] early SIP hangup:', earlyHangup)
+            await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='failed', call_outcome=? WHERE livekit_room_id=?").bind('sip_error: ' + earlyHangup.reason, roomName).run()
+          }
         }
       } catch (e: any) {
         sipStatus = 'dial_error'
