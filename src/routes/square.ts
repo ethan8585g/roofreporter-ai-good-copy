@@ -419,7 +419,7 @@ squareRoutes.post('/checkout', async (c) => {
           : `${pkg.name} — Roof Report Credits`,
         price_money: {
           amount: priceCents, // Square uses cents (same as our DB)
-          currency: 'USD',
+          currency: 'CAD', // Square account is CAD-only — USD throws "business can only process payments in CAD"
         },
         location_id: locationId,
       },
@@ -437,7 +437,7 @@ squareRoutes.post('/checkout', async (c) => {
     // Record the pending payment with credits in metadata for reliable lookup
     await c.env.DB.prepare(`
       INSERT INTO square_payments (customer_id, square_order_id, square_payment_link_id, amount, currency, status, payment_type, description, order_id, metadata_json)
-      VALUES (?, ?, ?, ?, 'usd', 'pending', 'credit_pack', ?, ?, ?)
+      VALUES (?, ?, ?, ?, 'cad', 'pending', 'credit_pack', ?, ?, ?)
     `).bind(
       customer.customer_id, squareOrderId, link?.id || '', priceCents,
       `${pkg.name} (${pkg.credits} credits)` + (promoApplied ? ` [${promoApplied.code}]` : ''),
@@ -516,7 +516,7 @@ squareRoutes.post('/checkout/report', async (c) => {
           : `Roof Measurement Report — ${tierLabels[tier] || tier}`,
         price_money: {
           amount: priceCents,
-          currency: 'USD',
+          currency: 'CAD', // Square account is CAD-only — USD throws "business can only process payments in CAD"
         },
         location_id: locationId,
       },
@@ -538,7 +538,7 @@ squareRoutes.post('/checkout/report', async (c) => {
     // Store metadata in our DB for webhook processing
     await c.env.DB.prepare(`
       INSERT INTO square_payments (customer_id, square_order_id, square_payment_link_id, amount, currency, status, payment_type, description, metadata_json)
-      VALUES (?, ?, ?, ?, 'usd', 'pending', 'one_time_report', ?, ?)
+      VALUES (?, ?, ?, ?, 'cad', 'pending', 'one_time_report', ?, ?)
     `).bind(
       customer.customer_id, squareOrderId, link?.id || '', priceCents,
       `Roof report: ${property_address}` + (promoApplied ? ` [${promoApplied.code}]` : ''),

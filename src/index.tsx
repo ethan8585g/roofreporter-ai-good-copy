@@ -986,6 +986,12 @@ app.get('/customer/dashboard', (c) => {
   return c.html(getCustomerDashboardHTML(c.env.ADSENSE_PUBLISHER_ID || ''))
 })
 
+// Logged-in checkout page for buying report packs. Until 2026-05-03 the
+// "Buy Reports" buttons all linked to /pricing — a public marketing page
+// that only ever pushes users to /register, dead-ending paying customers.
+app.get('/customer/buy-reports', (c) => c.html(getBuyReportsHTML()))
+app.get('/customer/buy-credits', (c) => c.redirect('/customer/buy-reports', 302))
+
 // Customer Invoice View
 app.get('/customer/invoice/:id', (c) => {
   return c.html(getCustomerInvoiceHTML())
@@ -9318,11 +9324,14 @@ ${previewId ? `
       return false;
     }
 
-    // conv-v5: fire GA4 + Meta + rrTrack sign_up events
+    // conv-v5: fire GA4 + Google Ads + Meta + rrTrack sign_up events
     function fireSignupEvents(method, companySize, primaryUse) {
       try {
         if (typeof gtag === 'function') {
           gtag('event', 'sign_up', { method: method, company_size: companySize || '', primary_use: primaryUse || '' });
+        }
+        if (typeof window.trackAdsConversion === 'function') {
+          window.trackAdsConversion('signup', { value: 1.0, currency: 'USD' });
         }
         if (typeof fbq === 'function') {
           fbq('track', 'CompleteRegistration');
@@ -10053,6 +10062,155 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
         if (el && d.unread_count > 0) el.innerHTML = '<span style="background:#10b981;color:white;padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700">' + d.unread_count + '</span>';
       }).catch(function(){});
   })();
+  </script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+function getBuyReportsHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Buy Reports — Roof Manager</title>
+  <meta name="robots" content="noindex,nofollow">
+</head>
+<body class="bg-[#0A0A0A] text-white min-h-screen">
+  <div class="max-w-5xl mx-auto px-4 py-10">
+    <div class="flex items-center justify-between mb-8">
+      <div>
+        <a href="/customer/dashboard" class="text-xs text-gray-400 hover:text-white"><i class="fas fa-arrow-left mr-1"></i>Back to dashboard</a>
+        <h1 class="text-3xl font-black mt-2">Buy reports</h1>
+        <p class="text-sm text-gray-400 mt-1">Pick a pack — bigger packs are cheaper per report. Reports never expire.</p>
+      </div>
+      <div class="text-right hidden sm:block">
+        <div id="trialPill" class="text-xs text-emerald-400 font-bold mb-1"></div>
+        <div id="creditsPill" class="text-xs text-blue-400 font-bold"></div>
+      </div>
+    </div>
+
+    <div id="msg" class="hidden p-4 rounded-xl text-sm mb-6"></div>
+
+    <div id="packsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div class="col-span-full text-center py-12 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Loading packs...</div>
+    </div>
+
+    <div class="bg-[#0f1217] rounded-2xl p-5 border border-white/5 max-w-xl">
+      <label for="promo" class="text-[11px] uppercase tracking-wide font-bold text-emerald-400 flex items-center gap-1.5 mb-2"><i class="fas fa-ticket-alt"></i>Promo / discount code <span class="text-[10px] text-gray-500 font-normal normal-case">(optional)</span></label>
+      <div class="flex gap-2">
+        <input id="promo" type="text" placeholder="Enter code" maxlength="50" autocomplete="off" class="flex-1 px-3.5 py-2.5 rounded-lg bg-[#1a1f2e] border border-white/10 text-sm uppercase tracking-wider"/>
+        <button onclick="checkPromo()" class="px-4 py-2.5 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-bold text-xs">Apply</button>
+      </div>
+      <div id="promoStatus" class="text-xs mt-2"></div>
+    </div>
+
+    <p class="text-xs text-gray-500 mt-6">Secure checkout via Square. Refunds available within 7 days for unused credits — email sales@roofmanager.ca.</p>
+  </div>
+
+  <script>
+    function authHeaders() {
+      var h = { 'Content-Type': 'application/json' };
+      try {
+        var t = localStorage.getItem('rc_customer_token');
+        if (t) h['Authorization'] = 'Bearer ' + t;
+      } catch(_) {}
+      return h;
+    }
+    function showMsg(type, html) {
+      var el = document.getElementById('msg');
+      el.className = 'p-4 rounded-xl text-sm mb-6 ' + (type === 'error'
+        ? 'bg-red-500/10 text-red-300 border border-red-500/30'
+        : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30');
+      el.innerHTML = html;
+      el.classList.remove('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    function fmt(c) { return '$' + (c/100).toFixed(2); }
+    async function loadPacks() {
+      try {
+        var r = await fetch('/api/square/packages');
+        var d = await r.json();
+        var packs = d.packages || [];
+        if (!packs.length) {
+          document.getElementById('packsGrid').innerHTML = '<div class="col-span-full text-center py-12 text-gray-500">No packs available right now. Email sales@roofmanager.ca.</div>';
+          return;
+        }
+        var bestVal = packs.reduce(function(a, b) { return (b.credits/b.price_cents > a.credits/a.price_cents) ? b : a; }, packs[0]);
+        document.getElementById('packsGrid').innerHTML = packs.map(function(p) {
+          var perReport = (p.price_cents / p.credits / 100).toFixed(2);
+          var isBest = p.id === bestVal.id;
+          return '<div class="bg-[#0f1217] rounded-2xl border ' + (isBest ? 'border-emerald-400/60 shadow-lg shadow-emerald-500/10' : 'border-white/10') + ' p-5 flex flex-col relative">' +
+            (isBest ? '<div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-[#0A0A0A] text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">Best value</div>' : '') +
+            '<div class="text-2xl font-black mb-1">' + escHtml(p.name) + '</div>' +
+            '<div class="text-xs text-gray-400 mb-4">' + escHtml(p.description || '') + '</div>' +
+            '<div class="text-3xl font-black text-emerald-400 mb-1">' + fmt(p.price_cents) + '</div>' +
+            '<div class="text-xs text-gray-500 mb-4">$' + perReport + ' / report</div>' +
+            '<button onclick="buyPack(' + p.id + ', this)" class="mt-auto py-3 rounded-xl ' + (isBest ? 'bg-emerald-500 hover:bg-emerald-400 text-[#0A0A0A]' : 'bg-white/10 hover:bg-white/20 text-white') + ' font-black text-sm transition-all">' +
+              '<i class="fas fa-shopping-cart mr-2"></i>Buy ' + p.credits + ' Reports' +
+            '</button>' +
+          '</div>';
+        }).join('');
+      } catch (e) {
+        document.getElementById('packsGrid').innerHTML = '<div class="col-span-full text-center py-12 text-red-400">Could not load packs. Please refresh.</div>';
+      }
+    }
+    function escHtml(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    async function loadBalance() {
+      try {
+        var r = await fetch('/api/square/billing', { headers: authHeaders() });
+        if (!r.ok) return;
+        var d = await r.json();
+        var b = d.billing || {};
+        var trial = b.free_trial_remaining || 0;
+        var paid = b.paid_credits_remaining || 0;
+        var t = document.getElementById('trialPill'); if (t) t.textContent = trial > 0 ? trial + ' free trial' + (trial===1?'':'s') + ' left' : '';
+        var c = document.getElementById('creditsPill'); if (c) c.textContent = paid + ' paid credit' + (paid===1?'':'s');
+      } catch(_) {}
+    }
+    async function checkPromo() {
+      var inp = document.getElementById('promo');
+      var s = document.getElementById('promoStatus');
+      var code = (inp.value || '').trim();
+      if (!code) { s.innerHTML = ''; return; }
+      s.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking…';
+      s.style.color = '#94a3b8';
+      try {
+        var r = await fetch('/api/square/promo/validate', { method:'POST', headers: authHeaders(), body: JSON.stringify({ code: code, original_cents: 7500 }) });
+        var d = await r.json();
+        if (d.valid) {
+          s.innerHTML = '<i class="fas fa-check-circle mr-1"></i>' + escHtml(d.message || 'Code applied');
+          s.style.color = '#34d399';
+        } else {
+          s.innerHTML = '<i class="fas fa-times-circle mr-1"></i>' + escHtml(d.error || 'Invalid code');
+          s.style.color = '#f87171';
+        }
+      } catch(_) {
+        s.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Network error';
+        s.style.color = '#f87171';
+      }
+    }
+    async function buyPack(pkgId, btn) {
+      var orig = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Redirecting to Square...';
+      var payload = { package_id: pkgId };
+      var promo = (document.getElementById('promo').value || '').trim();
+      if (promo) payload.promo_code = promo;
+      try {
+        var r = await fetch('/api/square/checkout', { method:'POST', headers: authHeaders(), body: JSON.stringify(payload) });
+        var d = await r.json();
+        if (r.status === 401) { window.location.href = '/login?return=' + encodeURIComponent('/customer/buy-reports'); return; }
+        if (d.checkout_url) { window.location.href = d.checkout_url; return; }
+        showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>' + escHtml(d.error || 'Checkout failed. Please try again.'));
+      } catch(e) {
+        showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Network error. Please try again.');
+      }
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    }
+    loadPacks();
+    loadBalance();
   </script>
   ${getRoverAssistant()}
 </body>

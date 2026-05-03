@@ -274,7 +274,7 @@ function renderDashboard() {
         (paidCredits > 0
           ? '<div class="flex items-center justify-between mb-2"><span class="text-xs" style="color:var(--text-muted)">Report credits</span><span class="text-xs font-bold text-blue-400">' + paidCredits + '</span></div>'
           : '') +
-        '<a href="/pricing" class="block w-full text-center py-2 bg-emerald-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg transition-colors">Buy Credits</a>' +
+        '<a href="/customer/buy-reports" class="block w-full text-center py-2 bg-emerald-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg transition-colors">Buy Reports</a>' +
         // Sidebar ad unit — shown only to non-subscribers
         '<div class="rra-ad-container" data-ad-slot="" data-ad-format="auto" style="display:none; margin-top:12px; min-height:120px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; padding:4px;"></div>' +
       '</div>' +
@@ -321,10 +321,10 @@ function renderDashboard() {
             '<div class="w-12 h-12 bg-blue-500/15 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"><i class="fas fa-tag text-white text-xl"></i></div>' +
             '<div class="flex-1 text-center sm:text-left">' +
               '<h3 class="text-white font-black text-base">Your Free Trial Reports Are Used Up!</h3>' +
-              '<p class="text-brand-200 text-xs mt-1">Buy report credits to continue generating reports — from <strong class="text-white">$5.95/report</strong> with credit packs.</p>' +
+              '<p class="text-brand-200 text-xs mt-1">Buy reports to keep generating measurements — from <strong class="text-white">$5.95/report</strong> in volume packs.</p>' +
             '</div>' +
             '<div class="flex gap-2 flex-shrink-0">' +
-              '<a href="/pricing" class="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-xl shadow text-sm transition-colors"><i class="fas fa-tag mr-1.5"></i>Buy Credits</a>' +
+              '<a href="/customer/buy-reports" class="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-xl shadow text-sm transition-colors"><i class="fas fa-tag mr-1.5"></i>Buy Reports</a>' +
             '</div>' +
           '</div>' +
         '</div>' : '') +
@@ -404,9 +404,9 @@ function renderDashboard() {
               '<div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-file-signature text-white text-sm"></i></div>' +
               '<div><p class="font-semibold text-sm" style="color:var(--text-primary)">New Proposal</p><p class="text-xs" style="color:var(--text-muted)">Professional roofing proposals</p></div>' +
             '</a>' +
-            '<a href="/pricing" class="flex items-center gap-3 p-3 rounded-xl transition-colors" style="background:var(--bg-elevated)">' +
+            '<a href="/customer/buy-reports" class="flex items-center gap-3 p-3 rounded-xl transition-colors" style="background:var(--bg-elevated)">' +
               '<div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background:var(--bg-card);border:1px solid var(--border-color)"><i class="fas fa-coins text-white text-sm"></i></div>' +
-              '<div><p class="font-semibold text-sm" style="color:var(--text-primary)">Buy Credits</p><p class="text-xs" style="color:var(--text-muted)">From $5.95/report CAD</p></div>' +
+              '<div><p class="font-semibold text-sm" style="color:var(--text-primary)">Buy Reports</p><p class="text-xs" style="color:var(--text-muted)">From $5.95/report CAD</p></div>' +
             '</a>' +
           '</div>' +
         '</div>' +

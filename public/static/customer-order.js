@@ -982,7 +982,7 @@ function renderReviewStep(root, progressBar) {
               </div>
             ` : `
               <button onclick="payWithSquare()" id="squareBtn" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
-                <i class="fas fa-credit-card mr-2"></i>Pay $7 USD for This Report
+                <i class="fas fa-credit-card mr-2"></i>Pay $7 CAD for This Report
               </button>
               <a href="/customer/buy-reports" class="py-3 px-4 bg-white/5 hover:bg-white/10 text-emerald-300 font-semibold rounded-xl transition-all text-sm text-center no-underline border border-emerald-500/30">
                 <i class="fas fa-tag mr-1"></i>Or buy a pack
