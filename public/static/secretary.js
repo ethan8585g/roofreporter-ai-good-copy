@@ -432,10 +432,7 @@
           '<div class="text-xs" style="color:#000">no extra charge</div></div>' +
       '</div>' +
       '<div class="flex flex-col sm:flex-row gap-2 mb-3">' +
-        '<select id="npInlineCountry" class="px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:#fff;color:#000">' +
-          '<option value="US">United States</option><option value="CA" disabled>Canada (coming soon)</option>' +
-        '</select>' +
-        '<input id="npInlineAreaCode" type="text" maxlength="3" placeholder="Area code (optional)" class="flex-1 px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:#fff;color:#000">' +
+        '<input id="npInlineAreaCode" type="text" maxlength="3" placeholder="US area code (e.g. 484)" class="flex-1 px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:#fff;color:#000">' +
         '<button onclick="secInlineSearchNumbers()" style="background:#0ea5e9;color:#fff" class="px-4 py-2 hover:opacity-90 rounded-lg text-sm font-semibold"><i class="fas fa-search mr-1"></i>Search</button>' +
       '</div>' +
       '<div id="npInlineResults" class="space-y-2 mb-3 max-h-64 overflow-y-auto">' + renderInlineResultsBody() + '</div>' +
@@ -461,11 +458,7 @@
         return '<div class="text-center py-4 text-xs" style="color:#b91c1c">' + state.signupNumberSearchError + '</div>';
       }
       if (state.signupNumberSearchAttempted) {
-        var country = (document.getElementById('npInlineCountry') || {}).value || 'US';
-        if (country === 'CA') {
-          return '<div class="text-center py-4 text-xs" style="color:#000">Canadian numbers aren\'t available yet — please choose United States and try a US area code (e.g. 484, 240, 512).</div>';
-        }
-        return '<div class="text-center py-4 text-xs" style="color:#000">No numbers available for that area. Try another area code (e.g. 484, 240, 512 are usually in stock).</div>';
+        return '<div class="text-center py-4 text-xs" style="color:#000">No numbers available for that area. Try another US area code (e.g. 484, 240, 512 are usually in stock).</div>';
       }
       return '<div class="text-center py-4 text-xs" style="color:#000">Choose a country and (optional) area code, then search to see available numbers.</div>';
     }
@@ -511,14 +504,13 @@
   }
 
   window.secInlineSearchNumbers = async function() {
-    var country = (document.getElementById('npInlineCountry') || {}).value || 'US';
     var areaCode = ((document.getElementById('npInlineAreaCode') || {}).value || '').replace(/\D/g, '').slice(0, 3);
     state.signupNumberSearchBusy = true;
     state.signupNumberSearchAttempted = true;
     state.signupNumberSearchError = '';
     refreshInlinePicker();
     try {
-      var qs = 'country=' + country + (areaCode ? '&areaCode=' + areaCode : '') + '&limit=20';
+      var qs = 'country=US' + (areaCode ? '&areaCode=' + areaCode : '') + '&limit=20';
       var res = await fetch('/api/secretary/numbers/search?' + qs, { headers: authOnly() });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Search failed');
@@ -2652,13 +2644,10 @@
           '<button onclick="document.getElementById(\'numberPickerModal\').remove()" class="text-black hover:text-black"><i class="fas fa-times text-xl"></i></button>' +
         '</div>' +
         '<div class="flex gap-2 mb-3">' +
-          '<select id="npCountry" class="px-3 py-2 bg-[#DBEAFE] border border-white/15 rounded-lg text-sm text-black">' +
-            '<option value="US">United States</option><option value="CA" disabled>Canada (coming soon)</option>' +
-          '</select>' +
-          '<input id="npAreaCode" type="text" maxlength="3" placeholder="Area code (optional)" class="flex-1 px-3 py-2 bg-[#DBEAFE] border border-white/15 rounded-lg text-sm text-black">' +
+          '<input id="npAreaCode" type="text" maxlength="3" placeholder="US area code (e.g. 484)" class="flex-1 px-3 py-2 bg-[#DBEAFE] border border-white/15 rounded-lg text-sm text-black">' +
           '<button onclick="secSearchNumbers()" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-sm font-semibold"><i class="fas fa-search mr-1"></i>Search</button>' +
         '</div>' +
-        '<div id="npResults" class="space-y-2"><div class="text-xs text-black text-center py-6">Choose a country and optional area code, then search.</div></div>' +
+        '<div id="npResults" class="space-y-2"><div class="text-xs text-black text-center py-6">Enter an optional US area code, then search to see available numbers.</div></div>' +
       '</div>';
     document.body.appendChild(modal);
   };
@@ -2666,11 +2655,10 @@
   window.secSearchNumbers = async function() {
     var resultsEl = document.getElementById('npResults');
     if (!resultsEl) return;
-    var country = (document.getElementById('npCountry') || {}).value || 'US';
     var areaCode = ((document.getElementById('npAreaCode') || {}).value || '').replace(/\D/g, '').slice(0, 3);
     resultsEl.innerHTML = '<div class="text-center py-6"><i class="fas fa-spinner fa-spin text-sky-400"></i></div>';
     try {
-      var qs = 'country=' + country + (areaCode ? '&areaCode=' + areaCode : '') + '&limit=20';
+      var qs = 'country=US' + (areaCode ? '&areaCode=' + areaCode : '') + '&limit=20';
       var res = await fetch('/api/secretary/numbers/search?' + qs, { headers: authOnly() });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Search failed');
