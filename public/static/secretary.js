@@ -238,8 +238,8 @@
           '<p class="text-sm mt-2" style="color:rgba(255,255,255,0.82)">Never miss a customer call again. Start with a <strong>1-month free trial</strong> — cancel anytime before renewal.</p>' +
         '</div>' +
 
-        '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-4 sm:p-6 mb-6">' +
-          '<h3 class="font-bold text-gray-100 text-lg mb-4"><i class="fas fa-check-circle text-green-500 mr-2"></i>What You Get</h3>' +
+        '<div class="rounded-2xl border border-white/10 shadow-sm p-4 sm:p-6 mb-6" style="background:#DBEAFE">' +
+          '<h3 class="font-bold text-lg mb-4" style="color:#000"><i class="fas fa-check-circle text-green-500 mr-2"></i>What You Get</h3>' +
           '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
             feature('fa-phone-alt', 'Keep Your Number', 'Or pick a new AI number from our inventory — included with your subscription') +
             feature('fa-user-clock', 'Answers When You Can\'t', 'Your phone rings first. AI picks up only when you miss the call') +
@@ -250,8 +250,8 @@
           '</div>' +
         '</div>' +
 
-        '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-4 sm:p-6 mb-6">' +
-          '<h3 class="font-bold text-gray-100 text-lg mb-4"><i class="fas fa-plug text-sky-500 mr-2"></i>How It Works</h3>' +
+        '<div class="rounded-2xl border border-white/10 shadow-sm p-4 sm:p-6 mb-6" style="background:#DBEAFE">' +
+          '<h3 class="font-bold text-lg mb-4" style="color:#000"><i class="fas fa-plug text-sky-500 mr-2"></i>How It Works</h3>' +
           '<div class="space-y-4">' +
             howStep(1, 'Pick a Phone Number', 'Search our inventory and grab a local AI number — included with your subscription. Or skip and use your existing line.') +
             howStep(2, 'Add Your Card', 'We need a card on file to start the free trial. You won\'t be charged the $199 plan fee until day 31.') +
@@ -407,7 +407,7 @@
   function howStep(num, title, desc) {
     return '<div class="flex items-start gap-4">' +
       '<div class="w-10 h-10 bg-sky-500 text-white rounded-full flex items-center justify-center flex-shrink-0 font-bold text-lg">' + num + '</div>' +
-      '<div><p class="font-semibold text-gray-100">' + title + '</p><p class="text-gray-300 text-sm">' + desc + '</p></div></div>';
+      '<div><p class="font-semibold" style="color:#000">' + title + '</p><p class="text-sm" style="color:#000">' + desc + '</p></div></div>';
   }
 
   // ── Inline phone-number picker (signup-flow Step 1) ──

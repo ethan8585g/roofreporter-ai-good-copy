@@ -91,12 +91,9 @@ export type Bindings = {
   TWILIO_ACCOUNT_SID: string    // e.g. "AC..."
   TWILIO_AUTH_TOKEN: string     // Account auth token
 
-  // Telnyx — Self-serve phone number provisioning for Roofer Secretary ($1/mo resale)
-  // Get from: portal.telnyx.com → API Keys. A single shared Credential Connection
-  // named "roof-manager-secretary" bridges Telnyx inbound calls to LIVEKIT_SIP_URI;
-  // per-customer routing happens via LiveKit dispatch rules.
-  TELNYX_API_KEY?: string
-  TELNYX_SECRETARY_CONNECTION_ID?: string  // Cached after first ensureSecretaryConnection() call
+  // (Roofer Secretary phone numbers are now provisioned via LiveKit Cloud's
+  // PhoneNumberService — see src/services/livekit-numbers.ts. No separate
+  // DID-vendor secret is required; LiveKit handles inventory + billing.)
 
   // Square Subscriptions — Cached plan variation id for the Roofer Secretary $199/mo plan.
   // Set after first ensurePlan() call logs it.
