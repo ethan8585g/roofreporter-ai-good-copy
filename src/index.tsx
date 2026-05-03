@@ -274,15 +274,11 @@ window.GOOGLE_ADS_CONVERSIONS = {
   contact_lead: 'AW-18080319225/XXX_CONTACT_LABEL',      // contact form submission
   demo:         'AW-18080319225/XXX_DEMO_LABEL',         // demo booked
   signup:       'AW-18080319225/26MMCMOgxaYcEPmNr61D',   // account created (LIVE)
-  phone:        'AW-18080319225/n3qYCO7uhqccEPmNr61D',   // tel: link click (LIVE)
   purchase:     'AW-18080319225/XXX_PURCHASE_LABEL'      // paid checkout success
 };
-// Call-from-Ads — dynamically swaps the displayed phone number to a Google-tracked
-// number for visitors who arrived from a Google Ads click. The actual sales line is
-// (780) 983-3335; Google rewrites tel: links and visible numbers automatically.
-gtag('config', 'AW-18080319225/vl3GCPHuhqccEPmNr61D', {
-  'phone_conversion_number': '+17809833335'
-});
+// Phone tracking removed — phone is not a lead source for this business and
+// the Call-from-Ads gtag('config') was causing repeated failed "Calls (uploads)"
+// in Tag Assistant on every page load.
 // Enhanced Conversions: SHA-256 hash for first-party user data per Google spec
 // (lowercase + trimmed). Improves match rate by 10-30% on iOS/Safari/ITP.
 window.__sha256Lower = async function(s) {
@@ -8603,7 +8599,7 @@ function getContactPageHTML() {
           <div style="background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:28px;margin-bottom:20px">
             <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 18px">Other ways to reach us</h3>
             <div style="display:flex;flex-direction:column;gap:14px">
-              <a href="tel:+17809833335" onclick="try{rrTrack&amp;&amp;rrTrack('phone_click',{location:'contact_page'});window.trackAdsConversion&amp;&amp;window.trackAdsConversion('phone',{value:5,currency:'CAD'});window.fireMetaContactEvent&amp;&amp;window.fireMetaContactEvent()}catch(e){}" style="display:flex;align-items:center;gap:12px;color:#d1d5db;text-decoration:none;font-size:14px;font-weight:500" aria-label="Call sales at (780) 983-3335">
+              <a href="tel:+17809833335" onclick="try{rrTrack&amp;&amp;rrTrack('phone_click',{location:'contact_page'});window.fireMetaContactEvent&amp;&amp;window.fireMetaContactEvent()}catch(e){}" style="display:flex;align-items:center;gap:12px;color:#d1d5db;text-decoration:none;font-size:14px;font-weight:500" aria-label="Call sales at (780) 983-3335">
                 <span style="width:36px;height:36px;border-radius:10px;background:rgba(0,255,136,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-phone" style="color:#00FF88;font-size:15px" aria-hidden="true"></i></span>
                 <span>(780) 983-3335<span style="display:block;font-size:11px;color:#6b7280;font-weight:400">Mon–Fri, 7am–6pm MT</span></span>
               </a> <!-- conv-v5: removed TODO placeholder, wired phone_click tracking -->
