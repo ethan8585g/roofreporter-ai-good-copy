@@ -937,15 +937,29 @@ callCenterRoutes.post('/call-complete', async (c) => {
   try {
     const { room_name, call_status, call_outcome, call_duration_seconds, talk_time_seconds, call_summary, call_transcript, caller_sentiment, objections_raised, follow_up_action, follow_up_date, prospect_id, agent_id } = await c.req.json()
 
-    // Update call log
+    // Update call log. If /quick-dial already detected a SIP-side failure
+    // (sip_error: trunk_rejected, etc.), DON'T let a late agent webhook
+    // overwrite that with a misleading "completed/no_answer". The polling
+    // diagnostic is the more accurate signal for fast hangups.
     if (room_name) {
-      await c.env.DB.prepare(
-        `UPDATE cc_call_logs SET call_status=?, call_outcome=?, call_duration_seconds=?, talk_time_seconds=?, call_summary=?, call_transcript=?, caller_sentiment=?, objections_raised=?, follow_up_action=?, follow_up_date=?, ended_at=datetime('now') WHERE livekit_room_id=?`
-      ).bind(
-        call_status || 'completed', call_outcome || '', call_duration_seconds || 0, talk_time_seconds || 0,
-        call_summary || '', call_transcript || '', caller_sentiment || '', objections_raised || '',
-        follow_up_action || '', follow_up_date || null, room_name
-      ).run()
+      const existing = await c.env.DB.prepare(
+        `SELECT call_status, call_outcome FROM cc_call_logs WHERE livekit_room_id=?`
+      ).bind(room_name).first<any>()
+      const alreadyFailed = existing?.call_status === 'failed' && /^(sip_error|dial_error|trunk_rejected)/i.test(existing?.call_outcome || '')
+      if (alreadyFailed) {
+        // Preserve diagnostic; only fill in transcript/summary/duration for context.
+        await c.env.DB.prepare(
+          `UPDATE cc_call_logs SET call_duration_seconds=?, talk_time_seconds=?, call_summary=?, call_transcript=?, ended_at=datetime('now') WHERE livekit_room_id=?`
+        ).bind(call_duration_seconds || 0, talk_time_seconds || 0, call_summary || '', call_transcript || '', room_name).run()
+      } else {
+        await c.env.DB.prepare(
+          `UPDATE cc_call_logs SET call_status=?, call_outcome=?, call_duration_seconds=?, talk_time_seconds=?, call_summary=?, call_transcript=?, caller_sentiment=?, objections_raised=?, follow_up_action=?, follow_up_date=?, ended_at=datetime('now') WHERE livekit_room_id=?`
+        ).bind(
+          call_status || 'completed', call_outcome || '', call_duration_seconds || 0, talk_time_seconds || 0,
+          call_summary || '', call_transcript || '', caller_sentiment || '', objections_raised || '',
+          follow_up_action || '', follow_up_date || null, room_name
+        ).run()
+      }
     }
 
     // Update prospect status based on outcome
