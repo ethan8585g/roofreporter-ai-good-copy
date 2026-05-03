@@ -72,6 +72,8 @@ import { aiAutopilotRoutes } from './routes/ai-autopilot'
 import { agentHubRoutes } from './routes/agent-hub'
 import { commissionRoutes } from './routes/commissions'
 import { customerLeadsRoutes } from './routes/customer-leads'
+import { customerApiConnectionsRoutes } from './routes/customer-api-connections'
+import { getCustomerIntegrationsHTML } from './routes/integrations-page'
 import { activityRoutes } from './routes/activity'
 import { rollupYesterday as activityRollupYesterday } from './services/activity-tracker'
 import usStatesRoutes from './routes/us-states'
@@ -264,11 +266,15 @@ gtag('get','${ga4Id}','client_id',function(cid){
 window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
 gtag('config', 'AW-18080319225');
-// Conversion labels — replace the XXX strings with the actual labels from Google Ads > Tools > Conversions
+// Conversion labels — replace the XXX strings with the actual labels from Google Ads > Tools > Conversions.
+// Real labels look like '26MMCMOgxaYcEPmNr61D'. The trackAdsConversion() helper no-ops on XXX_ values,
+// so all wired fires below stay safe until you paste real labels.
 window.GOOGLE_ADS_CONVERSIONS = {
-  lead:     'AW-18080319225/XXX_LEAD_LABEL',
-  signup:   'AW-18080319225/26MMCMOgxaYcEPmNr61D',
-  purchase: 'AW-18080319225/XXX_PURCHASE_LABEL'
+  lead:         'AW-18080319225/XXX_LEAD_LABEL',         // hero CTAs, exit-intent, gated content
+  contact_lead: 'AW-18080319225/XXX_CONTACT_LABEL',      // contact form submission
+  demo:         'AW-18080319225/XXX_DEMO_LABEL',         // demo booked
+  signup:       'AW-18080319225/26MMCMOgxaYcEPmNr61D',   // account created (LIVE)
+  purchase:     'AW-18080319225/XXX_PURCHASE_LABEL'      // paid checkout success
 };
 // Enhanced Conversions: SHA-256 hash for first-party user data per Google spec
 // (lowercase + trimmed). Improves match rate by 10-30% on iOS/Safari/ITP.
@@ -331,7 +337,31 @@ window.trackAdsConversion = function(kind, params) {
 <!-- Meta Pixel -->
 <script>
 !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
-fbq('init','${metaPixelId}');
+// Advanced Matching — pass first-party user data when a customer is logged in.
+// Meta hashes client-side automatically. Improves attribution similar to Google Enhanced Conversions.
+(function(){
+  var advMatch = {};
+  try {
+    var c = localStorage.getItem('rc_customer');
+    if (c) {
+      var u = JSON.parse(c);
+      if (u) {
+        if (u.email) advMatch.em = String(u.email).trim().toLowerCase();
+        if (u.phone) advMatch.ph = String(u.phone).replace(/[^0-9]/g,'');
+        if (u.name) {
+          var parts = String(u.name).trim().split(/\\s+/);
+          if (parts[0]) advMatch.fn = parts[0].toLowerCase();
+          if (parts.length > 1) advMatch.ln = parts.slice(1).join(' ').toLowerCase();
+        }
+      }
+    }
+  } catch(e) {}
+  if (Object.keys(advMatch).length > 0) {
+    fbq('init','${metaPixelId}', advMatch);
+  } else {
+    fbq('init','${metaPixelId}');
+  }
+})();
 fbq('track','PageView');
 ${url.pathname === '/pricing' ? "fbq('track','ViewContent',{content_name:'Pricing Page',content_category:'pricing'});" : ''}
 window.fireMetaLeadEvent=function(d){if(typeof fbq==='function')fbq('track','Lead',d||{});};
@@ -532,6 +562,7 @@ app.route('/api/agent-hub', agentHubRoutes)
 app.route('/api/field', fieldRoutes)
 app.route('/api/commissions', commissionRoutes)
 app.route('/api/customer-leads', customerLeadsRoutes)
+app.route('/api/customer/api-connections', customerApiConnectionsRoutes)
 app.route('/api/activity', activityRoutes)
 app.route('/field', fieldUiRoutes)
 
@@ -1018,6 +1049,9 @@ app.get('/customer/reset-password', (c) => {
 app.get('/customer/dashboard', (c) => {
   return c.html(getCustomerDashboardHTML(c.env.ADSENSE_PUBLISHER_ID || ''))
 })
+
+// Customer Integrations — outbound CRM API connections (AccuLynx, etc.)
+app.get('/customer/integrations', (c) => c.html(getCustomerIntegrationsHTML()))
 
 // Logged-in checkout page for buying report packs. Until 2026-05-03 the
 // "Buy Reports" buttons all linked to /pricing — a public marketing page
@@ -8210,6 +8244,11 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       var payload = { address: f.address.value.trim(), building_count: parseInt(f.building_count.value, 10), email: f.email.value.trim(), source: f.dataset.source || 'homepage_cta' };
       if (typeof gtag === 'function') gtag('event', 'lead_capture', { source: payload.source });
       if (typeof rrTrack === 'function') rrTrack('lead_capture', { source: payload.source });
+      try {
+        var fireAds = function(){ if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('lead', { value: 5, currency: 'CAD' }); };
+        if (typeof window.setAdsUserData === 'function') { window.setAdsUserData(payload.email, '', '').then(fireAds, fireAds); } else { fireAds(); }
+      } catch(_){}
+      if (typeof fbq === 'function') { try { fbq('track', 'Lead', { content_name: 'asset_report', source: payload.source }); } catch(_){} }
       fetch('/api/asset-report/lead', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
         .then(function(r) { return r.json(); })
         .then(function() { document.getElementById('assetReportForm').style.display = 'none'; document.getElementById('assetReportSuccess').style.display = 'block'; })
@@ -8329,6 +8368,11 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         if (!email) return false;
         if (typeof rrTrack === 'function') rrTrack('exit_intent_submit', {});
         if (typeof gtag === 'function') gtag('event', 'lead_capture', { source: 'exit_intent' });
+        try {
+          var fireAds = function(){ if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('lead', { value: 5, currency: 'CAD' }); };
+          if (typeof window.setAdsUserData === 'function') { window.setAdsUserData(email, '', '').then(fireAds, fireAds); } else { fireAds(); }
+        } catch(_){}
+        if (typeof fbq === 'function') { try { fbq('track', 'Lead', { content_name: 'exit_intent', source: 'exit_intent' }); } catch(_){} }
         // Fire-and-forget to reuse existing asset-report lead endpoint
         try {
           fetch('/api/asset-report/lead', {
@@ -8645,8 +8689,14 @@ function getContactPageHTML() {
           }
         } catch(_){}
         try { if (typeof rrTrack === 'function') rrTrack('lead_submit', { form: 'contact', interest: payload.interest }); } catch(_){}
-        // Google Ads conversion (kept for parity with prior thank-you page)
-        try { if (typeof gtag === 'function') gtag('event', 'conversion', { send_to: 'AW-18080319225/contact_form_submitted' }); } catch(_){}
+        // Google Ads conversion — uses helper so it auto-respects the placeholder pattern.
+        // Chain enhanced-conversions user_data hashing before firing the conversion.
+        try {
+          var fireAds = function(){ try { if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('contact_lead', { value: 10, currency: 'CAD' }); } catch(_){} };
+          if (typeof window.setAdsUserData === 'function') {
+            window.setAdsUserData(payload.email, payload.phone, payload.name).then(fireAds, fireAds);
+          } else { fireAds(); }
+        } catch(_){}
         // Swap form -> inline success card (do NOT redirect)
         f.style.display = 'none';
         document.getElementById('contact-form-success').style.display = 'block';
@@ -8678,7 +8728,7 @@ function getContactThankYouHTML() {
   <script>
     // Fire conversion on load
     window.addEventListener('load', function(){
-      try { gtag('event', 'conversion', { send_to: 'AW-18080319225/contact_form_submitted' }); } catch(_){}
+      try { if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('contact_lead', { value: 10, currency: 'CAD' }); } catch(_){}
       try { rrTrack('lead_capture', { source: 'contact_form_thank_you' }); } catch(_){}
     });
   </script>
@@ -8751,6 +8801,11 @@ function getCondoCheatSheetHTML() {
       var payload = { name: f.name.value.trim(), email: f.email.value.trim(), company: f.company.value.trim() };
       if (typeof gtag === 'function') gtag('event', 'lead_capture', { source: 'condo_cheat_sheet' });
       if (typeof rrTrack === 'function') rrTrack('lead_capture', { source: 'condo_cheat_sheet' });
+      try {
+        var fireAds = function(){ if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('lead', { value: 5, currency: 'CAD' }); };
+        if (typeof window.setAdsUserData === 'function') { window.setAdsUserData(payload.email, '', payload.name).then(fireAds, fireAds); } else { fireAds(); }
+      } catch(_){}
+      if (typeof fbq === 'function') { try { fbq('track', 'Lead', { content_name: 'condo_cheat_sheet' }); } catch(_){} }
       fetch('/api/condo-lead', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
         .then(function(r){return r.json();})
         .then(function(res){ window.location.href = (res && res.redirect) || '/condo-reserve-fund-cheat-sheet/thank-you'; })
@@ -8855,6 +8910,11 @@ function getDemoPortalHTML() {
       var email = e.target.email.value.trim();
       if (typeof gtag === 'function') gtag('event', 'lead_capture', { source: 'demo_portal' });
       if (typeof rrTrack === 'function') rrTrack('lead_capture', { source: 'demo_portal' });
+      try {
+        var fireAds = function(){ if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('lead', { value: 5, currency: 'CAD' }); };
+        if (typeof window.setAdsUserData === 'function') { window.setAdsUserData(email, '', '').then(fireAds, fireAds); } else { fireAds(); }
+      } catch(_){}
+      if (typeof fbq === 'function') { try { fbq('track', 'Lead', { content_name: 'demo_portal' }); } catch(_){} }
       fetch('/api/asset-report/lead', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: email, source: 'demo_portal' }) })
         .then(function(r){return r.json();}).catch(function(){});
       document.getElementById('reqForm').style.display='none';
@@ -15388,7 +15448,7 @@ function getDemoBookedHTML() {
   <style>* { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }</style>
   <script>
     window.addEventListener('load', function(){
-      try { gtag('event', 'conversion', { send_to: 'AW-18080319225/demo_booked' }); } catch(_){}
+      try { if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('demo', { value: 25, currency: 'CAD' }); } catch(_){}
       try { rrTrack('lead_capture', { source: 'demo_booked' }); } catch(_){}
     });
   </script>
