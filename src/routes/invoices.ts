@@ -307,7 +307,8 @@ invoiceRoutes.post('/', async (c) => {
     const {
       customer_id, crm_customer_id, new_customer, order_id, items, notes, terms, due_days, tax_rate, discount_amount,
       discount_type, document_type, scope_of_work, warranty_terms, payment_terms_text,
-      valid_until, attached_report_id, proposal_tier, proposal_group_id, my_cost, accent_color, show_report_sections
+      valid_until, attached_report_id, proposal_tier, proposal_group_id, my_cost, accent_color, show_report_sections,
+      send_customer_copy
     } = body
 
     if (!customer_id && !crm_customer_id && !new_customer) return c.json({ error: 'customer_id or new_customer is required' }, 400)
@@ -414,8 +415,9 @@ invoiceRoutes.post('/', async (c) => {
                             order_id, subtotal, tax_rate, tax_amount,
                             discount_amount, discount_type, total, status, due_date, notes, terms, created_by, document_type,
                             share_token, share_url, scope_of_work, warranty_terms, payment_terms_text, valid_until,
-                            attached_report_id, proposal_tier, proposal_group_id, my_cost, accent_color, show_report_sections)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            attached_report_id, proposal_tier, proposal_group_id, my_cost, accent_color, show_report_sections,
+                            send_customer_copy)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       number, resolvedCustomerId, crm_customer_id || null, crmName, crmEmail, crmPhone,
       order_id || null,
@@ -427,7 +429,8 @@ invoiceRoutes.post('/', async (c) => {
       valid_until || '', attached_report_id || null, proposal_tier || '', proposal_group_id || '',
       my_cost != null ? my_cost : null,
       accent_color || null,
-      show_report_sections ? JSON.stringify(show_report_sections) : null
+      show_report_sections ? JSON.stringify(show_report_sections) : null,
+      send_customer_copy === 0 || send_customer_copy === false ? 0 : 1
     ).run()
 
     const invoiceId = result.meta.last_row_id
@@ -486,7 +489,8 @@ invoiceRoutes.put('/:id', async (c) => {
     const {
       customer_id, crm_customer_id, order_id, items, notes, terms, due_days, tax_rate, discount_amount,
       discount_type, document_type, scope_of_work, warranty_terms, payment_terms_text,
-      valid_until, attached_report_id, my_cost, accent_color, show_report_sections
+      valid_until, attached_report_id, my_cost, accent_color, show_report_sections,
+      send_customer_copy
     } = body
 
     if (!scope.isAdmin) {
@@ -558,7 +562,8 @@ invoiceRoutes.put('/:id', async (c) => {
         order_id = ?, subtotal = ?, tax_rate = ?,
         tax_amount = ?, discount_amount = ?, discount_type = ?, total = ?, due_date = ?, notes = ?, terms = ?,
         document_type = ?, scope_of_work = ?, warranty_terms = ?, payment_terms_text = ?,
-        valid_until = ?, attached_report_id = ?, my_cost = ?, accent_color = ?, show_report_sections = ?, updated_at = datetime('now')
+        valid_until = ?, attached_report_id = ?, my_cost = ?, accent_color = ?, show_report_sections = ?,
+        send_customer_copy = ?, updated_at = datetime('now')
       WHERE id = ?
     `).bind(
       resolvedCustomerId || null, crm_customer_id || null, crmName, crmEmail, crmPhone,
@@ -568,6 +573,7 @@ invoiceRoutes.put('/:id', async (c) => {
       valid_until || '', attached_report_id || null, my_cost != null ? my_cost : null,
       accent_color || null,
       show_report_sections ? JSON.stringify(show_report_sections) : null,
+      send_customer_copy === 0 || send_customer_copy === false ? 0 : 1,
       id
     ).run()
 

@@ -3440,7 +3440,24 @@ app.get('/proposal/view/:token', async (c) => {
         let reportLink = ''
         let reportSectionsHtml = ''
         if (invProposal.attached_report_id) {
-          reportLink = `<a href="/api/reports/${invProposal.attached_report_id}/html" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100"><i class="fas fa-file-alt"></i>View Full Roof Report</a>`
+          // Default to the customer-friendly copy (no measurements) unless the
+          // contractor explicitly opted in to sending the full report. Fall back
+          // to the full report if the customer copy hasn't been generated yet.
+          const sendCustomerCopy = invProposal.send_customer_copy == null ? 1 : Number(invProposal.send_customer_copy)
+          let useCustomerCopy = sendCustomerCopy === 1
+          if (useCustomerCopy) {
+            try {
+              const cust = await c.env.DB.prepare(
+                `SELECT 1 as has FROM reports WHERE (id = ? OR order_id = ?) AND customer_report_html IS NOT NULL LIMIT 1`
+              ).bind(invProposal.attached_report_id, invProposal.attached_report_id).first<any>()
+              if (!cust) useCustomerCopy = false
+            } catch { useCustomerCopy = false }
+          }
+          const reportPath = useCustomerCopy
+            ? `/api/reports/${invProposal.attached_report_id}/customer-html`
+            : `/api/reports/${invProposal.attached_report_id}/html`
+          const reportLabel = useCustomerCopy ? 'View Roof Report' : 'View Full Roof Report'
+          reportLink = `<a href="${reportPath}" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100"><i class="fas fa-file-alt"></i>${reportLabel}</a>`
           try {
             const rRow = await c.env.DB.prepare(
               `SELECT r.api_response_raw FROM reports r WHERE r.id = ? OR r.order_id = ?`

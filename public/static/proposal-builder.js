@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showPitchToCustomer: true,
     showAreaToCustomer: true,
     showLineItemsToCustomer: false,
+    sendFullReport: false,
     customerPriceOverride: null,
     myCost: null,
     accentColor: '#0ea5e9',
@@ -183,6 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showSolarToCustomer: state.showSolarToCustomer,
         showPitchToCustomer: state.showPitchToCustomer,
         showAreaToCustomer: state.showAreaToCustomer,
+        sendFullReport: state.sendFullReport,
         attachments: state.attachments,
         editId: state.editId
       }));
@@ -215,6 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.showSolarToCustomer = !!d.showSolarToCustomer;
       state.showPitchToCustomer = d.showPitchToCustomer != null ? d.showPitchToCustomer : true;
       state.showAreaToCustomer = d.showAreaToCustomer != null ? d.showAreaToCustomer : true;
+      state.sendFullReport = !!d.sendFullReport;
       if (d.attachments) state.attachments = d.attachments;
       state.editId = d.editId || null;
       state.mode = 'create';
@@ -842,6 +845,14 @@ document.addEventListener('DOMContentLoaded', () => {
               '<label style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg-elevated);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text-secondary)"><input type="checkbox" ' + (state.showMaterialsToCustomer ? 'checked' : '') + ' onchange="window.__pbState.showMaterialsToCustomer=this.checked;window.__pbRender()"> Page 3: Material Take-Off (BOM)</label>' +
               '<label style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg-elevated);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text-secondary)"><input type="checkbox" ' + (state.showEdgesToCustomer ? 'checked' : '') + ' onchange="window.__pbState.showEdgesToCustomer=this.checked;window.__pbRender()"> Page 4: Edge Breakdown Details</label>' +
               '<label style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg-elevated);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text-secondary)"><input type="checkbox" ' + (state.showSolarToCustomer ? 'checked' : '') + ' onchange="window.__pbState.showSolarToCustomer=this.checked;window.__pbRender()"> Page 5: Quality & Validation Notes</label>' +
+            '</div>' +
+            // Attached roof report variant — customer copy (default) vs full contractor report
+            '<div style="margin-top:12px;padding:10px;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px">' +
+              '<div style="color:var(--text-muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px"><i class="fas fa-paperclip" style="margin-right:4px"></i>Attached Roof Report</div>' +
+              '<label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:13px;color:var(--text-secondary)">' +
+                '<input type="checkbox" ' + (state.sendFullReport ? 'checked' : '') + ' onchange="window.__pbState.sendFullReport=this.checked;window.__pbRender()" style="margin-top:3px">' +
+                '<span><strong style="color:var(--text-primary)">Send full report (with measurements)</strong><br><span style="color:var(--text-muted);font-size:11px">Off: customer sees only the aerial image and roof diagram. On: customer sees the full contractor report with all measurements.</span></span>' +
+              '</label>' +
             '</div>' +
           '</div>' +
 
@@ -2066,7 +2077,8 @@ document.addEventListener('DOMContentLoaded', () => {
           edges: !!state.showEdgesToCustomer,
           solar: !!state.showSolarToCustomer,
           lineItems: !!state.showLineItemsToCustomer
-        }
+        },
+        send_customer_copy: state.sendFullReport ? 0 : 1
       };
 
       let res;
@@ -2284,6 +2296,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.showSolarToCustomer = false;
       state.showPitchToCustomer = true;
       state.showAreaToCustomer = true;
+      state.sendFullReport = false;
       state.attachments = { includeRoofReport: true, includeMaterialBOM: true, insuranceCert: '', warrantyDoc: '', wcbCoverage: '', customAttachment: '' };
       state.loading = true; render();
       await checkPrereqs();
@@ -2507,6 +2520,9 @@ document.addEventListener('DOMContentLoaded', () => {
             state.showLineItemsToCustomer = !!sections.lineItems;
           }
         } catch(e) {}
+
+        // Restore "send full report" toggle (default: customer copy = false sendFullReport)
+        state.sendFullReport = inv.send_customer_copy === 0;
 
         // Fetch attached report so preview can render its sections
         if (inv.attached_report_id) {
