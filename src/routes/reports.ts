@@ -3467,6 +3467,17 @@ async function _generateReportForOrderInner(
     await repo.markOrderStatus(env.DB, orderId, 'completed')
     console.log(`[Generate] Order ${orderId}: ✅ Report saved as COMPLETED (v${baseVersion}, provider=${finalReportData.metadata?.provider || 'unknown'})`)
 
+    // Push to any external CRM connections the customer has configured
+    // (AccuLynx, JobNimbus, custom webhook, etc.). Fire-and-forget via
+    // waitUntil — failures land in customer_api_deliveries and never
+    // affect the report flow.
+    if (order?.customer_id) {
+      const { dispatchReportToExternalCRMs } = await import('../services/external-crm-dispatch')
+      const crmP = dispatchReportToExternalCRMs(env, orderId, order.customer_id, ctx)
+        .catch(e => console.warn(`[CRM-Dispatch] Order ${orderId} hook error:`, e?.message))
+      if (ctx?.waitUntil) ctx.waitUntil(crmP)
+    }
+
     // ── CUSTOMER REPORT (no measurements) ──
     // A second artifact built from the same data: aerial + 2D diagram, no
     // numbers anywhere. Stored on reports.customer_report_html so the

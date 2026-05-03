@@ -3117,11 +3117,10 @@ async function requireSubscription(c: any, customerId: number): Promise<{ ok: bo
 }
 
 // GET /numbers/search?country=US&areaCode=780&limit=20
+// Read-only — open to any logged-in customer so the signup form can preview
+// available numbers before a card is on file. Purchase still requires a
+// subscription + card.
 secretaryRoutes.get('/numbers/search', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-  const gate = await requireSubscription(c, customerId)
-  if (!gate.ok) return c.json({ error: 'Start a Roofer Secretary trial before picking a phone number.' }, 403)
-
   const country = (c.req.query('country') || 'US').toUpperCase()
   const areaCode = (c.req.query('areaCode') || '').replace(/\D/g, '') || undefined
   const locality = c.req.query('locality') || undefined

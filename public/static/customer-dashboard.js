@@ -244,6 +244,10 @@ function renderDashboard() {
             '<span class="text-sm">Team</span>' +
             (teamBadge ? '<span class="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-800 text-white">' + teamBadge + '</span>' : '') +
           '</a>' +
+          '<a href="/customer/integrations" class="flex items-center gap-3 px-4 py-2.5 transition-colors" style="color:var(--text-secondary);text-decoration:none" onmouseover="this.style.background=\'var(--bg-elevated)\'" onmouseout="this.style.background=\'transparent\'">' +
+            '<i class="fas fa-plug w-4 text-center text-sm" style="color:var(--text-muted)"></i>' +
+            '<span class="text-sm">API Connections</span>' +
+          '</a>' +
           '<a href="/customer/secretary" class="flex items-center gap-3 px-4 py-2.5 transition-colors" style="color:var(--text-secondary);text-decoration:none" onmouseover="this.style.background=\'var(--bg-elevated)\'" onmouseout="this.style.background=\'transparent\'">' +
             '<i class="fas fa-headset w-4 text-center text-sm" style="color:var(--text-muted)"></i>' +
             '<span class="text-sm">Secretary</span>' +

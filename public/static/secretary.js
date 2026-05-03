@@ -53,6 +53,11 @@
     // Agent persona selection
     selectedAgentName: '',
     selectedAgentVoice: '',
+    // Signup flow — number chosen inline before card entry
+    selectedSignupNumber: '',
+    selectedSignupNumberLabel: '',
+    signupNumberSearchResults: [],
+    signupNumberSearchBusy: false,
   };
 
   // ── On load: check for Square redirect, then fetch status ──
@@ -226,11 +231,11 @@
 
     root.innerHTML =
       '<div class="max-w-2xl mx-auto px-4">' +
-        '<div class="bg-gradient-to-br from-[#111111] to-blue-700 rounded-2xl p-6 sm:p-8 text-white text-center mb-8 shadow-xl">' +
-          '<div class="w-20 h-20 bg-[#111111]/20 rounded-2xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-headset text-4xl"></i></div>' +
-          '<h2 class="text-2xl sm:text-3xl font-extrabold mb-2">Roofer Secretary</h2>' +
-          '<p class="text-sky-100 text-base sm:text-lg">AI-Powered Phone Answering Service</p>' +
-          '<p class="text-sky-200 text-sm mt-2">Never miss a customer call again. Start with a <strong>1-month free trial</strong> — cancel anytime before renewal.</p>' +
+        '<div style="background:linear-gradient(135deg,#0f172a,#1d4ed8);color:#fff" class="rounded-2xl p-6 sm:p-8 text-center mb-8 shadow-xl">' +
+          '<div style="background:rgba(255,255,255,0.12)" class="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-headset text-4xl" style="color:#fff"></i></div>' +
+          '<h2 class="text-2xl sm:text-3xl font-extrabold mb-2" style="color:#fff">Roofer Secretary</h2>' +
+          '<p class="text-base sm:text-lg" style="color:rgba(255,255,255,0.92)">AI-Powered Phone Answering Service</p>' +
+          '<p class="text-sm mt-2" style="color:rgba(255,255,255,0.82)">Never miss a customer call again. Start with a <strong>1-month free trial</strong> — cancel anytime before renewal.</p>' +
         '</div>' +
 
         '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-4 sm:p-6 mb-6">' +
@@ -248,20 +253,23 @@
         '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-4 sm:p-6 mb-6">' +
           '<h3 class="font-bold text-gray-100 text-lg mb-4"><i class="fas fa-plug text-sky-500 mr-2"></i>How It Works</h3>' +
           '<div class="space-y-4">' +
-            howStep(1, 'Add Your Card', 'We need a card on file to start the free trial. You won\'t be charged until day 31.') +
-            howStep(2, 'Configure Your Agent', 'Set your greeting, agent voice, FAQ answers, and routing directly in your dashboard.') +
-            howStep(3, 'Pick a Phone Number', 'Get a new number from our inventory for $1/mo, or use your existing business line.') +
+            howStep(1, 'Pick a Phone Number', 'Search our inventory and grab a local AI number for $1/mo, or skip and forward your existing line.') +
+            howStep(2, 'Add Your Card', 'We need a card on file to start the free trial. You won\'t be charged the $199 plan fee until day 31.') +
+            howStep(3, 'Configure Your Agent', 'Set your greeting, agent voice, FAQ answers, and routing directly in your dashboard.') +
             howStep(4, 'Go Live', 'Forward unanswered calls to your Secretary. AI handles them with your voice and brand.') +
           '</div>' +
         '</div>' +
 
-        // ── Start Free Trial form ──
+        // ── Step 1: Pick Phone Number (inline, runs before card entry) ──
+        renderInlineNumberPicker() +
+
+        // ── Step 2: Start Free Trial form (card entry) ──
         '<div class="bg-[#111111] rounded-2xl border-2 border-sky-500 shadow-lg p-4 sm:p-6 mb-6">' +
           '<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">' +
             '<div><h3 class="font-bold text-gray-100 text-xl"><i class="fas fa-gift text-sky-500 mr-2"></i>Start Your Free Trial</h3>' +
-              '<p class="text-gray-500 text-sm mt-1">1 month free &bull; Card on file required &bull; Then $199/mo &bull; Cancel anytime</p></div>' +
-            '<div class="text-right"><div class="text-2xl sm:text-3xl font-extrabold text-sky-400">$0<span class="text-sm font-normal text-gray-500"> for 30 days</span></div>' +
-              '<div class="text-xs text-gray-400">then $199/mo</div></div>' +
+              '<p class="text-gray-300 text-sm mt-1">1 month free &bull; Card on file required &bull; Then $199/mo &bull; Cancel anytime</p></div>' +
+            '<div class="text-right"><div class="text-2xl sm:text-3xl font-extrabold text-sky-400">$0<span class="text-sm font-normal text-gray-300"> for 30 days</span></div>' +
+              '<div class="text-xs text-gray-300" id="trialCostBlurb">then $199/mo</div></div>' +
           '</div>' +
           '<div class="space-y-3 mb-4">' +
             '<div class="flex items-start gap-2 text-sm text-gray-300"><i class="fas fa-shield-alt text-emerald-400 mt-1"></i><div><strong>Secure card entry.</strong> Card is tokenized by Square. We never see your card number.</div></div>' +
@@ -271,10 +279,10 @@
           '<div id="squareCardContainer" class="mb-3 p-3 bg-[#0A0A0A] border border-white/10 rounded-xl min-h-[60px]"></div>' +
           '<div id="trialError" class="text-red-400 text-sm mb-3 hidden"></div>' +
           '<input type="text" id="trialCardholder" placeholder="Cardholder name" value="' + (custData.name || '') + '" class="w-full px-4 py-3 mb-3 border border-white/15 bg-[#0A0A0A] rounded-xl text-sm text-gray-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none">' +
-          '<button onclick="secStartTrial()" id="trialBtn" disabled class="w-full py-4 bg-gradient-to-r from-[#111111] to-[#1a1a1a] text-white rounded-xl font-bold text-lg hover:from-sky-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed">' +
+          '<button onclick="secStartTrial()" id="trialBtn" disabled style="background:linear-gradient(90deg,#0ea5e9,#1d4ed8);color:#fff" class="w-full py-4 rounded-xl font-bold text-lg transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed">' +
             '<i class="fas fa-spinner fa-spin mr-2"></i>Loading secure card form…</button>' +
         '</div>' +
-        '<p class="text-center text-xs text-gray-400 mb-8"><i class="fas fa-lock mr-1"></i>PCI-secure payments by Square &bull; Powered by LiveKit AI</p>' +
+        '<p class="text-center text-xs text-gray-300 mb-8"><i class="fas fa-lock mr-1"></i>PCI-secure payments by Square &bull; Powered by LiveKit AI</p>' +
       '</div>';
 
     // Mount Square Web Payments SDK card element.
@@ -320,7 +328,9 @@
       await _sqCard.attach('#squareCardContainer');
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-gift mr-2"></i>Start 1-Month Free Trial';
+        btn.innerHTML = state.selectedSignupNumber
+          ? '<i class="fas fa-gift mr-2"></i>Start Free Trial + Add Number ($1)'
+          : '<i class="fas fa-gift mr-2"></i>Start 1-Month Free Trial';
       }
     } catch (e) {
       if (err) { err.textContent = 'Card form failed to load: ' + (e.message || e); err.classList.remove('hidden'); }
@@ -337,7 +347,7 @@
     }
     if (err) err.classList.add('hidden');
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing…';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving card…';
     try {
       var result = await _sqCard.tokenize();
       if (result.status !== 'OK') throw new Error(result.errors && result.errors[0] && result.errors[0].message || 'Card tokenization failed');
@@ -351,26 +361,176 @@
       });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Trial signup failed');
-      showToast('Free trial started! Your trial ends ' + (data.trial_ends_at || 'in 30 days'), 'success');
+
+      // Chain: if a number was selected during signup, purchase it now ($1 charge).
+      // Trial is already active at this point — number purchase failure must NOT
+      // roll back the trial, just surface a non-blocking warning so the user can
+      // pick another from the Connect tab.
+      var numberPurchaseWarning = '';
+      if (state.selectedSignupNumber) {
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Purchasing your number…';
+        try {
+          var npRes = await fetch('/api/secretary/numbers/purchase', {
+            method: 'POST', headers: authHeaders(),
+            body: JSON.stringify({ phone_number: state.selectedSignupNumber }),
+          });
+          var npData = await npRes.json();
+          if (!npRes.ok) throw new Error(npData.error || 'Number purchase failed');
+        } catch (npErr) {
+          numberPurchaseWarning = ' Trial started, but number purchase failed: ' + (npErr.message || String(npErr)) + '. You can pick another from the Connect tab.';
+          console.warn('[secretary] number purchase failed after trial start:', npErr);
+        }
+      }
+
+      showToast('Free trial started! Your trial ends ' + (data.trial_ends_at || 'in 30 days') + '.' + numberPurchaseWarning,
+        numberPurchaseWarning ? 'warning' : 'success');
+      // Clear signup-only state so the post-trial UI loads cleanly.
+      state.selectedSignupNumber = '';
+      state.selectedSignupNumberLabel = '';
+      state.signupNumberSearchResults = [];
       await loadStatus();
     } catch (e) {
       if (err) { err.textContent = e.message || String(e); err.classList.remove('hidden'); }
       btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-gift mr-2"></i>Start 1-Month Free Trial';
+      btn.innerHTML = state.selectedSignupNumber
+        ? '<i class="fas fa-gift mr-2"></i>Start Free Trial + Add Number ($1)'
+        : '<i class="fas fa-gift mr-2"></i>Start 1-Month Free Trial';
     }
   };
 
   function feature(icon, title, desc) {
     return '<div class="flex items-start gap-3 p-3 bg-[#0A0A0A] rounded-xl">' +
-      '<div class="w-8 h-8 bg-sky-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"><i class="fas ' + icon + ' text-sky-600 text-sm"></i></div>' +
-      '<div><p class="font-semibold text-gray-100 text-sm">' + title + '</p><p class="text-gray-500 text-xs">' + desc + '</p></div></div>';
+      '<div style="background:rgba(14,165,233,0.15)" class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"><i class="fas ' + icon + ' text-sky-400 text-sm"></i></div>' +
+      '<div><p class="font-semibold text-gray-100 text-sm">' + title + '</p><p class="text-gray-300 text-xs">' + desc + '</p></div></div>';
   }
 
   function howStep(num, title, desc) {
     return '<div class="flex items-start gap-4">' +
       '<div class="w-10 h-10 bg-sky-500 text-white rounded-full flex items-center justify-center flex-shrink-0 font-bold text-lg">' + num + '</div>' +
-      '<div><p class="font-semibold text-gray-100">' + title + '</p><p class="text-gray-500 text-sm">' + desc + '</p></div></div>';
+      '<div><p class="font-semibold text-gray-100">' + title + '</p><p class="text-gray-300 text-sm">' + desc + '</p></div></div>';
   }
+
+  // ── Inline phone-number picker (signup-flow Step 1) ──
+  // Uses /api/secretary/numbers/search (now open to logged-in customers
+  // pre-trial) so the user can choose a number before adding their card.
+  function fmtPhonePretty(p) {
+    var d = String(p || '').replace(/^\+?1?/, '').replace(/\D/g, '');
+    if (d.length === 10) return '+1 (' + d.slice(0,3) + ') ' + d.slice(3,6) + '-' + d.slice(6);
+    return p || '';
+  }
+
+  function renderInlineNumberPicker() {
+    var hasSelection = !!state.selectedSignupNumber;
+    var pretty = hasSelection ? fmtPhonePretty(state.selectedSignupNumber) : '';
+    return '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-4 sm:p-6 mb-6">' +
+      '<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">' +
+        '<div><h3 class="font-bold text-gray-100 text-xl"><i class="fas fa-phone-alt text-sky-400 mr-2"></i>Pick Your Phone Number</h3>' +
+          '<p class="text-gray-300 text-sm mt-1">$1/mo &bull; we wire it to your AI agent automatically</p></div>' +
+        '<div class="text-right"><div class="text-2xl sm:text-3xl font-extrabold text-sky-400">$1<span class="text-sm font-normal text-gray-300"> today</span></div>' +
+          '<div class="text-xs text-gray-300">monthly thereafter</div></div>' +
+      '</div>' +
+      '<div class="flex flex-col sm:flex-row gap-2 mb-3">' +
+        '<select id="npInlineCountry" class="px-3 py-2 bg-[#0A0A0A] border border-white/15 rounded-lg text-sm text-gray-100">' +
+          '<option value="US">United States</option><option value="CA">Canada</option>' +
+        '</select>' +
+        '<input id="npInlineAreaCode" type="text" maxlength="3" placeholder="Area code (optional)" class="flex-1 px-3 py-2 bg-[#0A0A0A] border border-white/15 rounded-lg text-sm text-gray-100">' +
+        '<button onclick="secInlineSearchNumbers()" style="background:#0ea5e9;color:#fff" class="px-4 py-2 hover:opacity-90 rounded-lg text-sm font-semibold"><i class="fas fa-search mr-1"></i>Search</button>' +
+      '</div>' +
+      '<div id="npInlineResults" class="space-y-2 mb-3 max-h-64 overflow-y-auto">' + renderInlineResultsBody() + '</div>' +
+      '<div id="npInlineSummary" class="flex items-center justify-between gap-2 p-3 rounded-xl border border-white/10" style="background:#0A0A0A">' +
+        '<div class="text-sm" id="npInlineSummaryText" style="color:' + (hasSelection ? '#a7f3d0' : '#d1d5db') + '">' +
+          (hasSelection
+            ? '<i class="fas fa-check-circle mr-1"></i>Selected: <strong>' + pretty + '</strong> &bull; $1 today'
+            : '<i class="fas fa-info-circle mr-1"></i>No number selected — you can add one later from the Connect tab') + '</div>' +
+        (hasSelection
+          ? '<button onclick="secInlineClearNumber()" class="text-xs text-gray-300 hover:text-white underline whitespace-nowrap">Skip / clear</button>'
+          : '<button onclick="secInlineSearchNumbers()" class="text-xs text-sky-400 hover:text-sky-300 underline whitespace-nowrap">Search numbers</button>') +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderInlineResultsBody() {
+    if (state.signupNumberSearchBusy) {
+      return '<div class="text-center py-6"><i class="fas fa-spinner fa-spin text-sky-400"></i></div>';
+    }
+    var items = state.signupNumberSearchResults || [];
+    if (!items.length) {
+      return '<div class="text-center py-4 text-gray-300 text-xs">Choose a country and (optional) area code, then search to see available numbers.</div>';
+    }
+    return items.map(function(n) {
+      var pretty = fmtPhonePretty(n.phone_number);
+      var isSelected = state.selectedSignupNumber === n.phone_number;
+      var locality = (n.locality || '') + (n.region ? (n.locality ? ', ' : '') + n.region : '');
+      var pn = String(n.phone_number).replace(/'/g, '');
+      return '<div class="flex items-center justify-between rounded-xl px-4 py-3 border ' + (isSelected ? 'border-emerald-400' : 'border-white/10') + '" style="background:' + (isSelected ? 'rgba(16,185,129,0.08)' : '#0A0A0A') + '">' +
+        '<div><div class="font-mono text-gray-100">' + pretty + '</div>' +
+        '<div class="text-xs text-gray-300">' + (locality || 'Available') + ' &bull; $1/mo</div></div>' +
+        (isSelected
+          ? '<span class="text-sm text-emerald-400 font-semibold"><i class="fas fa-check-circle mr-1"></i>Selected</span>'
+          : '<button onclick="secInlineSelectNumber(\'' + pn + '\')" style="background:#10b981;color:#fff" class="text-sm hover:opacity-90 rounded-lg px-3 py-1.5 font-semibold">Select</button>') +
+      '</div>';
+    }).join('');
+  }
+
+  function refreshInlinePicker() {
+    var resultsEl = document.getElementById('npInlineResults');
+    if (resultsEl) resultsEl.innerHTML = renderInlineResultsBody();
+    var summaryWrap = document.getElementById('npInlineSummary');
+    if (summaryWrap) {
+      var hasSelection = !!state.selectedSignupNumber;
+      var pretty = hasSelection ? fmtPhonePretty(state.selectedSignupNumber) : '';
+      summaryWrap.innerHTML =
+        '<div class="text-sm" id="npInlineSummaryText" style="color:' + (hasSelection ? '#a7f3d0' : '#d1d5db') + '">' +
+          (hasSelection
+            ? '<i class="fas fa-check-circle mr-1"></i>Selected: <strong>' + pretty + '</strong> &bull; $1 today'
+            : '<i class="fas fa-info-circle mr-1"></i>No number selected — you can add one later from the Connect tab') + '</div>' +
+        (hasSelection
+          ? '<button onclick="secInlineClearNumber()" class="text-xs text-gray-300 hover:text-white underline whitespace-nowrap">Skip / clear</button>'
+          : '<button onclick="secInlineSearchNumbers()" class="text-xs text-sky-400 hover:text-sky-300 underline whitespace-nowrap">Search numbers</button>');
+    }
+    var btn = document.getElementById('trialBtn');
+    if (btn && !btn.disabled) {
+      btn.innerHTML = state.selectedSignupNumber
+        ? '<i class="fas fa-gift mr-2"></i>Start Free Trial + Add Number ($1)'
+        : '<i class="fas fa-gift mr-2"></i>Start 1-Month Free Trial';
+    }
+    var costBlurb = document.getElementById('trialCostBlurb');
+    if (costBlurb) costBlurb.textContent = state.selectedSignupNumber ? '+ $1 today (number) · then $199/mo' : 'then $199/mo';
+  }
+
+  window.secInlineSearchNumbers = async function() {
+    var country = (document.getElementById('npInlineCountry') || {}).value || 'US';
+    var areaCode = ((document.getElementById('npInlineAreaCode') || {}).value || '').replace(/\D/g, '').slice(0, 3);
+    state.signupNumberSearchBusy = true;
+    refreshInlinePicker();
+    try {
+      var qs = 'country=' + country + (areaCode ? '&areaCode=' + areaCode : '') + '&limit=20';
+      var res = await fetch('/api/secretary/numbers/search?' + qs, { headers: authOnly() });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Search failed');
+      state.signupNumberSearchResults = data.items || [];
+    } catch (e) {
+      state.signupNumberSearchResults = [];
+      var resultsEl = document.getElementById('npInlineResults');
+      if (resultsEl) resultsEl.innerHTML = '<div class="text-center py-4 text-red-400 text-xs">' + (e.message || String(e)) + '</div>';
+      state.signupNumberSearchBusy = false;
+      return;
+    }
+    state.signupNumberSearchBusy = false;
+    refreshInlinePicker();
+  };
+
+  window.secInlineSelectNumber = function(phoneNumber) {
+    state.selectedSignupNumber = phoneNumber;
+    state.selectedSignupNumberLabel = fmtPhonePretty(phoneNumber);
+    refreshInlinePicker();
+  };
+
+  window.secInlineClearNumber = function() {
+    state.selectedSignupNumber = '';
+    state.selectedSignupNumberLabel = '';
+    refreshInlinePicker();
+  };
 
   window.secSubmitEnrollment = async function() {
     var btn = document.getElementById('enrollBtn');
@@ -517,7 +677,52 @@
         '</div></div>' +
 
       // MODE-SPECIFIC CONFIG
-      renderModeSpecificConfig(c);
+      renderModeSpecificConfig(c) +
+
+      // STEP 3: SIP Pairing + Deploy
+      renderSipPairingAndDeploy(c);
+  }
+
+  // ── SIP trunk pairing summary + Deploy button ──
+  // Shows the customer's "from" cell and the purchased AI number side-by-side
+  // so they understand the call path. Deploy = save config + activate +
+  // open the forwarding wizard so they can finish by turning on cell forwarding.
+  function renderSipPairingAndDeploy(c) {
+    var aiNumber = (state.phoneSetup && state.phoneSetup.assigned_phone_number) || '';
+    var aiPretty = aiNumber ? fmtPhonePretty(aiNumber) : '';
+    var cellPretty = c.business_phone ? fmtPhonePretty(c.business_phone) : '';
+    var hasAi = !!aiNumber;
+    var hasCell = !!c.business_phone;
+    var canDeploy = hasAi && hasCell;
+    var connected = state.phoneSetup && state.phoneSetup.connection_status === 'connected';
+
+    return '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-6 mb-6">' +
+      '<h3 class="font-bold text-gray-100 text-lg mb-1"><span class="inline-flex items-center justify-center w-7 h-7 bg-sky-500 text-white rounded-full text-sm font-bold mr-2">3</span>SIP Pairing &amp; Deploy</h3>' +
+      '<p class="text-gray-300 text-sm mb-4 ml-9">Confirm your call path, then deploy your agent to LiveKit. Last step is turning on cell forwarding.</p>' +
+      '<div class="ml-9 grid grid-cols-1 md:grid-cols-3 gap-3 items-center mb-5">' +
+        // From (cell)
+        '<div class="rounded-xl p-4 border border-white/10" style="background:#0A0A0A">' +
+          '<div class="text-xs text-gray-300 mb-1"><i class="fas fa-mobile-alt text-sky-400 mr-1"></i>Your cell (forwarding from)</div>' +
+          '<div class="font-mono text-gray-100 text-base">' + (hasCell ? cellPretty : '<span class="text-gray-300 text-sm">Set in field above</span>') + '</div>' +
+        '</div>' +
+        // Arrow
+        '<div class="text-center text-gray-300"><i class="fas fa-arrow-right text-2xl"></i></div>' +
+        // To (AI number)
+        '<div class="rounded-xl p-4 border border-white/10" style="background:#0A0A0A">' +
+          '<div class="text-xs text-gray-300 mb-1"><i class="fas fa-headset text-emerald-400 mr-1"></i>Your AI receptionist (calls land here)</div>' +
+          '<div class="font-mono text-gray-100 text-base">' + (hasAi ? aiPretty : '<span class="text-gray-300 text-sm">No AI number — <button onclick="secSetTab(\'connect\')" class="text-sky-400 underline">pick one</button></span>') + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="ml-9 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">' +
+        '<button onclick="secDeployAgent()" id="deployAgentBtn" ' + (canDeploy ? '' : 'disabled') + ' style="background:linear-gradient(90deg,#0ea5e9,#1d4ed8);color:#fff" class="flex-1 py-4 rounded-xl font-bold text-lg transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed">' +
+          '<i class="fas fa-rocket mr-2"></i>Deploy Agent to LiveKit' +
+        '</button>' +
+        (connected
+          ? '<div class="text-emerald-400 text-sm self-center"><i class="fas fa-check-circle mr-1"></i>Forwarding live</div>'
+          : '<button onclick="secShowForwardingWizard(\'' + (aiNumber || '') + '\', null)" class="px-4 py-4 rounded-xl font-semibold text-sm border border-white/15 text-gray-100 hover:bg-white/5"><i class="fas fa-phone-volume mr-1"></i>Forwarding instructions</button>') +
+      '</div>' +
+      (!canDeploy ? '<p class="ml-9 mt-3 text-xs text-amber-400"><i class="fas fa-exclamation-triangle mr-1"></i>Add ' + (!hasCell ? 'your cell number above' : '') + (!hasCell && !hasAi ? ' and ' : '') + (!hasAi ? 'an AI number from the Connect tab' : '') + ' before deploying.</p>' : '') +
+    '</div>';
   }
 
   // ── Agent Persona Selector — Choose your AI answering agent ──
@@ -1837,6 +2042,93 @@
       else window.rmToast(data.error || 'Save failed', 'info');
     } catch(e) { window.rmToast('Network error', 'error'); }
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Configuration'; }
+  };
+
+  // ── One-click Deploy: save config + directories + activate, then guide ──
+  // Forwarding. The agent worker reads config from D1, so saving is enough to
+  // push the latest persona/script/Q&A. Activation flips the secretary on.
+  window.secDeployAgent = async function() {
+    var btn = document.getElementById('deployAgentBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Deploying…'; }
+    var hadError = false;
+    try {
+      // 1. Save config (mirrors secSaveConfig body so we don't double-toast).
+      var businessHours = {};
+      ['mon','tue','wed','thu','fri','sat','sun'].forEach(function(d) {
+        var el = document.getElementById('fullHrs_' + d);
+        if (el) businessHours[d] = el.value || 'closed';
+      });
+      var fallbackRadio = document.querySelector('input[name="answering_fallback"]:checked');
+      var cfgRes = await fetch('/api/secretary/config', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({
+          business_phone: document.getElementById('secPhone')?.value || '',
+          greeting_script: document.getElementById('secGreeting')?.value || '',
+          common_qa: document.getElementById('secQA')?.value || '',
+          general_notes: document.getElementById('secNotes')?.value || '',
+          secretary_mode: state.secretaryMode,
+          agent_name: document.getElementById('agentNameInput')?.value || state.selectedAgentName || 'Sarah',
+          agent_voice: state.selectedAgentVoice || (state.phoneSetup && state.phoneSetup.agent_voice) || 'alloy',
+          answering_fallback_action: fallbackRadio ? fallbackRadio.value : 'take_message',
+          answering_forward_number: document.getElementById('answeringFwdNum')?.value || '',
+          answering_sms_notify: document.getElementById('answeringSms')?.checked ? 1 : 0,
+          answering_email_notify: document.getElementById('answeringEmail')?.checked ? 1 : 0,
+          answering_notify_email: document.getElementById('answeringNotifyEmail')?.value || '',
+          full_can_book_appointments: document.getElementById('fullBookAppts')?.checked ? 1 : 0,
+          full_can_send_email: document.getElementById('fullSendEmail')?.checked ? 1 : 0,
+          full_can_schedule_callback: document.getElementById('fullScheduleCallback')?.checked ? 1 : 0,
+          full_can_answer_faq: document.getElementById('fullAnswerFaq')?.checked ? 1 : 0,
+          full_can_take_payment_info: document.getElementById('fullTakePayment')?.checked ? 1 : 0,
+          full_business_hours: JSON.stringify(businessHours),
+          full_booking_link: document.getElementById('fullBookingLink')?.value || '',
+          full_services_offered: document.getElementById('fullServices')?.value || '',
+          full_pricing_info: document.getElementById('fullPricing')?.value || '',
+          full_service_area: document.getElementById('fullServiceArea')?.value || '',
+          full_email_from_name: document.getElementById('fullEmailFromName')?.value || '',
+          full_email_signature: document.getElementById('fullEmailSig')?.value || '',
+        })
+      });
+      var cfgData = await cfgRes.json();
+      if (!cfgData.success) throw new Error(cfgData.error || 'Save config failed');
+
+      // 2. Save directories if there are any in the form.
+      var list = document.getElementById('directoriesList');
+      if (list && list.children.length >= 2) {
+        var dirs = [];
+        for (var i = 0; i < list.children.length; i++) {
+          dirs.push({
+            name: document.getElementById('dirName' + i)?.value || '',
+            phone_or_action: document.getElementById('dirAction' + i)?.value || '',
+            special_notes: document.getElementById('dirNotes' + i)?.value || '',
+          });
+        }
+        try {
+          await fetch('/api/secretary/directories', { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ directories: dirs }) });
+        } catch (_) { /* non-fatal */ }
+      }
+
+      // 3. Activate the secretary if it isn't already.
+      if (!state.isActive) {
+        try { await fetch('/api/secretary/toggle', { method: 'POST', headers: authHeaders() }); }
+        catch (_) { /* non-fatal */ }
+      }
+
+      await loadStatus();
+      showToast('Agent deployed! Now turn on call forwarding to finish.', 'success');
+
+      // 4. Open the forwarding wizard so the only remaining step is obvious.
+      var aiNumber = (state.phoneSetup && state.phoneSetup.assigned_phone_number) || '';
+      if (aiNumber && typeof window.secShowForwardingWizard === 'function') {
+        try { window.secShowForwardingWizard(aiNumber, null); } catch (_) {}
+      }
+    } catch (e) {
+      hadError = true;
+      window.rmToast && window.rmToast(e.message || 'Deploy failed', 'error');
+    }
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-rocket mr-2"></i>' + (hadError ? 'Retry Deploy' : 'Deploy Agent to LiveKit');
+    }
   };
 
   window.secSaveDirs = async function() {
