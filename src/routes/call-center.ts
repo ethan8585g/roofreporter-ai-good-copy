@@ -487,9 +487,11 @@ callCenterRoutes.post('/quick-dial', async (c) => {
     await new Promise(r => setTimeout(r, 2000))
 
     // Step 3: Dial via SIP — this is what makes the phone ring.
-    // wait_until_answered=true makes LiveKit block until the call is actually
-    // answered (or hits ringing_timeout / fails), so we get the real outcome
-    // instead of fire-and-forget "ringing" that immediately closes.
+    // Fire-and-forget: LiveKit returns once the SIP INVITE is sent; the actual
+    // call outcome (answered / no_answer / busy) comes back via the agent's
+    // /call-complete webhook. We previously tried wait_until_answered + Duration
+    // fields here, but LiveKit's Twirp parser rejected the request body with
+    // "the json request could not be decoded", so we match the proven /dial shape.
     if (outboundTrunkId) {
       const participantIdentity = 'callee-' + prospect.id + '-' + Date.now()
       const sipRequest = {
@@ -500,9 +502,6 @@ callCenterRoutes.post('/quick-dial', async (c) => {
         participant_name: prospect.contact_name || prospect.company_name || 'Prospect',
         play_dialtone: false,
         krisp_enabled: true,
-        wait_until_answered: true,
-        ringing_timeout: '30s',
-        max_call_duration: '600s',
       }
       console.log('[QuickDial] CreateSIPParticipant →', { trunk: outboundTrunkId.slice(0, 8) + '…', to: cleanPhone, room: roomName, identity: participantIdentity })
       try {
@@ -547,9 +546,11 @@ callCenterRoutes.post('/quick-dial', async (c) => {
           sipError = reason
           await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='failed', call_outcome=? WHERE livekit_room_id=?").bind('sip_error: ' + reason, roomName).run()
         } else {
-          // wait_until_answered=true → success means callee actually answered.
-          sipStatus = 'answered'
-          await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='connected' WHERE livekit_room_id=?").bind(roomName).run()
+          // Fire-and-forget: SIP INVITE accepted. Real outcome (answered /
+          // no_answer / busy) arrives via the /call-complete webhook from the
+          // Python agent, which updates cc_call_logs.call_status accordingly.
+          sipStatus = 'ringing'
+          await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='ringing' WHERE livekit_room_id=?").bind(roomName).run()
         }
       } catch (e: any) {
         sipStatus = 'dial_error'
