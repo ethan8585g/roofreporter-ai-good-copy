@@ -58,6 +58,8 @@
     selectedSignupNumberLabel: '',
     signupNumberSearchResults: [],
     signupNumberSearchBusy: false,
+    signupNumberSearchAttempted: false,
+    signupNumberSearchError: '',
   };
 
   // ── On load: check for Square redirect, then fetch status ──
@@ -431,7 +433,7 @@
       '</div>' +
       '<div class="flex flex-col sm:flex-row gap-2 mb-3">' +
         '<select id="npInlineCountry" class="px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:#fff;color:#000">' +
-          '<option value="US">United States</option><option value="CA">Canada</option>' +
+          '<option value="US">United States</option><option value="CA" disabled>Canada (coming soon)</option>' +
         '</select>' +
         '<input id="npInlineAreaCode" type="text" maxlength="3" placeholder="Area code (optional)" class="flex-1 px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:#fff;color:#000">' +
         '<button onclick="secInlineSearchNumbers()" style="background:#0ea5e9;color:#fff" class="px-4 py-2 hover:opacity-90 rounded-lg text-sm font-semibold"><i class="fas fa-search mr-1"></i>Search</button>' +
@@ -455,6 +457,16 @@
     }
     var items = state.signupNumberSearchResults || [];
     if (!items.length) {
+      if (state.signupNumberSearchError) {
+        return '<div class="text-center py-4 text-xs" style="color:#b91c1c">' + state.signupNumberSearchError + '</div>';
+      }
+      if (state.signupNumberSearchAttempted) {
+        var country = (document.getElementById('npInlineCountry') || {}).value || 'US';
+        if (country === 'CA') {
+          return '<div class="text-center py-4 text-xs" style="color:#000">Canadian numbers aren\'t available yet — please choose United States and try a US area code (e.g. 484, 240, 512).</div>';
+        }
+        return '<div class="text-center py-4 text-xs" style="color:#000">No numbers available for that area. Try another area code (e.g. 484, 240, 512 are usually in stock).</div>';
+      }
       return '<div class="text-center py-4 text-xs" style="color:#000">Choose a country and (optional) area code, then search to see available numbers.</div>';
     }
     return items.map(function(n) {
@@ -502,6 +514,8 @@
     var country = (document.getElementById('npInlineCountry') || {}).value || 'US';
     var areaCode = ((document.getElementById('npInlineAreaCode') || {}).value || '').replace(/\D/g, '').slice(0, 3);
     state.signupNumberSearchBusy = true;
+    state.signupNumberSearchAttempted = true;
+    state.signupNumberSearchError = '';
     refreshInlinePicker();
     try {
       var qs = 'country=' + country + (areaCode ? '&areaCode=' + areaCode : '') + '&limit=20';
@@ -511,10 +525,7 @@
       state.signupNumberSearchResults = data.items || [];
     } catch (e) {
       state.signupNumberSearchResults = [];
-      var resultsEl = document.getElementById('npInlineResults');
-      if (resultsEl) resultsEl.innerHTML = '<div class="text-center py-4 text-red-400 text-xs">' + (e.message || String(e)) + '</div>';
-      state.signupNumberSearchBusy = false;
-      return;
+      state.signupNumberSearchError = e.message || String(e);
     }
     state.signupNumberSearchBusy = false;
     refreshInlinePicker();
@@ -2642,7 +2653,7 @@
         '</div>' +
         '<div class="flex gap-2 mb-3">' +
           '<select id="npCountry" class="px-3 py-2 bg-[#DBEAFE] border border-white/15 rounded-lg text-sm text-black">' +
-            '<option value="US">United States</option><option value="CA">Canada</option>' +
+            '<option value="US">United States</option><option value="CA" disabled>Canada (coming soon)</option>' +
           '</select>' +
           '<input id="npAreaCode" type="text" maxlength="3" placeholder="Area code (optional)" class="flex-1 px-3 py-2 bg-[#DBEAFE] border border-white/15 rounded-lg text-sm text-black">' +
           '<button onclick="secSearchNumbers()" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-sm font-semibold"><i class="fas fa-search mr-1"></i>Search</button>' +

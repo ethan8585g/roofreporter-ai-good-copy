@@ -108,13 +108,14 @@ export async function searchNumbers(
     areaCode: opts.areaCode || undefined,
     limit: opts.limit || 20,
   })
-  // The Twirp response shape: { phoneNumbers: [{ e164, country, areaCode, type, locality, region, capabilities }] }
-  const items = (result?.phoneNumbers || result?.numbers || []) as any[]
+  // Twirp response: { items: [{ id, e164_format, country_code, area_code, number_type, locality, region, capabilities }] }
+  // (Verified live via lk number search --curl on 2026-05-03.)
+  const items = (result?.items || result?.phoneNumbers || result?.numbers || []) as any[]
   return items.map((n: any) => ({
-    phone_number: n.e164 || n.phoneNumber || '',
-    countryCode: n.country || n.countryCode,
-    areaCode: n.areaCode,
-    type: n.type,
+    phone_number: n.e164_format || n.e164 || n.phoneNumber || '',
+    countryCode: n.country_code || n.country || n.countryCode,
+    areaCode: n.area_code || n.areaCode,
+    type: n.number_type || n.type,
     locality: n.locality,
     region: n.region,
     capabilities: n.capabilities,
@@ -130,8 +131,8 @@ export async function purchaseNumber(
     numbers: [phoneNumber],
     sipDispatchRuleId: sipDispatchRuleId || undefined,
   })
-  // Response: { phoneNumbers: [{ id: "PN_PPN_…", e164, status, … }] } (best-effort field guess)
-  const purchased = (result?.phoneNumbers || result?.purchased || [])[0]
+  // Response shape mirrors search: { items: [{ id, e164_format, ... }] }.
+  const purchased = (result?.items || result?.phoneNumbers || result?.purchased || [])[0]
   const phoneNumberId = purchased?.id || purchased?.phoneNumberId || ''
   if (!phoneNumberId) throw new Error('LiveKit PurchasePhoneNumbers returned no id')
   return { phoneNumberId: String(phoneNumberId), phoneNumber }
