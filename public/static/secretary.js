@@ -264,25 +264,25 @@
         renderInlineNumberPicker() +
 
         // ── Step 2: Start Free Trial form (card entry) ──
-        '<div class="bg-[#111111] rounded-2xl border-2 border-sky-500 shadow-lg p-4 sm:p-6 mb-6">' +
+        '<div class="rounded-2xl border-2 border-sky-500 shadow-lg p-4 sm:p-6 mb-6" style="background:#DBEAFE">' +
           '<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">' +
-            '<div><h3 class="font-bold text-gray-100 text-xl"><i class="fas fa-gift text-sky-500 mr-2"></i>Start Your Free Trial</h3>' +
-              '<p class="text-gray-300 text-sm mt-1">1 month free &bull; Card on file required &bull; Then $199/mo &bull; Cancel anytime</p></div>' +
-            '<div class="text-right"><div class="text-2xl sm:text-3xl font-extrabold text-sky-400">$0<span class="text-sm font-normal text-gray-300"> for 30 days</span></div>' +
-              '<div class="text-xs text-gray-300" id="trialCostBlurb">then $199/mo</div></div>' +
+            '<div><h3 class="font-bold text-xl" style="color:#000"><i class="fas fa-gift text-sky-600 mr-2"></i>Start Your Free Trial</h3>' +
+              '<p class="text-sm mt-1" style="color:#000">1 month free &bull; Card on file required &bull; Then $199/mo &bull; Cancel anytime</p></div>' +
+            '<div class="text-right"><div class="text-2xl sm:text-3xl font-extrabold" style="color:#0369a1">$0<span class="text-sm font-normal" style="color:#000"> for 30 days</span></div>' +
+              '<div class="text-xs" id="trialCostBlurb" style="color:#000">then $199/mo</div></div>' +
           '</div>' +
           '<div class="space-y-3 mb-4">' +
-            '<div class="flex items-start gap-2 text-sm text-gray-300"><i class="fas fa-shield-alt text-emerald-400 mt-1"></i><div><strong>Secure card entry.</strong> Card is tokenized by Square. We never see your card number.</div></div>' +
-            '<div class="flex items-start gap-2 text-sm text-gray-300"><i class="fas fa-calendar-alt text-emerald-400 mt-1"></i><div><strong>Auto-reminder.</strong> We email you 3 days before the trial ends.</div></div>' +
-            '<div class="flex items-start gap-2 text-sm text-gray-300"><i class="fas fa-times-circle text-emerald-400 mt-1"></i><div><strong>Cancel anytime</strong> from your dashboard — no charge if you cancel before day 31.</div></div>' +
+            '<div class="flex items-start gap-2 text-sm" style="color:#000"><i class="fas fa-shield-alt text-emerald-600 mt-1"></i><div><strong>Secure card entry.</strong> Card is tokenized by Square. We never see your card number.</div></div>' +
+            '<div class="flex items-start gap-2 text-sm" style="color:#000"><i class="fas fa-calendar-alt text-emerald-600 mt-1"></i><div><strong>Auto-reminder.</strong> We email you 3 days before the trial ends.</div></div>' +
+            '<div class="flex items-start gap-2 text-sm" style="color:#000"><i class="fas fa-times-circle text-emerald-600 mt-1"></i><div><strong>Cancel anytime</strong> from your dashboard — no charge if you cancel before day 31.</div></div>' +
           '</div>' +
-          '<div id="squareCardContainer" class="mb-3 p-3 bg-[#0A0A0A] border border-white/10 rounded-xl min-h-[60px]"></div>' +
-          '<div id="trialError" class="text-red-400 text-sm mb-3 hidden"></div>' +
-          '<input type="text" id="trialCardholder" placeholder="Cardholder name" value="' + (custData.name || '') + '" class="w-full px-4 py-3 mb-3 border border-white/15 bg-[#0A0A0A] rounded-xl text-sm text-gray-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none">' +
+          '<div id="squareCardContainer" class="mb-3 p-3 border border-white/10 rounded-xl min-h-[60px]" style="background:#fff"></div>' +
+          '<div id="trialError" class="text-red-600 text-sm mb-3 hidden"></div>' +
+          '<input type="text" id="trialCardholder" placeholder="Cardholder name" value="' + (custData.name || '') + '" class="w-full px-4 py-3 mb-3 border border-white/15 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none" style="background:#fff;color:#000">' +
           '<button onclick="secStartTrial()" id="trialBtn" disabled style="background:linear-gradient(90deg,#0ea5e9,#1d4ed8);color:#fff" class="w-full py-4 rounded-xl font-bold text-lg transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed">' +
             '<i class="fas fa-spinner fa-spin mr-2"></i>Loading secure card form…</button>' +
         '</div>' +
-        '<p class="text-center text-xs text-gray-300 mb-8"><i class="fas fa-lock mr-1"></i>PCI-secure payments by Square &bull; Powered by LiveKit AI</p>' +
+        '<p class="text-center text-xs mb-8" style="color:#000"><i class="fas fa-lock mr-1"></i>PCI-secure payments by Square &bull; Powered by LiveKit AI</p>' +
       '</div>';
 
     // Mount Square Web Payments SDK card element.
@@ -422,29 +422,29 @@
   function renderInlineNumberPicker() {
     var hasSelection = !!state.selectedSignupNumber;
     var pretty = hasSelection ? fmtPhonePretty(state.selectedSignupNumber) : '';
-    return '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-4 sm:p-6 mb-6">' +
+    return '<div class="rounded-2xl border border-white/10 shadow-sm p-4 sm:p-6 mb-6" style="background:#DBEAFE">' +
       '<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">' +
-        '<div><h3 class="font-bold text-gray-100 text-xl"><i class="fas fa-phone-alt text-sky-400 mr-2"></i>Pick Your Phone Number</h3>' +
-          '<p class="text-gray-300 text-sm mt-1">Included with your subscription &bull; we wire it to your AI agent automatically</p></div>' +
-        '<div class="text-right"><div class="text-2xl sm:text-3xl font-extrabold text-emerald-400">FREE<span class="text-sm font-normal text-gray-300"> with plan</span></div>' +
-          '<div class="text-xs text-gray-300">no extra charge</div></div>' +
+        '<div><h3 class="font-bold text-xl" style="color:#000"><i class="fas fa-phone-alt text-sky-600 mr-2"></i>Pick Your Phone Number</h3>' +
+          '<p class="text-sm mt-1" style="color:#000">Included with your subscription &bull; we wire it to your AI agent automatically</p></div>' +
+        '<div class="text-right"><div class="text-2xl sm:text-3xl font-extrabold" style="color:#047857">FREE<span class="text-sm font-normal" style="color:#000"> with plan</span></div>' +
+          '<div class="text-xs" style="color:#000">no extra charge</div></div>' +
       '</div>' +
       '<div class="flex flex-col sm:flex-row gap-2 mb-3">' +
-        '<select id="npInlineCountry" class="px-3 py-2 bg-[#0A0A0A] border border-white/15 rounded-lg text-sm text-gray-100">' +
+        '<select id="npInlineCountry" class="px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:#fff;color:#000">' +
           '<option value="US">United States</option><option value="CA">Canada</option>' +
         '</select>' +
-        '<input id="npInlineAreaCode" type="text" maxlength="3" placeholder="Area code (optional)" class="flex-1 px-3 py-2 bg-[#0A0A0A] border border-white/15 rounded-lg text-sm text-gray-100">' +
+        '<input id="npInlineAreaCode" type="text" maxlength="3" placeholder="Area code (optional)" class="flex-1 px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:#fff;color:#000">' +
         '<button onclick="secInlineSearchNumbers()" style="background:#0ea5e9;color:#fff" class="px-4 py-2 hover:opacity-90 rounded-lg text-sm font-semibold"><i class="fas fa-search mr-1"></i>Search</button>' +
       '</div>' +
       '<div id="npInlineResults" class="space-y-2 mb-3 max-h-64 overflow-y-auto">' + renderInlineResultsBody() + '</div>' +
-      '<div id="npInlineSummary" class="flex items-center justify-between gap-2 p-3 rounded-xl border border-white/10" style="background:#0A0A0A">' +
-        '<div class="text-sm" id="npInlineSummaryText" style="color:' + (hasSelection ? '#a7f3d0' : '#d1d5db') + '">' +
+      '<div id="npInlineSummary" class="flex items-center justify-between gap-2 p-3 rounded-xl border border-white/10" style="background:#fff">' +
+        '<div class="text-sm" id="npInlineSummaryText" style="color:' + (hasSelection ? '#047857' : '#000') + '">' +
           (hasSelection
             ? '<i class="fas fa-check-circle mr-1"></i>Selected: <strong>' + pretty + '</strong> &bull; included'
             : '<i class="fas fa-info-circle mr-1"></i>No number selected — you can add one later from the Connect tab') + '</div>' +
         (hasSelection
-          ? '<button onclick="secInlineClearNumber()" class="text-xs text-gray-300 hover:text-white underline whitespace-nowrap">Skip / clear</button>'
-          : '<button onclick="secInlineSearchNumbers()" class="text-xs text-sky-400 hover:text-sky-300 underline whitespace-nowrap">Search numbers</button>') +
+          ? '<button onclick="secInlineClearNumber()" class="text-xs underline whitespace-nowrap" style="color:#000">Skip / clear</button>'
+          : '<button onclick="secInlineSearchNumbers()" class="text-xs underline whitespace-nowrap" style="color:#0369a1">Search numbers</button>') +
       '</div>' +
     '</div>';
   }
@@ -455,18 +455,18 @@
     }
     var items = state.signupNumberSearchResults || [];
     if (!items.length) {
-      return '<div class="text-center py-4 text-gray-300 text-xs">Choose a country and (optional) area code, then search to see available numbers.</div>';
+      return '<div class="text-center py-4 text-xs" style="color:#000">Choose a country and (optional) area code, then search to see available numbers.</div>';
     }
     return items.map(function(n) {
       var pretty = fmtPhonePretty(n.phone_number);
       var isSelected = state.selectedSignupNumber === n.phone_number;
       var locality = (n.locality || '') + (n.region ? (n.locality ? ', ' : '') + n.region : '');
       var pn = String(n.phone_number).replace(/'/g, '');
-      return '<div class="flex items-center justify-between rounded-xl px-4 py-3 border ' + (isSelected ? 'border-emerald-400' : 'border-white/10') + '" style="background:' + (isSelected ? 'rgba(16,185,129,0.08)' : '#0A0A0A') + '">' +
-        '<div><div class="font-mono text-gray-100">' + pretty + '</div>' +
-        '<div class="text-xs text-gray-300">' + (locality || 'Available') + ' &bull; included</div></div>' +
+      return '<div class="flex items-center justify-between rounded-xl px-4 py-3 border ' + (isSelected ? 'border-emerald-400' : 'border-white/10') + '" style="background:' + (isSelected ? 'rgba(16,185,129,0.15)' : '#fff') + '">' +
+        '<div><div class="font-mono" style="color:#000">' + pretty + '</div>' +
+        '<div class="text-xs" style="color:#000">' + (locality || 'Available') + ' &bull; included</div></div>' +
         (isSelected
-          ? '<span class="text-sm text-emerald-400 font-semibold"><i class="fas fa-check-circle mr-1"></i>Selected</span>'
+          ? '<span class="text-sm font-semibold" style="color:#047857"><i class="fas fa-check-circle mr-1"></i>Selected</span>'
           : '<button onclick="secInlineSelectNumber(\'' + pn + '\')" style="background:#10b981;color:#fff" class="text-sm hover:opacity-90 rounded-lg px-3 py-1.5 font-semibold">Select</button>') +
       '</div>';
     }).join('');
@@ -480,13 +480,13 @@
       var hasSelection = !!state.selectedSignupNumber;
       var pretty = hasSelection ? fmtPhonePretty(state.selectedSignupNumber) : '';
       summaryWrap.innerHTML =
-        '<div class="text-sm" id="npInlineSummaryText" style="color:' + (hasSelection ? '#a7f3d0' : '#d1d5db') + '">' +
+        '<div class="text-sm" id="npInlineSummaryText" style="color:' + (hasSelection ? '#047857' : '#000') + '">' +
           (hasSelection
             ? '<i class="fas fa-check-circle mr-1"></i>Selected: <strong>' + pretty + '</strong> &bull; included'
             : '<i class="fas fa-info-circle mr-1"></i>No number selected — you can add one later from the Connect tab') + '</div>' +
         (hasSelection
-          ? '<button onclick="secInlineClearNumber()" class="text-xs text-gray-300 hover:text-white underline whitespace-nowrap">Skip / clear</button>'
-          : '<button onclick="secInlineSearchNumbers()" class="text-xs text-sky-400 hover:text-sky-300 underline whitespace-nowrap">Search numbers</button>');
+          ? '<button onclick="secInlineClearNumber()" class="text-xs underline whitespace-nowrap" style="color:#000">Skip / clear</button>'
+          : '<button onclick="secInlineSearchNumbers()" class="text-xs underline whitespace-nowrap" style="color:#0369a1">Search numbers</button>');
     }
     var btn = document.getElementById('trialBtn');
     if (btn && !btn.disabled) {

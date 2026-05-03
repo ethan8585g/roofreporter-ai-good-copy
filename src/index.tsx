@@ -16925,7 +16925,7 @@ function getSecretaryPageHTML() {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/secretary.js?v=20260503b"></script>
+  <script src="/static/secretary.js?v=20260503c"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
