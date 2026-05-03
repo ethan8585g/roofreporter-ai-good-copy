@@ -153,8 +153,6 @@ function renderInsuranceExtras(report: RoofReport): string {
     </div>`
 
   const tiles: string[] = []
-  if (wr) tiles.push(tile('Hail Risk', `${wr.hail_score}/100`, `${wr.hail_event_count} events ≤${wr.sample_radius_km}km, max ${wr.largest_hail_inches.toFixed(2)}"`))
-  if (wr) tiles.push(tile('Wind Risk', `${wr.wind_score}/100`, wr.peak_wind_kmh > 0 ? `peak ${wr.peak_wind_kmh} km/h` : 'no recent events'))
   if (band && costMid != null) tiles.push(tile('Replacement (CAD)', `$${costMid.toLocaleString()}`, `range $${costLow!.toLocaleString()}–$${costHigh!.toLocaleString()}`))
 
   if (tiles.length === 0) return ''

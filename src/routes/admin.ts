@@ -4,7 +4,6 @@ import { validateAdminSession, requireSuperadmin } from './auth'
 import { generateReportForOrder } from './reports'
 import { createAutoInvoiceForOrder } from '../services/auto-invoice'
 import { validateTraceUi } from '../utils/trace-validation'
-import { enhanceTraceWithAI } from '../services/trace-enhancer'
 import { RoofMeasurementEngine, traceUiToEnginePayload } from '../services/roof-measurement-engine'
 import { BASEMAP_PROVIDERS } from '../services/satellite-imagery'
 import { generateApiKey } from '../middleware/api-auth'
@@ -4167,14 +4166,11 @@ adminRoutes.post('/superadmin/orders/:id/preview-trace', async (c) => {
       }
     }
 
-    // Auto-clean the proposed trace before running the engine, mirroring the
-    // public /calculate-from-trace flow so admins see the same numbers users
-    // would see post-submit.
-    let enhancement: Awaited<ReturnType<typeof enhanceTraceWithAI>> | null = null
+    // Run the engine on the raw trace (no AI simplification) so admin previews
+    // match exactly what user-self-traced reports produce.
     let proposed: any = null
     if (validation.valid) {
-      enhancement = await enhanceTraceWithAI(traceObj, c.env, { aiEnabled: true })
-      proposed = runEngine(enhancement.trace)
+      proposed = runEngine(traceObj)
     }
 
     let previous: any = null
@@ -4207,13 +4203,7 @@ adminRoutes.post('/superadmin/orders/:id/preview-trace', async (c) => {
       proposed,
       previous,
       delta,
-      enhancements: enhancement ? {
-        changes: enhancement.changes,
-        warnings: enhancement.warnings,
-        ai_used: enhancement.ai_used,
-        ai_suggestions_applied: enhancement.ai_suggestions_applied,
-        ai_suggestions_skipped: enhancement.ai_suggestions_skipped,
-      } : null,
+      enhancements: null,
       order: { id: order.id, order_number: order.order_number, property_address: order.property_address, house_sqft: order.house_sqft },
     })
   } catch (err: any) {
@@ -4249,14 +4239,8 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
       }, 400)
     }
 
-    // Auto-clean BEFORE persisting so the saved roof_trace_json matches the
-    // geometry the engine and the 3D diagram will render. The audit log
-    // captures whether enhancement happened so an admin can re-derive the
-    // raw input from the request body if needed.
-    const enhancement = await enhanceTraceWithAI(traceObj, c.env, { aiEnabled: true })
-    const enhancedTrace = enhancement.trace
-
-    // Audit: capture the previous trace (if any) so overrides are reversible
+    // Persist the raw trace as-is so admin-submitted reports have identical
+    // geometric detail to user-self-traced reports (no AI simplification).
     try {
       const prev = await c.env.DB.prepare(
         'SELECT roof_trace_json FROM orders WHERE id = ?'
@@ -4271,13 +4255,10 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
         validation_errors: validation.errors.length,
         forced: !!force,
         previous_trace_existed: !!prevJson,
-        enhancement_changes: enhancement.changes.length,
-        enhancement_ai_applied: enhancement.ai_suggestions_applied,
       })).run()
     } catch (e) { /* non-fatal audit */ }
 
-    // Save the ENHANCED trace
-    const traceStr = JSON.stringify(enhancedTrace)
+    const traceStr = JSON.stringify(traceObj)
     await c.env.DB.prepare(
       "UPDATE orders SET roof_trace_json = ?, needs_admin_trace = 0, updated_at = datetime('now') WHERE id = ?"
     ).bind(traceStr, orderId).run()
@@ -4314,13 +4295,7 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
     return c.json({
       success: true,
       result,
-      enhancements: {
-        changes: enhancement.changes,
-        warnings: enhancement.warnings,
-        ai_used: enhancement.ai_used,
-        ai_suggestions_applied: enhancement.ai_suggestions_applied,
-        ai_suggestions_skipped: enhancement.ai_suggestions_skipped,
-      },
+      enhancements: null,
     })
   } catch (err: any) {
     return c.json({ error: 'Failed to submit trace: ' + err.message }, 500)

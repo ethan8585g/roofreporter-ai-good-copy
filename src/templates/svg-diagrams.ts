@@ -2414,8 +2414,11 @@ export function generateTraceBasedDiagramSVG(
   const fmtFtUnit = (ft: number): string => ft < 0.5 ? '' : `${Math.round(ft)} ft`
 
   // ── Convert lat/lng to local X/Y (metres from centroid) ──
-  const centLat = eaves.reduce((s, p) => s + p.lat, 0) / eaves.length
-  const centLng = eaves.reduce((s, p) => s + p.lng, 0) / eaves.length
+  // Centroid spans ALL traced sections (main + garage + dormers, etc.) so
+  // multi-structure traces aren't centered on the largest building only.
+  const centroidPts = allEaveSections.flat()
+  const centLat = centroidPts.reduce((s, p) => s + p.lat, 0) / centroidPts.length
+  const centLng = centroidPts.reduce((s, p) => s + p.lng, 0) / centroidPts.length
   const cosLat = Math.cos(centLat * Math.PI / 180)
   const M_PER_DEG_LAT = 111320
   const M_PER_DEG_LNG = 111320 * cosLat
@@ -2427,9 +2430,12 @@ export function generateTraceBasedDiagramSVG(
   })
 
   const eavesXY = eaves.map(toXY)
+  const extraSectionsXY = extraSections.map(sec => sec.map(toXY))
 
-  // Collect ALL points for bounding box
+  // Collect ALL points for bounding box (must include extra sections so
+  // detached structures like garages stay within the drawn area).
   const allPts = [...eavesXY]
+  extraSectionsXY.forEach(sec => allPts.push(...sec))
   const ridgesXY = (roofTrace.ridges || []).map(line => line.map(toXY))
   const hipsXY = (roofTrace.hips || []).map(line => line.map(toXY))
   const valleysXY = (roofTrace.valleys || []).map(line => line.map(toXY))

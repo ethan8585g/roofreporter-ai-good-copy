@@ -3407,10 +3407,9 @@ async function _generateReportForOrderInner(
       console.log(`[Generate] Order ${orderId}: Customer pricing — $${order.price_per_bundle}/sq × ${grossSquares} squares = $${reportData.customer_total_cost_estimate} CAD`)
     }
 
-    // ── PRO-TIER: confidence breakdown, version diff, weather risk ──
+    // ── PRO-TIER: confidence breakdown, version diff ──
     try {
       const { computeConfidenceBreakdown, diffMeasurements } = await import('../services/report-pro')
-      const { getWeatherRiskForLocation } = await import('../services/report-weather')
 
       ;(reportData as any).confidence_breakdown = computeConfidenceBreakdown({
         imagery_quality: reportData.quality?.imagery_quality,
@@ -3434,16 +3433,6 @@ async function _generateReportForOrderInner(
         ;(reportData as any).current_version_num = 1
       }
 
-      // Weather risk lookup runs in parallel with HTML generation; never blocks
-      // the pipeline if NWS/IEM is down.
-      if (order.latitude && order.longitude) {
-        try {
-          const risk = await getWeatherRiskForLocation(Number(order.latitude), Number(order.longitude))
-          if (risk) (reportData as any).weather_risk = risk
-        } catch (e: any) {
-          console.warn(`[Generate] Order ${orderId}: weather-risk lookup failed: ${e?.message}`)
-        }
-      }
     } catch (proErr: any) {
       console.warn(`[Generate] Order ${orderId}: pro-tier metadata pipeline error (non-fatal):`, proErr?.message)
     }
