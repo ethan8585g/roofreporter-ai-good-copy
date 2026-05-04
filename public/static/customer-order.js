@@ -1105,6 +1105,11 @@ function initTraceMap() {
   google.maps.event.trigger(orderState.traceMap, 'resize');
   orderState.traceMap.setCenter(center);
 
+  mountTrace3DButton(mapDiv, () => ({
+    lat: parseFloat(orderState.lat),
+    lng: parseFloat(orderState.lng)
+  }));
+
   if (!isPhone) {
     // Desktop / iPad: click-to-place (unchanged behavior)
     orderState.traceMap.addListener('click', (e) => {
@@ -2839,4 +2844,87 @@ function clearAttachedCustomer() {
   orderState.attachedCrmCustomerId = null;
   orderState.attachedCrmCustomerName = '';
   renderOrderPage();
+}
+
+// Floating "Verify in 3D" button — opens /3d-verify (Photorealistic 3D Tiles)
+// in a modal iframe so the customer can inspect the roof from any angle before
+// or after tracing. Mirrors the helper in app.js.
+function mountTrace3DButton(mapDiv, getLatLng) {
+  if (!mapDiv || mapDiv.dataset.rm3dMounted === '1') return;
+  mapDiv.dataset.rm3dMounted = '1';
+
+  if (getComputedStyle(mapDiv).position === 'static') mapDiv.style.position = 'relative';
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = '🛰  Verify in 3D';
+  btn.setAttribute('aria-label', 'Open 3D photorealistic verification');
+  btn.style.cssText = [
+    'position:absolute', 'top:12px', 'right:12px', 'z-index:20',
+    'background:#0A0A0A', 'color:#00FF88',
+    'border:1px solid #00FF88', 'border-radius:999px',
+    'padding:8px 14px', 'font:700 12px -apple-system,BlinkMacSystemFont,Segoe UI,Inter,sans-serif',
+    'cursor:pointer', 'box-shadow:0 4px 14px rgba(0,255,136,0.25)',
+    'letter-spacing:.3px'
+  ].join(';');
+  btn.addEventListener('click', () => {
+    const ll = getLatLng() || {};
+    if (!Number.isFinite(ll.lat) || !Number.isFinite(ll.lng)) {
+      alert('No location set yet — pin the address first.');
+      return;
+    }
+    openVerify3DModal(ll.lat, ll.lng);
+  });
+  mapDiv.appendChild(btn);
+}
+
+function openVerify3DModal(lat, lng) {
+  if (document.getElementById('rm-verify3d-overlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'rm-verify3d-overlay';
+  overlay.style.cssText = [
+    'position:fixed', 'inset:0', 'z-index:99999',
+    'background:rgba(0,0,0,0.85)', 'backdrop-filter:blur(4px)',
+    '-webkit-backdrop-filter:blur(4px)',
+    'display:flex', 'align-items:center', 'justify-content:center',
+    'padding:24px'
+  ].join(';');
+
+  const shell = document.createElement('div');
+  shell.style.cssText = [
+    'position:relative', 'width:100%', 'height:100%',
+    'max-width:1400px', 'max-height:900px',
+    'background:#000', 'border-radius:14px', 'overflow:hidden',
+    'box-shadow:0 24px 60px rgba(0,0,0,0.6)',
+    'border:1px solid rgba(0,255,136,0.25)'
+  ].join(';');
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.textContent = '✕';
+  close.setAttribute('aria-label', 'Close 3D viewer');
+  close.style.cssText = [
+    'position:absolute', 'top:10px', 'right:10px', 'z-index:5',
+    'width:36px', 'height:36px', 'border-radius:999px',
+    'border:1px solid rgba(255,255,255,0.2)', 'background:rgba(0,0,0,0.7)',
+    'color:#fff', 'font:700 16px sans-serif', 'cursor:pointer'
+  ].join(';');
+
+  const iframe = document.createElement('iframe');
+  iframe.src = '/3d-verify?lat=' + encodeURIComponent(lat) + '&lng=' + encodeURIComponent(lng);
+  iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:#000';
+  iframe.allow = 'fullscreen';
+  iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+
+  shell.appendChild(iframe);
+  shell.appendChild(close);
+  overlay.appendChild(shell);
+  document.body.appendChild(overlay);
+
+  const dismiss = () => { try { overlay.remove(); } catch (_) {} document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') dismiss(); };
+  close.addEventListener('click', dismiss);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss(); });
+  document.addEventListener('keydown', onKey);
 }

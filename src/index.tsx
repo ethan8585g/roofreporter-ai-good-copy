@@ -1000,6 +1000,97 @@ app.get('/sample-report', (c) => {
   return c.redirect('https://www.roofmanager.ca/report/share/70f969fb607c4c40b6a2', 302)
 })
 
+// 3D Verify — Photorealistic 3D Tiles viewer for visual roof inspection.
+// Embedded as an iframe inside the trace UI; lat/lng come from query params.
+app.get('/3d-verify', (c) => {
+  const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
+  const lat = parseFloat(c.req.query('lat') || '') || 53.5461
+  const lng = parseFloat(c.req.query('lng') || '') || -113.4938
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>3D Roof Verify · Roof Manager</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Inter,sans-serif;overflow:hidden}
+  #map3d{width:100vw;height:100vh;display:block}
+  .topbar{position:fixed;top:12px;left:12px;right:12px;display:flex;gap:8px;z-index:10;flex-wrap:wrap;pointer-events:none}
+  .pill{background:rgba(0,0,0,.65);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:8px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.12);font-size:12px;font-weight:600;letter-spacing:.2px;pointer-events:auto;color:#fff}
+  .btn{cursor:pointer;border:none;background:#00FF88;color:#0A0A0A;font-weight:800;font-size:12px;padding:8px 14px;border-radius:999px;pointer-events:auto;transition:transform .12s ease}
+  .btn:hover{transform:translateY(-1px)}
+  .btn.ghost{background:rgba(0,0,0,.65);color:#fff;border:1px solid rgba(255,255,255,.18)}
+  .err{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;z-index:20;background:rgba(0,0,0,.92);font-size:14px;line-height:1.55;color:#fbbf24;display:none}
+  .err.show{display:flex}
+  .legend{position:fixed;bottom:14px;left:14px;background:rgba(0,0,0,.65);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);font-size:11px;color:#cbd5e1;z-index:10;line-height:1.5}
+  .legend strong{color:#00FF88}
+</style>
+</head>
+<body>
+<div id="map3d"></div>
+<div class="topbar">
+  <div class="pill">3D Verify · Photorealistic Tiles</div>
+  <div class="pill" id="coords">${lat.toFixed(5)}, ${lng.toFixed(5)}</div>
+  <button class="btn" onclick="resetView()">Reset View</button>
+  <button class="btn ghost" onclick="rotate(-30)">Rotate&nbsp;⟲</button>
+  <button class="btn ghost" onclick="rotate(30)">Rotate&nbsp;⟳</button>
+</div>
+<div class="legend">
+  Drag to orbit · Scroll to zoom · <strong>Right-click</strong>+drag to tilt
+</div>
+<div class="err" id="err"></div>
+<script>
+  const TARGET = { lat: ${lat}, lng: ${lng}, altitude: 0 };
+  const INITIAL_RANGE = 220;
+  const INITIAL_TILT = 60;
+  let currentHeading = 0;
+  let map3d = null;
+
+  function showErr(msg){
+    const el = document.getElementById('err');
+    el.textContent = msg;
+    el.classList.add('show');
+  }
+
+  function resetView(){
+    if (!map3d) return;
+    currentHeading = 0;
+    map3d.center = TARGET;
+    map3d.range = INITIAL_RANGE;
+    map3d.tilt = INITIAL_TILT;
+    map3d.heading = 0;
+  }
+
+  function rotate(delta){
+    if (!map3d) return;
+    currentHeading = (currentHeading + delta + 360) % 360;
+    map3d.heading = currentHeading;
+  }
+
+  ((g)=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src="https://maps."+c+"apis.com/maps/api/js?"+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({key: ${JSON.stringify(mapsKey)}, v: "alpha"});
+
+  google.maps.importLibrary("maps3d").then(({Map3DElement}) => {
+    map3d = new Map3DElement({
+      center: TARGET,
+      range: INITIAL_RANGE,
+      tilt: INITIAL_TILT,
+      heading: 0,
+      mode: 'hybrid'
+    });
+    map3d.style.width = '100vw';
+    map3d.style.height = '100vh';
+    const host = document.getElementById('map3d');
+    host.replaceWith(map3d);
+    map3d.id = 'map3d';
+  }).catch(err => {
+    showErr('Could not load Photorealistic 3D Tiles. Verify the Map Tiles API is enabled for this Google Maps key. (' + (err && err.message || err) + ')');
+  });
+</script>
+</body>
+</html>`
+  return c.html(html)
+})
+
 // Order Form page (new route)
 app.get('/order/new', (c) => {
   const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
