@@ -169,13 +169,14 @@ app.use('*', async (c, next) => {
       const ga4Script = ga4Id ? `
 <!-- Google Analytics 4 — Enhanced Configuration for Maximum Accuracy -->
 <script>
-// Consent Mode v2 — default grants (no cookie banner needed for analytics-only in Canada)
+// Consent Mode v2 — grant ad_storage by default so Google Ads conversions transmit.
+// Without this, gtag('event','conversion',...) is suppressed and Smart Bidding has no data.
 window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}
 gtag('consent','default',{
   'analytics_storage':'granted',
-  'ad_storage':'denied',
-  'ad_user_data':'denied',
-  'ad_personalization':'denied',
+  'ad_storage':'granted',
+  'ad_user_data':'granted',
+  'ad_personalization':'granted',
   'functionality_storage':'granted',
   'security_storage':'granted'
 });
@@ -856,6 +857,21 @@ app.get('/api/config/client', (c) => {
 
 // Landing / Marketing page
 app.get('/', async (c) => {
+  // Paid-traffic redirect: Google Ads / Bing Ads / Meta Ads visitors land on the
+  // focused /lander instead of the cluttered marketing homepage. Detected via
+  // ?gclid= (Google Ads) or ?utm_medium=cpc|paid_social. The query string is
+  // preserved so gclid/UTM persistence + attribution still work on /lander.
+  const qs = c.req.url.split('?')[1] || ''
+  const params = new URLSearchParams(qs)
+  const isPaid =
+    params.has('gclid') ||
+    params.get('utm_medium') === 'cpc' ||
+    params.get('utm_medium') === 'paid_social' ||
+    params.get('utm_medium') === 'ppc'
+  if (isPaid) {
+    return c.redirect(qs ? `/lander?${qs}` : '/lander', 302)
+  }
+
   let latestPosts: any[] = []
   try {
     const result = await c.env.DB.prepare(
