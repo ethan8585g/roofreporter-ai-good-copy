@@ -462,12 +462,14 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
     ? Math.round(tmIwb * 10) / 10
     : Math.round((lowSlopeSqftPg1 + (es.total_eave_ft || 0) * 3 + (es.total_valley_ft || 0) * 3 * 2) * 10) / 10
 
-  // Satellite image — prefer eagle-view if available, then enhanced satellite, then standard
+  // Satellite image — prefer user-captured Photorealistic 3D oblique, then
+  // eagle-view, then enhanced satellite, then standard nadir.
+  const oblique3dUrl = (report as any).imagery?.oblique_3d_url || ''
   const eagleViewUrl = (report as any).eagle_view_image?.data_url
     || (report as any).report_showcase_images?.enhanced_satellite
     || ''
   const satelliteUrl = report.imagery?.satellite_url || ''
-  const overheadUrl = eagleViewUrl || report.imagery?.satellite_overhead_url || satelliteUrl
+  const overheadUrl = oblique3dUrl || eagleViewUrl || report.imagery?.satellite_overhead_url || satelliteUrl
 
   // ── Per-structure breakdown (house + detached garage/shed/etc.) ──
   // Computed from roof_trace GPS coordinates so each traced building gets its own measurement row.

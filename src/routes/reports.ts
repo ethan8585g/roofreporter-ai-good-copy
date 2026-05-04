@@ -322,10 +322,51 @@ reportsRoutes.get('/:orderId/html', async (c) => {
   // floating button bottom-right of the rendered report; opens a slide-over
   // modal that POSTs to /api/reports/:orderId/feedback.
   const proWidget = `<script>window.__ROOF_REPORT_ORDER_ID__=${JSON.stringify(orderId)};</script><script src="/static/measure.js" defer></script>`
+
+  // 3D Cover capture widget — opens /3d-verify in a fullscreen modal iframe
+  // with the orderId param so the page shows the "Save as Cover" button.
+  // Captures a Photorealistic 3D Tiles oblique view and writes it to
+  // imagery.oblique_3d_url on the report; the cover template renders it on
+  // the next view. Bottom-right, sits to the LEFT of the feedback FAB.
+  const cover3dWidget = `
+<style>
+  .rm-3d-fab{position:fixed;bottom:24px;right:240px;z-index:99997;background:#0A0A0A;color:#00FF88;border:1px solid #00FF88;border-radius:999px;padding:12px 18px;font:700 13px -apple-system,BlinkMacSystemFont,Segoe UI,Inter,sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(0,255,136,0.25);display:inline-flex;align-items:center;gap:8px;transition:transform .12s ease}
+  .rm-3d-fab:hover{transform:translateY(-2px);background:#111}
+  @media (max-width: 720px){.rm-3d-fab{right:24px;bottom:88px}}
+  .rm-3d-overlay{position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,0.88);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:24px}
+  .rm-3d-overlay.open{display:flex}
+  .rm-3d-shell{position:relative;width:100%;height:100%;max-width:1400px;max-height:900px;background:#000;border-radius:14px;overflow:hidden;border:1px solid rgba(0,255,136,0.25);box-shadow:0 24px 60px rgba(0,0,0,0.6)}
+  .rm-3d-shell iframe{width:100%;height:100%;border:0;background:#000}
+  .rm-3d-close{position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:999px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.7);color:#fff;font:700 16px sans-serif;cursor:pointer;z-index:5}
+</style>
+<button type="button" class="rm-3d-fab" id="rm3dFab" aria-label="Open 3D cover capture">🛰 Update 3D Cover</button>
+<div class="rm-3d-overlay" id="rm3dOverlay" role="dialog" aria-modal="true">
+  <div class="rm-3d-shell">
+    <button type="button" class="rm-3d-close" id="rm3dClose" aria-label="Close 3D viewer">&times;</button>
+    <iframe id="rm3dFrame" allow="fullscreen" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+  </div>
+</div>
+<script>
+  (function(){
+    var orderId = ${JSON.stringify(orderId)};
+    var fab = document.getElementById('rm3dFab');
+    var overlay = document.getElementById('rm3dOverlay');
+    var frame = document.getElementById('rm3dFrame');
+    var close = document.getElementById('rm3dClose');
+    function open(){ frame.src = '/3d-verify?orderId=' + encodeURIComponent(orderId); overlay.classList.add('open'); document.body.style.overflow='hidden'; }
+    function dismiss(){ overlay.classList.remove('open'); frame.src = 'about:blank'; document.body.style.overflow=''; }
+    fab.addEventListener('click', open);
+    close.addEventListener('click', dismiss);
+    overlay.addEventListener('click', function(e){ if (e.target === overlay) dismiss(); });
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && overlay.classList.contains('open')) dismiss(); });
+  })();
+</script>`
+
+  const tail = `${cover3dWidget}${proWidget}`
   if (augmented.includes('</body>')) {
-    augmented = augmented.replace('</body>', `${proWidget}</body>`)
+    augmented = augmented.replace('</body>', `${tail}</body>`)
   } else {
-    augmented = augmented + proWidget
+    augmented = augmented + tail
   }
   return c.html(augmented)
 })
@@ -562,6 +603,48 @@ reportsRoutes.post('/:orderId/generate', async (c) => {
     report: result.report,
     enhancement_available: result.hasEnhanceKey,
   })
+})
+
+// ============================================================
+// POST /:orderId/3d-cover — Save a Photorealistic 3D Tiles capture
+// as the report's cover/overhead image. Captured by the /3d-verify
+// page (Cesium) and POSTed back here as a JPEG data URL. We mutate
+// reports.api_response_raw → imagery.oblique_3d_url so the cover
+// template prefers it on next render.
+// ============================================================
+reportsRoutes.post('/:orderId/3d-cover', async (c) => {
+  const orderId = c.req.param('orderId')
+  const user = (c as any).get('user')
+  if (!user) return c.json({ error: 'Authentication required' }, 401)
+
+  let body: any
+  try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON' }, 400) }
+  const dataUrl: string = (body?.image_data_url || '').toString()
+  if (!dataUrl.startsWith('data:image/')) return c.json({ error: 'image_data_url must be a data:image/* URL' }, 400)
+  // Cap at ~3MB after base64 decoding (≈4MB encoded). Reject obvious abuse.
+  if (dataUrl.length > 4_400_000) return c.json({ error: 'Image too large (max ~3MB)' }, 413)
+
+  // Ownership check for non-admins
+  if (user.role !== 'admin') {
+    const own = await c.env.DB.prepare('SELECT customer_id FROM orders WHERE id = ?').bind(orderId).first<{ customer_id: number | null }>()
+    if (!own) return c.json({ error: 'Order not found' }, 404)
+    if (own.customer_id && own.customer_id !== user.id) return c.json({ error: 'Forbidden' }, 403)
+  }
+
+  const row = await c.env.DB.prepare('SELECT api_response_raw FROM reports WHERE order_id = ?')
+    .bind(orderId).first<{ api_response_raw: string | null }>()
+  if (!row) return c.json({ error: 'Report not found' }, 404)
+
+  let parsed: any = {}
+  try { parsed = row.api_response_raw ? JSON.parse(row.api_response_raw) : {} } catch { parsed = {} }
+  parsed.imagery = parsed.imagery || {}
+  parsed.imagery.oblique_3d_url = dataUrl
+  parsed.imagery.oblique_3d_captured_at = new Date().toISOString()
+
+  await c.env.DB.prepare('UPDATE reports SET api_response_raw = ? WHERE order_id = ?')
+    .bind(JSON.stringify(parsed), orderId).run()
+
+  return c.json({ success: true, captured_at: parsed.imagery.oblique_3d_captured_at })
 })
 
 // ============================================================

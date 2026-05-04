@@ -23,6 +23,7 @@ export function generateCustomerReportHTML(report: RoofReport): string {
   const reportDate = property.report_date || new Date().toISOString().slice(0, 10)
 
   const satUrl =
+    (report as any).imagery?.oblique_3d_url ||
     report.imagery?.satellite_overhead_url ||
     report.imagery?.satellite_url ||
     null
