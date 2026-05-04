@@ -457,6 +457,13 @@ reportsRoutes.get('/:orderId/customer-pdf', async (c) => {
       setTimeout(function(){
         var source = document.body;
         overlay.style.display = 'none';
+        document.querySelectorAll('svg').forEach(function(s){
+          var r = s.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) {
+            s.setAttribute('width',  Math.round(r.width));
+            s.setAttribute('height', Math.round(r.height));
+          }
+        });
         window.html2pdf().set({
           margin:[10,10,10,10],
           filename:'Roof_Report_Customer_${safe}.pdf',
