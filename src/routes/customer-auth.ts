@@ -1210,14 +1210,19 @@ customerAuthRoutes.post('/set-tier', async (c) => {
   `).bind(token).first<any>()
   if (!session) return c.json({ error: 'Session expired' }, 401)
 
-  const { tier, city, province } = await c.req.json()
+  let body: any
+  try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON body' }, 400) }
+  const { tier, city, province } = body
+
+  const ALLOWED_TIERS = new Set(['starter', 'professional', 'pro', 'enterprise'])
+  const safeTier = ALLOWED_TIERS.has(String(tier)) ? String(tier) : 'starter'
 
   await c.env.DB.prepare(
     `UPDATE customers SET subscription_tier = ?,
       city = COALESCE(?, city), province = COALESCE(?, province),
       updated_at = datetime('now')
      WHERE id = ?`
-  ).bind(tier || 'starter', city || null, province || null, session.customer_id).run()
+  ).bind(safeTier, city || null, province || null, session.customer_id).run()
 
   return c.json({ success: true })
 })
@@ -1264,7 +1269,7 @@ customerAuthRoutes.post('/change-password', async (c) => {
   `).bind(storedHash, session.customer_id).run()
 
   // P1-04: invalidate all customer sessions on password change.
-  await c.env.DB.prepare('DELETE FROM customer_sessions WHERE customer_id = ?').bind(session.customer_id).run().catch(() => {})
+  await c.env.DB.prepare('DELETE FROM customer_sessions WHERE customer_id = ?').bind(session.customer_id).run().catch((err: any) => console.error('[customer-auth] session cleanup failed:', err?.message || err))
 
   return c.json({ success: true })
 })
@@ -1341,7 +1346,8 @@ customerAuthRoutes.patch('/reports/:id/panel-layout', async (c) => {
   ).bind(orderId, ownerId).first<any>()
   if (!order) return c.json({ error: 'Order not found' }, 404)
 
-  const body = await c.req.json().catch(() => ({}))
+  let body: any
+  try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON body' }, 400) }
   const userPanels = Array.isArray(body.user_panels) ? body.user_panels : []
 
   const existing = await c.env.DB.prepare(
@@ -1705,7 +1711,7 @@ customerAuthRoutes.post('/reset-password', async (c) => {
     ).bind(token).run()
 
     // P1-04: invalidate all sessions for this customer on password reset
-    await c.env.DB.prepare('DELETE FROM customer_sessions WHERE customer_id = ?').bind(targetCustomerId).run().catch(() => {})
+    await c.env.DB.prepare('DELETE FROM customer_sessions WHERE customer_id = ?').bind(targetCustomerId).run().catch((err: any) => console.error('[customer-auth] session cleanup failed:', err?.message || err))
 
     return c.json({ success: true, message: 'Password updated successfully. You can now sign in with your new password.' })
   } catch (err: any) {
@@ -2415,7 +2421,8 @@ customerAuthRoutes.get('/material-preferences', async (c) => {
 customerAuthRoutes.put('/material-preferences', async (c) => {
   const ownerId = await resolveCustomerOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
-  const body = await c.req.json().catch(() => ({}))
+  let body: any
+  try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON body' }, 400) }
 
   const allowedShingles = new Set(['3tab', 'architectural', 'premium', 'designer', 'impact_resistant', 'metal'])
   const existing = await loadCustomerPrefs(c.env.DB, ownerId)
@@ -2458,7 +2465,8 @@ customerAuthRoutes.get('/proposal-pricing', async (c) => {
 customerAuthRoutes.put('/proposal-pricing', async (c) => {
   const ownerId = await resolveCustomerOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
-  const body = await c.req.json().catch(() => ({}))
+  let body: any
+  try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON body' }, 400) }
   const allowed = ['pricing_mode', 'markup_percent', 'price_per_square', 'price_per_bundle',
     'include_labor', 'labor_per_square', 'include_tearoff', 'tearoff_per_square']
   const next: any = {}
