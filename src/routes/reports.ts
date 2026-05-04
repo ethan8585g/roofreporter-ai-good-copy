@@ -440,7 +440,38 @@ reportsRoutes.get('/:orderId/customer-pdf', async (c) => {
   if (!row || !row.customer_report_html) return c.json({ error: 'Customer report not found' }, 404)
   const html = row.customer_report_html
   const safe = String(orderId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32)
-  const pdfHtml = `${html}<script>if(new URLSearchParams(location.search).get('print')==='1')setTimeout(()=>window.print(),500)</script>`
+  const pdfHtml = `${html}<script>
+(function(){
+  var sp = new URLSearchParams(location.search);
+  if (sp.get('print') === '1') { setTimeout(function(){ window.print(); }, 500); return; }
+  if (sp.get('save') === '1') {
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    s.onload = function(){
+      var overlay = document.createElement('div');
+      overlay.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.85);color:#fff;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:18px;font-weight:600;z-index:2147483647';
+      overlay.textContent='Generating PDF…';
+      document.body.appendChild(overlay);
+      setTimeout(function(){
+        window.html2pdf().set({
+          margin:[8,8,8,8],
+          filename:'Roof_Report_Customer_${safe}.pdf',
+          image:{type:'jpeg',quality:0.95},
+          html2canvas:{scale:2,useCORS:true,allowTaint:true,letterRendering:true,backgroundColor:'#ffffff'},
+          jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
+          pagebreak:{mode:['css','legacy']}
+        }).from(document.body).save().then(function(){
+          if(overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+          setTimeout(function(){ try { window.close(); } catch(e){} }, 600);
+        })['catch'](function(err){
+          overlay.textContent = 'PDF generation failed: ' + (err && err.message ? err.message : 'unknown error');
+        });
+      }, 1200);
+    };
+    document.head.appendChild(s);
+  }
+})();
+</script>`
   return new Response(pdfHtml, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Disposition': `inline; filename="Roof_Report_Customer_${safe}.pdf"` } })
 })
 
