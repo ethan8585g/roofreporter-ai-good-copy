@@ -3837,35 +3837,212 @@ adminRoutes.get('/superadmin/phone-numbers/owned', async (c) => {
 adminRoutes.get('/superadmin/system-health', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
-  const checks: Record<string, any> = {}
-  // DB check
-  try { const r = await c.env.DB.prepare('SELECT COUNT(*) as cnt FROM customers').first<any>(); checks.database = { status: 'ok', customers: r?.cnt || 0 } } catch (e: any) { checks.database = { status: 'error', error: e.message } }
-  // Env vars
-  checks.env = {
-    SQUARE_ACCESS_TOKEN: !!(c.env as any).SQUARE_ACCESS_TOKEN,
-    LIVEKIT_API_KEY: !!(c.env as any).LIVEKIT_API_KEY,
-    LIVEKIT_URL: !!(c.env as any).LIVEKIT_URL,
-    GEMINI_API_KEY: !!(c.env as any).GEMINI_API_KEY,
-    GOOGLE_SOLAR_API_KEY: !!(c.env as any).GOOGLE_SOLAR_API_KEY,
-    GOOGLE_MAPS_API_KEY: !!(c.env as any).GOOGLE_MAPS_API_KEY,
-    GA4_MEASUREMENT_ID: !!(c.env as any).GA4_MEASUREMENT_ID,
-    JWT_SECRET: !!(c.env as any).JWT_SECRET,
-    SIP_OUTBOUND_TRUNK_ID: !!(c.env as any).SIP_OUTBOUND_TRUNK_ID,
+
+  const env = c.env as any
+  const out: Record<string, any> = { generated_at: new Date().toISOString() }
+
+  // Database — timed liveness probe
+  try {
+    const t0 = Date.now()
+    const r = await c.env.DB.prepare('SELECT COUNT(*) as cnt FROM customers').first<any>()
+    out.database = { status: 'ok', customers: r?.cnt || 0, latency_ms: Date.now() - t0 }
+  } catch (e: any) {
+    out.database = { status: 'error', error: e.message, latency_ms: null }
   }
-  // Recent errors
-  try { const errs = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM orders WHERE status = 'failed' AND created_at > datetime('now', '-7 days')").first<any>(); checks.recent_errors = { failed_orders_7d: errs?.cnt || 0 } } catch { checks.recent_errors = { failed_orders_7d: 0 } }
-  // Orders today
-  try { const today = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM orders WHERE created_at > datetime('now', '-1 day')").first<any>(); checks.activity = { orders_24h: today?.cnt || 0 } } catch { checks.activity = { orders_24h: 0 } }
-  return c.json(checks)
+
+  // Activity windows — orders / signups / leads / reports at 24h, 7d, 30d
+  out.activity = {
+    orders_24h: 0, orders_7d: 0, orders_30d: 0,
+    signups_24h: 0, signups_7d: 0, signups_30d: 0,
+    leads_24h: 0, leads_7d: 0,
+    reports_24h: 0, reports_7d: 0,
+  }
+  try {
+    const rows = await c.env.DB.batch([
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM orders WHERE created_at > datetime('now', '-1 day')"),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM orders WHERE created_at > datetime('now', '-7 days')"),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM orders WHERE created_at > datetime('now', '-30 days')"),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM customers WHERE created_at > datetime('now', '-1 day')"),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM customers WHERE created_at > datetime('now', '-7 days')"),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM customers WHERE created_at > datetime('now', '-30 days')"),
+    ]) as any[]
+    out.activity.orders_24h = rows[0].results?.[0]?.cnt || 0
+    out.activity.orders_7d = rows[1].results?.[0]?.cnt || 0
+    out.activity.orders_30d = rows[2].results?.[0]?.cnt || 0
+    out.activity.signups_24h = rows[3].results?.[0]?.cnt || 0
+    out.activity.signups_7d = rows[4].results?.[0]?.cnt || 0
+    out.activity.signups_30d = rows[5].results?.[0]?.cnt || 0
+  } catch {}
+  try {
+    const r1 = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM leads WHERE created_at > datetime('now', '-1 day')").first<any>()
+    const r2 = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM leads WHERE created_at > datetime('now', '-7 days')").first<any>()
+    out.activity.leads_24h = r1?.cnt || 0
+    out.activity.leads_7d = r2?.cnt || 0
+  } catch {}
+  try {
+    const r1 = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM reports WHERE created_at > datetime('now', '-1 day')").first<any>()
+    const r2 = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM reports WHERE created_at > datetime('now', '-7 days')").first<any>()
+    out.activity.reports_24h = r1?.cnt || 0
+    out.activity.reports_7d = r2?.cnt || 0
+  } catch {}
+
+  // Errors / unhealthy state
+  out.errors = { failed_orders_7d: 0, unprocessed_webhooks_7d: 0 }
+  try {
+    const r = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM orders WHERE status = 'failed' AND created_at > datetime('now', '-7 days')").first<any>()
+    out.errors.failed_orders_7d = r?.cnt || 0
+  } catch {}
+  try {
+    const r = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM webhook_logs WHERE processed = 0 AND created_at > datetime('now', '-7 days')").first<any>()
+    out.errors.unprocessed_webhooks_7d = r?.cnt || 0
+  } catch {}
+
+  // Subscriptions / MRR (secretary_subscriptions is the source of truth)
+  out.subscriptions = { active: 0, trial: 0, past_due: 0, mrr_cents: 0, arr_cents: 0 }
+  try {
+    const rows = await c.env.DB.batch([
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_subscriptions WHERE status='active'"),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_subscriptions WHERE status='trial' OR status='trialing'"),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_subscriptions WHERE status='past_due'"),
+      c.env.DB.prepare("SELECT COALESCE(SUM(monthly_price_cents),0) as mrr FROM secretary_subscriptions WHERE status='active'"),
+    ]) as any[]
+    out.subscriptions.active = rows[0].results?.[0]?.cnt || 0
+    out.subscriptions.trial = rows[1].results?.[0]?.cnt || 0
+    out.subscriptions.past_due = rows[2].results?.[0]?.cnt || 0
+    out.subscriptions.mrr_cents = rows[3].results?.[0]?.mrr || 0
+    out.subscriptions.arr_cents = (out.subscriptions.mrr_cents as number) * 12
+  } catch {}
+
+  // Telephony / LiveKit health
+  out.telephony = { phones_assigned: 0, phones_available: 0, phones_total: 0, agents_total: 0, agents_connected: 0 }
+  try {
+    const a = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_phone_pool WHERE status='assigned'").first<any>()
+    const v = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_phone_pool WHERE status='available'").first<any>()
+    const t = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_phone_pool").first<any>()
+    out.telephony.phones_assigned = a?.cnt || 0
+    out.telephony.phones_available = v?.cnt || 0
+    out.telephony.phones_total = t?.cnt || 0
+  } catch {}
+  try {
+    const total = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_config WHERE is_active = 1").first<any>()
+    const conn = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_config WHERE is_active = 1 AND connection_status = 'connected'").first<any>()
+    out.telephony.agents_total = total?.cnt || 0
+    out.telephony.agents_connected = conn?.cnt || 0
+  } catch {}
+
+  // Integration health — env-var presence grouped by service category
+  const presence = (k: string) => !!env[k]
+  out.integrations = [
+    {
+      name: 'Payments',
+      icon: 'fa-credit-card',
+      keys: [
+        { key: 'SQUARE_ACCESS_TOKEN', present: presence('SQUARE_ACCESS_TOKEN') },
+        { key: 'STRIPE_SECRET_KEY', present: presence('STRIPE_SECRET_KEY') },
+      ],
+    },
+    {
+      name: 'AI / Vision',
+      icon: 'fa-brain',
+      keys: [
+        { key: 'GEMINI_API_KEY', present: presence('GEMINI_API_KEY') },
+        { key: 'CLOUD_RUN_URL', present: presence('CLOUD_RUN_URL') },
+        { key: 'CLOUD_RUN_API_KEY', present: presence('CLOUD_RUN_API_KEY') },
+      ],
+    },
+    {
+      name: 'Voice / LiveKit',
+      icon: 'fa-microphone',
+      keys: [
+        { key: 'LIVEKIT_URL', present: presence('LIVEKIT_URL') },
+        { key: 'LIVEKIT_API_KEY', present: presence('LIVEKIT_API_KEY') },
+        { key: 'LIVEKIT_API_SECRET', present: presence('LIVEKIT_API_SECRET') },
+        { key: 'SIP_OUTBOUND_TRUNK_ID', present: presence('SIP_OUTBOUND_TRUNK_ID') },
+      ],
+    },
+    {
+      name: 'Maps / Solar',
+      icon: 'fa-map-marked-alt',
+      keys: [
+        { key: 'GOOGLE_MAPS_API_KEY', present: presence('GOOGLE_MAPS_API_KEY') },
+        { key: 'GOOGLE_SOLAR_API_KEY', present: presence('GOOGLE_SOLAR_API_KEY') },
+        { key: 'GCP_SERVICE_ACCOUNT_JSON', present: presence('GCP_SERVICE_ACCOUNT_JSON') },
+      ],
+    },
+    {
+      name: 'Email',
+      icon: 'fa-envelope',
+      keys: [
+        { key: 'GMAIL_CLIENT_ID', present: presence('GMAIL_CLIENT_ID') },
+        { key: 'GMAIL_CLIENT_SECRET', present: presence('GMAIL_CLIENT_SECRET') },
+        { key: 'RESEND_API_KEY', present: presence('RESEND_API_KEY') },
+      ],
+    },
+    {
+      name: 'Analytics',
+      icon: 'fa-chart-line',
+      keys: [
+        { key: 'GA4_MEASUREMENT_ID', present: presence('GA4_MEASUREMENT_ID') },
+        { key: 'GA4_PROPERTY_ID', present: presence('GA4_PROPERTY_ID') },
+      ],
+    },
+    {
+      name: 'Auth / Security',
+      icon: 'fa-shield-alt',
+      keys: [
+        { key: 'JWT_SECRET', present: presence('JWT_SECRET') },
+        { key: 'GOOGLE_OAUTH_CLIENT_ID', present: presence('GOOGLE_OAUTH_CLIENT_ID') },
+      ],
+    },
+  ]
+
+  return c.json(out)
 })
 
 // Paywall status
 adminRoutes.get('/superadmin/paywall-status', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+
   const tiers = await c.env.DB.prepare("SELECT subscription_plan, COUNT(*) as cnt FROM customers WHERE is_active = 1 GROUP BY subscription_plan").all<any>()
   const packages = await c.env.DB.prepare("SELECT * FROM credit_packages WHERE is_active = 1 ORDER BY sort_order").all<any>()
-  return c.json({ tiers: tiers.results || [], packages: packages.results || [], square_configured: !!(c.env as any).SQUARE_ACCESS_TOKEN })
+
+  // Real config flag — falls back to false if no row exists.
+  let enabled = false
+  let trial_days = 7
+  try {
+    const e = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'paywall_enabled' AND master_company_id = 1").first<any>()
+    if (e?.setting_value) enabled = e.setting_value === 'true' || e.setting_value === '1'
+    const t = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'paywall_trial_days' AND master_company_id = 1").first<any>()
+    const parsed = parseInt(t?.setting_value || '')
+    if (!isNaN(parsed) && parsed > 0) trial_days = parsed
+  } catch {}
+
+  // Subscription rollups (same source as system-health so the UI can cross-reference)
+  let mrr_cents = 0, active_subs = 0, trial_subs = 0, paying_count = 0
+  try {
+    const rows = await c.env.DB.batch([
+      c.env.DB.prepare("SELECT COALESCE(SUM(monthly_price_cents),0) as mrr, COUNT(*) as cnt FROM secretary_subscriptions WHERE status='active'"),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_subscriptions WHERE status='trial' OR status='trialing'"),
+      c.env.DB.prepare("SELECT COUNT(DISTINCT customer_id) as cnt FROM square_payments WHERE status='completed' AND created_at >= datetime('now','-12 months')"),
+    ]) as any[]
+    mrr_cents = rows[0].results?.[0]?.mrr || 0
+    active_subs = rows[0].results?.[0]?.cnt || 0
+    trial_subs = rows[1].results?.[0]?.cnt || 0
+    paying_count = rows[2].results?.[0]?.cnt || 0
+  } catch {}
+
+  return c.json({
+    enabled,
+    trial_days,
+    tiers: tiers.results || [],
+    packages: packages.results || [],
+    square_configured: !!(c.env as any).SQUARE_ACCESS_TOKEN,
+    mrr_cents,
+    active_subs,
+    trial_subs,
+    paying_count,
+  })
 })
 
 // Service invoices

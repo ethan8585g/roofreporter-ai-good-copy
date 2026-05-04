@@ -11443,18 +11443,82 @@ function renderRoverChatPanel(stats, tokenStats, conversations, total) {
 
 function roverChatOpenConv(id) {
   var conv = ((SA.data && SA.data.roverChat && SA.data.roverChat.conversations) || []).find(function(c) { return Number(c.id) === Number(id); });
-  if (!conv) return;
-  var paneConv = {
-    source_id: 'rover_' + conv.id,
-    channel: 'web_chat',
-    contact_name: conv.visitor_name || '',
-    contact_email: conv.visitor_email || '',
-    contact_phone: conv.visitor_phone || '',
-    last_activity_at: conv.last_message_at || conv.created_at,
-    created_at: conv.created_at,
-    preview: conv.summary || conv.first_user_message || ''
-  };
-  renderInboxDetail(paneConv);
+  if (!conv) { alert('Conversation not found in current list. Try refreshing.'); return; }
+
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+  // Tear down any prior modal so re-clicks always open fresh
+  var prior = document.getElementById('rover-conv-modal');
+  if (prior) prior.remove();
+
+  var name = conv.visitor_name || conv.visitor_email || conv.visitor_phone || ('Anonymous #' + conv.id);
+  var meta = [];
+  if (conv.visitor_email) meta.push('<i class="fas fa-envelope mr-1"></i>' + esc(conv.visitor_email));
+  if (conv.visitor_phone) meta.push('<i class="fas fa-phone mr-1"></i>' + esc(conv.visitor_phone));
+  if (conv.visitor_company) meta.push('<i class="fas fa-building mr-1"></i>' + esc(conv.visitor_company));
+  if (conv.lead_status) meta.push('<i class="fas fa-tag mr-1"></i>' + esc(conv.lead_status));
+  if (conv.message_count != null) meta.push('<i class="fas fa-comment mr-1"></i>' + conv.message_count + ' msgs');
+
+  var modal = document.createElement('div');
+  modal.id = 'rover-conv-modal';
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+  modal.style.background = 'rgba(0,0,0,0.55)';
+  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+  modal.innerHTML =
+    '<div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl flex flex-col" style="max-height:90vh">' +
+      '<div class="p-4 border-b border-gray-200 flex items-start justify-between flex-shrink-0">' +
+        '<div class="min-w-0 pr-3">' +
+          '<h3 class="text-base font-bold text-gray-900 truncate"><i class="fas fa-robot mr-1.5 text-slate-600"></i>' + esc(name) + '</h3>' +
+          (meta.length ? '<div class="text-[11px] text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-1">' + meta.map(function(m){ return '<span>' + m + '</span>'; }).join('') + '</div>' : '') +
+        '</div>' +
+        '<button onclick="document.getElementById(\'rover-conv-modal\').remove()" class="text-gray-400 hover:text-gray-700 flex-shrink-0 text-xl leading-none px-2"><i class="fas fa-times"></i></button>' +
+      '</div>' +
+      '<div id="rover-conv-messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50" style="min-height:300px">' +
+        '<div class="text-xs text-gray-400 text-center py-8"><i class="fas fa-spinner fa-spin mr-1"></i>Loading conversation…</div>' +
+      '</div>' +
+      '<div class="p-3 border-t border-gray-200 flex-shrink-0 flex items-center justify-between text-[11px] text-gray-500">' +
+        '<span>Conversation #' + Number(conv.id) + ' — started ' + esc(conv.created_at || '') + '</span>' +
+        '<button onclick="document.getElementById(\'rover-conv-modal\').remove()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded font-semibold">Close</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+
+  saFetch('/api/rover/admin/conversations/' + encodeURIComponent(conv.id))
+    .then(function(r) {
+      if (!r) throw new Error('no response');
+      if (!r.ok) return r.json().then(function(j){ throw new Error((j && j.error) || ('HTTP ' + r.status)); });
+      return r.json();
+    })
+    .then(function(data) {
+      var container = document.getElementById('rover-conv-messages');
+      if (!container) return;
+      var msgs = (data && data.messages) || [];
+      if (!msgs.length) {
+        container.innerHTML = '<div class="text-xs text-gray-400 text-center py-8">No messages in this conversation.</div>';
+        return;
+      }
+      container.innerHTML = msgs.map(function(m) {
+        var isUser = m.role === 'user';
+        var align = isUser ? 'justify-end' : 'justify-start';
+        var bubble = isUser ? 'bg-blue-600 text-white' : 'bg-white text-gray-800 border border-gray-200';
+        var label = isUser ? 'Visitor' : 'Rover';
+        var labelColor = isUser ? 'text-blue-700' : 'text-slate-600';
+        var when = m.created_at ? esc(m.created_at) : '';
+        return '<div class="flex ' + align + '">' +
+          '<div class="max-w-[80%]">' +
+            '<div class="text-[10px] font-bold uppercase tracking-wide mb-0.5 ' + labelColor + ' ' + (isUser ? 'text-right' : '') + '">' + label + '</div>' +
+            '<div class="' + bubble + ' rounded-lg px-3 py-2 shadow-sm">' +
+              '<p class="text-sm whitespace-pre-wrap break-words">' + esc(m.content) + '</p>' +
+            '</div>' +
+            (when ? '<div class="text-[10px] text-gray-400 mt-0.5 ' + (isUser ? 'text-right' : '') + '">' + when + '</div>' : '') +
+          '</div>' +
+        '</div>';
+      }).join('');
+    })
+    .catch(function(err) {
+      var container = document.getElementById('rover-conv-messages');
+      if (container) container.innerHTML = '<div class="text-xs text-red-600 text-center py-8"><i class="fas fa-exclamation-circle mr-1"></i>Failed to load messages: ' + esc(err && err.message ? err.message : 'unknown error') + '</div>';
+    });
 }
 
 async function openLeadDetailPane(type, id) {
@@ -12482,35 +12546,148 @@ function renderPlatformHealthView() {
   var health = SA.data.system_health || {};
   var paywall = SA.data.paywall_status || {};
 
-  var healthItems = [];
-  if (health.database) healthItems.push({ name: 'Database', status: health.database.status || 'unknown', detail: health.database.detail || '' });
-  if (health.api) healthItems.push({ name: 'API', status: health.api.status || 'unknown', detail: health.api.detail || '' });
-  if (health.workers) healthItems.push({ name: 'Workers', status: health.workers.status || 'unknown', detail: health.workers.detail || '' });
+  var db = health.database || {};
+  var act = health.activity || {};
+  var errs = health.errors || {};
+  var subs = health.subscriptions || {};
+  var tel = health.telephony || {};
+  var integrations = health.integrations || [];
+  var generated = health.generated_at ? new Date(health.generated_at) : null;
+  var ageSec = generated ? Math.max(0, Math.round((Date.now() - generated.getTime()) / 1000)) : null;
 
-  var healthHtml = '<div class="space-y-2">';
-  if (healthItems.length === 0) {
-    healthHtml += '<div class="grid grid-cols-3 gap-4">' +
-      samc('API Status', 'OK', 'fa-server', 'green') +
-      samc('Database', 'Connected', 'fa-database', 'green') +
-      samc('Workers', 'Running', 'fa-cog', 'green') +
-    '</div>';
-  } else {
-    healthItems.forEach(function(h) {
-      var color = h.status === 'healthy' || h.status === 'ok' ? 'green' : h.status === 'degraded' ? 'yellow' : 'red';
-      healthHtml += '<div class="flex items-center gap-3 p-3 bg-' + color + '-50 rounded-lg"><i class="fas fa-circle text-' + color + '-500 text-xs"></i><span class="font-semibold text-sm">' + h.name + '</span><span class="ml-auto text-xs text-gray-500">' + h.detail + '</span></div>';
-    });
-  }
-  healthHtml += '</div>';
+  // ── At-a-Glance KPIs ──
+  var mrrDollars = centsToD(subs.mrr_cents || paywall.mrr_cents || 0);
+  var activeSubs = (subs.active != null ? subs.active : (paywall.active_subs || 0));
+  var trialSubs = (subs.trial != null ? subs.trial : (paywall.trial_subs || 0));
+  var totalErrors = (errs.failed_orders_7d || 0) + (errs.unprocessed_webhooks_7d || 0);
+  var errColor = totalErrors === 0 ? 'green' : totalErrors < 5 ? 'amber' : 'red';
 
-  var paywallHtml = '<div class="grid grid-cols-2 gap-4">' +
-    samc('Paywall', paywall.enabled ? 'Active' : 'Disabled', 'fa-lock', paywall.enabled ? 'green' : 'gray') +
-    samc('Trial Days', paywall.trial_days || 7, 'fa-calendar', 'blue') +
+  var kpisHtml = '<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">' +
+    samc('MRR', mrrDollars, 'fa-dollar-sign', 'green', 'ARR ' + centsToD((subs.arr_cents || (subs.mrr_cents||0)*12))) +
+    samc('Active Subs', activeSubs, 'fa-users-cog', 'indigo', (subs.past_due || 0) + ' past due') +
+    samc('Trial Users', trialSubs, 'fa-gift', 'purple') +
+    samc('Orders 24h', act.orders_24h || 0, 'fa-shopping-cart', 'blue', (act.orders_7d || 0) + ' (7d)') +
+    samc('Signups 24h', act.signups_24h || 0, 'fa-user-plus', 'teal', (act.signups_7d || 0) + ' (7d)') +
+    samc('Errors 7d', totalErrors, 'fa-exclamation-triangle', errColor) +
   '</div>';
 
-  return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-heartbeat mr-2 text-red-500"></i>System Health</h2><p class="text-sm text-gray-500 mt-1">Infrastructure status, paywall, and deployment</p></div>' +
+  // ── System Status ──
+  var dbColor = db.status === 'ok' ? 'green' : 'red';
+  var dbLatencyLabel = db.latency_ms != null ? (db.latency_ms + ' ms') : '—';
+  var refreshedLabel = ageSec == null ? '—' : (ageSec < 60 ? ageSec + 's ago' : Math.round(ageSec/60) + 'm ago');
+  var statusHtml = '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+    samc('Database', db.status === 'ok' ? 'Connected' : 'Error', 'fa-database', dbColor, dbLatencyLabel + ' · ' + (db.customers || 0) + ' customers') +
+    samc('Edge Runtime', 'Cloudflare Workers', 'fa-cloud', 'green', 'Globally distributed') +
+    samc('Last Refreshed', refreshedLabel, 'fa-sync', 'gray', generated ? generated.toLocaleTimeString() : '') +
+  '</div>';
+
+  // ── Integration Health ──
+  var integrationsHtml = '';
+  if (!integrations.length) {
+    integrationsHtml = '<p class="text-sm text-slate-400 italic">No integration data available.</p>';
+  } else {
+    integrationsHtml = '<div class="space-y-2">';
+    integrations.forEach(function(group) {
+      var keys = group.keys || [];
+      var present = keys.filter(function(k){ return k.present; }).length;
+      var total = keys.length;
+      var groupColor = present === total ? 'green' : present === 0 ? 'red' : 'amber';
+      var keyPills = keys.map(function(k){
+        var c = k.present ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200';
+        var icon = k.present ? 'fa-check' : 'fa-times';
+        return '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded border ' + c + '"><i class="fas ' + icon + ' text-[9px]"></i>' + k.key + '</span>';
+      }).join('');
+      integrationsHtml +=
+        '<div class="flex items-start gap-3 p-3 rounded-lg border border-slate-100 bg-white">' +
+          '<div class="w-9 h-9 bg-' + groupColor + '-50 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas ' + (group.icon || 'fa-cog') + ' text-' + groupColor + '-500"></i></div>' +
+          '<div class="flex-1 min-w-0">' +
+            '<div class="flex items-center justify-between mb-1.5">' +
+              '<span class="font-semibold text-sm text-slate-700">' + group.name + '</span>' +
+              '<span class="text-[11px] font-semibold text-' + groupColor + '-600">' + present + '/' + total + '</span>' +
+            '</div>' +
+            '<div class="flex flex-wrap gap-1">' + keyPills + '</div>' +
+          '</div>' +
+        '</div>';
+    });
+    integrationsHtml += '</div>';
+  }
+
+  // ── Activity ──
+  var activityHtml = '<div class="grid grid-cols-2 md:grid-cols-4 gap-4">' +
+    samc('Orders', act.orders_24h || 0, 'fa-clipboard-list', 'blue', (act.orders_7d||0) + ' (7d) · ' + (act.orders_30d||0) + ' (30d)') +
+    samc('Signups', act.signups_24h || 0, 'fa-user-plus', 'teal', (act.signups_7d||0) + ' (7d) · ' + (act.signups_30d||0) + ' (30d)') +
+    samc('Leads', act.leads_24h || 0, 'fa-bullseye', 'amber', (act.leads_7d||0) + ' (7d)') +
+    samc('Reports', act.reports_24h || 0, 'fa-file-alt', 'indigo', (act.reports_7d||0) + ' (7d)') +
+  '</div>';
+
+  // ── Error Watch ──
+  var failColor = (errs.failed_orders_7d || 0) === 0 ? 'green' : (errs.failed_orders_7d || 0) < 3 ? 'amber' : 'red';
+  var hookColor = (errs.unprocessed_webhooks_7d || 0) === 0 ? 'green' : (errs.unprocessed_webhooks_7d || 0) < 5 ? 'amber' : 'red';
+  var errorHtml = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
+    samc('Failed Orders (7d)', errs.failed_orders_7d || 0, 'fa-times-circle', failColor, (errs.failed_orders_7d || 0) === 0 ? 'All clear' : 'Investigate in Orders tab') +
+    samc('Unprocessed Webhooks (7d)', errs.unprocessed_webhooks_7d || 0, 'fa-bolt', hookColor, (errs.unprocessed_webhooks_7d || 0) === 0 ? 'All processed' : 'Square / Stripe events pending') +
+  '</div>';
+
+  // ── Paywall & Subscriptions ──
+  var paywallEnabled = !!paywall.enabled;
+  var paywallColor = paywallEnabled ? 'green' : 'gray';
+  var paywallHtml = '<div class="grid grid-cols-2 md:grid-cols-4 gap-4">' +
+    samc('Paywall', paywallEnabled ? 'Enabled' : 'Disabled', 'fa-lock', paywallColor, paywallEnabled ? 'Gating features for free users' : 'Free access · set settings.paywall_enabled=true to enable') +
+    samc('Trial Days', paywall.trial_days || 7, 'fa-calendar', 'blue', 'settings.paywall_trial_days') +
+    samc('MRR', centsToD(paywall.mrr_cents || 0), 'fa-dollar-sign', 'green') +
+    samc('Paying Customers (12m)', paywall.paying_count || 0, 'fa-credit-card', 'amber') +
+  '</div>';
+
+  // Tiers + packages tables (preserved from previous endpoint shape)
+  var tiers = paywall.tiers || [];
+  var packages = paywall.packages || [];
+  if (tiers.length || packages.length) {
+    paywallHtml += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">';
+    if (tiers.length) {
+      var tierRows = tiers.map(function(t){
+        var label = t.subscription_plan || '—';
+        return '<tr class="border-t border-slate-100"><td class="py-1.5 text-sm text-slate-700">' + label + '</td><td class="py-1.5 text-sm text-right font-semibold">' + (t.cnt || 0) + '</td></tr>';
+      }).join('');
+      paywallHtml += '<div class="bg-white rounded-xl border border-slate-100 p-4">' +
+        '<div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Active Customers by Plan</div>' +
+        '<table class="w-full"><tbody>' + tierRows + '</tbody></table>' +
+      '</div>';
+    }
+    if (packages.length) {
+      var pkgRows = packages.map(function(p){
+        var price = p.price_cents != null ? centsToD(p.price_cents) : (p.price ? '$' + p.price : '—');
+        return '<tr class="border-t border-slate-100"><td class="py-1.5 text-sm text-slate-700">' + (p.name || '—') + '</td><td class="py-1.5 text-sm text-right">' + (p.credits || 0) + ' cr</td><td class="py-1.5 text-sm text-right font-semibold">' + price + '</td></tr>';
+      }).join('');
+      paywallHtml += '<div class="bg-white rounded-xl border border-slate-100 p-4">' +
+        '<div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Active Credit Packages</div>' +
+        '<table class="w-full"><tbody>' + pkgRows + '</tbody></table>' +
+      '</div>';
+    }
+    paywallHtml += '</div>';
+  }
+
+  // ── Telephony Health ──
+  var phonesAssignedPct = tel.phones_total ? Math.round(((tel.phones_assigned||0) / tel.phones_total) * 100) : 0;
+  var agentsConnPct = tel.agents_total ? Math.round(((tel.agents_connected||0) / tel.agents_total) * 100) : 0;
+  var phoneColor = (tel.phones_total||0) === 0 ? 'gray' : phonesAssignedPct < 80 ? 'green' : 'amber';
+  var agentColor = (tel.agents_total||0) === 0 ? 'gray' : agentsConnPct >= 90 ? 'green' : agentsConnPct >= 50 ? 'amber' : 'red';
+  var telephonyHtml = '<div class="grid grid-cols-2 md:grid-cols-4 gap-4">' +
+    samc('Phone Pool', (tel.phones_assigned||0) + ' / ' + (tel.phones_total||0), 'fa-phone', phoneColor, (tel.phones_available||0) + ' available') +
+    samc('Pool Utilization', phonesAssignedPct + '%', 'fa-percentage', phoneColor) +
+    samc('Active Agents', (tel.agents_connected||0) + ' / ' + (tel.agents_total||0), 'fa-headset', agentColor, agentsConnPct + '% connected') +
+    samc('Agents Total', tel.agents_total || 0, 'fa-robot', 'indigo') +
+  '</div>';
+
+  return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-heartbeat mr-2 text-red-500"></i>System Health</h2>' +
+      '<p class="text-sm text-gray-500 mt-1">Real-time platform telemetry · refreshed ' + refreshedLabel + '</p></div>' +
     '<div class="space-y-6">' +
-      saSection('System Status', 'fa-server', healthHtml) +
-      saSection('Paywall Configuration', 'fa-lock', paywallHtml) +
+      saSection('At a Glance', 'fa-tachometer-alt', kpisHtml) +
+      saSection('System Status', 'fa-server', statusHtml) +
+      saSection('Integration Health', 'fa-plug', integrationsHtml) +
+      saSection('Activity', 'fa-bolt', activityHtml) +
+      saSection('Error Watch', 'fa-exclamation-triangle', errorHtml) +
+      saSection('Paywall & Subscriptions', 'fa-lock', paywallHtml) +
+      saSection('Telephony Health', 'fa-phone-volume', telephonyHtml) +
     '</div>';
 }
 
