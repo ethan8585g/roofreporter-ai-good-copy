@@ -25,11 +25,26 @@ export interface SquareSubsBindings {
   SQUARE_SECRETARY_PLAN_VARIATION_ID?: string
 }
 
+// Square's idempotency_key max length is 45. Long identifiers (Square customer
+// IDs are ~26 chars, emails can be 50+) blow that limit when concatenated.
+// Hash to a deterministic 32-char hex so retries with the same logical key
+// still dedupe but never exceed the cap.
+async function shortIdempotencyKey(prefix: string, input: string): Promise<string> {
+  const data = new TextEncoder().encode(input)
+  const digest = await crypto.subtle.digest('SHA-1', data)
+  const hex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('')
+  // prefix (≤8) + '-' + 32 hex chars = ≤41, safely under 45.
+  return `${prefix.slice(0, 8)}-${hex.slice(0, 32)}`
+}
+
 function squareBase(env: SquareSubsBindings): string {
-  const token = env.SQUARE_ACCESS_TOKEN || ''
-  return token.startsWith('EAAA') || token.startsWith('sandbox-')
-    ? 'https://connect.squareupsandbox.com/v2'
-    : 'https://connect.squareup.com/v2'
+  // Square production tokens also start with "EAAA" — the prefix is NOT a
+  // sandbox marker. Match the rest of the codebase (routes/square.ts,
+  // routes/invoices.ts, routes/admin.ts, etc.) and default to production.
+  // If sandbox testing is ever needed, flip via an explicit SQUARE_ENV var.
+  const explicitEnv = (env as any).SQUARE_ENV
+  if (explicitEnv === 'sandbox') return 'https://connect.squareupsandbox.com/v2'
+  return 'https://connect.squareup.com/v2'
 }
 
 async function squareFetch(env: SquareSubsBindings, method: string, path: string, body?: any) {
@@ -71,7 +86,7 @@ export async function createCustomer(
   } catch { /* fall through to create */ }
 
   const created = await squareFetch(env, 'POST', '/customers', {
-    idempotency_key: `secretary-cust-${opts.emailAddress}-${Date.now()}`,
+    idempotency_key: await shortIdempotencyKey('sec-cust', `${opts.emailAddress}-${Date.now()}`),
     email_address: opts.emailAddress,
     given_name: opts.givenName,
     family_name: opts.familyName,
@@ -99,7 +114,7 @@ export async function saveCard(
   opts: { customerId: string; sourceId: string; cardholderName?: string; verificationToken?: string },
 ): Promise<SavedCardInfo> {
   const created = await squareFetch(env, 'POST', '/cards', {
-    idempotency_key: `secretary-card-${opts.customerId}-${Date.now()}`,
+    idempotency_key: await shortIdempotencyKey('sec-card', `${opts.customerId}-${Date.now()}`),
     source_id: opts.sourceId,
     verification_token: opts.verificationToken,
     card: {
@@ -194,7 +209,7 @@ export async function createSubscription(
   opts: { customerId: string; cardId: string; planVariationId: string; startDate: string; timezone?: string },
 ): Promise<CreatedSubscription> {
   const created = await squareFetch(env, 'POST', '/subscriptions', {
-    idempotency_key: `sub-${opts.customerId}-${Date.now()}`,
+    idempotency_key: await shortIdempotencyKey('sec-sub', `${opts.customerId}-${Date.now()}`),
     location_id: env.SQUARE_LOCATION_ID,
     customer_id: opts.customerId,
     card_id: opts.cardId,
@@ -278,7 +293,7 @@ export async function refundPayment(
   reason?: string,
 ): Promise<{ refundId: string; status: string }> {
   const created = await squareFetch(env, 'POST', '/refunds', {
-    idempotency_key: `refund-${paymentId}-${Date.now()}`,
+    idempotency_key: await shortIdempotencyKey('sec-rfd', `${paymentId}-${Date.now()}`),
     payment_id: paymentId,
     amount_money: { amount: amountCents, currency: 'USD' },
     reason: reason || 'Provisioning rolled back',
