@@ -7208,12 +7208,11 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
         <div class="leading-tight">
           <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
-          <span class="hidden sm:block text-gray-500 -mt-0.5 font-medium tracking-wide" style="font-size:10px">CRM &amp; Reports for Roofing &amp; Solar Companies</span>
         </div>
       </a>
 
       <!-- Desktop nav -->
-      <div class="hidden md:flex items-center gap-7">
+      <div class="hidden lg:flex items-center gap-7">
         <a href="/how-it-works" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">How It Works</a>
         <a href="/guides" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Tutorials</a>
         <!-- Features dropdown -->
@@ -7232,10 +7231,6 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           </div>
         </div>
         <a href="/pricing" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Pricing</a>
-        <a href="/blog" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Blog</a>
-        <a href="/coverage" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Coverage</a>
-        <a href="/faq" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">FAQ</a>
-        <a href="/contact" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Contact</a>
         <a href="/customer/login" onclick="rrTrack('cta_click',{location:'nav_login'})" class="border border-white/20 hover:border-white/40 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-all duration-200 hover:bg-white/5 whitespace-nowrap">
           <i class="fas fa-sign-in-alt mr-1.5 text-gray-400"></i>Log In</a>
         <a href="/register" onclick="rrTrack('cta_click',{location:'nav_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2.5 px-5 rounded-xl text-sm transition-all duration-200 hover:scale-105 shadow-lg shadow-[#00FF88]/20 whitespace-nowrap">
@@ -7243,7 +7238,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       </div>
 
       <!-- Mobile: visible Login + Register + menu button -->
-      <div class="md:hidden flex items-center gap-2">
+      <div class="lg:hidden flex items-center gap-2">
         <a href="/customer/login" onclick="rrTrack('cta_click',{location:'nav_mobile_login'})" class="border border-white/25 text-white font-bold py-2 px-3 rounded-xl text-sm min-h-[48px] inline-flex items-center whitespace-nowrap">
           Log In
         </a>
@@ -7257,7 +7252,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     </div>
 
     <!-- Mobile menu -->
-    <div id="mobile-menu" class="hidden md:hidden bg-[#0A0A0A]/98 backdrop-blur-2xl border-t border-white/5">
+    <div id="mobile-menu" class="hidden lg:hidden bg-[#0A0A0A]/98 backdrop-blur-2xl border-t border-white/5">
       <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-1">
         <a href="/how-it-works" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">How It Works</a>
         <a href="/guides" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Tutorials</a>
@@ -14176,7 +14171,6 @@ function getCoveragePageHTML() {
         <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
         <div class="leading-tight">
           <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
-          <span class="hidden sm:block text-gray-500 -mt-0.5 font-medium tracking-wide" style="font-size:10px">CRM &amp; Reports for Roofing &amp; Solar Companies</span>
         </div>
       </a>
       <div class="hidden md:flex items-center gap-7">
