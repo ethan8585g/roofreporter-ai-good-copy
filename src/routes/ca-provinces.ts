@@ -17,14 +17,14 @@ function getHeadTagsMinimal() {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>* { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }</style>
-  <link rel="icon" href="/static/logo.png" type="image/png">
-  <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">`
+  <link rel="icon" href="/static/logo.png?v=20260504" type="image/png">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png?v=20260504">`
 }
 
 function navHTML() {
   return `<nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.08)" class="text-white sticky top-0 z-50">
   <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-    <a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
+    <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
     <div class="flex items-center gap-4">
       <a href="/pricing" class="text-gray-400 hover:text-white text-sm hidden md:block">Pricing</a>
       <a href="/ca" class="text-gray-400 hover:text-white text-sm hidden md:block">Canada</a>
@@ -210,7 +210,7 @@ app.get('/:province', (c) => {
   <link rel="alternate" hreflang="en" href="https://www.roofmanager.ca/">
   <link rel="alternate" hreflang="x-default" href="https://www.roofmanager.ca/">
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"LocalBusiness","name":"Roof Manager — ${province.name}","description":"Satellite roof measurement software for ${province.name} roofing contractors. CAD pricing. Insurance-ready reports.","url":"https://www.roofmanager.ca/ca/${provinceSlug}","image":"https://www.roofmanager.ca/static/logo.png","address":{"@type":"PostalAddress","addressRegion":"${province.code}","addressCountry":"CA"},"areaServed":{"@type":"AdministrativeArea","name":"${province.name}"},"priceRange":"$5-$500 CAD"}
+  {"@context":"https://schema.org","@type":"LocalBusiness","name":"Roof Manager — ${province.name}","description":"Satellite roof measurement software for ${province.name} roofing contractors. CAD pricing. Insurance-ready reports.","url":"https://www.roofmanager.ca/ca/${provinceSlug}","image":"https://www.roofmanager.ca/static/logo.png?v=20260504","address":{"@type":"PostalAddress","addressRegion":"${province.code}","addressCountry":"CA"},"areaServed":{"@type":"AdministrativeArea","name":"${province.name}"},"priceRange":"$5-$500 CAD"}
   </script>
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Canada","item":"https://www.roofmanager.ca/ca"},{"@type":"ListItem","position":3,"name":"${province.name}","item":"https://www.roofmanager.ca/ca/${provinceSlug}"}]}

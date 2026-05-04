@@ -280,7 +280,7 @@ export function renderSolarWebProposal(
 
   <div class="footer">
     ${esc(company.name || '')}${company.phone ? ` · <a href="tel:${esc(company.phone)}">${esc(company.phone)}</a>` : ''}${company.email ? ` · <a href="mailto:${esc(company.email)}">${esc(company.email)}</a>` : ''}
-    <br><br>Powered by <img src="https://www.roofmanager.ca/static/logo.png" alt="Roof Manager" style="height:24px;width:auto;vertical-align:middle;margin-left:4px"/>
+    <br><br>Powered by <img src="https://www.roofmanager.ca/static/logo.png?v=20260504" alt="Roof Manager" style="height:24px;width:auto;vertical-align:middle;margin-left:4px"/>
   </div>
 </div>
 

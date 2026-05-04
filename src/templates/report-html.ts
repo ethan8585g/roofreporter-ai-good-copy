@@ -573,7 +573,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <div style="padding:12px 28px 10px;display:flex;align-items:center;gap:14px">
     <!-- Logo -->
     <div style="display:flex;align-items:center;flex-shrink:0">
-      <img src="https://www.roofmanager.ca/static/logo.png" alt="Roof Manager" style="height:48px;width:auto;display:block"/>
+      <img src="https://www.roofmanager.ca/static/logo.png?v=20260504" alt="Roof Manager" style="height:48px;width:auto;display:block"/>
     </div>
     <!-- Address -->
     <div style="flex:1;text-align:right">

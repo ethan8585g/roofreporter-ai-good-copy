@@ -51,7 +51,7 @@ async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number
     const html = `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
         <div style="text-align:center;background:#000;padding:20px;border-radius:12px 12px 0 0;margin:-32px -32px 24px">
-          <img src="https://www.roofmanager.ca/static/logo.png" alt="Roof Manager" width="160" style="max-width:160px;height:auto;display:block;margin:0 auto"/>
+          <img src="https://www.roofmanager.ca/static/logo.png?v=20260504" alt="Roof Manager" width="160" style="max-width:160px;height:auto;display:block;margin:0 auto"/>
         </div>
         <h2 style="color:#0A0A0A;margin-bottom:8px">You left before finishing — here's your roof report</h2>
         <p style="color:#374151;margin-bottom:24px">
@@ -123,7 +123,7 @@ async function runSecretaryTrialManagement(env: Bindings): Promise<{ remindersSe
       const html = `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
           <div style="text-align:center;background:#000;padding:20px;border-radius:12px 12px 0 0;margin:-32px -32px 24px">
-            <img src="https://www.roofmanager.ca/static/logo.png" alt="Roof Manager" width="160" style="max-width:160px;height:auto;display:block;margin:0 auto"/>
+            <img src="https://www.roofmanager.ca/static/logo.png?v=20260504" alt="Roof Manager" width="160" style="max-width:160px;height:auto;display:block;margin:0 auto"/>
           </div>
           <h2 style="color:#0A0A0A">Your Roofer Secretary trial ends in 3 days</h2>
           <p style="color:#374151">Hi ${row.name || 'there'},</p>

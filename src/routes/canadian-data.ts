@@ -17,12 +17,12 @@ const head = (title: string, desc: string, canonical: string, schema?: string) =
   <meta property="og:description" content="${desc}">
   <meta property="og:type" content="article">
   <meta property="og:url" content="https://www.roofmanager.ca${canonical}">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png?v=20260504">
   <meta property="og:locale" content="en_CA">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="geo.region" content="CA">
   <meta name="theme-color" content="#00FF88">
-  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=20260504">
   <link rel="stylesheet" href="/static/tailwind.css">
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
@@ -32,7 +32,7 @@ const head = (title: string, desc: string, canonical: string, schema?: string) =
 const nav = `<nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.92)">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
     <a href="/" class="flex items-center gap-3">
-      <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
+      <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
       <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
     </a>
     <div class="flex items-center gap-4">
@@ -57,7 +57,7 @@ canadianDataRoutes.get('/canadian-roof-cost-index-2026', (c) => {
     "@type": "Report",
     "name": "2026 Canadian Roof Replacement Cost Index",
     "author": { "@type": "Organization", "name": "Roof Manager", "url": "https://www.roofmanager.ca" },
-    "publisher": { "@type": "Organization", "name": "Roof Manager", "logo": { "@type": "ImageObject", "url": "https://www.roofmanager.ca/static/logo.png" } },
+    "publisher": { "@type": "Organization", "name": "Roof Manager", "logo": { "@type": "ImageObject", "url": "https://www.roofmanager.ca/static/logo.png?v=20260504" } },
     "datePublished": "2026-04-30",
     "inLanguage": "en-CA",
     "about": "Average roof replacement costs across Canadian provinces and metropolitan areas in 2026, compiled from Roof Manager platform data, contractor invoices, and provincial association reporting.",
@@ -374,7 +374,7 @@ ${nav}
   <div class="grid sm:grid-cols-2 gap-4 mb-10">
     <div class="rounded-xl border border-white/10 bg-white/5 p-5">
       <div class="text-white font-bold mb-2">Logo (PNG, transparent)</div>
-      <a href="/static/logo.png" class="text-[#00FF88] text-sm underline" download>Download logo →</a>
+      <a href="/static/logo.png?v=20260504" class="text-[#00FF88] text-sm underline" download>Download logo →</a>
     </div>
     <div class="rounded-xl border border-white/10 bg-white/5 p-5">
       <div class="text-white font-bold mb-2">Brand colour</div>
