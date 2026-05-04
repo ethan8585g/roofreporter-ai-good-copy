@@ -449,8 +449,8 @@ reportsRoutes.get('/:orderId/customer-pdf', async (c) => {
     s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
     s.onload = function(){
       var overlay = document.createElement('div');
-      overlay.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.85);color:#fff;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:18px;font-weight:600;z-index:2147483647';
-      overlay.textContent='Generating PDF…';
+      overlay.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.92);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:18px;font-weight:600;z-index:2147483647;text-align:center;padding:24px;gap:16px';
+      overlay.innerHTML = '<div>Generating PDF…</div><div style="font-size:13px;font-weight:400;opacity:0.75;max-width:420px">If your browser asks permission to download, click <b>Allow</b>. This tab will stay open.</div>';
       document.body.appendChild(overlay);
       setTimeout(function(){
         window.html2pdf().set({
@@ -461,10 +461,11 @@ reportsRoutes.get('/:orderId/customer-pdf', async (c) => {
           jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
           pagebreak:{mode:['css','legacy']}
         }).from(document.body).save().then(function(){
-          if(overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
-          setTimeout(function(){ try { window.close(); } catch(e){} }, 600);
+          overlay.innerHTML = '<div style="font-size:22px">✓ PDF saved</div><div style="font-size:14px;font-weight:400;opacity:0.8;max-width:420px">Check your Downloads folder. You can close this tab.</div><button id="rmCloseBtn" style="margin-top:8px;padding:10px 20px;background:#10b981;color:#fff;border:0;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px">Close tab</button>';
+          var btn = document.getElementById('rmCloseBtn');
+          if (btn) btn.onclick = function(){ try { window.close(); } catch(e){} };
         })['catch'](function(err){
-          overlay.textContent = 'PDF generation failed: ' + (err && err.message ? err.message : 'unknown error');
+          overlay.innerHTML = '<div style="color:#fca5a5">PDF generation failed</div><div style="font-size:13px;font-weight:400;opacity:0.8">' + (err && err.message ? err.message : 'unknown error') + '</div>';
         });
       }, 1200);
     };
