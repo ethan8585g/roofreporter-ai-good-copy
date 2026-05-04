@@ -1286,14 +1286,14 @@
     } else window.rmToast(data?.error || 'Dial failed', 'info');
   };
 
-  // Live call status panel — polls for updates
+  // Live call status panel — polls for updates and streams transcript
   window.ccShowCallStatus = function(dialData) {
     var panel = document.getElementById('cc-call-status');
     if (panel) panel.remove();
-    var html = '<div id="cc-call-status" class="fixed bottom-6 right-6 w-80 bg-gray-900 text-white rounded-2xl shadow-2xl z-50 overflow-hidden">' +
+    var html = '<div id="cc-call-status" class="fixed bottom-6 right-6 w-[420px] max-w-[95vw] bg-gray-900 text-white rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col" style="max-height:80vh">' +
       '<div class="px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 flex items-center justify-between">' +
         '<div class="flex items-center gap-2"><i class="fas fa-phone-alt animate-pulse"></i><span class="font-bold text-sm">Live Call</span></div>' +
-        '<button onclick="document.getElementById(\'cc-call-status\').remove();clearInterval(window._ccCallPoll)" class="text-white/70 hover:text-white"><i class="fas fa-times"></i></button>' +
+        '<button onclick="document.getElementById(\'cc-call-status\').remove();clearInterval(window._ccCallPoll);clearInterval(window._ccTranscriptPoll)" class="text-white/70 hover:text-white"><i class="fas fa-times"></i></button>' +
       '</div>' +
       '<div class="p-4 space-y-2">' +
         '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Company</span><span class="text-sm font-medium">' + (dialData.prospect?.company_name || '-') + '</span></div>' +
@@ -1301,10 +1301,17 @@
         '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Phone</span><span class="text-sm font-mono">' + (dialData.prospect?.phone || '-') + '</span></div>' +
         '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Agent</span><span class="text-sm font-medium">' + (dialData.agent?.name || '-') + '</span></div>' +
         '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">SIP</span><span class="text-sm font-medium">' + (dialData.sip_dial || '-') + '</span></div>' +
-        '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Status</span><span id="cc-call-live-status" class="text-sm font-bold text-green-400"><i class="fas fa-circle text-[6px] animate-pulse mr-1"></i>' + (dialData.sip_dial === 'answered' ? 'Connected' : 'Ringing...') + '</span></div>' +
+        '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Status</span><span id="cc-call-live-status" class="text-sm font-bold text-yellow-300"><i class="fas fa-phone-alt animate-pulse mr-1"></i>' + (dialData.sip_dial === 'answered' ? 'Connected' : 'Ringing...') + '</span></div>' +
         '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Duration</span><span id="cc-call-duration" class="text-sm font-mono text-gray-300">0:00</span></div>' +
       '</div>' +
-      '<div class="px-4 pb-3"><span class="text-[10px] text-gray-500">Room: ' + (dialData.room_name || '') + '</span></div>' +
+      '<div class="px-4 pb-2 border-t border-gray-800 pt-3 flex items-center justify-between">' +
+        '<span class="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">Live Transcript</span>' +
+        '<span id="cc-call-transcript-count" class="text-[10px] text-gray-500">0 lines</span>' +
+      '</div>' +
+      '<div id="cc-call-transcript" class="flex-1 overflow-y-auto px-4 pb-3 space-y-1.5 text-xs leading-relaxed" style="min-height:160px;max-height:40vh">' +
+        '<div class="text-gray-500 italic" id="cc-call-transcript-empty">Waiting for conversation to start…</div>' +
+      '</div>' +
+      '<div class="px-4 pb-3 border-t border-gray-800 pt-2"><span class="text-[10px] text-gray-500">Room: ' + (dialData.room_name || '') + '</span></div>' +
     '</div>';
     document.body.insertAdjacentHTML('beforeend', html);
 
@@ -1312,6 +1319,9 @@
     var startTime = Date.now();
     var durationEl = document.getElementById('cc-call-duration');
     var statusEl = document.getElementById('cc-call-live-status');
+    var transcriptEl = document.getElementById('cc-call-transcript');
+    var transcriptCountEl = document.getElementById('cc-call-transcript-count');
+    var lastTranscriptLen = 0;
     var durationInterval = setInterval(function() {
       if (!document.getElementById('cc-call-status')) { clearInterval(durationInterval); return; }
       var elapsed = Math.floor((Date.now() - startTime) / 1000);
@@ -1320,30 +1330,63 @@
       if (durationEl) durationEl.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
     }, 1000);
 
-    // Poll call status every 3s
+    // Render transcript lines (each line is "[ts] [role] text")
+    function renderTranscript(text) {
+      if (!transcriptEl) return;
+      if (!text) { return; }
+      if (text.length === lastTranscriptLen) return;
+      lastTranscriptLen = text.length;
+      var emptyEl = document.getElementById('cc-call-transcript-empty');
+      if (emptyEl) emptyEl.remove();
+      var lines = text.split('\n').filter(function(l){ return l.trim(); });
+      transcriptEl.innerHTML = lines.map(function(line) {
+        var m = line.match(/^\[([^\]]+)\]\s*\[([^\]]+)\]\s*(.*)$/);
+        var role = m ? m[2] : 'system';
+        var body = m ? m[3] : line;
+        var roleClass = role === 'agent' ? 'text-emerald-300' : (role === 'prospect' ? 'text-sky-300' : 'text-gray-400');
+        var roleLabel = role === 'agent' ? 'AI' : (role === 'prospect' ? 'Prospect' : role);
+        var safeBody = body.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        return '<div><span class="' + roleClass + ' font-semibold mr-1">' + roleLabel + ':</span><span class="text-gray-100">' + safeBody + '</span></div>';
+      }).join('');
+      transcriptEl.scrollTop = transcriptEl.scrollHeight;
+      if (transcriptCountEl) transcriptCountEl.textContent = lines.length + ' line' + (lines.length === 1 ? '' : 's');
+    }
+
+    // Poll call status + transcript every 2s
     var roomName = dialData.room_name;
+    var terminal = false;
     window._ccCallPoll = setInterval(async function() {
-      if (!document.getElementById('cc-call-status')) { clearInterval(window._ccCallPoll); clearInterval(durationInterval); return; }
+      if (!document.getElementById('cc-call-status')) { clearInterval(window._ccCallPoll); clearInterval(durationInterval); clearInterval(window._ccTranscriptPoll); return; }
       try {
-        var logs = await ccFetch('/api/call-center/call-logs?limit=1&room=' + encodeURIComponent(roomName));
-        var log = (logs?.call_logs || [])[0];
-        if (log && statusEl) {
-          if (log.call_status === 'completed' || log.call_status === 'failed') {
-            statusEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i>' + (log.call_outcome || log.call_status);
-            statusEl.className = 'text-sm font-bold ' + (log.call_outcome === 'interested' || log.call_outcome === 'demo_scheduled' ? 'text-green-400' : 'text-gray-400');
-            clearInterval(window._ccCallPoll);
-            clearInterval(durationInterval);
-            // Auto-close after 5s and refresh
-            setTimeout(function() { var p = document.getElementById('cc-call-status'); if (p) p.remove(); ccLoadTab('call-logs'); }, 5000);
-          } else if (log.call_status === 'ringing') {
-            statusEl.innerHTML = '<i class="fas fa-phone-alt animate-pulse mr-1"></i>Ringing...';
-          } else if (log.call_status === 'connected' || log.call_status === 'initiated') {
-            statusEl.innerHTML = '<i class="fas fa-circle text-[6px] animate-pulse mr-1"></i>In Progress';
-            statusEl.className = 'text-sm font-bold text-green-400';
+        var t = await ccFetch('/api/call-center/call-logs/by-room/' + encodeURIComponent(roomName) + '/transcript');
+        if (t && !t.error) {
+          renderTranscript(t.call_transcript || '');
+          if (statusEl) {
+            if (t.call_status === 'completed' || t.call_status === 'failed') {
+              if (!terminal) {
+                terminal = true;
+                var outcome = t.call_outcome || t.call_status;
+                statusEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i>' + outcome;
+                statusEl.className = 'text-sm font-bold ' + (outcome === 'interested' || outcome === 'demo_scheduled' ? 'text-green-400' : (outcome === 'completed' ? 'text-blue-300' : 'text-gray-400'));
+                clearInterval(window._ccCallPoll);
+                clearInterval(durationInterval);
+                // Leave transcript visible 15s so the user can read it.
+                setTimeout(function() { var p = document.getElementById('cc-call-status'); if (p) p.remove(); ccLoadTab('call-logs'); }, 15000);
+              }
+            } else if (t.call_status === 'connected') {
+              statusEl.innerHTML = '<i class="fas fa-circle text-[6px] animate-pulse mr-1"></i>Connected — In Progress';
+              statusEl.className = 'text-sm font-bold text-green-400';
+            } else if (t.call_status === 'ringing') {
+              statusEl.innerHTML = '<i class="fas fa-phone-alt animate-pulse mr-1"></i>Ringing...';
+              statusEl.className = 'text-sm font-bold text-yellow-300';
+            } else if (t.call_status === 'initiated') {
+              statusEl.innerHTML = '<i class="fas fa-circle text-[6px] animate-pulse mr-1"></i>Dialing...';
+              statusEl.className = 'text-sm font-bold text-yellow-300';
+            }
           }
         }
       } catch {}
-    }, 3000);
+    }, 2000);
   };
 
   // Contact Lists

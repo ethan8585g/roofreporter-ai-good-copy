@@ -52,11 +52,21 @@ class OutboundSalesAgent(Agent):
         # the call-flow tools (mark_interested, etc.) override from there.
         self.outcome = "failed"
         self.callee_joined = False
+        self.had_conversation = False
         self.transcript_lines = []
         self.objections = []
         self.sentiment = "neutral"
         self.follow_up_action = ""
         self.follow_up_date = ""
+        # Derive transcript-event endpoint from webhook_url so it lives on
+        # the same origin as /call-complete.
+        try:
+            self.transcript_event_url = webhook_url.rsplit("/", 1)[0] + "/transcript-event"
+            self.status_event_url = webhook_url.rsplit("/", 1)[0] + "/call-status"
+        except Exception:
+            self.transcript_event_url = f"{API_BASE}/api/call-center/transcript-event"
+            self.status_event_url = f"{API_BASE}/api/call-center/call-status"
+        self._room_name = ""
 
         company = prospect_info.get("company", "your company")
         contact = prospect_info.get("contact", "")
@@ -126,6 +136,69 @@ VOICEMAIL DETECTION:
             if self.outcome == "failed":
                 self.outcome = "no_answer"
             logger.info(f"Callee joined room: {ident}")
+            # Promote DB call_status from 'ringing' → 'connected' so the
+            # super-admin Live Call panel reflects the real state.
+            asyncio.create_task(self._post_status("connected"))
+
+    async def _post_status(self, status: str):
+        """Fire-and-forget: update cc_call_logs.call_status mid-call."""
+        if not self._room_name:
+            return
+        try:
+            async with aiohttp.ClientSession() as s:
+                await s.post(
+                    self.status_event_url,
+                    json={"room_name": self._room_name, "call_status": status},
+                    timeout=aiohttp.ClientTimeout(total=5),
+                )
+        except Exception as e:
+            logger.warning(f"status post failed: {e}")
+
+    async def _post_transcript_line(self, role: str, text: str):
+        """Fire-and-forget: stream a transcript line back to the worker."""
+        if not self._room_name or not text:
+            return
+        try:
+            async with aiohttp.ClientSession() as s:
+                await s.post(
+                    self.transcript_event_url,
+                    json={
+                        "room_name": self._room_name,
+                        "role": role,
+                        "text": text,
+                        "ts": datetime.utcnow().isoformat() + "Z",
+                    },
+                    timeout=aiohttp.ClientTimeout(total=5),
+                )
+        except Exception as e:
+            logger.warning(f"transcript post failed: {e}")
+
+    def _on_conversation_item_added(self, ev):
+        """Capture each utterance (user STT or agent TTS) as it lands in
+        the chat context. LiveKit fires this event on the VoiceSession."""
+        try:
+            item = getattr(ev, "item", None) or ev
+            role = getattr(item, "role", "") or ""
+            content = getattr(item, "text_content", None)
+            if callable(content):
+                content = content()
+            if not content:
+                # ChatMessage in some LK versions exposes .content as list[str]
+                raw = getattr(item, "content", "")
+                if isinstance(raw, list):
+                    content = " ".join(str(x) for x in raw if x)
+                else:
+                    content = str(raw or "")
+            content = (content or "").strip()
+            if not content:
+                return
+            display_role = "agent" if role == "assistant" else ("prospect" if role == "user" else role or "system")
+            self.transcript_lines.append(f"[{display_role}] {content}")
+            if role in ("user", "assistant"):
+                self.had_conversation = True
+            asyncio.create_task(self._post_transcript_line(display_role, content))
+        except Exception as e:
+            logger.warning(f"conversation_item_added handler error: {e}")
 
     @function_tool("book_appointment")
     async def book_appointment(self, date: str = "", time: str = "", notes: str = ""):
@@ -176,8 +249,14 @@ VOICEMAIL DETECTION:
 
         transcript = "\n".join(self.transcript_lines) if self.transcript_lines else ""
 
+        # If a real conversation happened but no tool-call outcome was set,
+        # don't mislabel the call as "no_answer". A connected call with
+        # transcript content but no explicit interest/booking is "completed".
+        if self.had_conversation and self.outcome in ("no_answer", "failed"):
+            self.outcome = "completed"
+
         payload = {
-            "room_name": self.session.room.name if self.session else "",
+            "room_name": self.session.room.name if self.session else self._room_name,
             "call_status": "completed",
             "call_outcome": self.outcome,
             "call_duration_seconds": duration,
@@ -235,6 +314,7 @@ async def entrypoint(ctx: RunContext):
     webhook_url = metadata.get("webhook_url", f"{API_BASE}/api/call-center/call-complete")
 
     agent = OutboundSalesAgent(prospect_info, script, webhook_url)
+    agent._room_name = ctx.room.name if ctx.room else ""
 
     session = VoiceSession(
         agent=agent,
@@ -255,6 +335,13 @@ async def entrypoint(ctx: RunContext):
     # infrastructure failures from real "no answer" (callee answered but
     # never said anything before the room ended).
     ctx.room.on("participant_connected", agent._on_participant_connected)
+
+    # Live transcript: stream each user/agent utterance back to the worker
+    # so the super-admin Live Call panel can render it in real time.
+    try:
+        session.on("conversation_item_added", agent._on_conversation_item_added)
+    except Exception as e:
+        logger.warning(f"Could not subscribe to conversation_item_added: {e}")
 
     await session.start(room=ctx.room)
 

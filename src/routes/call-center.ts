@@ -49,6 +49,11 @@ callCenterRoutes.use('/*', async (c, next) => {
   if (c.req.method === 'POST' && c.req.path.endsWith('/call-complete')) {
     return next() // Webhook — no auth
   }
+  // Live-call beacons from the LiveKit agent (transcript + status updates).
+  // Same trust model as /call-complete: room_name is the implicit token.
+  if (c.req.method === 'POST' && (c.req.path.endsWith('/transcript-event') || c.req.path.endsWith('/call-status'))) {
+    return next()
+  }
   const ok = await requireSuperAdmin(c)
   if (!ok) return c.json({ error: 'Superadmin access required' }, 403)
   return next()
@@ -931,6 +936,70 @@ callCenterRoutes.post('/livekit-token', async (c) => {
 })
 
 // ============================================================
+// LIVE TRANSCRIPT — Webhook from LiveKit agent (per utterance)
+// ============================================================
+// The Python agent fires this for each user STT result + agent reply.
+// Appends one line to cc_call_logs.call_transcript and (cheaply) promotes
+// call_status from 'ringing'/'initiated' to 'connected' so the super-admin
+// Live Call panel reflects that the call is in progress.
+callCenterRoutes.post('/transcript-event', async (c) => {
+  try {
+    const { room_name, role, text, ts } = await c.req.json()
+    if (!room_name || !text) return c.json({ error: 'room_name and text required' }, 400)
+    const row = await c.env.DB.prepare('SELECT id, call_status, call_transcript FROM cc_call_logs WHERE livekit_room_id=?').bind(room_name).first<any>()
+    if (!row) return c.json({ error: 'no call_log for room' }, 404)
+    const safeRole = (role || 'system').toString().slice(0, 16)
+    const line = `[${ts || new Date().toISOString()}] [${safeRole}] ${String(text).replace(/\s+/g, ' ').trim()}`
+    const updated = (row.call_transcript ? row.call_transcript + '\n' : '') + line
+    const promoteStatus = row.call_status === 'ringing' || row.call_status === 'initiated'
+    if (promoteStatus) {
+      await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='connected', call_transcript=? WHERE id=?").bind(updated, row.id).run()
+    } else {
+      await c.env.DB.prepare('UPDATE cc_call_logs SET call_transcript=? WHERE id=?').bind(updated, row.id).run()
+    }
+    return c.json({ success: true })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// Lightweight status update from the agent (e.g. callee joined → 'connected').
+// Refuses to overwrite terminal states ('completed', 'failed').
+callCenterRoutes.post('/call-status', async (c) => {
+  try {
+    const { room_name, call_status } = await c.req.json()
+    if (!room_name || !call_status) return c.json({ error: 'room_name and call_status required' }, 400)
+    const row = await c.env.DB.prepare('SELECT id, call_status FROM cc_call_logs WHERE livekit_room_id=?').bind(room_name).first<any>()
+    if (!row) return c.json({ error: 'no call_log for room' }, 404)
+    if (row.call_status === 'completed' || row.call_status === 'failed') {
+      return c.json({ success: true, skipped: 'terminal' })
+    }
+    await c.env.DB.prepare('UPDATE cc_call_logs SET call_status=? WHERE id=?').bind(call_status, row.id).run()
+    return c.json({ success: true })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// Super-admin: fetch the live transcript for an in-progress room.
+callCenterRoutes.get('/call-logs/by-room/:room/transcript', async (c) => {
+  const room = c.req.param('room')
+  const row = await c.env.DB.prepare(
+    'SELECT id, call_status, call_outcome, call_transcript, call_duration_seconds, started_at, ended_at FROM cc_call_logs WHERE livekit_room_id=?'
+  ).bind(room).first<any>()
+  if (!row) return c.json({ error: 'not found' }, 404)
+  return c.json({
+    call_log_id: row.id,
+    call_status: row.call_status || '',
+    call_outcome: row.call_outcome || '',
+    call_transcript: row.call_transcript || '',
+    call_duration_seconds: row.call_duration_seconds || 0,
+    started_at: row.started_at || null,
+    ended_at: row.ended_at || null,
+  })
+})
+
+// ============================================================
 // CALL COMPLETE — Webhook from LiveKit agent
 // ============================================================
 callCenterRoutes.post('/call-complete', async (c) => {
@@ -943,20 +1012,27 @@ callCenterRoutes.post('/call-complete', async (c) => {
     // diagnostic is the more accurate signal for fast hangups.
     if (room_name) {
       const existing = await c.env.DB.prepare(
-        `SELECT call_status, call_outcome FROM cc_call_logs WHERE livekit_room_id=?`
+        `SELECT call_status, call_outcome, call_transcript FROM cc_call_logs WHERE livekit_room_id=?`
       ).bind(room_name).first<any>()
       const alreadyFailed = existing?.call_status === 'failed' && /^(sip_error|dial_error|trunk_rejected)/i.test(existing?.call_outcome || '')
+      // The live transcript-event stream gives us a richer (timestamped, line-by-line)
+      // record than the agent's end-of-call join. Prefer the streamed version if it
+      // exists and is at least as long as the snapshot.
+      const liveTranscript = existing?.call_transcript || ''
+      const finalTranscript = liveTranscript && liveTranscript.length >= (call_transcript || '').length
+        ? liveTranscript
+        : (call_transcript || liveTranscript || '')
       if (alreadyFailed) {
         // Preserve diagnostic; only fill in transcript/summary/duration for context.
         await c.env.DB.prepare(
           `UPDATE cc_call_logs SET call_duration_seconds=?, talk_time_seconds=?, call_summary=?, call_transcript=?, ended_at=datetime('now') WHERE livekit_room_id=?`
-        ).bind(call_duration_seconds || 0, talk_time_seconds || 0, call_summary || '', call_transcript || '', room_name).run()
+        ).bind(call_duration_seconds || 0, talk_time_seconds || 0, call_summary || '', finalTranscript, room_name).run()
       } else {
         await c.env.DB.prepare(
           `UPDATE cc_call_logs SET call_status=?, call_outcome=?, call_duration_seconds=?, talk_time_seconds=?, call_summary=?, call_transcript=?, caller_sentiment=?, objections_raised=?, follow_up_action=?, follow_up_date=?, ended_at=datetime('now') WHERE livekit_room_id=?`
         ).bind(
           call_status || 'completed', call_outcome || '', call_duration_seconds || 0, talk_time_seconds || 0,
-          call_summary || '', call_transcript || '', caller_sentiment || '', objections_raised || '',
+          call_summary || '', finalTranscript, caller_sentiment || '', objections_raised || '',
           follow_up_action || '', follow_up_date || null, room_name
         ).run()
       }
