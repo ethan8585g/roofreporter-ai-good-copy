@@ -215,6 +215,7 @@
           '<th class="px-3 py-2.5 text-left font-semibold">Priority</th>' +
           '<th class="px-3 py-2.5 text-left font-semibold">Name</th>' +
           '<th class="px-3 py-2.5 text-left font-semibold">Email</th>' +
+          '<th class="px-3 py-2.5 text-left font-semibold">Phone</th>' +
           '<th class="px-3 py-2.5 text-left font-semibold">Address</th>' +
           '<th class="px-3 py-2.5 text-left font-semibold">Source</th>' +
           '<th class="px-3 py-2.5 text-left font-semibold">Type</th>' +
@@ -226,10 +227,14 @@
         var addr = l.address ? String(l.address) : '';
         var addrShort = addr.length > 40 ? addr.slice(0, 38) + '…' : addr;
         var sel = SAL.selectedId === l.id ? ' bg-teal-50' : '';
+        var phoneCell = l.phone
+          ? '<a href="tel:' + esc(l.phone) + '" onclick="event.stopPropagation()" class="text-teal-600 hover:underline whitespace-nowrap"><i class="fas fa-phone text-[10px] mr-1"></i>' + esc(l.phone) + '</a>'
+          : '<span class="text-gray-300">—</span>';
         html += '<tr data-lead-row="' + l.id + '" data-idx="' + idx + '" onclick="window._salOpenDrawer(' + l.id + ')" class="border-t border-gray-100 hover:bg-gray-50 cursor-pointer' + sel + '">' +
           '<td class="px-3 py-2.5">' + priorityBadge(l.priority || 'normal') + '</td>' +
           '<td class="px-3 py-2.5 font-medium text-gray-900">' + esc(l.name || '—') + '</td>' +
           '<td class="px-3 py-2.5 text-gray-700">' + esc(l.email || '—') + '</td>' +
+          '<td class="px-3 py-2.5 text-xs">' + phoneCell + '</td>' +
           '<td class="px-3 py-2.5 text-gray-600" title="' + esc(addr) + '">' + esc(addrShort || '—') + '</td>' +
           '<td class="px-3 py-2.5 text-gray-600 text-xs">' + esc(l.source_page || '—') + '</td>' +
           '<td class="px-3 py-2.5 text-gray-600 text-xs">' + esc(l.lead_type || '—') + '</td>' +
@@ -249,6 +254,7 @@
           '</div>' +
           '<p class="font-semibold text-gray-900">' + esc(l.name || '—') + '</p>' +
           '<p class="text-xs text-gray-600">' + esc(l.email || '') + '</p>' +
+          (l.phone ? '<p class="text-xs mt-0.5"><a href="tel:' + esc(l.phone) + '" onclick="event.stopPropagation()" class="text-teal-600"><i class="fas fa-phone text-[10px] mr-1"></i>' + esc(l.phone) + '</a></p>' : '') +
           '<p class="text-xs text-gray-500 mt-1">' + esc(l.address || '') + '</p>' +
           '<div class="flex items-center gap-2 mt-2">' + statusBadge(l.status || 'new') + '<span class="text-[10px] text-gray-500">' + esc(l.lead_type || '') + '</span></div>' +
         '</div>';

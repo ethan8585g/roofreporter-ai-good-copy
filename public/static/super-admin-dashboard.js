@@ -2130,21 +2130,29 @@ function renderSignupsView() {
       ${saSection('Recent Sign-ups', 'fa-user-clock', `
         <div class="space-y-2 max-h-96 overflow-y-auto">
           ${recent.length === 0 ? '<p class="text-gray-400 text-sm">No recent sign-ups</p>' : ''}
-          ${recent.map(u => `
-            <div class="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors">
-              <div class="flex items-center gap-3">
-                ${u.google_avatar ? `<img src="${u.google_avatar}" class="w-8 h-8 rounded-full">` : `<div class="w-8 h-8 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold">${(u.name||'?')[0].toUpperCase()}</div>`}
-                <div>
-                  <p class="text-sm font-medium text-gray-800">${u.name}</p>
-                  <p class="text-[10px] text-gray-400">${u.email} ${u.company_name ? '· ' + u.company_name : ''}</p>
+          ${recent.map(u => {
+            const phoneHtml = u.phone ? `<a href="tel:${u.phone}" class="text-teal-600 hover:underline" onclick="event.stopPropagation()"><i class="fas fa-phone text-[9px] mr-0.5"></i>${u.phone}</a>` : '';
+            const sizeBadge = u.company_size ? `<span class="inline-block px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-semibold">${u.company_size}</span>` : '';
+            const useBadge = u.primary_use ? `<span class="inline-block px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-semibold">${u.primary_use}</span>` : '';
+            const lastLogin = u.last_login ? `<span class="text-[10px] text-gray-400">last seen ${fmtDateTime(u.last_login)}</span>` : '';
+            return `
+            <div class="flex items-start justify-between py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors">
+              <div class="flex items-start gap-3 min-w-0 flex-1">
+                ${u.google_avatar ? `<img src="${u.google_avatar}" class="w-8 h-8 rounded-full flex-shrink-0">` : `<div class="w-8 h-8 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">${(u.name||'?')[0].toUpperCase()}</div>`}
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-gray-800 truncate">${u.name}${u.company_name ? ` <span class="text-gray-400 font-normal">· ${u.company_name}</span>` : ''}</p>
+                  <p class="text-[10px] text-gray-500 truncate"><a href="mailto:${u.email}" class="hover:text-teal-600" onclick="event.stopPropagation()">${u.email}</a>${phoneHtml ? ' · ' + phoneHtml : ''}</p>
+                  ${(sizeBadge || useBadge) ? `<div class="flex items-center gap-1 mt-1">${sizeBadge}${useBadge}</div>` : ''}
+                  ${lastLogin ? `<p class="mt-1">${lastLogin}</p>` : ''}
                 </div>
               </div>
-              <div class="text-right">
-                <p class="text-xs text-gray-500">${fmtDate(u.created_at)}</p>
+              <div class="text-right flex-shrink-0 ml-2">
+                <p class="text-xs text-gray-500 whitespace-nowrap">${fmtDate(u.created_at)}</p>
                 <p class="text-[10px] ${u.order_count > 0 ? 'text-green-600 font-medium' : 'text-gray-400'}">${u.order_count || 0} orders ${u.trial_orders > 0 ? `(${u.trial_orders} trial)` : ''}</p>
               </div>
             </div>
-          `).join('')}
+          `;
+          }).join('')}
         </div>
       `)}
     </div>

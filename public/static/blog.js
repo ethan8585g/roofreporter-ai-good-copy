@@ -693,6 +693,7 @@
             '<input type="text" id="bc-company" placeholder="Company Name" class="px-4 py-3 bg-white/10 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88] focus:border-transparent outline-none">' +
             '<input type="email" id="bc-email" placeholder="Email Address *" required class="px-4 py-3 bg-white/10 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88] focus:border-transparent outline-none">' +
           '</div>' +
+          '<input type="tel" id="bc-phone" placeholder="Phone (optional, for follow-up)" autocomplete="tel" class="w-full px-4 py-3 bg-white/10 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88] focus:border-transparent outline-none">' +
           '<textarea id="bc-message" rows="3" placeholder="Tell us about your roofing business..." class="w-full px-4 py-3 bg-white/10 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88] focus:border-transparent outline-none resize-none"></textarea>' +
           '<div id="bc-msg" class="hidden text-sm font-medium px-4 py-3 rounded-lg"></div>' +
           '<button type="submit" id="bc-submit" class="w-full py-4 font-extrabold rounded-xl text-lg transition-all shadow-xl" style="background:#00FF88;color:#0A0A0A"><i class="fas fa-rocket mr-2"></i>Get My Free Reports</button>' +
@@ -717,6 +718,7 @@
     var data = {
       name: name,
       email: email,
+      phone: (document.getElementById('bc-phone') || {}).value || '',
       company_name: (document.getElementById('bc-company') || {}).value || '',
       message: (document.getElementById('bc-message') || {}).value || '',
       source_page: 'blog:' + window.location.pathname
