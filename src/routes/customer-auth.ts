@@ -291,10 +291,10 @@ function getVerificationEmailHTML(code: string): string {
   return `
   <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
     <div style="text-align: center; margin-bottom: 32px;">
-      <div style="display: inline-block; width: 48px; height: 48px; background: #0ea5e9; border-radius: 12px; line-height: 48px; text-align: center;">
-        <span style="color: white; font-size: 24px;">&#127968;</span>
+      <div style="background:#000;padding:24px;border-radius:16px;display:inline-block">
+        <img src="https://www.roofmanager.ca/static/logo.png" alt="Roof Manager" width="180" style="max-width:180px;height:auto;display:block"/>
       </div>
-      <h1 style="color: #1e3a5f; font-size: 24px; margin: 16px 0 4px;">Roof Manager</h1>
+      <h1 style="color: #1e3a5f; font-size: 18px; margin: 16px 0 4px;">&nbsp;</h1>
       <p style="color: #6b7280; font-size: 14px; margin: 0;">Email Verification</p>
     </div>
     <div style="background: #f8fafc; border-radius: 16px; padding: 32px; text-align: center;">
@@ -1550,10 +1550,10 @@ async function sendPasswordResetEmail(env: any, toEmail: string, name: string, r
   const html = `
   <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
     <div style="text-align: center; margin-bottom: 32px;">
-      <div style="display: inline-block; width: 48px; height: 48px; background: #0ea5e9; border-radius: 12px; line-height: 48px; text-align: center;">
-        <span style="color: white; font-size: 24px;">&#127968;</span>
+      <div style="background:#000;padding:24px;border-radius:16px;display:inline-block">
+        <img src="https://www.roofmanager.ca/static/logo.png" alt="Roof Manager" width="180" style="max-width:180px;height:auto;display:block"/>
       </div>
-      <h1 style="color: #1e3a5f; font-size: 24px; margin: 16px 0 4px;">Roof Manager</h1>
+      <h1 style="color: #1e3a5f; font-size: 18px; margin: 16px 0 4px;">&nbsp;</h1>
       <p style="color: #6b7280; font-size: 14px; margin: 0;">Password Reset</p>
     </div>
     <div style="background: #f8fafc; border-radius: 16px; padding: 32px; text-align: center;">
@@ -2240,6 +2240,9 @@ customerAuthRoutes.post('/magic-link', async (c) => {
   const subject = 'Your Roof Manager sign-in link'
   const htmlBody = `
     <div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:32px">
+      <div style="text-align:center;background:#000;padding:20px;border-radius:12px;margin-bottom:24px">
+        <img src="https://www.roofmanager.ca/static/logo.png" alt="Roof Manager" width="180" style="max-width:180px;height:auto;display:block;margin:0 auto"/>
+      </div>
       <h2 style="color:#0A0A0A">Sign in to Roof Manager</h2>
       <p>Click the button below to sign in. This link expires in 15 minutes.</p>
       <a href="${magicUrl}" style="display:inline-block;background:#00FF88;color:#0A0A0A;font-weight:700;padding:14px 28px;border-radius:10px;text-decoration:none;font-size:16px;margin:16px 0">

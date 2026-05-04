@@ -543,7 +543,7 @@ heygen.post('/report-video/:orderId', async (c) => {
   const eave = report.total_eave_ft || 0
   const ridge = report.total_ridge_ft || 0
 
-  const script = body.custom_script || `Hi there! I have your Roof Reporter AI measurement report ready for the property at ${address}. Your roof has a total measured area of ${totalSquares} squares with a predominant pitch of ${pitch}. We identified ${segments} roof planes in total. Key edge measurements include ${Math.round(eave)} linear feet of eave and ${Math.round(ridge)} linear feet of ridge. The report includes a full diagram, waste factor analysis, and material estimation. All measurements are generated using our AI-powered satellite imagery analysis engine. If you have any questions about your report, our team is here to help. Thank you for using Roof Reporter AI!`
+  const script = body.custom_script || `Hi there! I have your Roof Manager measurement report ready for the property at ${address}. Your roof has a total measured area of ${totalSquares} squares with a predominant pitch of ${pitch}. We identified ${segments} roof planes in total. Key edge measurements include ${Math.round(eave)} linear feet of eave and ${Math.round(ridge)} linear feet of ridge. The report includes a full diagram, waste factor analysis, and material estimation. All measurements are generated using our AI-powered satellite imagery analysis engine. If you have any questions about your report, our team is here to help. Thank you for using Roof Manager!`
 
   const heygenPayload = {
     video_inputs: [{

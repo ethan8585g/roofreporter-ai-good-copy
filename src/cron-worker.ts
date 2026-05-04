@@ -50,6 +50,9 @@ async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number
     const registerUrl = `https://www.roofmanager.ca/register?email=${encodeURIComponent(row.email)}${row.preview_id ? `&preview_id=${row.preview_id}` : ''}`
     const html = `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
+        <div style="text-align:center;background:#000;padding:20px;border-radius:12px 12px 0 0;margin:-32px -32px 24px">
+          <img src="https://www.roofmanager.ca/static/logo.png" alt="Roof Manager" width="160" style="max-width:160px;height:auto;display:block;margin:0 auto"/>
+        </div>
         <h2 style="color:#0A0A0A;margin-bottom:8px">You left before finishing — here's your roof report</h2>
         <p style="color:#374151;margin-bottom:24px">
           We noticed you started setting up your Roof Manager account but didn't finish.
@@ -119,6 +122,9 @@ async function runSecretaryTrialManagement(env: Bindings): Promise<{ remindersSe
       if (!resendKey || !row.email) continue
       const html = `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
+          <div style="text-align:center;background:#000;padding:20px;border-radius:12px 12px 0 0;margin:-32px -32px 24px">
+            <img src="https://www.roofmanager.ca/static/logo.png" alt="Roof Manager" width="160" style="max-width:160px;height:auto;display:block;margin:0 auto"/>
+          </div>
           <h2 style="color:#0A0A0A">Your Roofer Secretary trial ends in 3 days</h2>
           <p style="color:#374151">Hi ${row.name || 'there'},</p>
           <p style="color:#374151">

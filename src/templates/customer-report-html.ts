@@ -104,7 +104,7 @@ export function generateCustomerReportHTML(report: RoofReport): string {
 <body>
   <section class="page">
     <div class="brand">
-      <div class="logo">Roof Manager</div>
+      <div class="logo"><img src="https://www.roofmanager.ca/static/logo.png" alt="Roof Manager" style="height:48px;width:auto;display:block"/></div>
       <div class="meta">
         ${orderNumber ? `Report #${escapeHtml(orderNumber)}<br/>` : ''}
         ${escapeHtml(reportDate)}

@@ -25,9 +25,9 @@ export function buildReportLinkEmail(
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif">
 <div style="max-width:560px;margin:0 auto;padding:24px">
-  <div style="background:#1E3A5F;color:#fff;padding:24px 28px;border-radius:12px 12px 0 0;text-align:center">
-    <div style="font-size:22px;font-weight:800;letter-spacing:1px">ROOF MANAGER</div>
-    <div style="font-size:12px;color:#93C5FD;margin-top:4px">Roof Report Ready</div>
+  <div style="background:#000;color:#fff;padding:20px 28px;border-radius:12px 12px 0 0;text-align:center">
+    <img src="https://www.roofmanager.ca/static/logo.png" alt="Roof Manager" width="180" style="max-width:180px;height:auto;display:block;margin:0 auto"/>
+    <div style="font-size:12px;color:#9CA3AF;margin-top:8px;letter-spacing:0.5px">Roof Report Ready</div>
   </div>
   <div style="background:#fff;padding:28px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
     <p style="font-size:15px;color:#1a1a2e;margin:0 0 12px">Your roof report for <strong>${address}</strong> is ready.</p>
@@ -65,9 +65,9 @@ export function buildEmailWrapper(reportHtml: string, address: string, reportNum
 <body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif">
 <div style="max-width:680px;margin:0 auto;padding:20px">
   <!-- Email Header -->
-  <div style="background:#1E3A5F;color:#fff;padding:24px 28px;border-radius:12px 12px 0 0;text-align:center">
-    <div style="font-size:24px;font-weight:800;letter-spacing:1px">REUSE CANADA</div>
-    <div style="font-size:12px;color:#93C5FD;margin-top:4px">Professional Roof Measurement Report</div>
+  <div style="background:#000;color:#fff;padding:20px 28px;border-radius:12px 12px 0 0;text-align:center">
+    <img src="https://www.roofmanager.ca/static/logo.png" alt="Roof Manager" width="200" style="max-width:200px;height:auto;display:block;margin:0 auto"/>
+    <div style="font-size:12px;color:#9CA3AF;margin-top:8px;letter-spacing:0.5px">Professional Roof Measurement Report</div>
   </div>
 
   <!-- Email Body -->
@@ -664,9 +664,10 @@ export async function notifySalesNewLead(env: any, data: {
 
   const html = `
 <div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
-  <div style="background:#0f172a;padding:24px;border-radius:12px 12px 0 0">
-    <h1 style="color:#38bdf8;font-size:18px;margin:0">🔔 New Lead from Roof Manager</h1>
-    <p style="color:#94a3b8;font-size:13px;margin:4px 0 0">Source: ${esc(data.source)}</p>
+  <div style="background:#000;padding:20px 24px;border-radius:12px 12px 0 0;text-align:center">
+    <img src="https://www.roofmanager.ca/static/logo.png" alt="Roof Manager" width="160" style="max-width:160px;height:auto;display:block;margin:0 auto 8px"/>
+    <h1 style="color:#fff;font-size:16px;margin:0;font-weight:600">🔔 New Lead</h1>
+    <p style="color:#9CA3AF;font-size:12px;margin:4px 0 0">Source: ${esc(data.source)}</p>
   </div>
   <div style="background:white;padding:24px;border:1px solid #e2e8f0;border-top:none">
     <table style="width:100%;border-collapse:collapse">${rows.join('')}</table>
@@ -769,9 +770,10 @@ export async function notifyNewUserSignup(env: any, data: {
 
   const html = `
 <div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
-  <div style="background:#0f172a;padding:24px;border-radius:12px 12px 0 0">
-    <h1 style="color:#34d399;font-size:18px;margin:0">🎉 New User Signup — Roof Manager</h1>
-    <p style="color:#94a3b8;font-size:13px;margin:4px 0 0">A new account just registered.</p>
+  <div style="background:#000;padding:20px 24px;border-radius:12px 12px 0 0;text-align:center">
+    <img src="https://www.roofmanager.ca/static/logo.png" alt="Roof Manager" width="160" style="max-width:160px;height:auto;display:block;margin:0 auto 8px"/>
+    <h1 style="color:#fff;font-size:16px;margin:0;font-weight:600">🎉 New User Signup</h1>
+    <p style="color:#9CA3AF;font-size:12px;margin:4px 0 0">A new account just registered.</p>
   </div>
   <div style="background:white;padding:24px;border:1px solid #e2e8f0;border-top:none">
     <table style="width:100%;border-collapse:collapse">${rows.join('')}</table>

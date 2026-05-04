@@ -809,8 +809,9 @@ async function sendTeamInviteEmail(
   const emailHtml = `
 <!DOCTYPE html>
 <html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f8fafc">
-  <div style="background:linear-gradient(135deg,#0ea5e9,#3b82f6);padding:24px;border-radius:12px 12px 0 0;text-align:center">
-    <h1 style="color:#fff;margin:0;font-size:22px">You're Invited to Join a Team!</h1>
+  <div style="background:#000;padding:20px 24px;border-radius:12px 12px 0 0;text-align:center">
+    <img src="https://www.roofmanager.ca/static/logo.png" alt="Roof Manager" width="180" style="max-width:180px;height:auto;display:block;margin:0 auto 8px"/>
+    <h1 style="color:#fff;margin:0;font-size:18px;font-weight:600">You're Invited to Join a Team!</h1>
   </div>
   <div style="background:#fff;padding:24px;border:1px solid #e2e8f0;border-radius:0 0 12px 12px">
     <p style="font-size:16px;color:#1e293b">Hi <strong>${memberName}</strong>,</p>

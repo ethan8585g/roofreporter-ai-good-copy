@@ -572,17 +572,8 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <!-- Header: Logo + Address -->
   <div style="padding:12px 28px 10px;display:flex;align-items:center;gap:14px">
     <!-- Logo -->
-    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-      <div style="width:36px;height:36px;background:${TEAL};border-radius:6px;display:flex;align-items:center;justify-content:center">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M3 21V10L12 3L21 10V21H15V14H9V21H3Z" fill="white"/>
-          <path d="M10 8.5C10 8.5 11 7 12 7C13 7 14 8.5 14 8.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <div>
-        <div style="font-size:16px;font-weight:900;color:${TEAL};letter-spacing:0.5px;line-height:1">ROOF MANAGER</div>
-        <div style="font-size:9px;font-weight:500;color:#888;letter-spacing:1px">AI</div>
-      </div>
+    <div style="display:flex;align-items:center;flex-shrink:0">
+      <img src="https://www.roofmanager.ca/static/logo.png" alt="Roof Manager" style="height:48px;width:auto;display:block"/>
     </div>
     <!-- Address -->
     <div style="flex:1;text-align:right">
