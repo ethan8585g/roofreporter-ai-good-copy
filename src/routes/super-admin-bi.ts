@@ -784,10 +784,16 @@ superAdminBi.get('/command-center', async (c) => {
       moduleDistRow, recentEventsRow, liveNowRow
     ] = await db.batch([
       // North Star — total_sales = paid orders + manual payments
+      // Credit-redemption orders (notes='Paid via credit balance') are excluded:
+      // their revenue was already booked when the credit pack was purchased.
       db.prepare(`SELECT
-                    (SELECT COALESCE(SUM(price),0) FROM orders WHERE payment_status='paid' AND (is_trial IS NULL OR is_trial=0))
+                    (SELECT COALESCE(SUM(price),0) FROM orders
+                       WHERE payment_status='paid' AND (is_trial IS NULL OR is_trial=0)
+                         AND (notes IS NULL OR notes NOT LIKE 'Paid via credit balance%'))
                     + (SELECT COALESCE(SUM(amount),0) FROM manual_payments) AS total_sales,
-                    (SELECT COUNT(*) FROM orders WHERE payment_status='paid' AND (is_trial IS NULL OR is_trial=0)) AS paid_orders,
+                    (SELECT COUNT(*) FROM orders
+                       WHERE payment_status='paid' AND (is_trial IS NULL OR is_trial=0)
+                         AND (notes IS NULL OR notes NOT LIKE 'Paid via credit balance%')) AS paid_orders,
                     (SELECT COUNT(*) FROM manual_payments) AS manual_payment_count`),
       db.prepare(`SELECT COUNT(*) as user_count, COUNT(CASE WHEN created_at >= datetime('now','-${days} days') THEN 1 END) as new_users FROM customers`),
       db.prepare(`SELECT COUNT(*) as active_today FROM (
@@ -797,15 +803,21 @@ superAdminBi.get('/command-center', async (c) => {
                   )`),
       // Defensive cap on read in case any uncapped legacy rows slip through.
       db.prepare(`SELECT ROUND(AVG(MIN(duration_seconds, 1800)),0) as session_avg FROM user_module_visits WHERE started_at >= datetime('now','-${days} days') AND duration_seconds > 0`),
-      // Top spenders — orders + manual payments
+      // Top spenders — orders + manual payments. Credit-redemption orders
+      // (notes='Paid via credit balance') are excluded so the prepaid pack
+      // isn't double-counted alongside the per-redemption notional $10.
       db.prepare(`SELECT c.id, c.name, c.email, c.company_name,
                          (SELECT COUNT(*) FROM orders o WHERE o.customer_id=c.id) as order_count,
-                         (SELECT COALESCE(SUM(o.price),0) FROM orders o WHERE o.customer_id=c.id AND o.payment_status='paid' AND (o.is_trial IS NULL OR o.is_trial=0))
+                         (SELECT COALESCE(SUM(o.price),0) FROM orders o
+                            WHERE o.customer_id=c.id AND o.payment_status='paid' AND (o.is_trial IS NULL OR o.is_trial=0)
+                              AND (o.notes IS NULL OR o.notes NOT LIKE 'Paid via credit balance%'))
                          + (SELECT COALESCE(SUM(mp.amount),0) FROM manual_payments mp WHERE mp.customer_id=c.id) as total_spent,
                          (SELECT COALESCE(SUM(mp.amount),0) FROM manual_payments mp WHERE mp.customer_id=c.id) as manual_amount,
                          (SELECT MAX(o.created_at) FROM orders o WHERE o.customer_id=c.id) as last_order_at
                   FROM customers c
-                  WHERE (SELECT COALESCE(SUM(o.price),0) FROM orders o WHERE o.customer_id=c.id AND o.payment_status='paid' AND (o.is_trial IS NULL OR o.is_trial=0))
+                  WHERE (SELECT COALESCE(SUM(o.price),0) FROM orders o
+                           WHERE o.customer_id=c.id AND o.payment_status='paid' AND (o.is_trial IS NULL OR o.is_trial=0)
+                             AND (o.notes IS NULL OR o.notes NOT LIKE 'Paid via credit balance%'))
                        + (SELECT COALESCE(SUM(mp.amount),0) FROM manual_payments mp WHERE mp.customer_id=c.id) > 0
                   ORDER BY total_spent DESC
                   LIMIT 10`),
