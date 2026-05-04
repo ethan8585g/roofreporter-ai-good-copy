@@ -7208,7 +7208,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
         <div class="leading-tight">
           <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
-          <span class="hidden sm:block text-gray-500 text-[10px] -mt-0.5 font-medium tracking-wide">CRM &amp; Reports for Roofing &amp; Solar Companies</span>
+          <span class="hidden sm:block text-gray-500 -mt-0.5 font-medium tracking-wide" style="font-size:10px">CRM &amp; Reports for Roofing &amp; Solar Companies</span>
         </div>
       </a>
 
@@ -14176,7 +14176,7 @@ function getCoveragePageHTML() {
         <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
         <div class="leading-tight">
           <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
-          <span class="hidden sm:block text-gray-500 text-[10px] -mt-0.5 font-medium tracking-wide">CRM &amp; Reports for Roofing &amp; Solar Companies</span>
+          <span class="hidden sm:block text-gray-500 -mt-0.5 font-medium tracking-wide" style="font-size:10px">CRM &amp; Reports for Roofing &amp; Solar Companies</span>
         </div>
       </a>
       <div class="hidden md:flex items-center gap-7">
