@@ -270,12 +270,15 @@ gtag('js', new Date());
 gtag('config', 'AW-18080319225');
 // Conversion labels — real labels look like '26MMCMOgxaYcEPmNr61D'. The trackAdsConversion()
 // helper no-ops on XXX_ values, so all wired fires below stay safe until labels are pasted.
+// TODO(google-ads): create the four conversion actions in Google Ads → Tools → Conversions
+// (Lead, Contact Lead, Demo Booked, Purchase) and replace each XXX_*_LABEL below with the
+// real label. Without this, Smart Bidding only sees the signup event — campaigns can't optimize CPA.
 window.GOOGLE_ADS_CONVERSIONS = {
-  lead:         'AW-18080319225/XXX_LEAD_LABEL',         // hero CTAs, exit-intent, gated content
-  contact_lead: 'AW-18080319225/XXX_CONTACT_LABEL',      // contact form submission
-  demo:         'AW-18080319225/XXX_DEMO_LABEL',         // demo booked
+  lead:         'AW-18080319225/XXX_LEAD_LABEL',         // TODO: hero CTAs, exit-intent, address-preview, gated lead capture
+  contact_lead: 'AW-18080319225/XXX_CONTACT_LABEL',      // TODO: contact form submission
+  demo:         'AW-18080319225/XXX_DEMO_LABEL',         // TODO: demo booked
   signup:       'AW-18080319225/26MMCMOgxaYcEPmNr61D',   // account created (LIVE)
-  purchase:     'AW-18080319225/XXX_PURCHASE_LABEL'      // paid checkout success
+  purchase:     'AW-18080319225/XXX_PURCHASE_LABEL'      // TODO: paid checkout success (Square return URL)
 };
 // Phone tracking removed — phone is not a lead source for this business and
 // the Call-from-Ads gtag('config') was causing repeated failed "Calls (uploads)"
@@ -10265,11 +10268,14 @@ function getCustomerLoginHTML(googleClientId = '') {
       // P2: disable the button while the network call is in flight so users
       // can't spam duplicate registrations.
       if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
+      // Pull persisted Google Ads click ID so attribution survives signup via this legacy form.
+      var _gclid = null;
+      try { var _gr = localStorage.getItem('rm_ads_gclid'); if (_gr) { var _gp = JSON.parse(_gr); _gclid = _gp && _gp.gclid || null; } } catch(_) {}
       try {
         const res = await fetch('/api/customer/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, name, phone, company_name: company, verification_token: _regVerificationToken, referred_by_code: new URLSearchParams(window.location.search).get('ref') || localStorage.getItem('_ref_code') || '' })
+          body: JSON.stringify({ email, password, name, phone, company_name: company, verification_token: _regVerificationToken, referred_by_code: new URLSearchParams(window.location.search).get('ref') || localStorage.getItem('_ref_code') || '', gclid: _gclid })
         });
         const data = await res.json();
         if (res.ok && data.success) {
