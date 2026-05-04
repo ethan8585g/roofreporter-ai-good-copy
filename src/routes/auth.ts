@@ -523,7 +523,8 @@ authRoutes.get('/admin-stats', async (c) => {
     const customers = await c.env.DB.prepare(`
       SELECT c.*,
         (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.id) as order_count,
-        (SELECT COALESCE(SUM(o.price), 0) FROM orders o WHERE o.customer_id = c.id AND o.payment_status = 'paid' AND (o.is_trial IS NULL OR o.is_trial = 0)) as total_spent,
+        (SELECT COALESCE(SUM(o.price), 0) FROM orders o WHERE o.customer_id = c.id AND o.payment_status = 'paid' AND (o.is_trial IS NULL OR o.is_trial = 0) AND (o.notes IS NULL OR o.notes NOT LIKE 'Paid via credit balance%'))
+          + (SELECT COALESCE(SUM(mp.amount), 0) FROM manual_payments mp WHERE mp.customer_id = c.id) as total_spent,
         (SELECT COUNT(*) FROM invoices i WHERE i.customer_id = c.id) as invoice_count,
         (SELECT COALESCE(SUM(i.total), 0) FROM invoices i WHERE i.customer_id = c.id AND i.status = 'paid') as invoices_paid,
         (SELECT MAX(o.created_at) FROM orders o WHERE o.customer_id = c.id) as last_order_date,
@@ -546,12 +547,13 @@ authRoutes.get('/admin-stats', async (c) => {
       ORDER BY month DESC
     `).all()
 
-    // Earnings by week (last 8 weeks)
+    // Earnings by week (last 8 weeks). Excludes trials and credit-redemption
+    // orders so the weekly chart matches the other revenue rollups.
     const weeklyEarnings = await c.env.DB.prepare(`
-      SELECT 
+      SELECT
         strftime('%Y-W%W', created_at) as week,
         COUNT(*) as order_count,
-        SUM(CASE WHEN payment_status = 'paid' THEN price ELSE 0 END) as revenue
+        SUM(CASE WHEN payment_status = 'paid' AND (is_trial IS NULL OR is_trial = 0) AND (notes IS NULL OR notes NOT LIKE 'Paid via credit balance%') THEN price ELSE 0 END) as revenue
       FROM orders
       WHERE created_at >= date('now', '-8 weeks')
       GROUP BY strftime('%Y-W%W', created_at)

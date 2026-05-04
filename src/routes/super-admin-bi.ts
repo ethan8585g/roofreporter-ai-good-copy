@@ -897,65 +897,6 @@ superAdminBi.get('/command-center', async (c) => {
   }
 })
 
-// ── MANUAL PAYMENTS — record offline / pricing-changed purchases ──────
-superAdminBi.post('/manual-payments', async (c) => {
-  try {
-    const admin = c.get('admin' as any) as any
-    const body = await c.req.json<any>().catch(() => ({}))
-    const customer_id = parseInt(body.customer_id, 10)
-    const amount = parseFloat(body.amount)
-    const description = (body.description || '').toString().slice(0, 500)
-    const paid_at = (body.paid_at || '').toString().trim()
-
-    if (!customer_id || customer_id <= 0) return c.json({ error: 'customer_id required' }, 400)
-    if (!isFinite(amount) || amount <= 0) return c.json({ error: 'amount must be positive' }, 400)
-
-    const exists = await c.env.DB.prepare(`SELECT id FROM customers WHERE id = ?`).bind(customer_id).first()
-    if (!exists) return c.json({ error: 'customer not found' }, 404)
-
-    const result = await c.env.DB.prepare(
-      paid_at
-        ? `INSERT INTO manual_payments (customer_id, amount, description, paid_at, recorded_by_admin_id) VALUES (?, ?, ?, ?, ?)`
-        : `INSERT INTO manual_payments (customer_id, amount, description, recorded_by_admin_id) VALUES (?, ?, ?, ?)`
-    ).bind(...(paid_at ? [customer_id, amount, description, paid_at, admin?.id || null] : [customer_id, amount, description, admin?.id || null])).run()
-
-    return c.json({ success: true, id: (result as any)?.meta?.last_row_id || null })
-  } catch (e: any) {
-    return c.json({ error: e.message }, 500)
-  }
-})
-
-superAdminBi.get('/manual-payments', async (c) => {
-  try {
-    const customerId = parseInt(c.req.query('customer_id') || '0', 10)
-    const sql = customerId > 0
-      ? `SELECT mp.id, mp.customer_id, mp.amount, mp.description, mp.paid_at, mp.created_at,
-                c.name as customer_name, c.email as customer_email
-         FROM manual_payments mp LEFT JOIN customers c ON c.id = mp.customer_id
-         WHERE mp.customer_id = ? ORDER BY mp.paid_at DESC LIMIT 200`
-      : `SELECT mp.id, mp.customer_id, mp.amount, mp.description, mp.paid_at, mp.created_at,
-                c.name as customer_name, c.email as customer_email
-         FROM manual_payments mp LEFT JOIN customers c ON c.id = mp.customer_id
-         ORDER BY mp.paid_at DESC LIMIT 200`
-    const stmt = customerId > 0 ? c.env.DB.prepare(sql).bind(customerId) : c.env.DB.prepare(sql)
-    const rs = await stmt.all<any>()
-    return c.json({ payments: rs?.results || [] })
-  } catch (e: any) {
-    return c.json({ error: e.message }, 500)
-  }
-})
-
-superAdminBi.delete('/manual-payments/:id', async (c) => {
-  try {
-    const id = parseInt(c.req.param('id'), 10)
-    if (!id) return c.json({ error: 'id required' }, 400)
-    await c.env.DB.prepare(`DELETE FROM manual_payments WHERE id = ?`).bind(id).run()
-    return c.json({ success: true })
-  } catch (e: any) {
-    return c.json({ error: e.message }, 500)
-  }
-})
-
 // ── MANUAL PAYMENTS ─────────────────────────────────────────
 // Record an offline / cash / e-transfer / wire payment so it shows up in
 // total_sales, top_spenders, and the revenue waterfall. Superadmin only.
@@ -992,14 +933,15 @@ superAdminBi.post('/manual-payments', async (c) => {
 
 superAdminBi.get('/manual-payments', async (c) => {
   try {
+    const customerId = parseInt(c.req.query('customer_id') || '0', 10)
     const limit = Math.min(parseInt(c.req.query('limit') || '50'), 200)
-    const rows = await c.env.DB.prepare(
-      `SELECT mp.id, mp.customer_id, c.email, c.name, mp.amount, mp.description, mp.paid_at, mp.recorded_by_admin_id, mp.created_at
-       FROM manual_payments mp
-       LEFT JOIN customers c ON c.id = mp.customer_id
-       ORDER BY mp.paid_at DESC
-       LIMIT ?`
-    ).bind(limit).all() as any
+    const baseSelect = `SELECT mp.id, mp.customer_id, c.email, c.email AS customer_email, c.name, c.name AS customer_name,
+                               mp.amount, mp.description, mp.paid_at, mp.recorded_by_admin_id, mp.created_at
+                        FROM manual_payments mp
+                        LEFT JOIN customers c ON c.id = mp.customer_id`
+    const rows = customerId > 0
+      ? await c.env.DB.prepare(`${baseSelect} WHERE mp.customer_id = ? ORDER BY mp.paid_at DESC LIMIT ?`).bind(customerId, limit).all() as any
+      : await c.env.DB.prepare(`${baseSelect} ORDER BY mp.paid_at DESC LIMIT ?`).bind(limit).all() as any
     return c.json({ payments: rows.results || [] })
   } catch (e: any) {
     return c.json({ error: e.message }, 500)

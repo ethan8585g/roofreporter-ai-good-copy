@@ -11,16 +11,23 @@
  * - Roofer Secretary AI Service Panel (minutes, billing, scripts)
  */
 import { Hono } from 'hono'
-import { validateAdminSession } from './auth'
+import { validateAdminSession, requireSuperadmin } from './auth'
 import { hashPassword } from '../lib/password'
 
 type Bindings = { DB: D1Database; [key: string]: any }
 const platformAdmin = new Hono<{ Bindings: Bindings }>()
 
-// Auth middleware — require valid admin session
+// Auth middleware — superadmin only. These routes manage tiers, voice/LLM
+// configs, prompts, and SIP setup — all platform-wide controls that a
+// regular admin role must not be able to mutate.
 platformAdmin.use('/*', async (c, next) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(
+    c.env.DB,
+    c.req.header('Authorization'),
+    c.req.header('Cookie')
+  )
   if (!admin) return c.json({ error: 'Admin authentication required' }, 401)
+  if (!requireSuperadmin(admin)) return c.json({ error: 'Superadmin access required' }, 403)
   c.set('admin' as any, admin)
   return next()
 })

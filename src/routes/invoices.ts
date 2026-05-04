@@ -1047,7 +1047,8 @@ invoiceRoutes.get('/customers/list', async (c) => {
       ? await c.env.DB.prepare(`
           SELECT c.*,
             (SELECT COUNT(*) FROM orders WHERE customer_id = c.id) as order_count,
-            (SELECT SUM(price) FROM orders WHERE customer_id = c.id AND payment_status = 'paid') as total_spent,
+            (SELECT COALESCE(SUM(price), 0) FROM orders WHERE customer_id = c.id AND payment_status = 'paid' AND (is_trial IS NULL OR is_trial = 0) AND (notes IS NULL OR notes NOT LIKE 'Paid via credit balance%'))
+              + (SELECT COALESCE(SUM(amount), 0) FROM manual_payments WHERE customer_id = c.id) as total_spent,
             (SELECT COUNT(*) FROM invoices WHERE customer_id = c.id) as invoice_count,
             (SELECT SUM(total) FROM invoices WHERE customer_id = c.id AND status = 'paid') as invoices_paid,
             'portal' as source
@@ -1056,7 +1057,8 @@ invoiceRoutes.get('/customers/list', async (c) => {
       : await c.env.DB.prepare(`
           SELECT c.*,
             (SELECT COUNT(*) FROM orders WHERE customer_id = c.id) as order_count,
-            (SELECT SUM(price) FROM orders WHERE customer_id = c.id AND payment_status = 'paid') as total_spent,
+            (SELECT COALESCE(SUM(price), 0) FROM orders WHERE customer_id = c.id AND payment_status = 'paid' AND (is_trial IS NULL OR is_trial = 0) AND (notes IS NULL OR notes NOT LIKE 'Paid via credit balance%'))
+              + (SELECT COALESCE(SUM(amount), 0) FROM manual_payments WHERE customer_id = c.id) as total_spent,
             (SELECT COUNT(*) FROM invoices WHERE customer_id = c.id) as invoice_count,
             (SELECT SUM(total) FROM invoices WHERE customer_id = c.id AND status = 'paid') as invoices_paid,
             'portal' as source

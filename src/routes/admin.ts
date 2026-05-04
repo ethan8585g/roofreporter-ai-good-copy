@@ -272,12 +272,14 @@ adminRoutes.get('/dashboard', async (c) => {
       FROM orders
     `).first()
 
-    // Revenue stats (EXCLUDES trial orders)
+    // Revenue stats (EXCLUDES trial orders + credit-redemption orders).
+    // Credit-redemption orders carry a notional $10 price but no money moves
+    // — the actual revenue was booked when the credit pack was purchased.
     const revenueStats = await c.env.DB.prepare(`
       SELECT
-        SUM(CASE WHEN payment_status = 'paid' AND (is_trial IS NULL OR is_trial = 0) THEN price ELSE 0 END) as total_revenue,
-        SUM(CASE WHEN payment_status = 'paid' AND service_tier = 'express' AND (is_trial IS NULL OR is_trial = 0) THEN price ELSE 0 END) as express_revenue,
-        SUM(CASE WHEN payment_status = 'paid' AND service_tier = 'standard' AND (is_trial IS NULL OR is_trial = 0) THEN price ELSE 0 END) as standard_revenue,
+        SUM(CASE WHEN payment_status = 'paid' AND (is_trial IS NULL OR is_trial = 0) AND (notes IS NULL OR notes NOT LIKE 'Paid via credit balance%') THEN price ELSE 0 END) as total_revenue,
+        SUM(CASE WHEN payment_status = 'paid' AND service_tier = 'express' AND (is_trial IS NULL OR is_trial = 0) AND (notes IS NULL OR notes NOT LIKE 'Paid via credit balance%') THEN price ELSE 0 END) as express_revenue,
+        SUM(CASE WHEN payment_status = 'paid' AND service_tier = 'standard' AND (is_trial IS NULL OR is_trial = 0) AND (notes IS NULL OR notes NOT LIKE 'Paid via credit balance%') THEN price ELSE 0 END) as standard_revenue,
         SUM(CASE WHEN is_trial = 1 THEN 1 ELSE 0 END) as trial_orders
       FROM orders
     `).first()
@@ -1160,7 +1162,8 @@ adminRoutes.get('/superadmin/users', async (c) => {
         owner.company_name as team_owner_company,
         (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.id) as order_count,
         (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.id AND o.is_trial = 1) as trial_orders,
-        (SELECT COALESCE(SUM(o.price), 0) FROM orders o WHERE o.customer_id = c.id AND o.payment_status = 'paid' AND (o.is_trial IS NULL OR o.is_trial = 0)) as total_spent,
+        (SELECT COALESCE(SUM(o.price), 0) FROM orders o WHERE o.customer_id = c.id AND o.payment_status = 'paid' AND (o.is_trial IS NULL OR o.is_trial = 0) AND (o.notes IS NULL OR o.notes NOT LIKE 'Paid via credit balance%'))
+          + (SELECT COALESCE(SUM(mp.amount), 0) FROM manual_payments mp WHERE mp.customer_id = c.id) as total_spent,
         (SELECT MAX(o.created_at) FROM orders o WHERE o.customer_id = c.id) as last_order_date,
         (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.id AND o.status = 'completed') as completed_reports
       FROM customers c
@@ -1294,12 +1297,13 @@ adminRoutes.get('/superadmin/sales', async (c) => {
       ORDER BY ${orderBy}
     `).all()
 
-    // Per-report order sales (non-trial)
+    // Per-report order sales (non-trial). paid_value excludes credit
+    // redemptions (those carry a notional $10 with no money moved).
     const orderSalesByPeriod = await c.env.DB.prepare(`
       SELECT ${groupBy.replace(/sp\./g, 'o.')} as period,
         COUNT(*) as orders,
         SUM(o.price) as total_value,
-        SUM(CASE WHEN o.payment_status = 'paid' THEN o.price ELSE 0 END) as paid_value,
+        SUM(CASE WHEN o.payment_status = 'paid' AND (o.notes IS NULL OR o.notes NOT LIKE 'Paid via credit balance%') THEN o.price ELSE 0 END) as paid_value,
         SUM(CASE WHEN o.is_trial = 1 THEN 1 ELSE 0 END) as trial_count
       FROM orders o
       ${dateFilter.replace(/sp\./g, 'o.')}
@@ -1334,7 +1338,7 @@ adminRoutes.get('/superadmin/sales', async (c) => {
       SELECT
         COUNT(*) as total_orders,
         SUM(price) as total_value,
-        SUM(CASE WHEN payment_status = 'paid' AND (is_trial IS NULL OR is_trial = 0) THEN price ELSE 0 END) as paid_value,
+        SUM(CASE WHEN payment_status = 'paid' AND (is_trial IS NULL OR is_trial = 0) AND (notes IS NULL OR notes NOT LIKE 'Paid via credit balance%') THEN price ELSE 0 END) as paid_value,
         SUM(CASE WHEN is_trial = 1 THEN 1 ELSE 0 END) as trial_orders
       FROM orders
     `).first()
@@ -1403,7 +1407,7 @@ adminRoutes.get('/superadmin/orders', async (c) => {
         SUM(CASE WHEN trace_source IS NULL AND COALESCE(needs_admin_trace,0) = 0 THEN 1 ELSE 0 END) as no_trace,
         SUM(CASE WHEN COALESCE(needs_admin_trace,0) = 1 THEN 1 ELSE 0 END) as needs_trace,
         SUM(CASE WHEN trace_source = 'self' AND COALESCE(is_trial,0) = 0 THEN 1 ELSE 0 END) as self_traced_paid,
-        COALESCE(SUM(CASE WHEN trace_source = 'self' AND payment_status = 'paid' AND COALESCE(is_trial,0) = 0 THEN price ELSE 0 END), 0) as self_traced_revenue
+        COALESCE(SUM(CASE WHEN trace_source = 'self' AND payment_status = 'paid' AND COALESCE(is_trial,0) = 0 AND (notes IS NULL OR notes NOT LIKE 'Paid via credit balance%') THEN price ELSE 0 END), 0) as self_traced_revenue
       FROM orders
     `).first()
 
