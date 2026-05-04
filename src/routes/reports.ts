@@ -323,6 +323,47 @@ reportsRoutes.get('/:orderId/html', async (c) => {
   // modal that POSTs to /api/reports/:orderId/feedback.
   const proWidget = `<script>window.__ROOF_REPORT_ORDER_ID__=${JSON.stringify(orderId)};</script><script src="/static/measure.js" defer></script>`
 
+  // Decide whether the cover already has a 3D oblique image — if not, we
+  // inject a hidden auto-capture iframe so the FIRST view of any report
+  // upgrades the cover with zero user action. One-shot per order.
+  let hasOblique3d = false
+  try {
+    const parsed = row.api_response_raw ? JSON.parse(row.api_response_raw) : null
+    hasOblique3d = !!(parsed?.imagery?.oblique_3d_url)
+  } catch {}
+
+  const autoCaptureBlock = hasOblique3d ? '' : `
+<style>
+  .rm-3d-autocap{position:fixed;bottom:90px;right:24px;z-index:99996;background:rgba(0,0,0,0.85);color:#fff;padding:10px 16px;border-radius:10px;font:600 12px -apple-system,BlinkMacSystemFont,Segoe UI,Inter,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.3);display:flex;align-items:center;gap:8px;border:1px solid rgba(0,255,136,0.25)}
+  .rm-3d-autocap .spin{display:inline-block;width:12px;height:12px;border:2px solid rgba(0,255,136,0.3);border-top-color:#00FF88;border-radius:50%;animation:rm3dspin 1s linear infinite}
+  @keyframes rm3dspin{to{transform:rotate(360deg)}}
+</style>
+<div class="rm-3d-autocap" id="rm3dAutoCap"><span class="spin"></span><span>Generating 3D cover…</span></div>
+<iframe id="rm3dAutoFrame" src="/3d-verify?autocapture=1&orderId=${encodeURIComponent(orderId)}" style="position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;border:0;opacity:0;pointer-events:none" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+<script>
+  (function(){
+    var banner = document.getElementById('rm3dAutoCap');
+    var frame = document.getElementById('rm3dAutoFrame');
+    var settled = false;
+    function done(ok){
+      if (settled) return; settled = true;
+      try { frame.remove(); } catch(_){}
+      if (ok && banner) {
+        banner.innerHTML = '<span style="color:#00FF88">✓</span> 3D cover ready — refresh to view';
+        setTimeout(function(){ try{location.reload();}catch(_){} }, 1200);
+      } else if (banner) {
+        banner.style.display = 'none';
+      }
+    }
+    window.addEventListener('message', function(e){
+      var d = e && e.data;
+      if (d && d.type === 'rm-3d-cover-done' && d.orderId === ${JSON.stringify(orderId)}) done(!!d.ok);
+    });
+    // Safety timeout
+    setTimeout(function(){ done(false); }, 35000);
+  })();
+</script>`
+
   // 3D Cover capture widget — opens /3d-verify in a fullscreen modal iframe
   // with the orderId param so the page shows the "Save as Cover" button.
   // Captures a Photorealistic 3D Tiles oblique view and writes it to
@@ -362,7 +403,7 @@ reportsRoutes.get('/:orderId/html', async (c) => {
   })();
 </script>`
 
-  const tail = `${cover3dWidget}${proWidget}`
+  const tail = `${autoCaptureBlock}${cover3dWidget}${proWidget}`
   if (augmented.includes('</body>')) {
     augmented = augmented.replace('</body>', `${tail}</body>`)
   } else {

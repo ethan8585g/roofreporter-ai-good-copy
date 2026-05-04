@@ -1085,10 +1085,12 @@ function initTraceMap() {
   // Fetch live pitch reading for the metrics bar.
   fetchLivePitch(center.lat, center.lng).catch(() => {});
 
-  // Pin marker
+  // Pin marker — clickable:false so the address centroid pin doesn't eat
+  // clicks at the most common trace-start spot.
   new google.maps.Marker({
     position: center,
     map: orderState.traceMap,
+    clickable: false,
     icon: {
       url: 'data:image/svg+xml,' + encodeURIComponent(
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="4" fill="%23ef4444" stroke="white" stroke-width="2"/></svg>'

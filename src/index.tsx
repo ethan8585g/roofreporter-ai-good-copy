@@ -1077,6 +1077,7 @@ app.get('/3d-verify', async (c) => {
   const TARGET = { lat: ${lat}, lng: ${lng} };
   const ORDER_ID = ${JSON.stringify(orderId)};
   const API_KEY = ${JSON.stringify(mapsKey)};
+  const AUTOCAPTURE = new URLSearchParams(location.search).get('autocapture') === '1';
   const INITIAL_HEIGHT = 250; // meters above ground
   const INITIAL_PITCH_DEG = -45; // looking down 45°
   let viewer = null;
@@ -1171,8 +1172,49 @@ app.get('/3d-verify', async (c) => {
     ).then((tileset) => {
       viewer.scene.primitives.add(tileset);
       flyToInitial(0);
+
+      // Auto-capture mode: when ?autocapture=1 + ?orderId= are set, the report
+      // page injected a hidden iframe so the first viewer of a report gets a
+      // 3D cover saved automatically. We wait for initial tiles to stream,
+      // give Cesium one extra frame, capture, POST, then signal the parent.
+      if (AUTOCAPTURE && ORDER_ID) {
+        const onceLoaded = tileset.initialTilesLoaded;
+        const fire = () => {
+          // Tilt the camera toward the south for a flattering oblique angle,
+          // then wait a short moment for the new tiles in view to stream in.
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, INITIAL_HEIGHT),
+            orientation: {
+              heading: Cesium.Math.toRadians(35),
+              pitch: Cesium.Math.toRadians(INITIAL_PITCH_DEG),
+              roll: 0
+            },
+            duration: 1.2
+          });
+          setTimeout(() => {
+            captureForCover().then(() => {
+              try { window.parent && window.parent.postMessage({ type: 'rm-3d-cover-done', orderId: ORDER_ID, ok: true }, '*'); } catch(_) {}
+            }).catch((e) => {
+              try { window.parent && window.parent.postMessage({ type: 'rm-3d-cover-done', orderId: ORDER_ID, ok: false, error: String(e && e.message || e) }, '*'); } catch(_) {}
+            });
+          }, 2500);
+        };
+        if (onceLoaded && onceLoaded.addEventListener) {
+          onceLoaded.addEventListener(fire);
+        } else {
+          // fallback: fixed delay if event isn't available on this Cesium build
+          setTimeout(fire, 6000);
+        }
+        // Hard timeout fallback so we never hang the parent indefinitely.
+        setTimeout(() => {
+          try { window.parent && window.parent.postMessage({ type: 'rm-3d-cover-done', orderId: ORDER_ID, ok: false, error: 'timeout' }, '*'); } catch(_) {}
+        }, 30000);
+      }
     }).catch((err) => {
       showErr('Could not load Photorealistic 3D Tiles. Verify the Map Tiles API is enabled for this key. (' + (err && err.message || err) + ')');
+      if (AUTOCAPTURE && ORDER_ID) {
+        try { window.parent && window.parent.postMessage({ type: 'rm-3d-cover-done', orderId: ORDER_ID, ok: false, error: String(err && err.message || err) }, '*'); } catch(_) {}
+      }
     });
   } catch (err) {
     showErr('Cesium failed to initialize. (' + (err && err.message || err) + ')');
