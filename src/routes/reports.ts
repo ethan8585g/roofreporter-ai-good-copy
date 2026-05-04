@@ -449,25 +449,38 @@ reportsRoutes.get('/:orderId/customer-pdf', async (c) => {
     s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
     s.onload = function(){
       var overlay = document.createElement('div');
+      overlay.id = 'rmPdfOverlay';
+      overlay.setAttribute('data-html2canvas-ignore', 'true');
       overlay.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.92);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:18px;font-weight:600;z-index:2147483647;text-align:center;padding:24px;gap:16px';
       overlay.innerHTML = '<div>Generating PDF…</div><div style="font-size:13px;font-weight:400;opacity:0.75;max-width:420px">If your browser asks permission to download, click <b>Allow</b>. This tab will stay open.</div>';
       document.body.appendChild(overlay);
+      var target = document.createElement('div');
+      target.style.cssText = 'background:#ffffff;color:#0f172a;width:794px;padding:24px;box-sizing:border-box';
+      var nodes = Array.prototype.slice.call(document.body.children);
+      nodes.forEach(function(n){ if (n !== overlay && n.tagName !== 'SCRIPT' && n.id !== 'rmPdfTarget') { target.appendChild(n.cloneNode(true)); } });
+      target.id = 'rmPdfTarget';
+      target.style.position = 'fixed';
+      target.style.left = '-99999px';
+      target.style.top = '0';
+      document.body.appendChild(target);
       setTimeout(function(){
         window.html2pdf().set({
-          margin:[8,8,8,8],
+          margin:[10,10,10,10],
           filename:'Roof_Report_Customer_${safe}.pdf',
           image:{type:'jpeg',quality:0.95},
-          html2canvas:{scale:2,useCORS:true,allowTaint:true,letterRendering:true,backgroundColor:'#ffffff'},
-          jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
-          pagebreak:{mode:['css','legacy']}
-        }).from(document.body).save().then(function(){
+          html2canvas:{scale:2,useCORS:true,allowTaint:true,letterRendering:true,backgroundColor:'#ffffff',windowWidth:794,ignoreElements:function(el){ return el && (el.id === 'rmPdfOverlay' || el.getAttribute && el.getAttribute('data-html2canvas-ignore') === 'true'); }},
+          jsPDF:{unit:'mm',format:'a4',orientation:'portrait',compress:true},
+          pagebreak:{mode:['css','legacy','avoid-all']}
+        }).from(target).save().then(function(){
+          if (target && target.parentNode) target.parentNode.removeChild(target);
           overlay.innerHTML = '<div style="font-size:22px">✓ PDF saved</div><div style="font-size:14px;font-weight:400;opacity:0.8;max-width:420px">Check your Downloads folder. You can close this tab.</div><button id="rmCloseBtn" style="margin-top:8px;padding:10px 20px;background:#10b981;color:#fff;border:0;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px">Close tab</button>';
           var btn = document.getElementById('rmCloseBtn');
           if (btn) btn.onclick = function(){ try { window.close(); } catch(e){} };
         })['catch'](function(err){
+          if (target && target.parentNode) target.parentNode.removeChild(target);
           overlay.innerHTML = '<div style="color:#fca5a5">PDF generation failed</div><div style="font-size:13px;font-weight:400;opacity:0.8">' + (err && err.message ? err.message : 'unknown error') + '</div>';
         });
-      }, 1200);
+      }, 1500);
     };
     document.head.appendChild(s);
   }
