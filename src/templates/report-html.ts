@@ -635,6 +635,8 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       ${slopeChangeFt > 0 ? `<div class="pt-row"><span class="pt-label" style="font-weight:700">Slope Change</span><span class="pt-value">${slopeChangeFt} LF</span></div>` : ''}
       ${stepFlashingFt > 0 ? `<div class="pt-row"><span class="pt-label" style="font-weight:700">Step Flashing</span><span class="pt-value">${stepFlashingFt} LF</span></div>` : ''}
       ${wallFlashingFt > 0 ? `<div class="pt-row"><span class="pt-label" style="font-weight:700">Headwall Flashing</span><span class="pt-value">${wallFlashingFt} LF</span></div>` : ''}
+      ${(es as any).chimney_flashing_count > 0 ? `<div class="pt-row"><span class="pt-label" style="font-weight:700">Chimney Flashing</span><span class="pt-value">${(es as any).chimney_flashing_count} ea</span></div>` : ''}
+      ${(es as any).pipe_boot_count > 0 ? `<div class="pt-row"><span class="pt-label" style="font-weight:700">Pipe Boots</span><span class="pt-value">${(es as any).pipe_boot_count} ea</span></div>` : ''}
     </div>
 
     <!-- RIGHT COLUMN: Aerial Satellite Image -->
@@ -1491,7 +1493,9 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         ${es.total_valley_ft > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Valley</span><span style="font-weight:700">${es.total_valley_ft} LF</span></div>` : ''}
         ${(es.total_transition_ft || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Slope Change</span><span style="font-weight:700">${es.total_transition_ft} LF</span></div>` : ''}
         ${(es.total_step_flashing_ft || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Step Flashing</span><span style="font-weight:700">${es.total_step_flashing_ft} LF</span></div>` : ''}
-        ${(es.total_wall_flashing_ft || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px"><span style="color:#555">Headwall Flashing</span><span style="font-weight:700">${es.total_wall_flashing_ft} LF</span></div>` : ''}
+        ${(es.total_wall_flashing_ft || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Headwall Flashing</span><span style="font-weight:700">${es.total_wall_flashing_ft} LF</span></div>` : ''}
+        ${((es as any).chimney_flashing_count || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Chimney Flashing</span><span style="font-weight:700">${(es as any).chimney_flashing_count} ea</span></div>` : ''}
+        ${((es as any).pipe_boot_count || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px"><span style="color:#555">Pipe Boots</span><span style="font-weight:700">${(es as any).pipe_boot_count} ea</span></div>` : ''}
       </div>
     </div>
 
@@ -1606,6 +1610,10 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
     drip_edge_rake_lf: Math.round(report.edge_summary?.total_rake_ft || 0),
     drip_edge_total_lf: Math.round((report.edge_summary?.total_eave_ft || 0) + (report.edge_summary?.total_rake_ft || 0)),
     valley_flashing_lf: Math.round(report.edge_summary?.total_valley_ft || 0),
+    step_flashing_lf:     Math.round((report.edge_summary as any)?.total_step_flashing_ft || 0),
+    headwall_flashing_lf: Math.round(((report.edge_summary as any)?.total_headwall_flashing_ft) || (report.edge_summary as any)?.total_wall_flashing_ft || 0),
+    chimney_flashing_count: (report.edge_summary as any)?.chimney_flashing_count || 0,
+    pipe_boot_count:        (report.edge_summary as any)?.pipe_boot_count || 0,
     roofing_nails_lbs: Math.ceil(grossArea / 100 * 2.5),
     caulk_tubes: Math.max(2, Math.ceil(netArea / 1000))
   }
@@ -1671,6 +1679,10 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
     { cat: 'Drip Edge — Eave', desc: 'Metal drip edge, eave profile (10.5ft sticks)', qty: Math.ceil(m.drip_edge_eave_lf / 10.5), unit: 'sticks', note: `${m.drip_edge_eave_lf} LF`, icon: '&#9472;', color: '#16a34a', code: 'RFG GUTAS' },
     { cat: 'Drip Edge — Rake', desc: 'Metal drip edge, rake profile (10.5ft sticks)', qty: Math.ceil(m.drip_edge_rake_lf / 10.5), unit: 'sticks', note: `${m.drip_edge_rake_lf} LF`, icon: '&#9472;', color: '#7c3aed', code: 'RFG GUTRS' },
     { cat: 'Valley Flashing', desc: 'Pre-bent W-valley metal or roll valley', qty: Math.ceil(m.valley_flashing_lf / 10), unit: 'pcs', note: `${m.valley_flashing_lf} LF total valley`, icon: '&#9660;', color: '#2563eb', code: 'RFG VALLEYM' },
+    ...(((m as any).step_flashing_lf || 0) > 0 ? [{ cat: 'Step Flashing', desc: 'Pre-bent step flashing pieces (5"×7", 1 per shingle course)', qty: Math.ceil((m as any).step_flashing_lf * 1.5), unit: 'pcs', note: `${(m as any).step_flashing_lf} LF along sloped wall lines`, icon: '&#9613;', color: '#F59E0B', code: 'RFG FLSTEP' }] : []),
+    ...(((m as any).headwall_flashing_lf || 0) > 0 ? [{ cat: 'Headwall Flashing', desc: 'Continuous headwall / apron flashing (10ft sticks)', qty: Math.ceil((m as any).headwall_flashing_lf / 10), unit: 'sticks', note: `${(m as any).headwall_flashing_lf} LF horizontal wall junction`, icon: '&#9644;', color: '#F97316', code: 'RFG FLHEAD' }] : []),
+    ...(((m as any).chimney_flashing_count || 0) > 0 ? [{ cat: 'Chimney Flashing Kit', desc: 'Pre-formed chimney flashing kit (apron + step + counter)', qty: (m as any).chimney_flashing_count, unit: 'kits', note: `${(m as any).chimney_flashing_count} chimney(s) on roof`, icon: '&#9632;', color: '#B45309', code: 'RFG FLCHIM' }] : []),
+    ...(((m as any).pipe_boot_count || 0) > 0 ? [{ cat: 'Pipe Boot Flashings', desc: 'Lead/EPDM pipe-boot flashings for plumbing/vent stacks', qty: (m as any).pipe_boot_count, unit: 'each', note: `${(m as any).pipe_boot_count} penetration(s)`, icon: '&#9711;', color: '#0891b2', code: 'RFG FLBOOT' }] : []),
     { cat: 'Roofing Nails', desc: '1.25″ galvanized coil nails', qty: m.roofing_nails_lbs, unit: 'lbs', note: 'Approx 2.5 lbs per square', icon: '&#9733;', color: '#64748b', code: 'RFG NAIL' },
     { cat: 'Caulk / Sealant', desc: 'Roofing sealant tubes', qty: m.caulk_tubes, unit: 'tubes', note: 'Flashings, vents, and penetrations', icon: '&#9679;', color: '#0891b2', code: 'RFG CLK' }
   ]
@@ -2194,6 +2206,30 @@ function buildMeasurementSummaryPage(report: RoofReport, reportNum: string, repo
             <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">pcs</td>
             <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">${m.valley_flashing_lf} LF valley</td>
           </tr>
+          ${((m as any).step_flashing_lf || 0) > 0 ? `<tr>
+            <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#F59E0B;margin-right:3px">&#9613;</span>Step Flashing</td>
+            <td style="padding:4px 10px;text-align:center;font-weight:800;color:#F59E0B;border-bottom:1px solid #eee">${Math.ceil((m as any).step_flashing_lf * 1.5)}</td>
+            <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">pcs</td>
+            <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">${(m as any).step_flashing_lf} LF along walls</td>
+          </tr>` : ''}
+          ${((m as any).headwall_flashing_lf || 0) > 0 ? `<tr style="background:#fafafa">
+            <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#F97316;margin-right:3px">&#9644;</span>Headwall Flashing</td>
+            <td style="padding:4px 10px;text-align:center;font-weight:800;color:#F97316;border-bottom:1px solid #eee">${Math.ceil((m as any).headwall_flashing_lf / 10)}</td>
+            <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">sticks</td>
+            <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">${(m as any).headwall_flashing_lf} LF wall top</td>
+          </tr>` : ''}
+          ${((m as any).chimney_flashing_count || 0) > 0 ? `<tr>
+            <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#B45309;margin-right:3px">&#9632;</span>Chimney Flashing Kit</td>
+            <td style="padding:4px 10px;text-align:center;font-weight:800;color:#B45309;border-bottom:1px solid #eee">${(m as any).chimney_flashing_count}</td>
+            <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">kits</td>
+            <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">Apron + step + counter</td>
+          </tr>` : ''}
+          ${((m as any).pipe_boot_count || 0) > 0 ? `<tr style="background:#fafafa">
+            <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#0891b2;margin-right:3px">&#9711;</span>Pipe Boots</td>
+            <td style="padding:4px 10px;text-align:center;font-weight:800;color:#0891b2;border-bottom:1px solid #eee">${(m as any).pipe_boot_count}</td>
+            <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">each</td>
+            <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">Plumbing / vent stacks</td>
+          </tr>` : ''}
           <tr>
             <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#64748b;margin-right:3px">&#9733;</span>Roofing Nails</td>
             <td style="padding:4px 10px;text-align:center;font-weight:800;color:#64748b;border-bottom:1px solid #eee">${m.roofing_nails_lbs}</td>

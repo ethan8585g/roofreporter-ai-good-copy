@@ -2354,8 +2354,30 @@ export function generateTraceBasedDiagramSVG(
     ridges?: { lat: number; lng: number }[][]
     hips?: { lat: number; lng: number }[][]
     valleys?: { lat: number; lng: number }[][]
+    /** Roof–wall junction lines for step / headwall flashing. */
+    walls?: Array<
+      | { lat: number; lng: number }[]
+      | { pts: { lat: number; lng: number }[]; kind?: 'step' | 'headwall' }
+    >
+    annotations?: {
+      chimneys?: { lat: number; lng: number }[]
+      vents?: { lat: number; lng: number }[]
+      pipe_boots?: { lat: number; lng: number }[]
+      skylights?: { lat: number; lng: number }[]
+    }
   },
-  edgeSummary: { total_ridge_ft: number; total_hip_ft: number; total_valley_ft: number; total_eave_ft: number; total_rake_ft: number },
+  edgeSummary: {
+    total_ridge_ft: number
+    total_hip_ft: number
+    total_valley_ft: number
+    total_eave_ft: number
+    total_rake_ft: number
+    total_step_flashing_ft?: number
+    total_headwall_flashing_ft?: number
+    total_wall_flashing_ft?: number
+    chimney_flashing_count?: number
+    pipe_boot_count?: number
+  },
   totalFootprintSqft: number,
   avgPitchDeg: number,
   predominantPitch: string,
@@ -2846,6 +2868,35 @@ export function generateTraceBasedDiagramSVG(
     svg += `<line x1="${tx(l.start.x).toFixed(1)}" y1="${ty(l.start.y).toFixed(1)}" x2="${tx(l.end.x).toFixed(1)}" y2="${ty(l.end.y).toFixed(1)}" stroke="${EDGE_COLOR['VALLEY']}" stroke-width="1.6" stroke-dasharray="6,3" stroke-linecap="round"/>`
   })
 
+  // ── WALL FLASHING LINES (amber=step, orange=headwall, hash pattern) ──
+  // These render only when the customer drew a wall layer in the tracer.
+  ;(roofTrace.walls || []).forEach((line) => {
+    const pts = Array.isArray(line) ? line : (line as any).pts
+    const kind: 'step' | 'headwall' = (!Array.isArray(line) && (line as any).kind === 'headwall') ? 'headwall' : 'step'
+    if (!pts || pts.length < 2) return
+    const color = kind === 'headwall' ? '#F97316' : '#F59E0B'
+    const xy = pts.map(toXY)
+    for (let i = 1; i < xy.length; i++) {
+      svg += `<line x1="${tx(xy[i-1].x).toFixed(1)}" y1="${ty(xy[i-1].y).toFixed(1)}" x2="${tx(xy[i].x).toFixed(1)}" y2="${ty(xy[i].y).toFixed(1)}" stroke="${color}" stroke-width="2" stroke-dasharray="4,2" stroke-linecap="round"/>`
+    }
+  })
+
+  // ── CHIMNEYS (filled brown squares with "C" label) ──
+  ;((roofTrace.annotations && roofTrace.annotations.chimneys) || []).forEach((pt) => {
+    const xy = toXY(pt)
+    const px = tx(xy.x), py = ty(xy.y)
+    svg += `<rect x="${(px-5).toFixed(1)}" y="${(py-5).toFixed(1)}" width="10" height="10" fill="#B45309" stroke="#fff" stroke-width="1"/>`
+    svg += `<text x="${px.toFixed(1)}" y="${(py+3).toFixed(1)}" text-anchor="middle" font-size="7" font-weight="800" fill="#fff" ${FONT}>C</text>`
+  })
+
+  // ── PIPE BOOTS (filled cyan circles with "P" label) ──
+  ;((roofTrace.annotations && roofTrace.annotations.pipe_boots) || []).forEach((pt) => {
+    const xy = toXY(pt)
+    const px = tx(xy.x), py = ty(xy.y)
+    svg += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="#0891b2" stroke="#fff" stroke-width="1"/>`
+    svg += `<text x="${px.toFixed(1)}" y="${(py+2.5).toFixed(1)}" text-anchor="middle" font-size="6" font-weight="800" fill="#fff" ${FONT}>P</text>`
+  })
+
   // ── EAVE EDGE DIMENSION LABELS (collision-aware architectural style) ──
   // Collect all label bounding boxes to prevent overlaps
   const placedLabels: { cx: number; cy: number; w: number; h: number }[] = []
@@ -3018,6 +3069,17 @@ export function generateTraceBasedDiagramSVG(
   }
   if (valleySegCount > 0) {
     legendItems.push({ plural: 'Valleys', color: '#1565C0', dash: true, totalFt: Math.round(edgeSummary.total_valley_ft), count: valleySegCount })
+  }
+  // Flashings — each row only renders if a wall layer was traced or
+  // chimney/pipe-boot annotations exist. Older diagrams omit these.
+  const stepFt     = Math.round((edgeSummary as any).total_step_flashing_ft || 0)
+  const headwallFt = Math.round((edgeSummary as any).total_headwall_flashing_ft || (edgeSummary as any).total_wall_flashing_ft || 0)
+  const wallSegCount = (roofTrace.walls || []).length
+  if (stepFt > 0) {
+    legendItems.push({ plural: 'Step Flashing', color: '#F59E0B', dash: true, totalFt: stepFt, count: wallSegCount })
+  }
+  if (headwallFt > 0) {
+    legendItems.push({ plural: 'Headwall', color: '#F97316', dash: true, totalFt: headwallFt, count: 0 })
   }
 
   const totalLinFtLegend = legendItems.reduce((s, it) => s + it.totalFt, 0)

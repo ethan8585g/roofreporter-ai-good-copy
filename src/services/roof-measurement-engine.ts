@@ -113,6 +113,21 @@ export interface TracePayload {
   hips?: TraceLine[]
   valleys?: TraceLine[]
   rakes?: TraceLine[]
+  /** Roof–wall junction lines. Each line carries a `kind` of 'step' (along
+   *  slope, gets step flashing) or 'headwall' (across slope top, gets
+   *  headwall flashing). Lengths flow into the materials estimate. */
+  walls?: Array<TraceLine & { kind?: 'step' | 'headwall' }>
+  /** Pre-computed flashing footages (linear feet) and counts. Bypasses
+   *  the engine's Cartesian-projection pipeline since flashings don't
+   *  need slope-corrected lengths — they are flat metal pieces. */
+  flashing_lengths_ft?: {
+    step?: number
+    headwall?: number
+  }
+  flashing_counts?: {
+    chimneys?: number
+    pipe_boots?: number
+  }
   faces?: TraceFace[]
   // New v4: slope_map and segment-based input
   slope_map?: Record<string, string>
@@ -211,6 +226,10 @@ export interface TraceMaterialEstimate {
   drip_edge_rake_lf: number
   drip_edge_total_lf: number
   valley_flashing_lf: number
+  step_flashing_lf: number
+  headwall_flashing_lf: number
+  chimney_flashing_count: number
+  pipe_boot_count: number
   roofing_nails_lbs: number
   caulk_tubes: number
 }
@@ -314,6 +333,10 @@ export interface TraceReport {
     rakes_total_ft: number
     perimeter_eave_rake_ft: number
     hip_plus_ridge_ft: number
+    step_flashing_total_ft: number
+    headwall_flashing_total_ft: number
+    chimney_flashing_count: number
+    pipe_boot_count: number
   }
   eave_edge_breakdown: EaveEdge[]
   eave_corner_analysis: EaveCornerDetail[]
@@ -848,10 +871,17 @@ function materialsEstimate(
   netSquares: number, wasteFrac: number,
   eaveFt: number, ridgeFt: number, hipFt: number, valleyFt: number, rakeFt: number,
   faces?: { pitch_rise: number; sloped_area_ft2: number }[],
-  eaveDepths?: EaveDepthLayer[]
+  eaveDepths?: EaveDepthLayer[],
+  flashings?: {
+    step_flashing_ft?: number
+    headwall_flashing_ft?: number
+    chimney_count?: number
+    pipe_boot_count?: number
+  }
 ): TraceMaterialEstimate {
   const gross = netSquares * (1 + wasteFrac)
   const iw = computeIceWaterBreakdown(faces || [], eaveFt, valleyFt, eaveDepths || [])
+  const f = flashings || {}
   return {
     shingles_squares_net:       round(netSquares, 2),
     shingles_squares_gross:     round(gross, 2),
@@ -867,6 +897,10 @@ function materialsEstimate(
     drip_edge_rake_lf:          round(rakeFt, 1),
     drip_edge_total_lf:         round(eaveFt + rakeFt, 1),
     valley_flashing_lf:         round(valleyFt * 1.10, 1),
+    step_flashing_lf:           round((f.step_flashing_ft || 0) * 1.10, 1),
+    headwall_flashing_lf:       round((f.headwall_flashing_ft || 0) * 1.05, 1),
+    chimney_flashing_count:     Math.max(0, Math.round(f.chimney_count || 0)),
+    pipe_boot_count:            Math.max(0, Math.round(f.pipe_boot_count || 0)),
     roofing_nails_lbs:          Math.ceil(gross * NAIL_LBS_PER_SQ),
     caulk_tubes:                Math.max(1, Math.ceil(gross / 5)),
   }
@@ -931,6 +965,12 @@ export class RoofMeasurementEngine {
   // Per-eave-edge tags ('eave' | 'rake') captured during tracing. Index aligns
   // with the from_pt index of each EaveEdge. Empty array = infer (legacy).
   private eavesTags: Array<'eave' | 'rake'> = []
+  // Flashings — pre-computed haversine totals from traceUiToEnginePayload.
+  // Engine doesn't need to project these (flat metal pieces, no slope correction).
+  private stepFlashingFt = 0
+  private headwallFlashingFt = 0
+  private chimneyCount = 0
+  private pipeBootCount = 0
 
   constructor(payload: TracePayload) {
     this.address    = payload.address || 'Unknown Address'
@@ -957,6 +997,12 @@ export class RoofMeasurementEngine {
     this.eavesTags = Array.isArray(payload.eaves_tags)
       ? payload.eaves_tags.filter((t): t is 'eave' | 'rake' => t === 'eave' || t === 'rake')
       : []
+
+    // Flashings (haversine LF + counts) — passthrough from trace payload.
+    this.stepFlashingFt     = Number(payload.flashing_lengths_ft?.step) || 0
+    this.headwallFlashingFt = Number(payload.flashing_lengths_ft?.headwall) || 0
+    this.chimneyCount       = Math.max(0, Math.round(Number(payload.flashing_counts?.chimneys) || 0))
+    this.pipeBootCount      = Math.max(0, Math.round(Number(payload.flashing_counts?.pipe_boots) || 0))
 
     // Normalise default slope (rise:12 → radians)
     this.defThetaRad = pitchAngleRad(this.defPitch)
@@ -1729,7 +1775,13 @@ export class RoofMeasurementEngine {
     const mat = materialsEstimate(
       netSquares, wFrac,
       totalEaveFt, totalRidgeFt, totalHipFt, totalValleyFt, totalRakeFt,
-      facesData, this.eaveDepths
+      facesData, this.eaveDepths,
+      {
+        step_flashing_ft:    this.stepFlashingFt,
+        headwall_flashing_ft: this.headwallFlashingFt,
+        chimney_count:       this.chimneyCount,
+        pipe_boot_count:     this.pipeBootCount,
+      }
     )
 
     const perimeterFt = totalEaveFt + totalRakeFt
@@ -1904,13 +1956,17 @@ export class RoofMeasurementEngine {
         num_obstructions:              obstructionDetails.length,
       },
       linear_measurements: {
-        eaves_total_ft:         round(totalEaveFt, 1),
-        ridges_total_ft:        round(totalRidgeFt, 1),
-        hips_total_ft:          round(totalHipFt, 1),
-        valleys_total_ft:       round(totalValleyFt, 1),
-        rakes_total_ft:         round(totalRakeFt, 1),
-        perimeter_eave_rake_ft: round(perimeterFt, 1),
-        hip_plus_ridge_ft:      round(totalHipFt + totalRidgeFt, 1),
+        eaves_total_ft:             round(totalEaveFt, 1),
+        ridges_total_ft:            round(totalRidgeFt, 1),
+        hips_total_ft:              round(totalHipFt, 1),
+        valleys_total_ft:           round(totalValleyFt, 1),
+        rakes_total_ft:             round(totalRakeFt, 1),
+        perimeter_eave_rake_ft:     round(perimeterFt, 1),
+        hip_plus_ridge_ft:          round(totalHipFt + totalRidgeFt, 1),
+        step_flashing_total_ft:     round(this.stepFlashingFt, 1),
+        headwall_flashing_total_ft: round(this.headwallFlashingFt, 1),
+        chimney_flashing_count:     this.chimneyCount,
+        pipe_boot_count:            this.pipeBootCount,
       },
       eave_edge_breakdown: edges,
       eave_corner_analysis: cornerAnalysis,
@@ -1948,11 +2004,16 @@ export function traceUiToEnginePayload(
     ridges?: UiTraceLine[]
     hips?: UiTraceLine[]
     valleys?: UiTraceLine[]
+    walls?: Array<
+      | { lat: number; lng: number }[]
+      | { pts: { lat: number; lng: number }[]; kind?: 'step' | 'headwall'; id?: string }
+    >
     slope_map?: Record<string, string>
     annotations?: {
       vents?: { lat: number; lng: number }[]
       skylights?: { lat: number; lng: number }[]
       chimneys?: { lat: number; lng: number }[]
+      pipe_boots?: { lat: number; lng: number }[]
     }
     traced_at?: string
     eaves_tags?: Array<'eave' | 'rake'>
@@ -2038,6 +2099,37 @@ export function traceUiToEnginePayload(
   const hips: TraceLine[]    = (traceJson.hips    || []).map((l, i) => normalizeLine(l, 'hip',    i))
   const valleys: TraceLine[] = (traceJson.valleys || []).map((l, i) => normalizeLine(l, 'valley', i))
 
+  // Wall junction lines — each carries a `kind` ('step' | 'headwall').
+  // Defaults to 'step' when the line is a bare point array (legacy) or
+  // when `kind` is missing or unrecognized.
+  const walls: Array<TraceLine & { kind?: 'step' | 'headwall' }> =
+    (traceJson.walls || []).map((l, i) => {
+      const base = normalizeLine(l as any, 'wall', i)
+      const isObj = !Array.isArray(l) && l && typeof l === 'object'
+      const rawKind = isObj ? (l as any).kind : null
+      const kind: 'step' | 'headwall' = rawKind === 'headwall' ? 'headwall' : 'step'
+      return { ...base, kind }
+    })
+
+  // Aggregate wall flashing length (linear feet) by kind, using haversine.
+  // Flashing pieces are flat metal — no slope correction needed.
+  const haversineFt = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+    const R_M = 6_371_000
+    const toRad = (d: number) => d * Math.PI / 180
+    const dLat = toRad(b.lat - a.lat)
+    const dLng = toRad(b.lng - a.lng)
+    const lat1 = toRad(a.lat), lat2 = toRad(b.lat)
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2
+    return 2 * R_M * Math.asin(Math.min(1, Math.sqrt(h))) * 3.28084
+  }
+  let stepFt = 0, headwallFt = 0
+  for (const w of walls) {
+    let len = 0
+    for (let i = 1; i < w.pts.length; i++) len += haversineFt(w.pts[i - 1], w.pts[i])
+    if (w.kind === 'headwall') headwallFt += len
+    else stepFt += len
+  }
+
   // Convert point annotations (vents/skylights/chimneys) to obstruction polygons.
   // Each marker becomes a small rectangle centered on the clicked lat/lng.
   const FT_PER_DEG_LAT = 364000  // ~ 1 deg lat ≈ 364,000 ft
@@ -2063,6 +2155,11 @@ export function traceUiToEnginePayload(
   for (const pt of ann.vents || []) {
     obstructions.push({ type: 'vent', poly: makeRectPoly(pt, 1, 1), width_ft: 1, length_ft: 1 })
   }
+  // Pipe boots are also small penetrations — deduct minimal area but
+  // surface the count for BOM (they each need a flashing boot).
+  for (const pt of ann.pipe_boots || []) {
+    obstructions.push({ type: 'vent', poly: makeRectPoly(pt, 0.75, 0.75), width_ft: 0.75, length_ft: 0.75 })
+  }
 
   return {
     address:        order.property_address || 'Unknown Address',
@@ -2079,6 +2176,12 @@ export function traceUiToEnginePayload(
     ridges,
     hips,
     valleys,
+    walls:          walls.length > 0 ? walls : undefined,
+    flashing_lengths_ft: { step: stepFt, headwall: headwallFt },
+    flashing_counts: {
+      chimneys:   (ann.chimneys   || []).length,
+      pipe_boots: (ann.pipe_boots || []).length,
+    },
     rakes:          [],
     faces:          [],
     slope_map:      traceJson.slope_map && Object.keys(traceJson.slope_map).length > 0

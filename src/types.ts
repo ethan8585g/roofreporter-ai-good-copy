@@ -591,6 +591,12 @@ export interface RoofReport {
     total_eave_ft: number
     total_rake_ft: number
     total_linear_ft: number
+    /** Flashings — populated when the trace includes wall lines or
+     *  chimney / pipe-boot annotations. Older reports omit these. */
+    total_step_flashing_ft?: number
+    total_headwall_flashing_ft?: number
+    chimney_flashing_count?: number
+    pipe_boot_count?: number
   }
 
   // ---- MATERIAL ESTIMATE (Section 5) ----

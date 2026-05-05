@@ -15,17 +15,31 @@ export interface LatLng { lat: number; lng: number }
 /** A traced line may be a bare point array (legacy) OR `{pts, pitch?, id?}`. */
 export type UiTraceLine = LatLng[] | { pts: LatLng[]; pitch?: number | string | null; id?: string }
 
+/** A wall-junction line. `kind` distinguishes step (along slope) from
+ *  headwall (across top of slope). Defaults to 'step' if omitted. */
+export type WallFlashingKind = 'step' | 'headwall'
+export type UiWallLine =
+  | LatLng[]
+  | { pts: LatLng[]; kind?: WallFlashingKind; id?: string }
+
 export interface UiTrace {
   eaves?: LatLng[] | LatLng[][]
   eaves_sections?: LatLng[][]
   ridges?: UiTraceLine[]
   hips?: UiTraceLine[]
   valleys?: UiTraceLine[]
+  /** Roof–wall junctions (step flashing along slopes, headwall flashing
+   *  across slope tops). Linear-foot output drives BOM flashing rows. */
+  walls?: UiWallLine[]
   slope_map?: Record<string, string>
   annotations?: {
     vents?: LatLng[]
     skylights?: LatLng[]
     chimneys?: LatLng[]
+    /** Plumbing/exhaust pipe penetrations — each becomes one pipe-boot
+     *  flashing in the BOM. Separate from `vents` so contractors can
+     *  distinguish powered vents from boot-only penetrations. */
+    pipe_boots?: LatLng[]
   }
   traced_at?: string
 }
@@ -98,6 +112,7 @@ export interface TraceValidationResult {
   ridges_count: number
   hips_count: number
   valleys_count: number
+  walls_count: number
   annotations_count: number
 }
 
@@ -172,6 +187,7 @@ export function validateTraceUi(trace: any): TraceValidationResult {
     ridges_count: 0,
     hips_count: 0,
     valleys_count: 0,
+    walls_count: 0,
     annotations_count: 0,
   }
 
@@ -243,8 +259,8 @@ export function validateTraceUi(trace: any): TraceValidationResult {
   })
   result.sections_count = sections.length
 
-  // ---- Line layers (ridges, hips, valleys) --------------------------------
-  const validateLineLayer = (key: 'ridges' | 'hips' | 'valleys') => {
+  // ---- Line layers (ridges, hips, valleys, walls) -------------------------
+  const validateLineLayer = (key: 'ridges' | 'hips' | 'valleys' | 'walls') => {
     const raw = trace[key]
     if (raw == null) return 0
     if (!Array.isArray(raw)) {
@@ -283,10 +299,22 @@ export function validateTraceUi(trace: any): TraceValidationResult {
   result.ridges_count  = validateLineLayer('ridges')
   result.hips_count    = validateLineLayer('hips')
   result.valleys_count = validateLineLayer('valleys')
+  result.walls_count   = validateLineLayer('walls')
 
-  // ---- Annotations (vents, skylights, chimneys) ---------------------------
+  // ---- Wall-line `kind` validation ----------------------------------------
+  if (Array.isArray(trace.walls)) {
+    trace.walls.forEach((line: any, lIdx: number) => {
+      if (line && typeof line === 'object' && !Array.isArray(line) && line.kind != null) {
+        if (line.kind !== 'step' && line.kind !== 'headwall') {
+          warnings.push({ severity: 'warning', code: 'bad_wall_kind', message: `walls[${lIdx}] has unrecognized kind "${line.kind}". Defaulting to "step".`, at: `walls[${lIdx}]` })
+        }
+      }
+    })
+  }
+
+  // ---- Annotations (vents, skylights, chimneys, pipe_boots) ---------------
   const ann = trace.annotations || {}
-  for (const type of ['vents', 'skylights', 'chimneys'] as const) {
+  for (const type of ['vents', 'skylights', 'chimneys', 'pipe_boots'] as const) {
     const list = ann[type]
     if (list == null) continue
     if (!Array.isArray(list)) {

@@ -1170,6 +1170,10 @@ reportsRoutes.post('/:orderId/trace-remeasure', async (c) => {
       total_valley_ft: traceReport.linear_measurements.valleys_total_ft,
       total_eave_ft: traceReport.linear_measurements.eaves_total_ft,
       total_rake_ft: traceReport.linear_measurements.rakes_total_ft,
+      total_step_flashing_ft:     traceReport.linear_measurements.step_flashing_total_ft || 0,
+      total_headwall_flashing_ft: traceReport.linear_measurements.headwall_flashing_total_ft || 0,
+      chimney_flashing_count:     traceReport.linear_measurements.chimney_flashing_count || 0,
+      pipe_boot_count:            traceReport.linear_measurements.pipe_boot_count || 0,
     },
     traceReport.key_measurements.total_projected_footprint_ft2,
     traceReport.key_measurements.dominant_pitch_angle_deg,
@@ -3350,7 +3354,13 @@ async function _generateReportForOrderInner(
         total_eave_ft: Math.round(lm.eaves_total_ft),
         total_rake_ft: Math.round(lm.rakes_total_ft),
         total_perimeter_ft: Math.round(lm.perimeter_eave_rake_ft),
-        total_flashing_ft: 0,
+        total_flashing_ft: Math.round((lm.step_flashing_total_ft || 0) + (lm.headwall_flashing_total_ft || 0)),
+        total_step_flashing_ft:     Math.round(lm.step_flashing_total_ft || 0),
+        total_headwall_flashing_ft: Math.round(lm.headwall_flashing_total_ft || 0),
+        // Legacy alias — older templates read `total_wall_flashing_ft` for headwall.
+        total_wall_flashing_ft:     Math.round(lm.headwall_flashing_total_ft || 0),
+        chimney_flashing_count:     lm.chimney_flashing_count || 0,
+        pipe_boot_count:            lm.pipe_boot_count || 0,
       }
 
       const traceMaterials = {
@@ -3365,6 +3375,10 @@ async function _generateReportForOrderInner(
         drip_edge_lf: Math.round(mat.drip_edge_total_lf),
         starter_strip_lf: Math.round(mat.starter_strip_lf),
         valley_flashing_lf: Math.round(mat.valley_flashing_lf),
+        step_flashing_lf:     Math.round(mat.step_flashing_lf || 0),
+        headwall_flashing_lf: Math.round(mat.headwall_flashing_lf || 0),
+        chimney_flashing_count: mat.chimney_flashing_count || 0,
+        pipe_boot_count:        mat.pipe_boot_count || 0,
         nails_lbs: mat.roofing_nails_lbs,
         caulk_tubes: mat.caulk_tubes,
         total_material_cost_cad: 0,               // Not computed in trace engine — placeholder
