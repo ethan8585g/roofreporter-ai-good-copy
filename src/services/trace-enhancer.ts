@@ -29,7 +29,7 @@ const FT_PER_DEG_LAT = 364_000
 const DEFAULTS = {
   collinearAngleDeg: 6,    // adjacent eave bearings within 6° → merge
   tinyEdgeFt:        1.2,  // edges shorter than 1.2 ft → drop
-  rightAngleSnapDeg: 7,    // interior angles within 7° of 90° → snap to 90°
+  rightAngleSnapDeg: 0,    // disabled — was silently rotating user-drawn corners up to 7°
   ridgeToCornerFt:   3.0,  // ridge endpoint within 3 ft of an eave corner → snap
   ridgeToLineFt:     2.0,  // ridge endpoint within 2 ft of a hip/valley endpoint → join
   ridgeGapFt:        1.5,  // two ridge polylines with endpoints within 1.5 ft → splice
@@ -537,11 +537,13 @@ export function enhanceTrace(trace: UiTrace, opts: EnhanceOptions = {}): Enhance
     }
     pts = collin.pts
 
-    const right = snapRightAngles(pts, cfg.rightAngleSnapDeg)
-    if (right.snapped > 0) {
-      changes.push({ rule: 'snap_right_angle', layer: 'eaves', section: s, details: `snapped ${right.snapped} corners to 90° (within ${cfg.rightAngleSnapDeg}°)` })
+    if (cfg.rightAngleSnapDeg > 0) {
+      const right = snapRightAngles(pts, cfg.rightAngleSnapDeg)
+      if (right.snapped > 0) {
+        changes.push({ rule: 'snap_right_angle', layer: 'eaves', section: s, details: `snapped ${right.snapped} corners to 90° (within ${cfg.rightAngleSnapDeg}°)` })
+      }
+      pts = right.pts
     }
-    pts = right.pts
 
     const eq = equalizeParallelPairs(pts, cfg.parallelPairAngleDeg, cfg.parallelPairMaxDiffFt, cfg.parallelPairMaxDiffPct)
     if (eq.equalized > 0) {

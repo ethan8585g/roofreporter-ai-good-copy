@@ -1585,13 +1585,6 @@ function handleTraceClick(pt) {
     const dsmSnap = snapToDsmSegment(pt, 0.5);
     if (dsmSnap) pt = dsmSnap;
   }
-  // 3. Right-angle snap — if the candidate edge is within 5° of 0/90/180/270
-  //    relative to the previous edge, lock it to the perpendicular/parallel.
-  if (mode === 'eaves' && orderState.traceEavesPoints.length >= 2) {
-    const prev = orderState.traceEavesPoints[orderState.traceEavesPoints.length - 2];
-    const anchor = orderState.traceEavesPoints[orderState.traceEavesPoints.length - 1];
-    pt = snapRightAngle(prev, anchor, pt);
-  }
   if (mode === 'eaves') {
     if (orderState.traceEavesPoints.length >= 3) {
       const first = orderState.traceEavesPoints[0];
