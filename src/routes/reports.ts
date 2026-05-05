@@ -470,7 +470,7 @@ reportsRoutes.get('/:orderId/customer-pdf', async (c) => {
           image:{type:'jpeg',quality:0.95},
           html2canvas:{scale:2,useCORS:true,allowTaint:true,letterRendering:true,backgroundColor:'#ffffff',scrollX:0,scrollY:0,windowWidth:document.documentElement.scrollWidth,windowHeight:document.documentElement.scrollHeight},
           jsPDF:{unit:'mm',format:'a4',orientation:'portrait',compress:true},
-          pagebreak:{mode:['css','legacy'],before:'.page',avoid:['svg','img','.frame']}
+          pagebreak:{mode:['css','legacy'],before:'.page+.page',avoid:['svg','img','.frame']}
         }).from(source).save().then(function(){
           showResult('<div style="font-size:22px">✓ PDF saved</div><div style="font-size:14px;font-weight:400;opacity:0.8;max-width:420px">Check your Downloads folder. You can close this tab.</div><button id="rmCloseBtn" style="margin-top:8px;padding:10px 20px;background:#10b981;color:#fff;border:0;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px">Close tab</button>');
         })['catch'](function(err){
