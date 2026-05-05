@@ -2245,16 +2245,17 @@ reportsRoutes.get('/:orderId/pdf', async (c) => {
   if (!html) return c.json({ error: 'Report HTML not available' }, 404)
   const addr = [report.property_address, report.property_city, report.property_province].filter(Boolean).join(', ')
   const safe = addr.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '_').substring(0, 50)
-  const saveScript = `<script>
+  const saveMode = c.req.query('save') === '1'
+
+  // Save mode: inject html2pdf bootstrap directly into the report's own
+  // <body> (before </body>) so we render the report's native 8.5x11 .page
+  // layout straight to letter-format PDF — no double-wrapping.
+  if (saveMode) {
+    const saveScript = `<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
 (function(){
-  var sp = new URLSearchParams(location.search);
-  if (sp.get('print') === '1') { setTimeout(function(){ window.print(); }, 500); return; }
-  if (sp.get('save') !== '1') return;
-  var s = document.createElement('script');
-  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-  s.onload = function(){
-    var controls = document.querySelector('.print-controls');
-    if (controls) controls.style.display = 'none';
+  function start(){
+    if (!window.html2pdf) { setTimeout(start, 100); return; }
     var overlay = document.createElement('div');
     overlay.id = 'rmPdfOverlay';
     overlay.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.92);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:18px;font-weight:600;z-index:2147483647;text-align:center;padding:24px;gap:16px';
@@ -2262,8 +2263,9 @@ reportsRoutes.get('/:orderId/pdf', async (c) => {
     document.body.appendChild(overlay);
     function showResult(htmlStr){ overlay.style.display='flex'; overlay.innerHTML = htmlStr; var btn = document.getElementById('rmCloseBtn'); if (btn) btn.onclick = function(){ try { window.close(); } catch(e){} }; }
     setTimeout(function(){
-      var source = document.body;
       overlay.style.display = 'none';
+      // Stamp explicit width/height on every inline SVG so html2canvas can
+      // rasterize it (viewBox alone resolves to 0x0 in some Chromium builds).
       document.querySelectorAll('svg').forEach(function(sv){
         var r = sv.getBoundingClientRect();
         if (r.width > 0 && r.height > 0) {
@@ -2271,29 +2273,42 @@ reportsRoutes.get('/:orderId/pdf', async (c) => {
           sv.setAttribute('height', Math.round(r.height));
         }
       });
+      // Hide any floating widgets injected onto the report (3D-cover FAB,
+      // measure feedback, etc.) so they don't bleed into the PDF.
+      ['#rm3dFab','#rm3dOverlay','#rm3dAutoCap','#rm3dAutoFrame','.rm-feedback-fab','#rmPdfOverlay'].forEach(function(sel){
+        document.querySelectorAll(sel).forEach(function(el){ el.style.display='none'; });
+      });
+      var source = document.body;
       window.html2pdf().set({
-        margin:[10,10,10,10],
+        margin:0,
         filename:'Roof_Report_${safe}.pdf',
         image:{type:'jpeg',quality:0.95},
         html2canvas:{scale:2,useCORS:true,allowTaint:true,letterRendering:true,backgroundColor:'#ffffff',scrollX:0,scrollY:0,windowWidth:document.documentElement.scrollWidth,windowHeight:document.documentElement.scrollHeight},
-        jsPDF:{unit:'mm',format:'a4',orientation:'portrait',compress:true},
-        pagebreak:{mode:['css','legacy'],before:'.page+.page',avoid:['svg','img','.frame']}
+        jsPDF:{unit:'in',format:'letter',orientation:'portrait',compress:true},
+        pagebreak:{mode:['css','legacy'],before:'.page',avoid:['svg','img','table']}
       }).from(source).save().then(function(){
         showResult('<div style="font-size:22px">✓ PDF saved</div><div style="font-size:14px;font-weight:400;opacity:0.8;max-width:420px">Check your Downloads folder. You can close this tab.</div><button id="rmCloseBtn" style="margin-top:8px;padding:10px 20px;background:#10b981;color:#fff;border:0;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px">Close tab</button>');
       })['catch'](function(err){
         showResult('<div style="color:#fca5a5">PDF generation failed</div><div style="font-size:13px;font-weight:400;opacity:0.8">' + (err && err.message ? err.message : 'unknown error') + '</div>');
       });
     }, 1500);
-  };
-  document.head.appendChild(s);
+  }
+  if (document.readyState === 'complete') start();
+  else window.addEventListener('load', start);
 })();
 </script>`
+    const injected = html.includes('</body>')
+      ? html.replace('</body>', `${saveScript}</body>`)
+      : html + saveScript
+    return new Response(injected, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Disposition': `inline; filename="Roof_Report_${safe}.pdf"` } })
+  }
+
   const pdfHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Roof_Report_${safe}.pdf</title>
 <style>@media print{body{margin:0;padding:0}.page{page-break-after:always}.page:last-child{page-break-after:auto}.print-controls{display:none!important}}
 .print-controls{position:fixed;top:0;left:0;right:0;z-index:9999;background:#1E3A5F;color:#fff;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;font-family:Inter,system-ui,sans-serif}
 .print-controls button{background:#00E5FF;color:#0B1E2F;border:none;padding:8px 24px;border-radius:6px;font-weight:700;cursor:pointer}body{padding-top:50px}@media print{body{padding-top:0}}</style></head>
 <body><div class="print-controls"><span>Roof Manager | ${addr}</span><button onclick="window.print()">Download PDF</button></div>
-${html}${saveScript}</body></html>`
+${html}<script>if(new URLSearchParams(location.search).get('print')==='1')setTimeout(()=>window.print(),500)</script></body></html>`
   return new Response(pdfHtml, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Disposition': `inline; filename="Roof_Report_${safe}.pdf"` } })
 })
 
