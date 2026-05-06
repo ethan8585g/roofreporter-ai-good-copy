@@ -322,6 +322,75 @@ export async function sendViaResend(
 }
 
 // ============================================================
+// CUSTOMER NOTIFICATION — "Your report is ready" after admin trace
+// Sent when the super admin manually completes a trace on a customer's
+// behalf (the submit-for-trace path). Customer dashboard polling is
+// already wired but customers without an open browser had no signal —
+// this email closes that gap.
+// ============================================================
+export async function notifyTraceCompletedToCustomer(
+  env: any,
+  args: {
+    to: string
+    order_number: string
+    property_address: string
+    customer_name?: string
+  }
+): Promise<void> {
+  const { to, order_number, property_address, customer_name } = args
+  if (!to) return
+  const greeting = customer_name ? `Hi ${customer_name.split(' ')[0]},` : 'Hi,'
+  const subject = `Your roof measurement report is ready — ${order_number}`
+  const html = `
+<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+  <h2 style="color:#111;margin-bottom:4px">Your report is ready</h2>
+  <p style="color:#555;margin-top:0">${order_number}</p>
+  <p style="color:#222;font-size:15px;line-height:1.5">${greeting}</p>
+  <p style="color:#222;font-size:15px;line-height:1.5">
+    Our team has finished tracing the roof at <strong>${property_address}</strong>.
+    Your measurement report is now available in your dashboard.
+  </p>
+  <a href="https://www.roofmanager.ca/customer" style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:8px">Open my dashboard →</a>
+  <p style="color:#888;font-size:12px;margin-top:24px">
+    Roof Manager · roofmanager.ca
+  </p>
+</div>`
+
+  const clientId = env?.GMAIL_CLIENT_ID
+  let clientSecret = env?.GMAIL_CLIENT_SECRET || ''
+  let refreshToken = env?.GMAIL_REFRESH_TOKEN || ''
+  let senderEmail = env?.GMAIL_SENDER_EMAIL || ''
+  if (env?.DB && (!clientSecret || !refreshToken || !senderEmail)) {
+    try {
+      const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
+      if (r?.setting_value) refreshToken = r.setting_value
+      const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
+      if (s?.setting_value) clientSecret = s.setting_value
+      if (!senderEmail) {
+        const se = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_sender_email' AND master_company_id=1").first<any>()
+        if (se?.setting_value) senderEmail = se.setting_value
+      }
+    } catch {}
+  }
+
+  let lastErr: any = null
+  if (env?.RESEND_API_KEY) {
+    try {
+      await sendViaResend(env.RESEND_API_KEY, to, subject, html)
+      return
+    } catch (e: any) { lastErr = e }
+  }
+  if (clientId && clientSecret && refreshToken) {
+    try {
+      await sendGmailOAuth2(clientId, clientSecret, refreshToken, to, subject, html, senderEmail || null)
+      return
+    } catch (e: any) { lastErr = e }
+  }
+  if (lastErr) throw lastErr
+  throw new Error('no email provider configured')
+}
+
+// ============================================================
 // SALES NOTIFICATION — Sent to super admin on new report requests
 // ============================================================
 export async function notifyNewReportRequest(
@@ -834,5 +903,104 @@ export async function notifyNewUserSignup(env: any, data: {
 
   if (!sent) {
     console.error('[notifyNewUserSignup] ALL email methods failed — signup notification for', data.email, 'was NOT delivered to sales@roofmanager.ca')
+  }
+}
+
+// ============================================================
+// Send a "Welcome to Roof Manager" email to a newly-registered user.
+// Fire-and-forget; never throws. Mirrors notifyNewUserSignup's
+// Gmail OAuth2 → Resend → GCP Service Account fallback chain.
+// ============================================================
+export async function sendWelcomeEmail(env: any, data: {
+  email: string
+  name?: string | null
+}): Promise<void> {
+  if (!data?.email) return
+  const esc = (v: any) => String(v ?? '').replace(/[&<>"']/g, (m) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' } as any)[m])
+  const firstName = (data.name || '').trim().split(/\s+/)[0] || ''
+  const greeting = firstName ? `Hi ${esc(firstName)},` : 'Hi there,'
+  const demoUrl = 'https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb'
+
+  const subject = 'Welcome to Roof Manager'
+  const html = `
+<div style="max-width:600px;margin:0 auto;font-family:Inter,Arial,Helvetica,sans-serif;background:#f4f4f5;padding:24px">
+  <div style="background:#000;padding:24px;border-radius:12px 12px 0 0;text-align:center">
+    <img src="https://www.roofmanager.ca/static/logo.png?v=20260504" alt="Roof Manager" width="180" style="max-width:180px;height:auto;display:block;margin:0 auto 8px"/>
+    <p style="color:#9CA3AF;font-size:12px;margin:6px 0 0;letter-spacing:0.5px">Welcome aboard</p>
+  </div>
+  <div style="background:#fff;padding:32px 28px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
+    <h1 style="font-size:22px;color:#0A0A0A;margin:0 0 16px;font-weight:700">Welcome to Roof Manager</h1>
+    <p style="font-size:15px;color:#1a1a2e;margin:0 0 16px;line-height:1.6">${greeting}</p>
+    <p style="font-size:15px;color:#1a1a2e;margin:0 0 16px;line-height:1.6">
+      Thanks for signing up for Roof Manager — the all-in-one platform for AI-powered roof measurements, reports, and CRM.
+      Your account is ready and your free trial roof reports have been added to it.
+    </p>
+    <p style="font-size:15px;color:#1a1a2e;margin:0 0 24px;line-height:1.6">
+      Jump in any time at
+      <a href="https://www.roofmanager.ca/customer" style="color:#00CC6A;font-weight:600;text-decoration:none">www.roofmanager.ca</a>
+      and start measuring your first roof.
+    </p>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+    <p style="font-size:15px;color:#1a1a2e;margin:0 0 18px;line-height:1.6">
+      If you have questions, concerns, or want to learn more and get a guided tour, book a demo with us:
+    </p>
+    <div style="text-align:center;margin:8px 0 4px">
+      <a href="${demoUrl}" style="display:inline-block;background:#00CC6A;color:#0A0A0A;font-weight:700;font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none">Book a Demo</a>
+    </div>
+    <p style="font-size:12px;color:#9CA3AF;margin:18px 0 0;text-align:center;word-break:break-all">${demoUrl}</p>
+  </div>
+  <p style="font-size:11px;color:#9CA3AF;text-align:center;margin:16px 0 0">© Roof Manager · www.roofmanager.ca</p>
+</div>`
+
+  // Strategy 1: Gmail OAuth2
+  let sent = false
+  const clientId = env.GMAIL_CLIENT_ID
+  let clientSecret = env.GMAIL_CLIENT_SECRET || ''
+  let refreshToken = env.GMAIL_REFRESH_TOKEN || ''
+  if (!refreshToken || !clientSecret) {
+    try {
+      const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
+      if (r?.setting_value) refreshToken = r.setting_value
+      const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
+      if (s?.setting_value) clientSecret = s.setting_value
+    } catch (e: any) {
+      console.warn('[sendWelcomeEmail] DB credential lookup failed:', e?.message)
+    }
+  }
+
+  if (clientId && clientSecret && refreshToken) {
+    try {
+      await sendGmailOAuth2(clientId, clientSecret, refreshToken, data.email, subject, html, 'sales@roofmanager.ca')
+      sent = true
+      console.log('[sendWelcomeEmail] sent via Gmail OAuth2 to', data.email)
+    } catch (e: any) {
+      console.error('[sendWelcomeEmail] Gmail OAuth2 failed:', e?.message || e)
+    }
+  }
+
+  // Strategy 2: Resend fallback
+  if (!sent && env.RESEND_API_KEY) {
+    try {
+      await sendViaResend(env.RESEND_API_KEY, data.email, subject, html)
+      sent = true
+      console.log('[sendWelcomeEmail] sent via Resend fallback to', data.email)
+    } catch (e: any) {
+      console.error('[sendWelcomeEmail] Resend fallback failed:', e?.message || e)
+    }
+  }
+
+  // Strategy 3: GCP Service Account fallback
+  if (!sent && env.GCP_SERVICE_ACCOUNT_JSON) {
+    try {
+      await sendGmailEmail(env.GCP_SERVICE_ACCOUNT_JSON, data.email, subject, html, 'sales@roofmanager.ca')
+      sent = true
+      console.log('[sendWelcomeEmail] sent via GCP Service Account fallback to', data.email)
+    } catch (e: any) {
+      console.error('[sendWelcomeEmail] GCP Service Account failed:', e?.message || e)
+    }
+  }
+
+  if (!sent) {
+    console.error('[sendWelcomeEmail] ALL email methods failed — welcome email for', data.email, 'was NOT delivered')
   }
 }

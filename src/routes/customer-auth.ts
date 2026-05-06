@@ -5,7 +5,7 @@ import { identifySession } from '../services/attribution'
 import { resolveTeamOwner } from './team'
 import { hashPassword, verifyPassword, isLegacyHash, dummyVerify } from '../lib/password'
 import { getCustomerSessionToken } from '../lib/session-tokens'
-import { notifyNewUserSignup } from '../services/email'
+import { notifyNewUserSignup, sendWelcomeEmail } from '../services/email'
 
 // P1-11: sanitize values before splicing into MIME headers. Strips CR/LF and
 // control chars that could be used for header injection (inject Bcc, etc.).
@@ -531,6 +531,12 @@ customerAuthRoutes.post('/google', async (c) => {
           ip,
         }).catch((e) => console.warn('[customer-auth] notifyNewUserSignup (google) failed:', e?.message || e)))
       } catch (e: any) { console.warn('[customer-auth] notifyNewUserSignup (google) skip:', e?.message) }
+
+      // Send "Welcome to Roof Manager" email to the new user (non-blocking)
+      try {
+        c.executionCtx.waitUntil(sendWelcomeEmail(c.env as any, { email, name })
+          .catch((e) => console.warn('[customer-auth] sendWelcomeEmail (google) failed:', e?.message || e)))
+      } catch (e: any) { console.warn('[customer-auth] sendWelcomeEmail (google) skip:', e?.message) }
     }
 
     // Attribution — link recent same-IP traffic to this customer + recompute
@@ -755,6 +761,12 @@ customerAuthRoutes.post('/register', async (c) => {
         ip,
       }).catch((e) => console.warn('[customer-auth] notifyNewUserSignup (email) failed:', e?.message || e)))
     } catch (e: any) { console.warn('[customer-auth] notifyNewUserSignup (email) skip:', e?.message) }
+
+    // Send "Welcome to Roof Manager" email to the new user (non-blocking)
+    try {
+      c.executionCtx.waitUntil(sendWelcomeEmail(c.env as any, { email: cleanEmail, name })
+        .catch((e) => console.warn('[customer-auth] sendWelcomeEmail (email) failed:', e?.message || e)))
+    } catch (e: any) { console.warn('[customer-auth] sendWelcomeEmail (email) skip:', e?.message) }
 
     return c.json({
       success: true,
