@@ -52,6 +52,7 @@ const SA_SECTIONS = {
   revenue: {
     label: 'Revenue', icon: 'fa-dollar-sign',
     tabs: [
+      { id: 'order-alerts', label: 'Order Alerts', icon: 'fa-bell' },
       { id: 'orders', label: 'Orders', icon: 'fa-clipboard-list' },
       { id: 'report-requests', label: 'Report Requests', icon: 'fa-satellite-dish' },
       { id: 'sales', label: 'Credit Sales', icon: 'fa-credit-card' },
@@ -91,6 +92,7 @@ const SA_SECTIONS = {
       { id: 'platform-onboarding', label: 'Onboarding', icon: 'fa-user-cog' },
       { id: 'api-users', label: 'API & Developers', icon: 'fa-key' },
       { id: 'platform-health', label: 'System Health', icon: 'fa-heartbeat' },
+      { id: 'platform-health-log', label: 'Health Check Log', icon: 'fa-clipboard-check' },
       { id: 'platform-settings', label: 'Settings', icon: 'fa-cog' }
     ]
   }
@@ -329,6 +331,10 @@ document.addEventListener('DOMContentLoaded', () => {
   loadNewSignupsBadge();
   setInterval(loadNewSignupsBadge, 60000);
 
+  // Poll unread order-alerts count every 30s for the Revenue sidebar badge.
+  loadOrderAlertsBadge();
+  setInterval(loadOrderAlertsBadge, 30000);
+
   // Auto-prompt for push notifications after dashboard loads
   setTimeout(() => {
     if (window.RoofPush && localStorage.getItem('rc_token')) {
@@ -476,6 +482,12 @@ async function loadView(view) {
           ]);
           if (healthRes && healthRes.ok) SA.data.system_health = await healthRes.json();
           if (paywallRes && paywallRes.ok) SA.data.paywall_status = await paywallRes.json();
+        } catch(e) {}
+        break;
+      case 'platform-health-log':
+        try {
+          const hclRes = await saFetch('/api/admin/superadmin/health-check-log');
+          if (hclRes && hclRes.ok) SA.data.health_check_log = await hclRes.json();
         } catch(e) {}
         break;
       case 'platform-settings':
@@ -859,12 +871,14 @@ function renderContent() {
     // ── Platform consolidated ──
     case 'platform-onboarding': root.innerHTML = tabBar + renderCustomerOnboardingView(); obLoadDeployments(); obLoadPhonePool(); break;
     case 'platform-health': root.innerHTML = tabBar + renderPlatformHealthView(); break;
+    case 'platform-health-log': root.innerHTML = tabBar + renderHealthCheckLogView(); break;
     case 'platform-settings': root.innerHTML = tabBar + renderPlatformSettingsView(); break;
     case 'people-directory': root.innerHTML = tabBar + renderPeopleDirectoryView(); break;
     case 'users': root.innerHTML = tabBar + renderUsersView(); break;
     case 'sales': root.innerHTML = tabBar + renderSalesView(); break;
     case 'report-requests': root.innerHTML = tabBar + renderReportRequestsView(); break;
     case 'orders': root.innerHTML = tabBar + renderOrdersView(); break;
+    case 'order-alerts': root.innerHTML = tabBar + renderOrderAlertsView(); loadOrderAlerts(); break;
     case 'signups': root.innerHTML = tabBar + renderSignupsView(); break;
     case 'marketing': root.innerHTML = tabBar + renderMarketingView(); break;
     case 'email-outreach': root.innerHTML = tabBar; break; // Handled by email-outreach.js — appends after tabBar
@@ -2079,6 +2093,147 @@ window.saChangeSignupsPeriod = function(p) {
   SA.signupsPeriod = p;
   loadView('signups');
 };
+
+// ============================================================
+// ORDER ALERTS — Persistent feed of every order arriving via any path.
+// Source of truth: super_admin_notifications table. Email is best-effort;
+// these rows always exist. Rows are written by services/admin-notifications.ts
+// from use-credit, square webhook, verify-payment, admin POST /api/orders,
+// submit-trace, and the unmatched-payment branch.
+// ============================================================
+function renderOrderAlertsView() {
+  return ''
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">'
+    +   '<div>'
+    +     '<h2 style="margin:0;font-size:20px;font-weight:800;color:#0f172a"><i class="fas fa-bell" style="color:#dc2626;margin-right:8px"></i>Order Alerts</h2>'
+    +     '<p style="margin:4px 0 0;color:#64748b;font-size:13px">Every customer order — self-traced, submit-for-trace, paid, trial, or unmatched payment.</p>'
+    +   '</div>'
+    +   '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+    +     '<select id="oa-filter-kind" onchange="loadOrderAlerts()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-xs">'
+    +       '<option value="">All kinds</option>'
+    +       '<option value="new_order">New order</option>'
+    +       '<option value="needs_trace">Needs trace</option>'
+    +       '<option value="trace_completed">Trace completed</option>'
+    +       '<option value="payment_unmatched">Payment unmatched</option>'
+    +     '</select>'
+    +     '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#475569"><input type="checkbox" id="oa-filter-unread" onchange="loadOrderAlerts()"> Unread only</label>'
+    +     '<button onclick="loadOrderAlerts()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-semibold text-gray-700"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>'
+    +     '<button onclick="markAllOrderAlertsRead()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold"><i class="fas fa-check-double mr-1"></i>Mark all read</button>'
+    +   '</div>'
+    + '</div>'
+    + '<div id="oa-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px"></div>'
+    + '<div id="oa-list"><div class="flex items-center py-12 justify-center text-gray-500"><div class="w-6 h-6 border-2 border-gray-200 border-t-slate-700 rounded-full animate-spin mr-3"></div>Loading alerts…</div></div>';
+}
+
+async function loadOrderAlerts() {
+  var listEl = document.getElementById('oa-list');
+  var sumEl = document.getElementById('oa-summary');
+  if (!listEl) return;
+  var kind = (document.getElementById('oa-filter-kind') || {}).value || '';
+  var unread = !!((document.getElementById('oa-filter-unread') || {}).checked);
+  var qs = ['limit=100'];
+  if (kind) qs.push('kind=' + encodeURIComponent(kind));
+  if (unread) qs.push('unread=1');
+  try {
+    var res = await saFetch('/api/admin/superadmin/notifications?' + qs.join('&'));
+    if (!res || !res.ok) {
+      listEl.innerHTML = '<div class="bg-white border border-gray-200 rounded-xl p-6 text-center text-red-500 text-sm">Failed to load order alerts.</div>';
+      return;
+    }
+    var data = await res.json();
+    var rows = data.notifications || [];
+    var counts = data.counts || {};
+
+    if (sumEl) {
+      var card = function(label, value, color) {
+        return '<div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid ' + color + ';border-radius:10px;padding:12px 14px"><div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">' + label + '</div><div style="font-size:22px;font-weight:800;color:#0f172a;margin-top:2px">' + (value || 0) + '</div></div>';
+      };
+      sumEl.innerHTML =
+        card('Unread total', counts.unread, '#0f172a') +
+        card('New order', counts.unread_new_order, '#3b82f6') +
+        card('Needs trace', counts.unread_needs_trace, '#f59e0b') +
+        card('Trace completed', counts.unread_trace_completed, '#10b981') +
+        card('Payment unmatched', counts.unread_payment_unmatched, '#dc2626') +
+        card('Email failed', counts.email_failed, '#dc2626');
+    }
+
+    if (rows.length === 0) {
+      listEl.innerHTML = '<div class="bg-white border border-gray-200 rounded-xl p-12 text-center"><i class="fas fa-bell-slash text-gray-300 text-4xl mb-3"></i><p class="text-gray-500 text-sm">No order alerts match the current filter.</p></div>';
+      return;
+    }
+
+    var html = '<div class="bg-white border border-gray-200 rounded-xl overflow-hidden">';
+    rows.forEach(function(r, i) {
+      html += renderOrderAlertRow(r, i === rows.length - 1);
+    });
+    html += '</div>';
+    listEl.innerHTML = html;
+  } catch (e) {
+    listEl.innerHTML = '<div class="bg-white border border-gray-200 rounded-xl p-6 text-center text-red-500 text-sm">' + (e && e.message ? e.message : 'Load failed') + '</div>';
+  }
+}
+
+function renderOrderAlertRow(r, isLast) {
+  var kindLabel = ({
+    new_order: 'New order',
+    needs_trace: 'Needs trace',
+    trace_completed: 'Trace completed',
+    payment_unmatched: 'Payment unmatched'
+  })[r.kind] || r.kind;
+  var sev = r.severity || 'info';
+  var sevColor = sev === 'urgent' ? '#dc2626' : (sev === 'warn' ? '#f59e0b' : (r.kind === 'trace_completed' ? '#10b981' : '#3b82f6'));
+  var unread = !r.read_at;
+  var tier = r.service_tier ? String(r.service_tier).toUpperCase() : '';
+  var paid = r.payment_status === 'paid';
+  var trial = r.is_trial ? '<span style="margin-left:6px;padding:2px 6px;background:#fef3c7;color:#92400e;font-size:10px;font-weight:700;border-radius:6px">TRIAL</span>' : '';
+  var emailBadge = '';
+  if (r.email_status === 'sent') emailBadge = '<span style="padding:2px 6px;background:#dcfce7;color:#166534;font-size:10px;font-weight:700;border-radius:6px">EMAIL SENT</span>';
+  else if (r.email_status === 'failed') emailBadge = '<span style="padding:2px 6px;background:#fee2e2;color:#991b1b;font-size:10px;font-weight:700;border-radius:6px" title="' + (r.email_detail || '').replace(/"/g, '&quot;') + '">EMAIL FAILED</span>';
+  else if (r.email_status === 'pending') emailBadge = '<span style="padding:2px 6px;background:#e2e8f0;color:#475569;font-size:10px;font-weight:700;border-radius:6px">EMAIL PENDING</span>';
+  else emailBadge = '<span style="padding:2px 6px;background:#f1f5f9;color:#475569;font-size:10px;font-weight:700;border-radius:6px">' + String(r.email_status || '').toUpperCase() + '</span>';
+  var when = r.created_at ? new Date(r.created_at + 'Z').toLocaleString() : '';
+  var border = isLast ? '' : 'border-bottom:1px solid #f1f5f9;';
+  var bg = unread ? '#fffbeb' : '#fff';
+  return ''
+    + '<div style="' + border + 'background:' + bg + ';padding:14px 18px;display:flex;gap:14px;align-items:flex-start">'
+    +   '<div style="width:6px;align-self:stretch;background:' + sevColor + ';border-radius:3px;flex-shrink:0"></div>'
+    +   '<div style="flex:1;min-width:0">'
+    +     '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">'
+    +       '<span style="font-size:11px;font-weight:800;text-transform:uppercase;color:' + sevColor + ';letter-spacing:0.5px">' + kindLabel + '</span>'
+    +       (unread ? '<span style="width:7px;height:7px;background:' + sevColor + ';border-radius:50%"></span>' : '')
+    +       (tier ? '<span style="padding:2px 6px;background:#f1f5f9;color:#475569;font-size:10px;font-weight:700;border-radius:6px">' + tier + '</span>' : '')
+    +       (paid ? '<span style="padding:2px 6px;background:#dcfce7;color:#166534;font-size:10px;font-weight:700;border-radius:6px">PAID' + (r.price ? ' $' + Number(r.price).toFixed(2) : '') + '</span>' : '')
+    +       trial
+    +       emailBadge
+    +     '</div>'
+    +     '<div style="font-size:14px;font-weight:700;color:#0f172a">' + (r.order_number || ('#' + (r.order_id || '?'))) + ' · ' + (r.property_address || '(no address)') + '</div>'
+    +     '<div style="font-size:12px;color:#64748b;margin-top:3px">' + (r.customer_email || 'no customer email') + ' · ' + when + '</div>'
+    +   '</div>'
+    +   '<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">'
+    +     (r.order_id ? '<button onclick="saSetView(\'orders\')" style="padding:5px 10px;background:#0f172a;color:#fff;font-size:11px;font-weight:700;border:none;border-radius:6px;cursor:pointer">View order</button>' : '')
+    +     (unread ? '<button onclick="markOrderAlertRead(' + r.id + ')" style="padding:5px 10px;background:#fff;color:#0f172a;font-size:11px;font-weight:700;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer">Mark read</button>' : '')
+    +   '</div>'
+    + '</div>';
+}
+
+async function markOrderAlertRead(id) {
+  try {
+    await saFetch('/api/admin/superadmin/notifications/' + id + '/read', { method: 'POST' });
+    loadOrderAlerts();
+  } catch(e) { /* swallow */ }
+}
+
+async function markAllOrderAlertsRead() {
+  try {
+    var kind = (document.getElementById('oa-filter-kind') || {}).value || '';
+    await saFetch('/api/admin/superadmin/notifications/read-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(kind ? { kind: kind } : {})
+    });
+    loadOrderAlerts();
+  } catch(e) { /* swallow */ }
+}
 
 function renderSignupsView() {
   const d = SA.data.signups || {};
@@ -11627,6 +11782,23 @@ async function loadInboxBadge() {
   } catch (e) { /* best effort */ }
 }
 
+// Unread order alerts — amber badge on the Revenue nav item. Backed by
+// super_admin_notifications (every customer-ordered report ends up here).
+async function loadOrderAlertsBadge() {
+  try {
+    var res = await saFetch('/api/admin/superadmin/notifications?unread=1&limit=1');
+    if (res && res.ok) {
+      var data = await res.json();
+      var total = (data.counts && data.counts.unread) || 0;
+      var badge = document.getElementById('sa-report-req-badge');
+      if (badge) {
+        badge.textContent = total;
+        badge.style.display = total > 0 ? '' : 'none';
+      }
+    }
+  } catch (e) { /* best effort */ }
+}
+
 // New user signups in the last 24h — green badge on the Customers nav item.
 async function loadNewSignupsBadge() {
   try {
@@ -12688,6 +12860,146 @@ function renderPlatformHealthView() {
       saSection('Error Watch', 'fa-exclamation-triangle', errorHtml) +
       saSection('Paywall & Subscriptions', 'fa-lock', paywallHtml) +
       saSection('Telephony Health', 'fa-phone-volume', telephonyHtml) +
+    '</div>';
+}
+
+// ============================================================
+// PLATFORM — HEALTH CHECK LOG (monitor agent run history + insights)
+// ============================================================
+function renderHealthCheckLogView() {
+  var d = SA.data.health_check_log || {};
+  var cfg = d.config || {};
+  var runs = d.runs || [];
+  var rollup = d.rollup || {};
+  var insights = d.insights || [];
+  var ic = d.insight_counts || {};
+  var memory = d.memory || [];
+
+  var lastRun = runs[0] || null;
+  var lastDetails = lastRun && lastRun.details ? lastRun.details : null;
+  var generated = d.generated_at ? new Date(d.generated_at) : null;
+  var refreshedLabel = generated ? generated.toLocaleTimeString() : '—';
+
+  // ── Header KPIs ──
+  var enabledLabel = cfg.enabled ? 'Enabled' : 'Disabled';
+  var enabledColor = cfg.enabled ? 'green' : 'gray';
+  var lastStatus = cfg.last_run_status || (lastRun ? lastRun.status : '—');
+  var statusColor = lastStatus === 'success' ? 'green' : lastStatus === 'error' ? 'red' : lastStatus === 'skipped' ? 'gray' : 'amber';
+  var lastRunAt = cfg.last_run_at || (lastRun ? lastRun.created_at : null);
+  var lastRunLabel = lastRunAt ? fmtDateTime(lastRunAt) : 'Never';
+  var errColor = (rollup.errors_24h || 0) === 0 ? 'green' : (rollup.errors_24h || 0) < 2 ? 'amber' : 'red';
+  var critColor = (ic.critical_open || 0) === 0 ? 'green' : 'red';
+  var avgDurLabel = rollup.avg_duration_ms_7d ? Math.round(rollup.avg_duration_ms_7d) + ' ms' : '—';
+
+  var kpisHtml = '<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">' +
+    samc('Monitor Agent', enabledLabel, 'fa-power-off', enabledColor, 'agent_type=monitor') +
+    samc('Last Run', lastStatus, 'fa-history', statusColor, lastRunLabel) +
+    samc('Runs (7d)', rollup.runs_7d || 0, 'fa-redo', 'indigo', (rollup.runs_24h || 0) + ' (24h)') +
+    samc('Errors (7d)', rollup.errors_7d || 0, 'fa-exclamation-triangle', errColor, (rollup.errors_24h || 0) + ' (24h)') +
+    samc('Open Insights', ic.open || 0, 'fa-lightbulb', 'amber', (ic.acknowledged || 0) + ' ack · ' + (ic.resolved || 0) + ' resolved') +
+    samc('Critical Open', ic.critical_open || 0, 'fa-skull-crossbones', critColor, (ic.high_open || 0) + ' high') +
+  '</div>';
+
+  // ── Latest Health Check (parsed from monitor-agent details_json) ──
+  var latestHtml;
+  if (!lastDetails) {
+    latestHtml = '<p class="text-sm text-slate-400 italic">No health check has run yet. The monitor agent runs every hour on the :00 tick when enabled.</p>';
+  } else {
+    var hs = lastDetails.health_score;
+    var iss = lastDetails.issues_found;
+    var hsColor = hs == null ? 'gray' : hs >= 80 ? 'green' : hs >= 60 ? 'amber' : 'red';
+    var issColor = (iss || 0) === 0 ? 'green' : (iss || 0) < 3 ? 'amber' : 'red';
+    latestHtml = '<div class="grid grid-cols-2 md:grid-cols-4 gap-4">' +
+      samc('Health Score', hs != null ? hs + '/100' : '—', 'fa-heartbeat', hsColor) +
+      samc('Issues Found', iss != null ? iss : '—', 'fa-bug', issColor, 'this run') +
+      samc('Run Duration', lastRun.duration_ms ? lastRun.duration_ms + ' ms' : '—', 'fa-stopwatch', 'blue', 'avg ' + avgDurLabel + ' (7d)') +
+      samc('When', lastRun.created_at ? fmtDateTime(lastRun.created_at) : '—', 'fa-clock', 'indigo', lastRun.summary || '') +
+    '</div>';
+  }
+
+  // ── Recent Runs table ──
+  var runsHtml;
+  if (!runs.length) {
+    runsHtml = '<p class="text-sm text-slate-400 italic">No monitor runs recorded yet.</p>';
+  } else {
+    var runRows = runs.map(function(r){
+      var sColor = r.status === 'success' ? 'green' : r.status === 'error' ? 'red' : r.status === 'skipped' ? 'gray' : 'amber';
+      var sIcon = r.status === 'success' ? 'fa-check-circle' : r.status === 'error' ? 'fa-times-circle' : r.status === 'skipped' ? 'fa-forward' : 'fa-circle-exclamation';
+      var hsCell = (r.details && r.details.health_score != null) ? (r.details.health_score + '/100') : '—';
+      var issCell = (r.details && r.details.issues_found != null) ? r.details.issues_found : '—';
+      return '<tr class="border-t border-slate-100 hover:bg-slate-50">' +
+        '<td class="py-2 px-3 text-xs text-slate-500 whitespace-nowrap">' + fmtDateTime(r.created_at) + '</td>' +
+        '<td class="py-2 px-3"><span class="inline-flex items-center gap-1.5 px-2 py-0.5 bg-' + sColor + '-50 text-' + sColor + '-700 rounded-full text-[11px] font-semibold capitalize"><i class="fas ' + sIcon + ' text-[9px]"></i>' + (r.status || '—') + '</span></td>' +
+        '<td class="py-2 px-3 text-sm text-slate-700">' + escapeHtml(r.summary || '—') + '</td>' +
+        '<td class="py-2 px-3 text-xs text-right text-slate-600">' + hsCell + '</td>' +
+        '<td class="py-2 px-3 text-xs text-right text-slate-600">' + issCell + '</td>' +
+        '<td class="py-2 px-3 text-xs text-right text-slate-500 whitespace-nowrap">' + (r.duration_ms != null ? r.duration_ms + ' ms' : '—') + '</td>' +
+      '</tr>';
+    }).join('');
+    runsHtml = '<div class="overflow-x-auto"><table class="w-full">' +
+      '<thead><tr class="bg-slate-50">' +
+        '<th class="py-2 px-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">When</th>' +
+        '<th class="py-2 px-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Status</th>' +
+        '<th class="py-2 px-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Summary</th>' +
+        '<th class="py-2 px-3 text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Health</th>' +
+        '<th class="py-2 px-3 text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Issues</th>' +
+        '<th class="py-2 px-3 text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Duration</th>' +
+      '</tr></thead><tbody>' + runRows + '</tbody></table></div>';
+  }
+
+  // ── Insights from Claude analysis ──
+  var insightsHtml;
+  if (!insights.length) {
+    insightsHtml = '<p class="text-sm text-slate-400 italic">No insights yet. The monitor agent generates insights from each scan.</p>';
+  } else {
+    var insightRows = insights.map(function(ins){
+      var sevColor = ins.severity === 'critical' ? 'red' : ins.severity === 'high' ? 'amber' : ins.severity === 'medium' ? 'yellow' : 'blue';
+      var catIcon = ins.category === 'bug' ? 'fa-bug' : ins.category === 'error' ? 'fa-exclamation-triangle' : ins.category === 'improvement' ? 'fa-lightbulb' : ins.category === 'performance' ? 'fa-tachometer-alt' : 'fa-heartbeat';
+      var statColor = ins.status === 'open' ? 'amber' : ins.status === 'acknowledged' ? 'blue' : 'green';
+      return '<div class="p-3 rounded-lg border border-slate-100 bg-white">' +
+        '<div class="flex items-start gap-3">' +
+          '<div class="w-9 h-9 bg-' + sevColor + '-50 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas ' + catIcon + ' text-' + sevColor + '-500"></i></div>' +
+          '<div class="flex-1 min-w-0">' +
+            '<div class="flex flex-wrap items-center gap-2 mb-1">' +
+              '<span class="font-semibold text-sm text-slate-800">' + escapeHtml(ins.title || '—') + '</span>' +
+              '<span class="inline-flex items-center px-1.5 py-0.5 bg-' + sevColor + '-100 text-' + sevColor + '-700 rounded text-[10px] font-bold uppercase">' + (ins.severity || '—') + '</span>' +
+              '<span class="inline-flex items-center px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-medium uppercase">' + (ins.category || '—') + '</span>' +
+              '<span class="inline-flex items-center px-1.5 py-0.5 bg-' + statColor + '-50 text-' + statColor + '-700 rounded text-[10px] font-medium capitalize">' + (ins.status || 'open') + '</span>' +
+              '<span class="text-[10px] text-slate-400 ml-auto">' + fmtDateTime(ins.created_at) + '</span>' +
+            '</div>' +
+            (ins.description ? '<p class="text-xs text-slate-600 mb-1.5">' + escapeHtml(ins.description) + '</p>' : '') +
+            (ins.suggested_fix ? '<p class="text-xs text-slate-500"><span class="font-semibold text-slate-600">Suggested fix:</span> ' + escapeHtml(ins.suggested_fix) + '</p>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    insightsHtml = '<div class="space-y-2">' + insightRows + '</div>';
+  }
+
+  // ── Accumulated platform memory (Claude's running model) ──
+  var memoryHtml;
+  if (!memory.length) {
+    memoryHtml = '<p class="text-sm text-slate-400 italic">No accumulated memory yet. Memory builds up across runs as the monitor learns the platform.</p>';
+  } else {
+    memoryHtml = '<div class="space-y-3">' + memory.map(function(m){
+      return '<div class="p-3 rounded-lg border border-slate-100 bg-slate-50">' +
+        '<div class="flex items-center justify-between mb-1.5">' +
+          '<span class="font-semibold text-xs text-slate-600 uppercase tracking-wider">' + escapeHtml(m.memory_key || '—') + '</span>' +
+          '<span class="text-[10px] text-slate-400">updated ' + fmtDateTime(m.updated_at) + '</span>' +
+        '</div>' +
+        '<p class="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">' + escapeHtml(m.memory_value || '') + '</p>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-clipboard-check mr-2 text-blue-500"></i>Health Check Log</h2>' +
+      '<p class="text-sm text-gray-500 mt-1">Platform monitor agent — run history, findings, and accumulated platform knowledge · refreshed ' + refreshedLabel + '</p></div>' +
+    '<div class="space-y-6">' +
+      saSection('At a Glance', 'fa-tachometer-alt', kpisHtml) +
+      saSection('Latest Health Check', 'fa-heartbeat', latestHtml) +
+      saSection('Insights & Findings (' + insights.length + ')', 'fa-lightbulb', insightsHtml) +
+      saSection('Recent Runs (' + runs.length + ')', 'fa-history', runsHtml) +
+      saSection('Accumulated Platform Knowledge', 'fa-brain', memoryHtml) +
     '</div>';
 }
 

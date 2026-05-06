@@ -9,6 +9,7 @@ import { BASEMAP_PROVIDERS } from '../services/satellite-imagery'
 import { generateApiKey } from '../middleware/api-auth'
 import { addCredits } from '../services/api-billing'
 import { notifyNewReportRequest, sendGmailOAuth2, sendViaResend, sendGmailEmail } from '../services/email'
+import { recordAndNotify } from '../services/admin-notifications'
 import { logAdminAction } from '../lib/audit-log'
 import { clientIp } from '../lib/rate-limit'
 import { encryptSecret, decryptSecret } from '../lib/secret-vault'
@@ -1428,6 +1429,95 @@ adminRoutes.get('/superadmin/orders', async (c) => {
     })
   } catch (err: any) {
     return c.json({ error: 'Failed to load orders', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// SUPER ADMIN NOTIFICATIONS — Persistent feed of order-lifecycle events.
+// Source of truth for "did super admin see this order arrive?"; email is
+// best-effort and may fail. Rows are inserted by services/admin-notifications.ts
+// from every order-creation path (use-credit, square webhook + verify-payment,
+// admin POST /api/orders, submit-trace, unmatched-payment branch).
+// ============================================================
+adminRoutes.get('/superadmin/notifications', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  try {
+    const limit = Math.max(1, Math.min(parseInt(c.req.query('limit') || '50'), 200))
+    const offset = Math.max(0, parseInt(c.req.query('offset') || '0'))
+    const unreadOnly = c.req.query('unread') === '1'
+    const kind = (c.req.query('kind') || '').trim()
+    const validKinds = ['new_order', 'needs_trace', 'trace_completed', 'payment_unmatched']
+    const useKindFilter = !!kind && validKinds.includes(kind)
+
+    const where: string[] = []
+    const args: any[] = []
+    if (unreadOnly) where.push('read_at IS NULL')
+    if (useKindFilter) { where.push('kind = ?'); args.push(kind) }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
+
+    const rows = await c.env.DB.prepare(`
+      SELECT id, kind, order_id, order_number, customer_id, customer_email,
+             property_address, service_tier, price, payment_status, is_trial,
+             trace_source, needs_admin_trace, email_status, email_detail,
+             severity, read_at, payload_json, created_at
+      FROM super_admin_notifications
+      ${whereSql}
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(...args, limit, offset).all()
+
+    const counts = await c.env.DB.prepare(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN read_at IS NULL THEN 1 ELSE 0 END) AS unread,
+        SUM(CASE WHEN kind = 'new_order' AND read_at IS NULL THEN 1 ELSE 0 END) AS unread_new_order,
+        SUM(CASE WHEN kind = 'needs_trace' AND read_at IS NULL THEN 1 ELSE 0 END) AS unread_needs_trace,
+        SUM(CASE WHEN kind = 'trace_completed' AND read_at IS NULL THEN 1 ELSE 0 END) AS unread_trace_completed,
+        SUM(CASE WHEN kind = 'payment_unmatched' AND read_at IS NULL THEN 1 ELSE 0 END) AS unread_payment_unmatched,
+        SUM(CASE WHEN email_status = 'failed' THEN 1 ELSE 0 END) AS email_failed
+      FROM super_admin_notifications
+    `).first()
+
+    return c.json({ notifications: rows.results, counts, limit, offset })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to load notifications', details: err.message }, 500)
+  }
+})
+
+adminRoutes.post('/superadmin/notifications/:id/read', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  const id = parseInt(c.req.param('id'))
+  if (isNaN(id)) return c.json({ error: 'Invalid notification id' }, 400)
+  try {
+    const r = await c.env.DB.prepare(
+      "UPDATE super_admin_notifications SET read_at = datetime('now') WHERE id = ? AND read_at IS NULL"
+    ).bind(id).run()
+    return c.json({ success: true, changed: r.meta.changes })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to mark read', details: err.message }, 500)
+  }
+})
+
+adminRoutes.post('/superadmin/notifications/read-all', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  try {
+    let body: any = {}
+    try { body = await c.req.json() } catch {}
+    const kind = (body?.kind || '').trim()
+    const validKinds = ['new_order', 'needs_trace', 'trace_completed', 'payment_unmatched']
+    const useKindFilter = !!kind && validKinds.includes(kind)
+    const sql = useKindFilter
+      ? "UPDATE super_admin_notifications SET read_at = datetime('now') WHERE read_at IS NULL AND kind = ?"
+      : "UPDATE super_admin_notifications SET read_at = datetime('now') WHERE read_at IS NULL"
+    const r = useKindFilter
+      ? await c.env.DB.prepare(sql).bind(kind).run()
+      : await c.env.DB.prepare(sql).run()
+    return c.json({ success: true, changed: r.meta.changes })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to mark all read', details: err.message }, 500)
   }
 })
 
@@ -3999,6 +4089,87 @@ adminRoutes.get('/superadmin/system-health', async (c) => {
   return c.json(out)
 })
 
+// Health Check Log — surfaces the platform monitor agent's run history,
+// per-run details, and Claude-generated insights. Read-only feed for super admin.
+adminRoutes.get('/superadmin/health-check-log', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+
+  const out: Record<string, any> = { generated_at: new Date().toISOString() }
+
+  // Agent config — last run status, totals, enabled flag, next_run_at
+  try {
+    const cfg = await c.env.DB.prepare(
+      "SELECT enabled, config_json, last_run_at, last_run_status, last_run_details, next_run_at, run_count, error_count, created_at, updated_at FROM agent_configs WHERE agent_type = 'monitor'"
+    ).first<any>()
+    out.config = cfg || null
+  } catch (e: any) { out.config = null }
+
+  // Recent runs — last 30 monitor runs, parse details_json into an object client-side
+  try {
+    const runs = await c.env.DB.prepare(
+      "SELECT id, status, summary, details_json, duration_ms, created_at FROM agent_runs WHERE agent_type = 'monitor' ORDER BY created_at DESC LIMIT 30"
+    ).all<any>()
+    out.runs = (runs.results || []).map((r: any) => {
+      let details: any = null
+      try { details = r.details_json ? JSON.parse(r.details_json) : null } catch { details = null }
+      return { id: r.id, status: r.status, summary: r.summary, duration_ms: r.duration_ms, created_at: r.created_at, details }
+    })
+  } catch (e: any) { out.runs = [] }
+
+  // Run rollups — totals over rolling windows for the header KPIs
+  out.rollup = { runs_24h: 0, runs_7d: 0, errors_24h: 0, errors_7d: 0, avg_duration_ms_7d: null }
+  try {
+    const rows = await c.env.DB.batch([
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM agent_runs WHERE agent_type = 'monitor' AND created_at > datetime('now', '-1 day')"),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM agent_runs WHERE agent_type = 'monitor' AND created_at > datetime('now', '-7 days')"),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM agent_runs WHERE agent_type = 'monitor' AND status = 'error' AND created_at > datetime('now', '-1 day')"),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM agent_runs WHERE agent_type = 'monitor' AND status = 'error' AND created_at > datetime('now', '-7 days')"),
+      c.env.DB.prepare("SELECT AVG(duration_ms) as avg_ms FROM agent_runs WHERE agent_type = 'monitor' AND created_at > datetime('now', '-7 days')"),
+    ]) as any[]
+    out.rollup.runs_24h = rows[0].results?.[0]?.cnt || 0
+    out.rollup.runs_7d = rows[1].results?.[0]?.cnt || 0
+    out.rollup.errors_24h = rows[2].results?.[0]?.cnt || 0
+    out.rollup.errors_7d = rows[3].results?.[0]?.cnt || 0
+    out.rollup.avg_duration_ms_7d = rows[4].results?.[0]?.avg_ms || null
+  } catch {}
+
+  // Recent insights — last 50 platform_insights from the monitor agent
+  try {
+    const insights = await c.env.DB.prepare(
+      "SELECT id, category, severity, title, description, suggested_fix, status, created_at, resolved_at FROM platform_insights ORDER BY created_at DESC LIMIT 50"
+    ).all<any>()
+    out.insights = insights.results || []
+  } catch (e: any) { out.insights = [] }
+
+  // Insight counts — by status for the header KPIs
+  out.insight_counts = { open: 0, acknowledged: 0, resolved: 0, critical_open: 0, high_open: 0 }
+  try {
+    const rows = await c.env.DB.batch([
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM platform_insights WHERE status = 'open'"),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM platform_insights WHERE status = 'acknowledged'"),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM platform_insights WHERE status = 'resolved'"),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM platform_insights WHERE status = 'open' AND severity = 'critical'"),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM platform_insights WHERE status = 'open' AND severity = 'high'"),
+    ]) as any[]
+    out.insight_counts.open = rows[0].results?.[0]?.cnt || 0
+    out.insight_counts.acknowledged = rows[1].results?.[0]?.cnt || 0
+    out.insight_counts.resolved = rows[2].results?.[0]?.cnt || 0
+    out.insight_counts.critical_open = rows[3].results?.[0]?.cnt || 0
+    out.insight_counts.high_open = rows[4].results?.[0]?.cnt || 0
+  } catch {}
+
+  // Accumulated platform memory — what Claude has learned about the platform across runs
+  try {
+    const mem = await c.env.DB.prepare(
+      "SELECT memory_key, memory_value, updated_at FROM agent_memory WHERE agent_type = 'monitor' ORDER BY updated_at DESC"
+    ).all<any>()
+    out.memory = mem.results || []
+  } catch (e: any) { out.memory = [] }
+
+  return c.json(out)
+})
+
 // Paywall status
 adminRoutes.get('/superadmin/paywall-status', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
@@ -4464,16 +4635,34 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
       if (ctx?.waitUntil) ctx.waitUntil(autoInvP)
     }
 
-    // Notify the customer via push (best-effort)
+    // Notify the customer via email + push (best-effort) and record a
+    // 'trace_completed' row in super_admin_notifications so the feed shows
+    // the trace lifecycle end-to-end.
     try {
       const order = await c.env.DB.prepare(
-        'SELECT customer_id, property_address, order_number FROM orders WHERE id = ?'
+        'SELECT o.customer_id, o.property_address, o.order_number, o.service_tier, o.price, o.is_trial, c.email AS customer_email, c.name AS customer_name FROM orders o LEFT JOIN customers c ON c.id = o.customer_id WHERE o.id = ?'
       ).bind(orderId).first<any>()
-      if (order?.customer_id) {
-        const subs = await c.env.DB.prepare(
-          'SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE customer_id = ?'
-        ).bind(order.customer_id).all()
-        // Log the activity — customer will see report in dashboard via polling
+      if (order) {
+        const notifyPromise = recordAndNotify(c.env, {
+          kind: 'trace_completed',
+          order: {
+            order_id: orderId,
+            order_number: order.order_number,
+            customer_id: order.customer_id,
+            customer_email: order.customer_email || '',
+            customer_name: order.customer_name || '',
+            property_address: order.property_address || '',
+            service_tier: order.service_tier || '',
+            price: order.price ?? 0,
+            payment_status: 'paid',
+            is_trial: !!order.is_trial,
+            trace_source: 'admin',
+            needs_admin_trace: false,
+            payload: { admin_id: admin.id },
+          },
+        }).catch((e) => console.warn('[admin-notif] trace_completed:', e?.message || e))
+        const ctx = (c as any).executionCtx
+        if (ctx?.waitUntil) ctx.waitUntil(notifyPromise)
         await c.env.DB.prepare(
           "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'manual_trace_completed', ?)"
         ).bind(`Admin traced order ${order.order_number} — ${order.property_address}`).run()
