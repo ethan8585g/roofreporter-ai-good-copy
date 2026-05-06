@@ -930,6 +930,7 @@ app.get('/register', (c) => {
   const googleClientId = (c.env as any).GOOGLE_OAUTH_CLIENT_ID || (c.env as any).GMAIL_CLIENT_ID || ''
   const previewId = c.req.query('preview_id') || ''
   const refCode = c.req.query('ref') || ''
+  c.header('Cache-Control', 'no-store, no-cache, must-revalidate')
   return c.html(getCustomerRegisterPageHTML(email, googleClientId, previewId, refCode))
 })
 
@@ -9490,7 +9491,7 @@ ${previewId ? `
 
         <div id="reg-error" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px"></div>
 
-        <form id="reg-form" autocomplete="on">
+        <form id="reg-form" autocomplete="on" onsubmit="event.preventDefault();return false">
           <!-- Step 1: email only -->
           <div id="step1">
             <label for="reg-email" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Work Email</label>
@@ -9595,6 +9596,7 @@ ${previewId ? `
                 style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:16px;cursor:pointer">
                 Create Account &#x2192;
               </button>
+              <p id="reg-submit-hint" style="display:none;margin:8px 0 0;font-size:13px;color:#b91c1c;text-align:center">Verify your email above to enable account creation.</p>
             </div>
           </div>
         </form>
@@ -9682,6 +9684,7 @@ ${previewId ? `
         if (!r.ok || !j.success || !j.verification_token) {
           setRegError(j.error || 'Invalid or expired code. Please try again.');
           if (btn) { btn.disabled = false; btn.textContent = 'Verify'; }
+          setSubmitEnabled(false);
           return;
         }
         verificationToken = j.verification_token;
@@ -9764,7 +9767,8 @@ ${previewId ? `
     }
     function onEmailBlur(email) {
       if (!email || !email.includes('@')) return;
-      var draft = JSON.parse(localStorage.getItem('rr_signup_draft') || '{}');
+      var draft = {};
+      try { draft = JSON.parse(localStorage.getItem('rr_signup_draft') || '{}'); } catch(_) { draft = {}; }
       draft.email = email;
       localStorage.setItem('rr_signup_draft', JSON.stringify(draft));
       fetch('/api/customer-auth/signup-started', {
@@ -9797,7 +9801,8 @@ ${previewId ? `
     // was clickable on first paint and every email signup hit a 400.
     (function() {
       try { setSubmitEnabled(false); } catch(_) {}
-      var draft = JSON.parse(localStorage.getItem('rr_signup_draft') || '{}');
+      var draft = {};
+      try { draft = JSON.parse(localStorage.getItem('rr_signup_draft') || '{}'); } catch(_) { draft = {}; }
       if (draft.email) {
         var el = document.getElementById('reg-email');
         if (el) el.value = draft.email;

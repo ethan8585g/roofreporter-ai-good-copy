@@ -666,11 +666,11 @@ customerAuthRoutes.post('/register', async (c) => {
     if (!verification_token) {
       return c.json({ error: 'Email verification is required. Please verify your email before completing registration.' }, 400)
     }
-    // Window starts at verify time, not send time — gives the user 15 minutes to fill in
+    // Window starts at verify time, not send time — gives the user 60 minutes to fill in
     // the registration form after verifying. Previously the clock ran from /send-verification,
     // so a user who took >10 minutes total got bounced back to step 1.
     const verified = await c.env.DB.prepare(
-      "SELECT * FROM email_verification_codes WHERE email = ? AND verification_token = ? AND verified_at IS NOT NULL AND verified_at > datetime('now', '-15 minutes')"
+      "SELECT * FROM email_verification_codes WHERE email = ? AND verification_token = ? AND verified_at IS NOT NULL AND verified_at > datetime('now', '-60 minutes')"
     ).bind(cleanEmail, verification_token).first<any>()
 
     if (!verified) {
