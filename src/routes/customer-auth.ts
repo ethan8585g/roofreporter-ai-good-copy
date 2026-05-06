@@ -631,28 +631,27 @@ customerAuthRoutes.post('/register', async (c) => {
     if (password.length < 6) {
       return c.json({ error: 'Password must be at least 6 characters' }, 400)
     }
-    // conv-v5: company_name is now required for B2B qualification
+    // company_name is required for B2B qualification
     if (!company_name || !String(company_name).trim()) {
       return c.json({ error: 'Company name is required' }, 400)
     }
-    // conv-v5: honeypot — silently accept-and-drop obvious bot signups
+    // Phone is now mandatory — every account must have a contactable number.
+    if (!phone || String(phone).replace(/\D/g, '').length < 7) {
+      return c.json({ error: 'A valid phone number is required.' }, 400)
+    }
+    // honeypot — silently accept-and-drop obvious bot signups
     if (website && String(website).trim().length > 0) {
       return c.json({ error: 'Registration failed. Please try again.' }, 400)
     }
-    // conv-v5: validate company_size (allow blank/undefined so phone-skip + blank-select still works)
     const VALID_COMPANY_SIZES = new Set(['solo', '2-5', '6-15', '16-50', '50+'])
     const cleanCompanySize = (company_size && VALID_COMPANY_SIZES.has(String(company_size)))
       ? String(company_size)
       : null
-    // conv-v5: validate primary_use (optional field)
     const VALID_PRIMARY_USES = new Set(['storm', 'retail', 'commercial', 'solar', 'other'])
     const cleanPrimaryUse = (primary_use && VALID_PRIMARY_USES.has(String(primary_use)))
       ? String(primary_use)
       : null
-    // conv-v5: soft phone validation — accept if >= 7 chars OR blank (skip), never reject
-    const cleanPhone = (phone && String(phone).replace(/\D/g, '').length >= 7)
-      ? String(phone).trim()
-      : (phone && String(phone).trim().length > 0 ? String(phone).trim() : null)
+    const cleanPhone = String(phone).trim()
 
     const cleanEmail = email.toLowerCase().trim()
     const cleanCompanyName = String(company_name).trim()
@@ -1011,9 +1010,51 @@ customerAuthRoutes.get('/me', async (c) => {
       // For team members, expose the owner's subscription so paywall UI reflects the account that pays
       subscription_status: isDev ? 'active' : ownerSubscriptionStatus,
       subscription_plan: isDev ? 'dev_unlimited' : ownerSubscriptionPlan,
-      subscription_end: ownerSubscriptionEnd
+      subscription_end: ownerSubscriptionEnd,
+      // Profile completion gate: every account must have phone + company_name.
+      // Google OAuth signups skip these fields, and legacy accounts may be missing them.
+      // The dashboard blocks access until complete via POST /complete-profile.
+      profile_complete: !!(session.phone && String(session.phone).trim() && session.company_name && String(session.company_name).trim())
     }
   })
+})
+
+// ============================================================
+// POST /complete-profile — Fill in missing phone / company_name for accounts
+// that were created without them (primarily Google OAuth users, plus any
+// legacy accounts that pre-date phone-required signup).
+// ============================================================
+customerAuthRoutes.post('/complete-profile', async (c) => {
+  const token = getCustomerSessionToken(c)
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+
+  const session = await c.env.DB.prepare(`
+    SELECT cs.customer_id, c.phone, c.company_name
+    FROM customer_sessions cs JOIN customers c ON c.id = cs.customer_id
+    WHERE cs.session_token = ? AND cs.expires_at > datetime('now') AND c.is_active = 1
+  `).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired or invalid' }, 401)
+
+  const body = await c.req.json().catch(() => ({} as any))
+  const phoneIn = (body && body.phone) ? String(body.phone).trim() : ''
+  const companyIn = (body && body.company_name) ? String(body.company_name).trim() : ''
+
+  // Use existing values if the user is only filling in the missing one.
+  const finalPhone = phoneIn || (session.phone ? String(session.phone).trim() : '')
+  const finalCompany = companyIn || (session.company_name ? String(session.company_name).trim() : '')
+
+  if (!finalPhone || finalPhone.replace(/\D/g, '').length < 7) {
+    return c.json({ error: 'A valid phone number is required.' }, 400)
+  }
+  if (!finalCompany) {
+    return c.json({ error: 'Company name is required.' }, 400)
+  }
+
+  await c.env.DB.prepare(
+    "UPDATE customers SET phone = ?, company_name = ?, updated_at = datetime('now') WHERE id = ?"
+  ).bind(finalPhone, finalCompany, session.customer_id).run()
+
+  return c.json({ success: true, phone: finalPhone, company_name: finalCompany })
 })
 
 // ============================================================

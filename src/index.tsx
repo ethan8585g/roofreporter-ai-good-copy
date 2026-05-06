@@ -9437,11 +9437,8 @@ ${previewId ? `
             <label for="reg-phone" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Mobile # <span style="font-weight:400;color:#6b7280">(so we can help you if you hit an issue)</span></label>
             <input id="reg-phone" type="tel" name="phone" inputmode="tel" autocomplete="tel" required
               placeholder="(555) 123-4567"
-              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:6px"
+              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px"
               onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
-            <div style="text-align:right;margin-bottom:12px">
-              <a href="#" id="reg-skip-phone" onclick="skipPhone(event)" style="font-size:12px;color:#6b7280;text-decoration:underline">Skip for now</a>
-            </div>
 
             <label for="reg-company-size" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">How big is your crew?</label>
             <select id="reg-company-size" name="company_size" required
@@ -9704,16 +9701,6 @@ ${previewId ? `
       }
     })();
 
-    // conv-v5: skip-phone link — clears phone + removes required, then submits
-    function skipPhone(ev) {
-      if (ev && ev.preventDefault) ev.preventDefault();
-      var p = document.getElementById('reg-phone');
-      if (p) { p.value = ''; p.removeAttribute('required'); }
-      rrTrack('signup_phone_skipped', {});
-      submitRegForm();
-      return false;
-    }
-
     // conv-v5: fire GA4 + Google Ads + Meta + rrTrack sign_up events
     // Value of 50 is an estimated avg LTV for a free→paid signup (tune in Google Ads if you have real LTV data).
     async function fireSignupEvents(method, companySize, primaryUse) {
@@ -9759,6 +9746,13 @@ ${previewId ? `
         var errC = document.getElementById('reg-error');
         if (errC) { errC.textContent = 'Please enter your company name.'; errC.style.display = 'block'; }
         var ce = document.getElementById('reg-company'); if (ce) ce.focus();
+        return;
+      }
+      var phoneDigits = phone.replace(/\D/g, '');
+      if (!phone || phoneDigits.length < 7) {
+        var errP = document.getElementById('reg-error');
+        if (errP) { errP.textContent = 'Please enter a valid phone number.'; errP.style.display = 'block'; }
+        var pe = document.getElementById('reg-phone'); if (pe) pe.focus();
         return;
       }
       if (password.length < 6) {
@@ -10361,8 +10355,32 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
   <main class="max-w-7xl mx-auto px-4 py-8">
     <div id="customer-root"></div>
   </main>
+
+  <!-- Profile completion modal — shown when phone or company_name is missing.
+       Blocks the dashboard until the user fills both. Required for accounts
+       that signed up via Google OAuth (which doesn't collect these fields). -->
+  <div id="rm-profile-gate" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(10,10,10,0.85);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:16px">
+    <div style="background:#fff;max-width:460px;width:100%;border-radius:16px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,0.4)">
+      <div style="text-align:center;margin-bottom:18px">
+        <div style="width:56px;height:56px;background:#00FF88;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px"><i class="fas fa-user-check" style="font-size:24px;color:#0A0A0A"></i></div>
+        <h2 style="font-size:22px;font-weight:800;color:#0A0A0A;margin:0 0 6px">Finish setting up your account</h2>
+        <p style="font-size:14px;color:#6b7280;margin:0">We need a couple more details so we can support you on your roofing reports.</p>
+      </div>
+      <div id="rm-profile-error" style="display:none;background:#fee;color:#b91c1c;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+      <div id="rm-profile-phone-wrap" style="margin-bottom:14px">
+        <label style="display:block;font-weight:600;font-size:13px;color:#374151;margin-bottom:6px">Mobile #</label>
+        <input id="rm-profile-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(555) 123-4567" style="width:100%;padding:11px 14px;border:1.5px solid #d1d5db;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box" onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
+      </div>
+      <div id="rm-profile-company-wrap" style="margin-bottom:18px">
+        <label style="display:block;font-weight:600;font-size:13px;color:#374151;margin-bottom:6px">Company Name</label>
+        <input id="rm-profile-company" type="text" autocomplete="organization" placeholder="Acme Roofing" style="width:100%;padding:11px 14px;border:1.5px solid #d1d5db;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box" onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
+      </div>
+      <button id="rm-profile-submit" onclick="rmProfileSubmit()" style="width:100%;padding:13px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:15px;cursor:pointer">Save and continue</button>
+    </div>
+  </div>
+
   <script>
-    // Auth guard
+    // Auth guard + profile completion gate
     (function() {
       var c = localStorage.getItem('rc_customer');
       if (!c) { window.location.href = '/customer/login'; return; }
@@ -10372,7 +10390,80 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
         var n = document.getElementById('custName');
         if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
       } catch(e) {}
+
+      // Check profile completeness — Google OAuth users + legacy accounts may
+      // be missing phone or company_name. Block dashboard until filled.
+      fetch('/api/customer-auth/me', { credentials: 'include' })
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+          if (!data || !data.customer) return;
+          var cust = data.customer;
+          if (cust.profile_complete) return;
+          // Show only the fields that are missing.
+          var phoneWrap = document.getElementById('rm-profile-phone-wrap');
+          var companyWrap = document.getElementById('rm-profile-company-wrap');
+          var hasPhone = cust.phone && String(cust.phone).trim();
+          var hasCompany = cust.company_name && String(cust.company_name).trim();
+          if (hasPhone && phoneWrap) phoneWrap.style.display = 'none';
+          if (hasCompany && companyWrap) companyWrap.style.display = 'none';
+          var gate = document.getElementById('rm-profile-gate');
+          if (gate) gate.style.display = 'flex';
+        })
+        ['catch'](function(){});
     })();
+
+    function rmProfileSubmit() {
+      var phoneEl = document.getElementById('rm-profile-phone');
+      var companyEl = document.getElementById('rm-profile-company');
+      var errEl = document.getElementById('rm-profile-error');
+      var btn = document.getElementById('rm-profile-submit');
+      var payload = {};
+      var phoneWrap = document.getElementById('rm-profile-phone-wrap');
+      var companyWrap = document.getElementById('rm-profile-company-wrap');
+      if (phoneWrap && phoneWrap.style.display !== 'none') {
+        var phone = (phoneEl.value || '').trim();
+        if (!phone || phone.replace(/\\D/g, '').length < 7) {
+          errEl.textContent = 'Please enter a valid phone number.';
+          errEl.style.display = 'block';
+          phoneEl.focus();
+          return;
+        }
+        payload.phone = phone;
+      }
+      if (companyWrap && companyWrap.style.display !== 'none') {
+        var company = (companyEl.value || '').trim();
+        if (!company) {
+          errEl.textContent = 'Please enter your company name.';
+          errEl.style.display = 'block';
+          companyEl.focus();
+          return;
+        }
+        payload.company_name = company;
+      }
+      btn.disabled = true; btn.textContent = 'Saving...';
+      fetch('/api/customer-auth/complete-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      }).then(function(r) { return r.json().then(function(d){ return { ok: r.ok, data: d }; }); })
+        .then(function(res) {
+          if (!res.ok) {
+            errEl.textContent = (res.data && res.data.error) || 'Could not save. Please try again.';
+            errEl.style.display = 'block';
+            btn.disabled = false; btn.textContent = 'Save and continue';
+            return;
+          }
+          var gate = document.getElementById('rm-profile-gate');
+          if (gate) gate.style.display = 'none';
+        })
+        ['catch'](function(){
+          errEl.textContent = 'Network error. Please try again.';
+          errEl.style.display = 'block';
+          btn.disabled = false; btn.textContent = 'Save and continue';
+        });
+    }
+
     function custLogout() {
       var token = localStorage.getItem('rc_customer_token');
       if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});

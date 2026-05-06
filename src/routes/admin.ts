@@ -1166,7 +1166,11 @@ adminRoutes.get('/superadmin/users', async (c) => {
         (SELECT COALESCE(SUM(o.price), 0) FROM orders o WHERE o.customer_id = c.id AND o.payment_status = 'paid' AND (o.is_trial IS NULL OR o.is_trial = 0) AND (o.notes IS NULL OR o.notes NOT LIKE 'Paid via credit balance%'))
           + (SELECT COALESCE(SUM(mp.amount), 0) FROM manual_payments mp WHERE mp.customer_id = c.id) as total_spent,
         (SELECT MAX(o.created_at) FROM orders o WHERE o.customer_id = c.id) as last_order_date,
-        (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.id AND o.status = 'completed') as completed_reports
+        (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.id AND o.status = 'completed') as completed_reports,
+        -- Total time spent on platform across all modules. user_activity_daily is a
+        -- forever-kept rollup (user_module_visits is purged after 90d).
+        (SELECT COALESCE(SUM(uad.total_seconds), 0) FROM user_activity_daily uad
+         WHERE uad.user_type = 'customer' AND uad.user_id = c.id) as total_seconds
       FROM customers c
       LEFT JOIN team_members tm ON tm.member_customer_id = c.id AND tm.status = 'active'
       LEFT JOIN customers owner ON owner.id = tm.owner_id
@@ -1220,7 +1224,8 @@ adminRoutes.get('/superadmin/users', async (c) => {
           0 as trial_orders,
           0 as total_spent,
           (SELECT MAX(datetime(j.created_at, 'unixepoch')) FROM api_jobs j WHERE j.account_id = a.id) as last_order_date,
-          (SELECT COUNT(*) FROM api_jobs j WHERE j.account_id = a.id AND j.status = 'ready') as completed_reports
+          (SELECT COUNT(*) FROM api_jobs j WHERE j.account_id = a.id AND j.status = 'ready') as completed_reports,
+          0 as total_seconds
         FROM api_accounts a
         ORDER BY a.created_at DESC
       `).all()

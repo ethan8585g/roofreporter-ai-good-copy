@@ -979,18 +979,25 @@ function renderUsersView() {
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Signup Details</th>
               <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Auth</th>
               <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Free Trial</th>
-              <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Credits</th>
-              <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Orders</th>
+              <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase" title="Total remaining report credits — free trial remaining + paid credits remaining">Remaining Credits</th>
+              <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Reports Ordered</th>
               <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Completed</th>
-              <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Revenue</th>
+              <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Total Spent</th>
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Last Order</th>
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Last Login</th>
+              <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase" title="Total time spent on the platform across all modules">Hours on Platform</th>
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Joined</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-50">
-            ${users.length === 0 ? '<tr><td colspan="13" class="px-4 py-8 text-center text-gray-400">No registered users yet</td></tr>' : ''}
-            ${users.map(u => `
+            ${users.length === 0 ? '<tr><td colspan="14" class="px-4 py-8 text-center text-gray-400">No registered users yet</td></tr>' : ''}
+            ${users.map(u => {
+              var paidRemaining = Math.max(0, (Number(u.report_credits) || 0) - (Number(u.credits_used) || 0));
+              var trialRemaining = Math.max(0, (Number(u.free_trial_total) || 0) - (Number(u.free_trial_used) || 0));
+              var creditsRemaining = paidRemaining + trialRemaining;
+              var totalSec = Number(u.total_seconds) || 0;
+              var hoursLabel = totalSec > 0 ? (totalSec / 3600).toFixed(1) + ' h' : '<span class="text-gray-300">0 h</span>';
+              return `
               <tr class="hover:bg-teal-50/30 transition-colors">
                 <td class="px-4 py-3">
                   <div class="flex items-center gap-2">
@@ -1001,9 +1008,9 @@ function renderUsersView() {
                     </div>
                   </div>
                 </td>
-                <td class="px-4 py-3 text-sm text-gray-600">${u.company_name || '-'}</td>
+                <td class="px-4 py-3 text-sm text-gray-600">${u.company_name || '<span class="text-amber-600 font-semibold" title="Required field — incomplete profile">missing</span>'}</td>
                 <td class="px-4 py-3 text-xs text-gray-500">
-                  <div>${u.phone || '<span class="text-gray-300">no phone</span>'}</div>
+                  <div>${u.phone || '<span class="text-amber-600 font-semibold" title="Required field — incomplete profile">no phone</span>'}</div>
                   ${[u.city, u.province].filter(Boolean).join(', ') ? `<div class="text-[10px] text-gray-400">${[u.address, u.city, u.province, u.postal_code].filter(Boolean).join(', ')}</div>` : ''}
                 </td>
                 <td class="px-4 py-3 text-xs text-gray-600">
@@ -1021,17 +1028,18 @@ function renderUsersView() {
                   <span class="text-xs ${(u.trial_orders || 0) >= (u.free_trial_total || 0) && (u.free_trial_total || 0) > 0 ? 'text-red-500 font-bold' : 'text-gray-600'}">${u.trial_orders || 0}/${u.free_trial_total || 0}</span>
                 </td>
                 <td class="px-4 py-3 text-center">
-                  <span class="text-xs font-medium ${(u.report_credits || 0) > 0 ? 'text-green-600' : 'text-gray-400'}">${u.report_credits || 0}</span>
-                  ${(u.credits_used || 0) > 0 ? `<span class="text-[10px] text-gray-400 block">${u.credits_used} used</span>` : ''}
+                  <span class="text-xs font-bold ${creditsRemaining > 0 ? 'text-green-600' : 'text-gray-400'}" title="Free trial remaining: ${trialRemaining} · Paid credits remaining: ${paidRemaining}">${creditsRemaining}</span>
+                  ${(paidRemaining > 0 || trialRemaining > 0) ? `<span class="text-[10px] text-gray-400 block">${trialRemaining} trial · ${paidRemaining} paid</span>` : ''}
                 </td>
                 <td class="px-4 py-3 text-center font-medium text-gray-700">${u.order_count || 0}</td>
                 <td class="px-4 py-3 text-center font-medium text-green-600">${u.completed_reports || 0}</td>
                 <td class="px-4 py-3 text-right font-bold text-gray-800">${$$(u.total_spent)}</td>
                 <td class="px-4 py-3 text-xs text-gray-500">${fmtDate(u.last_order_date)}</td>
                 <td class="px-4 py-3 text-xs">${u.last_login ? `<span class="text-green-600 font-medium" title="${fmtDateTime(u.last_login)}"><i class="fas fa-check-circle mr-1"></i>${fmtDate(u.last_login)}</span>` : '<span class="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-full uppercase">Never</span>'}</td>
+                <td class="px-4 py-3 text-right text-xs ${totalSec > 0 ? 'text-gray-700 font-medium' : 'text-gray-400'}" title="Total: ${Math.round(totalSec)}s across all modules">${hoursLabel}</td>
                 <td class="px-4 py-3 text-xs text-gray-500">${fmtDate(u.created_at)}</td>
               </tr>
-            `).join('')}
+            `;}).join('')}
           </tbody>
         </table>
       </div>
