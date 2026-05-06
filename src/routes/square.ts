@@ -6,7 +6,7 @@ import { isDevAccount } from './customer-auth'
 import { trackPaymentCompleted, trackCreditPurchase } from '../services/ga4-events'
 import { resolveTeamOwner } from './team'
 import { validateAdminSession } from './auth'
-import { notifyNewReportRequest } from '../services/email'
+import { recordAndNotify } from '../services/admin-notifications'
 import { addCredits } from '../services/api-billing'
 import { logAutoInvoiceStep } from '../services/auto-invoice-audit'
 
@@ -484,9 +484,37 @@ squareRoutes.post('/checkout/report', async (c) => {
     if (!customer) return c.json({ error: 'Not authenticated' }, 401)
 
     const { property_address, property_city, property_province, property_postal_code,
-            service_tier, latitude, longitude, success_url, cancel_url, promo_code } = await c.req.json()
+            service_tier, latitude, longitude, success_url, cancel_url, promo_code,
+            idempotency_key } = await c.req.json()
 
     if (!property_address) return c.json({ error: 'Property address is required' }, 400)
+
+    // Idempotency — mirrors orders.idempotency_key (migration 0188). A
+    // double-clicked "Pay with Square" button reuses the same Payment Link
+    // instead of creating a duplicate square_payments row + Square order.
+    const clientIdemKey = typeof idempotency_key === 'string' && idempotency_key.trim().length >= 8
+      ? idempotency_key.trim().slice(0, 80)
+      : null
+    if (clientIdemKey) {
+      const existing = await c.env.DB.prepare(
+        "SELECT square_payment_link_id, square_order_id, metadata_json FROM square_payments WHERE customer_id = ? AND idempotency_key = ? AND status = 'pending' LIMIT 1"
+      ).bind(customer.customer_id, clientIdemKey).first<any>()
+      if (existing?.square_payment_link_id) {
+        // Re-fetch the Payment Link from Square to get the URL — we don't
+        // store it locally and Square's URLs are stable for the link's life.
+        try {
+          const fetched = await squareRequest(accessToken, 'GET', `/online-checkout/payment-links/${existing.square_payment_link_id}`)
+          const link = fetched?.payment_link
+          if (link?.url || link?.long_url) {
+            return c.json({
+              checkout_url: link.url || link.long_url,
+              payment_link_id: link.id,
+              idempotent_replay: true,
+            })
+          }
+        } catch (e) { /* fall through and create a new one */ }
+      }
+    }
 
     const tier = service_tier || 'standard'
     // Single report = $7 USD flat (700 cents)
@@ -536,26 +564,51 @@ squareRoutes.post('/checkout/report', async (c) => {
     const squareOrderId = link?.order_id || ''
 
     // Store metadata in our DB for webhook processing
-    await c.env.DB.prepare(`
-      INSERT INTO square_payments (customer_id, square_order_id, square_payment_link_id, amount, currency, status, payment_type, description, metadata_json)
-      VALUES (?, ?, ?, ?, 'cad', 'pending', 'one_time_report', ?, ?)
-    `).bind(
-      customer.customer_id, squareOrderId, link?.id || '', priceCents,
-      `Roof report: ${property_address}` + (promoApplied ? ` [${promoApplied.code}]` : ''),
-      JSON.stringify({
-        payment_type: 'one_time_report',
-        service_tier: tier,
-        property_address,
-        property_city: property_city || '',
-        property_province: property_province || '',
-        property_postal_code: property_postal_code || '',
-        latitude: latitude || '',
-        longitude: longitude || '',
-        promo_code: promoApplied?.code,
-        promo_discount_cents: promoApplied?.discountCents,
-        original_cents: originalCents,
-      })
-    ).run()
+    try {
+      await c.env.DB.prepare(`
+        INSERT INTO square_payments (customer_id, square_order_id, square_payment_link_id, amount, currency, status, payment_type, description, metadata_json, idempotency_key)
+        VALUES (?, ?, ?, ?, 'cad', 'pending', 'one_time_report', ?, ?, ?)
+      `).bind(
+        customer.customer_id, squareOrderId, link?.id || '', priceCents,
+        `Roof report: ${property_address}` + (promoApplied ? ` [${promoApplied.code}]` : ''),
+        JSON.stringify({
+          payment_type: 'one_time_report',
+          service_tier: tier,
+          property_address,
+          property_city: property_city || '',
+          property_province: property_province || '',
+          property_postal_code: property_postal_code || '',
+          latitude: latitude || '',
+          longitude: longitude || '',
+          promo_code: promoApplied?.code,
+          promo_discount_cents: promoApplied?.discountCents,
+          original_cents: originalCents,
+        }),
+        clientIdemKey
+      ).run()
+    } catch (insertErr: any) {
+      // Race with a concurrent request for the same (customer_id, idempotency_key).
+      // Return the row that won the race instead of failing the request.
+      if (clientIdemKey && /UNIQUE|constraint/i.test(String(insertErr?.message || ''))) {
+        const dup = await c.env.DB.prepare(
+          "SELECT square_payment_link_id FROM square_payments WHERE customer_id = ? AND idempotency_key = ? LIMIT 1"
+        ).bind(customer.customer_id, clientIdemKey).first<any>()
+        if (dup?.square_payment_link_id) {
+          try {
+            const fetched = await squareRequest(accessToken, 'GET', `/online-checkout/payment-links/${dup.square_payment_link_id}`)
+            const dupLink = fetched?.payment_link
+            if (dupLink?.url || dupLink?.long_url) {
+              return c.json({
+                checkout_url: dupLink.url || dupLink.long_url,
+                payment_link_id: dupLink.id,
+                idempotent_replay: true,
+              })
+            }
+          } catch {}
+        }
+      }
+      throw insertErr
+    }
 
     if (promoApplied) {
       await c.env.DB.prepare(`UPDATE promo_codes SET uses_count = uses_count + 1 WHERE id = ?`).bind(promoApplied.id).run()
@@ -785,11 +838,29 @@ squareRoutes.post('/use-credit', async (c) => {
       throw insertErr
     }
 
-    // Notify sales@roofmanager.ca of new report request (background via waitUntil)
-    const notifyPromise = notifyNewReportRequest(c.env, {
-      order_number: orderNumber, property_address, requester_name: customer.name,
-      requester_email: customer.email, service_tier: tier, price, is_trial: isTrial
-    }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+    const newOrderId = result.meta.last_row_id as number
+
+    // Persist the super-admin notification synchronously so a Worker
+    // crash/timeout can't make this order invisible to admin. Email is
+    // attempted inside recordAndNotify (best-effort) — DB row is the
+    // source of truth.
+    const notifyPromise = recordAndNotify(c.env, {
+      kind: needs_admin_trace ? 'needs_trace' : 'new_order',
+      order: {
+        order_id: newOrderId,
+        order_number: orderNumber,
+        customer_id: customer.customer_id,
+        customer_email: customer.email,
+        customer_name: customer.name,
+        property_address,
+        service_tier: tier,
+        price,
+        payment_status: paymentStatus,
+        is_trial: isTrial,
+        trace_source: (roof_trace_json && !needs_admin_trace) ? 'self' : null,
+        needs_admin_trace: !!needs_admin_trace,
+      },
+    }).catch((e) => console.warn("[admin-notif] use-credit:", (e && e.message) || e))
     if ((c as any).executionCtx?.waitUntil) {
       ;(c as any).executionCtx.waitUntil(notifyPromise)
     }
@@ -812,8 +883,6 @@ squareRoutes.post('/use-credit', async (c) => {
         }
       }
     }
-
-    const newOrderId = result.meta.last_row_id as number
 
     // Audit trail for trial claims so per-IP rate-limit can see this account.
     if (!isDev && isTrial) {
@@ -1114,12 +1183,25 @@ squareRoutes.post('/webhook', async (c) => {
 
           const webhookOrderId = orderResult.meta.last_row_id as number
 
-          // Notify sales@roofmanager.ca of new report request (background via waitUntil)
-          const notifyPromise = notifyNewReportRequest(c.env, {
-            order_number: orderNumber, property_address: address,
-            requester_name: custData?.name || '', requester_email: custData?.email || '',
-            service_tier: tier, price, is_trial: false
-          }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+          // Persist super-admin notification + email (best-effort).
+          const notifyPromise = recordAndNotify(c.env, {
+            kind: 'new_order',
+            order: {
+              order_id: webhookOrderId,
+              order_number: orderNumber,
+              customer_id: customerId,
+              customer_email: custData?.email || '',
+              customer_name: custData?.name || '',
+              property_address: address,
+              service_tier: tier,
+              price,
+              payment_status: 'paid',
+              is_trial: false,
+              trace_source: null,
+              needs_admin_trace: false,
+              payload: { source: 'square_webhook', square_payment_id: payment.id },
+            },
+          }).catch((e) => console.warn("[admin-notif] webhook one_time_report:", (e && e.message) || e))
           if ((c as any).executionCtx?.waitUntil) {
             ;(c as any).executionCtx.waitUntil(notifyPromise)
           }
@@ -1239,6 +1321,31 @@ squareRoutes.post('/webhook', async (c) => {
               INSERT INTO user_activity_log (company_id, action, details)
               VALUES (1, 'payment_unmatched_manual_review', ?)
             `).bind(`URGENT: Square payment ${payment.id} (order ${squareOrderId}) succeeded for customer #${customerId} but payment_type='${pendingPayment.payment_type || 'null'}' could not be fulfilled. Manual review required.`).run()
+
+            // Surface in /super-admin Notifications tab so admin sees this
+            // immediately without grepping user_activity_log.
+            try {
+              const custData = await c.env.DB.prepare('SELECT name, email FROM customers WHERE id = ?').bind(customerId).first<any>()
+              await recordAndNotify(c.env, {
+                kind: 'payment_unmatched',
+                severity: 'urgent',
+                order: {
+                  order_id: null,
+                  order_number: squareOrderId || `square_${payment.id}`,
+                  customer_id: customerId,
+                  customer_email: custData?.email || '',
+                  customer_name: custData?.name || '',
+                  property_address: '(money collected, no order created)',
+                  service_tier: pendingPayment.payment_type || 'unknown',
+                  price: Number(pendingPayment.amount || 0),
+                  payment_status: 'paid',
+                  is_trial: false,
+                  payload: { square_payment_id: payment.id, square_order_id: squareOrderId },
+                },
+              })
+            } catch (e: any) {
+              console.warn('[admin-notif] payment_unmatched record failed:', e?.message || e)
+            }
           }
         }
 
@@ -1501,12 +1608,25 @@ squareRoutes.get('/verify-payment', async (c) => {
 
           const newOrderId = orderResult.meta.last_row_id as number
 
-          // Notify sales@roofmanager.ca of new report request (background via waitUntil)
-          const notifyPromise = notifyNewReportRequest(c.env, {
-            order_number: orderNumber, property_address: address,
-            requester_name: custData?.name || '', requester_email: custData?.email || '',
-            service_tier: tier, price, is_trial: false
-          }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+          // Persist super-admin notification + email (best-effort).
+          const notifyPromise = recordAndNotify(c.env, {
+            kind: 'new_order',
+            order: {
+              order_id: newOrderId,
+              order_number: orderNumber,
+              customer_id: customer.customer_id,
+              customer_email: custData?.email || '',
+              customer_name: custData?.name || '',
+              property_address: address,
+              service_tier: tier,
+              price,
+              payment_status: 'paid',
+              is_trial: false,
+              trace_source: null,
+              needs_admin_trace: false,
+              payload: { source: 'square_verify_payment', square_order_id: pendingPayment.square_order_id },
+            },
+          }).catch((e) => console.warn("[admin-notif] verify-payment one_time_report:", (e && e.message) || e))
           if ((c as any).executionCtx?.waitUntil) {
             ;(c as any).executionCtx.waitUntil(notifyPromise)
           }

@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { validateAdminSession } from './auth'
-import { notifyNewReportRequest } from '../services/email'
+import { recordAndNotify } from '../services/admin-notifications'
 import { autoProcessOrder } from '../services/ai-agent'
 
 export const ordersRoutes = new Hono<{ Bindings: Bindings }>()
@@ -102,12 +102,24 @@ ordersRoutes.post('/', async (c) => {
       VALUES (?, 'order_created', ?)
     `).bind(masterCompanyId, `Order ${orderNumber} created - ${service_tier} tier - $${price}`).run()
 
-    // Notify sales@roofmanager.ca of new report request (background via waitUntil)
-    const notifyPromise = notifyNewReportRequest(c.env, {
-      order_number: orderNumber, property_address,
-      requester_name: requester_name, requester_email: requester_email || '',
-      service_tier, price, is_trial: false
-    }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+    // Persist super-admin notification + email (best-effort).
+    const notifyPromise = recordAndNotify(c.env, {
+      kind: needs_admin_trace ? 'needs_trace' : 'new_order',
+      order: {
+        order_id: result.meta.last_row_id as number,
+        order_number: orderNumber,
+        customer_email: requester_email || '',
+        customer_name: requester_name,
+        property_address,
+        service_tier,
+        price,
+        payment_status: 'unpaid',
+        is_trial: false,
+        trace_source: traceSource,
+        needs_admin_trace: !!needs_admin_trace,
+        payload: { source: 'admin_post_orders' },
+      },
+    }).catch((e) => console.warn("[admin-notif] admin POST /api/orders:", (e && e.message) || e))
     if ((c as any).executionCtx?.waitUntil) {
       ;(c as any).executionCtx.waitUntil(notifyPromise)
     }
