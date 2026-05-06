@@ -8456,10 +8456,9 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     }, { passive: true });
   </script>
   <script src="/static/landing.js?v=20260408a" defer></script>
-  <!-- Mobile sticky bottom CTA bar — two buttons, hides inside hero -->
-  <div id="mobileStickyCta" class="md:hidden" style="position:fixed;bottom:0;left:0;right:0;z-index:60;display:none;background:rgba(10,10,10,0.97);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-top:1px solid rgba(255,255,255,0.08);padding:12px 16px;gap:10px;flex-direction:row">
-    <a href="/demo" onclick="rrTrack('cta_click',{location:'sticky_mobile_demo'})" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:rgba(255,255,255,0.07);color:#fff;font-weight:700;padding:12px 10px;border-radius:12px;font-size:14px;text-decoration:none;border:1px solid rgba(255,255,255,0.12);min-height:48px"><i class="fas fa-calendar-check" style="color:#00FF88;font-size:13px"></i>Book Demo</a>
-    <a href="/register" onclick="rrTrack('cta_click',{location:'sticky_mobile_signup'})" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:#00FF88;color:#0A0A0A;font-weight:800;padding:12px 10px;border-radius:12px;font-size:14px;text-decoration:none;box-shadow:0 8px 24px rgba(0,255,136,0.3);min-height:48px"><i class="fas fa-rocket" style="font-size:13px"></i>Start Free</a>
+  <!-- Mobile sticky bottom CTA bar — single Start Free button, hides inside hero -->
+  <div id="mobileStickyCta" class="md:hidden" style="position:fixed;bottom:0;left:0;right:0;z-index:60;display:none;background:rgba(10,10,10,0.97);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-top:1px solid rgba(255,255,255,0.08);padding:12px 16px;flex-direction:row">
+    <a href="/register" onclick="rrTrack('cta_click',{location:'sticky_mobile_signup'})" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#00FF88;color:#0A0A0A;font-weight:800;padding:14px 12px;border-radius:12px;font-size:15px;text-decoration:none;box-shadow:0 8px 24px rgba(0,255,136,0.3);min-height:48px"><i class="fas fa-rocket" style="font-size:13px"></i>Start Free &mdash; 4 Reports, No Card</a>
     <button aria-label="Dismiss sticky bar" onclick="document.getElementById('mobileStickyCta').style.display='none';try{sessionStorage.setItem('rm_sticky_dismiss','1')}catch(e){}" style="position:absolute;top:-10px;right:10px;width:22px;height:22px;border-radius:999px;background:#111;color:#9ca3af;border:1px solid rgba(255,255,255,0.15);font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center">&times;</button>
   </div>
   <script>
@@ -9309,8 +9308,7 @@ function getCustomerRegisterPageHTML(prefillEmail = '', googleClientId = '', pre
   </nav>
 
   <main>
-    <div style="max-width:1100px;margin:0 auto;padding:40px 24px 80px;display:grid;grid-template-columns:1fr;gap:40px" id="reg-grid">
-      <style>@media(min-width:800px){#reg-grid{grid-template-columns:1.2fr 1fr}}</style>
+    <div class="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-10" style="max-width:1100px;margin:0 auto;padding:40px 24px 80px" id="reg-grid">
 
       <!-- LEFT: Registration form -->
       <div style="background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:36px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
@@ -9336,7 +9334,7 @@ function getCustomerRegisterPageHTML(prefillEmail = '', googleClientId = '', pre
     data-theme="filled_black"
     data-text="continue_with"
     data-size="large"
-    data-width="320"
+    data-width="280"
     data-logo_alignment="left">
   </div>
 </div>
@@ -9471,8 +9469,8 @@ ${previewId ? `
         <p style="text-align:center;color:#9ca3af;font-size:12px;margin:14px 0 0"><i class="fas fa-lock" style="margin-right:5px"></i>256-bit SSL encrypted &nbsp;&middot;&nbsp; Hosted in Canada</p>
       </div>
 
-      <!-- RIGHT: Social-proof sidebar -->
-      <aside>
+      <!-- RIGHT: Social-proof sidebar (hidden on mobile to keep form above the fold) -->
+      <aside class="hidden md:block">
         <!-- 4 Free Reports card -->
         <div style="background:linear-gradient(135deg,#0A0A0A 0%,#1a1a2e 100%);border-radius:20px;padding:28px;margin-bottom:20px;border:1px solid rgba(0,255,136,0.2)">
           <div style="text-align:center;margin-bottom:20px">
@@ -15026,7 +15024,7 @@ function getSocialLandingHTML() {
   <div style="max-width:440px;width:100%;text-align:center">
     <img src="/static/logo.png?v=20260504" alt="Roof Manager" style="width:56px;height:56px;border-radius:12px;margin:0 auto 16px;display:block">
     <h1 style="font-size:28px;font-weight:900;margin:0 0 8px;line-height:1.2">Get Your Free<br>Roof Measurement Report</h1>
-    <p style="color:#9ca3af;font-size:14px;margin:0 0 24px">Enter your property address and we'll send you a professional satellite roof report in under 60 seconds.</p>
+    <p style="color:#9ca3af;font-size:14px;margin:0 0 24px">Get a professional satellite roof report in 60 seconds.</p>
 
     <form id="social-landing-form" onsubmit="return (async function(e){e.preventDefault();if(e.target.querySelector('[name=website]').value)return false;var b=e.target.querySelector('button[type=submit]');b.disabled=true;b.innerHTML='<i class=\\'fas fa-spinner fa-spin\\'></i> Generating...';var p=new URLSearchParams(location.search);try{var r=await fetch('/api/agents/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:(e.target.n&&e.target.n.value)||'',email:e.target.e.value,phone:(e.target.p&&e.target.p.value)||'',address:e.target.a.value||'',source_page:'social-landing',utm_source:p.get('utm_source')||sessionStorage.getItem('_rm_utm_source')||''})});if(r.ok){e.target.innerHTML='<div style=\\'padding:32px 0\\'><div style=\\'width:56px;height:56px;background:#00FF88;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:14px\\'><i class=\\'fas fa-check\\' style=\\'color:#0A0A0A;font-size:24px\\'></i></div><p style=\\'color:#00FF88;font-weight:700;font-size:18px;margin:0 0 6px\\'>Thank You!</p><p style=\\'color:#9ca3af;font-size:14px;margin:0\\'>We\\'ll be in touch shortly with your report.</p></div>';if(typeof window.fireMetaLeadEvent==='function')window.fireMetaLeadEvent({content_name:'social-landing'});return}b.disabled=false;b.textContent='Get Free Report'}catch(x){b.disabled=false;b.textContent='Get Free Report'}return false})(event)" style="text-align:left;position:relative">
       <input name="website" style="position:absolute;left:-9999px;opacity:0" tabindex="-1" autocomplete="off">
@@ -15672,17 +15670,17 @@ function getLanderFunnelHTML() {
             Get a <strong class="text-white">professional roof measurement report</strong> from satellite imagery in under 60 seconds. Accurate area, pitch, edge breakdowns, and a full material BOM — everything you need to quote a job.
           </p>
 
-          <div class="flex flex-col sm:flex-row gap-4 mb-6">
-            <a href="/register" class="group inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
+          <div class="flex flex-col sm:flex-row sm:flex-wrap gap-3 mb-6">
+            <a href="/register" class="group inline-flex items-center justify-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
               <i class="fas fa-rocket"></i>
               Claim Your 4 Free Reports
               <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
             </a>
-            <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="group inline-flex items-center gap-3 bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-10 rounded-xl text-lg border border-white/20 hover:border-white/30 transition-all">
+            <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="group inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-6 rounded-xl text-base border border-white/20 hover:border-white/30 transition-all">
               <i class="fas fa-calendar-check"></i>
               Book a Demo
             </a>
-            <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="group inline-flex items-center gap-3 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-10 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all">
+            <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="group inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all">
               <i class="fas fa-eye text-green-400"></i>
               View Sample Report
             </a>
@@ -15804,17 +15802,17 @@ function getLanderFunnelHTML() {
       <p class="text-lg text-gray-300 mb-10 max-w-xl mx-auto">
         Sign up in 30 seconds, get 4 free professional roof measurement reports, and access the full CRM — no credit card required.
       </p>
-      <div class="flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="/register" class="group inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-12 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
+      <div class="flex flex-col sm:flex-row sm:flex-wrap gap-3 justify-center">
+        <a href="/register" class="group inline-flex items-center justify-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
           <i class="fas fa-rocket"></i>
           Start Free Now
           <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
         </a>
-        <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="group inline-flex items-center gap-3 bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-10 rounded-xl text-lg border border-white/20 hover:border-white/30 transition-all">
+        <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="group inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-6 rounded-xl text-base border border-white/20 hover:border-white/30 transition-all">
           <i class="fas fa-calendar-check"></i>
           Book a Demo
         </a>
-        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="group inline-flex items-center gap-3 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-10 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all">
+        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="group inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all">
           <i class="fas fa-eye text-green-400"></i>
           View Sample Report
         </a>
