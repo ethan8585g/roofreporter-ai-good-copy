@@ -328,6 +328,15 @@ export async function sendViaResend(
 // already wired but customers without an open browser had no signal —
 // this email closes that gap.
 // ============================================================
+
+// HTML entity escape — protects email clients from injection via
+// user-controlled fields like property_address or customer_name.
+function htmlEsc(v: any): string {
+  return String(v ?? '').replace(/[&<>"']/g, (m) => (
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' } as Record<string,string>)[m]
+  ))
+}
+
 export async function notifyTraceCompletedToCustomer(
   env: any,
   args: {
@@ -339,15 +348,16 @@ export async function notifyTraceCompletedToCustomer(
 ): Promise<void> {
   const { to, order_number, property_address, customer_name } = args
   if (!to) return
-  const greeting = customer_name ? `Hi ${customer_name.split(' ')[0]},` : 'Hi,'
+  const firstName = (customer_name || '').split(' ')[0]
+  const greeting = firstName ? `Hi ${htmlEsc(firstName)},` : 'Hi,'
   const subject = `Your roof measurement report is ready — ${order_number}`
   const html = `
 <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
   <h2 style="color:#111;margin-bottom:4px">Your report is ready</h2>
-  <p style="color:#555;margin-top:0">${order_number}</p>
+  <p style="color:#555;margin-top:0">${htmlEsc(order_number)}</p>
   <p style="color:#222;font-size:15px;line-height:1.5">${greeting}</p>
   <p style="color:#222;font-size:15px;line-height:1.5">
-    Our team has finished tracing the roof at <strong>${property_address}</strong>.
+    Our team has finished tracing the roof at <strong>${htmlEsc(property_address)}</strong>.
     Your measurement report is now available in your dashboard.
   </p>
   <a href="https://www.roofmanager.ca/customer" style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:8px">Open my dashboard →</a>
@@ -405,17 +415,20 @@ export async function notifyNewReportRequest(
     is_trial: boolean
   }
 ): Promise<void> {
-  const typeLabel = order.is_trial ? 'Free Trial' : `Paid — $${order.price.toFixed(2)}`
+  const typeLabel = order.is_trial ? 'Free Trial' : `Paid — $${Number(order.price).toFixed(2)}`
   const subject = `New Report Request — ${order.order_number}`
+  // All user-controlled fields are HTML-escaped to prevent injection into
+  // admin email clients (the recipients are super admins — XSS in their
+  // inbox is high-impact).
   const html = `
 <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
   <h2 style="color:#111;margin-bottom:4px">New Report Request</h2>
-  <p style="color:#555;margin-top:0">${order.order_number}</p>
+  <p style="color:#555;margin-top:0">${htmlEsc(order.order_number)}</p>
   <table style="width:100%;border-collapse:collapse;margin:16px 0">
-    <tr><td style="padding:8px 0;color:#888;width:140px">Property</td><td style="padding:8px 0;font-weight:600">${order.property_address}</td></tr>
-    <tr><td style="padding:8px 0;color:#888">Customer</td><td style="padding:8px 0">${order.requester_name} &lt;${order.requester_email}&gt;</td></tr>
-    <tr><td style="padding:8px 0;color:#888">Tier</td><td style="padding:8px 0">${order.service_tier}</td></tr>
-    <tr><td style="padding:8px 0;color:#888">Type</td><td style="padding:8px 0">${typeLabel}</td></tr>
+    <tr><td style="padding:8px 0;color:#888;width:140px">Property</td><td style="padding:8px 0;font-weight:600">${htmlEsc(order.property_address)}</td></tr>
+    <tr><td style="padding:8px 0;color:#888">Customer</td><td style="padding:8px 0">${htmlEsc(order.requester_name)} &lt;${htmlEsc(order.requester_email)}&gt;</td></tr>
+    <tr><td style="padding:8px 0;color:#888">Tier</td><td style="padding:8px 0">${htmlEsc(order.service_tier)}</td></tr>
+    <tr><td style="padding:8px 0;color:#888">Type</td><td style="padding:8px 0">${htmlEsc(typeLabel)}</td></tr>
   </table>
   <a href="https://www.roofmanager.ca/admin/superadmin" style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">View in Super Admin →</a>
 </div>`

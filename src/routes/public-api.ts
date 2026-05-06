@@ -9,7 +9,7 @@ import type { Bindings, ApiAccount, ApiKey } from '../types'
 import { checkConcurrentJobLimit, generateApiKey, logApiRequest } from '../middleware/api-auth'
 import { holdCredit, refundCredit, getLedgerPage } from '../services/api-billing'
 import { signPdfUrl, verifyPdfUrl } from '../services/pdf-signing'
-import { notifyNewReportRequest } from '../services/email'
+import { recordAndNotify } from '../services/admin-notifications'
 
 export const publicApiRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -231,16 +231,27 @@ publicApiRoutes.post('/reports', async (c) => {
   await db.prepare('UPDATE api_jobs SET order_id = ? WHERE id = ?')
     .bind(orderResult.meta.last_row_id, jobId).run()
 
-  // Notify sales@roofmanager.ca of new API report request (background via waitUntil)
-  const notifyPromise = notifyNewReportRequest(c.env, {
-    order_number: orderNumber,
-    property_address: address.trim(),
-    requester_name: account.company_name || 'API Client',
-    requester_email: account.email || '',
-    service_tier: 'api',
-    price: 0,
-    is_trial: false
-  }).catch((e: any) => console.warn('[silent-catch]', e?.message || e))
+  // Persist super-admin notification + email (best-effort). Surfaces every
+  // API-driven order in /super-admin → Revenue → Order Alerts so admin has
+  // single-pane visibility for both human and API customers.
+  const notifyPromise = recordAndNotify(c.env, {
+    kind: 'needs_trace',
+    order: {
+      order_id: orderResult.meta.last_row_id as number,
+      order_number: orderNumber,
+      customer_id: null,
+      customer_email: account.email || '',
+      customer_name: account.company_name || 'API Client',
+      property_address: address.trim(),
+      service_tier: 'api',
+      price: 0,
+      payment_status: 'paid',
+      is_trial: false,
+      trace_source: null,
+      needs_admin_trace: true,
+      payload: { source: 'public_api', api_account_id: account.id, api_job_id: jobId },
+    },
+  }).catch((e: any) => console.warn('[admin-notif] public-api:', e?.message || e))
   if ((c as any).executionCtx?.waitUntil) {
     ;(c as any).executionCtx.waitUntil(notifyPromise)
   }

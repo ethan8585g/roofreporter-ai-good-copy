@@ -865,18 +865,21 @@ squareRoutes.post('/use-credit', async (c) => {
       ;(c as any).executionCtx.waitUntil(notifyPromise)
     }
 
-    // Atomic deduct: WHERE clause prevents overselling even with concurrent requests
+    // Atomic deduct: WHERE clause prevents overselling even with concurrent
+    // requests. COALESCE() guards legacy customers whose counters are NULL —
+    // SQLite NULL comparisons return NULL (falsy), which would block their
+    // first trial claim despite being entitled to it.
     if (!isDev) {
       if (isTrial) {
         const deductResult = await c.env.DB.prepare(
-          'UPDATE customers SET free_trial_used = free_trial_used + 1, updated_at = datetime("now") WHERE id = ? AND free_trial_used < free_trial_total'
+          'UPDATE customers SET free_trial_used = COALESCE(free_trial_used, 0) + 1, updated_at = datetime("now") WHERE id = ? AND COALESCE(free_trial_used, 0) < COALESCE(free_trial_total, 4)'
         ).bind(customer.customer_id).run()
         if (!deductResult.meta.changes) {
           return c.json({ error: 'No free trials remaining', credits_remaining: 0 }, 402)
         }
       } else {
         const deductResult = await c.env.DB.prepare(
-          'UPDATE customers SET credits_used = credits_used + 1, updated_at = datetime("now") WHERE id = ? AND credits_used < report_credits'
+          'UPDATE customers SET credits_used = COALESCE(credits_used, 0) + 1, updated_at = datetime("now") WHERE id = ? AND COALESCE(credits_used, 0) < COALESCE(report_credits, 0)'
         ).bind(customer.customer_id).run()
         if (!deductResult.meta.changes) {
           return c.json({ error: 'No credits remaining', credits_remaining: 0 }, 402)
@@ -1074,15 +1077,26 @@ squareRoutes.post('/webhook', async (c) => {
     const eventType = event.type || ''
 
     // P1-19: atomic idempotency. INSERT OR IGNORE wins the race under
-    // concurrent webhook deliveries — if meta.changes === 0 we already
-    // processed this event and can safely return 200 without side effects.
+    // concurrent webhook deliveries. But we must distinguish "already FULLY
+    // processed" from "previous attempt crashed mid-flight". The handler
+    // sets `processed = 1` only AFTER side effects complete; on retry we
+    // re-run the side effects rather than silently 200-ing on a partial.
     const insertResult = await c.env.DB.prepare(`
       INSERT OR IGNORE INTO square_webhook_events (square_event_id, event_type, payload)
       VALUES (?, ?, ?)
     `).bind(eventId, eventType, rawBody).run()
 
     if (!insertResult.meta.changes) {
-      return c.json({ received: true, duplicate: true })
+      const existing = await c.env.DB.prepare(
+        'SELECT processed FROM square_webhook_events WHERE square_event_id = ? LIMIT 1'
+      ).bind(eventId).first<any>()
+      if (existing?.processed) {
+        return c.json({ received: true, duplicate: true })
+      }
+      // Previous attempt crashed before marking processed=1 — fall through
+      // and re-run side effects. They are individually idempotent (atomic
+      // status guard on square_payments, unique idx on order_id linkage).
+      console.warn(`[Square Webhook] Re-processing ${eventId} (previous attempt did not complete)`)
     }
 
     // Process based on event type
@@ -1142,7 +1156,20 @@ squareRoutes.post('/webhook', async (c) => {
         }
 
         if (pendingPayment.payment_type === 'one_time_report') {
-          // Single report purchase — create order automatically
+          // Single report purchase — create order automatically.
+          // Re-check the linkage in case verify-payment created the order
+          // between our atomic UPDATE above and now (extremely tight race).
+          const linked = await c.env.DB.prepare(
+            'SELECT order_id FROM square_payments WHERE square_order_id = ? LIMIT 1'
+          ).bind(squareOrderId).first<any>()
+          if (linked?.order_id) {
+            console.log(`[Square Webhook] Order ${linked.order_id} already linked to ${squareOrderId} — skipping creation`)
+            await c.env.DB.prepare(
+              'UPDATE square_webhook_events SET processed = 1 WHERE square_event_id = ?'
+            ).bind(eventId).run()
+            break
+          }
+
           let meta: any = {}
           try { meta = JSON.parse(pendingPayment.metadata_json || '{}') } catch {}
 
@@ -1286,6 +1313,34 @@ squareRoutes.post('/webhook', async (c) => {
           if (credits > 0 && apiAccountId) {
             await addCredits(c.env.DB, apiAccountId, credits, 'square_payment', squareOrderId)
             console.log(`[Square Webhook] API account ${apiAccountId} credited ${credits} API credits`)
+          } else {
+            // Money collected but credits/account couldn't be resolved.
+            // Mark unmatched so admin sees + can refund/manually credit.
+            console.error(`[Square Webhook] UNFULFILLED api_credits — sq_order=${squareOrderId} credits=${credits} account=${apiAccountId}`)
+            await c.env.DB.prepare(
+              `UPDATE square_payments SET status = 'unmatched', updated_at = datetime('now') WHERE square_order_id = ?`
+            ).bind(squareOrderId).run()
+            try {
+              await recordAndNotify(c.env, {
+                kind: 'payment_unmatched',
+                severity: 'urgent',
+                order: {
+                  order_id: null,
+                  order_number: squareOrderId || `square_${payment.id}`,
+                  customer_id: customerId,
+                  customer_email: '',
+                  customer_name: '',
+                  property_address: `(api_credits unmatched — credits=${credits} account=${apiAccountId || 'null'})`,
+                  service_tier: 'api_credits',
+                  price: Number(pendingPayment.amount || 0),
+                  payment_status: 'paid',
+                  is_trial: false,
+                  payload: { square_payment_id: payment.id, square_order_id: squareOrderId, credits, api_account_id: apiAccountId },
+                },
+              })
+            } catch (e: any) {
+              console.warn('[admin-notif] api_credits unmatched record failed:', e?.message || e)
+            }
           }
 
         } else {
@@ -1390,10 +1445,99 @@ squareRoutes.post('/webhook', async (c) => {
       case 'refund.updated': {
         const refund = event.data?.object?.refund
         if (refund?.payment_id) {
+          // Look up the original payment so we can reverse the right side
+          // effect (order paid → refunded, credits added → returned, etc.).
+          const refundedPayment = await c.env.DB.prepare(
+            'SELECT * FROM square_payments WHERE square_payment_id = ? LIMIT 1'
+          ).bind(refund.payment_id).first<any>()
+
           await c.env.DB.prepare(`
             UPDATE square_payments SET status = 'refunded', updated_at = datetime('now')
             WHERE square_payment_id = ?
           `).bind(refund.payment_id).run()
+
+          if (refundedPayment) {
+            const cid = refundedPayment.customer_id
+            const ptype = refundedPayment.payment_type
+            const sqOrderId = refundedPayment.square_order_id
+
+            try {
+              if (ptype === 'one_time_report' && refundedPayment.order_id) {
+                // Reverse the order: mark refunded + cancel the report.
+                await c.env.DB.prepare(
+                  "UPDATE orders SET payment_status = 'refunded', status = 'cancelled', updated_at = datetime('now') WHERE id = ?"
+                ).bind(refundedPayment.order_id).run()
+              } else if (ptype === 'credit_pack') {
+                // Return the credits to inventory. Parse the same way the
+                // original add did (metadata first, description fallback).
+                let credits = 0
+                try {
+                  const meta = refundedPayment.metadata_json ? JSON.parse(refundedPayment.metadata_json) : {}
+                  if (meta.credits) credits = parseInt(meta.credits)
+                } catch {}
+                if (!credits) {
+                  const m = refundedPayment.description?.match(/\((\d+) credits?\)/)
+                  credits = m ? parseInt(m[1]) : 0
+                }
+                if (credits > 0 && cid) {
+                  // Decrement available credits but never go below 0. If the
+                  // customer has already used some, decrement credits_used so
+                  // the net balance reflects the refund correctly.
+                  await c.env.DB.prepare(
+                    "UPDATE customers SET report_credits = MAX(0, report_credits - ?), updated_at = datetime('now') WHERE id = ?"
+                  ).bind(credits, cid).run()
+                }
+              } else if (ptype === 'api_credits') {
+                let credits = 0
+                let apiAccountId: string | null = null
+                try {
+                  const meta = refundedPayment.metadata_json ? JSON.parse(refundedPayment.metadata_json) : {}
+                  if (meta.credits) credits = parseInt(meta.credits)
+                  if (meta.account_id) apiAccountId = meta.account_id
+                } catch {}
+                if (!apiAccountId) apiAccountId = refundedPayment.api_account_id ?? null
+                if (credits > 0 && apiAccountId) {
+                  // Reuse holdCredit-style ledger for negative entry.
+                  await c.env.DB.prepare(
+                    "UPDATE api_accounts SET credit_balance = MAX(0, credit_balance - ?), updated_at = datetime('now') WHERE id = ?"
+                  ).bind(credits, apiAccountId).run().catch((e: any) => console.warn('[refund] api credit reverse failed:', e?.message || e))
+                }
+              } else if (ptype === 'subscription' && cid) {
+                await c.env.DB.prepare(
+                  "UPDATE customers SET subscription_status = 'cancelled', updated_at = datetime('now') WHERE id = ?"
+                ).bind(cid).run()
+              }
+
+              // Always surface refunds in the super-admin Order Alerts feed.
+              const custData = cid
+                ? await c.env.DB.prepare('SELECT name, email FROM customers WHERE id = ?').bind(cid).first<any>()
+                : null
+              await recordAndNotify(c.env, {
+                kind: 'payment_unmatched',
+                severity: 'urgent',
+                order: {
+                  order_id: refundedPayment.order_id || null,
+                  order_number: sqOrderId || `square_${refund.payment_id}`,
+                  customer_id: cid || null,
+                  customer_email: custData?.email || '',
+                  customer_name: custData?.name || '',
+                  property_address: `(REFUND — ${ptype || 'unknown'}, $${Number(refundedPayment.amount || 0).toFixed(2)})`,
+                  service_tier: `refund:${ptype || 'unknown'}`,
+                  price: Number(refundedPayment.amount || 0),
+                  payment_status: 'refunded',
+                  is_trial: false,
+                  payload: {
+                    refund_id: refund.id,
+                    square_payment_id: refund.payment_id,
+                    square_order_id: sqOrderId,
+                    refund_amount: refundedPayment.amount,
+                  },
+                },
+              })
+            } catch (e: any) {
+              console.warn('[refund] reversal step failed:', e?.message || e)
+            }
+          }
         }
         await c.env.DB.prepare(
           'UPDATE square_webhook_events SET processed = 1 WHERE square_event_id = ?'
@@ -1565,9 +1709,55 @@ squareRoutes.get('/verify-payment', async (c) => {
               'UPDATE customers SET report_credits = report_credits + ?, subscription_plan = CASE WHEN subscription_plan = "free" THEN "credits" ELSE subscription_plan END, updated_at = datetime("now") WHERE id = ?'
             ).bind(credits, customer.customer_id).run()
             trackCreditPurchase(c.env as any, String(customer.customer_id), credits, pendingPayment.amount || 0).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+          } else {
+            // Money was collected but credits couldn't be parsed.
+            // Mark unmatched and surface to admin (mirrors webhook behavior).
+            console.error(`[verify-payment] UNFULFILLED credit_pack — sq_order=${pendingPayment.square_order_id} customer=${customer.customer_id}`)
+            await c.env.DB.prepare(
+              `UPDATE square_payments SET status = 'unmatched', updated_at = datetime('now') WHERE square_order_id = ?`
+            ).bind(pendingPayment.square_order_id).run()
+            try {
+              await recordAndNotify(c.env, {
+                kind: 'payment_unmatched',
+                severity: 'urgent',
+                order: {
+                  order_id: null,
+                  order_number: pendingPayment.square_order_id || `verify_${pendingPayment.id}`,
+                  customer_id: customer.customer_id,
+                  customer_email: customer.email || '',
+                  customer_name: customer.name || '',
+                  property_address: '(credit_pack unmatched — credits=0 from verify-payment)',
+                  service_tier: 'credit_pack',
+                  price: Number(pendingPayment.amount || 0),
+                  payment_status: 'paid',
+                  is_trial: false,
+                  payload: { source: 'verify_payment', square_order_id: pendingPayment.square_order_id },
+                },
+              })
+            } catch (e: any) {
+              console.warn('[admin-notif] verify-payment credit_pack unmatched record failed:', e?.message || e)
+            }
           }
         } else if (pendingPayment.payment_type === 'one_time_report') {
-          // Single report purchase — create order + trigger generation
+          // Single report purchase — create order + trigger generation.
+          // Re-check linkage in case the webhook already created the order
+          // between our atomic UPDATE and now.
+          const linkedVP = await c.env.DB.prepare(
+            'SELECT order_id FROM square_payments WHERE square_order_id = ? LIMIT 1'
+          ).bind(pendingPayment.square_order_id).first<any>()
+          if (linkedVP?.order_id) {
+            console.log(`[verify-payment] Order ${linkedVP.order_id} already linked — skipping creation`)
+            const updatedCustomer0 = await c.env.DB.prepare('SELECT * FROM customers WHERE id = ?').bind(customer.customer_id).first<any>()
+            return c.json({
+              success: true,
+              payment_status: 'paid',
+              payment_type: pendingPayment.payment_type,
+              subscription_status: updatedCustomer0?.subscription_status || 'none',
+              credits_remaining: (updatedCustomer0?.report_credits || 0) - (updatedCustomer0?.credits_used || 0),
+              credits_total: updatedCustomer0?.report_credits || 0,
+            })
+          }
+
           let meta: any = {}
           try { meta = JSON.parse(pendingPayment.metadata_json || '{}') } catch {}
 
@@ -1701,6 +1891,61 @@ squareRoutes.get('/verify-payment', async (c) => {
 
           if (credits > 0 && apiAccountId) {
             await addCredits(c.env.DB, apiAccountId, credits, 'square_payment', pendingPayment.square_order_id)
+          } else {
+            console.error(`[verify-payment] UNFULFILLED api_credits — sq_order=${pendingPayment.square_order_id} credits=${credits} account=${apiAccountId}`)
+            await c.env.DB.prepare(
+              `UPDATE square_payments SET status = 'unmatched', updated_at = datetime('now') WHERE square_order_id = ?`
+            ).bind(pendingPayment.square_order_id).run()
+            try {
+              await recordAndNotify(c.env, {
+                kind: 'payment_unmatched',
+                severity: 'urgent',
+                order: {
+                  order_id: null,
+                  order_number: pendingPayment.square_order_id || `verify_${pendingPayment.id}`,
+                  customer_id: customer.customer_id,
+                  customer_email: customer.email || '',
+                  customer_name: customer.name || '',
+                  property_address: `(api_credits unmatched — credits=${credits} account=${apiAccountId || 'null'})`,
+                  service_tier: 'api_credits',
+                  price: Number(pendingPayment.amount || 0),
+                  payment_status: 'paid',
+                  is_trial: false,
+                  payload: { source: 'verify_payment', square_order_id: pendingPayment.square_order_id, credits, api_account_id: apiAccountId },
+                },
+              })
+            } catch (e: any) {
+              console.warn('[admin-notif] verify-payment api_credits unmatched failed:', e?.message || e)
+            }
+          }
+        } else {
+          // Unknown / future / corrupted payment_type. Money was collected
+          // but no fulfillment branch matches. Mark unmatched + surface to
+          // admin instead of returning silent success to the customer.
+          console.error(`[verify-payment] UNKNOWN payment_type=${pendingPayment.payment_type} sq_order=${pendingPayment.square_order_id}`)
+          await c.env.DB.prepare(
+            `UPDATE square_payments SET status = 'unmatched', updated_at = datetime('now') WHERE square_order_id = ?`
+          ).bind(pendingPayment.square_order_id).run()
+          try {
+            await recordAndNotify(c.env, {
+              kind: 'payment_unmatched',
+              severity: 'urgent',
+              order: {
+                order_id: null,
+                order_number: pendingPayment.square_order_id || `verify_${pendingPayment.id}`,
+                customer_id: customer.customer_id,
+                customer_email: customer.email || '',
+                customer_name: customer.name || '',
+                property_address: `(unknown payment_type='${pendingPayment.payment_type || 'null'}' — money collected, no fulfillment)`,
+                service_tier: pendingPayment.payment_type || 'unknown',
+                price: Number(pendingPayment.amount || 0),
+                payment_status: 'paid',
+                is_trial: false,
+                payload: { source: 'verify_payment', square_order_id: pendingPayment.square_order_id, payment_type: pendingPayment.payment_type },
+              },
+            })
+          } catch (e: any) {
+            console.warn('[admin-notif] verify-payment unknown-type unmatched failed:', e?.message || e)
           }
         }
 

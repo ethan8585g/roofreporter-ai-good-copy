@@ -1411,7 +1411,9 @@ adminRoutes.get('/superadmin/orders', async (c) => {
         SUM(CASE WHEN trace_source = 'admin' THEN 1 ELSE 0 END) as admin_traced,
         SUM(CASE WHEN trace_source = 'ai_agent' THEN 1 ELSE 0 END) as ai_traced,
         SUM(CASE WHEN trace_source IS NULL AND COALESCE(needs_admin_trace,0) = 0 THEN 1 ELSE 0 END) as no_trace,
-        SUM(CASE WHEN COALESCE(needs_admin_trace,0) = 1 THEN 1 ELSE 0 END) as needs_trace,
+        -- needs_trace must match the actual queue (status in processing/pending)
+        -- so the sidebar badge agrees with the orders shown in the queue.
+        SUM(CASE WHEN COALESCE(needs_admin_trace,0) = 1 AND status IN ('processing','pending') THEN 1 ELSE 0 END) as needs_trace,
         SUM(CASE WHEN trace_source = 'self' AND COALESCE(is_trial,0) = 0 THEN 1 ELSE 0 END) as self_traced_paid,
         COALESCE(SUM(CASE WHEN trace_source = 'self' AND payment_status = 'paid' AND COALESCE(is_trial,0) = 0 AND (notes IS NULL OR notes NOT LIKE 'Paid via credit balance%') THEN price ELSE 0 END), 0) as self_traced_revenue
       FROM orders

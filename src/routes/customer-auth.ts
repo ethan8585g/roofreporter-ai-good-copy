@@ -635,10 +635,6 @@ customerAuthRoutes.post('/register', async (c) => {
     if (!company_name || !String(company_name).trim()) {
       return c.json({ error: 'Company name is required' }, 400)
     }
-    // Phone is now mandatory — every account must have a contactable number.
-    if (!phone || String(phone).replace(/\D/g, '').length < 7) {
-      return c.json({ error: 'A valid phone number is required.' }, 400)
-    }
     // honeypot — silently accept-and-drop obvious bot signups
     if (website && String(website).trim().length > 0) {
       return c.json({ error: 'Registration failed. Please try again.' }, 400)
@@ -651,7 +647,7 @@ customerAuthRoutes.post('/register', async (c) => {
     const cleanPrimaryUse = (primary_use && VALID_PRIMARY_USES.has(String(primary_use)))
       ? String(primary_use)
       : null
-    const cleanPhone = String(phone).trim()
+    const cleanPhone = (phone && String(phone).trim()) ? String(phone).trim() : null
 
     const cleanEmail = email.toLowerCase().trim()
     const cleanCompanyName = String(company_name).trim()

@@ -9327,7 +9327,7 @@ function getCustomerRegisterPageHTML(prefillEmail = '', googleClientId = '', pre
 <div id="g_id_onload"
   data-client_id="${googleClientId}"
   data-callback="handleGoogleCredential"
-  data-auto_prompt="false">
+  data-auto_prompt="true">
 </div>
 <div style="display:flex;justify-content:center;margin-bottom:6px" onclick="rrTrack('oauth_click',{provider:'google'})">
   <div class="g_id_signin"
@@ -9433,24 +9433,6 @@ ${previewId ? `
               placeholder="Acme Roofing"
               style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px"
               onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
-
-            <label for="reg-phone" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Mobile # <span style="font-weight:400;color:#6b7280">(so we can help you if you hit an issue)</span></label>
-            <input id="reg-phone" type="tel" name="phone" inputmode="tel" autocomplete="tel" required
-              placeholder="(555) 123-4567"
-              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px"
-              onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
-
-            <label for="reg-company-size" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">How big is your crew?</label>
-            <select id="reg-company-size" name="company_size" required
-              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px;background:#fff;color:#111"
-              onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
-              <option value="">Select crew size...</option>
-              <option value="solo">Just me (solo)</option>
-              <option value="2-5">2&#8211;5 crew members</option>
-              <option value="6-15">6&#8211;15 crew members</option>
-              <option value="16-50">16&#8211;50 crew members</option>
-              <option value="50+">50+</option>
-            </select>
 
             <label for="reg-primary-use" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">What do you mostly do? <span style="font-weight:400;color:#9ca3af">(optional)</span></label>
             <select id="reg-primary-use" name="primary_use"
@@ -9746,13 +9728,6 @@ ${previewId ? `
         var errC = document.getElementById('reg-error');
         if (errC) { errC.textContent = 'Please enter your company name.'; errC.style.display = 'block'; }
         var ce = document.getElementById('reg-company'); if (ce) ce.focus();
-        return;
-      }
-      var phoneDigits = phone.replace(/\D/g, '');
-      if (!phone || phoneDigits.length < 7) {
-        var errP = document.getElementById('reg-error');
-        if (errP) { errP.textContent = 'Please enter a valid phone number.'; errP.style.display = 'block'; }
-        var pe = document.getElementById('reg-phone'); if (pe) pe.focus();
         return;
       }
       if (password.length < 6) {

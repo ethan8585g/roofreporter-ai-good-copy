@@ -13,6 +13,7 @@ import { generateProfessionalReportHTML } from '../templates/report-html'
 import { generateTraceBasedDiagramSVG } from '../templates/svg-diagrams'
 import * as repo from '../repositories/reports'
 import { buildEmailWrapper, sendViaResend, sendGmailOAuth2 } from './email'
+import { recordAndNotify } from './admin-notifications'
 import { trackReportGenerated } from './ga4-events'
 
 // ── CONSTANTS ──
@@ -182,13 +183,40 @@ export async function autoProcessOrder(
 
     // ── Step 6: Mark order completed ──
     await env.DB.prepare(
-      "UPDATE orders SET status = 'completed', notes = COALESCE(notes, '') || '\n[AI Agent] Report generated automatically at ' || datetime('now') WHERE id = ?"
+      "UPDATE orders SET status = 'completed', trace_source = 'ai_agent', notes = COALESCE(notes, '') || '\n[AI Agent] Report generated automatically at ' || datetime('now') WHERE id = ?"
     ).bind(orderId).run()
 
     await logAgentAction(env.DB, orderId, 'report_generated',
       `Report generated successfully. Version: ${reportResult.version || 'unknown'}`)
 
-    // ── Step 7: Send notification email (fire-and-forget) ──
+    // ── Step 7: Surface trace completion to super admin + email customer ──
+    try {
+      const cust = order?.customer_id
+        ? await env.DB.prepare('SELECT name, email FROM customers WHERE id = ?').bind(order.customer_id).first<any>()
+        : null
+      await recordAndNotify(env, {
+        kind: 'trace_completed',
+        order: {
+          order_id: Number(orderId),
+          order_number: order.order_number,
+          customer_id: order.customer_id ?? null,
+          customer_email: cust?.email || order.requester_email || '',
+          customer_name: cust?.name || order.requester_name || '',
+          property_address: order.property_address || '',
+          service_tier: order.service_tier || '',
+          price: Number(order.price ?? 0),
+          payment_status: 'paid',
+          is_trial: !!order.is_trial,
+          trace_source: 'ai_agent',
+          needs_admin_trace: false,
+          payload: { source: 'ai_agent_auto_process' },
+        },
+      })
+    } catch (notifyErr: any) {
+      console.warn(`[AI Agent] recordAndNotify failed for order ${orderId}: ${notifyErr?.message || notifyErr}`)
+    }
+
+    // ── Step 7b: Send legacy notification email (fire-and-forget) ──
     try {
       await notifyReportReady(env, order, Number(orderId))
     } catch (emailErr: any) {
