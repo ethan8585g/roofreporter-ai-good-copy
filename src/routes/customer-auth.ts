@@ -403,8 +403,10 @@ customerAuthRoutes.post('/verify-code', async (c) => {
       return c.json({ error: 'Too many verification attempts. Please request a new code and wait 15 minutes before trying again.' }, 429)
     }
 
+    // expires_at is stored ISO 8601 (`...Z`) but datetime('now') returns space format —
+    // string comparison silently always passes. Use created_at, which is stored in matching format.
     const record = await c.env.DB.prepare(
-      "SELECT * FROM email_verification_codes WHERE email = ? AND code = ? AND used = 0 AND expires_at > datetime('now') ORDER BY created_at DESC LIMIT 1"
+      "SELECT * FROM email_verification_codes WHERE email = ? AND code = ? AND used = 0 AND created_at > datetime('now', '-10 minutes') ORDER BY created_at DESC LIMIT 1"
     ).bind(cleanEmail, code.trim()).first<any>()
 
     if (!record) {
@@ -664,10 +666,11 @@ customerAuthRoutes.post('/register', async (c) => {
     if (!verification_token) {
       return c.json({ error: 'Email verification is required. Please verify your email before completing registration.' }, 400)
     }
-    // Phase 2 #6: align with the 10-minute code expiry set in /send-verification.
-    // Was 30 minutes — let an expired code be reused for 20 extra minutes.
+    // Window starts at verify time, not send time — gives the user 15 minutes to fill in
+    // the registration form after verifying. Previously the clock ran from /send-verification,
+    // so a user who took >10 minutes total got bounced back to step 1.
     const verified = await c.env.DB.prepare(
-      "SELECT * FROM email_verification_codes WHERE email = ? AND verification_token = ? AND verified_at IS NOT NULL AND created_at > datetime('now', '-10 minutes')"
+      "SELECT * FROM email_verification_codes WHERE email = ? AND verification_token = ? AND verified_at IS NOT NULL AND verified_at > datetime('now', '-15 minutes')"
     ).bind(cleanEmail, verification_token).first<any>()
 
     if (!verified) {
