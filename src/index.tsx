@@ -169,17 +169,23 @@ app.use('*', async (c, next) => {
       const ga4Script = ga4Id ? `
 <!-- Google Analytics 4 — Enhanced Configuration for Maximum Accuracy -->
 <script>
-// Consent Mode v2 — grant ad_storage by default so Google Ads conversions transmit.
-// Without this, gtag('event','conversion',...) is suppressed and Smart Bidding has no data.
+// Consent Mode v2 — defaults to denied for GDPR/CCPA compliance.
+// Cookie banner (rm-consent-banner) flips to granted on user accept.
+// Returning visitors with stored consent re-apply on page load.
 window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}
-gtag('consent','default',{
-  'analytics_storage':'granted',
-  'ad_storage':'granted',
-  'ad_user_data':'granted',
-  'ad_personalization':'granted',
-  'functionality_storage':'granted',
-  'security_storage':'granted'
-});
+(function(){
+  var stored = null;
+  try { stored = localStorage.getItem('rm_consent'); } catch(e) {}
+  var granted = stored === 'accepted' ? 'granted' : 'denied';
+  gtag('consent','default',{
+    'analytics_storage': granted,
+    'ad_storage': granted,
+    'ad_user_data': granted,
+    'ad_personalization': granted,
+    'functionality_storage':'granted',
+    'security_storage':'granted'
+  });
+})();
 </script>
 <script async src="https://www.googletagmanager.com/gtag/js?id=${ga4Id}"></script>
 <script>
@@ -15095,13 +15101,13 @@ function getBlogListingHTML(posts: any[] = []) {
         <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
         <span class="text-white font-bold text-lg tracking-tight">Roof Manager</span>
       </a>
-      <div class="hidden md:flex items-center gap-5">
+      <div class="hidden md:flex items-center gap-4">
         <a href="/" class="text-gray-400 hover:text-white text-sm font-medium">Home</a>
         <a href="/#pricing" class="text-gray-400 hover:text-white text-sm font-medium">Pricing</a>
         <a href="/blog" class="text-[#00FF88] font-semibold text-sm border-b-2 border-[#00FF88] pb-0.5">Blog</a>
         <a href="/tools" class="text-gray-400 hover:text-white text-sm font-medium">Free Tools</a>
-        <a href="/lander" class="text-gray-400 hover:text-white text-sm font-medium">Get Started</a>
-        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-lg text-sm"><i class="fas fa-sign-in-alt mr-1"></i>Login</a>
+        <a href="/customer/login" class="border border-white/20 hover:border-white/40 text-white font-medium py-2 px-4 rounded-lg text-sm hover:bg-white/5"><i class="fas fa-sign-in-alt mr-1 text-gray-400"></i>Login</a>
+        <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2 px-5 rounded-lg text-sm shadow-lg shadow-[#00FF88]/20"><i class="fas fa-gift mr-1"></i>Start Free</a>
       </div>
       <button class="md:hidden text-white text-xl" onclick="document.getElementById('blog-mobile-menu').classList.toggle('hidden')"><i class="fas fa-bars"></i></button>
     </div>
@@ -15110,8 +15116,9 @@ function getBlogListingHTML(posts: any[] = []) {
         <a href="/" class="text-gray-400 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5">Home</a>
         <a href="/#pricing" class="text-gray-400 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5">Pricing</a>
         <a href="/blog" class="text-[#00FF88] font-semibold text-sm py-2.5 px-3 rounded-lg bg-white/5">Blog</a>
-        <a href="/lander" class="text-gray-400 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5">Get Started</a>
-        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-5 rounded-lg text-sm text-center mt-2"><i class="fas fa-sign-in-alt mr-1"></i>Login</a>
+        <a href="/tools" class="text-gray-400 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5">Free Tools</a>
+        <a href="/customer/login" class="border border-white/20 text-white font-medium py-2.5 px-3 rounded-lg text-sm hover:bg-white/5 mt-2"><i class="fas fa-sign-in-alt mr-1 text-gray-400"></i>Login</a>
+        <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2.5 px-5 rounded-lg text-sm text-center shadow-lg"><i class="fas fa-gift mr-1"></i>Start Free</a>
       </div>
     </div>
   </nav>
@@ -18071,7 +18078,7 @@ function getPrivacyPageHTML() {
   </header>
   <main class="max-w-4xl mx-auto px-4 py-12">
     <h1 class="text-2xl sm:text-4xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-    <p class="text-gray-500 mb-10">Last updated: March 31, 2026</p>
+    <p class="text-gray-500 mb-10">Last updated: May 5, 2026</p>
 
     <div class="prose prose-gray max-w-none space-y-8">
 
@@ -18087,21 +18094,40 @@ function getPrivacyPageHTML() {
           <li><strong>Property addresses:</strong> Street addresses and GPS coordinates you submit to generate roof measurement reports.</li>
           <li><strong>Payment information:</strong> Processed entirely by Square. We do not store full card numbers. We record transaction IDs and amounts for your billing history.</li>
           <li><strong>Usage data:</strong> Pages visited, features used, and report generation history — used to improve the service.</li>
-          <li><strong>Google Gmail OAuth token:</strong> When you voluntarily connect your Gmail account (see Section 3), we store your OAuth refresh token. We never collect or store the contents of your emails or inbox.</li>
+          <li><strong>Google Workspace OAuth token:</strong> When you voluntarily connect your Google account (see Section 3), we store your OAuth refresh token, encrypted at rest, so we can send mail on your behalf and sync calendar events for jobs you schedule. We never collect, read, or store the contents of your inbox or unrelated calendar events.</li>
         </ul>
       </section>
 
       <section>
-        <h2 class="text-xl font-semibold text-gray-900 mb-3">3. Google Gmail Integration and the <code class="bg-gray-100 px-1.5 py-0.5 rounded text-sm">gmail.send</code> Permission</h2>
-        <p class="text-gray-600 leading-relaxed mb-3">Roof Manager offers an <strong>optional</strong> Gmail integration that allows you to send roof measurement reports, proposals, and invoices from your own Gmail address on your behalf.</p>
-        <div class="bg-brand-50 border border-brand-200 rounded-xl p-5 mb-3">
-          <p class="text-brand-900 font-medium mb-1">Scope requested: <code class="bg-brand-100 px-1.5 py-0.5 rounded text-sm">gmail.send</code> only</p>
-          <p class="text-brand-800 text-sm leading-relaxed">When you connect your Gmail account, Roof Manager requests the <code>gmail.send</code> permission only. This allows us to send roof measurement reports, proposals, and invoices from your Gmail address on your behalf. We store only your Gmail OAuth refresh token, encrypted in our database. We never read, access, index, or store the contents of your emails or inbox.</p>
+        <h2 class="text-xl font-semibold text-gray-900 mb-3">3. Google Workspace API Data — Limited Use</h2>
+        <p class="text-gray-600 leading-relaxed mb-3">Roof Manager offers <strong>optional</strong> integrations with Google Gmail and Google Calendar so you can send roof measurement reports, proposals, and invoices from your own Gmail address, and sync scheduled jobs to your Google Calendar. Connecting these is entirely optional — the platform works fully without it.</p>
+
+        <div class="bg-brand-50 border border-brand-200 rounded-xl p-5 mb-4">
+          <p class="text-brand-900 font-bold mb-2">Limited Use disclosure</p>
+          <p class="text-brand-800 text-sm leading-relaxed">Roof Manager's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" class="underline" target="_blank" rel="noopener">Google API Services User Data Policy</a>, including the Limited Use requirements. The use of raw or derived user data received from Workspace APIs will adhere to the Google User Data Policy, including the Limited Use requirements.</p>
         </div>
+
+        <p class="text-gray-700 font-semibold mb-2">Scopes requested</p>
+        <ul class="list-disc list-inside space-y-2 text-gray-600 text-sm mb-4">
+          <li><code class="bg-gray-100 px-1.5 py-0.5 rounded">https://www.googleapis.com/auth/gmail.send</code> — to send roof measurement reports, proposals, and invoices from your Gmail address when you explicitly trigger a send action inside Roof Manager. Roof Manager <strong>cannot</strong> read, list, search, modify, or delete any messages in your inbox with this scope.</li>
+          <li><code class="bg-gray-100 px-1.5 py-0.5 rounded">https://www.googleapis.com/auth/calendar</code> and <code class="bg-gray-100 px-1.5 py-0.5 rounded">https://www.googleapis.com/auth/calendar.events</code> — to create, update, and delete calendar events that correspond to roofing jobs you schedule inside Roof Manager. We do not read events you created outside of Roof Manager except to detect duplicates of jobs we created.</li>
+          <li><code class="bg-gray-100 px-1.5 py-0.5 rounded">https://www.googleapis.com/auth/userinfo.email</code> — to identify the connected Google account so the correct user receives sent-mail and calendar sync.</li>
+        </ul>
+
+        <p class="text-gray-700 font-semibold mb-2">How we use Workspace API data</p>
+        <ul class="list-disc list-inside space-y-2 text-gray-600 text-sm mb-4">
+          <li>We use Workspace API data <strong>only</strong> to provide and improve the user-facing features described above (sending email and syncing job calendar events).</li>
+          <li>We <strong>do not</strong> use Workspace API data — including Gmail content, Calendar event content, or anything derived from them — to develop, train, improve, or evaluate generalized or non-personalized AI/ML models.</li>
+          <li>We <strong>do not</strong> sell Workspace API data, and we <strong>do not</strong> use it for advertising or any retargeting purpose.</li>
+          <li>We <strong>do not</strong> transfer Workspace API data to third parties except (a) as necessary to provide and improve the user-facing features above, (b) to comply with applicable law, or (c) as part of a merger, acquisition, or sale of assets with notice to users.</li>
+          <li>Human review of Workspace API data is performed only (a) with your explicit consent for a specific support request, (b) for security/abuse investigation, or (c) where required by law.</li>
+        </ul>
+
+        <p class="text-gray-700 font-semibold mb-2">Storage and revocation</p>
         <ul class="list-disc list-inside space-y-2 text-gray-600 text-sm">
-          <li>This integration is entirely optional. The platform works fully without it.</li>
-          <li>You may revoke access at any time at <a href="https://myaccount.google.com/permissions" class="text-brand-600 hover:underline" target="_blank" rel="noopener">myaccount.google.com/permissions</a>.</li>
-          <li>We do not use your Gmail token for any purpose other than sending emails you explicitly trigger within Roof Manager.</li>
+          <li>We store only the OAuth refresh token, encrypted at rest. We do not store your Gmail messages, inbox metadata, or calendar events on our servers.</li>
+          <li>You may disconnect Roof Manager at any time inside Settings, or revoke access directly at <a href="https://myaccount.google.com/permissions" class="text-brand-600 hover:underline" target="_blank" rel="noopener">myaccount.google.com/permissions</a>.</li>
+          <li>If you delete your Roof Manager account, all stored OAuth tokens are deleted within 30 days.</li>
         </ul>
       </section>
 
@@ -18111,7 +18137,7 @@ function getPrivacyPageHTML() {
           <li>To generate and deliver roof measurement reports.</li>
           <li>To process payments and maintain billing records.</li>
           <li>To send transactional emails (report delivery, invoices, account notifications).</li>
-          <li>To improve our AI models and measurement accuracy.</li>
+          <li>To improve roof-measurement accuracy using satellite imagery, geospatial data, and aggregated platform usage metrics. <strong>We do not use Google Workspace API data (Gmail or Calendar content) to train, improve, or evaluate AI/ML models.</strong> See Section 3 for the full Limited Use disclosure.</li>
           <li>To respond to support requests.</li>
         </ul>
         <p class="text-gray-600 mt-3">We do not sell your personal information to third parties. We do not use your data for advertising purposes.</p>
