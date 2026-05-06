@@ -924,6 +924,13 @@ app.get('/order', (c) => {
   return c.redirect(qs ? `/customer/order?${qs}` : '/customer/order')
 })
 
+// Onboarding "create a report now" CTA + first-report flow link to this URL.
+// The actual order page is /customer/order — redirect rather than 404.
+app.get('/customer/new-order', (c) => {
+  const qs = c.req.url.split('?')[1] || ''
+  return c.redirect(qs ? `/customer/order?${qs}` : '/customer/order')
+})
+
 // /dashboard redirect — users may type /dashboard directly
 app.get('/dashboard', (c) => {
   const qs = c.req.url.split('?')[1] || ''
@@ -7196,7 +7203,7 @@ function getOnboardingPageHTML(sessionToken = ''): string {
             Go to Dashboard &#x2192;
           </a>
           <div style="margin-top:24px">
-            <a href="/customer/new-order" style="color:#00CC6A;font-size:14px;text-decoration:none">Or create a report now &#x2192;</a>
+            <a href="/customer/order" style="color:#00CC6A;font-size:14px;text-decoration:none">Or create a report now &#x2192;</a>
           </div>
         </div>
       </div>
@@ -7244,7 +7251,7 @@ function getOnboardingPageHTML(sessionToken = ''): string {
     var address = (document.getElementById('first-address').value || '').trim();
     if (!address) return;
     // Redirect to new order page with address pre-filled
-    window.location.href = '/customer/new-order?address=' + encodeURIComponent(address);
+    window.location.href = '/customer/order?address=' + encodeURIComponent(address);
   }
   </script>
 </body>
@@ -10493,6 +10500,7 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
         <input id="rm-profile-company" type="text" autocomplete="organization" placeholder="Acme Roofing" style="width:100%;padding:11px 14px;border:1.5px solid #d1d5db;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box" onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
       </div>
       <button id="rm-profile-submit" onclick="rmProfileSubmit()" style="width:100%;padding:13px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:15px;cursor:pointer">Save and continue</button>
+      <button onclick="rmProfileSkip()" style="width:100%;padding:10px;background:transparent;color:#6b7280;border:none;font-size:13px;cursor:pointer;margin-top:6px">Skip for now</button>
     </div>
   </div>
 
@@ -10508,15 +10516,16 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
         if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
       } catch(e) {}
 
-      // Check profile completeness — Google OAuth users + legacy accounts may
-      // be missing phone or company_name. Block dashboard until filled.
+      // Profile completeness — Google OAuth users + legacy accounts may be
+      // missing phone or company_name. Show modal but allow "Skip for now"
+      // (dismissed via sessionStorage so it returns next session).
+      if (sessionStorage.getItem('rm_profile_gate_skipped')) return;
       fetch('/api/customer-auth/me', { credentials: 'include' })
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(data) {
           if (!data || !data.customer) return;
           var cust = data.customer;
           if (cust.profile_complete) return;
-          // Show only the fields that are missing.
           var phoneWrap = document.getElementById('rm-profile-phone-wrap');
           var companyWrap = document.getElementById('rm-profile-company-wrap');
           var hasPhone = cust.phone && String(cust.phone).trim();
@@ -10528,6 +10537,12 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
         })
         ['catch'](function(){});
     })();
+
+    function rmProfileSkip() {
+      try { sessionStorage.setItem('rm_profile_gate_skipped', '1'); } catch(e) {}
+      var gate = document.getElementById('rm-profile-gate');
+      if (gate) gate.style.display = 'none';
+    }
 
     function rmProfileSubmit() {
       var phoneEl = document.getElementById('rm-profile-phone');
@@ -16337,6 +16352,13 @@ function getCustomerOrderPageHTML(mapsApiKey: string, nearmapTileUrl: string | n
     </div>
   </header>
   <main class="max-w-4xl mx-auto px-4 py-8">
+    <div id="freeTrialBanner" style="display:none;background:linear-gradient(135deg,#00FF88 0%,#00CC6A 100%);color:#0A0A0A;padding:16px 20px;border-radius:14px;margin-bottom:20px;font-weight:600;align-items:center;gap:14px">
+      <i class="fas fa-gift" style="font-size:24px"></i>
+      <div style="flex:1">
+        <div style="font-size:16px;font-weight:800">You have <span id="freeTrialBannerCount">0</span> free report credits ready to use</div>
+        <div style="font-size:13px;font-weight:500;opacity:0.85">Pin an address below → trace the roof → click "Use Credit" to redeem.</div>
+      </div>
+    </div>
     <div id="order-root"></div>
   </main>
   <script>

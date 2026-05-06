@@ -112,6 +112,12 @@ async function loadOrderData() {
         countEl.textContent = remaining;
         badge.classList.remove('hidden');
       }
+      const banner = document.getElementById('freeTrialBanner');
+      const bannerCount = document.getElementById('freeTrialBannerCount');
+      if (banner && bannerCount && remaining > 0) {
+        bannerCount.textContent = remaining;
+        banner.style.display = 'flex';
+      }
     }
     if (pkgRes.ok) {
       const pd = await pkgRes.json();
