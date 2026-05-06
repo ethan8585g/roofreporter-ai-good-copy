@@ -7699,7 +7699,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
                   <span class="text-[11px] text-gray-500">Rated <strong class="text-white">4.9/5</strong> by 200+ contractors</span>
                 </div>
               </div>
-              <div class="absolute -bottom-4 -left-4 bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 shadow-xl flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-[#00FF88]/10 flex items-center justify-center"><i class="fas fa-chart-line text-[#00FF88] text-sm"></i></div><div><div class="text-white font-bold text-sm" data-count="9989" data-suffix="+" id="hero-counter">0+</div><div class="text-[10px] text-gray-500">reports generated</div></div></div>
+              <div class="absolute -bottom-4 -left-4 bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 shadow-xl flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-[#00FF88]/10 flex items-center justify-center"><i class="fas fa-chart-line text-[#00FF88] text-sm"></i></div><div><div class="text-white font-bold text-sm" data-count="35666" data-suffix="+" id="hero-counter">0+</div><div class="text-[10px] text-gray-500">reports this month</div></div></div>
               <div class="absolute -top-3 -right-3 bg-[#111111] border border-white/10 rounded-xl px-3 py-2 shadow-xl flex items-center gap-2"><div class="w-6 h-6 rounded-lg bg-[#22d3ee]/10 flex items-center justify-center"><i class="fas fa-bolt text-[#22d3ee] text-xs"></i></div><span class="text-white font-bold text-xs">&lt;60s delivery</span></div>
             </div>
           </div>
@@ -7740,6 +7740,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       <div class="flex marquee-track" style="width: max-content;">
         ${(() => {
           const items = [
+            {i:'fas fa-shield-alt', c:'#22d3ee', t:'SOC 2 Compliant', bold:true},
+            {i:'fab fa-trustpilot', c:'#00B67A', t:'Trustpilot', bold:true, href:'https://www.trustpilot.com/review/roofmanager.ca'},
             {i:'fas fa-shield-alt', c:'#00FF88', t:'PCI DSS Compliant'},
             {i:'fas fa-map-marker-alt', c:'#22d3ee', t:'Calgary'},
             {i:'fas fa-lock', c:'#22d3ee', t:'256-bit SSL'},
@@ -7754,13 +7756,17 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             {i:'fas fa-map-marker-alt', c:'#00FF88', t:'Houston'},
             {i:'fas fa-cloud', c:'#00FF88', t:'Cloudflare Protected'},
             {i:'fas fa-map-marker-alt', c:'#22d3ee', t:'Miami'},
-            {i:'fas fa-shield-alt', c:'#22d3ee', t:'SOC 2 Compliant'},
             {i:'fas fa-map-marker-alt', c:'#00FF88', t:'New York'},
             {i:'fas fa-flag', c:'#00FF88', t:'US & Canada Coverage'},
             {i:'fas fa-map-marker-alt', c:'#22d3ee', t:'Chicago'},
             {i:'fas fa-map-marker-alt', c:'#00FF88', t:'Atlanta'},
           ];
-          return [...items, ...items].map(x => `<div class="flex items-center gap-2.5 px-6 whitespace-nowrap"><i class="${x.i} text-sm" style="color:${x.c}"></i><span class="text-sm font-medium text-gray-400">${x.t}</span></div>`).join('');
+          return [...items, ...items].map(x => {
+            const inner = `<i class="${x.i} text-sm" style="color:${x.c}"></i><span class="text-sm ${x.bold ? 'font-bold text-gray-200' : 'font-medium text-gray-400'}">${x.t}</span>`;
+            return x.href
+              ? `<a href="${x.href}" target="_blank" rel="noopener" class="flex items-center gap-2.5 px-6 whitespace-nowrap hover:opacity-80 transition-opacity">${inner}</a>`
+              : `<div class="flex items-center gap-2.5 px-6 whitespace-nowrap">${inner}</div>`;
+          }).join('');
         })()}
       </div>
     </section>
@@ -10576,7 +10582,7 @@ function getBuyReportsHTML() {
       <div id="promoStatus" class="text-xs mt-2"></div>
     </div>
 
-    <p class="text-xs text-gray-500 mt-6">Secure checkout via Square. Refunds available within 7 days for unused credits — email sales@roofmanager.ca.</p>
+    <p class="text-xs text-gray-500 mt-6">Secure checkout via Square. <strong class="text-gray-300">30-day satisfaction guarantee</strong> — full refund on unused credits, email sales@roofmanager.ca.</p>
   </div>
 
   <script>
