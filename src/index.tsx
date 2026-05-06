@@ -305,7 +305,7 @@ window.GOOGLE_ADS_CONVERSIONS = {
   lead:         'AW-18080319225/XXX_LEAD_LABEL',         // TODO: hero CTAs, exit-intent, address-preview, gated lead capture
   contact_lead: 'AW-18080319225/XXX_CONTACT_LABEL',      // TODO: contact form submission
   demo:         'AW-18080319225/XXX_DEMO_LABEL',         // TODO: demo booked
-  signup:       'AW-18080319225/26MMCMOgxaYcEPmNr61D',   // account created (LIVE)
+  signup:       'AW-18080319225/eMC-CPy_yagcEPmNr61D',   // account created (LIVE)
   purchase:     'AW-18080319225/XXX_PURCHASE_LABEL'      // TODO: paid checkout success (Square return URL)
 };
 // Phone tracking removed — phone is not a lead source for this business and
@@ -919,10 +919,16 @@ app.get('/get-started', (c) => {
 })
 
 // /order redirect — users may type /order directly
-app.get('/order', (c) => c.redirect('/customer/order'))
+app.get('/order', (c) => {
+  const qs = c.req.url.split('?')[1] || ''
+  return c.redirect(qs ? `/customer/order?${qs}` : '/customer/order')
+})
 
 // /dashboard redirect — users may type /dashboard directly
-app.get('/dashboard', (c) => c.redirect('/customer/dashboard'))
+app.get('/dashboard', (c) => {
+  const qs = c.req.url.split('?')[1] || ''
+  return c.redirect(qs ? `/customer/dashboard?${qs}` : '/customer/dashboard')
+})
 
 // /register — standalone signup page (first-class funnel entry)
 app.get('/register', (c) => {
@@ -1035,11 +1041,11 @@ app.get('/onboarding', (c) => {
   return c.html(getOnboardingPageHTML(token))
 })
 
-// /signup redirect — keep backward compat, now points to /register
+// /signup redirect — keep backward compat, now points to /register.
+// Forward the FULL query string so gclid + utm_* survive (Google Ads tracking).
 app.get('/signup', (c) => {
-  const email = c.req.query('email') || ''
-  const qs = email ? `?email=${encodeURIComponent(email)}` : ''
-  return c.redirect('/register' + qs, 302)
+  const qs = c.req.url.split('?')[1] || ''
+  return c.redirect(qs ? `/register?${qs}` : '/register', 302)
 })
 
 // Public sample report — redirects to a real shared report so visitors see
@@ -2166,7 +2172,10 @@ app.get('/services', (c) => {
 // Feature Hub Pages — dedicated SEO landing pages per product (hub-and-spoke architecture)
 // Plain /features had no handler and 404'd — redirect to the measurements hub
 // (the main product surface) so old links / footer / nav references resolve.
-app.get('/features', (c) => c.redirect('/features/measurements', 302))
+app.get('/features', (c) => {
+  const qs = c.req.url.split('?')[1] || ''
+  return c.redirect(qs ? `/features/measurements?${qs}` : '/features/measurements', 302)
+})
 app.get('/features/measurements', (c) => { return c.html(getFeatureHubPageHTML('measurements')) })
 app.get('/features/crm', (c) => { return c.html(getFeatureHubPageHTML('crm')) })
 app.get('/features/ai-secretary', (c) => { return c.html(getFeatureHubPageHTML('ai-secretary')) })
@@ -2174,7 +2183,10 @@ app.get('/features/virtual-try-on', (c) => { return c.html(getFeatureHubPageHTML
 
 // How-To Guides — SSR blog-style guides
 app.get('/guides', (c) => c.html(getGuidesIndexHTML()))
-app.get('/tutorials', (c) => c.redirect('/guides', 301))
+app.get('/tutorials', (c) => {
+  const qs = c.req.url.split('?')[1] || ''
+  return c.redirect(qs ? `/guides?${qs}` : '/guides', 301)
+})
 app.get('/how-it-works', (c) => c.html(getHowItWorksPageHTML()))
 app.get('/faq', (c) => c.html(getFAQPageHTML()))
 // Free tools hub + embeddable calculators (backlink magnets)
