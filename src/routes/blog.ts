@@ -4,6 +4,7 @@ import { runOnce, seedDefaultKeywords, pickStalePostIds, refreshStalePost, getAg
 import { pingGoogleIndexing, pingGoogleIndexingBatch } from '../services/indexing-api'
 import { pingIndexNow } from '../services/indexnow'
 import { sanitizeHtml } from '../utils/sanitize-html'
+import { validateAdminSession } from './auth'
 
 export const blogRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -112,23 +113,16 @@ blogRoutes.get('/posts/:slug', async (c) => {
   }
 })
 
-// ============================================================
-// ADMIN: Helper to validate admin session
-// ============================================================
-async function validateAdminSession(db: D1Database, authHeader: string | undefined) {
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null
-  const token = authHeader.replace('Bearer ', '')
-  const session = await db.prepare(
-    `SELECT s.*, u.email, u.role FROM admin_sessions s JOIN admin_users u ON s.admin_id = u.id WHERE s.session_token = ? AND s.expires_at > datetime('now')`
-  ).bind(token).first()
-  return session
-}
+// Admin session validation is shared with the rest of the admin routes — see
+// ./auth. The canonical helper accepts both Bearer (legacy) and the
+// rm_admin_session HttpOnly cookie, so the SuperAdmin dashboard can hit blog
+// endpoints without a stale-Bearer 401 → forced /login redirect.
 
 // ============================================================
 // ADMIN: List all blog posts (including drafts)
 // ============================================================
 blogRoutes.get('/admin/posts', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
 
   try {
@@ -148,7 +142,7 @@ blogRoutes.get('/admin/posts', async (c) => {
 // ADMIN: Create a new blog post
 // ============================================================
 blogRoutes.post('/admin/posts', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
 
   try {
@@ -210,7 +204,7 @@ blogRoutes.post('/admin/posts', async (c) => {
 // ADMIN: Update a blog post
 // ============================================================
 blogRoutes.put('/admin/posts/:id', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
 
   try {
@@ -254,7 +248,7 @@ blogRoutes.put('/admin/posts/:id', async (c) => {
 // ADMIN: Delete a blog post
 // ============================================================
 blogRoutes.delete('/admin/posts/:id', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
 
   try {
@@ -270,7 +264,7 @@ blogRoutes.delete('/admin/posts/:id', async (c) => {
 // ADMIN: Init blog table (fallback if migration not run)
 // ============================================================
 blogRoutes.post('/admin/init', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
 
   try {
@@ -309,7 +303,7 @@ blogRoutes.post('/admin/init', async (c) => {
 
 // Admin: seed default keyword queue
 blogRoutes.post('/admin/agent/seed', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
   try {
     const inserted = await seedDefaultKeywords(c.env.DB)
@@ -321,7 +315,7 @@ blogRoutes.post('/admin/agent/seed', async (c) => {
 
 // Admin: add custom keyword
 blogRoutes.post('/admin/agent/keywords', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
   try {
     const { keyword, geo_modifier, intent, priority, target_category } = await c.req.json()
@@ -337,7 +331,7 @@ blogRoutes.post('/admin/agent/keywords', async (c) => {
 
 // Admin: queue + log status
 blogRoutes.get('/admin/agent/status', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
   try {
     const queue = await c.env.DB.prepare(
@@ -359,7 +353,7 @@ blogRoutes.get('/admin/agent/status', async (c) => {
 
 // Admin: manually trigger one run
 blogRoutes.post('/admin/agent/run', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
   const result = await runOnce(c.env)
   return c.json(result, result.ok ? 200 : 200)
@@ -369,7 +363,7 @@ blogRoutes.post('/admin/agent/run', async (c) => {
 // publish cadence, stale-post count. Use to eyeball whether the
 // autonomous pipeline is healthy.
 blogRoutes.get('/admin/agent/health', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
   try {
     return c.json(await getAgentHealth(c.env.DB))
@@ -380,7 +374,7 @@ blogRoutes.get('/admin/agent/health', async (c) => {
 
 // Admin: list stale published posts (default >90 days old, max 50).
 blogRoutes.get('/admin/agent/stale', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
   const days = Math.max(1, parseInt(c.req.query('days') || '90'))
   const limit = Math.min(50, Math.max(1, parseInt(c.req.query('limit') || '10')))
@@ -396,7 +390,7 @@ blogRoutes.get('/admin/agent/stale', async (c) => {
 // Google/IndexNow). Body: { id: <post_id> }. If omitted, auto-picks the
 // single oldest post past the threshold.
 blogRoutes.post('/admin/agent/refresh', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
   try {
     const body = await c.req.json().catch(() => ({})) as { id?: number; days?: number }
@@ -417,7 +411,7 @@ blogRoutes.post('/admin/agent/refresh', async (c) => {
 // posts. Use sparingly; 10 posts at a time is a reasonable ceiling to
 // avoid blowing the Pages subrequest budget.
 blogRoutes.post('/admin/agent/refresh-batch', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
   try {
     const body = await c.req.json().catch(() => ({})) as { days?: number; limit?: number }
@@ -441,7 +435,7 @@ blogRoutes.post('/admin/agent/refresh-batch', async (c) => {
 // Useful for (1) re-indexing after a mass content edit, (2) testing the
 // service-account + Search Console ownership setup.
 blogRoutes.post('/admin/indexing/ping', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
   try {
     const body = await c.req.json().catch(() => ({})) as { url?: string; urls?: string[]; type?: 'URL_UPDATED' | 'URL_DELETED' }
@@ -460,7 +454,7 @@ blogRoutes.post('/admin/indexing/ping', async (c) => {
 
 // Admin: ping every published blog post (useful for initial bulk submission)
 blogRoutes.post('/admin/indexing/ping-all', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
   try {
     const posts = await c.env.DB.prepare(
@@ -479,7 +473,7 @@ blogRoutes.post('/admin/indexing/ping-all', async (c) => {
 // Admin: IndexNow — zero-auth ping to Bing/Yandex/Naver/Seznam.
 // POST body: { urls: [...] }. If omitted, submits every published blog post.
 blogRoutes.post('/admin/indexnow/ping', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Unauthorized' }, 401)
   try {
     const body = await c.req.json().catch(() => ({})) as { urls?: string[] }

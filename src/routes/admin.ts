@@ -4035,6 +4035,8 @@ adminRoutes.get('/superadmin/system-health', async (c) => {
       icon: 'fa-credit-card',
       keys: [
         { key: 'SQUARE_ACCESS_TOKEN', present: presence('SQUARE_ACCESS_TOKEN') },
+        { key: 'SQUARE_WEBHOOK_SIGNATURE_KEY', present: presence('SQUARE_WEBHOOK_SIGNATURE_KEY') },
+        { key: 'SQUARE_WEBHOOK_URL', present: presence('SQUARE_WEBHOOK_URL') },
         { key: 'STRIPE_SECRET_KEY', present: presence('STRIPE_SECRET_KEY') },
       ],
     },
