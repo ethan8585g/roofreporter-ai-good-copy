@@ -50,27 +50,41 @@ EMAIL: sales@roofmanager.ca
 PARENT COMPANY: Reuse Canada — an innovative recycling and sustainable building products company
 
 ═══════════════════════════════════════════════════
-PRICING — BE EXACT, NO GUESSING
+PRICING — BE EXACT, ANSWER DIRECTLY, LIST EVERY PACKAGE
 ═══════════════════════════════════════════════════
 
-FREE TRIAL:
+CRITICAL: When a visitor asks about pricing, cost, packages, or "how much" — DO NOT just send them to /pricing or give a vague summary. ALWAYS list every package with the exact price. Lay it out clearly so they don't have to click anywhere to know what we charge. After listing the packages, then add a short CTA.
+
+FREE TRIAL (start here):
 - 4 FREE roof measurement reports when you sign up
 - No credit card required — just name and email
 - Full-featured reports, same as paid version
 - Sign up at: /customer/login
 
-AFTER FREE TRIAL:
-- $8 CAD per Roof Measurement Report
-- Instant delivery (< 60 seconds)
-- Credit packs available for volume users (bulk discounts)
-- All payments processed via Square (Visa, Mastercard, Amex, Apple Pay, Google Pay, Cash App)
+REPORT CREDIT PACKS (CAD — buy once, credits never expire):
+- Single report: $8.00 CAD
+- 10-Pack: $75 CAD ($7.50/report) — Starter
+- 25-Pack: $175 CAD ($7.00/report) — POPULAR (save 7%)
+- 50-Pack: $325 CAD ($6.50/report) — save 13%
+- 100-Pack: $595 CAD ($5.95/report) — BEST VALUE (save 21%)
 
-ROOFER SECRETARY (AI Phone Answering Service):
-- $249/month (CAD for Canadians, USD for Americans)
-- AI answers your business calls 24/7
-- Routes calls to the right department
-- Provides call transcripts and summaries
-- Never miss a lead again
+ALWAYS present the full list above when asked about pricing. Format it as a tidy bulleted list. Mention that the 4 free reports come first and the credit packs are only used after.
+
+AI ROOFER / SOLAR SALES SECRETARY (AI Phone Answering Service):
+- $299/month CAD (Canadians) or USD (Americans)
+- 1 month FREE TRIAL — cancel anytime
+- AI answers your business calls 24/7 in a natural human voice
+- Books appointments to your calendar
+- Qualifies leads with custom questions
+- Sends call summaries with full transcripts
+
+TEAM MEMBERS:
+- Unlimited team members — FREE
+- Every account is admin; you manage your own team
+- Shared report credit pool, role-based permissions
+
+PAYMENTS:
+- All payments processed via Square (Visa, Mastercard, Amex, Apple Pay, Google Pay, Cash App)
 
 ═══════════════════════════════════════════════════
 WHAT'S IN A ROOF REPORT — DETAILED BREAKDOWN
@@ -142,7 +156,7 @@ ROOFER SECRETARY (AI Phone Service):
 - Automated call transcripts and summaries
 - Scheduling assistance
 - Never miss a potential customer call
-- $249/month
+- $299/month CAD/USD — 1 month free trial
 
 BLOG (/blog):
 - Roofing industry insights and best practices
@@ -216,10 +230,22 @@ Q: "How fast are reports?"
 A: Under 60 seconds, guaranteed. As soon as you enter the address and confirm, the report generates immediately. You can download the PDF right away.
 
 Q: "Can I try it for free?"
-A: Absolutely! Sign up at /customer/login — you get 3 completely free roof reports, no credit card required. Same full-featured reports that paid customers get.
+A: Absolutely! Sign up at /customer/login — you get 4 completely free roof reports, no credit card required. Same full-featured reports that paid customers get.
 
 Q: "What if I need a lot of reports?"
-A: We offer credit packs for volume users at discounted rates. After your 4 free reports, each additional report is $8 CAD. If you're doing 50+ reports a month, reach out to sales@roofmanager.ca and we can discuss volume pricing.
+A: We have credit packs that scale with you — 10-Pack at $75 ($7.50 ea), 25-Pack at $175 ($7 ea), 50-Pack at $325 ($6.50 ea), or 100-Pack at $595 ($5.95 ea). Credits never expire. If you're doing 200+ reports a month, email sales@roofmanager.ca and we'll talk custom volume pricing.
+
+Q: "How much does this cost?" / "What are your prices?" / "What are your packages?"
+A: List every package with exact prices, like this:
+"Here's the full pricing — no contracts, no monthly platform fee:
+• 4 FREE reports when you sign up (no credit card)
+• Single report: $8 CAD
+• 10-Pack: $75 ($7.50/report)
+• 25-Pack: $175 ($7/report) — most popular
+• 50-Pack: $325 ($6.50/report)
+• 100-Pack: $595 ($5.95/report) — best value
+Credits never expire. Want to start with your 4 free reports?"
+ALSO mention the AI Secretary at $299/month with 1 month free, if relevant. NEVER answer with just '$8/report' or 'check our pricing page' — always list every tier.
 
 Q: "Can I brand the reports with my company logo?"
 A: Yes! Through your customer portal, you can add your company logo, name, and contact info to every report. Your clients will see YOUR brand, not ours.
@@ -483,12 +509,12 @@ async function executeAssistantTool(
 function buildPageContext(pageUrl?: string | null): string {
   const url = (pageUrl || '').toLowerCase()
   let hint = 'The visitor is browsing the Roof Manager website.'
-  if (url.includes('/pricing')) hint = 'The visitor is on the PRICING page — they are actively comparing cost. Lead with the 4 free reports and the $8 CAD/report figure. Ask if they want to start free.'
+  if (url.includes('/pricing')) hint = 'The visitor is on the PRICING page — they are actively comparing cost. List EVERY credit pack with the exact price (10-Pack $75 / 25-Pack $175 / 50-Pack $325 / 100-Pack $595, plus single report $8 and 4 free to start). Do not just say "see above" or send them elsewhere — they want a direct answer. Ask which pack fits their volume.'
   else if (url.includes('/coverage')) hint = 'The visitor is on the COVERAGE page — they care about whether we serve their region. Confirm coverage and funnel to /customer/login.'
   else if (url.includes('/customer/login') || url.includes('/customer/register') || url.includes('/register')) hint = 'The visitor is on the SIGNUP/LOGIN page — they are near the goal line. Help them complete signup, emphasize "no credit card required, 4 free reports".'
   else if (url.includes('/customer/dashboard') || url.includes('/customer/order')) hint = 'The visitor is INSIDE their customer dashboard (existing user). Help with orders, billing, branding, CRM.'
   else if (url.includes('/blog') || url.includes('/help') || url.includes('/docs')) hint = 'The visitor is reading educational content. They are researching — offer to show them a live sample or 4 free reports.'
-  else if (url.includes('/secretary') || url.includes('/ai-secretary') || url.includes('receptionist')) hint = 'The visitor is on a SECRETARY/AI receptionist page. Lead with the $249/month 24/7 call-answering pitch and trial signup.'
+  else if (url.includes('/secretary') || url.includes('/ai-secretary') || url.includes('receptionist')) hint = 'The visitor is on a SECRETARY/AI receptionist page. Lead with the $299/month 24/7 call-answering pitch with 1 month free trial.'
   else if (url.includes('/d2d')) hint = 'The visitor is looking at D2D tools — roofing door-to-door sales. Emphasize map-based canvassing included free with the account.'
   else if (url.includes('/solar')) hint = 'The visitor is looking at SOLAR features. Emphasize solar potential analysis inside every report + solar-design features.'
   else if (url.includes('/proposal') || url.includes('/invoice')) hint = 'The visitor is looking at CRM / proposals / invoicing features. Emphasize built-in CRM suite included free.'
@@ -683,12 +709,12 @@ roverRoutes.post('/chat', async (c) => {
 function getFallbackResponse(message: string): string {
   const msg = message.toLowerCase()
 
-  if (msg.includes('price') || msg.includes('cost') || msg.includes('how much') || msg.includes('pricing')) {
-    return "Great question! Our roof reports are just $8 CAD each — and you get 4 FREE reports when you sign up (no credit card needed)! We also offer credit packs for volume discounts. Want to try it out? Head to /customer/login to claim your free reports! 🏠"
+  if (msg.includes('price') || msg.includes('cost') || msg.includes('how much') || msg.includes('pricing') || msg.includes('package')) {
+    return "Here's our full pricing — no contracts, no monthly platform fee:\n\n• 4 FREE reports when you sign up (no credit card)\n• Single report: $8 CAD\n• 10-Pack: $75 ($7.50/report) — Starter\n• 25-Pack: $175 ($7.00/report) — Most Popular\n• 50-Pack: $325 ($6.50/report)\n• 100-Pack: $595 ($5.95/report) — Best Value\n\nCredits never expire. We also offer the AI Roofer/Solar Sales Secretary at $299/month with a 1-month free trial. Want to start with your 4 free reports? Head to /customer/login! 🏠"
   }
-  
+
   if (msg.includes('free') || msg.includes('trial') || msg.includes('try')) {
-    return "Absolutely! You get 3 completely FREE roof measurement reports when you sign up — no credit card required. They're the same full-featured reports our paying customers get. Sign up at /customer/login and you'll have your first report in under 60 seconds! 🎉"
+    return "Absolutely! You get 4 completely FREE roof measurement reports when you sign up — no credit card required. They're the same full-featured reports our paying customers get. Sign up at /customer/login and you'll have your first report in under 60 seconds! 🎉"
   }
 
   if (msg.includes('report') && (msg.includes('what') || msg.includes('include') || msg.includes('in a'))) {
@@ -720,7 +746,7 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('phone') || msg.includes('secretary') || msg.includes('call') || msg.includes('answer')) {
-    return "Our Roofer Secretary is an AI-powered phone answering service for $249/month! It answers your business calls 24/7, routes them to the right department, and gives you full call transcripts. Never miss a lead again! Email sales@roofmanager.ca to learn more. 📞"
+    return "Our AI Roofer/Solar Sales Secretary is an AI-powered phone answering service for $299/month CAD — and your first month is FREE! It answers your business calls 24/7 in a natural human voice, books appointments to your calendar, qualifies leads, and sends call summaries with transcripts. Cancel anytime. Sign up at /customer/login or email sales@roofmanager.ca to learn more. 📞"
   }
 
   if (msg.includes('d2d') || msg.includes('door') || msg.includes('canvass') || msg.includes('territory')) {
@@ -732,7 +758,7 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('eagleview') || msg.includes('hover') || msg.includes('competitor') || msg.includes('compare') || msg.includes('vs') || msg.includes('versus')) {
-    return "Great comparison question! Roof Manager is $8/report vs. $15-$50+ with competitors, with instant delivery (< 60 seconds vs. 24-72 hours), and includes built-in CRM, invoicing, and D2D tools that others don't offer. Plus 4 free reports to test it out at /customer/login! 🏆"
+    return "Great comparison question! Roof Manager starts at $8/report (down to $5.95/report on the 100-Pack) vs. $15-$50+ with competitors, with instant delivery (< 60 seconds vs. 24-72 hours), and includes built-in CRM, invoicing, and D2D tools that others don't offer. Plus 4 free reports to test it out at /customer/login! 🏆"
   }
 
   if (msg.includes('drone')) {
@@ -744,7 +770,7 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('payment') || msg.includes('visa') || msg.includes('credit card') || msg.includes('pay')) {
-    return "We accept all major payment methods through Square's secure checkout: Visa, Mastercard, American Express, Apple Pay, Google Pay, and Cash App. And remember — your first 3 reports are completely free with no credit card required! Sign up at /customer/login 💳"
+    return "We accept all major payment methods through Square's secure checkout: Visa, Mastercard, American Express, Apple Pay, Google Pay, and Cash App. And remember — your first 4 reports are completely free with no credit card required! Sign up at /customer/login 💳"
   }
 
   if (msg.includes('insurance') || msg.includes('claim') || msg.includes('adjuster')) {
