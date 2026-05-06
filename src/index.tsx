@@ -5048,6 +5048,8 @@ function getHeadTags(canonicalPath?: string) {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin>
+  <link rel="dns-prefetch" href="//www.google-analytics.com">
   <link rel="dns-prefetch" href="//maps.googleapis.com">
   <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png?v=20260504">
   <link rel="manifest" href="/manifest.json">
@@ -7286,10 +7288,13 @@ function getPasswordResetFormHTML(token: string): string {
 
 function getLandingPageHTML(latestPosts: any[] = []) {
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en-CA">
 <head>
   ${getHeadTags()}
-  <title>Roof Measurement Report Software | AI Satellite Reports — Roof Manager</title>
+  <title>AI Roof Measurement Reports in 60 Seconds | Roof Manager</title>
+  <meta name="geo.region" content="CA">
+  <meta name="geo.placename" content="Alberta, Canada">
+  <meta name="ICBM" content="53.5461,-113.4938">
   <meta name="description" content="Generate a roof measurement report in under 60 seconds — satellite-grade accuracy for roofing, solar, and insurance pros. Free sample report, no credit card.">
   <meta property="og:title" content="Roof Measurement Report Software — Roof Manager">
   <meta property="og:description" content="Contractor-grade roof measurement reports from satellite imagery in under 60 seconds. Full CRM, AI condition analysis, instant PDF delivery.">
@@ -7630,8 +7635,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <span class="relative flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00FF88]"></span></span>
               <span class="text-sm font-semibold text-[#00FF88] tracking-wide">Trusted by 200+ Contractors — US &amp; Canada</span>
             </div>
-            <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] text-white mb-6 tracking-tight">The Roof Measurement Report Platform <span class="neon-text">Roofers Actually Trust</span></h1>
-            <h2 class="text-lg lg:text-xl text-gray-300 mb-8 max-w-xl leading-relaxed font-normal">Get a contractor-grade roof measurement report in 60 seconds. Satellite precision, AI condition analysis, and instant PDF delivery — from any laptop or phone.</h2>
+            <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] text-white mb-6 tracking-tight">AI Satellite Roof Measurement Reports <span class="neon-text">Roofers Actually Trust</span></h1>
+            <h2 class="text-lg lg:text-xl text-gray-300 mb-8 max-w-xl leading-relaxed font-normal">Generate a contractor-grade roof measurement report in under 60 seconds — satellite-precise area, pitch, edges, and material BOM, with full CRM and instant PDF delivery. Built for US &amp; Canadian roofing contractors.</h2>
 
             <!-- Primary CTA (ONE) -->
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 mb-4">
@@ -14897,8 +14902,8 @@ function getPricingPageHTML() {
     </div>
 
     <div class="text-center mb-12">
-      <h1 class="text-4xl font-bold mb-4" style="color:var(--text-primary)">Simple, Transparent Pricing</h1>
-      <p class="text-lg max-w-2xl mx-auto" style="color:var(--text-secondary)">Start with 4 free reports. After that, save with 10, 25, 50, or 100 report credit packs.</p>
+      <h1 class="text-4xl font-bold mb-4" style="color:var(--text-primary)">Roof Measurement Report Pricing — From $5.95 per Report</h1>
+      <p class="text-lg max-w-2xl mx-auto" style="color:var(--text-secondary)">Pay-per-report, no subscription. Start with 4 free reports — then save with 10, 25, 50, or 100 report credit packs. CRM, invoicing, and proposals always free.</p>
     </div>
 
     <!-- How it works -->
@@ -15653,7 +15658,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
         <span><i class="fas fa-clock mr-1"></i>${post.read_time_minutes || 5} min read</span>
         ${post.category ? `<span class="bg-[#00FF88]/10 text-[#00FF88] px-2 py-0.5 rounded text-xs font-bold">${post.category}</span>` : ''}
       </div>
-      <p class="text-xs text-gray-600 mb-6"><i class="fas fa-shield-alt text-[#00FF88] mr-1"></i>Reviewed by roofing measurement engineers · Roof Manager is the roof measurement & CRM platform trusted by 5,000+ contractors across the US & Canada.</p>
+      <p class="text-xs text-gray-600 mb-6"><i class="fas fa-shield-alt text-[#00FF88] mr-1"></i>Reviewed by roofing measurement engineers · References NBC 2020, IRC 2021, FBC 8th Ed. · Roof Manager is the roof measurement &amp; CRM platform trusted by 5,000+ contractors across the US &amp; Canada · <a href="/authors/roof-manager-editorial-team" class="text-[#00FF88] hover:underline">Editorial policy</a>.</p>
     </div>
     ${post.excerpt ? `<div style="background:#111111;border-left:4px solid #00FF88;padding:1.25rem 1.5rem;margin-bottom:2rem;border-radius:0 8px 8px 0;">
       <p style="font-weight:700;color:#00FF88;margin:0 0 0.5rem;font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;">TL;DR</p>

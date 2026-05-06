@@ -33,7 +33,7 @@ await esbuild.build({
   platform: 'browser',
   target: 'es2022',
   outfile: join(DIST, '_worker.js'),
-  minify: false,
+  minify: true,
   sourcemap: false,
   conditions: ['workerd', 'worker', 'browser'],
   external: ['node:*', '__STATIC_CONTENT_MANIFEST'],
