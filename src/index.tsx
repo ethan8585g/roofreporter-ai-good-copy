@@ -6308,11 +6308,6 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
           <span class="label text-sm font-semibold">Inbox</span>
           <span id="sa-sidebar-inbox-badge" style="margin-left:auto;background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none">0</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-section="leads" onclick="saSetSection('leads', this)">
-          <i class="fas fa-user-plus w-5 text-center"></i>
-          <span class="label text-sm font-semibold">Leads</span>
-          <span id="sa-sidebar-leads-badge" style="margin-left:auto;background:#10b981;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none">0</span>
-        </div>
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-section="customers" onclick="saSetSection('customers', this)">
           <i class="fas fa-users w-5 text-center"></i>
           <span class="label text-sm font-semibold">Customers</span>

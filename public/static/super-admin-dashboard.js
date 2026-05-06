@@ -5,7 +5,7 @@
 // ============================================================
 
 const SA = {
-  view: 'inbox',
+  view: 'leads-inbox',
   section: 'inbox',
   loading: true,
   data: {},
@@ -31,13 +31,8 @@ const SA_SECTIONS = {
   inbox: {
     label: 'Inbox', icon: 'fa-inbox',
     tabs: [
+      { id: 'leads-inbox', label: 'Leads', icon: 'fa-user-plus' },
       { id: 'inbox', label: 'All Conversations', icon: 'fa-inbox' }
-    ]
-  },
-  leads: {
-    label: 'Leads', icon: 'fa-user-plus',
-    tabs: [
-      { id: 'leads-inbox', label: 'Leads Inbox', icon: 'fa-user-plus' }
     ]
   },
   customers: {
