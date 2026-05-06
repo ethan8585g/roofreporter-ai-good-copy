@@ -12913,6 +12913,32 @@ function renderPlatformHealthView() {
 // ============================================================
 // PLATFORM — HEALTH CHECK LOG (monitor agent run history + insights)
 // ============================================================
+// Friendly labels for monitor error_codes — keeps raw 4xx JSON out of the UI.
+var HCL_ERROR_LABELS = {
+  insufficient_credits: 'Insufficient Anthropic credits',
+  auth_failed: 'Anthropic auth failed',
+  rate_limited: 'Anthropic rate-limited',
+  model_unavailable: 'Anthropic model unavailable',
+  timeout: 'Anthropic timed out',
+  network: 'Network error reaching Anthropic',
+  parse_error: 'Could not parse Claude response',
+  missing_api_key: 'ANTHROPIC_API_KEY missing',
+  circuit_open: 'Skipped — circuit breaker',
+  unknown: 'Unknown error'
+};
+
+function hclLabelForRun(r) {
+  // Prefer structured error_code; fall back to a cleaned-up summary.
+  var code = r && r.details && r.details.error_code;
+  if (code && HCL_ERROR_LABELS[code]) return HCL_ERROR_LABELS[code];
+  if (r && r.details && r.details.error_label) return r.details.error_label;
+  var s = (r && r.summary) || '';
+  // Strip raw 400 JSON dumps so they never reach the user
+  if (/credit balance is too low/i.test(s)) return HCL_ERROR_LABELS.insufficient_credits;
+  if (/^4\d\d\s*\{/.test(s)) return 'Anthropic API error';
+  return s || '—';
+}
+
 function renderHealthCheckLogView() {
   var d = SA.data.health_check_log || {};
   var cfg = d.config || {};
@@ -12921,13 +12947,41 @@ function renderHealthCheckLogView() {
   var insights = d.insights || [];
   var ic = d.insight_counts || {};
   var memory = d.memory || [];
+  var diag = d.diagnostic || {};
 
   var lastRun = runs[0] || null;
-  var lastDetails = lastRun && lastRun.details ? lastRun.details : null;
+  // Ignore empty {} details_json — it confuses the empty-state check
+  var lastDetails = (lastRun && lastRun.details && Object.keys(lastRun.details).length > 0) ? lastRun.details : null;
+  var lastSuccess = null;
+  for (var i = 0; i < runs.length; i++) { if (runs[i].status === 'success') { lastSuccess = runs[i]; break; } }
   var generated = d.generated_at ? new Date(d.generated_at) : null;
   var refreshedLabel = generated ? generated.toLocaleTimeString() : '—';
 
-  // ── Header KPIs ──
+  // ── Diagnostic banner ──────────────────────────────────────
+  var bannerHtml = '';
+  var an = diag.action_needed;
+  if (an) {
+    var bannerCss = an.severity === 'critical'
+      ? 'bg-red-50 border-red-200 text-red-800'
+      : an.severity === 'warning'
+      ? 'bg-amber-50 border-amber-200 text-amber-800'
+      : 'bg-blue-50 border-blue-200 text-blue-800';
+    var bannerIcon = an.severity === 'critical' ? 'fa-circle-exclamation' : an.severity === 'warning' ? 'fa-triangle-exclamation' : 'fa-circle-info';
+    var ctaHtml = (an.cta_url && an.cta_label)
+      ? '<a href="' + escapeHtml(an.cta_url) + '" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-current rounded-lg text-xs font-semibold hover:bg-opacity-80"><i class="fas fa-arrow-up-right-from-square text-[10px]"></i>' + escapeHtml(an.cta_label) + '</a>'
+      : '';
+    bannerHtml =
+      '<div class="rounded-xl border ' + bannerCss + ' p-4 flex items-start gap-3 mb-4">' +
+        '<i class="fas ' + bannerIcon + ' text-lg mt-0.5"></i>' +
+        '<div class="flex-1 min-w-0">' +
+          '<p class="font-bold text-sm">' + escapeHtml(an.title) + '</p>' +
+          '<p class="text-xs mt-1 opacity-90 leading-relaxed">' + escapeHtml(an.message) + '</p>' +
+        '</div>' +
+        (ctaHtml ? '<div class="flex-shrink-0">' + ctaHtml + '</div>' : '') +
+      '</div>';
+  }
+
+  // ── Header KPIs ─────────────────────────────────────────────
   var enabledLabel = cfg.enabled ? 'Enabled' : 'Disabled';
   var enabledColor = cfg.enabled ? 'green' : 'gray';
   var lastStatus = cfg.last_run_status || (lastRun ? lastRun.status : '—');
@@ -12936,10 +12990,9 @@ function renderHealthCheckLogView() {
   var lastRunLabel = lastRunAt ? fmtDateTime(lastRunAt) : 'Never';
   var errColor = (rollup.errors_24h || 0) === 0 ? 'green' : (rollup.errors_24h || 0) < 2 ? 'amber' : 'red';
   var critColor = (ic.critical_open || 0) === 0 ? 'green' : 'red';
-  var avgDurLabel = rollup.avg_duration_ms_7d ? Math.round(rollup.avg_duration_ms_7d) + ' ms' : '—';
 
   var kpisHtml = '<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">' +
-    samc('Monitor Agent', enabledLabel, 'fa-power-off', enabledColor, 'agent_type=monitor') +
+    samc('Monitor Agent', enabledLabel, 'fa-power-off', enabledColor, 'hourly @ :00') +
     samc('Last Run', lastStatus, 'fa-history', statusColor, lastRunLabel) +
     samc('Runs (7d)', rollup.runs_7d || 0, 'fa-redo', 'indigo', (rollup.runs_24h || 0) + ' (24h)') +
     samc('Errors (7d)', rollup.errors_7d || 0, 'fa-exclamation-triangle', errColor, (rollup.errors_24h || 0) + ' (24h)') +
@@ -12947,42 +13000,120 @@ function renderHealthCheckLogView() {
     samc('Critical Open', ic.critical_open || 0, 'fa-skull-crossbones', critColor, (ic.high_open || 0) + ' high') +
   '</div>';
 
-  // ── Latest Health Check (parsed from monitor-agent details_json) ──
-  var latestHtml;
-  if (!lastDetails) {
-    latestHtml = '<p class="text-sm text-slate-400 italic">No health check has run yet. The monitor agent runs every hour on the :00 tick when enabled.</p>';
+  // ── Hero "Latest Run" card with sparkline ────────────────────
+  var heroHtml;
+  var hs = lastSuccess && lastSuccess.details ? lastSuccess.details.health_score : null;
+  if (hs == null) {
+    heroHtml =
+      '<div class="rounded-2xl bg-gradient-to-br from-slate-50 to-white border border-slate-200 p-6">' +
+        '<div class="flex items-start gap-4">' +
+          '<div class="w-14 h-14 bg-slate-100 rounded-xl flex items-center justify-center"><i class="fas fa-heart-pulse text-slate-400 text-xl"></i></div>' +
+          '<div class="flex-1">' +
+            '<p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Latest Successful Scan</p>' +
+            '<p class="text-2xl font-extrabold text-slate-700 mt-1">Waiting on first successful run</p>' +
+            '<p class="text-xs text-slate-500 mt-2 leading-relaxed">Once the monitor agent completes a scan, this card will show the health score, trend, and a sparkline of the last 30 runs. Use "Run scan now" to trigger one immediately.</p>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
   } else {
-    var hs = lastDetails.health_score;
-    var iss = lastDetails.issues_found;
-    var hsColor = hs == null ? 'gray' : hs >= 80 ? 'green' : hs >= 60 ? 'amber' : 'red';
-    var issColor = (iss || 0) === 0 ? 'green' : (iss || 0) < 3 ? 'amber' : 'red';
-    latestHtml = '<div class="grid grid-cols-2 md:grid-cols-4 gap-4">' +
-      samc('Health Score', hs != null ? hs + '/100' : '—', 'fa-heartbeat', hsColor) +
-      samc('Issues Found', iss != null ? iss : '—', 'fa-bug', issColor, 'this run') +
-      samc('Run Duration', lastRun.duration_ms ? lastRun.duration_ms + ' ms' : '—', 'fa-stopwatch', 'blue', 'avg ' + avgDurLabel + ' (7d)') +
-      samc('When', lastRun.created_at ? fmtDateTime(lastRun.created_at) : '—', 'fa-clock', 'indigo', lastRun.summary || '') +
-    '</div>';
+    var hsColor = hs >= 80 ? 'green' : hs >= 60 ? 'amber' : 'red';
+    var hsBg = hs >= 80 ? 'from-green-50 to-emerald-50 border-green-100' : hs >= 60 ? 'from-amber-50 to-yellow-50 border-amber-100' : 'from-red-50 to-rose-50 border-red-100';
+    // Sparkline of last 30 health scores from successful runs (oldest → newest)
+    var sparkPoints = runs.slice().reverse()
+      .filter(function(r){ return r.status === 'success' && r.details && r.details.health_score != null; })
+      .map(function(r){ return r.details.health_score; });
+    var spark = '';
+    if (sparkPoints.length >= 2) {
+      var w = 240, h = 50, n = sparkPoints.length;
+      var maxV = 100, minV = 0;
+      var pts = sparkPoints.map(function(v, idx){
+        var x = (idx / (n - 1)) * w;
+        var y = h - ((v - minV) / (maxV - minV)) * h;
+        return x.toFixed(1) + ',' + y.toFixed(1);
+      }).join(' ');
+      var areaPts = '0,' + h + ' ' + pts + ' ' + w + ',' + h;
+      var strokeColor = hsColor === 'green' ? '#10b981' : hsColor === 'amber' ? '#f59e0b' : '#ef4444';
+      spark =
+        '<svg viewBox="0 0 ' + w + ' ' + h + '" class="w-full h-12">' +
+          '<polygon points="' + areaPts + '" fill="' + strokeColor + '" opacity="0.12"/>' +
+          '<polyline points="' + pts + '" fill="none" stroke="' + strokeColor + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+        '</svg>';
+    } else {
+      spark = '<p class="text-[10px] text-slate-400 italic">Sparkline appears after 2+ successful runs</p>';
+    }
+    var iss = lastSuccess.details.issues_found || 0;
+    var crit = lastSuccess.details.critical_count || 0;
+    heroHtml =
+      '<div class="rounded-2xl bg-gradient-to-br ' + hsBg + ' border p-6">' +
+        '<div class="grid grid-cols-1 md:grid-cols-3 gap-6">' +
+          '<div>' +
+            '<p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Health Score</p>' +
+            '<p class="text-5xl font-black text-' + hsColor + '-600 mt-1 leading-none">' + hs + '<span class="text-2xl text-' + hsColor + '-400">/100</span></p>' +
+            '<p class="text-xs text-slate-500 mt-2">' + fmtDateTime(lastSuccess.created_at) + '</p>' +
+          '</div>' +
+          '<div>' +
+            '<p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Findings</p>' +
+            '<p class="text-3xl font-extrabold text-slate-700 mt-1">' + iss + '</p>' +
+            '<p class="text-xs text-slate-500 mt-2">' + (crit > 0 ? '<span class="text-red-600 font-semibold">' + crit + ' critical</span>' : 'No critical issues') + '</p>' +
+          '</div>' +
+          '<div>' +
+            '<p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Health trend (last 30 runs)</p>' +
+            '<div class="mt-1">' + spark + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
   }
 
-  // ── Recent Runs table ──
+  // ── Recent Runs (collapses contiguous repeat errors) ─────────
   var runsHtml;
   if (!runs.length) {
-    runsHtml = '<p class="text-sm text-slate-400 italic">No monitor runs recorded yet.</p>';
+    runsHtml = '<p class="text-sm text-slate-300 italic">No monitor runs recorded yet.</p>';
   } else {
-    var runRows = runs.map(function(r){
+    // Group head streak of identical error labels into a single collapsed row
+    var headLabel = hclLabelForRun(runs[0]);
+    var streakLen = 0;
+    if (runs[0].status !== 'success') {
+      for (var k = 0; k < runs.length; k++) {
+        if (runs[k].status === 'success') break;
+        if (hclLabelForRun(runs[k]) !== headLabel) break;
+        streakLen++;
+      }
+    }
+    var collapsed = streakLen >= 3;
+    var visibleRuns = collapsed ? runs.slice(streakLen) : runs;
+    var firstStreak = collapsed ? runs[streakLen - 1] : null;
+    var lastStreak = collapsed ? runs[0] : null;
+
+    var runRows = visibleRuns.map(function(r){
       var sColor = r.status === 'success' ? 'green' : r.status === 'error' ? 'red' : r.status === 'skipped' ? 'gray' : 'amber';
       var sIcon = r.status === 'success' ? 'fa-check-circle' : r.status === 'error' ? 'fa-times-circle' : r.status === 'skipped' ? 'fa-forward' : 'fa-circle-exclamation';
       var hsCell = (r.details && r.details.health_score != null) ? (r.details.health_score + '/100') : '—';
       var issCell = (r.details && r.details.issues_found != null) ? r.details.issues_found : '—';
+      var label = r.status === 'success' ? (r.summary || hclLabelForRun(r)) : hclLabelForRun(r);
       return '<tr class="border-t border-slate-100 hover:bg-slate-50">' +
         '<td class="py-2 px-3 text-xs text-slate-500 whitespace-nowrap">' + fmtDateTime(r.created_at) + '</td>' +
         '<td class="py-2 px-3"><span class="inline-flex items-center gap-1.5 px-2 py-0.5 bg-' + sColor + '-50 text-' + sColor + '-700 rounded-full text-[11px] font-semibold capitalize"><i class="fas ' + sIcon + ' text-[9px]"></i>' + (r.status || '—') + '</span></td>' +
-        '<td class="py-2 px-3 text-sm text-slate-700">' + escapeHtml(r.summary || '—') + '</td>' +
+        '<td class="py-2 px-3 text-sm text-slate-700">' + escapeHtml(label) + '</td>' +
         '<td class="py-2 px-3 text-xs text-right text-slate-600">' + hsCell + '</td>' +
         '<td class="py-2 px-3 text-xs text-right text-slate-600">' + issCell + '</td>' +
         '<td class="py-2 px-3 text-xs text-right text-slate-500 whitespace-nowrap">' + (r.duration_ms != null ? r.duration_ms + ' ms' : '—') + '</td>' +
       '</tr>';
     }).join('');
+    var collapsedRow = '';
+    if (collapsed) {
+      collapsedRow =
+        '<tr class="bg-amber-50/60 border-t border-amber-100">' +
+          '<td colspan="6" class="py-3 px-3">' +
+            '<div class="flex items-center gap-3">' +
+              '<i class="fas fa-layer-group text-amber-500"></i>' +
+              '<div class="flex-1">' +
+                '<p class="text-sm font-semibold text-amber-800">' + streakLen + ' consecutive runs failed with "' + escapeHtml(headLabel) + '"</p>' +
+                '<p class="text-[11px] text-amber-700/80 mt-0.5">From ' + fmtDateTime(firstStreak.created_at) + ' to ' + fmtDateTime(lastStreak.created_at) + '</p>' +
+              '</div>' +
+            '</div>' +
+          '</td>' +
+        '</tr>';
+    }
     runsHtml = '<div class="overflow-x-auto"><table class="w-full">' +
       '<thead><tr class="bg-slate-50">' +
         '<th class="py-2 px-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">When</th>' +
@@ -12991,20 +13122,27 @@ function renderHealthCheckLogView() {
         '<th class="py-2 px-3 text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Health</th>' +
         '<th class="py-2 px-3 text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Issues</th>' +
         '<th class="py-2 px-3 text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Duration</th>' +
-      '</tr></thead><tbody>' + runRows + '</tbody></table></div>';
+      '</tr></thead><tbody>' + collapsedRow + runRows + '</tbody></table></div>';
   }
 
-  // ── Insights from Claude analysis ──
+  // ── Insights ────────────────────────────────────────────────
   var insightsHtml;
   if (!insights.length) {
-    insightsHtml = '<p class="text-sm text-slate-400 italic">No insights yet. The monitor agent generates insights from each scan.</p>';
+    insightsHtml = '<p class="text-sm text-slate-300 italic">No insights yet — the monitor generates these from each successful scan.</p>';
   } else {
     var insightRows = insights.map(function(ins){
       var sevColor = ins.severity === 'critical' ? 'red' : ins.severity === 'high' ? 'amber' : ins.severity === 'medium' ? 'yellow' : 'blue';
       var catIcon = ins.category === 'bug' ? 'fa-bug' : ins.category === 'error' ? 'fa-exclamation-triangle' : ins.category === 'improvement' ? 'fa-lightbulb' : ins.category === 'performance' ? 'fa-tachometer-alt' : 'fa-heartbeat';
       var statColor = ins.status === 'open' ? 'amber' : ins.status === 'acknowledged' ? 'blue' : 'green';
-      return '<div class="p-3 rounded-lg border border-slate-100 bg-white">' +
-        '<div class="flex items-start gap-3">' +
+      var actions = '';
+      if (ins.status === 'open') {
+        actions = '<button onclick="hclAckInsight(' + ins.id + ')" class="text-[10px] font-semibold text-blue-600 hover:text-blue-800 px-2 py-0.5 rounded hover:bg-blue-50">Acknowledge</button>' +
+                  '<button onclick="hclResolveInsight(' + ins.id + ')" class="text-[10px] font-semibold text-green-600 hover:text-green-800 px-2 py-0.5 rounded hover:bg-green-50">Resolve</button>';
+      } else if (ins.status === 'acknowledged') {
+        actions = '<button onclick="hclResolveInsight(' + ins.id + ')" class="text-[10px] font-semibold text-green-600 hover:text-green-800 px-2 py-0.5 rounded hover:bg-green-50">Resolve</button>';
+      }
+      return '<div class="rounded-lg border border-slate-100 bg-white border-l-4 border-l-' + sevColor + '-400">' +
+        '<div class="p-3 flex items-start gap-3">' +
           '<div class="w-9 h-9 bg-' + sevColor + '-50 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas ' + catIcon + ' text-' + sevColor + '-500"></i></div>' +
           '<div class="flex-1 min-w-0">' +
             '<div class="flex flex-wrap items-center gap-2 mb-1">' +
@@ -13016,6 +13154,7 @@ function renderHealthCheckLogView() {
             '</div>' +
             (ins.description ? '<p class="text-xs text-slate-600 mb-1.5">' + escapeHtml(ins.description) + '</p>' : '') +
             (ins.suggested_fix ? '<p class="text-xs text-slate-500"><span class="font-semibold text-slate-600">Suggested fix:</span> ' + escapeHtml(ins.suggested_fix) + '</p>' : '') +
+            (actions ? '<div class="flex items-center gap-1 mt-2">' + actions + '</div>' : '') +
           '</div>' +
         '</div>' +
       '</div>';
@@ -13023,10 +13162,10 @@ function renderHealthCheckLogView() {
     insightsHtml = '<div class="space-y-2">' + insightRows + '</div>';
   }
 
-  // ── Accumulated platform memory (Claude's running model) ──
+  // ── Memory ──────────────────────────────────────────────────
   var memoryHtml;
   if (!memory.length) {
-    memoryHtml = '<p class="text-sm text-slate-400 italic">No accumulated memory yet. Memory builds up across runs as the monitor learns the platform.</p>';
+    memoryHtml = '<p class="text-sm text-slate-300 italic">No accumulated memory yet — builds up as the monitor learns the platform across successful scans.</p>';
   } else {
     memoryHtml = '<div class="space-y-3">' + memory.map(function(m){
       return '<div class="p-3 rounded-lg border border-slate-100 bg-slate-50">' +
@@ -13039,16 +13178,67 @@ function renderHealthCheckLogView() {
     }).join('') + '</div>';
   }
 
-  return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-clipboard-check mr-2 text-blue-500"></i>Health Check Log</h2>' +
-      '<p class="text-sm text-gray-500 mt-1">Platform monitor agent — run history, findings, and accumulated platform knowledge · refreshed ' + refreshedLabel + '</p></div>' +
+  // ── Action button: Run scan now ─────────────────────────────
+  var actionsHtml =
+    '<button id="hcl-run-now-btn" onclick="hclRunNow()" class="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm">' +
+      '<i class="fas fa-play text-[10px]"></i><span>Run scan now</span>' +
+    '</button>';
+
+  // ── Help tooltip helper (inline, hover-revealed) ────────────
+  function help(text) {
+    return '<span class="relative group inline-flex items-center ml-1.5"><i class="fas fa-circle-question text-[11px] text-slate-300 hover:text-slate-500 cursor-help"></i>' +
+      '<span class="invisible group-hover:visible absolute left-1/2 -translate-x-1/2 top-full mt-1 w-60 px-2 py-1.5 bg-slate-800 text-white text-[10px] rounded-md shadow-lg z-10 leading-relaxed normal-case font-normal">' + text + '</span></span>';
+  }
+
+  return '<div class="mb-5 flex items-start justify-between gap-4">' +
+      '<div>' +
+        '<h2 class="text-2xl font-black text-gray-900"><i class="fas fa-clipboard-check mr-2 text-blue-500"></i>Health Check Log</h2>' +
+        '<p class="text-sm text-gray-500 mt-1">Platform monitor agent — run history, findings, and accumulated knowledge · refreshed ' + refreshedLabel + '</p>' +
+      '</div>' +
+      '<div class="flex-shrink-0">' + actionsHtml + '</div>' +
+    '</div>' +
+    bannerHtml +
     '<div class="space-y-6">' +
-      saSection('At a Glance', 'fa-tachometer-alt', kpisHtml) +
-      saSection('Latest Health Check', 'fa-heartbeat', latestHtml) +
-      saSection('Insights & Findings (' + insights.length + ')', 'fa-lightbulb', insightsHtml) +
-      saSection('Recent Runs (' + runs.length + ')', 'fa-history', runsHtml) +
-      saSection('Accumulated Platform Knowledge', 'fa-brain', memoryHtml) +
+      saSection('Latest Successful Scan' + help('The hero card shows the most recent run that completed without errors. Trend sparkline plots health scores from successful runs in chronological order.'), 'fa-heart-pulse', heroHtml) +
+      saSection('At a Glance' + help('Quick KPI overview. Runs are scheduled hourly via Cloudflare Cron — failures here usually mean the Anthropic API is unhealthy, not your platform.'), 'fa-tachometer-alt', kpisHtml) +
+      saSection('Insights & Findings (' + insights.length + ')' + help('AI-generated suggestions from successful scans. Click Acknowledge to mark as seen, Resolve when fixed.'), 'fa-lightbulb', insightsHtml) +
+      saSection('Recent Runs (' + runs.length + ')' + help('Last 30 monitor executions. Repeat errors at the top are collapsed into a single row to reduce noise.'), 'fa-history', runsHtml) +
+      saSection('Accumulated Platform Knowledge' + help('A running summary Claude maintains about your platform. Each successful scan updates this memory so future scans can detect regressions.'), 'fa-brain', memoryHtml) +
     '</div>';
 }
+
+// ── Action handlers (Run now, Acknowledge, Resolve) ────────────
+window.hclRunNow = async function() {
+  var btn = document.getElementById('hcl-run-now-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin text-[10px]"></i><span>Running…</span>'; }
+  try {
+    var res = await saFetch('/api/agent-hub/monitor/run', { method: 'POST' });
+    if (!res || !res.ok) {
+      var msg = 'Run failed';
+      try { var j = await res.json(); msg = j.error || msg; } catch(e){}
+      alert('Monitor scan: ' + msg);
+    }
+  } catch(e) {
+    alert('Monitor scan failed: ' + (e && e.message || e));
+  } finally {
+    // Refresh the view either way — the new run row should now be at the top
+    if (typeof loadView === 'function') loadView('platform-health-log');
+  }
+};
+
+window.hclAckInsight = async function(id) {
+  try {
+    await saFetch('/api/agent-hub/monitor/insights/' + id + '/acknowledge', { method: 'POST' });
+    if (typeof loadView === 'function') loadView('platform-health-log');
+  } catch(e) { alert('Acknowledge failed: ' + (e && e.message || e)); }
+};
+
+window.hclResolveInsight = async function(id) {
+  try {
+    await saFetch('/api/agent-hub/monitor/insights/' + id + '/resolve', { method: 'POST' });
+    if (typeof loadView === 'function') loadView('platform-health-log');
+  } catch(e) { alert('Resolve failed: ' + (e && e.message || e)); }
+};
 
 // ============================================================
 // UNIFIED CUSTOMERS DIRECTORY

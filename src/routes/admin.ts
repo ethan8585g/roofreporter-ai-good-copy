@@ -4246,6 +4246,91 @@ adminRoutes.get('/superadmin/health-check-log', async (c) => {
     out.memory = mem.results || []
   } catch (e: any) { out.memory = [] }
 
+  // ── Diagnostic — translates raw run state into a single actionable
+  // banner the UI can show at the top of the page. We look at the head of
+  // the run list (already sorted DESC) for a contiguous failure streak and
+  // surface the most-common error_code so the user knows exactly what to fix.
+  try {
+    const runs = out.runs as any[]
+    let streak = 0
+    let streakCode: string | null = null
+    const codeCounts = new Map<string, number>()
+    for (const r of runs) {
+      if (r.status === 'success') break
+      streak++
+      const code = r.details?.error_code || (r.summary?.toLowerCase?.().includes('credit balance') ? 'insufficient_credits' : 'unknown')
+      codeCounts.set(code, (codeCounts.get(code) || 0) + 1)
+      if (streakCode === null) streakCode = code
+    }
+    const lastSuccess = runs.find((r: any) => r.status === 'success') || null
+
+    // Most common code in the failure streak (prefer billing/auth over unknown)
+    let dominantCode = streakCode || 'unknown'
+    let dominantCount = 0
+    for (const [code, n] of codeCounts) {
+      if (n > dominantCount) { dominantCode = code; dominantCount = n }
+    }
+
+    let action_needed: null | { severity: 'critical'|'warning'|'info'; code: string; title: string; message: string; cta_label?: string; cta_url?: string } = null
+
+    if (streak >= 3 && dominantCode === 'insufficient_credits') {
+      action_needed = {
+        severity: 'critical',
+        code: 'insufficient_credits',
+        title: 'Anthropic API credits exhausted',
+        message: `The platform monitor has failed ${streak} consecutive runs because the Anthropic account is out of credits. Top up billing to resume health checks, content generation, lead replies, and traffic analysis.`,
+        cta_label: 'Open Anthropic billing',
+        cta_url: 'https://console.anthropic.com/settings/billing',
+      }
+    } else if (streak >= 3 && dominantCode === 'auth_failed') {
+      action_needed = {
+        severity: 'critical',
+        code: 'auth_failed',
+        title: 'Anthropic API key rejected',
+        message: `${streak} consecutive auth failures from Anthropic. Verify ANTHROPIC_API_KEY is set in Cloudflare Workers secrets and matches a valid key.`,
+      }
+    } else if (streak >= 3 && dominantCode === 'rate_limited') {
+      action_needed = {
+        severity: 'warning',
+        code: 'rate_limited',
+        title: 'Anthropic API is rate-limiting us',
+        message: `${streak} consecutive rate-limit failures. Reduce concurrent agent runs or upgrade the Anthropic tier.`,
+      }
+    } else if (streak >= 3 && dominantCode === 'missing_api_key') {
+      action_needed = {
+        severity: 'critical',
+        code: 'missing_api_key',
+        title: 'ANTHROPIC_API_KEY not configured',
+        message: 'The Cloudflare Workers environment is missing ANTHROPIC_API_KEY. Set it via wrangler secret put or the Pages dashboard.',
+      }
+    } else if (streak >= 5) {
+      action_needed = {
+        severity: 'warning',
+        code: dominantCode,
+        title: `${streak} consecutive monitor failures`,
+        message: `The most recent ${streak} runs all failed. Investigate the latest error in the runs table below.`,
+      }
+    } else if (!lastSuccess && runs.length > 0) {
+      action_needed = {
+        severity: 'info',
+        code: 'no_success_yet',
+        title: 'Monitor has never completed successfully',
+        message: 'No successful run on record. Click "Run scan now" once API access is healthy to seed the dashboard.',
+      }
+    }
+
+    out.diagnostic = {
+      action_needed,
+      run_streak: streak,
+      streak_code: streakCode,
+      dominant_code: dominantCode,
+      last_success_at: lastSuccess?.created_at || null,
+      anthropic_key_present: !!c.env.ANTHROPIC_API_KEY,
+    }
+  } catch {
+    out.diagnostic = { action_needed: null, run_streak: 0, streak_code: null, dominant_code: null, last_success_at: null, anthropic_key_present: !!c.env.ANTHROPIC_API_KEY }
+  }
+
   return c.json(out)
 })
 

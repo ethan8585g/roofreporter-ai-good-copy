@@ -343,13 +343,32 @@ export default {
         const t0 = Date.now()
         try {
           const result = await runMonitorAgent(env)
-          const summary = !result.ok ? `Failed: ${result.error || 'unknown error'}`
+          const summary = !result.ok
+            ? (result.error_label || result.error || 'Monitor scan failed')
             : `Health ${result.health_score}/100 — ${result.issues_found} finding(s)${result.critical_count > 0 ? ` (${result.critical_count} critical!)` : ''}`
+          const status: 'success' | 'error' | 'skipped' =
+            result.ok ? 'success' : (result.error_code === 'circuit_open' ? 'skipped' : 'error')
           console.log(`[CRON:monitor] ${summary}`)
-          await logRun('monitor', result.ok ? 'success' : 'error', summary, { health_score: result.health_score, issues_found: result.issues_found }, Date.now() - t0)
+          await logRun('monitor', status, summary, {
+            health_score: result.health_score,
+            issues_found: result.issues_found,
+            error_code: result.error_code,
+            error_label: result.error_label,
+          }, Date.now() - t0)
         } catch (err: any) {
-          console.error('[CRON:monitor] Error:', err.message)
-          await logRun('monitor', 'error', err.message, {}, Date.now() - t0)
+          // Belt-and-suspenders — runMonitorAgent should now never throw,
+          // but if it does, classify here too instead of dumping raw JSON.
+          const m = String(err?.message || err || '').toLowerCase()
+          const code = m.includes('credit balance') ? 'insufficient_credits'
+            : m.includes('rate limit') ? 'rate_limited'
+            : m.includes('unauthorized') || m.includes('invalid api key') ? 'auth_failed'
+            : 'unknown'
+          const label = code === 'insufficient_credits' ? 'Anthropic billing — credits exhausted'
+            : code === 'rate_limited' ? 'Anthropic rate-limited'
+            : code === 'auth_failed' ? 'Anthropic auth failed'
+            : 'Monitor scan crashed unexpectedly'
+          console.error('[CRON:monitor] Error:', err?.message)
+          await logRun('monitor', 'error', label, { error_code: code, error_label: label }, Date.now() - t0)
         }
       })())
     }

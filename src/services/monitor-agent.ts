@@ -54,6 +54,18 @@ export interface PlatformInsight {
   suggested_fix: string
 }
 
+export type MonitorErrorCode =
+  | 'insufficient_credits'
+  | 'auth_failed'
+  | 'rate_limited'
+  | 'model_unavailable'
+  | 'timeout'
+  | 'network'
+  | 'parse_error'
+  | 'missing_api_key'
+  | 'circuit_open'
+  | 'unknown'
+
 export interface MonitorRunResult {
   ok: boolean
   health_score: number
@@ -63,6 +75,30 @@ export interface MonitorRunResult {
   threshold_adjusted?: boolean
   threshold_adjustment?: { adjusted: boolean; old_threshold: number; new_threshold: number; reason: string }
   error?: string
+  error_code?: MonitorErrorCode
+  error_label?: string
+}
+
+// Map exceptions thrown by the Anthropic SDK (or surrounding fetch layer) into
+// stable, user-facing categories the UI can render cleanly. Falls back to
+// 'unknown' so we never leak raw 4xx JSON bodies into agent_runs.summary.
+export function classifyAnthropicError(err: any): { code: MonitorErrorCode; label: string } {
+  const msg = String(err?.message || err || '').toLowerCase()
+  const status = Number(err?.status || err?.statusCode || 0)
+
+  if (msg.includes('credit balance is too low') || msg.includes('insufficient_quota') || msg.includes('billing'))
+    return { code: 'insufficient_credits', label: 'Anthropic billing — credits exhausted' }
+  if (status === 401 || status === 403 || msg.includes('authentication') || msg.includes('invalid api key') || msg.includes('unauthorized'))
+    return { code: 'auth_failed', label: 'Anthropic auth failed — check API key' }
+  if (status === 429 || msg.includes('rate limit') || msg.includes('too many requests'))
+    return { code: 'rate_limited', label: 'Anthropic rate-limited — backing off' }
+  if (status === 404 || msg.includes('model') && msg.includes('not found'))
+    return { code: 'model_unavailable', label: 'Anthropic model unavailable' }
+  if (msg.includes('timeout') || msg.includes('timed out') || msg.includes('etimedout'))
+    return { code: 'timeout', label: 'Anthropic request timed out' }
+  if (msg.includes('fetch failed') || msg.includes('network') || msg.includes('econnreset') || msg.includes('socket'))
+    return { code: 'network', label: 'Network error reaching Anthropic' }
+  return { code: 'unknown', label: 'Anthropic call failed — see details' }
 }
 
 // ── Prompt builder ────────────────────────────────────────────
@@ -249,10 +285,41 @@ export async function autoAdjustTracingThreshold(
 
 export async function runMonitorAgent(env: Bindings): Promise<MonitorRunResult> {
   if (!env.ANTHROPIC_API_KEY) {
-    return { ok: false, health_score: 0, issues_found: 0, critical_count: 0, insights: [], error: 'ANTHROPIC_API_KEY not configured' }
+    return {
+      ok: false, health_score: 0, issues_found: 0, critical_count: 0, insights: [],
+      error_code: 'missing_api_key',
+      error_label: 'ANTHROPIC_API_KEY not configured',
+      error: 'ANTHROPIC_API_KEY not configured',
+    }
   }
 
   const db = env.DB
+
+  // Circuit-breaker: if the last 5 monitor runs all failed with the same
+  // billing-class error, skip the API call entirely so we stop burning
+  // duration and log noise on a known-broken state. Manual /run resets it
+  // because that path doesn't use this skip — see agent-hub.ts.
+  try {
+    const recent = await db.prepare(
+      `SELECT details_json FROM agent_runs WHERE agent_type = 'monitor'
+       ORDER BY created_at DESC LIMIT 5`
+    ).all<{ details_json: string }>()
+    const codes = (recent.results || []).map(r => {
+      try { return JSON.parse(r.details_json || '{}').error_code as string | undefined } catch { return undefined }
+    })
+    if (codes.length === 5 && codes.every(c => c === 'insufficient_credits' || c === 'auth_failed')) {
+      const code = codes[0] as MonitorErrorCode
+      const label = code === 'insufficient_credits'
+        ? 'Skipped — Anthropic credits exhausted (5 prior failures). Add billing to resume.'
+        : 'Skipped — Anthropic auth failing (5 prior failures). Check ANTHROPIC_API_KEY.'
+      return {
+        ok: false, health_score: 0, issues_found: 0, critical_count: 0, insights: [],
+        error_code: 'circuit_open',
+        error_label: label,
+        error: label,
+      }
+    }
+  } catch { /* fall through — non-fatal */ }
   const now24h   = new Date(Date.now() -  1 * 86400 * 1000).toISOString()
   const now7d    = new Date(Date.now() -  7 * 86400 * 1000).toISOString()
   const now14d   = new Date(Date.now() - 14 * 86400 * 1000).toISOString()
@@ -385,18 +452,29 @@ export async function runMonitorAgent(env: Bindings): Promise<MonitorRunResult> 
   // Read accumulated memory from prior runs
   const priorMemory = await readAgentMemory(db, AGENT_TYPE, 'platform_summary')
 
-  // Call Claude for analysis
+  // Call Claude for analysis — caught so we never leak raw 4xx JSON
+  // into agent_runs.summary; classifyAnthropicError maps to a stable code.
   const client = getAnthropicClient(env.ANTHROPIC_API_KEY)
-  const response = await client.messages.create({
-    model: CLAUDE_MODEL,
-    max_tokens: 2048,
-    messages: [{ role: 'user', content: buildMonitorPrompt(metrics, priorMemory) }],
-  })
-
-  const text = response.content
-    .filter(b => b.type === 'text')
-    .map(b => (b as any).text)
-    .join('')
+  let text: string
+  try {
+    const response = await client.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 2048,
+      messages: [{ role: 'user', content: buildMonitorPrompt(metrics, priorMemory) }],
+    })
+    text = response.content
+      .filter(b => b.type === 'text')
+      .map(b => (b as any).text)
+      .join('')
+  } catch (err: any) {
+    const { code, label } = classifyAnthropicError(err)
+    return {
+      ok: false, health_score: 0, issues_found: 0, critical_count: 0, insights: [],
+      error_code: code,
+      error_label: label,
+      error: label,
+    }
+  }
 
   const { health_score, insights, memory_update } = parseMonitorFindings(text)
 
