@@ -1016,7 +1016,7 @@ app.get('/signup', (c) => {
 // Public sample report — redirects to a real shared report so visitors see
 // the live product output, not a static mock-up.
 app.get('/sample-report', (c) => {
-  return c.redirect('https://www.roofmanager.ca/report/share/70f969fb607c4c40b6a2', 302)
+  return c.redirect('https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb', 302)
 })
 
 // 3D Verify — Photorealistic 3D Tiles viewer for visual roof inspection
@@ -2511,6 +2511,7 @@ app.get('/roof-measurement/:city', (c) => {
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
         <a href="/register" class="px-8 py-3.5 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold rounded-xl text-lg shadow-xl shadow-[#00FF88]/20">Get 4 Free Reports <i class="fas fa-arrow-right ml-2"></i></a>
         <a href="/pricing" class="px-8 py-3.5 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-xl text-lg border border-white/10">View Pricing</a>
+        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-xl text-lg border border-white/10"><i class="fas fa-eye text-[#00FF88]"></i>View Sample Report</a>
       </div>
       <p class="text-sm text-gray-500 mt-4">No credit card required. Works on any address with Google satellite coverage.</p>
     </div>
@@ -2658,6 +2659,7 @@ app.get('/roof-measurement/:city', (c) => {
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
         <a href="/register" class="px-8 py-3.5 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg shadow-xl">Get 4 Free Reports <i class="fas fa-arrow-right ml-2"></i></a>
         <a href="/pricing" class="px-8 py-3.5 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-lg border border-white/20">View Pricing</a>
+        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-lg border border-white/20"><i class="fas fa-eye text-sky-400"></i>View Sample Report</a>
       </div>
       <p class="text-sm text-blue-300 mt-4">No credit card required. Instant setup.</p>
     </div>
@@ -2972,6 +2974,7 @@ app.get('/roof-replacement-cost/:city', (c) => {
         <p style="font-weight:700;color:#00FF88;margin:0 0 0.5rem;font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;">TL;DR</p>
         <p style="margin:0;color:#d1d5db;line-height:1.7;">Asphalt shingle roof replacement in ${city.name}, ${city.province} costs <strong style="color:white;">${cost.low}–${cost.high} ${currency}</strong> in 2026 for a typical 1,500–2,500 sq ft home. The average is <strong style="color:white;">${cost.avg} ${currency}</strong>. Costs vary by pitch complexity, current condition, materials, and permit requirements under the ${buildingCode}. Get a free satellite measurement before calling contractors.</p>
       </div>
+      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,0.05);color:#fff;font-weight:700;padding:11px 22px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);font-size:14px;text-decoration:none"><i class="fas fa-eye" style="color:#00FF88"></i>View Sample Measurement Report</a>
     </div>
 
     <!-- Cost cards -->
@@ -7541,6 +7544,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             <!-- Primary CTA (ONE) -->
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 mb-4">
               <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_primary'});window.trackAdsConversion&amp;&amp;window.trackAdsConversion('lead',{value:5,currency:'CAD'})}catch(e){}" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px] whitespace-nowrap"><i class="fas fa-gift" aria-hidden="true"></i>Start free — 4 roof reports, no card<i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform" aria-hidden="true"></i></a>
+              <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_sample_report'})}catch(e){}" class="inline-flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-7 rounded-xl text-base border border-white/10 hover:border-white/20 min-h-[56px] transition-all whitespace-nowrap"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Report</a>
               <a href="#hero-preview-form" onclick="try{rrTrack('cta_click',{location:'hero_secondary_preview'});var i=document.getElementById('hero-address');if(i){i.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(function(){i.focus()},400)}}catch(e){}" class="text-sm text-gray-300 hover:text-white inline-flex items-center gap-1.5 whitespace-nowrap">Or try a free preview with any address <i class="fas fa-arrow-right text-[10px]" aria-hidden="true"></i></a>
             </div>
             <a href="/contact" onclick="try{rrTrack('cta_click',{location:'hero_tertiary_contact'})}catch(e){}" class="text-xs text-gray-500 hover:text-gray-300 inline-block mb-5">Talk to sales</a>
@@ -7585,8 +7589,9 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             </div>
 
             <!-- Mobile-only primary CTA mirror (desktop has it above) -->
-            <div class="lg:hidden mt-8">
+            <div class="lg:hidden mt-8 flex flex-col gap-3">
               <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_mobile_primary'});window.trackAdsConversion&amp;&amp;window.trackAdsConversion('lead',{value:5,currency:'CAD'})}catch(e){}" class="flex items-center justify-center gap-3 bg-[#00FF88] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px]"><i class="fas fa-gift" aria-hidden="true"></i>Start free — 4 roof reports, no card<i class="fas fa-arrow-right text-sm" aria-hidden="true"></i></a>
+              <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_mobile_sample_report'})}catch(e){}" class="flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-7 rounded-xl text-base border border-white/10 min-h-[56px] transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Report</a>
             </div>
           </div>
           <div class="hidden lg:block">
@@ -8770,7 +8775,8 @@ function getContactPageHTML() {
         <i class="fas fa-headset"></i> Sales &amp; Support
       </div>
       <h1 style="font-size:clamp(28px,5vw,44px);font-weight:900;color:#fff;margin:0 0 14px;line-height:1.1">Talk to a roofing software specialist</h1>
-      <p style="color:#9ca3af;font-size:17px;max-width:520px;margin:0 auto;line-height:1.6">Real humans, usually reply within 2 business hours. We'll match you to the right plan — no pushy sales.</p>
+      <p style="color:#9ca3af;font-size:17px;max-width:520px;margin:0 auto 24px;line-height:1.6">Real humans, usually reply within 2 business hours. We'll match you to the right plan — no pushy sales.</p>
+      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,0.05);color:#fff;font-weight:700;padding:12px 22px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);font-size:14px;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'"><i class="fas fa-eye" style="color:#00FF88"></i>View Sample Measurement Report</a>
     </section>
 
     <!-- Two-column form + sidebar -->
@@ -10880,6 +10886,7 @@ function getComparisonPageHTML(slug: string): string {
       <div class="flex flex-col sm:flex-row gap-4 justify-center mb-4">
         <a href="/register" onclick="rrTrack('cta_click',{location:'comparison_${slug}_hero'})" class="inline-flex items-center justify-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.03]"><i class="fas fa-rocket"></i> Start Free — 4 Reports On Us</a>
         <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-calendar-check text-[#00FF88]"></i> Book a Demo</a>
+        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Report</a>
       </div>
       <p class="text-xs text-gray-600"><i class="fas fa-lock mr-1 text-[#00FF88]"></i>No credit card required &middot; No USD conversion &middot; Native CAD pricing</p>
     </div>
@@ -11633,7 +11640,12 @@ function getHowItWorksPageHTML(): string {
   <section class="max-w-5xl mx-auto px-4 py-14 md:py-20">
     <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold mb-6" style="background:#22d3ee18;color:#22d3ee"><i class="fas fa-route"></i> Simple Process</div>
     <h1 class="text-4xl md:text-6xl font-black text-white leading-tight tracking-tight mb-5">Address to Report in 4 Steps</h1>
-    <p class="text-lg text-gray-400 max-w-2xl mb-12">No ladders. No drones. No tape measures. Just enter an address and get a professional, branded PDF in under a minute.</p>
+    <p class="text-lg text-gray-400 max-w-2xl mb-6">No ladders. No drones. No tape measures. Just enter an address and get a professional, branded PDF in under a minute.</p>
+    <div class="mb-12">
+      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+        <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
+      </a>
+    </div>
     <div class="grid md:grid-cols-2 gap-5 mb-12">
       ${steps.map(s => `
         <div class="bg-[#111111] border border-white/10 rounded-2xl p-7 hover:border-white/20 transition-all">
@@ -11728,7 +11740,12 @@ function getFAQPageHTML(): string {
   <section class="max-w-3xl mx-auto px-4 py-14 md:py-20">
     <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold mb-6" style="background:#ffffff14;color:#d1d5db"><i class="fas fa-question-circle"></i> FAQ</div>
     <h1 class="text-4xl md:text-5xl font-black text-white leading-tight tracking-tight mb-5">Frequently Asked Questions</h1>
-    <p class="text-lg text-gray-400 max-w-2xl mb-10">Can't find what you're looking for? <a href="mailto:sales@roofmanager.ca" class="text-[#00FF88] hover:underline">Email us</a> and we'll get back to you fast.</p>
+    <p class="text-lg text-gray-400 max-w-2xl mb-6">Can't find what you're looking for? <a href="mailto:sales@roofmanager.ca" class="text-[#00FF88] hover:underline">Email us</a> and we'll get back to you fast.</p>
+    <div class="mb-10">
+      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+        <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
+      </a>
+    </div>
     <div class="space-y-3">
       ${faqs.map((f, i) => `
         <details class="group bg-[#111111] rounded-xl border border-white/10 overflow-hidden" ${i === 0 ? 'open' : ''}>
@@ -11822,7 +11839,12 @@ function getGuidesIndexHTML(): string {
   <section class="max-w-7xl mx-auto px-4 py-14 md:py-20">
     <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold mb-6" style="background:#00FF8818;color:#00FF88"><i class="fas fa-book-open"></i> Guides</div>
     <h1 class="text-4xl md:text-5xl font-black text-white leading-tight tracking-tight mb-4">How-To Guides</h1>
-    <p class="text-lg text-gray-400 max-w-2xl mb-12">Everything you need to run your roofing company on Roof Manager — from ordering your first report to deploying a 24/7 AI receptionist.</p>
+    <p class="text-lg text-gray-400 max-w-2xl mb-6">Everything you need to run your roofing company on Roof Manager — from ordering your first report to deploying a 24/7 AI receptionist.</p>
+    <div class="mb-12">
+      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+        <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
+      </a>
+    </div>
     <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5">${cards}</div>
   </section>
   ${getContactFormHTML('guides')}
@@ -11991,6 +12013,7 @@ function getFeatureHubPageHTML(featureSlug: string): string {
             <a href="/register" onclick="rrTrack('cta_click',{location:'feature_hub_${f.slug}_hero'})" class="inline-flex items-center justify-center gap-2 font-extrabold py-3.5 px-8 rounded-xl text-base shadow-2xl transition-all hover:scale-[1.03]" style="background:${f.accentColor};color:#0A0A0A"><i class="fas fa-rocket"></i> Start Free — 4 Reports On Us</a>
             `}
             <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-3.5 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-calendar-check" style="color:${f.accentColor}"></i> Book a Demo</a>
+            <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-3.5 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye" style="color:${f.accentColor}"></i> View Sample Report</a>
           </div>
           <p class="text-xs text-gray-600"><i class="fas fa-lock mr-1" style="color:${f.accentColor}"></i>${f.slug === 'ai-secretary' ? '1-month free trial &middot; card required &middot; $199/mo after &middot; cancel anytime' : 'No credit card required &middot; 4 free reports included'}</p>
         </div>
@@ -13192,7 +13215,10 @@ function getBestContractorsHubHTML(): string {
     <div class="max-w-3xl mx-auto px-4">
       <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-6">Contractor Directory</span>
       <h1 class="text-4xl md:text-5xl font-black text-white mb-6">Best Roofing Contractors &mdash; US &amp; Canada</h1>
-      <p class="text-lg text-gray-400">A city-by-city directory ranked against verifiable criteria: licensure, insurance-claim experience, measurement accuracy, online reviews, and storm-response availability. Browse by city to find qualified local roofers.</p>
+      <p class="text-lg text-gray-400 mb-6">A city-by-city directory ranked against verifiable criteria: licensure, insurance-claim experience, measurement accuracy, online reviews, and storm-response availability. Browse by city to find qualified local roofers.</p>
+      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+        <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
+      </a>
     </div>
   </section>
   <section class="py-12" style="background:#0d0d0d">
@@ -13400,6 +13426,7 @@ function getXactimateAlternativeHTML(): string {
       <div class="flex flex-col sm:flex-row gap-3 justify-center">
         <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg">Start Free &mdash; 3 Reports on Us</a>
         <a href="#compare" class="bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl border border-white/10">Compare side-by-side</a>
+        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl border border-white/10"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Report</a>
       </div>
       <p class="text-xs text-gray-500 mt-4">No credit card &middot; 60-second signup &middot; Accepted by every major US carrier</p>
     </div>
@@ -13533,7 +13560,10 @@ function getRoofingSoftwareComparisonHubHTML(): string {
   <section class="py-20 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)">
     <div class="max-w-4xl mx-auto px-4">
       <h1 class="text-4xl md:text-5xl font-black text-white mb-6">Roofing Software Comparisons</h1>
-      <p class="text-lg text-gray-400 max-w-2xl mx-auto">Pick a competitor to see how Roof Manager compares side-by-side on pricing, turnaround, accuracy, and workflow. All comparisons are fact-based and sourced from public pricing as of 2026.</p>
+      <p class="text-lg text-gray-400 max-w-2xl mx-auto mb-6">Pick a competitor to see how Roof Manager compares side-by-side on pricing, turnaround, accuracy, and workflow. All comparisons are fact-based and sourced from public pricing as of 2026.</p>
+      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+        <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
+      </a>
     </div>
   </section>
   <section class="py-16" style="background:#0d0d0d">
@@ -13888,7 +13918,12 @@ function getServicesPageHTML() {
       <h1 class="text-5xl md:text-6xl font-black text-white mb-6 tracking-tight leading-tight">
         Everything Your Roofing<br/><span class="neon-text">Business Needs</span>
       </h1>
-      <p class="text-lg text-gray-400 max-w-3xl mx-auto leading-relaxed mb-8">13+ integrated tools — from satellite roof measurements to CRM, AI secretary, website builder, API access, and more. One platform, zero climbing.</p>
+      <p class="text-lg text-gray-400 max-w-3xl mx-auto leading-relaxed mb-6">13+ integrated tools — from satellite roof measurements to CRM, AI secretary, website builder, API access, and more. One platform, zero climbing.</p>
+      <div class="flex justify-center mb-8">
+        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+          <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
+        </a>
+      </div>
       <div class="flex flex-wrap justify-center gap-3 text-xs text-gray-500">
         <a href="#reports" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">Measurement Reports</a>
         <a href="#solar" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">Solar Analysis</a>
@@ -14453,7 +14488,12 @@ function getCoveragePageHTML() {
       <h1 class="text-5xl md:text-6xl font-black text-white mb-6 tracking-tight leading-tight">
         Roof Measurements in<br/><span class="neon-text">40+ Countries</span>
       </h1>
-      <p class="text-lg text-gray-400 max-w-3xl mx-auto leading-relaxed mb-8">Satellite-powered roof measurement reports wherever Google Solar API coverage exists. From North America to Europe, Asia-Pacific, and South America — measure any roof from anywhere in the world.</p>
+      <p class="text-lg text-gray-400 max-w-3xl mx-auto leading-relaxed mb-6">Satellite-powered roof measurement reports wherever Google Solar API coverage exists. From North America to Europe, Asia-Pacific, and South America — measure any roof from anywhere in the world.</p>
+      <div class="mb-8 flex justify-center">
+        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+          <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
+        </a>
+      </div>
       <div class="flex flex-wrap justify-center gap-4 text-sm text-gray-500">
         <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-satellite text-[#00FF88] mr-2"></i>Satellite imagery</span>
         <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-bolt text-[#22d3ee] mr-2"></i>Under 60 seconds</span>
@@ -14653,10 +14693,16 @@ function getPricingPageHTML() {
         <h2 class="text-3xl font-extrabold">4 Free Reports When You Sign Up</h2>
       </div>
       <p class="text-green-100 text-lg mb-6">No credit card required. Create an account and get 4 professional roof measurement reports — completely free.</p>
-      <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_signup'})" class="inline-flex items-center gap-2 bg-white text-green-700 font-bold py-3 px-8 rounded-xl text-lg shadow-lg transition-all hover:scale-105 hover:bg-green-50">
-        <i class="fas fa-user-plus"></i>
-        Sign Up Free
-      </a>
+      <div class="flex flex-col sm:flex-row gap-3 justify-center">
+        <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_signup'})" class="inline-flex items-center justify-center gap-2 bg-white text-green-700 font-bold py-3 px-8 rounded-xl text-lg shadow-lg transition-all hover:scale-105 hover:bg-green-50">
+          <i class="fas fa-user-plus"></i>
+          Sign Up Free
+        </a>
+        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-bold py-3 px-8 rounded-xl text-lg border border-white/30 transition-all">
+          <i class="fas fa-eye"></i>
+          View Sample Report
+        </a>
+      </div>
     </div>
 
     <div class="text-center mb-12">
@@ -14931,7 +14977,9 @@ function getSocialLandingHTML() {
       <div style="text-align:center"><i class="fas fa-users" style="color:#00FF88;font-size:14px;display:block;margin-bottom:4px"></i><span style="color:#6b7280;font-size:11px">5,000+ contractors</span></div>
     </div>
 
-    <p style="color:#4b5563;font-size:11px;margin-top:32px"><a href="/" style="color:#6b7280;text-decoration:none">Powered by <strong style="color:#9ca3af">Roof Manager</strong></a></p>
+    <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;margin-top:20px;color:#9ca3af;font-size:13px;text-decoration:none;padding:10px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px"><i class="fas fa-eye" style="color:#00FF88"></i>View a Sample Measurement Report</a>
+
+    <p style="color:#4b5563;font-size:11px;margin-top:24px"><a href="/" style="color:#6b7280;text-decoration:none">Powered by <strong style="color:#9ca3af">Roof Manager</strong></a></p>
   </div>
   <script>
     // Persist UTM params
@@ -15006,7 +15054,10 @@ function getBlogListingHTML(posts: any[] = []) {
         <span class="text-sm font-medium text-[#00FF88]">Industry Insights</span>
       </div>
       <h1 class="text-4xl md:text-5xl font-black mb-4 tracking-tight">The Roof Manager Blog</h1>
-      <p class="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed">Roofing industry insights, AI measurement technology, contractor business tips, and everything you need to grow your roofing business.</p>
+      <p class="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed mb-6">Roofing industry insights, AI measurement technology, contractor business tips, and everything you need to grow your roofing business.</p>
+      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+        <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
+      </a>
       <div class="mt-8 flex flex-wrap justify-center gap-3" id="blog-categories-hero"></div>
     </div>
   </div>
@@ -15565,6 +15616,10 @@ function getLanderFunnelHTML() {
               <i class="fas fa-calendar-check"></i>
               Book a Demo
             </a>
+            <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="group inline-flex items-center gap-3 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-10 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all">
+              <i class="fas fa-eye text-green-400"></i>
+              View Sample Report
+            </a>
           </div>
 
           <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm text-gray-400">
@@ -15692,6 +15747,10 @@ function getLanderFunnelHTML() {
         <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="group inline-flex items-center gap-3 bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-10 rounded-xl text-lg border border-white/20 hover:border-white/30 transition-all">
           <i class="fas fa-calendar-check"></i>
           Book a Demo
+        </a>
+        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="group inline-flex items-center gap-3 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-10 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all">
+          <i class="fas fa-eye text-green-400"></i>
+          View Sample Report
         </a>
       </div>
       <p class="text-sm text-gray-400 mt-6">Then $8 USD per report, or save with packs ($7.50/ea for 10, $7.00/ea for 25, $5.95/ea for 100). No subscriptions. Cancel anytime. <a href="/privacy" class="underline hover:text-gray-200">Privacy Policy</a> · <a href="/terms" class="underline hover:text-gray-200">Terms</a></p>
@@ -15824,7 +15883,10 @@ function getDemoLandingPageHTML() {
         <span style="color:#9ca3af;font-size:13px"><i class="fas fa-check" style="color:#00FF88;margin-right:6px"></i>Recording + notes sent after</span>
       </div>
       <h1 style="font-size:clamp(28px,5vw,48px);font-weight:900;color:#fff;margin:0 0 16px;line-height:1.1">See Roof Manager live — in 20 minutes</h1>
-      <p style="color:#9ca3af;font-size:17px;max-width:540px;margin:0 auto 28px;line-height:1.6">Walk through measurements, CRM, invoicing, and the AI secretary on a real roof you pick. No slides.</p>
+      <p style="color:#9ca3af;font-size:17px;max-width:540px;margin:0 auto 20px;line-height:1.6">Walk through measurements, CRM, invoicing, and the AI secretary on a real roof you pick. No slides.</p>
+      <div style="display:flex;justify-content:center;margin-bottom:28px">
+        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,0.05);color:#fff;font-weight:700;padding:13px 24px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);font-size:14px;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'"><i class="fas fa-eye" style="color:#00FF88"></i>View Sample Measurement Report</a>
+      </div>
       <!-- Social proof avatars -->
       <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin-bottom:16px">
         ${[{n:'Mike D.',r:'Roofing Contractor'},{n:'Sarah K.',r:'Estimator'},{n:'James R.',r:'Prairie Roofing'}].map(t=>`
@@ -19487,7 +19549,7 @@ function getHomeownerEstimatePageHTML(): string {
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="flex items-center gap-3">
-        <a href="/sample-report" class="text-gray-400 hover:text-white text-sm font-medium hidden sm:inline transition-colors">See Sample Report</a>
+        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="text-gray-400 hover:text-white text-sm font-medium hidden sm:inline transition-colors">See Sample Report</a>
         <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-5 rounded-xl text-sm min-h-[44px] inline-flex items-center transition-colors">Start Free</a>
       </div>
     </div>
@@ -19512,7 +19574,7 @@ function getHomeownerEstimatePageHTML(): string {
           <a href="/register" class="flex items-center justify-center gap-2.5 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px] transition-all hover:scale-[1.02]">
             <i class="fas fa-satellite-dish"></i> Get My Free Roof Report <i class="fas fa-arrow-right text-sm"></i>
           </a>
-          <a href="/sample-report" class="flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-7 rounded-xl text-base border border-white/10 hover:border-white/20 min-h-[56px] transition-all">
+          <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-7 rounded-xl text-base border border-white/10 hover:border-white/20 min-h-[56px] transition-all">
             <i class="fas fa-eye text-[#00FF88]"></i> See a Sample Report
           </a>
         </div>
@@ -19705,7 +19767,7 @@ function getHomeownerEstimatePageHTML(): string {
       </div>
       <div class="flex items-center gap-5 text-sm text-gray-500">
         <a href="/" class="hover:text-[#00FF88] transition-colors">Home</a>
-        <a href="/sample-report" class="hover:text-[#00FF88] transition-colors">Sample Report</a>
+        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="hover:text-[#00FF88] transition-colors">Sample Report</a>
         <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a>
         <a href="/faq" class="hover:text-[#00FF88] transition-colors">FAQ</a>
         <a href="/contact" class="hover:text-[#00FF88] transition-colors">Contact</a>
@@ -19795,7 +19857,7 @@ function getShingleCalculatorHTML(isEmbed = false): string {
 </head>
 <body style="background:#0A0A0A;color:#fff">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)"><div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"><a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a><a href="/tools" class="text-gray-400 hover:text-white text-sm">&larr; All Tools</a></div></nav>
-  <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Shingle Calculator</h1><p class="text-gray-400">Bundles, squares, and underlayment rolls from roof area and waste factor.</p></div></section>
+  <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Shingle Calculator</h1><p class="text-gray-400 mb-5">Bundles, squares, and underlayment rolls from roof area and waste factor.</p><a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-2.5 px-6 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report</a></div></section>
   <section class="py-10" style="background:#0A0A0A"><div class="max-w-3xl mx-auto px-4">${calc}</div></section>
   ${embedSnippetBlock('shingle-calculator', 'Shingle Calculator')}
   <section class="py-12 text-center" style="background:#0A0A0A"><a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 px-8 rounded-xl"><i class="fas fa-rocket"></i>Get 4 Free Measurement Reports</a></section>
@@ -19852,7 +19914,7 @@ function getDeductibleEstimatorHTML(isEmbed = false): string {
 </head>
 <body style="background:#0A0A0A;color:#fff">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)"><div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"><a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a><a href="/tools" class="text-gray-400 hover:text-white text-sm">&larr; All Tools</a></div></nav>
-  <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Insurance Deductible Estimator</h1><p class="text-gray-400">See your out-of-pocket cost on a roofing insurance claim before you file.</p></div></section>
+  <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Insurance Deductible Estimator</h1><p class="text-gray-400 mb-5">See your out-of-pocket cost on a roofing insurance claim before you file.</p><a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-2.5 px-6 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report</a></div></section>
   <section class="py-10" style="background:#0A0A0A"><div class="max-w-3xl mx-auto px-4">${calc}</div></section>
   ${embedSnippetBlock('insurance-deductible-estimator', 'Deductible Estimator')}
   <section class="py-12 text-center" style="background:#0A0A0A"><a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 px-8 rounded-xl"><i class="fas fa-rocket"></i>Get 4 Free Measurement Reports</a></section>
@@ -19909,7 +19971,7 @@ function getSolarProductionEstimatorHTML(isEmbed = false): string {
 </head>
 <body style="background:#0A0A0A;color:#fff">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)"><div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"><a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a><a href="/tools" class="text-gray-400 hover:text-white text-sm">&larr; All Tools</a></div></nav>
-  <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Solar Production Estimator</h1><p class="text-gray-400">Annual kWh output from system size, sun hours, and derate factor.</p></div></section>
+  <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Solar Production Estimator</h1><p class="text-gray-400 mb-5">Annual kWh output from system size, sun hours, and derate factor.</p><a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-2.5 px-6 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report</a></div></section>
   <section class="py-10" style="background:#0A0A0A"><div class="max-w-3xl mx-auto px-4">${calc}</div></section>
   ${embedSnippetBlock('solar-production-estimator', 'Solar Production Estimator')}
   <section class="py-12 text-center" style="background:#0A0A0A"><a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 px-8 rounded-xl"><i class="fas fa-rocket"></i>Get 4 Free Measurement Reports</a></section>
@@ -20020,7 +20082,7 @@ function getToolsHubHTML(): string {
         </div>
       </a>
 
-      <a href="/sample-report" style="text-decoration:none;">
+      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" style="text-decoration:none;">
         <div class="tool-card">
           <div style="font-size:36px;margin-bottom:16px;">📄</div>
           <h2 style="font-size:20px;font-weight:700;color:#f1f5f9;margin-bottom:8px;">Sample Measurement Report</h2>
@@ -20123,7 +20185,8 @@ function getPitchCalculatorHTML(): string {
     <div style="text-align:center;margin-bottom:40px;">
       <span style="background:#f59e0b22;color:#f59e0b;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:6px 14px;border-radius:20px;">Free Tool</span>
       <h1 style="font-size:36px;font-weight:800;margin:20px 0 12px;">Roof Pitch Calculator</h1>
-      <p style="color:#94a3b8;font-size:16px;">Convert any roof pitch to degrees, calculate the pitch multiplier, and estimate true sloped area from your footprint.</p>
+      <p style="color:#94a3b8;font-size:16px;margin-bottom:18px;">Convert any roof pitch to degrees, calculate the pitch multiplier, and estimate true sloped area from your footprint.</p>
+      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:#111827;color:#e2e8f0;font-weight:700;padding:10px 20px;border-radius:8px;border:1px solid #1e293b;font-size:13px;text-decoration:none">📄 View Sample Measurement Report</a>
     </div>
 
     <!-- Calculator -->
@@ -20627,7 +20690,10 @@ function getAboutPageHTML(): string {
     <section class="text-center mb-16">
       <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-6">About Roof Manager</span>
       <h1 class="text-4xl md:text-6xl font-black text-white mb-6 leading-tight">The roof measurement platform<br/><span class="text-[#00FF88]">built for contractors, by engineers.</span></h1>
-      <p class="text-lg md:text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">Roof Manager is a satellite roof measurement report and complete CRM &mdash; proposals, invoicing, AI voice receptionist &mdash; engineered for residential and commercial roofing contractors across the United States and Canada. We build the tools we wish existed when we were sourcing measurement reports ourselves.</p>
+      <p class="text-lg md:text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed mb-6">Roof Manager is a satellite roof measurement report and complete CRM &mdash; proposals, invoicing, AI voice receptionist &mdash; engineered for residential and commercial roofing contractors across the United States and Canada. We build the tools we wish existed when we were sourcing measurement reports ourselves.</p>
+      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+        <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
+      </a>
     </section>
 
     <section class="bg-[#111] border border-white/10 rounded-2xl p-8 md:p-12 mb-12">
@@ -20784,7 +20850,8 @@ function getPressPageHTML(): string {
     <div style="text-align:center;margin-bottom:56px;">
       <span style="background:#f59e0b22;color:#f59e0b;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:6px 14px;border-radius:20px;">Press & Media</span>
       <h1 style="font-size:40px;font-weight:800;margin:20px 0 16px;">Roof Manager Media Kit</h1>
-      <p style="color:#94a3b8;font-size:17px;max-width:600px;margin:0 auto;">Resources for journalists, bloggers, and analysts covering roofing technology, construction AI, and Canadian proptech.</p>
+      <p style="color:#94a3b8;font-size:17px;max-width:600px;margin:0 auto 22px;">Resources for journalists, bloggers, and analysts covering roofing technology, construction AI, and Canadian proptech.</p>
+      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:10px;background:#111827;color:#e2e8f0;font-weight:700;padding:11px 22px;border-radius:10px;border:1px solid #1e293b;font-size:14px;text-decoration:none">📄 View Sample Measurement Report</a>
     </div>
 
     <!-- Quick stats -->
@@ -20951,7 +21018,8 @@ function getMaterialEstimatorHTML(): string {
     <div style="text-align:center;margin-bottom:40px;">
       <span style="background:#38bdf822;color:#38bdf8;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:6px 14px;border-radius:20px;">Free Tool</span>
       <h1 style="font-size:36px;font-weight:800;margin:20px 0 12px;">Roofing Material Estimator</h1>
-      <p style="color:#94a3b8;font-size:16px;max-width:600px;margin:0 auto;">Enter your roof footprint and pitch to calculate shingles, bundles, squares, underlayment, and ridge cap — waste factor included.</p>
+      <p style="color:#94a3b8;font-size:16px;max-width:600px;margin:0 auto 18px;">Enter your roof footprint and pitch to calculate shingles, bundles, squares, underlayment, and ridge cap — waste factor included.</p>
+      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:#111827;color:#e2e8f0;font-weight:700;padding:10px 20px;border-radius:8px;border:1px solid #1e293b;font-size:13px;text-decoration:none">📄 View Sample Measurement Report</a>
     </div>
     <div style="background:#111827;border:1px solid #1e293b;border-radius:20px;padding:36px;margin-bottom:40px;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px;">
