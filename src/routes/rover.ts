@@ -71,7 +71,7 @@ REPORT CREDIT PACKS (CAD — buy once, credits never expire):
 ALWAYS present the full list above when asked about pricing. Format it as a tidy bulleted list. Mention that the 4 free reports come first and the credit packs are only used after.
 
 AI ROOFER / SOLAR SALES SECRETARY (AI Phone Answering Service):
-- $299/month CAD (Canadians) or USD (Americans)
+- $199/month CAD (Canadians) or USD (Americans)
 - 1 month FREE TRIAL — cancel anytime
 - AI answers your business calls 24/7 in a natural human voice
 - Books appointments to your calendar
@@ -156,7 +156,7 @@ ROOFER SECRETARY (AI Phone Service):
 - Automated call transcripts and summaries
 - Scheduling assistance
 - Never miss a potential customer call
-- $299/month CAD/USD — 1 month free trial
+- $199/month CAD/USD — 1 month free trial
 
 BLOG (/blog):
 - Roofing industry insights and best practices
@@ -245,7 +245,7 @@ A: List every package with exact prices, like this:
 • 50-Pack: $325 ($6.50/report)
 • 100-Pack: $595 ($5.95/report) — best value
 Credits never expire. Want to start with your 4 free reports?"
-ALSO mention the AI Secretary at $299/month with 1 month free, if relevant. NEVER answer with just '$8/report' or 'check our pricing page' — always list every tier.
+ALSO mention the AI Secretary at $199/month with 1 month free, if relevant. NEVER answer with just '$8/report' or 'check our pricing page' — always list every tier.
 
 Q: "Can I brand the reports with my company logo?"
 A: Yes! Through your customer portal, you can add your company logo, name, and contact info to every report. Your clients will see YOUR brand, not ours.
@@ -514,7 +514,7 @@ function buildPageContext(pageUrl?: string | null): string {
   else if (url.includes('/customer/login') || url.includes('/customer/register') || url.includes('/register')) hint = 'The visitor is on the SIGNUP/LOGIN page — they are near the goal line. Help them complete signup, emphasize "no credit card required, 4 free reports".'
   else if (url.includes('/customer/dashboard') || url.includes('/customer/order')) hint = 'The visitor is INSIDE their customer dashboard (existing user). Help with orders, billing, branding, CRM.'
   else if (url.includes('/blog') || url.includes('/help') || url.includes('/docs')) hint = 'The visitor is reading educational content. They are researching — offer to show them a live sample or 4 free reports.'
-  else if (url.includes('/secretary') || url.includes('/ai-secretary') || url.includes('receptionist')) hint = 'The visitor is on a SECRETARY/AI receptionist page. Lead with the $299/month 24/7 call-answering pitch with 1 month free trial.'
+  else if (url.includes('/secretary') || url.includes('/ai-secretary') || url.includes('receptionist')) hint = 'The visitor is on a SECRETARY/AI receptionist page. Lead with the $199/month 24/7 call-answering pitch with 1 month free trial.'
   else if (url.includes('/d2d')) hint = 'The visitor is looking at D2D tools — roofing door-to-door sales. Emphasize map-based canvassing included free with the account.'
   else if (url.includes('/solar')) hint = 'The visitor is looking at SOLAR features. Emphasize solar potential analysis inside every report + solar-design features.'
   else if (url.includes('/proposal') || url.includes('/invoice')) hint = 'The visitor is looking at CRM / proposals / invoicing features. Emphasize built-in CRM suite included free.'
@@ -710,7 +710,7 @@ function getFallbackResponse(message: string): string {
   const msg = message.toLowerCase()
 
   if (msg.includes('price') || msg.includes('cost') || msg.includes('how much') || msg.includes('pricing') || msg.includes('package')) {
-    return "Here's our full pricing — no contracts, no monthly platform fee:\n\n• 4 FREE reports when you sign up (no credit card)\n• Single report: $8 CAD\n• 10-Pack: $75 ($7.50/report) — Starter\n• 25-Pack: $175 ($7.00/report) — Most Popular\n• 50-Pack: $325 ($6.50/report)\n• 100-Pack: $595 ($5.95/report) — Best Value\n\nCredits never expire. We also offer the AI Roofer/Solar Sales Secretary at $299/month with a 1-month free trial. Want to start with your 4 free reports? Head to /customer/login! 🏠"
+    return "Here's our full pricing — no contracts, no monthly platform fee:\n\n• 4 FREE reports when you sign up (no credit card)\n• Single report: $8 CAD\n• 10-Pack: $75 ($7.50/report) — Starter\n• 25-Pack: $175 ($7.00/report) — Most Popular\n• 50-Pack: $325 ($6.50/report)\n• 100-Pack: $595 ($5.95/report) — Best Value\n\nCredits never expire. We also offer the AI Roofer/Solar Sales Secretary at $199/month with a 1-month free trial. Want to start with your 4 free reports? Head to /customer/login! 🏠"
   }
 
   if (msg.includes('free') || msg.includes('trial') || msg.includes('try')) {
@@ -746,7 +746,7 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('phone') || msg.includes('secretary') || msg.includes('call') || msg.includes('answer')) {
-    return "Our AI Roofer/Solar Sales Secretary is an AI-powered phone answering service for $299/month CAD — and your first month is FREE! It answers your business calls 24/7 in a natural human voice, books appointments to your calendar, qualifies leads, and sends call summaries with transcripts. Cancel anytime. Sign up at /customer/login or email sales@roofmanager.ca to learn more. 📞"
+    return "Our AI Roofer/Solar Sales Secretary is an AI-powered phone answering service for $199/month CAD — and your first month is FREE! It answers your business calls 24/7 in a natural human voice, books appointments to your calendar, qualifies leads, and sends call summaries with transcripts. Cancel anytime. Sign up at /customer/login or email sales@roofmanager.ca to learn more. 📞"
   }
 
   if (msg.includes('d2d') || msg.includes('door') || msg.includes('canvass') || msg.includes('territory')) {
@@ -1607,7 +1607,7 @@ CAPABILITIES YOU CAN HELP WITH:
 3. CRM — Help with customers (/customer/customers), invoices (/customer/invoices), proposals (/customer/proposals), jobs (/customer/jobs).
 4. VIRTUAL TRY-ON — AI roof visualization at /customer/virtual-tryon.
 5. D2D MANAGER — Door-to-door sales tracking at /customer/d2d.
-6. SECRETARY AI — ${context.secretaryActive ? 'Their AI secretary is active with ' + (context.secretaryCalls || 0) + ' calls handled. Manage at /customer/secretary.' : 'Not subscribed. $249/month for 24/7 AI phone answering. Set up at /customer/secretary.'}
+6. SECRETARY AI — ${context.secretaryActive ? 'Their AI secretary is active with ' + (context.secretaryCalls || 0) + ' calls handled. Manage at /customer/secretary.' : 'Not subscribed. $199/month after a 1-month free trial — 24/7 AI phone answering. Set up at /customer/secretary.'}
 7. TEAM MANAGEMENT — Add team members at /customer/team. $50/user/month.
 8. SETTINGS & BRANDING — Customize branding at /customer/settings.
 9. BUY CREDITS — Volume discounts at /pricing.
