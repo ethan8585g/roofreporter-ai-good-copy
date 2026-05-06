@@ -2131,6 +2131,10 @@ app.get('/pricing', (c) => {
   return c.html(getPricingPageHTML())
 })
 
+// Competitor comparison pages (SEO + funnel — own the "vs X" search intent)
+app.get('/vs-eagleview', (c) => c.html(getComparisonPageHTML('eagleview')))
+app.get('/vs-roofsnap', (c) => c.html(getComparisonPageHTML('roofsnap')))
+
 // Services Directory Page (public, SEO)
 app.get('/services', (c) => {
   return c.html(getServicesPageHTML())
@@ -5234,6 +5238,54 @@ html.light-theme{background:#f5f7fa !important}
       setTimeout(openModal, 25000);
       window.addEventListener('pagehide', openModal);
     }
+  })();</script>
+  <!-- ── Cookie consent banner (GDPR/CCPA) — injects on first visit ── -->
+  <style>
+    #rm-consent-banner{position:fixed;left:12px;right:12px;bottom:12px;z-index:9997;background:#0A0A0A;color:#e5e7eb;border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:14px 16px;box-shadow:0 12px 40px rgba(0,0,0,0.5);display:none;font-size:13px;line-height:1.45;max-width:760px;margin:0 auto}
+    #rm-consent-banner.rm-show{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+    #rm-consent-banner .rm-cb-text{flex:1 1 260px;min-width:0}
+    #rm-consent-banner .rm-cb-text a{color:#00FF88;text-decoration:underline}
+    #rm-consent-banner .rm-cb-actions{display:flex;gap:8px;flex:0 0 auto}
+    #rm-consent-banner button{font-family:inherit;font-size:13px;font-weight:700;padding:9px 14px;border-radius:9px;cursor:pointer;border:none;line-height:1}
+    #rm-consent-banner .rm-cb-accept{background:#00FF88;color:#0A0A0A}
+    #rm-consent-banner .rm-cb-reject{background:rgba(255,255,255,0.08);color:#e5e7eb;border:1px solid rgba(255,255,255,0.18)}
+    @media (max-width:480px){#rm-consent-banner{padding:12px;font-size:12.5px}#rm-consent-banner .rm-cb-actions{width:100%}#rm-consent-banner .rm-cb-actions button{flex:1}}
+  </style>
+  <script>(function(){
+    try {
+      var stored = null;
+      try { stored = localStorage.getItem('rm_consent'); } catch(_){}
+      if (stored === 'accepted' || stored === 'rejected') return;
+      function build(){
+        if (document.getElementById('rm-consent-banner')) return;
+        var b = document.createElement('div');
+        b.id = 'rm-consent-banner';
+        b.setAttribute('role','dialog');
+        b.setAttribute('aria-label','Cookie consent');
+        b.innerHTML = '<div class="rm-cb-text">We use cookies for analytics and to measure ad performance. You can accept or reject — essential cookies always run. <a href="/privacy" rel="noopener">Privacy Policy</a>.</div><div class="rm-cb-actions"><button type="button" class="rm-cb-reject" aria-label="Reject non-essential cookies">Reject</button><button type="button" class="rm-cb-accept" aria-label="Accept all cookies">Accept All</button></div>';
+        document.body.appendChild(b);
+        requestAnimationFrame(function(){ b.classList.add('rm-show'); });
+        function close(decision){
+          try { localStorage.setItem('rm_consent', decision); } catch(_){}
+          if (decision === 'accepted' && typeof gtag === 'function') {
+            gtag('consent','update',{
+              'analytics_storage':'granted',
+              'ad_storage':'granted',
+              'ad_user_data':'granted',
+              'ad_personalization':'granted'
+            });
+          }
+          b.style.display = 'none';
+        }
+        b.querySelector('.rm-cb-accept').addEventListener('click', function(){ close('accepted'); });
+        b.querySelector('.rm-cb-reject').addEventListener('click', function(){ close('rejected'); });
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', build);
+      } else {
+        build();
+      }
+    } catch(_){}
   })();</script>`
 }
 
@@ -7484,6 +7536,15 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           </div>
         </div>
         <a href="/pricing" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Pricing</a>
+        <!-- Alternatives dropdown -->
+        <div class="relative rm-features-dd">
+          <button class="flex items-center gap-1 text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Alternatives <i class="fas fa-chevron-down text-[10px] rm-features-chevron"></i></button>
+          <div class="rm-features-panel absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-[#111111] border border-white/10 rounded-xl shadow-2xl z-50 py-2">
+            <div class="px-4 pt-2 pb-1 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Compare</div>
+            <a href="/vs-eagleview" class="flex items-start gap-2.5 px-4 py-2.5 text-gray-400 hover:text-white hover:bg-white/5 text-sm transition-colors"><i class="fas fa-balance-scale text-[#00FF88] w-4 text-xs mt-1"></i><span><span class="block font-medium">Roof Manager vs EagleView</span><span class="block text-[11px] text-gray-500">$8 vs $50&ndash;$95 per report</span></span></a>
+            <a href="/vs-roofsnap" class="flex items-start gap-2.5 px-4 py-2.5 text-gray-400 hover:text-white hover:bg-white/5 text-sm transition-colors"><i class="fas fa-balance-scale text-[#22d3ee] w-4 text-xs mt-1"></i><span><span class="block font-medium">Roof Manager vs RoofSnap</span><span class="block text-[11px] text-gray-500">Free CRM, no per-seat fees</span></span></a>
+          </div>
+        </div>
         <a href="/customer/login" onclick="rrTrack('cta_click',{location:'nav_login'})" class="border border-white/20 hover:border-white/40 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-all duration-200 hover:bg-white/5 whitespace-nowrap">
           <i class="fas fa-sign-in-alt mr-1.5 text-gray-400"></i>Log In</a>
         <a href="/register" onclick="rrTrack('cta_click',{location:'nav_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2.5 px-5 rounded-xl text-sm transition-all duration-200 hover:scale-105 shadow-lg shadow-[#00FF88]/20 whitespace-nowrap">
@@ -7515,6 +7576,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <a href="/condo-reserve-fund-cheat-sheet" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-building text-[#a78bfa] mr-2 text-xs"></i>Commercial / Condo Boards</a>
         <a href="/services" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">All Features</a>
         <a href="/pricing" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Pricing</a>
+        <a href="/vs-eagleview" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-balance-scale text-[#00FF88] mr-2 text-xs"></i>vs EagleView</a>
+        <a href="/vs-roofsnap" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-balance-scale text-[#22d3ee] mr-2 text-xs"></i>vs RoofSnap</a>
         <a href="/blog" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Blog</a>
         <a href="/coverage" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Coverage</a>
         <a href="/lander" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Get Started</a>
@@ -7563,20 +7626,25 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <span class="inline-flex items-center gap-1 whitespace-nowrap"><i class="fas fa-check text-[#00FF88] text-[10px]" aria-hidden="true"></i>4.9/5 from 200+ contractors</span>
             </p>
 
-            <!-- Address-preview (demoted: kept for high-intent visitors but visually secondary) -->
+            <!-- Address-preview (email-gated: drops a lead before unlocking the result) -->
             <div id="hero-preview-form" class="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4 max-w-xl">
-              <label for="hero-address" class="block text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-2">Free preview — no account needed</label>
+              <label for="hero-address" class="block text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-2">Free preview — see your roof in 60 seconds</label>
+              <input id="hero-address" type="text" placeholder="Enter a property address&#x2026;"
+                autocomplete="off" inputmode="text"
+                style="width:100%;padding:14px 16px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:12px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:8px"
+                onfocus="this.style.borderColor='#00FF88'"
+                onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
               <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <input id="hero-address" type="text" placeholder="Enter a property address&#x2026;"
-                  autocomplete="off" inputmode="text"
+                <input id="hero-email" type="email" placeholder="Work email" autocomplete="email" inputmode="email"
                   style="flex:1;min-width:200px;padding:14px 16px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:12px;font-size:16px;outline:none;box-sizing:border-box"
                   onfocus="this.style.borderColor='#00FF88'"
                   onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
                 <button type="button" id="hero-preview-btn" onclick="startPreview()"
-                  style="padding:14px 20px;background:rgba(255,255,255,0.1);color:#fff;font-weight:700;border:1px solid rgba(255,255,255,0.15);border-radius:12px;font-size:14px;cursor:pointer;white-space:nowrap;flex-shrink:0">
+                  style="padding:14px 20px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:12px;font-size:14px;cursor:pointer;white-space:nowrap;flex-shrink:0">
                   Preview roof &#x2192;
                 </button>
               </div>
+              <p id="hero-preview-msg" style="margin:8px 0 0;font-size:11px;color:#9ca3af">Email unlocks the satellite view and metrics. No spam — we only send your preview.</p>
             </div>
 
             <!-- Preview result panel (unchanged behavior, demoted Book demo to plain text) -->
@@ -8695,8 +8763,32 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 
       window.startPreview = function() {
         var addr = document.getElementById('hero-address').value.trim();
+        var emailEl = document.getElementById('hero-email');
+        var email = emailEl ? emailEl.value.trim() : '';
+        var msgEl = document.getElementById('hero-preview-msg');
         if (!addr) { document.getElementById('hero-address').focus(); return; }
+        // Email gate: required + basic format check before unlocking the preview.
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          if (msgEl) { msgEl.textContent = 'Enter your work email to unlock the satellite preview.'; msgEl.style.color = '#fca5a5'; }
+          if (emailEl) emailEl.focus();
+          return;
+        }
+        if (msgEl) { msgEl.textContent = 'Unlocking your preview\u2026'; msgEl.style.color = '#9ca3af'; }
         rrTrack('hero_cta_click', {variant: 'address_start'});
+        // Fire lead conversion + drop the email into the existing lead-capture endpoint (non-blocking).
+        try {
+          if (typeof window.setAdsUserData === 'function') { window.setAdsUserData(email, '', ''); }
+          if (typeof window.trackAdsConversion === 'function') { window.trackAdsConversion('lead', { value: 5, currency: 'CAD' }); }
+          if (typeof gtag === 'function') { gtag('event', 'lead_capture', { source: 'hero_address_preview' }); }
+          if (typeof fbq === 'function') { fbq('track', 'Lead', { content_name: 'hero_address_preview' }); }
+          if (typeof rrTrack === 'function') { rrTrack('lead_captured', { source: 'hero_address_preview' }); }
+          fetch('/api/asset-report/lead', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ email: email, address: addr, source: 'hero_address_preview', tag: 'preview_unlock' }),
+            keepalive: true
+          }).catch(function(){});
+        } catch(_) {}
         var btn = document.getElementById('hero-preview-btn');
         btn.disabled = true; btn.textContent = 'Measuring\u2026';
         var utm = {};
@@ -8704,7 +8796,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         fetch('/api/public/preview', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({address: addr, utm: utm})
+          body: JSON.stringify({address: addr, email: email, utm: utm})
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
@@ -14817,7 +14909,29 @@ function getPricingPageHTML() {
     <div class="rounded-2xl border p-6 mb-8 max-w-3xl mx-auto text-center" style="background:var(--bg-card);border-color:var(--border-color)">
       <h2 class="text-lg font-bold mb-3" style="color:var(--text-primary)"><i class="fas fa-info-circle text-[#00FF88] mr-2" aria-hidden="true"></i>How pricing works</h2>
       <p class="text-base mb-1" style="color:var(--text-primary)"><strong>Month 1:</strong> 4 reports free, no card.</p>
-      <p class="text-base" style="color:var(--text-primary)"><strong>After:</strong> buy credit packs — from $7.50/report (10-pack) down to $5.95/report (100-pack).</p>
+      <p class="text-base" style="color:var(--text-primary)"><strong>After:</strong> $8 per single report, or buy a credit pack to save (down to $5.95/report at 100).</p>
+    </div>
+
+    <!-- Single report card — for solo / first-time buyers -->
+    <div class="max-w-3xl mx-auto mb-12">
+      <div class="rounded-2xl border p-6 flex flex-col sm:flex-row items-center gap-5 hover:shadow-md transition-shadow" style="background:var(--bg-card);border-color:var(--border-color)">
+        <div class="flex-1 text-center sm:text-left">
+          <div class="flex items-center gap-2 justify-center sm:justify-start mb-1">
+            <h3 class="text-xl font-bold" style="color:var(--text-primary)">Single Report &mdash; Try It</h3>
+            <span class="inline-block bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[11px] font-bold">No commitment</span>
+          </div>
+          <p class="text-sm" style="color:var(--text-muted)">Just trying it out? Buy one report. No subscription, no credit pack required &mdash; pay as you go.</p>
+        </div>
+        <div class="text-center sm:text-right flex-shrink-0">
+          <div class="mb-2">
+            <span class="text-3xl font-black" style="color:var(--text-primary)">$8</span>
+            <span class="text-xs ml-1" style="color:var(--text-muted)">CAD / report</span>
+          </div>
+          <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_single_report'})" class="inline-block py-2.5 px-6 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-lg text-sm transition-all hover:scale-[1.02]">
+            Buy 1 Report
+          </a>
+        </div>
+      </div>
     </div>
 
     <!-- Credit Packs -->
