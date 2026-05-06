@@ -264,7 +264,7 @@ function renderDashboard() {
             '<span class="ml-auto text-xs" style="color:var(--text-muted)">' + (localStorage.getItem('rc_dashboard_theme') === 'light' ? 'Light' : 'Dark') + '</span>' +
           '</button>' +
           '<div style="height:1px;background:var(--border-color);margin:4px 0"></div>' +
-          '<a href="/customer/logout" class="flex items-center gap-3 px-4 py-2.5 transition-colors" style="color:var(--text-secondary);text-decoration:none" onmouseover="this.style.background=\'var(--bg-elevated)\'" onmouseout="this.style.background=\'transparent\'">' +
+          '<a href="javascript:void(0)" onclick="custLogout()" class="flex items-center gap-3 px-4 py-2.5 transition-colors" style="color:var(--text-secondary);text-decoration:none" onmouseover="this.style.background=\'var(--bg-elevated)\'" onmouseout="this.style.background=\'transparent\'">' +
             '<i class="fas fa-sign-out-alt w-4 text-center text-sm" style="color:var(--text-muted)"></i>' +
             '<span class="text-sm">Sign out</span>' +
           '</a>' +
@@ -927,7 +927,7 @@ function showOnboardingModal() {
       content: '<div class="space-y-3">' +
         '<p class="text-sm text-gray-400">Your dashboard has everything you need to run your roofing business:</p>' +
         '<div class="grid grid-cols-2 gap-2">' +
-          '<a href="/customer/crm/reports" onclick="dismissOnboarding()" class="bg-brand-50 border border-brand-200 rounded-xl p-3 text-center hover:bg-brand-100 transition-colors"><i class="fas fa-file-alt text-emerald-400 text-lg mb-1 block"></i><p class="text-xs font-semibold text-brand-700">Reports</p></a>' +
+          '<a href="/customer/reports" onclick="dismissOnboarding()" class="bg-brand-50 border border-brand-200 rounded-xl p-3 text-center hover:bg-brand-100 transition-colors"><i class="fas fa-file-alt text-emerald-400 text-lg mb-1 block"></i><p class="text-xs font-semibold text-brand-700">Reports</p></a>' +
           '<a href="/customer/proposals" onclick="dismissOnboarding()" class="bg-blue-500/15/10 border border-white/15 rounded-xl p-3 text-center hover:bg-white/10 transition-colors"><i class="fas fa-file-invoice text-gray-400 text-lg mb-1 block"></i><p class="text-xs font-semibold text-gray-400">Proposals</p></a>' +
           '<a href="/customer/customers" onclick="dismissOnboarding()" class="bg-blue-500/15 border border-blue-500/20 rounded-xl p-3 text-center hover:bg-blue-500/15 transition-colors"><i class="fas fa-users text-blue-400 text-lg mb-1 block"></i><p class="text-xs font-semibold text-blue-400">Customers</p></a>' +
           '<a href="/customer/material-calculator" onclick="dismissOnboarding()" class="bg-sky-50 border border-sky-200 rounded-xl p-3 text-center hover:bg-sky-100 transition-colors"><i class="fas fa-calculator text-sky-500 text-lg mb-1 block"></i><p class="text-xs font-semibold text-sky-700">Material Calc</p></a>' +
@@ -1290,7 +1290,7 @@ async function checkMaterialSetup() {
           '<p class="text-amber-100 text-xs mt-0.5">Choose your preferred shingle type, waste factor, and tax rate so every report automatically includes an accurate material take-off.</p>' +
         '</div>' +
         '<div class="flex gap-2 flex-shrink-0">' +
-          '<a href="/customer/settings" class="px-4 py-2 bg-white hover:bg-amber-50 text-amber-700 font-bold rounded-xl shadow text-sm transition-colors"><i class="fas fa-cog mr-1.5"></i>Set Up Now</a>' +
+          '<a href="/customer/profile" class="px-4 py-2 bg-white hover:bg-amber-50 text-amber-700 font-bold rounded-xl shadow text-sm transition-colors"><i class="fas fa-cog mr-1.5"></i>Set Up Now</a>' +
           '<button onclick="dismissMaterialSetup()" class="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-medium transition-colors border border-white/20">Dismiss</button>' +
         '</div>' +
       '</div>' +

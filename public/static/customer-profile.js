@@ -615,9 +615,6 @@
     '</div>' +
     '<div class="flex gap-3 flex-wrap">' +
       '<a href="/pricing" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg transition-colors"><i class="fas fa-coins mr-1"></i>Buy Credits</a>' +
-      (profile.square_customer_id
-        ? '<a href="/customer/billing" class="px-4 py-2 border border-gray-300 text-gray-600 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors"><i class="fas fa-receipt mr-1"></i>Billing History</a>'
-        : '') +
     '</div>';
   }
 
