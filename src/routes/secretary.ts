@@ -228,14 +228,28 @@ secretaryRoutes.post('/start-trial', async (c) => {
   if (!cardNonce) return c.json({ error: 'cardNonce is required (tokenize the card via Square Web SDK)' }, 400)
 
   try {
-    // Reject duplicate active/trialing subscriptions.
+    // Reject duplicate active subscriptions. Stale 'pending' rows
+    // (created when the previous Square call failed mid-flow) are cleaned
+    // up here so the user can retry without accumulating duplicates — but
+    // only if the row is genuinely old. A fresh pending row from a parallel
+    // request is rejected to preserve idempotency.
     const existing = await c.env.DB.prepare(
-      `SELECT id, status, square_subscription_id, trial_ends_at FROM secretary_subscriptions
+      `SELECT id, status, square_subscription_id, trial_ends_at, created_at FROM secretary_subscriptions
        WHERE customer_id = ? AND status IN ('active','trialing','pending','past_due')
        ORDER BY id DESC LIMIT 1`
     ).bind(customerId).first<any>()
-    if (existing && existing.status !== 'pending') {
-      return c.json({ error: `You already have a ${existing.status} Roofer Secretary subscription.`, subscription: existing }, 400)
+    if (existing) {
+      if (existing.status === 'pending') {
+        const staleAfterMs = 5 * 60 * 1000
+        const createdMs = existing.created_at ? new Date(String(existing.created_at).replace(' ', 'T') + 'Z').getTime() : 0
+        const isStale = createdMs && (Date.now() - createdMs) > staleAfterMs
+        if (!isStale) {
+          return c.json({ error: 'A Roofer Secretary signup is already in progress. Please wait a moment and try again.', subscription: existing }, 409)
+        }
+        await c.env.DB.prepare(`DELETE FROM secretary_subscriptions WHERE id = ?`).bind(existing.id).run()
+      } else {
+        return c.json({ error: `You already have a ${existing.status} Roofer Secretary subscription.`, subscription: existing }, 409)
+      }
     }
 
     // Load customer details for Square record.

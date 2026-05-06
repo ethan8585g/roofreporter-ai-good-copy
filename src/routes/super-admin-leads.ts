@@ -63,11 +63,27 @@ superAdminLeads.get('/', async (c) => {
     if (since) { where.push('created_at > ?'); binds.push(since) }
 
     const whereSql = where.join(' AND ')
+    // Phase 3 #12: status counts must respect the same filter as the list,
+    // otherwise the tab badges report global totals while the table shows
+    // search-filtered rows. Build a per-status counts WHERE that excludes
+    // the status filter itself (we want every status bucket back, even when
+    // the user is filtering for a specific one).
+    const countsWhereParts = ['1=1']
+    const countsBinds: any[] = []
+    if (leadType && ALLOWED_LEAD_TYPES.includes(leadType)) { countsWhereParts.push('lead_type = ?'); countsBinds.push(leadType) }
+    if (priority && ALLOWED_PRIORITY.includes(priority)) { countsWhereParts.push('priority = ?'); countsBinds.push(priority) }
+    if (q) {
+      countsWhereParts.push('(LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(COALESCE(address,\'\')) LIKE ? OR LOWER(COALESCE(phone,\'\')) LIKE ?)')
+      const pat = '%' + q.toLowerCase() + '%'
+      countsBinds.push(pat, pat, pat, pat)
+    }
+    if (since) { countsWhereParts.push('created_at > ?'); countsBinds.push(since) }
+    const countsWhereSql = countsWhereParts.join(' AND ')
     const listStmt = c.env.DB.prepare(
       `SELECT * FROM leads WHERE ${whereSql} ORDER BY created_at DESC LIMIT ? OFFSET ?`
     ).bind(...binds, limit, offset)
     const countStmt = c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM leads WHERE ${whereSql}`).bind(...binds)
-    const countsStmt = c.env.DB.prepare(`SELECT status, COUNT(*) as cnt FROM leads GROUP BY status`)
+    const countsStmt = c.env.DB.prepare(`SELECT status, COUNT(*) as cnt FROM leads WHERE ${countsWhereSql} GROUP BY status`).bind(...countsBinds)
 
     const [listRes, countRes, countsRes] = await c.env.DB.batch([listStmt, countStmt, countsStmt]) as any[]
 

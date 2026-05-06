@@ -34,7 +34,13 @@ export interface LeadRunResult {
 // ── Prompt builder (exported for testing) ─────────────────────
 
 export function buildLeadPrompt(lead: LeadRow): string {
-  const name = lead.name || 'there'
+  // Treat known placeholders the same as a missing name. Historical rows
+  // landed with name='Website Visitor' / 'Blog visitor' from anonymous form
+  // submissions; passing those into the prompt would surface as "Hi
+  // Website," in generated emails.
+  const PLACEHOLDER_NAMES = /^(website visitor|blog visitor|anonymous|unknown|n\/?a)$/i
+  const rawName = (lead.name || '').trim()
+  const name = !rawName || PLACEHOLDER_NAMES.test(rawName) ? 'there' : rawName
   const company = lead.company ? ` at ${lead.company}` : ''
   const address = lead.address ? ` for the property at ${lead.address}` : ''
   const buildingNote = lead.building_count && lead.building_count > 1

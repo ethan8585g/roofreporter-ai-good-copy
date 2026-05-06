@@ -39,7 +39,12 @@ agentsRoutes.post('/leads', async (c) => {
     if (!email) return c.json({ error: 'Email is required' }, 400)
     const emailClean = String(email).trim().toLowerCase()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean)) return c.json({ error: 'Invalid email' }, 400)
-    const cleanName = name ? String(name).trim().slice(0, 200) : 'Website Visitor'
+    // Track whether we have a real name. When the form omits it we still need
+    // a label for the sales notification ("Name: Website Visitor"), but the
+    // greeting in the lead-facing ack email must NOT split that placeholder
+    // into "Hi Website," (Phase 3 #11 audit fix).
+    const hasRealName = !!(name && String(name).trim())
+    const cleanName = hasRealName ? String(name).trim().slice(0, 200) : 'Website Visitor'
 
     const LEAD_TYPES = ['free_measurement_report', 'contact', 'demo', 'comparison', 'storm', 'hail', 'hurricane', 'other']
     const PRIORITIES = ['low', 'normal', 'high', 'urgent']
@@ -150,7 +155,7 @@ agentsRoutes.post('/leads', async (c) => {
     // ── Auto-acknowledgment email to the lead (non-blocking, 3-tier fallback) ──
     // Sent BEFORE the sales@ notification so the lead hears back quickly even if
     // the sales notification later fails.
-    const firstName = cleanName.split(' ')[0] || 'there'
+    const firstName = hasRealName ? (cleanName.split(' ')[0] || 'there') : 'there'
     const isReportLead = leadTypeClean === 'free_measurement_report'
     const ackWindow = isReportLead ? 'within 2 business hours' : 'within 1 business day'
     const ackSubject = isReportLead

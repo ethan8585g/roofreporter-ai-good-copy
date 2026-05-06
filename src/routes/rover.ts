@@ -1301,6 +1301,24 @@ roverRoutes.get('/admin/conversations', async (c) => {
     const search = c.req.query('search')
     const offset = (page - 1) * limit
 
+    // Phase 3 #13: lazy idle/ended transition before listing, so the Inbox
+    // never shows a row as 'active' when the cron hasn't fired yet. Mirrors
+    // the rules in cron-worker.ts (30-min idle, 24-hr ended).
+    try {
+      await c.env.DB.prepare(
+        `UPDATE rover_conversations
+            SET status = 'ended', ended_at = COALESCE(ended_at, datetime('now')), updated_at = datetime('now')
+          WHERE status IN ('active','idle')
+            AND COALESCE(last_message_at, created_at) < datetime('now', '-24 hours')`
+      ).run()
+      await c.env.DB.prepare(
+        `UPDATE rover_conversations
+            SET status = 'idle', updated_at = datetime('now')
+          WHERE status = 'active'
+            AND COALESCE(last_message_at, created_at) < datetime('now', '-30 minutes')`
+      ).run()
+    } catch {}
+
     let where = 'WHERE 1=1'
     const params: any[] = []
 

@@ -11600,7 +11600,10 @@ function renderRoverChatPanel(stats, tokenStats, conversations, total) {
         : leadStatus === 'converted' ? 'bg-green-100 text-green-700'
         : leadStatus === 'engaged' ? 'bg-blue-100 text-blue-700'
         : 'bg-gray-100 text-gray-600';
-      var statusColor = c.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600';
+      var statusColor = c.status === 'active' ? 'bg-green-100 text-green-700'
+        : c.status === 'idle' ? 'bg-amber-100 text-amber-700'
+        : c.status === 'ended' ? 'bg-gray-100 text-gray-500'
+        : 'bg-gray-100 text-gray-600';
       var preview = c.summary || c.first_user_message || '';
       if (preview.length > 80) preview = preview.substring(0, 80) + '…';
       var score = (c.lead_score == null) ? 0 : c.lead_score;

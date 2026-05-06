@@ -91,6 +91,43 @@ async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number
   return { sent, skipped }
 }
 
+// ── Rover chat session idle/ended sweep ───────────────────────────────────────
+// Phase 3 #13: rover_conversations.status only ever transitioned 'active'→'ended'
+// when an admin explicitly closed a chat. The Inbox UI surfaced every dormant
+// chat as "Active". This sweep transitions sessions based on last_message_at:
+//   no message in 30 min  → 'idle'
+//   no message in 24 hr   → 'ended'
+const ROVER_IDLE_AFTER_MIN = 30
+const ROVER_END_AFTER_HOURS = 24
+async function runRoverSessionSweep(env: Bindings): Promise<{ idled: number; ended: number }> {
+  const db = (env as any).DB
+  let idled = 0
+  let ended = 0
+  try {
+    const endRes = await db.prepare(
+      `UPDATE rover_conversations
+          SET status = 'ended', ended_at = COALESCE(ended_at, datetime('now')), updated_at = datetime('now')
+        WHERE status IN ('active','idle')
+          AND COALESCE(last_message_at, created_at) < datetime('now', '-${ROVER_END_AFTER_HOURS} hours')`
+    ).run()
+    ended = (endRes as any)?.meta?.changes || 0
+  } catch (err: any) {
+    console.warn('[rover-sweep] end pass failed:', err?.message)
+  }
+  try {
+    const idleRes = await db.prepare(
+      `UPDATE rover_conversations
+          SET status = 'idle', updated_at = datetime('now')
+        WHERE status = 'active'
+          AND COALESCE(last_message_at, created_at) < datetime('now', '-${ROVER_IDLE_AFTER_MIN} minutes')`
+    ).run()
+    idled = (idleRes as any)?.meta?.changes || 0
+  } catch (err: any) {
+    console.warn('[rover-sweep] idle pass failed:', err?.message)
+  }
+  return { idled, ended }
+}
+
 // ── Roofer Secretary trial management ─────────────────────────────────────────
 // Sends a day-25 reminder email via Resend and auto-cancels past_due subscriptions
 // that have been stuck for more than 7 days. Square handles the actual day-31
@@ -328,6 +365,19 @@ export default {
         }
       })())
     }
+
+    // ── Rover chat session idle/ended sweep (every cron tick) ─
+    // 30-min idle → 'idle', 24-hr stale → 'ended'. Cheap UPDATE, no LLM.
+    ctx.waitUntil((async () => {
+      try {
+        const result = await runRoverSessionSweep(env)
+        if (result.idled || result.ended) {
+          console.log(`[CRON:rover-sweep] idled ${result.idled}, ended ${result.ended}`)
+        }
+      } catch (err: any) {
+        console.error('[CRON:rover-sweep] Error:', err.message)
+      }
+    })())
 
     // ── Roofer Secretary trial management (daily at 15:00 UTC = 8am Mountain) ──
     // Fires a reminder 3 days before trial end + cancels past_due subs >7 days old.
