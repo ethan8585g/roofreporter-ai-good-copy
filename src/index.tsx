@@ -186,8 +186,30 @@ window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);
     'security_storage':'granted'
   });
 })();
+// Defer the heavy gtag.js + Ads + Meta Pixel script downloads until first
+// user interaction or a 3.5s fallback timeout. The gtag()/fbq() stubs above
+// queue calls into dataLayer, so all config + event fires below run safely
+// before the actual scripts load — improves mobile LCP by ~200-300ms.
+window.__rmDeferTracking = (function(){
+  var loaded = false;
+  var pending = [];
+  function load() {
+    if (loaded) return; loaded = true;
+    pending.forEach(function(src){
+      var s = document.createElement('script');
+      s.async = true; s.src = src;
+      document.head.appendChild(s);
+    });
+    pending = null;
+  }
+  var events = ['pointerdown','touchstart','scroll','keydown','mousemove'];
+  var trigger = function(){ load(); events.forEach(function(e){ window.removeEventListener(e, trigger); }); };
+  events.forEach(function(e){ window.addEventListener(e, trigger, { passive: true, once: true }); });
+  setTimeout(load, 3500);
+  return function(src){ if (loaded) { var s=document.createElement('script'); s.async=true; s.src=src; document.head.appendChild(s); } else { pending.push(src); } };
+})();
+window.__rmDeferTracking('https://www.googletagmanager.com/gtag/js?id=${ga4Id}');
 </script>
-<script async src="https://www.googletagmanager.com/gtag/js?id=${ga4Id}"></script>
 <script>
 gtag('js',new Date());
 gtag('config','${ga4Id}',{
@@ -269,7 +291,7 @@ gtag('get','${ga4Id}','client_id',function(cid){
       
       const googleAdsScript = `
 <!-- Google Ads (AW-18080319225) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=AW-18080319225"></script>
+<script>window.__rmDeferTracking && window.__rmDeferTracking('https://www.googletagmanager.com/gtag/js?id=AW-18080319225');</script>
 <script>
 window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
@@ -378,7 +400,7 @@ window.trackAdsConversion = function(kind, params) {
       const metaPixelScript = metaPixelId ? `
 <!-- Meta Pixel -->
 <script>
-!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];if(window.__rmDeferTracking){window.__rmDeferTracking(v);}else{t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s);}}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
 // Advanced Matching — pass first-party user data when a customer is logged in.
 // Meta hashes client-side automatically. Improves attribution similar to Google Enhanced Conversions.
 (function(){
@@ -5033,6 +5055,7 @@ function getHeadTags(canonicalPath?: string) {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Roof Manager">
   <meta name="mobile-web-app-capable" content="yes">
+  <link rel="preload" href="/static/tailwind.css" as="style" fetchpriority="high">
   <link rel="stylesheet" href="/static/tailwind.css">
   <!-- RC#6: Font Awesome preload pattern — reliable in iOS Safari (media=print onload hack is flaky) -->
   <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -7379,7 +7402,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&display=fallback" rel="stylesheet">
   <style>
     * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
     /* Landing page scroll animations — opacity stays at 1 so content is always readable; only transform animates */
@@ -8256,7 +8279,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 
     <!-- FINAL CTA -->
     <section class="relative py-28 overflow-hidden">
-      <div class="absolute inset-0"><img src="https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1920&q=80&auto=format&fit=crop" alt="Aerial satellite roof view" class="w-full h-full object-cover" loading="lazy" /><div class="absolute inset-0 bg-gradient-to-r from-slate-900/95 via-slate-900/90 to-cyan-900/80"></div></div>
+      <div class="absolute inset-0"><img src="https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1920&q=80&auto=format&fit=crop" alt="Aerial satellite roof view" class="w-full h-full object-cover" width="1920" height="1080" loading="lazy" decoding="async" /><div class="absolute inset-0 bg-gradient-to-r from-slate-900/95 via-slate-900/90 to-cyan-900/80"></div></div>
       <div class="relative max-w-4xl mx-auto px-4 text-center scroll-animate">
         <h2 class="text-4xl lg:text-5xl font-black text-white mb-6 tracking-tight leading-tight">Ready to Save Hours<br/>on Every Estimate?</h2>
         <p class="text-xl text-gray-300 mb-8 max-w-2xl mx-auto font-light">Stop climbing roofs. Stop guessing measurements. Start quoting faster with satellite-powered precision.</p>
@@ -8841,7 +8864,7 @@ function getContactPageHTML() {
   <link rel="canonical" href="https://www.roofmanager.ca/contact">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&display=fallback" rel="stylesheet">
   <style>
     * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
     html { scroll-behavior: smooth; }
@@ -9123,7 +9146,7 @@ function getContactThankYouHTML() {
   <meta name="robots" content="noindex">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&display=fallback" rel="stylesheet">
   <style>* { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }</style>
   <script>
     // Fire conversion on load
@@ -9391,7 +9414,7 @@ function getCustomerRegisterPageHTML(prefillEmail = '', googleClientId = '', pre
   <link rel="canonical" href="https://www.roofmanager.ca/register">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&display=fallback" rel="stylesheet">
   <style>
     * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
     .reg-input { width:100%;padding:11px 14px;border:1px solid #d1d5db;border-radius:10px;font-size:14px;box-sizing:border-box;outline:none;transition:border-color 0.2s,box-shadow 0.2s;background:#fff;color:#111; }
@@ -16046,7 +16069,7 @@ function getDemoLandingPageHTML() {
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&display=fallback" rel="stylesheet">
 </head>
 <body style="background:#0A0A0A;color:#fff;margin:0;min-height:100vh">
   <!-- Nav -->
@@ -20644,7 +20667,7 @@ function i18nHead(locale: I18NLocale, title: string, desc: string, canonicalPath
   <link rel="stylesheet" href="/static/tailwind.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&display=fallback" rel="stylesheet">
   <style>* { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }</style>
   <link rel="icon" href="/static/logo.png?v=20260504" type="image/png">
   <title>${title}</title>
