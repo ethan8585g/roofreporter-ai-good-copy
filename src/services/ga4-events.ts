@@ -199,6 +199,60 @@ export function trackUserLogin(
   }, userId)
 }
 
+/** Track email verification success — fires after the 6-digit code is accepted */
+export function trackEmailVerified(
+  env: any,
+  userId: string,
+  extra: GA4EventParams = {}
+): Promise<boolean> {
+  return trackGA4(env, 'email_verified', {
+    category: 'user',
+    ...extra
+  }, userId)
+}
+
+/** Track each onboarding step transition (1=welcome, 2=company, 3=first-report, 4=done) */
+export function trackOnboardingStep(
+  env: any,
+  userId: string,
+  step: number,
+  action: 'completed' | 'skipped' = 'completed',
+  extra: GA4EventParams = {}
+): Promise<boolean> {
+  return trackGA4(env, 'onboarding_step_completed', {
+    step,
+    action,
+    category: 'onboarding',
+    ...extra
+  }, userId)
+}
+
+/** Track full onboarding completion (reached step 4) */
+export function trackOnboardingCompleted(
+  env: any,
+  userId: string,
+  extra: GA4EventParams = {}
+): Promise<boolean> {
+  return trackGA4(env, 'onboarding_completed', {
+    category: 'onboarding',
+    ...extra
+  }, userId)
+}
+
+/** Track first report attempt — fires when a user creates their first order */
+export function trackFirstReportStarted(
+  env: any,
+  userId: string,
+  orderId: string,
+  extra: GA4EventParams = {}
+): Promise<boolean> {
+  return trackGA4(env, 'first_report_started', {
+    order_id: orderId,
+    category: 'activation',
+    ...extra
+  }, userId)
+}
+
 /** Track proposal view by customer (public link opened) */
 export function trackProposalViewed(
   env: any,

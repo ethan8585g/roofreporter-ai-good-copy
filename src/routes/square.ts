@@ -3,7 +3,7 @@ import { getCustomerSessionToken } from '../lib/session-tokens'
 import type { Bindings } from '../types'
 import { generateReportForOrder, enhanceReportInline, generateAIImageryForReport } from './reports'
 import { isDevAccount } from './customer-auth'
-import { trackPaymentCompleted, trackCreditPurchase } from '../services/ga4-events'
+import { trackPaymentCompleted, trackCreditPurchase, trackFirstReportStarted } from '../services/ga4-events'
 import { resolveTeamOwner } from './team'
 import { validateAdminSession } from './auth'
 import { recordAndNotify } from '../services/admin-notifications'
@@ -892,6 +892,15 @@ squareRoutes.post('/use-credit', async (c) => {
       await c.env.DB.prepare(
         `INSERT INTO trial_claims (customer_id, order_id, ip_address, email) VALUES (?, ?, ?, ?)`
       ).bind(customer.customer_id, newOrderId, claimantIp || null, customer.email || null).run().catch((e) => console.warn('[trial_claims] insert failed:', e?.message || e))
+    }
+
+    // GA4 funnel event — fires on the customer's very first order (trial usage
+    // before deduction was 0). Lets us measure activation rate from signup.
+    if ((customer.free_trial_used || 0) === 0 && (customer.credits_used || 0) === 0) {
+      trackFirstReportStarted(c.env as any, String(customer.customer_id), String(newOrderId), {
+        is_trial: isTrial ? 1 : 0,
+        service_tier: tier,
+      }).catch((e) => console.warn('[square] GA4 trackFirstReportStarted failed:', e?.message || e))
     }
 
     // ============================================================

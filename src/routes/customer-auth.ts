@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
-import { trackUserSignup, trackUserLogin } from '../services/ga4-events'
+import { trackUserSignup, trackUserLogin, trackEmailVerified, trackOnboardingStep, trackOnboardingCompleted } from '../services/ga4-events'
 import { identifySession } from '../services/attribution'
 import { resolveTeamOwner } from './team'
 import { hashPassword, verifyPassword, isLegacyHash, dummyVerify } from '../lib/password'
@@ -302,7 +302,7 @@ function getVerificationEmailHTML(code: string): string {
       <div style="background: white; border: 2px solid #0ea5e9; border-radius: 12px; padding: 16px; display: inline-block; min-width: 200px;">
         <span style="font-family: 'Courier New', monospace; font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #1e3a5f;">${code}</span>
       </div>
-      <p style="color: #9ca3af; font-size: 13px; margin: 24px 0 0;">This code expires in 10 minutes.<br>If you didn't request this, please ignore this email.</p>
+      <p style="color: #9ca3af; font-size: 13px; margin: 24px 0 0;">This code expires in 30 minutes.<br>If you didn't request this, please ignore this email.</p>
     </div>
     <p style="color: #d1d5db; font-size: 11px; text-align: center; margin-top: 24px;">&copy; 2026 Roof Manager &middot; Alberta, Canada</p>
   </div>`
@@ -340,7 +340,7 @@ customerAuthRoutes.post('/send-verification', async (c) => {
 
     // Generate code
     const code = generateVerificationCode()
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes
 
     // Invalidate previous codes for this email
     await c.env.DB.prepare(
@@ -406,7 +406,7 @@ customerAuthRoutes.post('/verify-code', async (c) => {
     // expires_at is stored ISO 8601 (`...Z`) but datetime('now') returns space format —
     // string comparison silently always passes. Use created_at, which is stored in matching format.
     const record = await c.env.DB.prepare(
-      "SELECT * FROM email_verification_codes WHERE email = ? AND code = ? AND used = 0 AND created_at > datetime('now', '-10 minutes') ORDER BY created_at DESC LIMIT 1"
+      "SELECT * FROM email_verification_codes WHERE email = ? AND code = ? AND used = 0 AND created_at > datetime('now', '-30 minutes') ORDER BY created_at DESC LIMIT 1"
     ).bind(cleanEmail, code.trim()).first<any>()
 
     if (!record) {
@@ -430,6 +430,11 @@ customerAuthRoutes.post('/verify-code', async (c) => {
     await c.env.DB.prepare(
       'UPDATE email_verification_codes SET verification_token = ? WHERE id = ?'
     ).bind(verificationToken, record.id).run()
+
+    // GA4 funnel event — fires before account exists, so userId is the email hash placeholder.
+    trackEmailVerified(c.env as any, `pending_${cleanEmail.split('@')[1] || 'unknown'}`, {
+      email_domain: cleanEmail.split('@')[1] || 'unknown',
+    }).catch((e) => console.warn('[customer-auth] GA4 trackEmailVerified failed:', e?.message || e))
 
     return c.json({
       success: true,
@@ -633,10 +638,6 @@ customerAuthRoutes.post('/register', async (c) => {
     if (password.length < 6) {
       return c.json({ error: 'Password must be at least 6 characters' }, 400)
     }
-    // company_name is required for B2B qualification
-    if (!company_name || !String(company_name).trim()) {
-      return c.json({ error: 'Company name is required' }, 400)
-    }
     // honeypot — silently accept-and-drop obvious bot signups
     if (website && String(website).trim().length > 0) {
       return c.json({ error: 'Registration failed. Please try again.' }, 400)
@@ -652,7 +653,9 @@ customerAuthRoutes.post('/register', async (c) => {
     const cleanPhone = (phone && String(phone).trim()) ? String(phone).trim() : null
 
     const cleanEmail = email.toLowerCase().trim()
-    const cleanCompanyName = String(company_name).trim()
+    // Company name is now optional — empty string when not provided so the user
+    // can still finish signup without committing to a company identity yet.
+    const cleanCompanyName = (company_name && String(company_name).trim()) ? String(company_name).trim() : ''
 
     // Log signup attempts for audit purposes (rate-limit check removed per product decision).
     try {
@@ -1010,10 +1013,10 @@ customerAuthRoutes.get('/me', async (c) => {
       subscription_status: isDev ? 'active' : ownerSubscriptionStatus,
       subscription_plan: isDev ? 'dev_unlimited' : ownerSubscriptionPlan,
       subscription_end: ownerSubscriptionEnd,
-      // Profile completion gate: every account must have phone + company_name.
-      // Google OAuth signups skip these fields, and legacy accounts may be missing them.
-      // The dashboard blocks access until complete via POST /complete-profile.
-      profile_complete: !!(session.phone && String(session.phone).trim() && session.company_name && String(session.company_name).trim())
+      // Profile completion gate: phone is the only blocker now (we need a way
+      // to reach the customer for support / verification). Company name is
+      // optional and can be added from settings.
+      profile_complete: !!(session.phone && String(session.phone).trim())
     }
   })
 })
@@ -1122,6 +1125,72 @@ customerAuthRoutes.get('/profile', async (c) => {
 })
 
 // ============================================================
+// GET /last-order-defaults — Pre-fill the new-order form from the
+// customer's most recent order (requester fields only — homeowner data is
+// per-property and never reused).
+// ============================================================
+customerAuthRoutes.get('/last-order-defaults', async (c) => {
+  const token = getCustomerSessionToken(c)
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+  const session = await c.env.DB.prepare(
+    `SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')`
+  ).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+
+  const last = await c.env.DB.prepare(
+    `SELECT requester_name, requester_company, requester_email, requester_phone
+     FROM orders WHERE customer_id = ? ORDER BY id DESC LIMIT 1`
+  ).bind(session.customer_id).first<any>()
+
+  if (!last) return c.json({ defaults: null })
+  return c.json({
+    defaults: {
+      requester_name: last.requester_name || '',
+      requester_company: last.requester_company || '',
+      requester_email: last.requester_email || '',
+      requester_phone: last.requester_phone || '',
+    }
+  })
+})
+
+// ============================================================
+// POST /onboarding/track — Persist current onboarding step + GA4 event
+// Called by the onboarding wizard on every step transition so we can
+// (a) resume the wizard if the user closes the tab and (b) measure
+// where users drop off in the funnel.
+// ============================================================
+customerAuthRoutes.post('/onboarding/track', async (c) => {
+  const token = getCustomerSessionToken(c)
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+  const session = await c.env.DB.prepare(
+    `SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')`
+  ).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+
+  const body = await c.req.json().catch(() => ({}))
+  const stepRaw = Number(body?.step)
+  const action = body?.action === 'skipped' ? 'skipped' : 'completed'
+  if (!Number.isFinite(stepRaw) || stepRaw < 1 || stepRaw > 4) {
+    return c.json({ error: 'step must be 1, 2, 3, or 4' }, 400)
+  }
+  const step = Math.floor(stepRaw)
+  const completed = step >= 4 ? 1 : 0
+
+  await c.env.DB.prepare(
+    `UPDATE customers SET onboarding_step = ?, onboarding_completed = MAX(onboarding_completed, ?), updated_at = datetime('now') WHERE id = ?`
+  ).bind(step, completed, session.customer_id).run()
+
+  trackOnboardingStep(c.env as any, String(session.customer_id), step, action)
+    .catch((e) => console.warn('[customer-auth] GA4 trackOnboardingStep failed:', e?.message || e))
+  if (completed === 1) {
+    trackOnboardingCompleted(c.env as any, String(session.customer_id))
+      .catch((e) => console.warn('[customer-auth] GA4 trackOnboardingCompleted failed:', e?.message || e))
+  }
+
+  return c.json({ success: true, step, completed: completed === 1 })
+})
+
+// ============================================================
 // POST /onboarding/complete — Mark onboarding as finished
 // ============================================================
 customerAuthRoutes.post('/onboarding/complete', async (c) => {
@@ -1132,8 +1201,10 @@ customerAuthRoutes.post('/onboarding/complete', async (c) => {
   ).bind(token).first<any>()
   if (!session) return c.json({ error: 'Session expired' }, 401)
   await c.env.DB.prepare(
-    `UPDATE customers SET onboarding_completed = 1, onboarding_step = 3, updated_at = datetime('now') WHERE id = ?`
+    `UPDATE customers SET onboarding_completed = 1, onboarding_step = 4, updated_at = datetime('now') WHERE id = ?`
   ).bind(session.customer_id).run()
+  trackOnboardingCompleted(c.env as any, String(session.customer_id))
+    .catch((e) => console.warn('[customer-auth] GA4 trackOnboardingCompleted failed:', e?.message || e))
   return c.json({ success: true })
 })
 

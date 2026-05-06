@@ -93,6 +93,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadOrderData();
   renderOrderPage();
   initMap();
+  // Pre-fill the search input from ?address= so the onboarding hand-off
+  // ("Generate my first report") doesn't drop the typed address.
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const seed = params.get('address');
+    if (seed) {
+      const input = document.getElementById('mapSearchInput');
+      if (input && !input.value) {
+        input.value = seed;
+        input.focus();
+      }
+    }
+  } catch (_) { /* non-fatal */ }
 });
 
 async function loadOrderData() {
@@ -522,6 +535,7 @@ function renderPinStep(root, progressBar) {
             <label class="block text-sm font-semibold text-gray-300 mb-2"><i class="fas fa-search mr-1"></i>Search Address</label>
             <input type="text" id="mapSearchInput" placeholder="Search an address..."
               class="w-full px-4 py-3 border border-white/15 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm" style="color:var(--text-primary)">
+            <p id="addressValidationHint" class="text-xs text-gray-400 mt-1.5"><i class="fas fa-circle-info mr-1"></i>Pick from the dropdown for accurate measurement &mdash; freeform addresses may fail to geocode.</p>
           </div>
 
           <div>

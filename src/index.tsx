@@ -7169,7 +7169,7 @@ function getOnboardingPageHTML(sessionToken = ''): string {
         <button onclick="saveCompany()" style="width:100%;padding:16px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:12px;font-size:17px;cursor:pointer">
           Continue &#x2192;
         </button>
-        <button onclick="nextStep(2)" style="width:100%;padding:12px;background:transparent;color:#6b7280;border:none;font-size:14px;cursor:pointer;margin-top:8px">
+        <button onclick="nextStep(2, 'skipped')" style="width:100%;padding:12px;background:transparent;color:#6b7280;border:none;font-size:14px;cursor:pointer;margin-top:8px">
           Skip for now
         </button>
       </div>
@@ -7188,7 +7188,7 @@ function getOnboardingPageHTML(sessionToken = ''): string {
         <button onclick="runFirstReport()" style="width:100%;padding:16px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:12px;font-size:17px;cursor:pointer">
           Generate My First Report &#x26A1;
         </button>
-        <button onclick="nextStep(3)" style="width:100%;padding:12px;background:transparent;color:#6b7280;border:none;font-size:14px;cursor:pointer;margin-top:8px">
+        <button onclick="nextStep(3, 'skipped')" style="width:100%;padding:12px;background:transparent;color:#6b7280;border:none;font-size:14px;cursor:pointer;margin-top:8px">
           I'll do this later
         </button>
       </div>
@@ -7220,7 +7220,55 @@ function getOnboardingPageHTML(sessionToken = ''): string {
     sessionToken = localStorage.getItem('rc_customer_token') || '';
   }
 
-  function nextStep(from) {
+  // Resume from the persisted onboarding_step on the customer record so a
+  // user who closed the tab mid-flow doesn't have to start over.
+  function authHeaders() {
+    return sessionToken
+      ? { 'Authorization': 'Bearer ' + sessionToken, 'Content-Type': 'application/json' }
+      : { 'Content-Type': 'application/json' };
+  }
+
+  async function loadResumeState() {
+    if (!sessionToken) return;
+    try {
+      var r = await fetch('/api/customer-auth/profile', { headers: authHeaders() });
+      if (!r.ok) return;
+      var j = await r.json().catch(function(){ return {}; });
+      var c = j && j.customer;
+      if (!c) return;
+      // If they already finished, send them straight to the dashboard.
+      if (c.onboarding_completed) { window.location.replace('/customer/dashboard'); return; }
+      var resumeStep = Math.max(1, Math.min(4, (c.onboarding_step || 0) + 1));
+      if (resumeStep > 1) jumpToStep(resumeStep);
+    } catch (_) { /* network glitch — start at step 1 */ }
+  }
+
+  function jumpToStep(target) {
+    if (target < 1 || target > 4) return;
+    for (var i = 1; i <= 4; i++) {
+      var el = document.getElementById('step-' + i);
+      var dot = document.getElementById('dot-' + i);
+      if (el) el.classList.toggle('active', i === target);
+      if (dot) {
+        dot.classList.toggle('active', i === target);
+        dot.classList.toggle('done', i < target);
+      }
+    }
+    currentStep = target;
+  }
+
+  function trackStep(step, action) {
+    if (!sessionToken) return;
+    try {
+      fetch('/api/customer-auth/onboarding/track', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ step: step, action: action || 'completed' })
+      }).catch(function(){});
+    } catch(_) {}
+  }
+
+  function nextStep(from, action) {
+    trackStep(from, action || 'completed');
     var el = document.getElementById('step-' + from);
     if (el) el.classList.remove('active');
     var dot = document.getElementById('dot-' + from);
@@ -7230,6 +7278,9 @@ function getOnboardingPageHTML(sessionToken = ''): string {
     if (next) next.classList.add('active');
     var nextDot = document.getElementById('dot-' + currentStep);
     if (nextDot) nextDot.classList.add('active');
+    // When the user lands on the final step, mark onboarding complete so the
+    // "Welcome back, finish setup" banner doesn't reappear on the dashboard.
+    if (currentStep === 4) trackStep(4, 'completed');
   }
 
   async function saveCompany() {
@@ -7239,7 +7290,7 @@ function getOnboardingPageHTML(sessionToken = ''): string {
       try {
         await fetch('/api/customer/profile', {
           method: 'PATCH',
-          headers: { 'Authorization': 'Bearer ' + sessionToken, 'Content-Type': 'application/json' },
+          headers: authHeaders(),
           body: JSON.stringify({ company_name: name, phone: phone })
         });
       } catch(e) {}
@@ -7250,9 +7301,12 @@ function getOnboardingPageHTML(sessionToken = ''): string {
   async function runFirstReport() {
     var address = (document.getElementById('first-address').value || '').trim();
     if (!address) return;
+    trackStep(3, 'completed');
     // Redirect to new order page with address pre-filled
     window.location.href = '/customer/order?address=' + encodeURIComponent(address);
   }
+
+  loadResumeState();
   </script>
 </body>
 </html>`
@@ -9573,8 +9627,8 @@ ${previewId ? `
               <div id="strength-bar" style="height:100%;width:0%;transition:width 0.3s,background 0.3s;border-radius:2px"></div>
             </div>
 
-            <label for="reg-company" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Company Name</label>
-            <input id="reg-company" type="text" name="company_name" autocomplete="organization" required
+            <label for="reg-company" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Company Name <span style="font-weight:400;color:#9ca3af">(optional &mdash; you can add this later)</span></label>
+            <input id="reg-company" type="text" name="company_name" autocomplete="organization"
               placeholder="Acme Roofing"
               style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px"
               onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
@@ -9767,12 +9821,42 @@ ${previewId ? `
           .then(function(j){
             if (j && j.success) {
               try { rrTrack('signup_code_sent', {}); } catch(_){}
+            } else if (j && j.email_sent === false) {
+              // All three send methods (Resend / Gmail / GCP) failed. Surface a
+              // recovery affordance so the user can switch addresses without
+              // hunting for the back button.
+              showEmailFailRecovery(j.error || 'We couldn’t deliver to that address.');
             } else if (j && j.error) {
               setRegError(j.error);
             }
           })
           .catch(function(){ setRegError('Could not send verification code. Try again.'); });
       }
+    }
+
+    function showEmailFailRecovery(msg) {
+      var vb = document.getElementById('reg-verify-block');
+      if (vb) vb.style.display = 'none';
+      var box = document.getElementById('reg-email-fail-block');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'reg-email-fail-block';
+        box.style.cssText = 'background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px;margin-bottom:16px;font-size:14px;color:#991b1b';
+        box.innerHTML = '<div id="reg-email-fail-msg" style="margin-bottom:10px"></div>'
+          + '<button type="button" id="reg-email-fail-retry" style="padding:8px 14px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;margin-right:8px">Use a different email</button>'
+          + '<a href="mailto:sales@roofmanager.ca" style="font-size:13px;color:#7f1d1d;text-decoration:underline">Contact support</a>';
+        var step2 = document.getElementById('step2');
+        if (step2) step2.insertBefore(box, step2.firstChild);
+        var btn = document.getElementById('reg-email-fail-retry');
+        if (btn) btn.onclick = function(){
+          if (box && box.parentNode) box.parentNode.removeChild(box);
+          goToStep1();
+          var em = document.getElementById('reg-email'); if (em) { em.value = ''; em.focus(); }
+        };
+      }
+      var m = document.getElementById('reg-email-fail-msg');
+      if (m) m.textContent = msg;
+      box.style.display = 'block';
     }
     function goToStep1() {
       document.getElementById('step2').style.display = 'none';
@@ -9871,12 +9955,6 @@ ${previewId ? `
       if (!email || !password || !name) {
         var err2 = document.getElementById('reg-error');
         if (err2) { err2.textContent = 'Please fill in all required fields.'; err2.style.display = 'block'; }
-        return;
-      }
-      if (!company) {
-        var errC = document.getElementById('reg-error');
-        if (errC) { errC.textContent = 'Please enter your company name.'; errC.style.display = 'block'; }
-        var ce = document.getElementById('reg-company'); if (ce) ce.focus();
         return;
       }
       if (password.length < 6) {
@@ -10477,6 +10555,7 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
     </div>
   </header>
   <main class="max-w-7xl mx-auto px-4 py-8">
+    <div id="rm-activation-cards"></div>
     <div id="customer-root"></div>
   </main>
 
@@ -10519,12 +10598,14 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
       // Profile completeness — Google OAuth users + legacy accounts may be
       // missing phone or company_name. Show modal but allow "Skip for now"
       // (dismissed via sessionStorage so it returns next session).
-      if (sessionStorage.getItem('rm_profile_gate_skipped')) return;
+      var profileGateSkipped = !!sessionStorage.getItem('rm_profile_gate_skipped');
       fetch('/api/customer-auth/me', { credentials: 'include' })
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(data) {
           if (!data || !data.customer) return;
           var cust = data.customer;
+          renderActivationCards(cust);
+          if (profileGateSkipped) return;
           if (cust.profile_complete) return;
           var phoneWrap = document.getElementById('rm-profile-phone-wrap');
           var companyWrap = document.getElementById('rm-profile-company-wrap');
@@ -10537,6 +10618,43 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
         })
         ['catch'](function(){});
     })();
+
+    // Activation cards: resume-onboarding banner + free-trial / pricing card.
+    // Renders into #rm-activation-cards (placed above #customer-root). Banner
+    // appears only when onboarding is in-progress; pricing card always shows
+    // pre-paywall so users anchor to value before hitting the buy page.
+    function renderActivationCards(cust) {
+      var host = document.getElementById('rm-activation-cards');
+      if (!host) return;
+      var html = '';
+      var ob = cust.onboarding_completed ? 1 : 0;
+      var step = cust.onboarding_step || 0;
+      if (!ob && step > 0 && step < 4) {
+        html += '<div style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);border:1px solid rgba(0,255,136,0.25);border-radius:14px;padding:18px 20px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">'
+          + '<div style="flex:1;min-width:240px"><div style="font-weight:800;color:#fff;font-size:16px;margin-bottom:4px">Welcome back &mdash; finish your setup</div>'
+          + '<div style="color:#9ca3af;font-size:13px">You stopped at step ' + step + ' of 4. Pick up where you left off.</div></div>'
+          + '<a href="/onboarding" style="background:#00FF88;color:#0A0A0A;font-weight:800;padding:10px 18px;border-radius:10px;text-decoration:none;font-size:14px;white-space:nowrap">Continue setup &#x2192;</a>'
+          + '</div>';
+      }
+      var freeRem = (typeof cust.free_trial_remaining === 'number') ? cust.free_trial_remaining : 0;
+      var freeTotal = (typeof cust.free_trial_total === 'number') ? cust.free_trial_total : 0;
+      var paidRem = (typeof cust.paid_credits_remaining === 'number') ? cust.paid_credits_remaining : 0;
+      // Hide for dev accounts (unlimited reads as 999999).
+      var unlimited = freeRem >= 999999 || paidRem >= 999999;
+      if (!unlimited) {
+        var freeUsed = Math.max(0, freeTotal - freeRem);
+        html += '<div style="background:#111111;border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:18px 20px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap">'
+          + '<div style="flex:1;min-width:240px"><div style="font-weight:800;color:#fff;font-size:15px;margin-bottom:4px">'
+          + (freeRem > 0
+              ? ('You have <span style="color:#00FF88">' + freeRem + '</span> of ' + freeTotal + ' free reports left')
+              : 'You\\'ve used your free trial reports')
+          + '</div>'
+          + '<div style="color:#9ca3af;font-size:13px">Save with bulk packs &mdash; from <span style="color:#fff;font-weight:700">$5.95/report</span> on the 100-pack.</div></div>'
+          + '<a href="/customer/buy-reports" style="background:transparent;border:1.5px solid #00FF88;color:#00FF88;font-weight:700;padding:9px 16px;border-radius:10px;text-decoration:none;font-size:14px;white-space:nowrap">View packs</a>'
+          + '</div>';
+      }
+      host.innerHTML = html;
+    }
 
     function rmProfileSkip() {
       try { sessionStorage.setItem('rm_profile_gate_skipped', '1'); } catch(e) {}
