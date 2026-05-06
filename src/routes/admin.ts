@@ -1133,6 +1133,76 @@ adminRoutes.get('/superadmin/people', async (c) => {
   }
 })
 
+// GET /superadmin/person/:type/:id — Detail for a single row in the People
+// Directory, used by the inline slide-over panel (Phase 4 #15). Mirrors the
+// three person_type buckets returned by /superadmin/people.
+adminRoutes.get('/superadmin/person/:type/:id', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  const type = c.req.param('type')
+  const id = parseInt(c.req.param('id'), 10)
+  if (!id || id <= 0) return c.json({ error: 'Invalid id' }, 400)
+  try {
+    if (type === 'platform_user') {
+      const cust = await c.env.DB.prepare(
+        `SELECT id, name, email, phone, company_name, company_size, primary_use,
+                address, city, province, postal_code,
+                lead_source, lead_utm_source, referral_code, referred_by,
+                google_id, google_avatar, is_active, last_login, created_at,
+                free_trial_used, free_trial_total, report_credits, credits_used
+           FROM customers WHERE id = ?`
+      ).bind(id).first<any>()
+      if (!cust) return c.json({ error: 'Not found' }, 404)
+      const stats = await c.env.DB.prepare(
+        `SELECT
+            (SELECT COUNT(*) FROM orders WHERE customer_id = ?) as order_count,
+            (SELECT COUNT(*) FROM orders WHERE customer_id = ? AND status = 'completed') as completed_orders,
+            (SELECT COUNT(*) FROM orders WHERE customer_id = ? AND is_trial = 1) as trial_orders,
+            (SELECT COALESCE(SUM(price), 0) FROM orders WHERE customer_id = ? AND payment_status = 'paid') as total_paid,
+            (SELECT MAX(created_at) FROM orders WHERE customer_id = ?) as last_order_at,
+            (SELECT COUNT(*) FROM invoices WHERE customer_id = ?) as invoice_count,
+            (SELECT COUNT(*) FROM secretary_subscriptions WHERE customer_id = ? AND status IN ('active','trialing')) as active_secretary_subs`
+      ).bind(id, id, id, id, id, id, id).first<any>()
+      const recentOrders = await c.env.DB.prepare(
+        `SELECT id, order_number, property_address, status, price, created_at
+           FROM orders WHERE customer_id = ? ORDER BY created_at DESC LIMIT 5`
+      ).bind(id).all<any>()
+      return c.json({ type, customer: cust, stats: stats || {}, recent_orders: recentOrders.results || [] })
+    }
+    if (type === 'crm_customer') {
+      try {
+        const row = await c.env.DB.prepare(
+          `SELECT cc.id, cc.name, cc.email, cc.phone, cc.company, cc.address,
+                  cc.status, cc.created_at, cc.owner_id,
+                  c.name as owner_name, c.email as owner_email, c.company_name as owner_company
+             FROM crm_customers cc LEFT JOIN customers c ON c.id = cc.owner_id
+            WHERE cc.id = ?`
+        ).bind(id).first<any>()
+        if (!row) return c.json({ error: 'Not found' }, 404)
+        return c.json({ type, customer: row, stats: {}, recent_orders: [] })
+      } catch (e: any) {
+        return c.json({ error: 'crm_customers table unavailable' }, 404)
+      }
+    }
+    if (type === 'prospect') {
+      try {
+        const row = await c.env.DB.prepare(
+          `SELECT id, contact_name as name, email, phone, company_name as company,
+                  status, created_at
+             FROM cc_prospects WHERE id = ?`
+        ).bind(id).first<any>()
+        if (!row) return c.json({ error: 'Not found' }, 404)
+        return c.json({ type, customer: row, stats: {}, recent_orders: [] })
+      } catch (e: any) {
+        return c.json({ error: 'cc_prospects table unavailable' }, 404)
+      }
+    }
+    return c.json({ error: 'Invalid type' }, 400)
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
 adminRoutes.get('/superadmin/users', async (c) => {
   const admin = c.get('admin' as any)
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)

@@ -71,7 +71,7 @@ const SA_SECTIONS = {
       { id: 'user-activity', label: 'User Activity', icon: 'fa-user-clock' },
       { id: 'growth-marketing', label: 'Marketing', icon: 'fa-bullhorn' },
       { id: 'growth-seo', label: 'SEO & Blog', icon: 'fa-pen-nib' },
-      { id: 'meta-connect', label: 'Instagram', icon: 'fa-instagram' }
+      { id: 'meta-connect', label: 'Meta', icon: 'fa-facebook' }
     ]
   },
   'ai-ops': {
@@ -89,7 +89,6 @@ const SA_SECTIONS = {
     label: 'Platform', icon: 'fa-server',
     tabs: [
       { id: 'phone-marketplace', label: 'Phone Numbers', icon: 'fa-phone-square-alt' },
-      { id: 'platform-onboarding', label: 'Onboarding', icon: 'fa-user-cog' },
       { id: 'api-users', label: 'API & Developers', icon: 'fa-key' },
       { id: 'platform-health', label: 'System Health', icon: 'fa-heartbeat' },
       { id: 'platform-health-log', label: 'Health Check Log', icon: 'fa-clipboard-check' },
@@ -471,9 +470,7 @@ async function loadView(view) {
         }
         break;
       // ── Platform consolidated views ──
-      case 'platform-onboarding':
-        SA.data.platformOnboarding = null;
-        break;
+      // (platform-onboarding removed — onboarding lives under Customers as customer-onboarding)
       case 'platform-health':
         try {
           const [healthRes, paywallRes] = await Promise.all([
@@ -869,7 +866,6 @@ function renderContent() {
     case 'aiops-agents': root.innerHTML = tabBar + renderAiOpsAgentsView(); loadAgentHubDashboard(); loadAiAgentDashboard(); break;
     case 'aiops-voice': root.innerHTML = tabBar; break; // HeyGen external module
     // ── Platform consolidated ──
-    case 'platform-onboarding': root.innerHTML = tabBar + renderCustomerOnboardingView(); obLoadDeployments(); obLoadPhonePool(); break;
     case 'platform-health': root.innerHTML = tabBar + renderPlatformHealthView(); break;
     case 'platform-health-log': root.innerHTML = tabBar + renderHealthCheckLogView(); break;
     case 'platform-settings': root.innerHTML = tabBar + renderPlatformSettingsView(); break;
@@ -13166,13 +13162,120 @@ function peopleDoSearch() {
   loadView('people-directory');
 }
 
-function peopleOpenProfile(type, id) {
-  if (type === 'platform_user') {
-    // Navigate to the existing user view — could be expanded with profile tabs later
-    saSetView('users');
+// Phase 4 #15: in-place slide-over for the People Directory. Works for all
+// three person_types (platform_user / crm_customer / prospect) so admins can
+// drill into a row without leaving the search/filter context.
+async function peopleOpenProfile(type, id) {
+  if (!type || !id) return;
+  // Mount container — created lazily so it doesn't bloat the initial DOM.
+  var host = document.getElementById('sa-person-panel-host');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'sa-person-panel-host';
+    document.body.appendChild(host);
   }
-  // CRM customers and prospects — future: open inline profile with tabs
+  host.innerHTML =
+    '<div id="sa-person-panel-overlay" class="fixed inset-0 bg-black/40 z-50" onclick="peopleClosePanel()"></div>' +
+    '<aside id="sa-person-panel" class="fixed right-0 top-0 bottom-0 w-full max-w-md bg-white shadow-2xl z-50 overflow-y-auto transform transition-transform" style="transform:translateX(100%)">' +
+      '<div class="p-6">' +
+        '<div class="flex items-center justify-between mb-4">' +
+          '<h3 class="text-base font-bold text-slate-700"><i class="fas fa-user mr-2 text-slate-400"></i>Customer Detail</h3>' +
+          '<button onclick="peopleClosePanel()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400" aria-label="Close"><i class="fas fa-times"></i></button>' +
+        '</div>' +
+        '<div id="sa-person-panel-body"><div class="py-12 text-center text-slate-400 text-sm"><i class="fas fa-circle-notch fa-spin mr-2"></i>Loading…</div></div>' +
+      '</div>' +
+    '</aside>';
+  // Slide-in next tick so the transition runs.
+  setTimeout(function() {
+    var p = document.getElementById('sa-person-panel');
+    if (p) p.style.transform = 'translateX(0)';
+  }, 10);
+
+  try {
+    var res = await saFetch('/api/admin/superadmin/person/' + encodeURIComponent(type) + '/' + encodeURIComponent(id));
+    var body = document.getElementById('sa-person-panel-body');
+    if (!body) return;
+    if (!res || !res.ok) {
+      body.innerHTML = '<div class="py-8 text-center text-red-500 text-sm"><i class="fas fa-exclamation-circle mr-2"></i>Failed to load (' + (res ? res.status : 'network') + ')</div>';
+      return;
+    }
+    var d = await res.json();
+    body.innerHTML = renderPersonPanelBody(d);
+  } catch (e) {
+    var body2 = document.getElementById('sa-person-panel-body');
+    if (body2) body2.innerHTML = '<div class="py-8 text-center text-red-500 text-sm"><i class="fas fa-exclamation-circle mr-2"></i>' + (e && e.message ? e.message : 'Error') + '</div>';
+  }
 }
+
+function peopleClosePanel() {
+  var p = document.getElementById('sa-person-panel');
+  if (p) p.style.transform = 'translateX(100%)';
+  setTimeout(function() {
+    var host = document.getElementById('sa-person-panel-host');
+    if (host) host.innerHTML = '';
+  }, 250);
+}
+
+function renderPersonPanelBody(d) {
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function row(label, value) {
+    if (value == null || value === '') return '';
+    return '<div class="flex items-start gap-3 py-2 border-b border-slate-50 last:border-0">' +
+      '<div class="text-xs font-semibold text-slate-400 uppercase tracking-wide w-28 flex-shrink-0 pt-0.5">' + label + '</div>' +
+      '<div class="text-sm text-slate-700 flex-1 break-words">' + value + '</div>' +
+    '</div>';
+  }
+  var c = d.customer || {};
+  var s = d.stats || {};
+  var orders = d.recent_orders || [];
+  var typeBadge = {
+    platform_user: '<span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold uppercase tracking-wide">Platform User</span>',
+    crm_customer: '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-bold uppercase tracking-wide">CRM Customer</span>',
+    prospect: '<span class="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-[10px] font-bold uppercase tracking-wide">Prospect</span>'
+  }[d.type] || '';
+  var heading =
+    '<div class="mb-5">' +
+      '<div class="flex items-center gap-2 mb-1">' + typeBadge + (c.is_active === 0 ? '<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-bold">SUSPENDED</span>' : '') + '</div>' +
+      '<h2 class="text-xl font-bold text-slate-800">' + esc(c.name || c.email || ('#' + c.id)) + '</h2>' +
+      (c.email ? '<a href="mailto:' + esc(c.email) + '" class="text-sm text-sky-600 hover:underline">' + esc(c.email) + '</a>' : '') +
+    '</div>';
+  var details =
+    '<div class="bg-slate-50 rounded-xl p-4 mb-4">' +
+      row('Phone', c.phone ? '<a href="tel:' + esc(c.phone) + '" class="text-sky-600 hover:underline">' + esc(c.phone) + '</a>' : '') +
+      row('Company', esc(c.company_name || c.company || c.owner_company || '')) +
+      row('Address', esc([c.address, c.city, c.province, c.postal_code].filter(Boolean).join(', '))) +
+      row('Status', esc(c.status || '')) +
+      row('Joined', c.created_at ? esc(fmtDate(c.created_at)) : '') +
+      row('Last login', c.last_login ? esc(fmtDateTime(c.last_login)) : '') +
+      row('Lead source', esc(c.lead_source || c.lead_utm_source || '')) +
+      (c.owner_id ? row('Owned by', esc((c.owner_name || c.owner_email || '#' + c.owner_id) + (c.owner_company ? ' · ' + c.owner_company : ''))) : '') +
+    '</div>';
+  var statsHtml = '';
+  if (d.type === 'platform_user') {
+    statsHtml =
+      '<div class="grid grid-cols-2 gap-2 mb-4">' +
+        samc('Orders', s.order_count || 0, 'fa-clipboard-list', 'blue', (s.completed_orders || 0) + ' completed') +
+        samc('Total paid', '$' + ((s.total_paid || 0)).toFixed(2), 'fa-dollar-sign', 'green', (s.invoice_count || 0) + ' invoices') +
+        samc('Trial reports', (c.free_trial_used || 0) + '/' + (c.free_trial_total || 0), 'fa-gift', 'amber', (c.report_credits || 0) + ' credits') +
+        samc('Secretary subs', s.active_secretary_subs || 0, 'fa-headset', (s.active_secretary_subs > 0 ? 'green' : 'gray'), s.last_order_at ? ('Last order ' + fmtDate(s.last_order_at)) : '') +
+      '</div>';
+    if (orders.length) {
+      statsHtml += '<div class="bg-white border border-slate-100 rounded-xl p-3 mb-4">' +
+        '<h4 class="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">Recent orders</h4>' +
+        orders.map(function(o) {
+          return '<div class="flex items-center justify-between py-1.5 border-b border-slate-50 last:border-0 text-xs">' +
+            '<span class="font-mono text-slate-500">#' + esc(o.order_number || o.id) + '</span>' +
+            '<span class="text-slate-700 truncate flex-1 mx-2">' + esc(o.property_address || '—') + '</span>' +
+            '<span class="text-slate-400">' + (o.created_at ? esc(fmtDate(o.created_at)) : '') + '</span>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
+  }
+  return heading + details + statsHtml;
+}
+window.peopleClosePanel = peopleClosePanel;
+window.peopleOpenProfile = peopleOpenProfile;
 
 function renderPlatformSettingsView() {
   return '<div class="mb-5"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-cog mr-2 text-gray-500"></i>Platform Settings</h2><p class="text-sm text-gray-500 mt-1">Material preferences, SIP mapping, feature toggles</p></div>' +
