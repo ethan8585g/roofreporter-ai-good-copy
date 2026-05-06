@@ -1012,6 +1012,19 @@ invoiceRoutes.delete('/:id', async (c) => {
 invoiceRoutes.get('/stats/summary', async (c) => {
   try {
     const scope = getScope(c)
+    // Mirror the list endpoint's document_type behavior so stats and list
+    // never disagree. Default (or ?document_type=invoice) restricts to true
+    // invoices + legacy NULL rows; pass ?document_type=proposal etc. to scope
+    // the stats to a specific document type.
+    const docType = c.req.query('document_type')
+    let docFilter = ''
+    const docParams: any[] = []
+    if (docType === 'invoice' || !docType) {
+      docFilter = "(document_type IS NULL OR document_type = 'invoice')"
+    } else {
+      docFilter = 'document_type = ?'
+      docParams.push(docType)
+    }
     const base = `
       SELECT
         COUNT(*) as total_invoices,
@@ -1023,10 +1036,11 @@ invoiceRoutes.get('/stats/summary', async (c) => {
         SUM(CASE WHEN status = 'overdue' THEN total ELSE 0 END) as total_overdue,
         SUM(total) as grand_total
       FROM invoices
+      WHERE ${docFilter}
     `
     const stats = scope.isAdmin
-      ? await c.env.DB.prepare(base).first()
-      : await c.env.DB.prepare(base + ' WHERE customer_id = ?').bind(scope.ownerId).first()
+      ? await c.env.DB.prepare(base).bind(...docParams).first()
+      : await c.env.DB.prepare(base + ' AND customer_id = ?').bind(...docParams, scope.ownerId).first()
     const perms = getPerms(c)
     const hideMoney = perms ? !can(perms, 'view_financials') : false
     return c.json({ stats: hideMoney && stats ? redactFinancials(stats as any) : stats, financials_hidden: hideMoney })

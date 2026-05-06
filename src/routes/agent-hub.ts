@@ -20,7 +20,11 @@ const VALID_AGENTS = new Set(['tracing', 'content', 'email', 'lead', 'monitor', 
 // ── Auth middleware ───────────────────────────────────────────
 
 agentHubRoutes.use('*', async (c, next) => {
-  const session = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  // Pass the Cookie header through so the rm_admin_session HttpOnly cookie
+  // works as a fallback when localStorage Bearer is stale/missing — without
+  // this the dashboard would 403 and leave the agent cards stuck on
+  // "Loading...".
+  const session = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!session || session.role !== 'superadmin') {
     return c.json({ error: 'Superadmin access required' }, 403)
   }

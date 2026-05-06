@@ -4040,7 +4040,7 @@ function renderPricingView() {
                 value="${(p.secretary_per_call_price_cents / 100).toFixed(2)}"
                 class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             </div>
-            <p class="text-[10px] text-gray-400">Per-call fee if using pay-as-you-go model</p>
+            <p class="text-[10px] text-gray-400">Pay-as-you-go fee per call. Leave at $0.00 if calls are included in the monthly subscription (default).</p>
           </div>
         </div>
 
@@ -10660,10 +10660,55 @@ function renderAgentHubView() {
   `;
 }
 
+function hubRenderError(message) {
+  // Surface a clear failure state instead of leaving cards stuck on
+  // "Loading...". Each card shows an "Error" badge, dashes for stats, and
+  // the toggle button is re-enabled with a "Retry" affordance.
+  var metricsEl = document.getElementById('hub-metrics');
+  if (metricsEl) {
+    metricsEl.innerHTML = '<div class="col-span-full bg-red-50 border border-red-100 rounded-2xl p-4 text-sm text-red-700"><i class="fas fa-exclamation-triangle mr-2"></i>' +
+      'Status unavailable — ' + (message || 'check configuration (GEMINI_API_KEY / agent-hub auth)') + '. ' +
+      '<button onclick="loadAgentHubDashboard()" class="ml-2 underline font-semibold">Retry</button></div>';
+  }
+  HUB_AGENTS.forEach(function(a) {
+    var statusEl = document.getElementById('hub-status-' + a.key);
+    if (statusEl) {
+      statusEl.textContent = 'Error';
+      statusEl.className = 'px-2 py-0.5 bg-red-50 text-red-600 rounded-full text-xs font-bold';
+    }
+    var statsEl = document.getElementById('hub-stats-' + a.key);
+    if (statsEl) {
+      statsEl.innerHTML =
+        '<div><div class="text-xs text-slate-400 font-medium">Last run</div><div class="text-xs font-semibold text-slate-400 mt-0.5">—</div></div>' +
+        '<div><div class="text-xs text-slate-400 font-medium">Total runs</div><div class="text-xs font-bold text-slate-400 mt-0.5">—</div></div>' +
+        '<div><div class="text-xs text-slate-400 font-medium">Last status</div><div class="text-xs font-bold text-red-500 mt-0.5">unavailable</div></div>';
+    }
+    var toggleBtn = document.getElementById('hub-toggle-' + a.key);
+    if (toggleBtn) {
+      toggleBtn.disabled = true;
+      toggleBtn.textContent = 'Unavailable';
+      toggleBtn.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-50 text-slate-400 cursor-not-allowed';
+    }
+  });
+  var feedEl = document.getElementById('hub-feed');
+  if (feedEl) feedEl.innerHTML = '<div class="text-sm text-red-500 py-6 text-center"><i class="fas fa-exclamation-circle mr-2"></i>Activity feed unavailable.</div>';
+}
+
 async function loadAgentHubDashboard() {
-  var res = await saFetch('/api/agent-hub/dashboard');
-  if (!res || !res.ok) return;
-  var d = await res.json();
+  var res;
+  try { res = await saFetch('/api/agent-hub/dashboard'); }
+  catch (e) { hubRenderError(e && e.message); return; }
+  if (!res) { hubRenderError('network error'); return; }
+  if (!res.ok) {
+    var msg = 'HTTP ' + res.status;
+    try { var ej = await res.json(); if (ej && ej.error) msg = ej.error; } catch (_) {}
+    hubRenderError(msg);
+    return;
+  }
+  var d;
+  try { d = await res.json(); }
+  catch (e) { hubRenderError('invalid response'); return; }
+  if (d && d.success === false) { hubRenderError(d.error || 'agent-hub returned failure'); return; }
   SA.data.agentHub = d;
 
   var m = d.metrics || {};
