@@ -22,7 +22,7 @@ const HEYGEN_BASE = 'https://api.heygen.com'
 
 // ── Middleware: require super-admin via admin_sessions ─────────────────────────
 heygen.use('/*', async (c, next) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) {
     return c.json({ error: 'Super admin required' }, 403)
   }

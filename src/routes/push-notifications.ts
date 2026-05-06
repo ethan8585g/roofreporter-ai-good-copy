@@ -167,7 +167,7 @@ pushRoutes.get('/subscriptions', async (c) => {
 // ============================================================
 pushRoutes.post('/test', async (c) => {
   try {
-    const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+    const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
     if (!admin) return c.json({ error: 'Admin authentication required' }, 401)
 
     const result = await sendPushToUser(c.env.DB, c.env, 'admin', (admin as any).id, {

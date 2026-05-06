@@ -18,7 +18,7 @@ import { validateAdminSession } from './auth'
 
 // Admin auth middleware for AI analysis endpoints
 aiAnalysisRoutes.use('/*', async (c, next) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin authentication required' }, 401)
   c.set('admin' as any, admin)
   return next()

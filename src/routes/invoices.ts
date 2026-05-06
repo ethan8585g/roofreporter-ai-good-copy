@@ -18,7 +18,7 @@ invoiceRoutes.use('/*', async (c, next) => {
   if (path.includes('/view/') || path.includes('/webhook') || path.includes('/respond/')) return next()
 
   // Try admin auth first
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (admin) { c.set('admin' as any, admin); return next() }
 
   // Fallback: try customer auth (Bearer header OR rm_customer_session cookie)

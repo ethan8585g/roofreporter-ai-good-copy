@@ -11,7 +11,7 @@ export const ordersRoutes = new Hono<{ Bindings: Bindings }>()
 // Customer-facing order access is via /api/customer/orders
 // ============================================================
 ordersRoutes.use('/*', async (c, next) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) {
     return c.json({ error: 'Admin authentication required' }, 401)
   }

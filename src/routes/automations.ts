@@ -16,7 +16,7 @@ export const automationsRoutes = new Hono<{ Bindings: Bindings }>()
 
 // Auth middleware — accepts Admin OR Customer tokens (same pattern as invoices.ts)
 automationsRoutes.use('/*', async (c, next) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (admin) { c.set('admin' as any, admin); return next() }
 
   const authHeader = c.req.header('Authorization')

@@ -264,7 +264,7 @@ authRoutes.post('/register', async (c) => {
 // GET CURRENT USER — Validates session token in DB
 // ============================================================
 authRoutes.get('/me', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) {
     return c.json({ error: 'Not authenticated or session expired' }, 401)
   }
@@ -284,7 +284,7 @@ authRoutes.get('/me', async (c) => {
 // LIST USERS (admin only)
 // ============================================================
 authRoutes.get('/users', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) {
     return c.json({ error: 'Superadmin access required' }, 403)
   }
@@ -305,7 +305,7 @@ authRoutes.get('/users', async (c) => {
 // CHANGE PASSWORD — Admin changes own password
 // ============================================================
 authRoutes.post('/change-password', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) {
     return c.json({ error: 'Not authenticated' }, 401)
   }
@@ -513,7 +513,7 @@ authRoutes.post('/logout', async (c) => {
 // Protected by session validation
 // ============================================================
 authRoutes.get('/admin-stats', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) {
     return c.json({ error: 'Not authenticated' }, 401)
   }
@@ -804,7 +804,7 @@ async function setDbSetting(db: any, key: string, value: string, encrypted = fal
 
 // POST /api/auth/gmail/setup — Save Gmail OAuth client secret from GCP console
 authRoutes.post('/gmail/setup', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin authentication required' }, 401)
 
   const { client_secret } = await c.req.json()
