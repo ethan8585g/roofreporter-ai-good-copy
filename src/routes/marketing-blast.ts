@@ -75,7 +75,10 @@ marketingBlastRoutes.post('/reengagement-blast', async (c) => {
     }
   }
 
-  // --- Recipient query: never_ordered ∪ dormant_60d, is_active, has email
+  // --- Recipient query: never_ordered ∪ dormant_60d, is_active, has email.
+  // Exclude internal team (@roofmanager.ca), test fixtures
+  // (@roofmanager.test, '%@example.com'), and the superadmin's own
+  // address — none of those should receive a marketing promo.
   const rows = await c.env.DB.prepare(`
     SELECT
       c.id,
@@ -89,6 +92,10 @@ marketingBlastRoutes.post('/reengagement-blast', async (c) => {
     WHERE c.is_active = 1
       AND c.email IS NOT NULL
       AND TRIM(c.email) != ''
+      AND LOWER(c.email) NOT LIKE '%@roofmanager.ca'
+      AND LOWER(c.email) NOT LIKE '%@roofmanager.test'
+      AND LOWER(c.email) NOT LIKE '%@example.com'
+      AND LOWER(c.email) != 'christinegourley04@gmail.com'
     GROUP BY c.id
     HAVING (COUNT(o.id) = 0 AND c.created_at < datetime('now','-3 days'))
         OR MAX(o.created_at) < datetime('now','-60 days')
