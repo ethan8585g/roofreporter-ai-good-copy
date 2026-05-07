@@ -7725,6 +7725,21 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               </div>
             </div>
 
+            <!-- Subtle pricing poster — bulk-price reassurance, links to /pricing -->
+            <a href="/pricing" onclick="try{rrTrack('cta_click',{location:'hero_pricing_poster'})}catch(e){}"
+               class="group flex items-center gap-4 max-w-xl mt-6 mb-2 bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-[#00FF88]/30 rounded-2xl px-4 py-3 sm:px-5 sm:py-4 transition-all"
+               aria-label="See volume pricing — roof measurement reports from $5.95 each">
+              <div class="flex-shrink-0 inline-flex flex-col items-center justify-center w-14 h-14 rounded-xl bg-[#00FF88]/10 border border-[#00FF88]/25">
+                <span class="text-[9px] font-bold text-[#00FF88] tracking-widest uppercase leading-none">From</span>
+                <span class="text-[#00FF88] font-black text-base leading-tight mt-0.5">$5.95</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-white font-bold text-sm leading-snug">Roof measurement reports start at just $5.95 per report</div>
+                <div class="text-gray-500 text-[11px] mt-1">100-credit pack &middot; USD &middot; volume pricing</div>
+              </div>
+              <i class="fas fa-arrow-right text-gray-500 group-hover:text-[#00FF88] group-hover:translate-x-0.5 transition-all text-xs flex-shrink-0" aria-hidden="true"></i>
+            </a>
+
             <!-- Mobile-only primary CTA mirror (desktop has it above) -->
             <div class="lg:hidden mt-8 flex flex-col gap-3">
               <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_mobile_primary'});window.trackAdsConversion&amp;&amp;window.trackAdsConversion('lead',{value:5,currency:'CAD'})}catch(e){}" class="flex items-center justify-center gap-3 bg-[#00FF88] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px]"><i class="fas fa-gift" aria-hidden="true"></i>Start free — 4 roof reports, no card<i class="fas fa-arrow-right text-sm" aria-hidden="true"></i></a>
