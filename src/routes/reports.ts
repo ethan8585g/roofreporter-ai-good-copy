@@ -2777,6 +2777,11 @@ reportsRoutes.post('/:orderId/webhook-update', async (c) => {
   if (status === 'failed' || status === 'error') {
     console.error(`[Webhook] Order ${orderId}: Enhancement FAILED: ${error_message}`)
     await repo.markEnhancementFailed(c.env.DB, orderId, error_message || 'Unknown error from Cloud Run')
+    // Route to super-admin trace queue so user can decide (manually re-trace,
+    // re-run base generation, or accept the unenhanced report).
+    try {
+      await repo.flagForReview(c.env.DB, orderId, 'enhancement_failed', { error: (error_message || 'Unknown error from Cloud Run').toString().substring(0, 500) })
+    } catch {}
     return c.json({ success: false, message: 'Enhancement failure recorded', orderId })
   }
 
@@ -3142,12 +3147,17 @@ export async function generateReportForOrder(
 
   const result = await Promise.race([generationPromise, timeoutPromise])
 
-  // If we timed out, ensure the report is marked failed so it's not stuck
+  // If we timed out, route to super-admin trace queue instead of marking
+  // the customer's order as 'failed'. Customer never sees a rejection —
+  // user (super-admin) decides whether to manually trace, retry, or refund.
   if (!result.success && result.error?.includes('timed out')) {
     try {
-      await repo.markReportFailed(env.DB, orderId, result.error)
-      await repo.markOrderStatus(env.DB, orderId, 'failed')
-      console.error(`[Generate] Order ${orderId}: TIMED OUT after ${Date.now() - generationStart}ms — marked as failed`)
+      await repo.flagForReview(env.DB, orderId, 'gen_timeout', {
+        error: result.error,
+        elapsed_ms: Date.now() - generationStart,
+        timeout_ms: GENERATION_TIMEOUT_MS,
+      })
+      console.warn(`[Generate] Order ${orderId}: TIMED OUT after ${Date.now() - generationStart}ms — queued for super-admin trace review`)
     } catch {}
   }
 
@@ -3164,9 +3174,12 @@ async function _generateReportForOrderInner(
     const attemptNum = (existing?.generation_attempts || 0) + 1
     if (existing?.status === 'generating') {
       const staleMs = existing.generation_started_at ? Date.now() - new Date(existing.generation_started_at + 'Z').getTime() : Infinity
-      if (staleMs > 120_000) { await repo.markReportFailed(env.DB, orderId, `Timed out (${Math.round(staleMs/1000)}s)`) }
-      else if (staleMs < Infinity) return { success: false, error: 'Already in progress' }
-      else { await repo.markReportFailed(env.DB, orderId, 'Stuck (no start time)') }
+      if (staleMs > 120_000) {
+        await repo.flagForReview(env.DB, orderId, 'gen_stuck', { stale_ms: staleMs, msg: `Timed out (${Math.round(staleMs/1000)}s)` })
+      } else if (staleMs < Infinity) return { success: false, error: 'Already in progress' }
+      else {
+        await repo.flagForReview(env.DB, orderId, 'gen_stuck_no_start', { msg: 'Stuck (no start time)' })
+      }
     }
     if (existing?.status === 'enhancing') {
       const staleMs = existing.generation_started_at ? Date.now() - new Date(existing.generation_started_at + 'Z').getTime() : Infinity
@@ -3180,8 +3193,15 @@ async function _generateReportForOrderInner(
         await repo.markOrderStatus(env.DB, orderId, 'completed')
       }
     }
-    // Allow retry even if max attempts exceeded — reset counter if status was 'failed'
-    if (attemptNum > 3 && existing?.status !== 'failed') return { success: false, error: 'Max attempts exceeded' }
+    // Allow retry even if max attempts exceeded — reset counter if status was 'failed'.
+    // On the 4th+ attempt of a non-failed run, route to super-admin trace queue
+    // instead of returning a hard rejection. Customer keeps seeing 'in progress'.
+    if (attemptNum > 3 && existing?.status !== 'failed') {
+      try {
+        await repo.flagForReview(env.DB, orderId, 'max_attempts', { attempt_num: attemptNum })
+      } catch {}
+      return { success: false, error: 'Max attempts exceeded — queued for review' }
+    }
     const safeAttempt = attemptNum > 3 ? 1 : attemptNum
     await repo.upsertGeneratingState(env.DB, orderId, safeAttempt, !!existing)
     await repo.markOrderStatus(env.DB, orderId, 'processing')
@@ -3841,7 +3861,8 @@ async function _generateReportForOrderInner(
       hasEnhanceKey
     }
   } catch (err: any) {
-    try { await repo.markReportFailed(env.DB, orderId, err.message); await repo.markOrderStatus(env.DB, orderId, 'failed') } catch {}
+    // Never reject the customer — route the failure to super-admin trace queue.
+    try { await repo.flagForReview(env.DB, orderId, 'gen_exception', { error: err.message?.substring(0, 500) }) } catch {}
     return { success: false, error: err.message }
   }
 }

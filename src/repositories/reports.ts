@@ -245,6 +245,39 @@ export async function markReportFailed(db: D1Database, orderId: number | string,
   `).bind(errorMsg.substring(0, 1000), orderId).run()
 }
 
+// Customer-ordered reports must NEVER hit a customer-visible "rejected"/"failed"
+// state on the auto pipeline. Instead route them to the super-admin trace queue
+// (orders.needs_admin_trace=1 + reports.needs_review=1) so the user can decide.
+// Order status stays in 'paid'/'processing' so the customer dashboard shows the
+// order as in-progress, not failed.
+export async function flagForReview(
+  db: D1Database,
+  orderId: number | string,
+  reasonCode: string,
+  detail: any
+) {
+  const detailJson = (() => {
+    try { return JSON.stringify(detail ?? {}).substring(0, 4000) } catch { return null }
+  })()
+  await db.prepare(
+    "UPDATE orders SET needs_admin_trace = 1, status = CASE WHEN status IN ('failed','cancelled','refunded') THEN status ELSE 'processing' END, updated_at = datetime('now') WHERE id = ?"
+  ).bind(orderId).run()
+  // Ensure a report row exists, then flag it. INSERT OR IGNORE keeps the existing
+  // row if generation already created one.
+  await db.prepare(
+    "INSERT OR IGNORE INTO reports (order_id, status, created_at, updated_at) VALUES (?, 'pending', datetime('now'), datetime('now'))"
+  ).bind(orderId).run()
+  await db.prepare(`
+    UPDATE reports SET
+      needs_review = 1,
+      review_reason = COALESCE(review_reason, ?),
+      review_detail = COALESCE(review_detail, ?),
+      status = CASE WHEN status = 'completed' THEN status ELSE 'pending' END,
+      updated_at = datetime('now')
+    WHERE order_id = ?
+  `).bind(reasonCode.substring(0, 100), detailJson, orderId).run()
+}
+
 export async function markOrderStatus(db: D1Database, orderId: number | string, status: string) {
   // Phase 3 orphan-prevention gate: refuse to flip an order to 'completed' unless
   // the corresponding report has renderable content. Prevents the IDs 49 / 50
