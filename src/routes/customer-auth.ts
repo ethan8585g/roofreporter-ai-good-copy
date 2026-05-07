@@ -2504,6 +2504,10 @@ const PROPOSAL_PRICING_DEFAULTS = {
     drip_edge_lf: 1.75,
     starter_strip_lf: 1.25,
     valley_flashing_lf: 3.25,
+    step_flashing_lf: 0.85,
+    headwall_flashing_lf: 1.40,
+    chimney_flashing_kit: 65,
+    pipe_boot_each: 12,
     nails_box: 48,
     caulk_tube: 8,
     labor_per_square: 180,
@@ -2615,7 +2619,9 @@ customerAuthRoutes.put('/proposal-pricing', async (c) => {
 
   if (body.material_unit_prices && typeof body.material_unit_prices === 'object') {
     const mupAllowed = ['shingle_bundle', 'underlayment_roll', 'ice_water_roll', 'ridge_cap_bundle',
-      'drip_edge_lf', 'starter_strip_lf', 'valley_flashing_lf', 'nails_box', 'caulk_tube',
+      'drip_edge_lf', 'starter_strip_lf', 'valley_flashing_lf',
+      'step_flashing_lf', 'headwall_flashing_lf', 'chimney_flashing_kit', 'pipe_boot_each',
+      'nails_box', 'caulk_tube',
       'labor_per_square', 'tearoff_per_square', 'dumpster_flat', 'dumpster_sqft_per_unit', 'tax_rate']
     const mup: any = {}
     for (const k of mupAllowed) {

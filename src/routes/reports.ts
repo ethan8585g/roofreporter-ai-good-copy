@@ -35,6 +35,7 @@ import { resolvePitch } from '../services/pitch-resolver'
 import { generatePanelLayout } from '../services/solar-panel-layout'
 import { estimateMaterials, generateAccuLynxCSV, generateXactimateXML, type DetailedMaterialBOM } from '../services/material-estimation-engine'
 import { enhanceReportViaGemini } from '../services/gemini-enhance'
+import { enrichReportWithFlashing } from '../services/flashing-enrichment'
 import { segmentWithGemini, geminiOutlineToTracePayload } from '../services/sam3-segmentation'
 import { generateReportImagery, buildAIImageryHTML } from '../services/ai-image-generation'
 import { buildEmailWrapper, buildReportLinkEmail, sendGmailEmail, sendViaResend, sendGmailOAuth2 } from '../services/email'
@@ -2067,6 +2068,23 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
   const mergedEnhVision = mergeVisionFindings(crEnhanceVision, geminiEnhVision)
   if (mergedEnhVision) reportData.vision_findings = mergedEnhVision
 
+  // ── METAL FLASHING — derive chimney/pipe counts from vision findings
+  //   and append BOM lines at this contractor's prices. Helper skips
+  //   the visionScan call when findings already exist (just-set above).
+  try {
+    await enrichReportWithFlashing(reportData as any, c.env.DB, {
+      imageUrl: enhanceImg,
+      customerId: order?.customer_id ?? null,
+      vertexApiKey: c.env.GOOGLE_VERTEX_API_KEY,
+      gcpProject: c.env.GOOGLE_CLOUD_PROJECT,
+      gcpLocation: c.env.GOOGLE_CLOUD_LOCATION,
+      serviceAccountKey: c.env.GCP_SERVICE_ACCOUNT_KEY,
+      visionTimeoutMs: 12000,
+    })
+  } catch (flashErr: any) {
+    console.warn(`[GenerateEnhanced] Order ${orderId}: flashing enrichment skipped: ${flashErr?.message}`)
+  }
+
   // ── PHASE 1 COMPLETE: Save base report first, then attempt enhancement inline ──
   const baseHtml = generateProfessionalReportHTML(reportData)
   const baseVer = '3.0'
@@ -3672,6 +3690,29 @@ async function _generateReportForOrderInner(
 
     } catch (proErr: any) {
       console.warn(`[Generate] Order ${orderId}: pro-tier metadata pipeline error (non-fatal):`, proErr?.message)
+    }
+
+    // ── METAL FLASHING — runs vision (if not already done) and appends
+    //   chimney/pipe-boot BOM lines at this contractor's prices. Never
+    //   blocks: vision failures degrade silently to zero counts.
+    try {
+      const flashingImg =
+        (reportData as any)?.imagery?.satellite_overhead_url ||
+        (reportData as any)?.imagery?.satellite_url ||
+        (order?.latitude && order?.longitude && env.GOOGLE_MAPS_API_KEY
+          ? `https://maps.googleapis.com/maps/api/staticmap?center=${order.latitude},${order.longitude}&zoom=20&size=640x640&scale=2&maptype=satellite&key=${env.GOOGLE_MAPS_API_KEY}`
+          : null)
+      await enrichReportWithFlashing(reportData as any, env.DB, {
+        imageUrl: flashingImg,
+        customerId: order?.customer_id ?? null,
+        vertexApiKey: env.GOOGLE_VERTEX_API_KEY,
+        gcpProject: env.GOOGLE_CLOUD_PROJECT,
+        gcpLocation: env.GOOGLE_CLOUD_LOCATION,
+        serviceAccountKey: env.GCP_SERVICE_ACCOUNT_KEY,
+        visionTimeoutMs: 12000,
+      })
+    } catch (flashErr: any) {
+      console.warn(`[Generate] Order ${orderId}: flashing enrichment skipped: ${flashErr?.message}`)
     }
 
     console.log(`[Generate] Order ${orderId}: generating HTML report...`)
