@@ -18,6 +18,32 @@ function isValidEmail(email: string): boolean {
 export const squareRoutes = new Hono<{ Bindings: Bindings }>()
 
 // ============================================================
+// SITEWIDE AUTO-PROMO — applies a percentage discount to every credit
+// pack until the expiry date, with no code required. Mirrors the offer
+// announced in the May 7 reengagement blast. Customers can still type
+// a manual promo code; manual codes take precedence over the auto promo.
+// To end the promo, set ACTIVE = false (or let the date pass).
+// ============================================================
+const SITEWIDE_AUTO_PROMO = {
+  active: true,
+  discount_pct: 20,
+  // Sunday May 11, 2026 23:59:59 Mountain Time = 2026-05-12T05:59:59Z UTC
+  expires_at: '2026-05-12T05:59:59Z',
+  label: '20% off all packs — this week only',
+  short_label: '20% off this week',
+  pseudo_code: 'WEEK20',
+}
+function isAutoPromoActive(): boolean {
+  if (!SITEWIDE_AUTO_PROMO.active) return false
+  return new Date() < new Date(SITEWIDE_AUTO_PROMO.expires_at)
+}
+function applyAutoPromo(originalCents: number): { finalCents: number; discountCents: number } {
+  const pct = Math.max(0, Math.min(100, SITEWIDE_AUTO_PROMO.discount_pct))
+  const discountCents = Math.round((originalCents * pct) / 100)
+  return { finalCents: Math.max(0, originalCents - discountCents), discountCents }
+}
+
+// ============================================================
 // PROMO CODE RESOLVER — looks up a promo code and computes the discount
 // against an original price (in cents). Validates: code exists, active, not
 // expired, under max_uses, and (if scoped) the customer's email matches.
@@ -318,8 +344,29 @@ squareRoutes.get('/packages', async (c) => {
   try {
     const packages = await c.env.DB.prepare(
       'SELECT id, name, description, credits, price_cents, sort_order FROM credit_packages WHERE is_active = 1 ORDER BY sort_order'
-    ).all()
-    return c.json({ packages: packages.results })
+    ).all<any>()
+
+    const promoActive = isAutoPromoActive()
+    const promo = promoActive ? {
+      active: true,
+      discount_pct: SITEWIDE_AUTO_PROMO.discount_pct,
+      label: SITEWIDE_AUTO_PROMO.label,
+      short_label: SITEWIDE_AUTO_PROMO.short_label,
+      expires_at: SITEWIDE_AUTO_PROMO.expires_at,
+    } : null
+
+    const decorated = (packages.results || []).map((p: any) => {
+      if (!promoActive) return { ...p, original_price_cents: p.price_cents }
+      const { finalCents, discountCents } = applyAutoPromo(p.price_cents)
+      return {
+        ...p,
+        original_price_cents: p.price_cents,
+        price_cents: finalCents,
+        discount_cents: discountCents,
+      }
+    })
+
+    return c.json({ packages: decorated, promo })
   } catch (err: any) {
     return c.json({ error: 'Failed to fetch packages', details: err.message }, 500)
   }
@@ -395,13 +442,22 @@ squareRoutes.post('/checkout', async (c) => {
     // Apply promo code if supplied — discount is reflected in the Square
     // payment-link price_money. Reject the checkout if the code is bad so
     // the user doesn't get charged full price thinking the discount applied.
+    // If no manual code is provided AND the sitewide auto-promo is active,
+    // apply that instead so the displayed discount matches the charged total.
     let priceCents = pkg.price_cents
     let promoApplied: { id: number; code: string; discountCents: number } | null = null
+    let autoPromoApplied: { code: string; discountCents: number } | null = null
     if (promo_code) {
       const r = await resolvePromoCode(c.env.DB, promo_code, customer.email || '', priceCents)
       if (!r.valid) return c.json({ error: 'Promo code: ' + r.error }, 400)
       priceCents = r.finalCents
       promoApplied = { id: r.promoId, code: r.code, discountCents: r.discountCents }
+    } else if (isAutoPromoActive()) {
+      const { finalCents, discountCents } = applyAutoPromo(priceCents)
+      if (discountCents > 0) {
+        priceCents = finalCents
+        autoPromoApplied = { code: SITEWIDE_AUTO_PROMO.pseudo_code, discountCents }
+      }
     }
 
     // Determine URLs — P1-21: constrain to our own origins.
@@ -410,12 +466,22 @@ squareRoutes.post('/checkout', async (c) => {
     const cancelUrl = safeRedirectUrl(cancel_url, `${origin}/customer/dashboard?payment=cancelled`)
 
     // Create Square Payment Link (Quick Pay Checkout)
+    const appliedTag = promoApplied
+      ? `${promoApplied.code} applied`
+      : autoPromoApplied
+        ? `${autoPromoApplied.code} applied`
+        : null
+    const noteSuffix = promoApplied
+      ? ` | Promo: ${promoApplied.code} (-$${(promoApplied.discountCents/100).toFixed(2)})`
+      : autoPromoApplied
+        ? ` | Promo: ${autoPromoApplied.code} (-$${(autoPromoApplied.discountCents/100).toFixed(2)})`
+        : ''
     const idempotencyKey = `checkout-${customer.customer_id}-${pkg.id}-${Date.now()}`
     const paymentLink = await squareRequest(accessToken, 'POST', '/online-checkout/payment-links', {
       idempotency_key: idempotencyKey,
       quick_pay: {
-        name: promoApplied
-          ? `${pkg.name} — Roof Report Credits (${promoApplied.code} applied)`
+        name: appliedTag
+          ? `${pkg.name} — Roof Report Credits (${appliedTag})`
           : `${pkg.name} — Roof Report Credits`,
         price_money: {
           amount: priceCents, // Square uses cents (same as our DB)
@@ -427,8 +493,7 @@ squareRoutes.post('/checkout', async (c) => {
         redirect_url: successUrl,
         ask_for_shipping_address: false,
       },
-      payment_note: `${pkg.credits} roof report credits for ${customer.email}` +
-        (promoApplied ? ` | Promo: ${promoApplied.code} (-$${(promoApplied.discountCents/100).toFixed(2)})` : ''),
+      payment_note: `${pkg.credits} roof report credits for ${customer.email}` + noteSuffix,
     })
 
     const link = paymentLink.payment_link
@@ -442,7 +507,15 @@ squareRoutes.post('/checkout', async (c) => {
       customer.customer_id, squareOrderId, link?.id || '', priceCents,
       `${pkg.name} (${pkg.credits} credits)` + (promoApplied ? ` [${promoApplied.code}]` : ''),
       order_id || null,
-      JSON.stringify({ credits: pkg.credits, package_id: pkg.id, package_name: pkg.name, promo_code: promoApplied?.code, promo_discount_cents: promoApplied?.discountCents, original_cents: pkg.price_cents })
+      JSON.stringify({
+        credits: pkg.credits,
+        package_id: pkg.id,
+        package_name: pkg.name,
+        promo_code: promoApplied?.code || autoPromoApplied?.code,
+        promo_discount_cents: promoApplied?.discountCents || autoPromoApplied?.discountCents,
+        original_cents: pkg.price_cents,
+        auto_promo: autoPromoApplied ? true : undefined,
+      })
     ).run()
 
     // Bump uses_count + log redemption immediately (the user committed to the

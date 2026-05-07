@@ -10974,6 +10974,14 @@ function getBuyReportsHTML() {
 
     <div id="msg" class="hidden p-4 rounded-xl text-sm mb-6"></div>
 
+    <div id="promoBanner" class="hidden mb-6 rounded-2xl border border-emerald-400/40 bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-transparent px-5 py-4 flex items-center gap-4">
+      <div class="text-2xl"><i class="fas fa-tags text-emerald-400"></i></div>
+      <div class="flex-1">
+        <div id="promoBannerTitle" class="text-base font-black text-emerald-300">20% off all packs — this week only</div>
+        <div id="promoBannerSub" class="text-xs text-emerald-200/70 mt-0.5">Discount auto-applies at checkout. No code needed.</div>
+      </div>
+    </div>
+
     <div id="packsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
       <div class="col-span-full text-center py-12 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Loading packs...</div>
     </div>
@@ -11014,6 +11022,26 @@ function getBuyReportsHTML() {
         var r = await fetch('/api/square/packages');
         var d = await r.json();
         var packs = d.packages || [];
+        var promo = d.promo || null;
+        var banner = document.getElementById('promoBanner');
+        if (banner) {
+          if (promo && promo.active) {
+            var t = document.getElementById('promoBannerTitle');
+            var s = document.getElementById('promoBannerSub');
+            if (t) t.textContent = promo.label || (promo.discount_pct + '% off all packs — this week only');
+            var endsTxt = '';
+            if (promo.expires_at) {
+              try {
+                var ed = new Date(promo.expires_at);
+                endsTxt = ' Ends ' + ed.toLocaleDateString(undefined, { weekday:'long', month:'short', day:'numeric' }) + '.';
+              } catch(_) {}
+            }
+            if (s) s.textContent = 'Discount auto-applies at checkout. No code needed.' + endsTxt;
+            banner.classList.remove('hidden');
+          } else {
+            banner.classList.add('hidden');
+          }
+        }
         if (!packs.length) {
           document.getElementById('packsGrid').innerHTML = '<div class="col-span-full text-center py-12 text-gray-500">No packs available right now. Email sales@roofmanager.ca.</div>';
           return;
@@ -11022,11 +11050,19 @@ function getBuyReportsHTML() {
         document.getElementById('packsGrid').innerHTML = packs.map(function(p) {
           var perReport = (p.price_cents / p.credits / 100).toFixed(2);
           var isBest = p.id === bestVal.id;
+          var hasDiscount = (p.original_price_cents != null) && (p.original_price_cents > p.price_cents);
+          var priceBlock = hasDiscount
+            ? '<div class="flex items-baseline gap-2 mb-1">' +
+                '<span class="text-3xl font-black text-emerald-400">' + fmt(p.price_cents) + '</span>' +
+                '<span class="text-base text-gray-500 line-through">' + fmt(p.original_price_cents) + '</span>' +
+              '</div>' +
+              '<div class="inline-block text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-300 px-2 py-0.5 rounded mb-2">Save ' + fmt(p.discount_cents) + '</div>'
+            : '<div class="text-3xl font-black text-emerald-400 mb-1">' + fmt(p.price_cents) + '</div>';
           return '<div class="bg-[#0f1217] rounded-2xl border ' + (isBest ? 'border-emerald-400/60 shadow-lg shadow-emerald-500/10' : 'border-white/10') + ' p-5 flex flex-col relative">' +
             (isBest ? '<div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-[#0A0A0A] text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">Best value</div>' : '') +
             '<div class="text-2xl font-black mb-1">' + escHtml(p.name) + '</div>' +
             '<div class="text-xs text-gray-400 mb-4">' + escHtml(p.description || '') + '</div>' +
-            '<div class="text-3xl font-black text-emerald-400 mb-1">' + fmt(p.price_cents) + '</div>' +
+            priceBlock +
             '<div class="text-xs text-gray-500 mb-4">$' + perReport + ' / report</div>' +
             '<button onclick="buyPack(' + p.id + ', this)" class="mt-auto py-3 rounded-xl ' + (isBest ? 'bg-emerald-500 hover:bg-emerald-400 text-[#0A0A0A]' : 'bg-white/10 hover:bg-white/20 text-white') + ' font-black text-sm transition-all">' +
               '<i class="fas fa-shopping-cart mr-2"></i>Buy ' + p.credits + ' Reports' +
