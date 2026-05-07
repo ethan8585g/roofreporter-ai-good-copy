@@ -54,10 +54,25 @@ async function getCustomerInfo(c: any): Promise<{ id: number; email: string; eff
 }
 
 secretaryRoutes.use('/*', async (c, next) => {
-  // Public routes (no auth) — the LiveKit agent worker calls these from
-  // outside the customer session. Keep this list tight.
+  // Public routes (no customer-session auth) — the LiveKit agent worker calls
+  // these from outside the customer session. Keep this list tight and gate
+  // them with SECRETARY_AGENT_TOKEN when configured.
   const path = c.req.path
-  if (path.startsWith('/api/secretary/agent-config/')) {
+  const isAgentRoute =
+    path.startsWith('/api/secretary/agent-config/') ||
+    path === '/api/secretary/webhook/message' ||
+    path === '/api/secretary/webhook/appointment' ||
+    path === '/api/secretary/webhook/callback' ||
+    path === '/api/secretary/webhook/call-complete' ||
+    path === '/api/secretary/webhook/test-result'
+  if (isAgentRoute) {
+    const expected = (c.env as any).SECRETARY_AGENT_TOKEN
+    if (expected) {
+      const presented = c.req.header('x-agent-token') || ''
+      if (presented !== expected) return c.json({ error: 'Forbidden' }, 403)
+    } else {
+      console.warn(`[secretary] ${path} called without SECRETARY_AGENT_TOKEN configured — endpoint is unauthenticated`)
+    }
     return next()
   }
   const info = await getCustomerInfo(c)
@@ -347,7 +362,25 @@ secretaryRoutes.post('/start-trial', async (c) => {
     })
   } catch (err: any) {
     console.error('[Secretary StartTrial]', err)
-    return c.json({ error: err?.message || 'Failed to start trial' }, 500)
+    // Translate Square's internal API errors into a customer-friendly message.
+    // Raw "Square POST /cards failed: INVALID_CARD_DATA" leaking to the UI
+    // is both confusing and exposes implementation detail.
+    const raw = String(err?.message || '')
+    let userMessage = 'We couldn\'t start your trial. Please try again or use a different card.'
+    if (/INVALID_CARD_DATA|invalid card data|Card declined|CARD_DECLINED|GENERIC_DECLINE/i.test(raw)) {
+      userMessage = 'Your card was declined or rejected. Please check the number, expiry, CVV, and postal/ZIP code, or try a different card.'
+    } else if (/CVV_FAILURE|VERIFY_CVV_FAILURE/i.test(raw)) {
+      userMessage = 'The CVV/security code didn\'t match. Please re-enter your card details.'
+    } else if (/INVALID_EXPIRATION|invalid expir/i.test(raw)) {
+      userMessage = 'The card expiration date isn\'t valid. Please check and try again.'
+    } else if (/INSUFFICIENT_FUNDS/i.test(raw)) {
+      userMessage = 'Your card was declined for insufficient funds. Please try a different card.'
+    } else if (/CARD_TOKEN_EXPIRED|card.*token.*expired/i.test(raw)) {
+      userMessage = 'The card form expired. Please re-enter your card details and try again.'
+    } else if (/Square not configured|HTTP 401|HTTP 403/i.test(raw)) {
+      userMessage = 'Payment processing is temporarily unavailable. Please try again in a few minutes.'
+    }
+    return c.json({ error: userMessage }, 500)
   }
 })
 
@@ -385,9 +418,17 @@ secretaryRoutes.get('/trial-status', async (c) => {
 
 // ============================================================
 // POST /cancel — Cancel the Square subscription (stays active to period end)
+// Also releases the assigned LiveKit/Telnyx number so we stop paying for the
+// DID. If Square cancel succeeds but D1 write fails, log a reconciliation
+// marker so the next subscription.updated webhook fixes the state.
 // ============================================================
 secretaryRoutes.post('/cancel', async (c) => {
   const customerId = c.get('customerId' as any) as number
+  const realCustomerId = c.get('realCustomerId' as any) as number
+  // Block team members — only the owning customer can cancel the subscription.
+  if (realCustomerId !== customerId) {
+    return c.json({ error: 'Only the account owner can cancel the subscription' }, 403)
+  }
   const row = await c.env.DB.prepare(
     `SELECT id, square_subscription_id FROM secretary_subscriptions
      WHERE customer_id = ? AND status IN ('trialing','active','past_due')
@@ -397,10 +438,55 @@ secretaryRoutes.post('/cancel', async (c) => {
 
   try {
     await SquareSubs.cancelSubscription(c.env, row.square_subscription_id)
+  } catch (squareErr: any) {
+    console.error('[Secretary Cancel] Square cancel failed:', squareErr)
+    return c.json({ error: 'Cancellation failed at Square. Please try again.' }, 502)
+  }
+
+  // Square is now canceled. From here on every step is best-effort — log a
+  // reconciliation marker on any failure so the webhook handler can heal state.
+  let dbUpdated = false
+  try {
     await c.env.DB.prepare(
       `UPDATE secretary_subscriptions SET status='cancelled', cancelled_at=datetime('now'), updated_at=datetime('now') WHERE id = ?`
     ).bind(row.id).run()
-    await logBillingEvent(c.env.DB, customerId, 'cancelled', { metadata: { square_subscription_id: row.square_subscription_id } })
+    dbUpdated = true
+  } catch (dbErr: any) {
+    console.error('[Secretary Cancel] DB write failed after Square cancel — webhook will reconcile:', dbErr)
+    await logBillingEvent(c.env.DB, customerId, 'cancel_db_failed', {
+      metadata: { square_subscription_id: row.square_subscription_id, error: String(dbErr?.message || dbErr) },
+    }).catch(() => {})
+  }
+
+  // Release the assigned phone number so we stop paying for the DID.
+  try {
+    const numRow = await c.env.DB.prepare(
+      `SELECT id, phone_number FROM secretary_phone_pool
+       WHERE assigned_to_customer_id = ? AND status = 'assigned'
+       ORDER BY id DESC LIMIT 1`
+    ).bind(customerId).first<any>()
+    if (numRow?.phone_number) {
+      try { await LiveKitNumbers.releaseNumber(c.env, numRow.phone_number) } catch (relErr: any) {
+        console.warn('[Secretary Cancel] LiveKit release failed (DID may still bill):', relErr?.message || relErr)
+      }
+      await c.env.DB.prepare(
+        `UPDATE secretary_phone_pool SET status='released', assigned_to_customer_id=NULL WHERE id = ?`
+      ).bind(numRow.id).run().catch(() => {})
+      await c.env.DB.prepare(
+        `UPDATE secretary_config SET assigned_phone_number = '', connection_status = 'not_connected', is_active = 0 WHERE customer_id = ?`
+      ).bind(customerId).run().catch(() => {})
+    } else {
+      // Even with no number, deactivate the agent.
+      await c.env.DB.prepare(
+        `UPDATE secretary_config SET is_active = 0 WHERE customer_id = ?`
+      ).bind(customerId).run().catch(() => {})
+    }
+  } catch (numErr: any) {
+    console.warn('[Secretary Cancel] number teardown encountered an error:', numErr?.message || numErr)
+  }
+
+  try {
+    await logBillingEvent(c.env.DB, customerId, 'cancelled', { metadata: { square_subscription_id: row.square_subscription_id, db_updated: dbUpdated } })
     return c.json({ status: 'cancelled' })
   } catch (err: any) {
     console.error('[Secretary Cancel]', err)
@@ -429,7 +515,7 @@ secretaryRoutes.get('/status', async (c) => {
   const isDev = c.get('isDev' as any) as boolean
 
   const sub = await c.env.DB.prepare(
-    `SELECT * FROM secretary_subscriptions WHERE customer_id = ? AND status IN ('active', 'pending', 'past_due') ORDER BY id DESC LIMIT 1`
+    `SELECT * FROM secretary_subscriptions WHERE customer_id = ? AND status IN ('active', 'trialing', 'pending', 'past_due') ORDER BY id DESC LIMIT 1`
   ).bind(customerId).first<any>()
 
   const config = await c.env.DB.prepare(
@@ -445,7 +531,7 @@ secretaryRoutes.get('/status', async (c) => {
   ).bind(customerId).first<any>()
 
   // Dev account gets free access — treat as active subscription
-  const hasActive = isDev ? true : sub?.status === 'active'
+  const hasActive = isDev ? true : (sub?.status === 'active' || sub?.status === 'trialing' || sub?.status === 'past_due')
 
   return c.json({
     subscription: isDev ? { status: 'active', is_dev_grant: true } : (sub || null),
@@ -486,15 +572,55 @@ secretaryRoutes.post('/config', async (c) => {
   if (!business_phone) return c.json({ error: 'Business phone number is required' }, 400)
   if (!greeting_script) return c.json({ error: 'Greeting script is required' }, 400)
   if (general_notes && general_notes.length > 3000) return c.json({ error: 'General notes must be 3000 characters or less' }, 400)
+  if (common_qa && common_qa.length > 5000) return c.json({ error: 'FAQ section must be 5000 characters or less' }, 400)
   const validModes = ['directory', 'answering', 'full']
   if (!validModes.includes(secretary_mode)) return c.json({ error: 'secretary_mode must be directory, answering, or full' }, 400)
+  // Server-side voice allowlist — frontend offers these; reject anything else
+  // so a tampered request can't persist garbage that the LiveKit agent reads.
+  const validVoices = ['alloy', 'shimmer', 'nova', 'echo', 'onyx', 'fable']
+  if (agent_voice !== undefined && agent_voice !== '' && !validVoices.includes(agent_voice)) {
+    return c.json({ error: `agent_voice must be one of: ${validVoices.join(', ')}` }, 400)
+  }
+  if (agent_name !== undefined && typeof agent_name === 'string' && agent_name.length > 80) {
+    return c.json({ error: 'agent_name must be 80 characters or less' }, 400)
+  }
 
   try {
     const existing = await c.env.DB.prepare(
-      `SELECT id FROM secretary_config WHERE customer_id = ?`
+      `SELECT * FROM secretary_config WHERE customer_id = ?`
     ).bind(customerId).first<any>()
 
     if (existing) {
+      // Patch semantics: only overwrite fields explicitly present in the body.
+      // Previously every save wiped omitted fields back to defaults, which
+      // wrecked tabs that POSTed only a subset of the form.
+      const pick = <T,>(key: string, fallback: T): T => (Object.prototype.hasOwnProperty.call(body, key) ? (body as any)[key] : fallback)
+      const fbBusinessPhone = pick('business_phone', existing.business_phone)
+      const fbGreeting = pick('greeting_script', existing.greeting_script)
+      const fbCommonQa = pick('common_qa', existing.common_qa || '')
+      const fbGeneralNotes = pick('general_notes', existing.general_notes || '')
+      const fbAgentName = pick('agent_name', existing.agent_name || 'Sarah')
+      const fbAgentVoice = pick('agent_voice', existing.agent_voice || 'alloy')
+      const fbMode = pick('secretary_mode', existing.secretary_mode || 'directory')
+      const fbAnsFallback = pick('answering_fallback_action', existing.answering_fallback_action || 'take_message')
+      const fbAnsForward = pick('answering_forward_number', existing.answering_forward_number || '')
+      const fbAnsSms = pick('answering_sms_notify', existing.answering_sms_notify ?? 1)
+      const fbAnsEmail = pick('answering_email_notify', existing.answering_email_notify ?? 1)
+      const fbAnsNotifyEmail = pick('answering_notify_email', existing.answering_notify_email || '')
+      const fbFullBook = pick('full_can_book_appointments', existing.full_can_book_appointments ?? 1)
+      const fbFullEmail = pick('full_can_send_email', existing.full_can_send_email ?? 1)
+      const fbFullCallback = pick('full_can_schedule_callback', existing.full_can_schedule_callback ?? 1)
+      const fbFullFaq = pick('full_can_answer_faq', existing.full_can_answer_faq ?? 1)
+      const fbFullPayment = pick('full_can_take_payment_info', existing.full_can_take_payment_info ?? 0)
+      const fbFullHoursRaw = pick<any>('full_business_hours', existing.full_business_hours || '{}')
+      const fbFullHours = typeof fbFullHoursRaw === 'string' ? fbFullHoursRaw : JSON.stringify(fbFullHoursRaw || {})
+      const fbFullBooking = pick('full_booking_link', existing.full_booking_link || '')
+      const fbFullServices = pick('full_services_offered', existing.full_services_offered || '')
+      const fbFullPricing = pick('full_pricing_info', existing.full_pricing_info || '')
+      const fbFullArea = pick('full_service_area', existing.full_service_area || '')
+      const fbFullFromName = pick('full_email_from_name', existing.full_email_from_name || '')
+      const fbFullSignature = pick('full_email_signature', existing.full_email_signature || '')
+
       await c.env.DB.prepare(
         `UPDATE secretary_config SET
           business_phone = ?, greeting_script = ?, common_qa = ?, general_notes = ?,
@@ -509,16 +635,15 @@ secretaryRoutes.post('/config', async (c) => {
           updated_at = datetime('now')
         WHERE customer_id = ?`
       ).bind(
-        business_phone, greeting_script, common_qa || '', general_notes || '',
-        agent_name || 'Sarah', agent_voice || 'alloy',
-        secretary_mode,
-        answering_fallback_action || 'take_message', answering_forward_number || '',
-        answering_sms_notify ?? 1, answering_email_notify ?? 1, answering_notify_email || '',
-        full_can_book_appointments ?? 1, full_can_send_email ?? 1, full_can_schedule_callback ?? 1,
-        full_can_answer_faq ?? 1, full_can_take_payment_info ?? 0,
-        typeof full_business_hours === 'string' ? full_business_hours : JSON.stringify(full_business_hours || {}),
-        full_booking_link || '', full_services_offered || '', full_pricing_info || '',
-        full_service_area || '', full_email_from_name || '', full_email_signature || '',
+        fbBusinessPhone, fbGreeting, fbCommonQa, fbGeneralNotes,
+        fbAgentName, fbAgentVoice,
+        fbMode,
+        fbAnsFallback, fbAnsForward,
+        fbAnsSms, fbAnsEmail, fbAnsNotifyEmail,
+        fbFullBook, fbFullEmail, fbFullCallback,
+        fbFullFaq, fbFullPayment, fbFullHours,
+        fbFullBooking, fbFullServices, fbFullPricing,
+        fbFullArea, fbFullFromName, fbFullSignature,
         customerId
       ).run()
     } else {
@@ -626,10 +751,10 @@ secretaryRoutes.post('/toggle', async (c) => {
   const customerId = c.get('customerId' as any) as number
   const isDev = c.get('isDev' as any) as boolean
 
-  // Verify active subscription (dev accounts bypass)
+  // Verify active or trialing subscription (dev accounts bypass)
   if (!isDev) {
     const sub = await c.env.DB.prepare(
-      `SELECT status FROM secretary_subscriptions WHERE customer_id = ? AND status = 'active' ORDER BY id DESC LIMIT 1`
+      `SELECT status FROM secretary_subscriptions WHERE customer_id = ? AND status IN ('active','trialing','past_due') ORDER BY id DESC LIMIT 1`
     ).bind(customerId).first<any>()
     if (!sub) return c.json({ error: 'Active subscription required' }, 403)
   }
@@ -656,41 +781,83 @@ secretaryRoutes.post('/toggle', async (c) => {
 
 // ============================================================
 // GET /calls — Call log history
+// Supports ?filter=all|leads|follow_up and ?search=<text> matched against
+// caller_phone, caller_name, and call_summary.
 // ============================================================
 secretaryRoutes.get('/calls', async (c) => {
   const customerId = c.get('customerId' as any) as number
-  const limit = parseInt(c.req.query('limit') || '50')
-  const offset = parseInt(c.req.query('offset') || '0')
+  const rawLimit = parseInt(c.req.query('limit') || '50', 10)
+  const rawOffset = parseInt(c.req.query('offset') || '0', 10)
+  const limit = Math.min(Math.max(isNaN(rawLimit) ? 50 : rawLimit, 1), 200)
+  const offset = Math.max(isNaN(rawOffset) ? 0 : rawOffset, 0)
+  const filter = (c.req.query('filter') || 'all').toString().toLowerCase()
+  const search = (c.req.query('search') || '').toString().trim()
+
+  const where: string[] = ['customer_id = ?']
+  const params: any[] = [customerId]
+  if (filter === 'leads') {
+    where.push("(lead_status IS NOT NULL AND lead_status NOT IN ('','none'))")
+  } else if (filter === 'follow_up') {
+    where.push('follow_up_required = 1')
+    where.push('(follow_up_completed IS NULL OR follow_up_completed = 0)')
+  }
+  if (search) {
+    where.push('(caller_phone LIKE ? OR caller_name LIKE ? OR call_summary LIKE ?)')
+    const like = `%${search}%`
+    params.push(like, like, like)
+  }
+  const whereSql = `WHERE ${where.join(' AND ')}`
 
   const calls = await c.env.DB.prepare(
-    `SELECT * FROM secretary_call_logs WHERE customer_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`
-  ).bind(customerId, limit, offset).all<any>()
+    `SELECT * FROM secretary_call_logs ${whereSql} ORDER BY created_at DESC LIMIT ? OFFSET ?`
+  ).bind(...params, limit, offset).all<any>()
 
   const total = await c.env.DB.prepare(
-    `SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ?`
-  ).bind(customerId).first<any>()
+    `SELECT COUNT(*) as cnt FROM secretary_call_logs ${whereSql}`
+  ).bind(...params).first<any>()
 
   return c.json({
     calls: calls.results || [],
     total: total?.cnt || 0,
+    filter,
+    search,
     limit,
     offset,
   })
 })
 
 // ============================================================
-// GET /calls/:id — Get single call detail with full transcript
+// GET /calls/:id — Get single call detail with full transcript + any
+// messages, appointments, and callbacks the agent captured for this call.
 // ============================================================
 secretaryRoutes.get('/calls/:id', async (c) => {
   const customerId = c.get('customerId' as any) as number
-  const callId = parseInt(c.req.param('id'))
+  const callId = parseInt(c.req.param('id'), 10)
+  if (!callId || isNaN(callId)) return c.json({ error: 'Invalid call id' }, 400)
 
   const call = await c.env.DB.prepare(
     `SELECT * FROM secretary_call_logs WHERE id = ? AND customer_id = ?`
   ).bind(callId, customerId).first<any>()
-
   if (!call) return c.json({ error: 'Call not found' }, 404)
-  return c.json({ call })
+
+  const [messages, appointments, callbacks] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT * FROM secretary_messages WHERE customer_id = ? AND call_log_id = ? ORDER BY created_at`
+    ).bind(customerId, callId).all<any>().catch(() => ({ results: [] })),
+    c.env.DB.prepare(
+      `SELECT * FROM secretary_appointments WHERE customer_id = ? AND call_log_id = ? ORDER BY created_at`
+    ).bind(customerId, callId).all<any>().catch(() => ({ results: [] })),
+    c.env.DB.prepare(
+      `SELECT * FROM secretary_callbacks WHERE customer_id = ? AND call_log_id = ? ORDER BY created_at`
+    ).bind(customerId, callId).all<any>().catch(() => ({ results: [] })),
+  ])
+
+  return c.json({
+    call,
+    messages: messages.results || [],
+    appointments: appointments.results || [],
+    callbacks: callbacks.results || [],
+  })
 })
 
 // ============================================================
@@ -704,6 +871,18 @@ secretaryRoutes.post('/livekit-token', async (c) => {
   const livekitUrl = (c.env as any).LIVEKIT_URL
 
   if (!apiKey || !apiSecret) return c.json({ error: 'LiveKit not configured' }, 500)
+
+  // Gate on a paying/trialing subscription. Without this, canceled customers
+  // continue answering calls indefinitely and a leaked customerId could mint
+  // tokens forever.
+  const isDev = c.get('isDev' as any) as boolean
+  if (!isDev) {
+    const sub = await c.env.DB.prepare(
+      `SELECT status FROM secretary_subscriptions WHERE customer_id = ? ORDER BY id DESC LIMIT 1`
+    ).bind(customerId).first<any>()
+    const ok = sub && ['active', 'trialing', 'past_due'].includes(String(sub.status))
+    if (!ok) return c.json({ error: 'No active Roofer Secretary subscription' }, 402)
+  }
 
   const config = await c.env.DB.prepare(
     `SELECT * FROM secretary_config WHERE customer_id = ?`
@@ -3231,6 +3410,31 @@ secretaryRoutes.post('/numbers/purchase', async (c) => {
     return c.json({ error: 'Start a Roofer Secretary trial before purchasing a number.' }, 403)
   }
 
+  // Idempotency: if this customer already has the same number assigned,
+  // return success without creating a second trunk/dispatch/allocation.
+  // If they have a *different* number assigned, reject — they must release
+  // the existing number first to avoid orphaning LiveKit resources.
+  const existingAssign = await c.env.DB.prepare(
+    `SELECT phone_number FROM secretary_phone_pool
+     WHERE assigned_to_customer_id = ? AND status = 'assigned'
+     ORDER BY id DESC LIMIT 1`
+  ).bind(customerId).first<any>()
+  if (existingAssign?.phone_number) {
+    if (existingAssign.phone_number === phoneNumber) {
+      return c.json({
+        phone_number: phoneNumber,
+        provider: 'livekit',
+        monthly_cost_cents: 0,
+        charged_cents: 0,
+        already_assigned: true,
+      })
+    }
+    return c.json({
+      error: 'You already have a phone number assigned. Release it from the Connect tab before purchasing a different one.',
+      assigned_phone_number: existingAssign.phone_number,
+    }, 409)
+  }
+
   // Step 1 — LiveKit inbound trunk.
   let trunkId = ''
   try {
@@ -3279,11 +3483,13 @@ secretaryRoutes.post('/numbers/purchase', async (c) => {
 
   // Step 4 — DB writes (atomic batch). Provider is now 'livekit'; we stash
   // the LiveKit phone-number id in telnyx_phone_number_id to avoid a schema
-  // migration (column is now provider-agnostic).
+  // migration (column is now provider-agnostic). Use INSERT OR REPLACE so a
+  // previously-released row for the same phone_number doesn't blow the UNIQUE
+  // constraint on retry.
   try {
     await c.env.DB.batch([
       c.env.DB.prepare(
-        `INSERT INTO secretary_phone_pool
+        `INSERT OR REPLACE INTO secretary_phone_pool
          (phone_number, phone_sid, region, status, assigned_to_customer_id, assigned_at,
           sip_trunk_id, dispatch_rule_id, provider, telnyx_phone_number_id, telnyx_connection_id,
           purchased_at, monthly_cost_cents_billed)
@@ -3357,6 +3563,12 @@ secretaryRoutes.post('/numbers/purchase', async (c) => {
 // POST /numbers/release — Release the currently-assigned LiveKit number
 secretaryRoutes.post('/numbers/release', async (c) => {
   const customerId = c.get('customerId' as any) as number
+  const realCustomerId = c.get('realCustomerId' as any) as number
+  // Only the owning customer can release the number — team members otherwise
+  // have full write access to the owner's account, which is too much rope.
+  if (realCustomerId !== customerId) {
+    return c.json({ error: 'Only the account owner can release the phone number' }, 403)
+  }
   const row = await c.env.DB.prepare(
     `SELECT id, phone_number FROM secretary_phone_pool
      WHERE assigned_to_customer_id = ? AND status = 'assigned'

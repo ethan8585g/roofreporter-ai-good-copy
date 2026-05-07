@@ -1713,6 +1713,7 @@ squareRoutes.post('/webhook', async (c) => {
         break
       }
 
+      case 'invoice.payment_failed':
       case 'invoice.failed':
       case 'invoice.canceled': {
         const invoice = event.data?.object?.invoice

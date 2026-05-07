@@ -175,12 +175,32 @@
 
     var trial = state.trial || {};
     var banner = '';
-    if (trial.status === 'trialing' && trial.trial_days_remaining != null) {
-      var daysLeft = trial.trial_days_remaining;
+    // TZ-safe day countdown: parse YYYY-MM-DD as a local date and round up.
+    function _trialDaysLeft() {
+      var raw = trial.trial_ends_at || trial.next_charge_date;
+      if (!raw) return trial.trial_days_remaining;
+      var m = String(raw).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) return trial.trial_days_remaining;
+      var endLocal = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+      var todayLocal = new Date(); todayLocal.setHours(0, 0, 0, 0);
+      var diff = Math.ceil((endLocal.getTime() - todayLocal.getTime()) / 86400000);
+      return Math.max(0, diff);
+    }
+    function _fmtChargeDate() {
+      var raw = trial.next_charge_date || trial.trial_ends_at || '';
+      var m = String(raw).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) return raw;
+      try {
+        var d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      } catch (_) { return raw; }
+    }
+    if (trial.status === 'trialing' && (trial.trial_days_remaining != null || trial.trial_ends_at)) {
+      var daysLeft = _trialDaysLeft();
       banner = '<div class="bg-gradient-to-r from-[#0e1d34] to-[#0b1628] border border-sky-500/40 rounded-xl p-4 mb-4 flex items-center justify-between gap-3">' +
         '<div class="flex items-center gap-3"><i class="fas fa-gift text-sky-400 text-xl"></i>' +
         '<div><div class="text-sm font-bold text-sky-200">Free trial active — ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' left</div>' +
-        '<div class="text-xs text-black">Your card ending in ' + (trial.card_last4 || '••••') + ' will be charged $199 on ' + (trial.next_charge_date || trial.trial_ends_at) + '.</div></div></div>' +
+        '<div class="text-xs text-black">Your card ending in ' + (trial.card_last4 || '••••') + ' will be charged $199 on ' + _fmtChargeDate() + '.</div></div></div>' +
         '<button onclick="secCancelSubscription()" class="text-xs text-red-300 hover:text-red-200 underline">Cancel before renewal</button></div>';
     } else if (trial.status === 'past_due') {
       banner = '<div class="bg-red-500/10 border border-red-500/40 rounded-xl p-4 mb-4 text-red-200 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Your last payment failed. Please update your card to avoid cancellation.</div>';
@@ -381,8 +401,8 @@
           verificationToken: verificationToken,
         }),
       });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Trial signup failed');
+      var data = await res.json().catch(function() { return {}; });
+      if (!res.ok) throw new Error(data.error || ('Trial signup failed (HTTP ' + res.status + ')'));
 
       // Chain: if a number was selected during signup, purchase it now ($1 charge).
       // Trial is already active at this point — number purchase failure must NOT
@@ -396,8 +416,8 @@
             method: 'POST', headers: authHeaders(),
             body: JSON.stringify({ phone_number: state.selectedSignupNumber }),
           });
-          var npData = await npRes.json();
-          if (!npRes.ok) throw new Error(npData.error || 'Number purchase failed');
+          var npData = await npRes.json().catch(function() { return {}; });
+          if (!npRes.ok) throw new Error(npData.error || ('Number purchase failed (HTTP ' + npRes.status + ')'));
         } catch (npErr) {
           numberPurchaseWarning = ' Trial started, but number purchase failed: ' + (npErr.message || String(npErr)) + '. You can pick another from the Connect tab.';
           console.warn('[secretary] number purchase failed after trial start:', npErr);
@@ -1958,7 +1978,7 @@
         loadCalls();
       } else {
         var err = await res.json().catch(function() { return {}; });
-        window.rmToast('❌ ' + (err.error || 'Failed to simulate call', 'error'));
+        window.rmToast('❌ ' + (err.error || 'Failed to simulate call'), 'error');
       }
     } catch(e) { window.rmToast('❌ Network error: ' + e.message, 'error'); }
   };
@@ -2954,16 +2974,21 @@
       '</div>';
   };
 
+  var _cancelInFlight = false;
   window.secCancelSubscription = async function() {
+    if (_cancelInFlight) return;
     if (!confirm('Cancel your Roofer Secretary subscription? You can keep using it until the end of your current trial/billing period, then it will stop.')) return;
+    _cancelInFlight = true;
     try {
       var res = await fetch('/api/secretary/cancel', { method: 'POST', headers: authHeaders() });
-      var data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Cancel failed');
+      var data = await res.json().catch(function() { return {}; });
+      if (!res.ok) throw new Error(data.error || ('Cancel failed (HTTP ' + res.status + ')'));
       showToast('Subscription cancelled. Service will continue until the period ends.', 'info');
       await loadStatus();
     } catch (e) {
       showToast(e.message || 'Cancel failed', 'error');
+    } finally {
+      _cancelInFlight = false;
     }
   };
 

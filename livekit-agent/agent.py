@@ -129,7 +129,9 @@ async def get_agent_config(ctx: JobContext) -> dict:
             async with aiohttp.ClientSession() as session:
                 # Use the internal config endpoint (by customer_id)
                 url = f"{api_url}/api/secretary/agent-config/{customer_id}"
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                agent_token = os.environ.get("SECRETARY_AGENT_TOKEN")
+                req_headers = {"x-agent-token": agent_token} if agent_token else {}
+                async with session.get(url, headers=req_headers, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         # The endpoint returns data directly (not wrapped in success/config)
@@ -281,6 +283,8 @@ class RooferSecretaryAgent(Agent):
             try:
                 import aiohttp
                 async with aiohttp.ClientSession() as session:
+                    agent_token = os.environ.get("SECRETARY_AGENT_TOKEN", "")
+                    hdrs = {"x-agent-token": agent_token} if agent_token else {}
                     await session.post(
                         f"{api_url}/api/secretary/webhook/message",
                         json={
@@ -290,6 +294,7 @@ class RooferSecretaryAgent(Agent):
                             "message": message,
                             "urgency": urgency,
                         },
+                        headers=hdrs,
                         timeout=aiohttp.ClientTimeout(total=5)
                     )
             except Exception as e:
@@ -322,6 +327,8 @@ class RooferSecretaryAgent(Agent):
             try:
                 import aiohttp
                 async with aiohttp.ClientSession() as session:
+                    agent_token = os.environ.get("SECRETARY_AGENT_TOKEN", "")
+                    hdrs = {"x-agent-token": agent_token} if agent_token else {}
                     await session.post(
                         f"{api_url}/api/secretary/webhook/appointment",
                         json={
@@ -332,6 +339,7 @@ class RooferSecretaryAgent(Agent):
                             "service_type": service_type,
                             "notes": f"AI-captured lead: {service_type} at {property_address}",
                         },
+                        headers=hdrs,
                         timeout=aiohttp.ClientTimeout(total=5)
                     )
             except Exception as e:
@@ -375,6 +383,8 @@ class RooferSecretaryAgent(Agent):
             try:
                 import aiohttp
                 async with aiohttp.ClientSession() as session:
+                    agent_token = os.environ.get("SECRETARY_AGENT_TOKEN", "")
+                    hdrs = {"x-agent-token": agent_token} if agent_token else {}
                     await session.post(
                         f"{api_url}/api/secretary/webhook/message",
                         json={
@@ -384,6 +394,7 @@ class RooferSecretaryAgent(Agent):
                             "message": f"EMERGENCY: {emergency_details} at {property_address}",
                             "urgency": "emergency",
                         },
+                        headers=hdrs,
                         timeout=aiohttp.ClientTimeout(total=5)
                     )
             except Exception as e:
@@ -495,6 +506,8 @@ async def entrypoint(ctx: JobContext):
             if api_url and customer_id:
                 try:
                     import requests
+                    agent_token = os.environ.get("SECRETARY_AGENT_TOKEN", "")
+                    hdrs = {"x-agent-token": agent_token} if agent_token else {}
                     requests.post(
                         f"{api_url}/api/secretary/webhook/call-complete",
                         json={
@@ -511,6 +524,7 @@ async def entrypoint(ctx: JobContext):
                             "directory_routed": agent._directory_routed,
                             "outcome": outcome,
                         },
+                        headers=hdrs,
                         timeout=10
                     )
                     logger.info(f"Call complete webhook sent: {duration}s, outcome={outcome}, transcript_lines={len(agent._transcript_lines)}")
