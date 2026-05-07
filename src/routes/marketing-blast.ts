@@ -96,6 +96,8 @@ marketingBlastRoutes.post('/reengagement-blast', async (c) => {
       AND LOWER(c.email) NOT LIKE '%@roofmanager.test'
       AND LOWER(c.email) NOT LIKE '%@example.com'
       AND LOWER(c.email) != 'christinegourley04@gmail.com'
+      AND LOWER(c.email) != 'ethangourley@icloud.com'
+      AND c.email LIKE '%_@_%._%'
     GROUP BY c.id
     HAVING (COUNT(o.id) = 0 AND c.created_at < datetime('now','-3 days'))
         OR MAX(o.created_at) < datetime('now','-60 days')
