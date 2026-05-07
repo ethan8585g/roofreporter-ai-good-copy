@@ -1328,6 +1328,7 @@ function renderReportRequestsView() {
           (o.needs_admin_trace ?
             '<button onclick="saOpenTraceModal(' + o.id + ',' + (o.latitude || 0) + ',' + (o.longitude || 0) + ',\'' + (o.property_address || '').replace(/'/g, "\\'") + '\',\'' + (o.order_number || '') + '\')" style="padding:5px 12px;background:#f59e0b;color:#111;font-size:11px;font-weight:700;border:none;border-radius:6px;cursor:pointer"><i class="fas fa-drafting-compass mr-1"></i>Trace</button>' :
             '<a href="/api/reports/' + o.id + '/html" target="_blank" style="padding:5px 12px;background:rgba(14,165,233,0.15);color:#38bdf8;font-size:11px;font-weight:600;border:none;border-radius:6px;text-decoration:none;display:inline-block;margin-right:6px"><i class="fas fa-file-alt mr-1"></i>View</a>' +
+            '<button onclick="saRegenerateReport(' + o.id + ',\'' + (o.order_number || ('#' + o.id)).replace(/\'/g, "\\\'") + '\')" title="Re-run report engine on existing trace (preserves trace, refreshes report)" style="padding:5px 10px;background:rgba(20,184,166,0.15);color:#5eead4;font-size:11px;font-weight:700;border:1px solid rgba(20,184,166,0.4);border-radius:6px;cursor:pointer;margin-right:6px"><i class="fas fa-arrows-rotate mr-1"></i>Regen</button>' +
             '<button onclick="saConfirmRetrace(' + o.id + ',\'' + (o.order_number || ('#' + o.id)).replace(/\'/g, "\\\'") + '\')" title="Cancel current report and re-queue for manual trace" style="padding:5px 10px;background:rgba(239,68,68,0.15);color:#fca5a5;font-size:11px;font-weight:700;border:1px solid rgba(239,68,68,0.4);border-radius:6px;cursor:pointer"><i class="fas fa-rotate-left mr-1"></i>Re-Trace</button>'
           ) +
         '</td>' +
@@ -1350,6 +1351,28 @@ window.saCopyShareLink = function(token) {
     });
   } else {
     window.prompt('Copy this share link:', url);
+  }
+};
+
+// ── Regenerate report on existing trace (non-destructive) ──
+window.saRegenerateReport = async function(orderId, orderNumber) {
+  try {
+    saToast('Regenerating report for ' + orderNumber + '…');
+    var res = await saFetch('/api/admin/superadmin/orders/' + orderId + '/regenerate-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    if (!res) return;
+    var data = await res.json();
+    if (!res.ok || !data.success) {
+      saToast('Regen failed: ' + (data && data.error ? data.error : 'unknown error'));
+      return;
+    }
+    saToast('Report regenerated for ' + orderNumber);
+    loadView('report-requests');
+  } catch (err) {
+    saToast('Regen failed: ' + ((err && err.message) || 'network error'));
   }
 };
 

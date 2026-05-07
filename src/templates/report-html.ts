@@ -434,6 +434,10 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   const stepFlashingFt = es.total_step_flashing_ft || 0
   const wallFlashingFt = es.total_wall_flashing_ft || 0
   const slopeChangeFt = es.total_transition_ft || 0
+  // Eaves flashing (drip edge / gutter apron) — auto-derived from the
+  // traced eave perimeter so contractors see it as a distinct flashing
+  // line item alongside step/headwall/valley/chimney.
+  const eavesFlashingFt = (es as any).total_eaves_flashing_ft || es.total_eave_ft || 0
 
   // Predominant pitch
   const largestSeg = [...report.segments].sort((a, b) => b.true_area_sqft - a.true_area_sqft)[0]
@@ -638,6 +642,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       <div class="pt-row"><span class="pt-label" style="font-weight:700">Hip</span><span class="pt-value">${es.total_hip_ft} LF</span></div>
       <div class="pt-row"><span class="pt-label" style="font-weight:700">Valley</span><span class="pt-value">${es.total_valley_ft} LF</span></div>
       ${slopeChangeFt > 0 ? `<div class="pt-row"><span class="pt-label" style="font-weight:700">Slope Change</span><span class="pt-value">${slopeChangeFt} LF</span></div>` : ''}
+      ${eavesFlashingFt > 0 ? `<div class="pt-row"><span class="pt-label" style="font-weight:700">Eaves Flashing</span><span class="pt-value">${eavesFlashingFt} LF</span></div>` : ''}
       ${stepFlashingFt > 0 ? `<div class="pt-row"><span class="pt-label" style="font-weight:700">Step Flashing</span><span class="pt-value">${stepFlashingFt} LF</span></div>` : ''}
       ${wallFlashingFt > 0 ? `<div class="pt-row"><span class="pt-label" style="font-weight:700">Headwall Flashing</span><span class="pt-value">${wallFlashingFt} LF</span></div>` : ''}
       ${(es as any).chimney_flashing_count > 0 ? `<div class="pt-row"><span class="pt-label" style="font-weight:700">Chimney Flashing</span><span class="pt-value">${(es as any).chimney_flashing_count} ea</span></div>` : ''}
@@ -1384,6 +1389,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         ${es.total_hip_ft > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Hip</span><span style="font-weight:700">${es.total_hip_ft} LF</span></div>` : ''}
         ${es.total_valley_ft > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Valley</span><span style="font-weight:700">${es.total_valley_ft} LF</span></div>` : ''}
         ${(es.total_transition_ft || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Slope Change</span><span style="font-weight:700">${es.total_transition_ft} LF</span></div>` : ''}
+        ${eavesFlashingFt > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Eaves Flashing</span><span style="font-weight:700">${eavesFlashingFt} LF</span></div>` : ''}
         ${(es.total_step_flashing_ft || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Step Flashing</span><span style="font-weight:700">${es.total_step_flashing_ft} LF</span></div>` : ''}
         ${(es.total_wall_flashing_ft || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Headwall Flashing</span><span style="font-weight:700">${es.total_wall_flashing_ft} LF</span></div>` : ''}
         ${((es as any).chimney_flashing_count || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Chimney Flashing</span><span style="font-weight:700">${(es as any).chimney_flashing_count} ea</span></div>` : ''}
@@ -1571,8 +1577,8 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
     ...iwbRows,
     { cat: 'Ridge Cap', desc: 'Hip &amp; ridge cap shingles', qty: m.ridge_cap_bundles, unit: 'bundles', note: `${m.ridge_cap_lf} LF total ridge + hip`, icon: '&#9650;', color: '#dc2626', code: 'RFG RIDGC' },
     { cat: 'Starter Strip', desc: 'Starter shingles (eave + rake perimeter)', qty: Math.ceil(m.starter_strip_lf / 100), unit: 'rolls', note: `${m.starter_strip_lf} LF perimeter`, icon: '&#9644;', color: '#16a34a', code: 'RFG STARTU' },
-    { cat: 'Drip Edge — Eave', desc: 'Metal drip edge, eave profile (10.5ft sticks)', qty: Math.ceil(m.drip_edge_eave_lf / 10.5), unit: 'sticks', note: `${m.drip_edge_eave_lf} LF`, icon: '&#9472;', color: '#16a34a', code: 'RFG GUTAS' },
-    { cat: 'Drip Edge — Rake', desc: 'Metal drip edge, rake profile (10.5ft sticks)', qty: Math.ceil(m.drip_edge_rake_lf / 10.5), unit: 'sticks', note: `${m.drip_edge_rake_lf} LF`, icon: '&#9472;', color: '#7c3aed', code: 'RFG GUTRS' },
+    ...((m.drip_edge_eave_lf || 0) > 0 ? [{ cat: 'Eaves Flashing', desc: 'Eaves flashing / drip edge — eave profile (10.5ft sticks)', qty: Math.ceil(m.drip_edge_eave_lf / 10.5), unit: 'sticks', note: `${m.drip_edge_eave_lf} LF along eaves`, icon: '&#9472;', color: '#16a34a', code: 'RFG GUTAS' }] : []),
+    ...((m.drip_edge_rake_lf || 0) > 0 ? [{ cat: 'Drip Edge — Rake', desc: 'Metal drip edge, rake profile (10.5ft sticks)', qty: Math.ceil(m.drip_edge_rake_lf / 10.5), unit: 'sticks', note: `${m.drip_edge_rake_lf} LF`, icon: '&#9472;', color: '#7c3aed', code: 'RFG GUTRS' }] : []),
     { cat: 'Valley Flashing', desc: 'Pre-bent W-valley metal or roll valley', qty: Math.ceil(m.valley_flashing_lf / 10), unit: 'pcs', note: `${m.valley_flashing_lf} LF total valley`, icon: '&#9660;', color: '#2563eb', code: 'RFG VALLEYM' },
     ...(((m as any).step_flashing_lf || 0) > 0 ? [{ cat: 'Step Flashing', desc: 'Pre-bent step flashing pieces (5"×7", 1 per shingle course)', qty: Math.ceil((m as any).step_flashing_lf * 1.5), unit: 'pcs', note: `${(m as any).step_flashing_lf} LF along sloped wall lines`, icon: '&#9613;', color: '#F59E0B', code: 'RFG FLSTEP' }] : []),
     ...(((m as any).headwall_flashing_lf || 0) > 0 ? [{ cat: 'Headwall Flashing', desc: 'Continuous headwall / apron flashing (10ft sticks)', qty: Math.ceil((m as any).headwall_flashing_lf / 10), unit: 'sticks', note: `${(m as any).headwall_flashing_lf} LF horizontal wall junction`, icon: '&#9644;', color: '#F97316', code: 'RFG FLHEAD' }] : []),
@@ -2090,12 +2096,18 @@ function buildMeasurementSummaryPage(report: RoofReport, reportNum: string, repo
             <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">rolls</td>
             <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">${m.starter_strip_lf} LF perimeter</td>
           </tr>
-          <tr>
-            <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#16a34a;margin-right:3px">&#9472;</span>Drip Edge</td>
-            <td style="padding:4px 10px;text-align:center;font-weight:800;color:#16a34a;border-bottom:1px solid #eee">${Math.ceil(m.drip_edge_total_lf / 10.5)}</td>
+          ${(m.drip_edge_eave_lf || 0) > 0 ? `<tr>
+            <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#16a34a;margin-right:3px">&#9472;</span>Eaves Flashing</td>
+            <td style="padding:4px 10px;text-align:center;font-weight:800;color:#16a34a;border-bottom:1px solid #eee">${Math.ceil(m.drip_edge_eave_lf / 10.5)}</td>
             <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">sticks</td>
-            <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">${m.drip_edge_total_lf} LF total</td>
-          </tr>
+            <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">${m.drip_edge_eave_lf} LF along eaves</td>
+          </tr>` : ''}
+          ${(m.drip_edge_rake_lf || 0) > 0 ? `<tr style="background:#fafafa">
+            <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#7c3aed;margin-right:3px">&#9472;</span>Drip Edge — Rake</td>
+            <td style="padding:4px 10px;text-align:center;font-weight:800;color:#7c3aed;border-bottom:1px solid #eee">${Math.ceil(m.drip_edge_rake_lf / 10.5)}</td>
+            <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">sticks</td>
+            <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">${m.drip_edge_rake_lf} LF along rakes</td>
+          </tr>` : ''}
           <tr style="background:#fafafa">
             <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#2563eb;margin-right:3px">&#9660;</span>Valley Flashing</td>
             <td style="padding:4px 10px;text-align:center;font-weight:800;color:#2563eb;border-bottom:1px solid #eee">${Math.ceil(m.valley_flashing_lf / 10)}</td>

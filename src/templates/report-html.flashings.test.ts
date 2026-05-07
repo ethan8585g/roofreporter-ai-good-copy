@@ -45,11 +45,30 @@ function makeReport(overrides: any = {}) {
 
 describe('flashings — report HTML rendering', () => {
   it('omits all flashing rows on a report with no flashings', () => {
-    const html = generateProfessionalReportHTML(makeReport())
+    const html = generateProfessionalReportHTML(makeReport({
+      edge_summary: { total_eave_ft: 0, total_rake_ft: 0, total_linear_ft: 30 },
+    }))
     expect(html).not.toContain('Step Flashing')
     expect(html).not.toContain('Headwall Flashing')
     expect(html).not.toContain('Chimney Flashing')
     expect(html).not.toContain('Pipe Boots')
+    expect(html).not.toContain('Eaves Flashing')
+  })
+
+  it('renders Eaves Flashing row auto-derived from total_eave_ft', () => {
+    const html = generateProfessionalReportHTML(makeReport({
+      edge_summary: { total_eave_ft: 100, total_rake_ft: 60 },
+    }))
+    expect(html).toContain('Eaves Flashing')
+    expect(html).toContain('100 LF')
+  })
+
+  it('Eaves Flashing prefers explicit total_eaves_flashing_ft when set', () => {
+    const html = generateProfessionalReportHTML(makeReport({
+      edge_summary: { total_eave_ft: 100, total_eaves_flashing_ft: 88, total_rake_ft: 60 },
+    }))
+    expect(html).toContain('Eaves Flashing')
+    expect(html).toContain('88 LF')
   })
 
   it('renders Step Flashing row when total_step_flashing_ft > 0', () => {

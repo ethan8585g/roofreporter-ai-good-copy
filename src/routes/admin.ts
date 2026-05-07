@@ -4896,6 +4896,69 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
 })
 
 // ============================================================
+// REGENERATE REPORT — Re-runs the report engine on the existing
+// stored roof_trace_json without touching the trace itself. Used
+// when a code change to the engine or report template needs to
+// flow into a previously-generated report (e.g. a new line item
+// like Eaves Flashing was added). Non-destructive: the trace is
+// preserved, only the report HTML/data is rebuilt.
+// ============================================================
+adminRoutes.post('/superadmin/orders/:id/regenerate-report', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const orderId = parseInt(c.req.param('id'))
+  if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
+
+  try {
+    const order = await c.env.DB.prepare(
+      'SELECT id, order_number, property_address, roof_trace_json FROM orders WHERE id = ?'
+    ).bind(orderId).first<any>()
+    if (!order) return c.json({ error: 'Order not found' }, 404)
+    if (!order.roof_trace_json) {
+      return c.json({ error: 'Order has no stored trace — use submit-trace instead' }, 400)
+    }
+
+    // Reset just the report row so the engine writes a fresh result.
+    // Keep roof_trace_json on orders untouched.
+    await c.env.DB.prepare(`
+      UPDATE reports SET
+        professional_report_html = NULL,
+        customer_report_html = NULL,
+        api_response_raw = NULL,
+        status = 'pending',
+        generation_attempts = 0,
+        generation_started_at = NULL,
+        generation_completed_at = NULL,
+        error_message = NULL,
+        needs_review = 0,
+        review_reason = NULL,
+        review_detail = NULL,
+        updated_at = datetime('now')
+      WHERE order_id = ?
+    `).bind(orderId).run()
+
+    const result = await generateReportForOrder(orderId, c.env, (c as any).executionCtx)
+
+    try {
+      await c.env.DB.prepare(
+        "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'admin_regenerate_report', ?)"
+      ).bind(JSON.stringify({
+        order_id: orderId,
+        order_number: order.order_number,
+        admin_id: admin.id,
+        admin_email: admin.email,
+        property_address: order.property_address,
+        success: !!result?.success,
+      })).run()
+    } catch (e) { /* non-fatal audit */ }
+
+    return c.json({ success: true, result })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to regenerate report: ' + err.message }, 500)
+  }
+})
+
+// ============================================================
 // CANCEL & RE-TRACE — Hard-reset a generated report and put the
 // order back in the manual trace queue. Used when a generated
 // report is wrong (broken diagram, duplicated structure, etc.)
