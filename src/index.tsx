@@ -303,6 +303,7 @@ gtag('get','${ga4Id}','client_id',function(cid){
 window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
 gtag('config', 'AW-18080319225');
+gtag('config', 'AW-17810045368');
 // Conversion labels — real labels look like '26MMCMOgxaYcEPmNr61D'. The trackAdsConversion()
 // helper no-ops on XXX_ values, so all wired fires below stay safe until labels are pasted.
 // TODO(google-ads): create the four conversion actions in Google Ads → Tools → Conversions
