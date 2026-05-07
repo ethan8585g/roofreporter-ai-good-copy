@@ -976,12 +976,14 @@ function renderUsersView() {
               <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Total Spent</th>
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Last Order</th>
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Last Login</th>
+              <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase" title="Total number of times this user has signed in (lifetime)">Total Logins</th>
+              <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase" title="Sign-ins recorded today (UTC)">Logins Today</th>
               <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase" title="Total time spent on the platform across all modules">Hours on Platform</th>
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Joined</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-50">
-            ${users.length === 0 ? '<tr><td colspan="14" class="px-4 py-8 text-center text-gray-400">No registered users yet</td></tr>' : ''}
+            ${users.length === 0 ? '<tr><td colspan="16" class="px-4 py-8 text-center text-gray-400">No registered users yet</td></tr>' : ''}
             ${users.map(u => {
               var paidRemaining = Math.max(0, (Number(u.report_credits) || 0) - (Number(u.credits_used) || 0));
               var trialRemaining = Math.max(0, (Number(u.free_trial_total) || 0) - (Number(u.free_trial_used) || 0));
@@ -1027,6 +1029,8 @@ function renderUsersView() {
                 <td class="px-4 py-3 text-right font-bold text-gray-800">${$$(u.total_spent)}</td>
                 <td class="px-4 py-3 text-xs text-gray-500">${fmtDate(u.last_order_date)}</td>
                 <td class="px-4 py-3 text-xs">${u.last_login ? `<span class="text-green-600 font-medium" title="${fmtDateTime(u.last_login)}"><i class="fas fa-check-circle mr-1"></i>${fmtDate(u.last_login)}</span>` : '<span class="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-full uppercase">Never</span>'}</td>
+                <td class="px-4 py-3 text-center text-xs ${(u.login_count || 0) > 0 ? 'text-teal-700 font-bold' : 'text-gray-300'}" title="Lifetime sign-in count">${u.login_count || 0}</td>
+                <td class="px-4 py-3 text-center text-xs ${(u.login_count_today || 0) > 0 ? 'text-emerald-700 font-bold' : 'text-gray-300'}" title="Sign-ins recorded today (UTC)">${u.login_count_today || 0}</td>
                 <td class="px-4 py-3 text-right text-xs ${totalSec > 0 ? 'text-gray-700 font-medium' : 'text-gray-400'}" title="Total: ${Math.round(totalSec)}s across all modules">${hoursLabel}</td>
                 <td class="px-4 py-3 text-xs text-gray-500">${fmtDate(u.created_at)}</td>
               </tr>

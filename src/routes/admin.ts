@@ -1222,6 +1222,10 @@ adminRoutes.get('/superadmin/users', async (c) => {
         c.lead_source, c.lead_utm_source,
         c.google_id, c.google_avatar,
         c.is_active, c.last_login, c.created_at,
+        (SELECT COUNT(*) FROM customer_login_events e
+         WHERE e.customer_id = c.id) as login_count,
+        (SELECT COUNT(*) FROM customer_login_events e
+         WHERE e.customer_id = c.id AND date(e.created_at) = date('now')) as login_count_today,
         c.free_trial_used, c.free_trial_total,
         c.report_credits, c.credits_used,
         CASE WHEN tm.id IS NOT NULL THEN 'team_member' ELSE 'owner' END as user_type,
@@ -1278,6 +1282,8 @@ adminRoutes.get('/superadmin/users', async (c) => {
           CASE WHEN a.status = 'active' THEN 1 ELSE 0 END as is_active,
           NULL as last_login,
           datetime(a.created_at, 'unixepoch') as created_at,
+          0 as login_count,
+          0 as login_count_today,
           0 as free_trial_used,
           0 as free_trial_total,
           a.credit_balance as report_credits,

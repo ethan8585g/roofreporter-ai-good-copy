@@ -36,6 +36,7 @@ Intent: ${row.intent}. Target audience: Canadian homeowners and roofing contract
 Requirements:
 - Natural keyword usage (2-4% density, no stuffing).
 - Structured for Generative Engine Optimization: clear H2/H3 hierarchy, short declarative sentences LLMs can cite.
+// link-audit-allow — example anchors inside an LLM prompt, not real links
 - Include at least 3 internal links: <a href="/services">...</a>, <a href="/quote">...</a>, <a href="/pricing">...</a>.
 - Include a 5-question FAQ section at the bottom.
 - Embed schema.org JSON-LD for BlogPosting AND FAQPage in a single <script type="application/ld+json"> block at the end.

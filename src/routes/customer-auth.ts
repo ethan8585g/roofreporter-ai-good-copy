@@ -495,13 +495,15 @@ customerAuthRoutes.post('/google', async (c) => {
     if (customer) {
       // Update existing customer with Google info
       await c.env.DB.prepare(`
-        UPDATE customers SET 
-          google_id = ?, google_avatar = ?, name = COALESCE(name, ?), 
+        UPDATE customers SET
+          google_id = ?, google_avatar = ?, name = COALESCE(name, ?),
           email_verified = 1, last_login = datetime('now'), updated_at = datetime('now')
         WHERE id = ?
       `).bind(googleId, avatar, name, customer.id).run()
     } else {
-      // Create new customer with the standard free-trial grant (NOT paid credits)
+      // Create new customer with the standard free-trial grant (NOT paid credits).
+      // The Google sign-in IS the first login — login_count is derived from
+      // customer_login_events (insert below) so nothing extra to seed here.
       const result = await c.env.DB.prepare(`
         INSERT INTO customers (email, name, google_id, google_avatar, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, auto_invoice_enabled, last_login)
         VALUES (?, ?, ?, ?, 1, 1, 0, 0, ?, 0, 0, datetime('now'))
@@ -545,6 +547,14 @@ customerAuthRoutes.post('/google', async (c) => {
           .catch((e) => console.warn('[customer-auth] sendWelcomeEmail (google) failed:', e?.message || e)))
       } catch (e: any) { console.warn('[customer-auth] sendWelcomeEmail (google) skip:', e?.message) }
     }
+
+    // Per-event login log (Google OAuth — covers both new signup + returning sign-in).
+    try {
+      const ipForLog = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || null
+      await c.env.DB.prepare(
+        "INSERT INTO customer_login_events (customer_id, auth_method, ip_address) VALUES (?, 'google', ?)"
+      ).bind(customer.id, ipForLog).run()
+    } catch (e: any) { console.warn('[customer-auth] login_event insert (google) failed:', e?.message) }
 
     // Attribution — link recent same-IP traffic to this customer + recompute
     try {
@@ -855,6 +865,14 @@ customerAuthRoutes.post('/login', async (c) => {
     await c.env.DB.prepare(
       "UPDATE customers SET last_login = datetime('now'), updated_at = datetime('now') WHERE id = ?"
     ).bind(customer.id).run()
+
+    // Per-event log so super admin can compute lifetime + daily login counts.
+    try {
+      const ipForLog = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || null
+      await c.env.DB.prepare(
+        "INSERT INTO customer_login_events (customer_id, auth_method, ip_address) VALUES (?, 'email', ?)"
+      ).bind(customer.id, ipForLog).run()
+    } catch (e: any) { console.warn('[customer-auth] login_event insert failed:', e?.message) }
 
     const token = generateSessionToken()
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()

@@ -3,6 +3,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "audit:links": "node scripts/audit-internal-links.mjs",
+    "prebuild": "node scripts/audit-internal-links.mjs",
     "build": "node build.mjs",
     "build:vite": "vite build",
     "preview": "wrangler pages dev dist",
