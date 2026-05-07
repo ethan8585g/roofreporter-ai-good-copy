@@ -7127,8 +7127,6 @@ function getOnboardingPageHTML(sessionToken = ''): string {
       <div class="progress-dot" id="dot-2"></div>
       <div class="w-8 h-px bg-white/20"></div>
       <div class="progress-dot" id="dot-3"></div>
-      <div class="w-8 h-px bg-white/20"></div>
-      <div class="progress-dot" id="dot-4"></div>
     </div>
 
     <div class="w-full max-w-lg">
@@ -7169,32 +7167,10 @@ function getOnboardingPageHTML(sessionToken = ''): string {
         <button onclick="saveCompany()" style="width:100%;padding:16px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:12px;font-size:17px;cursor:pointer">
           Continue &#x2192;
         </button>
-        <button onclick="nextStep(2, 'skipped')" style="width:100%;padding:12px;background:transparent;color:#6b7280;border:none;font-size:14px;cursor:pointer;margin-top:8px">
-          Skip for now
-        </button>
       </div>
 
-      <!-- Step 3: First report -->
+      <!-- Step 3: Done -->
       <div class="step" id="step-3">
-        <div class="text-center mb-8">
-          <div style="font-size:48px;margin-bottom:12px">&#x1F4CB;</div>
-          <h2 class="text-2xl font-black mb-2">Try your first report</h2>
-          <p class="text-gray-400">Enter any roofing job address and we'll pull satellite data, calculate area, pitch, and material estimates instantly.</p>
-        </div>
-        <input type="text" id="first-address" placeholder="123 Main St, Toronto, ON"
-          style="width:100%;padding:16px 18px;background:#111111;border:1.5px solid rgba(255,255,255,0.15);border-radius:12px;color:#fff;font-size:16px;margin-bottom:20px;box-sizing:border-box;outline:none"
-          onfocus="this.style.borderColor='#00FF88'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'"
-          onkeydown="if(event.key==='Enter')runFirstReport()">
-        <button onclick="runFirstReport()" style="width:100%;padding:16px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:12px;font-size:17px;cursor:pointer">
-          Generate My First Report &#x26A1;
-        </button>
-        <button onclick="nextStep(3, 'skipped')" style="width:100%;padding:12px;background:transparent;color:#6b7280;border:none;font-size:14px;cursor:pointer;margin-top:8px">
-          I'll do this later
-        </button>
-      </div>
-
-      <!-- Step 4: Done -->
-      <div class="step" id="step-4">
         <div class="text-center">
           <div style="font-size:72px;margin-bottom:16px">&#x1F389;</div>
           <h2 class="text-3xl font-black mb-3">You're all set!</h2>
@@ -7238,14 +7214,14 @@ function getOnboardingPageHTML(sessionToken = ''): string {
       if (!c) return;
       // If they already finished, send them straight to the dashboard.
       if (c.onboarding_completed) { window.location.replace('/customer/dashboard'); return; }
-      var resumeStep = Math.max(1, Math.min(4, (c.onboarding_step || 0) + 1));
+      var resumeStep = Math.max(1, Math.min(3, (c.onboarding_step || 0) + 1));
       if (resumeStep > 1) jumpToStep(resumeStep);
     } catch (_) { /* network glitch — start at step 1 */ }
   }
 
   function jumpToStep(target) {
-    if (target < 1 || target > 4) return;
-    for (var i = 1; i <= 4; i++) {
+    if (target < 1 || target > 3) return;
+    for (var i = 1; i <= 3; i++) {
       var el = document.getElementById('step-' + i);
       var dot = document.getElementById('dot-' + i);
       if (el) el.classList.toggle('active', i === target);
@@ -7280,7 +7256,7 @@ function getOnboardingPageHTML(sessionToken = ''): string {
     if (nextDot) nextDot.classList.add('active');
     // When the user lands on the final step, mark onboarding complete so the
     // "Welcome back, finish setup" banner doesn't reappear on the dashboard.
-    if (currentStep === 4) trackStep(4, 'completed');
+    if (currentStep === 3) trackStep(3, 'completed');
   }
 
   async function saveCompany() {
@@ -7296,14 +7272,6 @@ function getOnboardingPageHTML(sessionToken = ''): string {
       } catch(e) {}
     }
     nextStep(2);
-  }
-
-  async function runFirstReport() {
-    var address = (document.getElementById('first-address').value || '').trim();
-    if (!address) return;
-    trackStep(3, 'completed');
-    // Redirect to new order page with address pre-filled
-    window.location.href = '/customer/order?address=' + encodeURIComponent(address);
   }
 
   loadResumeState();
@@ -7645,7 +7613,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <a href="/customer/login" onclick="rrTrack('cta_click',{location:'nav_login'})" class="border border-white/20 hover:border-white/40 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-all duration-200 hover:bg-white/5 whitespace-nowrap">
           <i class="fas fa-sign-in-alt mr-1.5 text-gray-400"></i>Log In</a>
         <a href="/register" onclick="rrTrack('cta_click',{location:'nav_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2.5 px-5 rounded-xl text-sm transition-all duration-200 hover:scale-105 shadow-lg shadow-[#00FF88]/20 whitespace-nowrap">
-          <i class="fas fa-gift mr-1.5"></i>Start Free</a>
+          <i class="fas fa-gift mr-1.5"></i>Register Now</a>
       </div>
 
       <!-- Mobile: visible Login + Register + menu button -->
