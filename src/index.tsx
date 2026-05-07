@@ -16481,16 +16481,21 @@ function getDemoLandingPageHTML() {
             <p style="color:#6b7280;font-size:14px;max-width:220px;line-height:1.5">Complete the form on the left and the booking calendar will appear here.</p>
           </div>
 
-          <!-- Calendar iframe (hidden until form submit) -->
-          <div id="cal-wrapper">
-            <iframe
-              id="cal-iframe"
-              src=""
-              title="Book a demo — Roof Manager"
-              loading="lazy"
-              style="width:100%;height:700px;border:none;border-radius:12px"
-              allow="payment">
-            </iframe>
+          <!-- Booking CTA (hidden until form submit) — opens Google Calendar in new tab.
+               Google's calendar.app.google shortlinks block iframe embedding via X-Frame-Options,
+               so we link out instead. -->
+          <div id="cal-wrapper" style="text-align:center;padding:32px 20px">
+            <div style="width:64px;height:64px;border-radius:50%;background:rgba(0,255,136,0.12);border:1px solid rgba(0,255,136,0.3);display:flex;align-items:center;justify-content:center;margin:0 auto 18px">
+              <i class="fas fa-calendar-check" style="color:#00FF88;font-size:26px"></i>
+            </div>
+            <div style="color:#fff;font-size:16px;font-weight:700;margin-bottom:6px">You're all set — pick your time</div>
+            <p style="color:#9ca3af;font-size:13px;max-width:300px;margin:0 auto 22px;line-height:1.6">Choose a 20-minute slot on Google Calendar. Confirmation will be emailed to you.</p>
+            <a id="cal-open-btn" href="https://calendar.app.google/1j4KJLuXGGfwBL3y7" target="_blank" rel="noopener"
+               style="display:inline-flex;align-items:center;gap:10px;background:#00FF88;color:#0A0A0A;font-weight:800;padding:14px 28px;border-radius:12px;text-decoration:none;font-size:15px;transition:transform 0.15s"
+               onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+              <i class="fas fa-external-link-alt"></i>Open Booking Calendar
+            </a>
+            <div style="color:#6b7280;font-size:12px;margin-top:12px">Opens Google Calendar in a new tab</div>
           </div>
 
           <!-- What happens next -->
@@ -16557,14 +16562,13 @@ function getDemoLandingPageHTML() {
           var banner = document.getElementById('demo-success-banner');
           banner.style.display = 'flex';
 
-          // Reveal calendar
+          // Reveal booking CTA
           document.getElementById('cal-placeholder').style.display = 'none';
           var wrapper = document.getElementById('cal-wrapper');
           wrapper.classList.add('visible');
-          document.getElementById('cal-iframe').src = 'https://calendar.app.google/KNLFST4CNxViPPN3A';
           document.getElementById('cal-next-steps').style.display = 'block';
 
-          // Scroll to calendar
+          // Scroll to booking CTA
           setTimeout(function(){ document.getElementById('cal-wrapper').scrollIntoView({ behavior:'smooth', block:'start' }); }, 200);
         })
         .catch(function(){
