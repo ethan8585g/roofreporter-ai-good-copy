@@ -68,6 +68,7 @@
         '<input name="e" type="email" required placeholder="Enter your email" autocomplete="email" style="width:100%;padding:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#fff;font-size:14px;outline:none;margin-bottom:10px;box-sizing:border-box">' +
         '<input name="p" type="tel" placeholder="Phone (optional, for follow-up)" autocomplete="tel" style="width:100%;padding:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#fff;font-size:14px;outline:none;margin-bottom:10px;box-sizing:border-box">' +
         '<input name="a" placeholder="Property address (optional)" autocomplete="street-address" style="width:100%;padding:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#fff;font-size:14px;outline:none;margin-bottom:10px;box-sizing:border-box">' +
+        '<textarea name="m" placeholder="Message (optional) — tell us what you need" rows="3" style="width:100%;padding:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#fff;font-size:14px;outline:none;margin-bottom:10px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea>' +
         '<button type="submit" style="width:100%;background:' + btnBg + ';color:' + btnColor + ';font-weight:800;padding:13px;border:none;border-radius:10px;font-size:14px;cursor:pointer;min-height:46px">' +
           (isSocial ? '<i class="fas fa-gift" style="margin-right:6px"></i>Claim My Free Reports' : '<i class="fas fa-gift" style="margin-right:6px"></i>Get My 4 Free Reports') +
         '</button>' +
@@ -94,6 +95,7 @@
         email: form.querySelector('[name=e]').value,
         phone: (form.querySelector('[name=p]') && form.querySelector('[name=p]').value) || '',
         address: form.querySelector('[name=a]').value || '',
+        message: (form.querySelector('[name=m]') && form.querySelector('[name=m]').value) || '',
         source_page: sourcePage,
         utm_source: utmSource || ''
       })
