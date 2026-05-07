@@ -5265,7 +5265,7 @@ html.light-theme{background:#f5f7fa !important}
           el.id = 'rm-exit-modal';
           el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)';
           el.innerHTML = '<div style="position:relative;background:#111827;border:1px solid rgba(0,255,136,0.25);border-radius:18px;padding:28px;max-width:540px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,0.5)">' +
-            '<button onclick="document.getElementById(\'rm-exit-modal\').remove()" aria-label="Close" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.08);border:none;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px">\u00d7</button>' +
+            '<button onclick="document.getElementById(\\'rm-exit-modal\\').remove()" aria-label="Close" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.08);border:none;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px">\u00d7</button>' +
             html +
             '</div>';
           el.addEventListener('click', function(ev){ if (ev.target === el) el.remove(); });
