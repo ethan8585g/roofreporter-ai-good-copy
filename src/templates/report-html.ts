@@ -227,6 +227,11 @@ function buildPerStructureSynthReport(
   partitionCount: number,
 ): RoofReport {
   const synth: any = { ...report }
+  // Drop cached full-roof SVG/inputs so each per-structure render regenerates
+  // its diagram from synth.roof_trace (just this partition's eaves + lines).
+  // Without this, pages 1-5 and 6-10 both render the combined-roof SVG.
+  delete synth.trace_diagram_svg
+  delete synth.customer_trace_input
   const km = engineResult.key_measurements
   const lm = engineResult.linear_measurements
 
