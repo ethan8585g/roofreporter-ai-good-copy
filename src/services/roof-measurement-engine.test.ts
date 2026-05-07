@@ -98,6 +98,45 @@ describe('eaves_tags reclassify edge totals', () => {
   })
 })
 
+describe('multi-structure eaves — secondary perimeters add to total', () => {
+  it('sums eave LF across primary house + detached garage', () => {
+    const house  = squareEavesAt(40, -75, 12)  // 12 m square ⇒ ~157 ft perimeter
+    const garage = squareEavesAt(40.001, -75.001, 6) // 6 m square ⇒ ~79 ft perimeter
+
+    const houseOnly = new RoofMeasurementEngine({
+      address: 'Test', default_pitch: 6, eaves_outline: house,
+    }).run()
+    const houseAndGarage = new RoofMeasurementEngine({
+      address: 'Test', default_pitch: 6, eaves_outline: house,
+      eaves_sections: [house, garage],
+    }).run()
+
+    // Garage perimeter (~79 ft) must be added to the house perimeter
+    // (~157 ft). Total should be ~236 ft, not the house-only 157.
+    expect(houseAndGarage.linear_measurements.eaves_total_ft).toBeGreaterThan(
+      houseOnly.linear_measurements.eaves_total_ft + 70
+    )
+    expect(houseAndGarage.linear_measurements.eaves_total_ft).toBeCloseTo(
+      houseOnly.linear_measurements.eaves_total_ft + 79, 0
+    )
+  })
+
+  it('ignores the primary outline if also passed in eaves_sections (no double-count)', () => {
+    const house = squareEavesAt(40, -75, 12)
+    const houseOnly = new RoofMeasurementEngine({
+      address: 'Test', default_pitch: 6, eaves_outline: house,
+    }).run()
+    // Pass primary outline ALSO inside eaves_sections — engine filters it out.
+    const dup = new RoofMeasurementEngine({
+      address: 'Test', default_pitch: 6, eaves_outline: house,
+      eaves_sections: [house],
+    }).run()
+    expect(dup.linear_measurements.eaves_total_ft).toBeCloseTo(
+      houseOnly.linear_measurements.eaves_total_ft, 0
+    )
+  })
+})
+
 describe('plane_segments_lat_lng — per-facet pitch override', () => {
   it('accepts plane_segments_lat_lng without throwing and falls back when no overlap', () => {
     const eaves = squareEavesAt(40, -75, 10)

@@ -515,10 +515,10 @@ export default {
       }
     }
 
-    // Reports error sweep — runs at :05, :15, :35 for higher cadence
-    // since report errors block customer delivery. DB-only (no Browser
-    // Rendering), so it runs without an agent_configs gate when enabled.
-    if ((minute === 5 || minute === 15 || minute === 35) && await isAgentEnabled('scan_reports')) {
+    // Reports error sweep — fires every cron tick (every 10 min). DB-only
+    // (no Browser Rendering or auth), report errors block customer
+    // delivery so we want minimum-latency detection. Cheap.
+    if (await isAgentEnabled('scan_reports')) {
       const expectedAt = new Date(now)
       expectedAt.setUTCSeconds(0, 0)
       ctx.waitUntil((async () => {

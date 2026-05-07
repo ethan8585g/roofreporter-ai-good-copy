@@ -1,0 +1,115 @@
+{
+  "timestamp": "2026-04-16T07:50:59.751189",
+  "checks": [
+    {
+      "name": "HTTP: https://www.roofmanager.ca",
+      "passed": true,
+      "timestamp": "2026-04-16T07:51:00.623806",
+      "details": {
+        "status": 200,
+        "response_time_ms": 761.33,
+        "body_preview": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <meta name=\"google-site-verification\" content=\"CvzH14V1vTrop"
+      },
+      "error": null
+    },
+    {
+      "name": "HTTP: https://www.roofmanager.ca/api/health",
+      "passed": true,
+      "timestamp": "2026-04-16T07:51:01.104685",
+      "details": {
+        "status": 200,
+        "response_time_ms": 476.32,
+        "body_preview": "{\"status\":\"ok\",\"service\":\"Roof Manager - Business Management CRM\",\"timestamp\":\"2026-04-16T07:51:01.137Z\",\"env_configured\":{\"GOOGLE_SOLAR_API_KEY\":true,\"GOOGLE_MAPS_API_KEY\":true,\"GOOGLE_VERTEX_API_KEY"
+      },
+      "error": null
+    },
+    {
+      "name": "HTTP: https://www.roofmanager.ca/api/health/solar",
+      "passed": true,
+      "timestamp": "2026-04-16T07:51:02.391139",
+      "details": {
+        "status": 200,
+        "response_time_ms": 1282.01,
+        "body_preview": "{\"timestamp\":\"2026-04-16T07:51:01.389Z\",\"keys_configured\":{\"solar_api_key\":true,\"solar_key_prefix\":\"AIzaSyAY...\",\"maps_api_key\":true,\"maps_key_prefix\":\"AIzaSyAY...\"},\"tests\":{\"building_insights\":{\"sta"
+      },
+      "error": null
+    },
+    {
+      "name": "HTTP: https://www.roofmanager.ca/api/health/gemini",
+      "passed": true,
+      "timestamp": "2026-04-16T07:51:03.472750",
+      "details": {
+        "status": 200,
+        "response_time_ms": 1079.69,
+        "body_preview": "{\"status\":\"ok\",\"model\":\"gemini-2.0-flash\",\"auth_mode\":\"service_account_auto\",\"response\":\"OK\",\"project\":\"helpful-passage-486204-h9\",\"service_account\":\"roof-measure-ai@helpful-passage-486204-h9.iam.gser"
+      },
+      "error": null
+    },
+    {
+      "name": "HTTP: https://www.roofmanager.ca/login",
+      "passed": true,
+      "timestamp": "2026-04-16T07:51:04.017117",
+      "details": {
+        "status": 200,
+        "response_time_ms": 541.88,
+        "body_preview": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <meta name=\"google-site-verification\" content=\"CvzH14V1vTrop"
+      },
+      "error": null
+    },
+    {
+      "name": "HTTP: https://www.roofmanager.ca/register",
+      "passed": true,
+      "timestamp": "2026-04-16T07:51:04.255837",
+      "details": {
+        "status": 200,
+        "response_time_ms": 227.09,
+        "body_preview": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <meta name=\"google-site-verification\" content=\"CvzH14V1vTrop"
+      },
+      "error": null
+    },
+    {
+      "name": "HTTP: https://www.roofmanager.ca/onboarding",
+      "passed": true,
+      "timestamp": "2026-04-16T07:51:04.677697",
+      "details": {
+        "status": 200,
+        "response_time_ms": 417.29,
+        "body_preview": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n  <title>Welcome to Roof Manager \u2014 Get Started</title>\n  <link re"
+      },
+      "error": null
+    },
+    {
+      "name": "HTTP: https://www.roofmanager.ca/admin",
+      "passed": true,
+      "timestamp": "2026-04-16T07:51:04.882522",
+      "details": {
+        "status": 200,
+        "response_time_ms": 202.32,
+        "body_preview": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <meta name=\"google-site-verification\" content=\"CvzH14V1vTrop"
+      },
+      "error": null
+    },
+    {
+      "name": "HTTP: https://www.roofmanager.ca/dashboard",
+      "passed": false,
+      "timestamp": "2026-04-16T07:51:05.069411",
+      "details": {
+        "status": 404,
+        "response_time_ms": 186.8
+      },
+      "error": "HTTP 404: Not Found"
+    },
+    {
+      "name": "Network: www.roofmanager.ca:443",
+      "passed": true,
+      "timestamp": "2026-04-16T07:51:05.107748",
+      "details": "www.roofmanager.ca:443 reachable",
+      "error": null
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 1,
+    "skipped": 0
+  }
+}

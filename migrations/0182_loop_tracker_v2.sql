@@ -96,7 +96,7 @@ INSERT OR IGNORE INTO loop_definitions
    'Logged-in customer surfaces. Requires SCAN_CUSTOMER_EMAIL secret.'),
   ('scan_admin',    'Super Admin scan',          'site_scan', 'cf_cron', '20,50 * * * *', 'Every 30 min',          1800, 'cron_worker', 'runScan(admin)',
    'Logged-in super-admin surfaces. Requires SCAN_ADMIN_EMAIL secret.'),
-  ('scan_reports',  'Recent reports sweep',      'site_scan', 'cf_cron', '5,15,35 * * * *','Every ~20 min',          1200, 'cron_worker', 'runScan(reports)',
+  ('scan_reports',  'Recent reports sweep',      'site_scan', 'cf_cron', '*/10 * * * *',  'Every 10 min',            600, 'cron_worker', 'runScan(reports)',
    'Sweeps recent roof-measurement reports for broken diagrams, dup structures, missing HTML, stuck jobs.'),
   ('scan_health',   'Daily system health check', 'health',    'cf_cron', '0 9 * * *',     'Daily at 09:00 UTC',   86400, 'cron_worker', 'runScan(health)',
    'D1 latency, secrets present, volume sanity, orphan reports.'),

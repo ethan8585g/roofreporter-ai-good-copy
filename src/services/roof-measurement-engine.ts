@@ -1714,6 +1714,26 @@ export class RoofMeasurementEngine {
       totalRakeFt = totalRakeFt + rakeFromTags
     }
 
+    // Multi-structure: add perimeter LF from each secondary eaves section
+    // (detached garage, porch, dormer outline, etc.) to the eave total.
+    // The primary structure already supports rake tagging; secondary
+    // sections currently have no per-edge tagging UI, so their full
+    // perimeter is treated as eave LF — which matches how gutter +
+    // drip-edge are quoted in practice for detached garages.
+    if (this.rawEavesSections.length > 0) {
+      for (const secPts of this.rawEavesSections) {
+        const { projected: secCart } = projectToCartesian(secPts)
+        if (secCart.length < 3) continue
+        let secPerimM = 0
+        for (let i = 0; i < secCart.length; i++) {
+          const a = secCart[i]
+          const b = secCart[(i + 1) % secCart.length]
+          secPerimM += dist2D(a, b)
+        }
+        totalEaveFt += secPerimM * M_TO_FT
+      }
+    }
+
     const facesData   = this.faceAreas()
     let totalSloped = facesData.reduce((s, f) => s + f.sloped_area_ft2, 0)
     let totalProj   = facesData.reduce((s, f) => s + f.projected_area_ft2, 0)

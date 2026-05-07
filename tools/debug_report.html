@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RoofManager Debug Scan — 2026-04-14 23:21:55 UTC</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         background: #f5f6fa; color: #222; padding: 2rem; }
+  h1 { font-size: 1.6rem; color: #1a1a2e; margin-bottom: 0.3rem; }
+  h2 { font-size: 1.2rem; color: #16213e; margin: 2rem 0 0.8rem; border-bottom: 2px solid #e0e4ef;
+       padding-bottom: 0.4rem; }
+  h3 { font-size: 1rem; color: #0f3460; margin: 1.2rem 0 0.4rem; }
+  .meta { color: #666; font-size: 0.85rem; margin-bottom: 2rem; }
+  .card { background: #fff; border-radius: 8px; padding: 1.2rem 1.5rem;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 1rem; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 12px;
+           font-size: 0.78rem; font-weight: 600; }
+  .ok   { background: #e8f5e9; color: #2e7d32; }
+  .warn { background: #fff8e1; color: #f57f17; }
+  .err  { background: #fce4ec; color: #c62828; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th    { background: #f0f2f8; text-align: left; padding: 6px 10px;
+          font-weight: 600; border-bottom: 1px solid #d0d5e8; }
+  td    { padding: 6px 10px; border-bottom: 1px solid #eef0f6; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr));
+                  gap: 0.8rem; margin-bottom: 1rem; }
+  .stat { background: #fff; border-radius: 8px; padding: 0.8rem 1rem;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.07); text-align: center; }
+  .stat-num { font-size: 2rem; font-weight: 700; color: #0f3460; }
+  .stat-lbl { font-size: 0.75rem; color: #888; margin-top: 2px; }
+  pre  { background: #f8f9fc; padding: 0.6rem 1rem; border-radius: 6px;
+         font-size: 0.78rem; overflow-x: auto; white-space: pre-wrap; }
+  .empty { color: #aaa; font-style: italic; font-size: 0.85rem; }
+  .tl-row { display: flex; gap: 1rem; padding: 4px 0; font-size: 0.83rem; }
+  .tl-label { min-width: 200px; color: #555; }
+  .tl-ts    { min-width: 180px; color: #333; font-family: monospace; }
+  .tl-detail{ color: #888; }
+</style>
+</head>
+<body>
+<h1>RoofManager.ca — Super Admin Debug Scan</h1>
+<div class="meta">Generated 2026-04-14 23:21:55 UTC · Lookback: 7 days · Target: https://www.roofmanager.ca</div>
+
+<!-- ====== 1. ONBOARDING ====== -->
+<h2>1. Customer Onboarding Issues</h2>
+<div class="summary-grid">
+  <div class="stat"><div class="stat-num">0</div><div class="stat-lbl">New Customers</div></div>
+  <div class="stat"><div class="stat-num ok">0</div><div class="stat-lbl">Unverified Email &gt;24h</div></div>
+  <div class="stat"><div class="stat-num ok">0</div><div class="stat-lbl">Onboarding Stuck &gt;48h</div></div>
+  <div class="stat"><div class="stat-num ok">0</div><div class="stat-lbl">No Subscription</div></div>
+  <div class="stat"><div class="stat-num ok">0</div><div class="stat-lbl">Webhook Error Types</div></div>
+</div>
+
+
+
+
+
+
+
+
+<p class="empty">No onboarding issues found.</p>
+
+
+
+<!-- ====== 2. PLATFORM HEALTH ====== -->
+<h2>2. Platform Health</h2>
+<div class="summary-grid">
+  <div class="stat"><div class="stat-num ok">0</div><div class="stat-lbl">API Failures</div></div>
+  <div class="stat"><div class="stat-num ok">OK</div><div class="stat-lbl">D1 Database</div></div>
+  <div class="stat"><div class="stat-num ok">0</div><div class="stat-lbl">Webhook Backlog Types</div></div>
+  <div class="stat"><div class="stat-num">2</div><div class="stat-lbl">Admin Users</div></div>
+</div>
+
+<h3>API Endpoints</h3>
+<div class="card">
+<table>
+<tr><th>Endpoint</th><th>Status</th><th>Latency</th><th>Result</th></tr>
+
+<tr>
+  <td>Main Health</td>
+  <td><span class="badge ok">200</span></td>
+  <td>178ms</td>
+  <td><span class="badge ok">OK</span></td>
+</tr>
+
+<tr>
+  <td>Solar API Health</td>
+  <td><span class="badge ok">200</span></td>
+  <td>1161ms</td>
+  <td><span class="badge ok">OK</span></td>
+</tr>
+
+<tr>
+  <td>Gemini AI Health</td>
+  <td><span class="badge ok">200</span></td>
+  <td>683ms</td>
+  <td><span class="badge ok">OK</span></td>
+</tr>
+
+</table></div>
+
+
+
+
+
+
+<h3>Admin Users</h3>
+<div class="card">
+<table>
+<tr><th>ID</th><th>Email</th><th>Role</th><th>Active</th><th>Last Login</th></tr>
+
+<tr><td>2</td><td>b***@telus.net</td><td>superadmin</td>
+    <td><span class="badge ok">Yes</span></td>
+    <td>—</td></tr>
+
+<tr><td>1</td><td>e***@gmail.com</td><td>superadmin</td>
+    <td><span class="badge ok">Yes</span></td>
+    <td>2026-04-11 23:35:14</td></tr>
+
+</table></div>
+
+
+
+<!-- ====== 3. REPORT TRACING ====== -->
+<h2>3. Roof Measurement Report Tracing</h2>
+<div class="summary-grid">
+  <div class="stat"><div class="stat-num">26</div><div class="stat-lbl">Total Reports</div></div>
+  <div class="stat"><div class="stat-num ok">0</div><div class="stat-lbl">Stuck Generating</div></div>
+  <div class="stat"><div class="stat-num ok">0</div><div class="stat-lbl">Failed (no error msg)</div></div>
+  <div class="stat"><div class="stat-num ok">0</div><div class="stat-lbl">High Retry (&gt;3)</div></div>
+  <div class="stat"><div class="stat-num ok">0</div><div class="stat-lbl">Missing PDFs</div></div>
+  <div class="stat"><div class="stat-num ok">0</div><div class="stat-lbl">Enhancement Failures</div></div>
+</div>
+
+<h3>Status Distribution</h3>
+<div class="card">
+<table>
+<tr><th>Status</th><th>Count</th></tr>
+
+<tr><td>completed</td><td>25</td></tr>
+
+<tr><td>pending</td><td>1</td></tr>
+
+</table></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<p class="empty">No report issues found in this period.</p>
+
+
+</body>
+</html>
