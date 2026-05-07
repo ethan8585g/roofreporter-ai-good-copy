@@ -1921,9 +1921,21 @@ function saCloseEaveSection() {
 window.saSubmitTrace = async function(orderId) {
   var s = window._saTraceState;
   if (!s) return;
-  // Auto-close current eave draft if it has >=3 points and no closed sections yet
-  if ((!s.eaveSections || s.eaveSections.length === 0) && s._eaveLatLngs && s._eaveLatLngs.length >= 3) {
+  // Auto-close any pending eave draft (handles the "user added a 2nd structure
+  // but forgot to close it" case — without this, the unsaved draft is silently
+  // discarded and only its ridge/hip lines survive, producing a garage diagram
+  // with floating hips/ridges and no eaves polygon).
+  if (s._eaveLatLngs && s._eaveLatLngs.length >= 3) {
     saCloseEaveSection();
+  } else if (s._eaveLatLngs && s._eaveLatLngs.length > 0) {
+    // Partial draft (1-2 points) is about to be discarded — warn if the user
+    // also placed ridge/hip/valley lines, which suggests they were tracing a
+    // second structure and just didn't close its eaves.
+    var floatingLines = (s._ridgeData || []).length + (s._hipData || []).length + (s._valleyData || []).length;
+    if (floatingLines > 0) {
+      var ok = confirm('You have ' + s._eaveLatLngs.length + ' unsaved eave point' + (s._eaveLatLngs.length === 1 ? '' : 's') + ' that will be discarded. Submit anyway?');
+      if (!ok) return;
+    }
   }
   if (!s.eaveSections || s.eaveSections.length === 0) {
     alert('Please draw the eaves polygon first (at least 3 points). Click the first point again to close it.');
