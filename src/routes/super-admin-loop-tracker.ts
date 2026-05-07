@@ -24,7 +24,7 @@ superAdminLoopTracker.use('*', async (c, next) => {
   await next()
 })
 
-const VALID_TYPES: ScanType[] = ['public', 'customer', 'admin', 'health']
+const VALID_TYPES: ScanType[] = ['public', 'customer', 'admin', 'health', 'reports']
 
 // ── JSON: list runs ──────────────────────────────────────────
 superAdminLoopTracker.get('/api/runs', async (c) => {
@@ -187,6 +187,7 @@ const TYPES = [
   { key:'public',   label:'Public surface',       desc:'Landing, pricing, blog' },
   { key:'customer', label:'Customer modules',     desc:'Logged-in customer portal' },
   { key:'admin',    label:'Super Admin modules',  desc:'Logged-in admin pages' },
+  { key:'reports',  label:'Report sweep',         desc:'Recent reports — broken diagrams, dup structures, stuck jobs' },
   { key:'health',   label:'System health',        desc:'Daily DB + secrets check' },
 ];
 

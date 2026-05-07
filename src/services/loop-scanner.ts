@@ -6,13 +6,24 @@
 
 import type { Bindings } from '../types'
 import { issueScanCustomerJWT, issueScanAdminJWT } from './synthetic-auth'
+import {
+  fetchReportsForSweep,
+  scanReportsBatch,
+  type ReportFindingCategory,
+} from './report-error-scanner'
 
 const PROD_BASE = 'https://www.roofmanager.ca'
 const SYNTHETIC_HEADER = { 'X-Synthetic-Test': '1' }
 
-export type ScanType = 'public' | 'customer' | 'admin' | 'health'
+export type ScanType = 'public' | 'customer' | 'admin' | 'health' | 'reports'
 type Severity = 'error' | 'warn'
-type Category = 'broken_link' | 'form_smoke' | 'console_error' | 'api_health' | 'health_check'
+type Category =
+  | 'broken_link'
+  | 'form_smoke'
+  | 'console_error'
+  | 'api_health'
+  | 'health_check'
+  | ReportFindingCategory
 
 type Finding = {
   severity: Severity
@@ -80,6 +91,11 @@ export async function runScan(
     if (type === 'health') {
       const findings = await runHealthCheck(env)
       return await closeRun(env, runId, t0, 1, findings)
+    }
+
+    if (type === 'reports') {
+      const findings = await runReportSweep(env)
+      return await closeRun(env, runId, t0, findings.pagesChecked, findings.list)
     }
 
     const cfg =
@@ -326,12 +342,28 @@ async function runHealthCheck(env: Bindings): Promise<Finding[]> {
     findings.push({ severity: 'error', category: 'health_check', message: `D1 SELECT 1 failed: ${e?.message}` })
   }
 
-  // 2. Critical secrets present
-  const required = ['GOOGLE_SOLAR_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_VERTEX_API_KEY', 'SQUARE_ACCESS_TOKEN', 'RESEND_API_KEY', 'JWT_SECRET']
-  for (const key of required) {
-    const val = (env as any)[key]
-    if (!val || (typeof val === 'string' && val.length < 4)) {
-      findings.push({ severity: 'error', category: 'health_check', message: `Required secret missing or empty: ${key}` })
+  // 2. Critical secrets present. Each entry is a tuple of equivalent keys —
+  // the secret is OK if ANY one of them is populated. (The codebase has a few
+  // historical aliases for Gemini and email delivery; we only care that
+  // *some* working path is configured.)
+  const requiredAny: Array<{ label: string; keys: string[] }> = [
+    { label: 'Google Solar API', keys: ['GOOGLE_SOLAR_API_KEY'] },
+    { label: 'Google Maps', keys: ['GOOGLE_MAPS_API_KEY'] },
+    { label: 'Gemini API', keys: ['GEMINI_API_KEY', 'GEMINI_ENHANCE_API_KEY', 'default_gemini_googleaistudio_key', 'google_ai_studio_secret_key', 'GOOGLE_VERTEX_API_KEY'] },
+    { label: 'Square payments', keys: ['SQUARE_ACCESS_TOKEN'] },
+    { label: 'Email delivery (Resend or Gmail OAuth)', keys: ['RESEND_API_KEY', 'GMAIL_REFRESH_TOKEN'] },
+  ]
+  for (const { label, keys } of requiredAny) {
+    const ok = keys.some(k => {
+      const v = (env as any)[k]
+      return v && typeof v === 'string' && v.length >= 4
+    })
+    if (!ok) {
+      findings.push({
+        severity: 'error',
+        category: 'health_check',
+        message: `${label} not configured — none of [${keys.join(', ')}] are set`,
+      })
     }
   }
 
@@ -370,6 +402,51 @@ async function runHealthCheck(env: Bindings): Promise<Finding[]> {
   } catch {}
 
   return findings
+}
+
+// ── Inline: scan ONE report immediately after generation ────────
+// Writes findings under a tiny single-report loop_scan_runs row tagged
+// triggered_by='inline' so the Super Admin Loop Tracker UI shows them
+// in the same feed as batch sweep results. Non-fatal: a scanner error
+// must never block report delivery to the customer.
+export async function scanReportInline(env: Bindings, orderId: number | string): Promise<void> {
+  try {
+    const { scanReportForErrors } = await import('./report-error-scanner')
+    const reportFindings = await scanReportForErrors(env, orderId)
+    if (reportFindings.length === 0) return // silent pass — no row needed
+
+    const t0 = Date.now()
+    const run = await env.DB.prepare(
+      `INSERT INTO loop_scan_runs (scan_type, status, triggered_by, pages_checked) VALUES ('reports', 'running', 'inline', 1) RETURNING id`,
+    ).first<{ id: number }>()
+    if (!run) return
+    const findings: Finding[] = reportFindings.map(f => ({
+      severity: f.severity,
+      category: f.category as Category,
+      url: f.url,
+      message: f.message,
+      details: { ...(f.details || {}), order_id: f.order_id },
+    }))
+    await closeRun(env, run.id, t0, 1, findings)
+  } catch (e: any) {
+    console.warn('[scanReportInline] non-fatal scanner error:', e?.message || e)
+  }
+}
+
+// ── Sweep: scan recent reports for generation errors ────────────
+// Covers reports created/updated in the last ~75 minutes (overlap with
+// the hourly cron) plus any review-flagged report not yet resolved.
+async function runReportSweep(env: Bindings): Promise<{ pagesChecked: number; list: Finding[] }> {
+  const rows = await fetchReportsForSweep(env, 75)
+  const reportFindings = await scanReportsBatch(env, rows)
+  const list: Finding[] = reportFindings.map(f => ({
+    severity: f.severity,
+    category: f.category as Category,
+    url: f.url,
+    message: f.message,
+    details: { ...(f.details || {}), order_id: f.order_id },
+  }))
+  return { pagesChecked: rows.length, list }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
