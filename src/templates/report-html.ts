@@ -7,7 +7,7 @@
 
 import type {
   RoofReport, RoofSegment, EdgeMeasurement, AIMeasurementAnalysis,
-  PerimeterPoint, VisionFindings
+  PerimeterPoint
 } from '../types'
 import {
   pitchToRatio, feetToFeetInches, smartEdgeFootage, SEGMENT_COLORS
@@ -767,7 +767,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <!-- Accuracy + Disclaimer -->
   <div style="padding:4px 28px 36px;font-size:7px;color:#666;line-height:1.5;text-align:center">
     <strong style="color:#333">Accuracy:</strong> &plusmn;2% area, &plusmn;1% linear &mdash; industry-standard tolerance per EagleView/RoofSnap convention.
-    Report is an engineering-grade estimate based on user-traced GPS or AI vision; physical verification recommended for code-critical work.
+    Report is an engineering-grade estimate based on user-traced GPS coordinates; physical verification recommended for code-critical work.
     &copy; ${new Date().getFullYear()} Roof Manager. All imagery &copy; Google.
   </div>
 
@@ -959,7 +959,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <!-- Methodology note -->
   <div style="padding:6px 28px 0">
     <div style="padding:4px 8px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:3px;font-size:6.5px;color:#0369a1;line-height:1.4">
-      <strong>Methodology:</strong> Measurements from ${(report as any).roof_trace ? 'user-traced GPS coordinates (UTM projection, Shoelace formula)' : 'AI vision analysis of satellite imagery'}. Pitch multiplier &radic;(rise&sup2;+12&sup2;)/12 applied for true 3D surface area. Pitch source: ${(report as any).roof_trace ? 'per-segment GPS where computed; otherwise dominant pitch from Solar API roofSegmentStats' : 'AI vision (Gemini)'}. Engine v6.0 &mdash; Industry-standard multipliers per GAF/CertainTeed/IKO/EagleView.
+      <strong>Methodology:</strong> Measurements from ${(report as any).roof_trace ? 'user-traced GPS coordinates (UTM projection, Shoelace formula)' : 'satellite imagery (UTM projection, Shoelace formula)'}. Pitch multiplier &radic;(rise&sup2;+12&sup2;)/12 applied for true 3D surface area. Pitch source: ${(report as any).roof_trace ? 'per-segment GPS where computed; otherwise dominant pitch from Solar API roofSegmentStats' : 'dominant pitch from Solar API roofSegmentStats'}. Engine v6.0 &mdash; Industry-standard multipliers per GAF/CertainTeed/IKO/EagleView.
     </div>
   </div>
 
@@ -987,112 +987,6 @@ ${report.solar_panel_layout ? buildSolarProposalPage(report, reportNum, reportDa
 
 </body>
 </html>`
-}
-
-// ============================================================
-// HELPER: Build Vision Findings HTML section for professional report
-// Renders the multimodal AI inspection results as a styled page
-// ============================================================
-
-// ============================================================
-// HELPER: Build Vision Findings HTML section for professional report
-// ============================================================
-export function buildVisionFindingsHTML(vf: VisionFindings): string {
-  if (!vf || !vf.findings || vf.findings.length === 0) return ''
-
-  const hs = vf.heat_score
-  const heatColor = hs.total >= 75 ? '#dc2626' : hs.total >= 50 ? '#ea580c' : hs.total >= 25 ? '#d97706' : '#059669'
-  const heatBg = hs.total >= 75 ? '#fef2f2' : hs.total >= 50 ? '#fff7ed' : hs.total >= 25 ? '#fffbeb' : '#ecfdf5'
-  const condColor: Record<string, string> = { excellent: '#059669', good: '#16a34a', fair: '#d97706', poor: '#ea580c', critical: '#dc2626' }
-
-  const severityBadge = (sev: string) => {
-    const c: Record<string, [string, string]> = { low: ['#ecfdf5', '#059669'], moderate: ['#fffbeb', '#d97706'], high: ['#fff7ed', '#ea580c'], critical: ['#fef2f2', '#dc2626'] }
-    const [bg, fg] = c[sev] || ['#f1f5f9', '#475569']
-    return `<span style="padding:2px 6px;border-radius:2px;font-size:7px;font-weight:700;background:${bg};color:${fg};text-transform:uppercase">${sev}</span>`
-  }
-
-  const catIcon: Record<string, string> = { vulnerability: '&#9888;', obstruction: '&#9899;', environmental: '&#127795;', condition: '&#128269;' }
-
-  const findingsRows = vf.findings.slice(0, 12).map(f =>
-    `<tr>
-      <td style="padding:4px 6px;font-size:8px">${catIcon[f.category] || '&#8226;'} ${f.label}</td>
-      <td style="padding:4px 6px;font-size:8px;text-align:center">${severityBadge(f.severity)}</td>
-      <td style="padding:4px 6px;font-size:8px;text-align:center">${f.confidence}%</td>
-      <td style="padding:4px 6px;font-size:7.5px;color:#475569">${f.description.substring(0, 80)}${f.description.length > 80 ? '...' : ''}</td>
-    </tr>`
-  ).join('')
-
-  const gaugeWidth = Math.max(5, hs.total)
-
-  return `
-<!-- ==================== VISION INSPECTION PAGE ==================== -->
-<div class="page" style="page-break-before:always">
-  <div style="background:#002244;padding:10px 32px;display:flex;justify-content:space-between;align-items:center">
-    <div style="color:#fff;font-size:13px;font-weight:700;letter-spacing:1px">&#128065; AI VISION INSPECTION</div>
-    <div style="color:#7eafd4;font-size:9px;text-align:right">Multimodal Roof Condition Analysis &bull; ${vf.model}</div>
-  </div>
-  <div style="padding:16px 32px 50px">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-      <div style="background:${heatBg};border:1px solid ${heatColor}33;border-radius:6px;padding:14px">
-        <div style="font-size:9px;font-weight:700;color:${heatColor};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">&#128293; CRM Heat Score</div>
-        <div style="display:flex;align-items:baseline;gap:8px">
-          <span style="font-size:32px;font-weight:900;color:${heatColor}">${hs.total}</span>
-          <span style="font-size:14px;color:${heatColor};font-weight:600">/100</span>
-          <span style="padding:3px 10px;border-radius:3px;font-size:9px;font-weight:700;background:${heatColor};color:#fff;text-transform:uppercase;margin-left:8px">${hs.classification.replace('_', ' ')}</span>
-        </div>
-        <div style="background:#e2e8f0;border-radius:4px;height:8px;margin:8px 0;overflow:hidden">
-          <div style="width:${gaugeWidth}%;height:100%;background:${heatColor};border-radius:4px"></div>
-        </div>
-        <div style="font-size:7.5px;color:#64748b">${hs.summary}</div>
-      </div>
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:14px">
-        <div style="font-size:9px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Score Components</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:8px">
-          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Age & Wear</span><span style="font-weight:700">${hs.components.age_wear}/30</span></div>
-          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Structural</span><span style="font-weight:700">${hs.components.structural}/25</span></div>
-          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Environmental</span><span style="font-weight:700">${hs.components.environmental}/20</span></div>
-          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Obstructions</span><span style="font-weight:700">${hs.components.obstruction_complexity}/15</span></div>
-          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Urgency</span><span style="font-weight:700">${hs.components.urgency_bonus}/10</span></div>
-          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Condition</span><span style="font-weight:700;color:${condColor[vf.overall_condition] || '#475569'};text-transform:uppercase">${vf.overall_condition}</span></div>
-        </div>
-      </div>
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <div style="flex:1;text-align:center;padding:6px;background:#fef2f2;border-radius:4px;border:1px solid #fecaca">
-        <div style="font-size:18px;font-weight:900;color:#dc2626">${vf.findings.filter(f => f.category === 'vulnerability').length}</div>
-        <div style="font-size:7px;color:#991b1b;font-weight:600">Vulnerabilities</div>
-      </div>
-      <div style="flex:1;text-align:center;padding:6px;background:#f0f9ff;border-radius:4px;border:1px solid #bae6fd">
-        <div style="font-size:18px;font-weight:900;color:#0369a1">${vf.findings.filter(f => f.category === 'obstruction').length}</div>
-        <div style="font-size:7px;color:#0c4a6e;font-weight:600">Obstructions</div>
-      </div>
-      <div style="flex:1;text-align:center;padding:6px;background:#ecfdf5;border-radius:4px;border:1px solid #a7f3d0">
-        <div style="font-size:18px;font-weight:900;color:#059669">${vf.findings.filter(f => f.category === 'environmental').length}</div>
-        <div style="font-size:7px;color:#065f46;font-weight:600">Environmental</div>
-      </div>
-      <div style="flex:1;text-align:center;padding:6px;background:#f5f3ff;border-radius:4px;border:1px solid #c4b5fd">
-        <div style="font-size:18px;font-weight:900;color:#7c3aed">${vf.findings.filter(f => f.category === 'condition').length}</div>
-        <div style="font-size:7px;color:#5b21b6;font-weight:600">Condition</div>
-      </div>
-    </div>
-    <table style="width:100%;border-collapse:collapse;font-size:8.5px;margin-top:4px">
-      <thead>
-        <tr style="background:#003366;color:#fff">
-          <th style="padding:5px 6px;text-align:left;font-size:7.5px;font-weight:700">Finding</th>
-          <th style="padding:5px 6px;text-align:center;font-size:7.5px;font-weight:700;width:70px">Severity</th>
-          <th style="padding:5px 6px;text-align:center;font-size:7.5px;font-weight:700;width:45px">Conf.</th>
-          <th style="padding:5px 6px;text-align:left;font-size:7.5px;font-weight:700">Description</th>
-        </tr>
-      </thead>
-      <tbody>${findingsRows}</tbody>
-    </table>
-    ${vf.findings.length > 12 ? `<div style="font-size:7px;color:#94a3b8;text-align:center;margin-top:4px">... and ${vf.findings.length - 12} more findings</div>` : ''}
-    <div style="margin-top:12px;padding:8px 12px;background:#eff6ff;border-radius:4px;border-left:3px solid #3b82f6;font-size:7.5px;color:#1e40af">
-      <strong>AI Vision Note:</strong> ${vf.summary} &mdash; Inspected ${new Date(vf.inspected_at).toLocaleDateString('en-CA')} using ${vf.model}. Duration: ${vf.duration_ms}ms.
-      ${vf.heat_score.total >= 50 ? '<br><strong>&#9888; Field verification strongly recommended.</strong>' : ''}
-    </div>
-  </div>
-</div>`
 }
 
 // ============================================================
@@ -2329,7 +2223,7 @@ function buildMeasurementSummaryPage(report: RoofReport, reportNum: string, repo
   <!-- Notes -->
   <div style="padding:0 28px">
     <div style="padding:6px 10px;background:${TEAL_LIGHT};border:1px solid ${TEAL};border-radius:4px;font-size:7px;color:${TEAL_DARK};line-height:1.5">
-      <strong>Notes:</strong> All measurements derived from ${(report as any).roof_trace ? 'user-traced GPS coordinates (UTM projection, Shoelace formula)' : 'AI vision analysis'}. Pitch multiplier &radic;(rise&sup2;+12&sup2;)/12 applied for true 3D surface area. Material quantities include standard waste factor. Verify with supplier before purchasing.
+      <strong>Notes:</strong> All measurements derived from ${(report as any).roof_trace ? 'user-traced GPS coordinates (UTM projection, Shoelace formula)' : 'satellite imagery (UTM projection, Shoelace formula)'}. Pitch multiplier &radic;(rise&sup2;+12&sup2;)/12 applied for true 3D surface area. Material quantities include standard waste factor. Verify with supplier before purchasing.
     </div>
   </div>
 

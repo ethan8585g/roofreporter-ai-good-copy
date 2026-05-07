@@ -23,7 +23,7 @@ import {
 import { buildSolarGeometry, solarGeometryToTracePayload, getZoomForFootprint } from '../services/solar-geometry'
 import { buildDataLayersReport, generateSegmentsFromDLAnalysis, generateSegmentsFromAIGeometry } from '../services/report-engine'
 import { executeRoofOrder, fetchSolarImageryOnly, type DataLayersAnalysis } from '../services/solar-datalayers'
-import { generateProfessionalReportHTML, buildVisionFindingsHTML, generateSimpleTwoPageReport } from '../templates/report-html'
+import { generateProfessionalReportHTML, generateSimpleTwoPageReport } from '../templates/report-html'
 import { generateSolarProposalHTML } from '../templates/solar-proposal'
 import { generateTraceBasedDiagramSVG } from '../templates/svg-diagrams'
 import { generateCustomerReportHTML } from '../templates/customer-report-html'
