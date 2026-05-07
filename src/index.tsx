@@ -7663,7 +7663,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       <div class="absolute top-1/3 left-1/4 w-[800px] h-[800px] rounded-full opacity-10" style="background: radial-gradient(circle, #00FF88 0%, transparent 70%);"></div>
       <div class="absolute bottom-0 right-0 w-[600px] h-[600px] rounded-full opacity-5" style="background: radial-gradient(circle, #22d3ee 0%, transparent 70%);"></div>
       <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-32 pb-24 lg:pt-40 lg:pb-32">
-        <div class="grid lg:grid-cols-2 gap-16 lg:gap-20 items-center">
+        <div class="grid gap-16 items-center">
           <div>
             <!-- conv-v5: hero rewritten — one primary CTA, demoted preview/contact to inline text links, trust bar replaces chip soup -->
             <div class="inline-flex items-center gap-2.5 bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-full px-5 py-2.5 mb-8 backdrop-blur-sm">
@@ -7744,115 +7744,6 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             <div class="lg:hidden mt-8 flex flex-col gap-3">
               <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_mobile_primary'});window.trackAdsConversion&amp;&amp;window.trackAdsConversion('lead',{value:5,currency:'CAD'})}catch(e){}" class="flex items-center justify-center gap-3 bg-[#00FF88] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px]"><i class="fas fa-gift" aria-hidden="true"></i>Start free — 4 roof reports, no card<i class="fas fa-arrow-right text-sm" aria-hidden="true"></i></a>
               <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_mobile_sample_report'})}catch(e){}" class="flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-7 rounded-xl text-base border border-white/10 min-h-[56px] transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Report</a>
-            </div>
-          </div>
-          <div class="hidden lg:block">
-            <div class="relative">
-              <div class="bg-[#111111] border border-white/10 rounded-2xl overflow-hidden shadow-2xl shadow-black/50 neon-glow">
-                <!-- LIVE MEASUREMENT badge -->
-                <div class="bg-[#0d1117] px-6 py-4 border-b border-white/5 flex items-center justify-between">
-                  <div class="inline-flex items-center gap-2.5 text-[#00FF88] text-xs font-bold tracking-wider uppercase">
-                    <span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-[#00FF88]"></span></span>
-                    Live Measurement
-                  </div>
-                  <span class="text-[10px] text-gray-500 font-mono">123 Maple Ave, Calgary AB</span>
-                </div>
-                <!-- Satellite-style top-down roof measurement -->
-                <div class="relative px-6 pt-6 pb-2" style="background:linear-gradient(180deg,#0d1117 0%,#111 100%);">
-                  <svg viewBox="0 0 400 240" class="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                      <pattern id="satGrid" width="16" height="16" patternUnits="userSpaceOnUse">
-                        <path d="M 16 0 L 0 0 0 16" fill="none" stroke="rgba(0,255,136,0.05)" stroke-width="1"/>
-                      </pattern>
-                      <radialGradient id="satVignette" cx="50%" cy="50%" r="70%">
-                        <stop offset="0%" stop-color="#1a2332" stop-opacity="1"/>
-                        <stop offset="100%" stop-color="#0a0e14" stop-opacity="1"/>
-                      </radialGradient>
-                      <linearGradient id="roofTone" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stop-color="#3d4656"/>
-                        <stop offset="100%" stop-color="#262c38"/>
-                      </linearGradient>
-                    </defs>
-                    <rect width="400" height="240" fill="url(#satVignette)"/>
-                    <rect width="400" height="240" fill="url(#satGrid)"/>
-                    <!-- Surrounding property context -->
-                    <rect x="30" y="30" width="40" height="60" fill="#1e2530" opacity="0.8" rx="2"/>
-                    <rect x="330" y="40" width="50" height="45" fill="#1e2530" opacity="0.8" rx="2"/>
-                    <rect x="340" y="170" width="40" height="55" fill="#1e2530" opacity="0.7" rx="2"/>
-                    <path d="M 0 105 Q 200 100 400 108" stroke="#2a3140" stroke-width="14" fill="none" opacity="0.6"/>
-                    <circle cx="50" cy="180" r="8" fill="#1a3a2a" opacity="0.6"/>
-                    <circle cx="75" cy="200" r="6" fill="#1a3a2a" opacity="0.6"/>
-                    <circle cx="350" cy="130" r="7" fill="#1a3a2a" opacity="0.6"/>
-                    <!-- Roof footprint (top-down) -->
-                    <polygon points="120,70 280,70 300,170 100,170" fill="url(#roofTone)" stroke="rgba(0,0,0,0.4)" stroke-width="1"/>
-                    <!-- Ridge -->
-                    <line x1="140" y1="120" x2="260" y2="120" stroke="#00FF88" stroke-width="2.5" class="roof-svg-line delay-1"/>
-                    <!-- Hips -->
-                    <line x1="120" y1="70" x2="140" y2="120" stroke="#22d3ee" stroke-width="2.5" class="roof-svg-line delay-2"/>
-                    <line x1="280" y1="70" x2="260" y2="120" stroke="#22d3ee" stroke-width="2.5" class="roof-svg-line delay-2"/>
-                    <line x1="100" y1="170" x2="140" y2="120" stroke="#22d3ee" stroke-width="2.5" class="roof-svg-line delay-2"/>
-                    <line x1="300" y1="170" x2="260" y2="120" stroke="#22d3ee" stroke-width="2.5" class="roof-svg-line delay-2"/>
-                    <!-- Eaves -->
-                    <line x1="120" y1="70" x2="280" y2="70" stroke="#a78bfa" stroke-width="2" class="roof-svg-line delay-3"/>
-                    <line x1="100" y1="170" x2="300" y2="170" stroke="#a78bfa" stroke-width="2" class="roof-svg-line delay-3"/>
-                    <line x1="120" y1="70" x2="100" y2="170" stroke="#a78bfa" stroke-width="2" class="roof-svg-line delay-3"/>
-                    <line x1="280" y1="70" x2="300" y2="170" stroke="#a78bfa" stroke-width="2" class="roof-svg-line delay-3"/>
-                    <!-- Measurement vertices -->
-                    <circle cx="120" cy="70" r="3" fill="#00FF88"/>
-                    <circle cx="280" cy="70" r="3" fill="#00FF88"/>
-                    <circle cx="100" cy="170" r="3" fill="#00FF88"/>
-                    <circle cx="300" cy="170" r="3" fill="#00FF88"/>
-                    <circle cx="140" cy="120" r="3" fill="#00FF88"/>
-                    <circle cx="260" cy="120" r="3" fill="#00FF88"/>
-                    <!-- Labels -->
-                    <g class="roof-label delay-1">
-                      <rect x="170" y="104" width="60" height="18" rx="4" fill="#00FF88"/>
-                      <text x="200" y="117" text-anchor="middle" fill="#0A0A0A" font-size="10" font-weight="800">Ridge 48.2 ft</text>
-                    </g>
-                    <g class="roof-label delay-2">
-                      <rect x="95" y="88" width="50" height="16" rx="4" fill="#22d3ee"/>
-                      <text x="120" y="100" text-anchor="middle" fill="#0A0A0A" font-size="9" font-weight="800">Hip 32.6</text>
-                    </g>
-                    <g class="roof-label delay-3">
-                      <rect x="170" y="176" width="60" height="16" rx="4" fill="#a78bfa"/>
-                      <text x="200" y="188" text-anchor="middle" fill="#0A0A0A" font-size="9" font-weight="800">Eave 96.4 ft</text>
-                    </g>
-                    <!-- Scanning pin -->
-                    <circle cx="200" cy="120" r="5" fill="#00FF88"/>
-                    <circle cx="200" cy="120" r="10" fill="none" stroke="#00FF88" stroke-width="1.5" opacity="0.5">
-                      <animate attributeName="r" from="5" to="18" dur="1.6s" repeatCount="indefinite"/>
-                      <animate attributeName="opacity" from="0.7" to="0" dur="1.6s" repeatCount="indefinite"/>
-                    </circle>
-                    <!-- Compass -->
-                    <g transform="translate(365,30)">
-                      <circle r="12" fill="rgba(0,0,0,0.5)" stroke="rgba(255,255,255,0.15)"/>
-                      <text y="-3" text-anchor="middle" fill="#00FF88" font-size="9" font-weight="800">N</text>
-                      <path d="M 0 -8 L 3 0 L 0 -2 L -3 0 Z" fill="#00FF88"/>
-                    </g>
-                  </svg>
-                </div>
-                <!-- Report summary card -->
-                <div class="px-6 pb-6 pt-2 space-y-3">
-                  <div class="bg-[#0d1117] border border-[#00FF88]/20 rounded-xl p-4">
-                    <div class="flex items-center justify-between mb-3">
-                      <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Report Summary</div>
-                      <div class="inline-flex items-center gap-1.5 text-[10px] text-[#00FF88] font-bold"><i class="fas fa-check-circle"></i>High Confidence</div>
-                    </div>
-                    <div class="grid grid-cols-3 gap-2">
-                      <div><div class="text-[9px] text-gray-500 uppercase tracking-wider">Sloped Area</div><div class="text-lg font-black text-white">2,847<span class="text-xs text-gray-400 ml-1">ft²</span></div></div>
-                      <div><div class="text-[9px] text-gray-500 uppercase tracking-wider">Pitch</div><div class="text-lg font-black text-white">4/12</div></div>
-                      <div><div class="text-[9px] text-gray-500 uppercase tracking-wider">Shingles</div><div class="text-lg font-black text-white">32<span class="text-xs text-gray-400 ml-1">sq</span></div></div>
-                    </div>
-                  </div>
-                  <a href="/register" onclick="rrTrack('cta_click',{location:'hero_card_signup'})" class="flex items-center justify-center gap-3 w-full bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 rounded-xl text-base shadow-xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.02]"><i class="fas fa-gift"></i> Get 4 FREE Reports <i class="fas fa-arrow-right text-sm"></i></a>
-                </div>
-                <div class="px-6 py-3 bg-[#080c10] border-t border-white/5 flex items-center justify-center gap-3">
-                  <div class="flex items-center gap-0.5"><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i></div>
-                  <span class="text-[11px] text-gray-500">Rated <strong class="text-white">4.9/5</strong> by 200+ contractors</span>
-                </div>
-              </div>
-              <div class="absolute -bottom-4 -left-4 bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 shadow-xl flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-[#00FF88]/10 flex items-center justify-center"><i class="fas fa-chart-line text-[#00FF88] text-sm"></i></div><div><div class="text-white font-bold text-sm" data-count="35666" data-suffix="+" id="hero-counter">0+</div><div class="text-[10px] text-gray-500">reports this month</div></div></div>
-              <div class="absolute -top-3 -right-3 bg-[#111111] border border-white/10 rounded-xl px-3 py-2 shadow-xl flex items-center gap-2"><div class="w-6 h-6 rounded-lg bg-[#22d3ee]/10 flex items-center justify-center"><i class="fas fa-bolt text-[#22d3ee] text-xs"></i></div><span class="text-white font-bold text-xs">&lt;60s delivery</span></div>
             </div>
           </div>
         </div>
