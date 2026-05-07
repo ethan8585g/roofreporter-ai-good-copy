@@ -178,6 +178,18 @@ export type Bindings = {
   // The local slash command sends this in `Authorization: Bearer …` to evaluate
   // the signup funnel and queue super-admin alerts on regressions.
   FUNNEL_MONITOR_TOKEN?: string
+
+  // ── Loop Tracker — recurring site scanners (services/loop-scanner.ts) ──
+  // Email of an existing super-admin / customer. The scanner mints a
+  // short-lived (5-min) session row directly in admin_sessions /
+  // customer_sessions; no password is stored.
+  SCAN_ADMIN_EMAIL?: string
+  SCAN_CUSTOMER_EMAIL?: string
+  // Optional: enable console-error capture via Cloudflare Browser Rendering
+  // REST API. If either is unset, console-error check logs a single 'skipped'
+  // warning and exits — the rest of the scan still runs.
+  CLOUDFLARE_ACCOUNT_ID?: string
+  CLOUDFLARE_API_TOKEN?: string
 }
 
 // ============================================================

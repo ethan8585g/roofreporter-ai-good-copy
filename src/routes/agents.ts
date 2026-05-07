@@ -25,6 +25,13 @@ async function getCustomer(c: any): Promise<{ id: number; email: string; ownerId
 // ============================================================
 agentsRoutes.post('/leads', async (c) => {
   try {
+    // Loop Tracker synthetic smoke test — short-circuit BEFORE any side
+    // effects (no DB write, no notification email, no admin alert). Lets
+    // the recurring scanner verify the endpoint is up + accepting JSON
+    // without polluting the leads table.
+    if (c.req.header('X-Synthetic-Test') === '1') {
+      return c.json({ success: true, synthetic: true })
+    }
     let body: any
     try { body = await c.req.json() } catch (_) {
       return c.json({ error: 'Invalid JSON body' }, 400)

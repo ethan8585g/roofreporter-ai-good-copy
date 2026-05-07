@@ -64,6 +64,9 @@ import { platformAdmin } from './routes/platform-admin'
 import { superAdminBi } from './routes/super-admin-bi'
 import { superAdminLeads } from './routes/super-admin-leads'
 import { superAdminAttribution } from './routes/super-admin-attribution'
+import { superAdminLoopTracker } from './routes/super-admin-loop-tracker'
+import { runScan as runLoopScan } from './services/loop-scanner'
+import { pruneExpiredScanSessions } from './services/synthetic-auth'
 import { superAdminLtv } from './routes/super-admin-ltv'
 import { superAdminColdCall } from './routes/super-admin-cold-call'
 import { fieldRoutes, fieldUiRoutes } from './routes/field'
@@ -612,6 +615,11 @@ app.route('/api/admin/leads', superAdminLeads)
 // Super-admin attribution: HTML pages at /super-admin/attribution* + JSON at /api/super-admin/attribution/*
 app.route('/super-admin/attribution', superAdminAttribution)
 app.route('/api/super-admin/attribution', superAdminAttribution)
+
+// Super-admin Loop Tracker: HTML page at /super-admin/loop-tracker + JSON at /api/super-admin/loop-tracker/*
+// Surfaces results of the recurring site scanners (public, customer, admin, daily health).
+app.route('/super-admin/loop-tracker', superAdminLoopTracker)
+app.route('/api/super-admin/loop-tracker', superAdminLoopTracker)
 
 app.route('/super-admin/ltv', superAdminLtv)
 app.route('/api/super-admin/ltv', superAdminLtv)
@@ -4948,6 +4956,47 @@ export default {
       })())
     }
 
+    // ── Loop Tracker scanners (every 30 min, staggered) ──────
+    // Three surfaces (public/customer/admin) on the same cron tick are
+    // staggered by minute so they don't pile concurrent fetch + Browser
+    // Rendering invocations against the same edge node. The daily system
+    // health check runs at 09:00 UTC (~02-04 local depending on DST).
+    const minute = now.getUTCMinutes()
+    const SCAN_AT: Array<[number, 'public' | 'customer' | 'admin']> = [
+      [0, 'public'],   [30, 'public'],
+      [10, 'customer'], [40, 'customer'],
+      [20, 'admin'],   [50, 'admin'],
+    ]
+    for (const [m, type] of SCAN_AT) {
+      if (minute === m && await isAgentEnabled(`scan_${type}`)) {
+        ctx.waitUntil((async () => {
+          const t0 = Date.now()
+          try {
+            const r = await runLoopScan(env, type, 'cron')
+            await logRun(`scan_${type}`, r.status === 'pass' ? 'success' : (r.status === 'fail' ? 'error' : 'error'), r.summary, { runId: r.runId, fail_count: r.failCount, pages: r.pagesChecked }, Date.now() - t0)
+          } catch (err: any) {
+            console.error(`[CRON:scan_${type}] Error:`, err.message)
+            await logRun(`scan_${type}`, 'error', err.message, {}, Date.now() - t0)
+          } finally {
+            await pruneExpiredScanSessions(env).catch(() => {})
+          }
+        })())
+      }
+    }
+    // Daily system health check — 09:00 UTC.
+    if (hour === 9 && minute === 0 && await isAgentEnabled('scan_health')) {
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const r = await runLoopScan(env, 'health', 'cron')
+          await logRun('scan_health', r.status === 'pass' ? 'success' : 'error', r.summary, { runId: r.runId, fail_count: r.failCount }, Date.now() - t0)
+        } catch (err: any) {
+          console.error('[CRON:scan_health] Error:', err.message)
+          await logRun('scan_health', 'error', err.message, {}, Date.now() - t0)
+        }
+      })())
+    }
+
     // ── Traffic Analyst Agent (every 12 hours: 0, 12 UTC) ────
     if (hour % 12 === 0 && await isAgentEnabled('traffic')) {
       ctx.waitUntil((async () => {
@@ -6323,6 +6372,7 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
           </button>
         </div>
         <a href="/" target="_blank" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-external-link-alt mr-1"></i>View Site</a>
+        <a href="/super-admin/loop-tracker" class="text-gray-400 hover:text-white text-xs transition-colors relative" id="sa-loop-tracker-link"><i class="fas fa-radar mr-1"></i>Loop Tracker<span id="sa-loop-tracker-badge" class="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] font-bold rounded-full px-1.5 h-4 flex items-center justify-center" style="display:none">0</span></a>
         <a href="/settings" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-cog mr-1"></i>Settings</a>
         <button onclick="saLogout()" class="text-gray-400 hover:text-red-400 text-xs transition-colors"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
       </div>
