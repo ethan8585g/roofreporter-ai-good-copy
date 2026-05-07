@@ -103,6 +103,11 @@ export interface TracePayload {
   // Total footprint = sum of all section areas. Engine uses the largest section
   // for linear/face geometry; remaining sections contribute area only.
   eaves_sections?: TracePt[][]
+  // Per-section pitch (rise:12) parallel to eaves_sections. When provided and
+  // > 0 for a given index, that section's sloped area is computed at its own
+  // pitch instead of the dominant default. Use this to model dormers and
+  // additions with steeper or shallower pitch than the main roof.
+  eaves_section_pitches?: Array<number | null>
   // Multi-layer eave depth: per-section overhang depth values.
   // If provided, ice & water shield and starter strip are computed per-layer.
   eave_depths?: EaveDepthLayer[]
@@ -347,6 +352,18 @@ export interface TraceReport {
   valley_details: LineDetail[]
   rake_details: LineDetail[]
   face_details: FaceDetail[]
+  // Per-section sloped/projected areas for multi-section roofs. Index 0 is the
+  // primary outline; subsequent entries align with TracePayload.eaves_sections.
+  // Only emitted when extra eaves sections are present. Used by the report
+  // template to show a per-structure pitch breakdown when sections vary.
+  section_pitches?: Array<{
+    section_index: number       // 0 = primary, 1+ = extra eaves_sections
+    label: string               // 'Main roof' | 'Section 2' | etc.
+    pitch_rise: number          // rise:12
+    projected_ft2: number
+    sloped_ft2: number
+    is_user_specified: boolean  // true when section's pitch came from eaves_section_pitches
+  }>
   materials_estimate: TraceMaterialEstimate
   advisory_notes: string[]
 }
@@ -940,6 +957,9 @@ export class RoofMeasurementEngine {
   // Raw WGS84 inputs
   private rawEaves: TracePt[]
   private rawEavesSections: TracePt[][] // extra sections for multi-section roofs
+  // Per-section pitch (rise:12) parallel to rawEavesSections. null = use
+  // engine default. Lets dormers/additions ride at their own pitch.
+  private rawEavesSectionPitches: Array<number | null> = []
   private rawRidges: TraceLine[]
   private rawHips: TraceLine[]
   private rawValleys: TraceLine[]
@@ -1021,10 +1041,24 @@ export class RoofMeasurementEngine {
 
     // Parse raw WGS84 inputs
     this.rawEaves   = (payload.eaves_outline || []).map(p => ({ lat: p.lat, lng: p.lng, elevation: p.elevation ?? null }))
-    // Extra eaves sections: filter to those different from the primary outline
-    this.rawEavesSections = (payload.eaves_sections || [])
-      .filter(sec => sec !== payload.eaves_outline && sec.length >= 3)
-      .map(sec => sec.map(p => ({ lat: p.lat, lng: p.lng, elevation: p.elevation ?? null })))
+    // Extra eaves sections: filter to those different from the primary outline.
+    // Per-section pitches must be filtered alongside in lockstep so the parallel
+    // arrays stay index-aligned.
+    {
+      const inputSections = payload.eaves_sections || []
+      const inputPitches  = payload.eaves_section_pitches || []
+      const kept: TracePt[][] = []
+      const keptPitches: Array<number | null> = []
+      inputSections.forEach((sec, i) => {
+        if (sec !== payload.eaves_outline && sec.length >= 3) {
+          kept.push(sec.map(p => ({ lat: p.lat, lng: p.lng, elevation: p.elevation ?? null })))
+          const p = inputPitches[i]
+          keptPitches.push(typeof p === 'number' && isFinite(p) && p > 0 && p <= 30 ? p : null)
+        }
+      })
+      this.rawEavesSections      = kept
+      this.rawEavesSectionPitches = keptPitches
+    }
     this.rawRidges  = this.parseLines(payload.ridges || [])
     this.rawHips    = this.parseLines(payload.hips || [])
     this.rawValleys = this.parseLines(payload.valleys || [])
@@ -1738,16 +1772,41 @@ export class RoofMeasurementEngine {
     let totalSloped = facesData.reduce((s, f) => s + f.sloped_area_ft2, 0)
     let totalProj   = facesData.reduce((s, f) => s + f.projected_area_ft2, 0)
 
+    // Snapshot the primary outline's totals before adding extra sections — used
+    // to render the per-structure breakdown when the report has dormers/extras.
+    const primaryProjFt2 = totalProj
+    const primarySlopedFt2 = totalSloped
+
     // Add footprint areas from extra eaves sections (garages, porches, dormers, etc.)
-    // Each extra section is measured independently and added to the total
+    // Each extra section is measured independently and added to the total. When
+    // the user specified a per-section pitch (e.g. a steeper dormer), that
+    // pitch is applied to the section's sloped area; otherwise it falls back
+    // to the engine default. Per-section area & pitch are also captured for
+    // surfacing in the report's Project Totals.
+    const sectionPitchAreas: Array<{
+      section_index: number
+      pitch_rise: number
+      projected_ft2: number
+      sloped_ft2: number
+      is_user_specified: boolean
+    }> = []
     if (this.rawEavesSections.length > 0) {
-      const domRise = this.defPitch
-      for (const secPts of this.rawEavesSections) {
+      for (let i = 0; i < this.rawEavesSections.length; i++) {
+        const secPts = this.rawEavesSections[i]
+        const userPitch = this.rawEavesSectionPitches[i]
+        const secRise = (userPitch != null && userPitch > 0) ? userPitch : this.defPitch
         const { projected: secCart } = projectToCartesian(secPts)
         const secProjFt2 = shoelaceAreaM2(secCart) * M2_TO_FT2
-        const secSloped  = slopedFromProjected(secProjFt2, domRise)
+        const secSloped  = slopedFromProjected(secProjFt2, secRise)
         totalProj   += secProjFt2
         totalSloped += secSloped
+        sectionPitchAreas.push({
+          section_index: i + 1,                 // 0 reserved for primary
+          pitch_rise: secRise,
+          projected_ft2: secProjFt2,
+          sloped_ft2: secSloped,
+          is_user_specified: userPitch != null && userPitch > 0,
+        })
       }
     }
 
@@ -1822,8 +1881,21 @@ export class RoofMeasurementEngine {
       notes.push(`Hip roof confirmed (${round(totalHipFt, 1)} ft total hip length).`)
     if (this.eavesCart.length > 10)
       notes.push('Complex perimeter (>10 eave points) — Allow extra cut waste.')
-    if (this.rawEavesSections.length > 0)
-      notes.push(`Multi-section roof: ${this.rawEavesSections.length + 1} separate eaves polygon(s) detected (e.g. garage, porch, dormer). Areas summed using dominant pitch ${round(this.defPitch, 1)}:12.`)
+    if (this.rawEavesSections.length > 0) {
+      const customPitched = sectionPitchAreas.filter(s => s.is_user_specified)
+      if (customPitched.length > 0) {
+        const list = customPitched
+          .map(s => `Section ${s.section_index + 1}: ${round(s.pitch_rise, 1)}:12`)
+          .join(', ')
+        notes.push(
+          `Multi-section roof: ${this.rawEavesSections.length + 1} separate eaves polygon(s) — ` +
+          `${customPitched.length} section(s) measured at user-specified pitch (${list}). ` +
+          `Other sections use the dominant pitch ${round(this.defPitch, 1)}:12.`
+        )
+      } else {
+        notes.push(`Multi-section roof: ${this.rawEavesSections.length + 1} separate eaves polygon(s) detected (e.g. garage, porch, dormer). Areas summed using dominant pitch ${round(this.defPitch, 1)}:12.`)
+      }
+    }
 
     // Obstruction notes
     if (obstructionDetails.length > 0) {
@@ -1997,6 +2069,30 @@ export class RoofMeasurementEngine {
       valley_details:      valleySegs,
       rake_details:        rakeSegs,
       face_details:        facesData,
+      // Per-structure pitch breakdown — emitted only when the roof has extra
+      // eaves sections. Index 0 is the primary outline; index 1+ aligns with
+      // rawEavesSections. The report template renders this when section
+      // pitches differ from the dominant pitch.
+      section_pitches:     this.rawEavesSections.length > 0
+        ? [
+            {
+              section_index: 0,
+              label: 'Main roof',
+              pitch_rise: round(domPitch, 1),
+              projected_ft2: round(primaryProjFt2, 1),
+              sloped_ft2: round(primarySlopedFt2, 1),
+              is_user_specified: false,
+            },
+            ...sectionPitchAreas.map(s => ({
+              section_index: s.section_index,
+              label: `Section ${s.section_index + 1}`,
+              pitch_rise: round(s.pitch_rise, 1),
+              projected_ft2: round(s.projected_ft2, 1),
+              sloped_ft2: round(s.sloped_ft2, 1),
+              is_user_specified: s.is_user_specified,
+            })),
+          ]
+        : undefined,
       materials_estimate:  mat,
       advisory_notes:      notes,
       cross_check:         crossCheck,
@@ -2038,6 +2134,11 @@ export function traceUiToEnginePayload(
     traced_at?: string
     eaves_tags?: Array<'eave' | 'rake'>
     eaves_sections_tags?: Array<Array<'eave' | 'rake'>>
+    // Parallel to `eaves_sections` (or `eaves` when array-of-arrays). Each
+    // entry is the user-specified pitch (rise:12) for that section. null/0
+    // means "use the default/dominant pitch." Lets dormers and additions
+    // ride at a different pitch than the main roof.
+    eaves_section_pitches?: Array<number | null | undefined>
     plane_segments_lat_lng?: Array<{
       pitch_rise: number
       centroid: { lat: number; lng: number }
@@ -2058,12 +2159,31 @@ export function traceUiToEnginePayload(
   // Resolve multi-section eaves: prefer eaves_sections, fall back to eaves (which may be
   // a flat array [old single-section] or an array of arrays [new multi-section format])
   let allSections: { lat: number; lng: number }[][] = []
+  // Per-section pitch keyed by the section reference (NOT by index) so the
+  // largest-section reorder and auto-split below don't desync pitches.
+  // Sections produced by auto-split are absent from the map → null → engine
+  // default — which is fine, since auto-split fires only when the user did
+  // not separate structures themselves and so couldn't tag per-section pitch.
+  const sectionPitchByRef = new Map<{ lat: number; lng: number }[], number | null>()
+  const validatePitchRise = (p: unknown): number | null => {
+    if (typeof p !== 'number' || !isFinite(p) || p <= 0 || p > 30) return null
+    return p
+  }
   if (traceJson.eaves_sections && traceJson.eaves_sections.length > 0) {
     allSections = traceJson.eaves_sections.filter(s => s.length >= 3)
+    const inputPitches = traceJson.eaves_section_pitches || []
+    traceJson.eaves_sections.forEach((sec, i) => {
+      sectionPitchByRef.set(sec, validatePitchRise(inputPitches[i]))
+    })
   } else if (Array.isArray(traceJson.eaves)) {
     if (traceJson.eaves.length > 0 && Array.isArray((traceJson.eaves as any)[0])) {
       // Array of arrays (new format)
-      allSections = (traceJson.eaves as { lat: number; lng: number }[][]).filter(s => s.length >= 3)
+      const arr = traceJson.eaves as { lat: number; lng: number }[][]
+      allSections = arr.filter(s => s.length >= 3)
+      const inputPitches = traceJson.eaves_section_pitches || []
+      arr.forEach((sec, i) => {
+        sectionPitchByRef.set(sec, validatePitchRise(inputPitches[i]))
+      })
     } else {
       // Flat array (old single-section format)
       const flat = traceJson.eaves as { lat: number; lng: number }[]
@@ -2085,6 +2205,13 @@ export function traceUiToEnginePayload(
     ? allSections.reduce((best, s) => s.length > best.length ? s : best, allSections[0])
     : []
   const extraSections = allSections.filter(s => s !== primary)
+  const extraSectionPitches: Array<number | null> = extraSections.map(
+    s => sectionPitchByRef.get(s) ?? null
+  )
+  // The primary outline may itself carry a user-specified pitch. We expose it
+  // as `default_pitch` so the engine treats the main roof at the user's value
+  // instead of falling back to the live-detected default.
+  const primaryPitchOverride = sectionPitchByRef.get(primary) ?? null
 
   const eavesOutline: TracePt[] = primary.map(p => ({
     lat: p.lat, lng: p.lng, elevation: null
@@ -2185,12 +2312,17 @@ export function traceUiToEnginePayload(
     address:        order.property_address || 'Unknown Address',
     homeowner:      order.homeowner_name || 'Unknown',
     order_id:       order.order_number || '',
-    default_pitch:  defaultPitch,
+    // If the primary section has a user-specified pitch, prefer it over the
+    // caller's default (which is typically the live Solar-API readout).
+    default_pitch:  primaryPitchOverride ?? defaultPitch,
     complexity:     'medium',
     include_waste:  true,
     eaves_outline:  eavesOutline,
     eaves_sections: extraSections.length > 0
       ? extraSections.map(sec => sec.map(p => ({ lat: p.lat, lng: p.lng })))
+      : undefined,
+    eaves_section_pitches: extraSections.length > 0 && extraSectionPitches.some(p => p != null)
+      ? extraSectionPitches
       : undefined,
     obstructions:   obstructions.length > 0 ? obstructions : undefined,
     ridges,

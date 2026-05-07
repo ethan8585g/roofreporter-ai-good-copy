@@ -1679,9 +1679,16 @@ function closeEavesPolygon() {
 
   const sectionIdx = orderState.traceEavesSections.length;
   const sectionTags = Array.isArray(orderState.traceEavesTags) ? [...orderState.traceEavesTags] : [];
+  // Default the section's pitch to the live Solar-API readout. The user can
+  // override it from the Section Pitches panel — critical for dormers and
+  // additions that ride at a different pitch than the main roof.
+  const defaultPitch = (orderState.livePitchRise && orderState.livePitchRise > 0)
+    ? orderState.livePitchRise
+    : null;
   orderState.traceEavesSections.push({
     points: [...orderState.traceEavesPoints],
     tags: sectionTags,
+    pitch_rise: defaultPitch,
   });
   if (!Array.isArray(orderState.traceEavesSectionsTags)) orderState.traceEavesSectionsTags = [];
   orderState.traceEavesSectionsTags.push(sectionTags);
@@ -2238,6 +2245,41 @@ function updateTraceUI() {
             <span class="font-bold text-sm text-amber-700" id="desktopMetricPitch">${orderState.livePitchRise}:12</span>
           </div>`
         : '';
+
+      // Per-section pitch editor — appears once at least one section is closed.
+      // Lets users mark dormers/additions at a steeper pitch than the main roof
+      // so the engine doesn't undercount the sloped area on Harry-style A-frame
+      // dormers. Defaults to the live Solar-API pitch captured on close.
+      let sectionPitchesHtml = '';
+      if (orderState.traceEavesSections.length > 0) {
+        const rows = orderState.traceEavesSections.map((sec, i) => {
+          const val = (sec.pitch_rise && sec.pitch_rise > 0) ? sec.pitch_rise : '';
+          return `
+            <div class="flex justify-between items-center text-xs">
+              <span class="text-gray-400">S${i + 1}</span>
+              <span class="flex items-center gap-1">
+                <input
+                  type="number" min="0" max="24" step="0.5"
+                  value="${val}"
+                  data-section-pitch-idx="${i}"
+                  class="w-12 px-1 py-0.5 text-right text-amber-700 font-bold bg-[#0A0A0A] border border-white/15 rounded text-xs"
+                  placeholder="—"
+                />
+                <span class="text-gray-500">:12</span>
+              </span>
+            </div>`;
+        }).join('');
+        const hint = orderState.traceEavesSections.length >= 2
+          ? '<div class="text-[10px] text-gray-500 italic mt-1">Steeper for A-frame dormers (e.g. 12:12).</div>'
+          : '<div class="text-[10px] text-gray-500 italic mt-1">Trace dormers as a separate structure to set their own pitch.</div>';
+        sectionPitchesHtml = `
+          <div class="border-t border-white/10 pt-2 mt-1">
+            <div class="text-xs text-gray-400 mb-1"><i class="fas fa-mountain mr-1"></i>Section Pitches</div>
+            <div class="space-y-1">${rows}</div>
+            ${hint}
+          </div>`;
+      }
+
       metricsPanel.innerHTML = `
         <div class="space-y-2">
           <div class="flex justify-between items-center">
@@ -2253,9 +2295,29 @@ function updateTraceUI() {
             <span class="text-gray-500 text-xs"><i class="fas fa-th mr-1"></i>Est. Area</span>
             <span class="font-bold text-sm text-blue-700">${(orderState.liveFootprintSqft / 100).toFixed(1)}</span>
           </div>
+          ${sectionPitchesHtml}
           ${cvHtml}
         </div>
       `;
+      // Wire per-section pitch inputs. Stored on traceEavesSections[i].pitch_rise
+      // and shipped as eaves_section_pitches in the trace payload.
+      metricsPanel.querySelectorAll('[data-section-pitch-idx]').forEach(input => {
+        input.addEventListener('change', (e) => {
+          const idx = parseInt(e.target.getAttribute('data-section-pitch-idx'), 10);
+          const raw = parseFloat(e.target.value);
+          const sec = orderState.traceEavesSections[idx];
+          if (!sec) return;
+          if (!isFinite(raw) || raw <= 0) {
+            sec.pitch_rise = null;
+            e.target.value = '';
+          } else if (raw > 24) {
+            sec.pitch_rise = 24;
+            e.target.value = '24';
+          } else {
+            sec.pitch_rise = raw;
+          }
+        });
+      });
       metricsPanel.classList.remove('hidden');
     } else {
       metricsPanel.innerHTML = '<p class="text-xs text-gray-400 text-center italic">Place 3+ eave points to see live measurements</p>';
@@ -2475,9 +2537,17 @@ async function confirmTrace() {
     ? _sectionTags[_primaryIdx]
     : [];
 
+  // Per-section pitches parallel to _sections. Engine routes the largest
+  // section's pitch to default_pitch and the rest to per-section overrides,
+  // letting steeper dormers measure correctly without affecting the main roof.
+  const _sectionPitches = (orderState.traceEavesSections || []).map(s =>
+    (s && typeof s.pitch_rise === 'number' && s.pitch_rise > 0) ? s.pitch_rise : null
+  );
+
   orderState.roofTraceJson = {
     eaves: _primary,
     eaves_sections: _sections,
+    eaves_section_pitches: _sectionPitches,
     ridges: orderState.traceRidgeLines,
     hips: orderState.traceHipLines,
     valleys: orderState.traceValleyLines,

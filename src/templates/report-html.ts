@@ -609,6 +609,25 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         <span class="pt-label">Predominant Pitch</span>
         <span class="pt-value">${predominantPitch} <span class="pt-sub">(${predominantPitchDeg.toFixed(1)}°)</span></span>
       </div>
+      ${(() => {
+        // Per-section pitch breakdown — surfaces dormers / additions traced at
+        // a different pitch than the main roof. Hidden when sections all share
+        // the dominant pitch (avoids cluttering single-pitch reports).
+        const sps: Array<{
+          section_index: number; label: string; pitch_rise: number;
+          projected_ft2: number; sloped_ft2: number; is_user_specified: boolean
+        }> = (report as any).trace_measurement?.section_pitches || []
+        if (sps.length < 2) return ''
+        const pitches = sps.map(s => s.pitch_rise)
+        const allSame = pitches.every(p => Math.abs(p - pitches[0]) < 0.05)
+        if (allSame) return ''
+        const rows = sps.map(s => `
+          <div class="pt-row" style="padding:2px 4px 2px 16px;font-size:9px;color:#555">
+            <span class="pt-label" style="font-weight:600">${s.label}${s.is_user_specified ? '' : '<span class="pt-sub" style="color:#999"> (auto)</span>'}</span>
+            <span class="pt-value" style="font-weight:600">${s.pitch_rise.toFixed(1)}:12 <span class="pt-sub" style="color:#999">(${Math.round(s.sloped_ft2).toLocaleString()} SF sloped)</span></span>
+          </div>`).join('')
+        return `<div style="background:#fafafa;border-left:3px solid ${TEAL};padding:2px 0;margin:-2px 0 4px">${rows}</div>`
+      })()}
       <div class="pt-row">
         <span class="pt-label">Gross Area<span class="pt-sub">(w/${mat.waste_pct || 5}% waste)</span></span>
         <span class="pt-value">${grossAreaSF.toLocaleString()} SF</span>
