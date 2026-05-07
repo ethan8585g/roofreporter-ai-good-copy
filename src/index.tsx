@@ -2178,9 +2178,10 @@ app.get('/pricing', (c) => {
   return c.html(getPricingPageHTML())
 })
 
-// Competitor comparison pages (SEO + funnel — own the "vs X" search intent)
-app.get('/vs-eagleview', (c) => c.html(getComparisonPageHTML('eagleview')))
-app.get('/vs-roofsnap', (c) => c.html(getComparisonPageHTML('roofsnap')))
+// Competitor comparison pages — moved into the /blog section.
+// Old /vs-* URLs 301 to the new blog posts to preserve SEO equity.
+app.get('/vs-eagleview', (c) => c.redirect('/blog/roof-manager-vs-eagleview', 301))
+app.get('/vs-roofsnap', (c) => c.redirect('/blog/roof-manager-vs-roofsnap', 301))
 
 // Services Directory Page (public, SEO)
 app.get('/services', (c) => {
