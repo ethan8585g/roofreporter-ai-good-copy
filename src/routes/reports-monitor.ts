@@ -30,7 +30,11 @@ reportsMonitorRoutes.use('*', async (c, next) => {
 })
 
 reportsMonitorRoutes.post('/tick', async (c) => {
-  const result = await runScan(c.env, 'reports', 'manual')
+  // The /loop /reports-monitor slash command lives outside the cron Worker
+  // so we tag the source as 'claude_loop' (not 'cf_cron') and use a distinct
+  // loop_id so it shows as its own row in the tracker, separate from the
+  // cron-fired scan_reports.
+  const result = await runScan(c.env, 'reports', 'manual', { source: 'claude_loop', loopId: 'reports_monitor' })
 
   // Pull the findings for this run so the slash command can produce
   // a per-category breakdown without a second round-trip.

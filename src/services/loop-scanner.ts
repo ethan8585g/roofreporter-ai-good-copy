@@ -42,6 +42,21 @@ type ScanResult = {
   summary: string
 }
 
+// Caller-supplied context. Source distinguishes cron vs manual vs Claude
+// /loop vs Anthropic-hosted /schedule. expectedAt lets us measure schedule
+// skew (cron actually fires at e.g. :30:08 instead of :30:00).
+export type RunSource = 'cf_cron' | 'manual' | 'inline' | 'claude_loop' | 'cloud_routine'
+export type RunOptions = {
+  source?: RunSource
+  expectedAt?: Date
+  inputs?: any
+  // Override the default loop_id (`scan_${type}`). Used when the same
+  // scanner is invoked from multiple loops — e.g. /reports-monitor calls
+  // runScan('reports') but its loop_id should be 'reports_monitor', not
+  // 'scan_reports', so the tracker shows distinct rows for cron vs Claude.
+  loopId?: string
+}
+
 type SurfaceConfig = {
   seedPaths: string[]
   apiHealthRoutes: string[]
@@ -49,6 +64,10 @@ type SurfaceConfig = {
   consolePaths: string[]
   authHeader?: () => Promise<Record<string, string>>
 }
+
+// Per-probe latency capture. Stored as metrics_json on the run so the
+// drill-down can render full request waterfalls.
+type ProbeMetric = { kind: 'link' | 'api' | 'form' | 'console' | 'health'; path?: string; status?: number; durationMs: number; bodyLen?: number; ok: boolean }
 
 // Surfaces are intentionally narrow — adding URLs is cheap, but a runaway
 // crawler is expensive (Browser Rendering bills per invocation).
@@ -79,23 +98,40 @@ const ADMIN_SURFACE: SurfaceConfig = {
 }
 
 // ── Public entry point ──────────────────────────────────────────
+// Back-compat: the third positional arg is still 'cron'|'manual' (legacy
+// triggered_by). For richer context callers should pass a RunOptions object
+// as the 4th arg with source/expectedAt/inputs. The legacy signature still
+// works — both files in the repo and external /loop callers continue to
+// compile without change.
 export async function runScan(
   env: Bindings,
   type: ScanType,
-  triggeredBy: 'cron' | 'manual' = 'cron',
+  triggeredBy: 'cron' | 'manual' | 'inline' = 'manual',
+  opts: RunOptions = {},
 ): Promise<ScanResult> {
   const t0 = Date.now()
-  const runId = await openRun(env, type, triggeredBy)
+  const loopId = opts.loopId || `scan_${type}`
+  const source: RunSource = opts.source
+    ?? (triggeredBy === 'cron' ? 'cf_cron' : (triggeredBy === 'inline' ? 'inline' : 'manual'))
+  const skewMs = opts.expectedAt ? (Date.now() - opts.expectedAt.getTime()) : null
+  const runId = await openRun(env, type, triggeredBy, {
+    loopId,
+    source,
+    expectedAt: opts.expectedAt,
+    skewMs,
+    inputs: opts.inputs,
+  })
+  const metrics: ProbeMetric[] = []
 
   try {
     if (type === 'health') {
-      const findings = await runHealthCheck(env)
-      return await closeRun(env, runId, t0, 1, findings)
+      const findings = await runHealthCheck(env, metrics)
+      return await closeRun(env, runId, t0, 1, findings, metrics, loopId, source)
     }
 
     if (type === 'reports') {
       const findings = await runReportSweep(env)
-      return await closeRun(env, runId, t0, findings.pagesChecked, findings.list)
+      return await closeRun(env, runId, t0, findings.pagesChecked, findings.list, metrics, loopId, source)
     }
 
     const cfg =
@@ -108,24 +144,33 @@ export async function runScan(
 
     // Run all four categories in parallel — each is independent.
     const [linkF, apiF, formF, consoleF] = await Promise.all([
-      crawlLinks(cfg.seedPaths, auth).catch(e => fatalFinding('broken_link', e)),
-      pingApiHealth(cfg.apiHealthRoutes, auth).catch(e => fatalFinding('api_health', e)),
-      submitFormSmokes(cfg.formTests, auth).catch(e => fatalFinding('form_smoke', e)),
-      captureConsoleErrors(env, cfg.consolePaths, auth).catch(e => fatalFinding('console_error', e)),
+      crawlLinks(cfg.seedPaths, auth, metrics).catch(e => fatalFinding('broken_link', e)),
+      pingApiHealth(cfg.apiHealthRoutes, auth, metrics).catch(e => fatalFinding('api_health', e)),
+      submitFormSmokes(cfg.formTests, auth, metrics).catch(e => fatalFinding('form_smoke', e)),
+      captureConsoleErrors(env, cfg.consolePaths, auth, metrics).catch(e => fatalFinding('console_error', e)),
     ])
     findings.push(...linkF, ...apiF, ...formF, ...consoleF)
 
-    return await closeRun(env, runId, t0, cfg.seedPaths.length, findings)
+    return await closeRun(env, runId, t0, cfg.seedPaths.length, findings, metrics, loopId, source)
   } catch (err: any) {
+    const errSummary = `Error: ${err?.message || err}`.slice(0, 500)
     await env.DB.prepare(
-      `UPDATE loop_scan_runs SET status='error', finished_at=datetime('now'), duration_ms=?, summary=? WHERE id=?`
-    ).bind(Date.now() - t0, `Error: ${err?.message || err}`.slice(0, 500), runId).run()
+      `UPDATE loop_scan_runs SET status='error', finished_at=datetime('now'), duration_ms=?, summary=?, metrics_json=?, error_stack=? WHERE id=?`
+    ).bind(
+      Date.now() - t0,
+      errSummary,
+      metrics.length ? JSON.stringify(metrics).slice(0, 32000) : null,
+      err?.stack ? String(err.stack).slice(0, 4000) : null,
+      runId,
+    ).run()
+    await writeHeartbeat(env, loopId, 'error', Date.now() - t0, runId, errSummary, source).catch(() => {})
+    await touchDefinition(env, loopId, 'error', runId).catch(() => {})
     return { runId, status: 'error', pagesChecked: 0, okCount: 0, failCount: 0, summary: err?.message || 'unknown' }
   }
 }
 
 // ── Check: broken-link crawl ────────────────────────────────────
-async function crawlLinks(seedPaths: string[], auth: Record<string, string>): Promise<Finding[]> {
+async function crawlLinks(seedPaths: string[], auth: Record<string, string>, metrics: ProbeMetric[]): Promise<Finding[]> {
   const findings: Finding[] = []
   const visited = new Set<string>()
   const queue: { path: string; from: string }[] = seedPaths.map(p => ({ path: p, from: 'seed' }))
@@ -140,15 +185,18 @@ async function crawlLinks(seedPaths: string[], auth: Record<string, string>): Pr
       processed++
 
       const url = `${PROD_BASE}${path}`
+      const probeT0 = Date.now()
       try {
         const res = await fetch(url, { headers: { ...auth, 'User-Agent': 'RoofManagerLoopScanner/1.0' }, redirect: 'manual' })
+        const dur = Date.now() - probeT0
+        metrics.push({ kind: 'link', path, status: res.status, durationMs: dur, ok: res.status < 400 })
         if (res.status >= 400) {
           findings.push({
             severity: res.status >= 500 ? 'error' : 'warn',
             category: 'broken_link',
             url: path,
             message: `HTTP ${res.status} on ${path}`,
-            details: { status: res.status, linkedFrom: from },
+            details: { status: res.status, linkedFrom: from, durationMs: dur },
           })
           return
         }
@@ -164,6 +212,7 @@ async function crawlLinks(seedPaths: string[], auth: Record<string, string>): Pr
           }
         }
       } catch (e: any) {
+        metrics.push({ kind: 'link', path, durationMs: Date.now() - probeT0, ok: false })
         findings.push({
           severity: 'error',
           category: 'broken_link',
@@ -191,32 +240,37 @@ function extractInternalHrefs(html: string): string[] {
 }
 
 // ── Check: API health pings ─────────────────────────────────────
-async function pingApiHealth(routes: string[], auth: Record<string, string>): Promise<Finding[]> {
+async function pingApiHealth(routes: string[], auth: Record<string, string>, metrics: ProbeMetric[]): Promise<Finding[]> {
   const findings: Finding[] = []
   await Promise.all(routes.map(async route => {
     const url = `${PROD_BASE}${route}`
+    const probeT0 = Date.now()
     try {
       const res = await fetch(url, { headers: auth })
+      const text = await res.text()
+      const dur = Date.now() - probeT0
+      metrics.push({ kind: 'api', path: route, status: res.status, durationMs: dur, bodyLen: text.length, ok: res.status < 400 })
       if (res.status >= 400) {
         findings.push({
           severity: 'error',
           category: 'api_health',
           url: route,
           message: `API ${route} returned ${res.status}`,
-          details: { status: res.status },
+          details: { status: res.status, durationMs: dur, bodyPrefix: text.slice(0, 200) },
         })
         return
       }
-      const text = await res.text()
       if (!text || text.length < 2) {
         findings.push({
           severity: 'warn',
           category: 'api_health',
           url: route,
           message: `API ${route} returned empty body`,
+          details: { durationMs: dur },
         })
       }
     } catch (e: any) {
+      metrics.push({ kind: 'api', path: route, durationMs: Date.now() - probeT0, ok: false })
       findings.push({
         severity: 'error',
         category: 'api_health',
@@ -232,28 +286,34 @@ async function pingApiHealth(routes: string[], auth: Record<string, string>): Pr
 async function submitFormSmokes(
   tests: SurfaceConfig['formTests'],
   auth: Record<string, string>,
+  metrics: ProbeMetric[],
 ): Promise<Finding[]> {
   const findings: Finding[] = []
   await Promise.all(tests.map(async t => {
     const url = `${PROD_BASE}${t.endpoint}`
+    const probeT0 = Date.now()
     try {
       const res = await fetch(url, {
         method: t.method || 'POST',
         headers: { ...auth, ...SYNTHETIC_HEADER, 'Content-Type': 'application/json' },
         body: JSON.stringify(t.body),
       })
+      const dur = Date.now() - probeT0
       const expected = t.expectStatus || 200
-      if (res.status !== expected && !(expected === 200 && res.status === 201)) {
+      const ok = res.status === expected || (expected === 200 && res.status === 201)
+      metrics.push({ kind: 'form', path: t.endpoint, status: res.status, durationMs: dur, ok })
+      if (!ok) {
         const body = await res.text().catch(() => '')
         findings.push({
           severity: 'error',
           category: 'form_smoke',
           url: t.endpoint,
           message: `Form ${t.endpoint}: expected ${expected}, got ${res.status}`,
-          details: { responseBodyPrefix: body.slice(0, 200) },
+          details: { responseBodyPrefix: body.slice(0, 200), durationMs: dur },
         })
       }
     } catch (e: any) {
+      metrics.push({ kind: 'form', path: t.endpoint, durationMs: Date.now() - probeT0, ok: false })
       findings.push({
         severity: 'error',
         category: 'form_smoke',
@@ -272,6 +332,7 @@ async function captureConsoleErrors(
   env: Bindings,
   paths: string[],
   auth: Record<string, string>,
+  metrics: ProbeMetric[],
 ): Promise<Finding[]> {
   const findings: Finding[] = []
   const acct = (env as any).CLOUDFLARE_ACCOUNT_ID
@@ -282,6 +343,7 @@ async function captureConsoleErrors(
 
   for (const path of paths) {
     const url = `${PROD_BASE}${path}`
+    const probeT0 = Date.now()
     try {
       const apiRes = await fetch(`https://api.cloudflare.com/client/v4/accounts/${acct}/browser-rendering/json`, {
         method: 'POST',
@@ -296,6 +358,8 @@ async function captureConsoleErrors(
         }),
       })
       const json: any = await apiRes.json().catch(() => ({}))
+      const dur = Date.now() - probeT0
+      metrics.push({ kind: 'console', path, status: apiRes.status, durationMs: dur, ok: apiRes.ok })
       // Browser Rendering returns console messages on errors.
       const consoleMsgs: any[] = json?.result?.consoleMessages || json?.consoleMessages || []
       const errors = consoleMsgs.filter(m => m.type === 'error' || m.level === 'error')
@@ -317,6 +381,7 @@ async function captureConsoleErrors(
         })
       }
     } catch (e: any) {
+      metrics.push({ kind: 'console', path, durationMs: Date.now() - probeT0, ok: false })
       findings.push({
         severity: 'warn',
         category: 'console_error',
@@ -329,7 +394,7 @@ async function captureConsoleErrors(
 }
 
 // ── Daily system health check ───────────────────────────────────
-async function runHealthCheck(env: Bindings): Promise<Finding[]> {
+async function runHealthCheck(env: Bindings, metrics: ProbeMetric[]): Promise<Finding[]> {
   const findings: Finding[] = []
 
   // 1. D1 round-trip latency
@@ -337,8 +402,10 @@ async function runHealthCheck(env: Bindings): Promise<Finding[]> {
     const t0 = Date.now()
     await env.DB.prepare(`SELECT 1 as ok`).first()
     const ms = Date.now() - t0
+    metrics.push({ kind: 'health', path: 'd1_select_1', durationMs: ms, ok: true })
     if (ms > 1000) findings.push({ severity: 'warn', category: 'health_check', message: `D1 latency ${ms}ms (>1s)` })
   } catch (e: any) {
+    metrics.push({ kind: 'health', path: 'd1_select_1', durationMs: 0, ok: false })
     findings.push({ severity: 'error', category: 'health_check', message: `D1 SELECT 1 failed: ${e?.message}` })
   }
 
@@ -417,8 +484,9 @@ export async function scanReportInline(env: Bindings, orderId: number | string):
 
     const t0 = Date.now()
     const run = await env.DB.prepare(
-      `INSERT INTO loop_scan_runs (scan_type, status, triggered_by, pages_checked) VALUES ('reports', 'running', 'inline', 1) RETURNING id`,
-    ).first<{ id: number }>()
+      `INSERT INTO loop_scan_runs (scan_type, status, triggered_by, pages_checked, loop_id, source, inputs_json)
+       VALUES ('reports', 'running', 'inline', 1, 'scan_reports', 'inline', ?) RETURNING id`,
+    ).bind(JSON.stringify({ order_id: orderId })).first<{ id: number }>()
     if (!run) return
     const findings: Finding[] = reportFindings.map(f => ({
       severity: f.severity,
@@ -427,7 +495,7 @@ export async function scanReportInline(env: Bindings, orderId: number | string):
       message: f.message,
       details: { ...(f.details || {}), order_id: f.order_id },
     }))
-    await closeRun(env, run.id, t0, 1, findings)
+    await closeRun(env, run.id, t0, 1, findings, [], 'scan_reports', 'inline')
   } catch (e: any) {
     console.warn('[scanReportInline] non-fatal scanner error:', e?.message || e)
   }
@@ -459,10 +527,29 @@ function fatalFinding(category: Category, err: any): Finding[] {
   return [{ severity: 'error', category, message: `Check threw: ${err?.message || err}` }]
 }
 
-async function openRun(env: Bindings, type: ScanType, triggeredBy: string): Promise<number> {
+type OpenRunCtx = {
+  loopId?: string
+  source?: RunSource
+  expectedAt?: Date
+  skewMs?: number | null
+  inputs?: any
+}
+
+async function openRun(env: Bindings, type: ScanType, triggeredBy: string, ctx: OpenRunCtx = {}): Promise<number> {
   const r = await env.DB.prepare(
-    `INSERT INTO loop_scan_runs (scan_type, status, triggered_by) VALUES (?, 'running', ?) RETURNING id`
-  ).bind(type, triggeredBy).first<{ id: number }>()
+    `INSERT INTO loop_scan_runs
+       (scan_type, status, triggered_by, loop_id, source, expected_at, skew_ms, inputs_json)
+     VALUES (?, 'running', ?, ?, ?, ?, ?, ?)
+     RETURNING id`
+  ).bind(
+    type,
+    triggeredBy,
+    ctx.loopId || `scan_${type}`,
+    ctx.source || 'manual',
+    ctx.expectedAt ? ctx.expectedAt.toISOString().slice(0, 19).replace('T', ' ') : null,
+    ctx.skewMs ?? null,
+    ctx.inputs ? JSON.stringify(ctx.inputs).slice(0, 32000) : null,
+  ).first<{ id: number }>()
   return r!.id
 }
 
@@ -472,12 +559,16 @@ async function closeRun(
   t0: number,
   pagesChecked: number,
   findings: Finding[],
+  metrics: ProbeMetric[] = [],
+  loopId?: string,
+  source?: RunSource,
 ): Promise<ScanResult> {
   const fails = findings.filter(f => f.severity === 'error').length
   const status = fails > 0 ? 'fail' : 'pass'
   const summary = findings.length === 0
     ? `OK · ${pagesChecked} page(s) checked`
     : `${findings.length} finding(s): ${fails} error, ${findings.length - fails} warn`
+  const durationMs = Date.now() - t0
 
   if (findings.length > 0) {
     const stmts = findings.map(f =>
@@ -488,9 +579,20 @@ async function closeRun(
     await env.DB.batch(stmts)
   }
 
+  // Roll-up metrics: counts + p50/p95 across probes for the dashboard.
+  const rollup = summarizeMetrics(metrics)
+  const metricsBlob = metrics.length > 0
+    ? JSON.stringify({ rollup, probes: metrics }).slice(0, 32000)
+    : null
+
   await env.DB.prepare(
-    `UPDATE loop_scan_runs SET status=?, finished_at=datetime('now'), duration_ms=?, pages_checked=?, ok_count=?, fail_count=?, summary=? WHERE id=?`
-  ).bind(status, Date.now() - t0, pagesChecked, pagesChecked - fails, fails, summary.slice(0, 500), runId).run()
+    `UPDATE loop_scan_runs SET status=?, finished_at=datetime('now'), duration_ms=?, pages_checked=?, ok_count=?, fail_count=?, summary=?, metrics_json=? WHERE id=?`
+  ).bind(status, durationMs, pagesChecked, pagesChecked - fails, fails, summary.slice(0, 500), metricsBlob, runId).run()
+
+  if (loopId) {
+    await writeHeartbeat(env, loopId, status, durationMs, runId, summary, source).catch(() => {})
+    await touchDefinition(env, loopId, status, runId).catch(() => {})
+  }
 
   return {
     runId,
@@ -499,5 +601,132 @@ async function closeRun(
     okCount: pagesChecked - fails,
     failCount: fails,
     summary,
+  }
+}
+
+function summarizeMetrics(metrics: ProbeMetric[]): Record<string, any> {
+  if (metrics.length === 0) return {}
+  const byKind: Record<string, number[]> = {}
+  let okN = 0, failN = 0
+  for (const m of metrics) {
+    if (m.ok) okN++; else failN++
+    if (!byKind[m.kind]) byKind[m.kind] = []
+    byKind[m.kind].push(m.durationMs)
+  }
+  const out: Record<string, any> = { ok: okN, fail: failN, total: metrics.length, by_kind: {} }
+  for (const [k, ds] of Object.entries(byKind)) {
+    const sorted = [...ds].sort((a, b) => a - b)
+    out.by_kind[k] = {
+      count: ds.length,
+      p50: sorted[Math.floor(sorted.length * 0.5)],
+      p95: sorted[Math.floor(sorted.length * 0.95)] ?? sorted[sorted.length - 1],
+      max: sorted[sorted.length - 1],
+    }
+  }
+  return out
+}
+
+// ── External-run recorder ──────────────────────────────────────
+// Lets non-scan loops (Claude /loop endpoints, cloud routines) write a
+// fully-formed run row + heartbeat in one call. Used by funnel-monitor,
+// gmail-health, and the routines heartbeat endpoint.
+export async function recordExternalRun(
+  env: Bindings,
+  args: {
+    loopId: string
+    source: RunSource
+    status: 'pass' | 'fail' | 'error'
+    summary: string
+    durationMs: number
+    inputs?: any
+    outputs?: any
+    findings?: Array<{ severity: 'error' | 'warn'; category: string; url?: string; message: string; details?: any }>
+    expectedAt?: Date
+  },
+): Promise<{ runId: number }> {
+  const skewMs = args.expectedAt ? (Date.now() - args.expectedAt.getTime()) : null
+  // Store as scan_type='external' so the existing schema + dashboard
+  // continue working. Real distinction is loop_id + source.
+  const row = await env.DB.prepare(
+    `INSERT INTO loop_scan_runs
+       (scan_type, status, triggered_by, loop_id, source, expected_at, skew_ms, inputs_json, outputs_json,
+        finished_at, duration_ms, pages_checked, ok_count, fail_count, summary)
+     VALUES ('external', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?)
+     RETURNING id`
+  ).bind(
+    args.status,
+    args.source === 'cf_cron' ? 'cron' : (args.source === 'manual' ? 'manual' : 'external'),
+    args.loopId,
+    args.source,
+    args.expectedAt ? args.expectedAt.toISOString().slice(0, 19).replace('T', ' ') : null,
+    skewMs,
+    args.inputs ? JSON.stringify(args.inputs).slice(0, 32000) : null,
+    args.outputs ? JSON.stringify(args.outputs).slice(0, 32000) : null,
+    args.durationMs,
+    1,
+    args.status === 'pass' ? 1 : 0,
+    args.findings?.filter(f => f.severity === 'error').length || 0,
+    args.summary.slice(0, 500),
+  ).first<{ id: number }>()
+  const runId = row!.id
+
+  if (args.findings && args.findings.length > 0) {
+    const stmts = args.findings.map(f =>
+      env.DB.prepare(
+        `INSERT INTO loop_scan_findings (run_id, severity, category, url, message, details_json) VALUES (?, ?, ?, ?, ?, ?)`
+      ).bind(runId, f.severity, f.category, f.url || null, f.message.slice(0, 500), f.details ? JSON.stringify(f.details).slice(0, 4000) : null)
+    )
+    await env.DB.batch(stmts)
+  }
+
+  await writeHeartbeat(env, args.loopId, args.status, args.durationMs, runId, args.summary, args.source).catch(() => {})
+  await touchDefinition(env, args.loopId, args.status, runId).catch(() => {})
+  return { runId }
+}
+
+// ── Heartbeat / definition helpers ─────────────────────────────
+// Writes one lightweight row per loop execution. Used by the dashboard
+// for the 24h heatmap and "last seen" / staleness detection.
+export async function writeHeartbeat(
+  env: Bindings,
+  loopId: string,
+  status: string,
+  durationMs: number,
+  runId: number | null,
+  summary: string | null,
+  source?: RunSource,
+): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO loop_heartbeats (loop_id, status, duration_ms, run_id, summary, source) VALUES (?, ?, ?, ?, ?, ?)`
+  ).bind(loopId, status, durationMs, runId, (summary || '').slice(0, 500), source || null).run()
+}
+
+// Updates the rollup row in loop_definitions. Auto-creates a stub row if
+// the loop_id isn't in the seed catalog yet (keeps the registry self-healing
+// when new loops are added without a migration).
+export async function touchDefinition(
+  env: Bindings,
+  loopId: string,
+  status: string,
+  runId: number | null,
+): Promise<void> {
+  const isFail = status === 'fail' || status === 'error'
+  const upd = await env.DB.prepare(
+    `UPDATE loop_definitions
+        SET last_run_at = datetime('now'),
+            last_status = ?,
+            last_run_id = ?,
+            consecutive_failures = CASE WHEN ? THEN consecutive_failures + 1 ELSE 0 END,
+            total_runs = total_runs + 1,
+            total_failures = total_failures + CASE WHEN ? THEN 1 ELSE 0 END,
+            updated_at = datetime('now')
+      WHERE loop_id = ?`
+  ).bind(status, runId, isFail ? 1 : 0, isFail ? 1 : 0, loopId).run()
+  if ((upd.meta?.changes || 0) === 0) {
+    await env.DB.prepare(
+      `INSERT INTO loop_definitions
+         (loop_id, name, category, source, schedule_human, owner, last_run_at, last_status, last_run_id, total_runs, total_failures, consecutive_failures)
+       VALUES (?, ?, 'cron', 'cf_cron', 'unknown', 'cron_worker', datetime('now'), ?, ?, 1, ?, ?)`
+    ).bind(loopId, loopId, status, runId, isFail ? 1 : 0, isFail ? 1 : 0).run()
   }
 }

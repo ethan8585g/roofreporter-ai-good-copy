@@ -18,6 +18,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { loadGmailCreds } from '../services/email'
+import { recordExternalRun } from '../services/loop-scanner'
 
 export const emailHealthRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -55,6 +56,7 @@ emailHealthRoutes.use('*', async (c, next) => {
 })
 
 emailHealthRoutes.post('/tick', async (c) => {
+  const t0 = Date.now()
   const body = await c.req.json().catch(() => ({})) as { dry_run?: boolean }
   const dryRun = body.dry_run === true
 
@@ -63,6 +65,28 @@ emailHealthRoutes.post('/tick', async (c) => {
   if (!result.healthy && !dryRun) {
     result.alert_id = await queueEmailHealthAlert(c.env, result)
   }
+
+  const status: 'pass' | 'fail' = result.healthy ? 'pass' : 'fail'
+  const findings = result.healthy
+    ? []
+    : [{
+        severity: 'error' as const,
+        category: 'gmail_oauth',
+        message: `Gmail OAuth2 transport unhealthy — ${result.token_mint.error || 'creds missing'}`.slice(0, 500),
+        details: { creds: result.creds, token_mint: result.token_mint, notes: result.notes },
+      }]
+  await recordExternalRun(c.env, {
+    loopId: 'gmail_health',
+    source: 'claude_loop',
+    status,
+    summary: result.healthy
+      ? `Gmail OAuth2 OK · token mint ${result.token_mint.status}, expires_in ${result.token_mint.expires_in_s}s`
+      : `Gmail OAuth2 FAILED · ${result.token_mint.error || 'creds missing'}`.slice(0, 500),
+    durationMs: Date.now() - t0,
+    inputs: { dry_run: dryRun },
+    outputs: { healthy: result.healthy, creds: result.creds, token_mint: result.token_mint, alert_id: result.alert_id },
+    findings,
+  }).catch(e => console.warn('[gmail-health] tracker write failed:', e?.message || e))
 
   return c.json(result)
 })

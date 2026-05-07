@@ -176,8 +176,17 @@ export type Bindings = {
 
   // ── Funnel Monitor — bearer token for the /loop /funnel-monitor slash command ─
   // The local slash command sends this in `Authorization: Bearer …` to evaluate
-  // the signup funnel and queue super-admin alerts on regressions.
+  // the signup funnel and queue super-admin alerts on regressions. Shared
+  // with /loop /gmail-health (email-health.ts also reads this).
   FUNNEL_MONITOR_TOKEN?: string
+
+  // ── Reports Monitor — bearer token for the /loop /reports-monitor slash command ─
+  REPORTS_MONITOR_TOKEN?: string
+
+  // ── Cloud Routine heartbeat — bearer token for Anthropic /schedule routines
+  // POSTing /api/super-admin/loop-tracker/api/routines/heartbeat. Falls back
+  // to FUNNEL_MONITOR_TOKEN if unset so scheduling docs only need one secret.
+  CLOUD_ROUTINE_TOKEN?: string
 
   // ── Loop Tracker — recurring site scanners (services/loop-scanner.ts) ──
   // Email of an existing super-admin / customer. The scanner mints a

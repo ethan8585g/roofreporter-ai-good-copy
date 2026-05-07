@@ -68,8 +68,9 @@ import { superAdminBi } from './routes/super-admin-bi'
 import { superAdminLeads } from './routes/super-admin-leads'
 import { superAdminAttribution } from './routes/super-admin-attribution'
 import { superAdminLoopTracker } from './routes/super-admin-loop-tracker'
-import { runScan as runLoopScan } from './services/loop-scanner'
-import { pruneExpiredScanSessions } from './services/synthetic-auth'
+// runLoopScan + pruneExpiredScanSessions are imported by src/cron-worker.ts
+// (the actual cron Worker). They were imported here for the Pages-side
+// scheduled() handler that never fires — see comment near line 4970.
 import { superAdminLtv } from './routes/super-admin-ltv'
 import { superAdminColdCall } from './routes/super-admin-cold-call'
 import { fieldRoutes, fieldUiRoutes } from './routes/field'
@@ -4967,65 +4968,10 @@ export default {
       })())
     }
 
-    // ── Loop Tracker scanners (every 30 min, staggered) ──────
-    // Three surfaces (public/customer/admin) on the same cron tick are
-    // staggered by minute so they don't pile concurrent fetch + Browser
-    // Rendering invocations against the same edge node. The daily system
-    // health check runs at 09:00 UTC (~02-04 local depending on DST).
-    const minute = now.getUTCMinutes()
-    const SCAN_AT: Array<[number, 'public' | 'customer' | 'admin' | 'reports']> = [
-      [0, 'public'],   [30, 'public'],
-      [10, 'customer'], [40, 'customer'],
-      [20, 'admin'],   [50, 'admin'],
-      [5, 'reports'],  [35, 'reports'],
-    ]
-    for (const [m, type] of SCAN_AT) {
-      if (minute === m && await isAgentEnabled(`scan_${type}`)) {
-        ctx.waitUntil((async () => {
-          const t0 = Date.now()
-          try {
-            const r = await runLoopScan(env, type, 'cron')
-            await logRun(`scan_${type}`, r.status === 'pass' ? 'success' : (r.status === 'fail' ? 'error' : 'error'), r.summary, { runId: r.runId, fail_count: r.failCount, pages: r.pagesChecked }, Date.now() - t0)
-          } catch (err: any) {
-            console.error(`[CRON:scan_${type}] Error:`, err.message)
-            await logRun(`scan_${type}`, 'error', err.message, {}, Date.now() - t0)
-          } finally {
-            await pruneExpiredScanSessions(env).catch(() => {})
-          }
-        })())
-      }
-    }
-    // ── Reports error sweep (hourly at :15) ──────────────────
-    // DB-only scan — no external fetches, no Browser Rendering — so it runs
-    // without the agent_configs gate that the public/customer/admin scanners
-    // use. Findings land in loop_scan_runs/loop_scan_findings alongside the
-    // inline scan rows produced by report generation itself.
-    if (minute === 15) {
-      ctx.waitUntil((async () => {
-        const t0 = Date.now()
-        try {
-          const r = await runLoopScan(env, 'reports', 'cron')
-          await logRun('scan_reports', r.status === 'pass' ? 'success' : 'error', r.summary, { runId: r.runId, fail_count: r.failCount, pages: r.pagesChecked }, Date.now() - t0)
-        } catch (err: any) {
-          console.error('[CRON:scan_reports] Error:', err.message)
-          await logRun('scan_reports', 'error', err.message, {}, Date.now() - t0)
-        }
-      })())
-    }
-
-    // Daily system health check — 09:00 UTC.
-    if (hour === 9 && minute === 0 && await isAgentEnabled('scan_health')) {
-      ctx.waitUntil((async () => {
-        const t0 = Date.now()
-        try {
-          const r = await runLoopScan(env, 'health', 'cron')
-          await logRun('scan_health', r.status === 'pass' ? 'success' : 'error', r.summary, { runId: r.runId, fail_count: r.failCount }, Date.now() - t0)
-        } catch (err: any) {
-          console.error('[CRON:scan_health] Error:', err.message)
-          await logRun('scan_health', 'error', err.message, {}, Date.now() - t0)
-        }
-      })())
-    }
+    // Loop Tracker scanners moved to src/cron-worker.ts. Cloudflare Pages
+    // does not honor scheduled() handlers in the Pages Function — only the
+    // separate roofmanager-agent-cron Worker fires on cron. Keeping the
+    // logic here was a no-op that masked the cron breakage for weeks.
 
     // ── Traffic Analyst Agent (every 12 hours: 0, 12 UTC) ────
     if (hour % 12 === 0 && await isAgentEnabled('traffic')) {
@@ -6440,6 +6386,11 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
           <i class="fas fa-server w-5 text-center"></i>
           <span class="label text-sm font-semibold">Platform</span>
         </div>
+        <a href="/super-admin/loop-tracker" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" style="text-decoration:none">
+          <i class="fas fa-radar w-5 text-center"></i>
+          <span class="label text-sm font-semibold">Loops</span>
+          <span id="sa-sidebar-loops-badge" style="margin-left:auto;background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none">0</span>
+        </a>
       </div>
     </aside>
 
@@ -6477,6 +6428,29 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
     }
     // saSetView is defined in super-admin-dashboard.js — handles sidebar highlight + view loading
     // saSetSection is defined in super-admin-dashboard.js — handles section switching
+
+    // Loop Tracker badge — surfaces unresolved errors + stale loops in both
+    // the header link and the sidebar "Loops" entry. Refreshes every 60s.
+    (function() {
+      function refreshLoopBadge() {
+        fetch('/api/super-admin/loop-tracker/api/status', { credentials:'include' })
+          .then(r => r.ok ? r.json() : null)
+          .then(d => {
+            if (!d) return;
+            const total = (d.unresolved_errors || 0) + (d.failing_loops || 0) + (d.stale_loops || 0);
+            const headerBadge = document.getElementById('sa-loop-tracker-badge');
+            const sidebarBadge = document.getElementById('sa-sidebar-loops-badge');
+            [headerBadge, sidebarBadge].forEach(b => {
+              if (!b) return;
+              if (total > 0) { b.textContent = total > 99 ? '99+' : total; b.style.display = 'flex'; }
+              else { b.style.display = 'none'; }
+            });
+          })
+          .catch(() => {});
+      }
+      refreshLoopBadge();
+      setInterval(refreshLoopBadge, 60000);
+    })();
   </script>
   <script src="/static/toast.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>

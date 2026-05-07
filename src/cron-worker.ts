@@ -13,6 +13,8 @@ import { runEmailAgent } from './services/email-agent'
 import { runMonitorAgent } from './services/monitor-agent'
 import { runTrafficAgent } from './services/traffic-agent'
 import { runNightlyAttributionRollup } from './services/attribution'
+import { runScan as runLoopScan, writeHeartbeat as writeLoopHeartbeat, touchDefinition as touchLoopDefinition, type ScanType } from './services/loop-scanner'
+import { pruneExpiredScanSessions } from './services/synthetic-auth'
 
 // ── Abandoned signup recovery ─────────────────────────────────────────────────
 async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number; skipped: number }> {
@@ -264,8 +266,20 @@ export default {
            run_count=run_count+1, error_count=error_count+CASE WHEN ?='error' THEN 1 ELSE 0 END,
            updated_at=datetime('now') WHERE agent_type=?`
         ).bind(status, summary.slice(0, 500), status, agentType).run()
+        // Mirror into the Loop Tracker so the unified dashboard shows it too.
+        await writeLoopHeartbeat(env, agentType, status === 'success' ? 'pass' : status, durationMs, null, summary, 'cf_cron').catch(() => {})
+        await touchLoopDefinition(env, agentType, status === 'success' ? 'pass' : status, null).catch(() => {})
       } catch {}
     }
+
+    // Write a single "tick" heartbeat per cron firing so the dashboard can
+    // confirm the cron Worker itself is alive — independent of any individual
+    // loop. If this stops appearing, the Worker isn't firing at all.
+    ctx.waitUntil(
+      writeLoopHeartbeat(env, 'cron_worker_tick', 'pass', 0, null, `tick at ${now.toISOString()}`, 'cf_cron')
+        .then(() => touchLoopDefinition(env, 'cron_worker_tick', 'pass', null))
+        .catch(() => {})
+    )
 
     // ── Tracing Agent (every cron tick — every 10 min) ────────
     if (await isAgentEnabled('tracing')) {
@@ -465,6 +479,61 @@ export default {
         } catch (err: any) {
           console.error('[CRON:traffic] Error:', err.message)
           await logRun('traffic', 'error', err.message, {}, Date.now())
+        }
+      })())
+    }
+
+    // ── Loop Tracker scanners ────────────────────────────────────────────
+    // Every 30 min, staggered by minute so the three surface scans don't
+    // pile concurrent fetch + Browser Rendering invocations at the same
+    // edge node. Each is gated on agent_configs.enabled = 1; runScan
+    // writes its own loop_scan_runs/heartbeat row, so we don't double-log
+    // through logRun() — it would just duplicate the entry.
+    const SCAN_AT: Array<[number, ScanType]> = [
+      [0, 'public'],   [30, 'public'],
+      [10, 'customer'], [40, 'customer'],
+      [20, 'admin'],   [50, 'admin'],
+    ]
+    for (const [m, type] of SCAN_AT) {
+      if (minute === m && await isAgentEnabled(`scan_${type}`)) {
+        const expectedAt = new Date(now)
+        expectedAt.setUTCSeconds(0, 0)
+        ctx.waitUntil((async () => {
+          try {
+            await runLoopScan(env, type, 'cron', { source: 'cf_cron', expectedAt })
+          } catch (err: any) {
+            console.error(`[CRON:scan_${type}] Error:`, err?.message)
+          } finally {
+            await pruneExpiredScanSessions(env).catch(() => {})
+          }
+        })())
+      }
+    }
+
+    // Reports error sweep — runs at :05, :15, :35 for higher cadence
+    // since report errors block customer delivery. DB-only (no Browser
+    // Rendering), so it runs without an agent_configs gate when enabled.
+    if ((minute === 5 || minute === 15 || minute === 35) && await isAgentEnabled('scan_reports')) {
+      const expectedAt = new Date(now)
+      expectedAt.setUTCSeconds(0, 0)
+      ctx.waitUntil((async () => {
+        try {
+          await runLoopScan(env, 'reports', 'cron', { source: 'cf_cron', expectedAt })
+        } catch (err: any) {
+          console.error('[CRON:scan_reports] Error:', err?.message)
+        }
+      })())
+    }
+
+    // Daily system health check at 09:00 UTC.
+    if (hour === 9 && minute === 0 && await isAgentEnabled('scan_health')) {
+      const expectedAt = new Date(now)
+      expectedAt.setUTCHours(9, 0, 0, 0)
+      ctx.waitUntil((async () => {
+        try {
+          await runLoopScan(env, 'health', 'cron', { source: 'cf_cron', expectedAt })
+        } catch (err: any) {
+          console.error('[CRON:scan_health] Error:', err?.message)
         }
       })())
     }

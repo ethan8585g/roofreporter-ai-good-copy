@@ -18,6 +18,7 @@
 
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
+import { recordExternalRun } from '../services/loop-scanner'
 
 export const funnelMonitorRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -93,6 +94,7 @@ funnelMonitorRoutes.use('*', async (c, next) => {
 })
 
 funnelMonitorRoutes.post('/tick', async (c) => {
+  const t0 = Date.now()
   const body = await c.req.json().catch(() => ({})) as { dry_run?: boolean }
   const dryRun = body.dry_run === true
 
@@ -101,6 +103,28 @@ funnelMonitorRoutes.post('/tick', async (c) => {
   if (result.verdict === 'alert' && !dryRun) {
     result.alert_id = await queueRegressionAlert(c.env, result)
   }
+
+  // Mirror into the Loop Tracker so this /loop heartbeat shows up in the
+  // unified dashboard alongside the cron scans.
+  const status: 'pass' | 'fail' = result.verdict === 'alert' ? 'fail' : 'pass'
+  const findings = result.verdict === 'alert'
+    ? [{
+        severity: 'error' as const,
+        category: 'funnel_regression',
+        message: `${result.drop_stage || 'unknown stage'} — ${result.notes.join(' | ')}`.slice(0, 500),
+        details: { drop_stage: result.drop_stage, notes: result.notes, current: result.current, baseline: result.baseline_avg },
+      }]
+    : []
+  await recordExternalRun(c.env, {
+    loopId: 'funnel_monitor',
+    source: 'claude_loop',
+    status,
+    summary: `Verdict: ${result.verdict}${result.drop_stage ? ` (${result.drop_stage})` : ''} · ${result.notes.length} note(s)`,
+    durationMs: Date.now() - t0,
+    inputs: { dry_run: dryRun },
+    outputs: { verdict: result.verdict, drop_stage: result.drop_stage, alert_id: result.alert_id, last_hour: result.last_hour },
+    findings,
+  }).catch(e => console.warn('[funnel-monitor] tracker write failed:', e?.message || e))
 
   return c.json(result)
 })

@@ -84,3 +84,13 @@ Required in Cloudflare Workers environment (set via `wrangler secret put` or das
 - `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`
 - `STRIPE_SECRET_KEY` / `SQUARE_ACCESS_TOKEN`
 - `JWT_SECRET`
+
+Loop Tracker (super admin Loops module — `/super-admin/loop-tracker`):
+- `SCAN_ADMIN_EMAIL` — admin email used by `scan_admin` to mint synthetic 5-min sessions (no password). Required on **both** the Pages project AND the `roofmanager-agent-cron` Worker for cron-fired scans to authenticate.
+- `SCAN_CUSTOMER_EMAIL` — customer email used by `scan_customer`. Optional; without it, leave `agent_configs.scan_customer.enabled = 0`.
+- `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` — optional, enables Browser Rendering REST API for console-error capture during scans. Without these, the console_error check logs a single "skipped" warning and the rest of the scan still runs.
+- `FUNNEL_MONITOR_TOKEN` — bearer token for the Claude `/funnel-monitor` and `/gmail-health` slash commands.
+- `REPORTS_MONITOR_TOKEN` — bearer token for the Claude `/reports-monitor` slash command.
+- `CLOUD_ROUTINE_TOKEN` — optional bearer token for Anthropic `/schedule` cloud routines POSTing `/api/super-admin/loop-tracker/api/routines/heartbeat`. Falls back to `FUNNEL_MONITOR_TOKEN` when unset.
+
+Two separate deployments to remember: the Pages project (`roofing-measurement-tool`, all HTTP routes) and the `roofmanager-agent-cron` Worker (`wrangler-cron.jsonc`, fires every 10 min, drives all loops + agents). Cloudflare Pages does NOT honor `scheduled()` handlers — anything cron-driven must live in `src/cron-worker.ts`. Each deployment maintains its own secret store.
