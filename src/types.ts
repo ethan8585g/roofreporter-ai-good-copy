@@ -55,7 +55,7 @@ export type Bindings = {
 
   // Email delivery
   GMAIL_SENDER_EMAIL: string // The Google Workspace user email to impersonate when sending via Gmail API
-  RESEND_API_KEY: string     // Resend.com API key (recommended for personal Gmail users)
+  RESEND_API_KEY?: string    // Resend.com API key — Gmail-failure fallback. Currently UNSET in production; sends fail silently if Gmail OAuth2 hits a rate limit or the refresh token expires. Set via `wrangler pages secret put RESEND_API_KEY` to close the gap.
 
   // Gmail OAuth2 — Personal Gmail email delivery (preferred method)
   // Set up at: https://console.cloud.google.com/apis/credentials
@@ -63,7 +63,7 @@ export type Bindings = {
   // Then visit /api/auth/gmail to authorize and obtain refresh token
   GMAIL_CLIENT_ID: string
   GMAIL_CLIENT_SECRET: string
-  GMAIL_REFRESH_TOKEN: string
+  GMAIL_REFRESH_TOKEN?: string  // Optional in env — by design lives in D1 settings (gmail_refresh_token). loadGmailCreds() in services/email.ts resolves env-first, then falls back to D1.
 
   // Google Sign-In for customers
   // Uses the same OAuth 2.0 Client ID as Gmail OAuth2 (or a separate one)
