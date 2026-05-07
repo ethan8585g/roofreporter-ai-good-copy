@@ -6304,7 +6304,7 @@ function getDispatchBoardHTML(mapsApiKey: string = '') {
 function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
   const mapsScript = mapsApiKey
     ? `<script>function onSaGoogleMapsReady(){window._saGoogleMapsLoaded=true;}</script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places&callback=onSaGoogleMapsReady" async defer></script>`
+    <script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&v=beta&libraries=places,maps3d&callback=onSaGoogleMapsReady" async defer></script>`
     : ''
   return `<!DOCTYPE html>
 <html lang="en">

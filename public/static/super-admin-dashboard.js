@@ -1654,7 +1654,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
   overlay.id = 'sa-trace-modal';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:16px';
   overlay.innerHTML =
-    '<div style="background:#111827;border:1px solid #374151;border-radius:16px;width:100%;max-width:900px;height:90vh;display:flex;flex-direction:column">' +
+    '<div style="background:#111827;border:1px solid #374151;border-radius:16px;width:96vw;max-width:1700px;height:90vh;display:flex;flex-direction:column">' +
       '<div style="padding:16px 20px;border-bottom:1px solid #374151;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">' +
         '<div>' +
           '<div style="color:#f9fafb;font-size:15px;font-weight:700"><i class="fas fa-drafting-compass mr-2" style="color:#f59e0b"></i>Trace Roof — ' + orderNum + '</div>' +
@@ -1678,7 +1678,16 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<i class="fas fa-expand-arrows-alt mr-1 text-blue-400"></i>Trace the outermost roof edge (drip line), not the walls' +
         '</span>' +
       '</div>' +
-      '<div id="sa-trace-map" style="flex:1;min-height:0"></div>' +
+      '<div style="flex:1;min-height:0;display:flex;gap:8px;padding:0 8px">' +
+        '<div style="flex:1;min-height:0;display:flex;flex-direction:column">' +
+          '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Trace</div>' +
+          '<div id="sa-trace-map" style="flex:1;min-height:0;border-radius:8px;overflow:hidden"></div>' +
+        '</div>' +
+        '<div style="flex:1;min-height:0;display:flex;flex-direction:column">' +
+          '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">3D Reference</div>' +
+          '<gmp-map-3d id="sa-trace-map-3d" mode="HYBRID" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;width:100%;height:100%"></gmp-map-3d>' +
+        '</div>' +
+      '</div>' +
       '<div style="padding:14px 20px;border-top:1px solid #374151;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;flex-shrink:0">' +
         '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
           '<button onclick="saTraceSetTool(\'eave\')" id="sa-tool-eave" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#22c55e;color:#fff;border:none">Eaves</button>' +
@@ -1831,6 +1840,25 @@ function saInitTraceMap(lat, lng, address) {
   });
   s.map = map;
 
+  // ── Photorealistic 3D reference map (right pane) ─────────────
+  // Follows the 2D trace map's center on every pan/zoom so admin only
+  // navigates once. Tilt/heading remain user-controlled on the 3D side.
+  var map3d = document.getElementById('sa-trace-map-3d');
+  function set3dCenter(latLng) {
+    if (!map3d) return;
+    try {
+      map3d.center = { lat: latLng.lat(), lng: latLng.lng(), altitude: 0 };
+      if (map3d.range == null) map3d.range = 180;
+      if (map3d.tilt == null) map3d.tilt = 67.5;
+      if (map3d.heading == null) map3d.heading = 25;
+    } catch (e) { /* maps3d library not ready or unsupported — skip silently */ }
+  }
+  set3dCenter(new google.maps.LatLng(center.lat, center.lng));
+  map.addListener('idle', function() {
+    var c = map.getCenter();
+    if (c) set3dCenter(c);
+  });
+
   // Register higher-resolution basemaps (Esri / Mapbox / Nearmap) as
   // selectable map types — same pattern as Storm Scout. Tokens are
   // resolved server-side; providers without a configured token are
@@ -1916,6 +1944,7 @@ function saInitTraceMap(lat, lng, address) {
       if (status === 'OK' && results && results[0]) {
         map.setCenter(results[0].geometry.location);
         map.setZoom(20);
+        set3dCenter(results[0].geometry.location);
       }
     });
   }
