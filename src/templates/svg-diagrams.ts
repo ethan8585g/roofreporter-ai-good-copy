@@ -2769,6 +2769,19 @@ export function generateTraceBasedDiagramSVG(
     svg += `<polygon points="${pts}" fill="url(#${hatchIds[fi % hatchIds.length]})" stroke="none"/>`
   })
 
+  // Label collision tracker — must be initialised before the extra-sections
+  // loop, which references it for per-edge dimension labels on detached
+  // structures. Previously declared further down, which crashed the SVG
+  // generator on any multi-structure trace (TDZ on `labelCollides`).
+  const placedLabels: { cx: number; cy: number; w: number; h: number }[] = []
+  const labelCollides = (cx: number, cy: number, w: number, h: number): boolean => {
+    for (const lb of placedLabels) {
+      if (Math.abs(cx - lb.cx) < (w + lb.w) / 2 + 3 &&
+          Math.abs(cy - lb.cy) < (h + lb.h) / 2 + 3) return true
+    }
+    return false
+  }
+
   // ── EAVE PERIMETER (clean black outline — primary section) ──
   const eavePts = eavesXY.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
   svg += `<polygon points="${eavePts}" fill="none" stroke="#1a1a1a" stroke-width="2.2" stroke-linejoin="round"/>`
@@ -2898,16 +2911,8 @@ export function generateTraceBasedDiagramSVG(
   })
 
   // ── EAVE EDGE DIMENSION LABELS (collision-aware architectural style) ──
-  // Collect all label bounding boxes to prevent overlaps
-  const placedLabels: { cx: number; cy: number; w: number; h: number }[] = []
-  const labelCollides = (cx: number, cy: number, w: number, h: number): boolean => {
-    for (const lb of placedLabels) {
-      if (Math.abs(cx - lb.cx) < (w + lb.w) / 2 + 3 &&
-          Math.abs(cy - lb.cy) < (h + lb.h) / 2 + 3) return true
-    }
-    return false
-  }
-
+  // `placedLabels` + `labelCollides` are declared earlier (above the eave
+  // perimeter block) so the extra-sections loop can use them without TDZ.
   for (let i = 0; i < n; i++) {
     if (HIDE) break
     const a = eaves[i], b = eaves[(i + 1) % n]
