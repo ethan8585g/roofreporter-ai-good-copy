@@ -947,6 +947,17 @@ app.get('/register', (c) => {
   return c.html(getCustomerRegisterPageHTML(email, googleClientId, previewId, refCode))
 })
 
+// /contact-thanks — landing page after contact form submit. Confirms reply
+// SLA and offers an immediate self-serve register path (Google or email/pw).
+app.get('/contact-thanks', (c) => {
+  const email = c.req.query('email') || ''
+  const name = c.req.query('name') || ''
+  const company = c.req.query('company') || ''
+  const googleClientId = (c.env as any).GOOGLE_OAUTH_CLIENT_ID || (c.env as any).GMAIL_CLIENT_ID || ''
+  c.header('Cache-Control', 'no-store, no-cache, must-revalidate')
+  return c.html(getContactThanksPageHTML(email, name, company, googleClientId))
+})
+
 // Magic link auth handler
 app.get('/auth/magic', async (c) => {
   const token = c.req.query('token') || ''
@@ -5358,8 +5369,8 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
     <div class="max-w-3xl mx-auto px-4">
       <div class="text-center mb-10">
         <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold px-4 py-1.5 rounded-full mb-4"><i class="fas fa-envelope mr-1.5"></i>GET IN TOUCH</span>
-        <h2 class="text-3xl md:text-4xl font-bold text-white mb-3">${sourcePage === 'pricing' ? 'Questions? Talk to Our Team' : 'Ready to Transform Your Roofing Business?'}</h2>
-        <p class="text-gray-400 max-w-xl mx-auto">${sourcePage === 'pricing' ? 'Not sure which plan is right for you? Tell us about your business and we\'ll recommend the best option.' : 'Tell us about your business — we\'ll have you set up with AI-powered roof reports in minutes.'}</p>
+        <h2 class="text-3xl md:text-4xl font-bold text-white mb-3">${sourcePage === 'pricing' ? 'Questions? Talk to Our Team' : 'Get In Touch'}</h2>
+        <p class="text-gray-400 max-w-xl mx-auto">${sourcePage === 'pricing' ? 'Not sure which plan is right for you? Tell us about your business and we\'ll recommend the best option.' : 'Tell us about your business — we\'ll get back to you within 1-2 business days.'}</p>
       </div>
       <form id="lead-capture-form" data-source="${safeSource}" onsubmit="return submitLeadForm(event)" class="bg-[#111111] border border-white/10 rounded-2xl p-8 space-y-5">
         <div>
@@ -5382,9 +5393,9 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
         </div>
         <div id="lead-form-msg" class="hidden text-sm font-medium px-4 py-3 rounded-lg"></div>
         <button type="submit" id="lead-submit-btn" class="w-full bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl shadow-lg shadow-[#00FF88]/20 transition-all hover:scale-[1.01] text-lg">
-          <i class="fas fa-rocket mr-2"></i>Get My Free Reports
+          <i class="fas fa-paper-plane mr-2"></i>Send Message
         </button>
-        <p class="text-center text-gray-500 text-xs mt-1"><i class="fas fa-lock mr-1 text-[#00FF88]"></i>No credit card required &middot; 4 free reports included &middot; Instant access</p>
+        <p class="text-center text-gray-500 text-xs mt-1"><i class="fas fa-clock mr-1 text-[#00FF88]"></i>We'll reply within 1-2 business days</p>
         <div class="text-center my-4"><span class="text-gray-600 text-xs">— or skip the form —</span></div>
         <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="block w-full bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl text-center text-lg transition-all border border-white/10 hover:border-[#00FF88]/30">
           <i class="fas fa-calendar-check mr-2 text-[#00FF88]"></i>Book a Free 15-Min Demo Instead
@@ -5426,14 +5437,11 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
       var data = await res.json();
       if (data.success) {
         if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('lead', { value: 1.0, currency: 'USD' });
-        msg.className = 'text-sm font-medium px-4 py-3 rounded-lg bg-green-500/20 text-green-300 border border-green-500/30';
-        msg.textContent = '';
-        var icon = document.createElement('i'); icon.className = 'fas fa-check-circle mr-2'; msg.appendChild(icon);
-        msg.appendChild(document.createTextNode("You're in! "));
-        var a = document.createElement('a'); a.href = 'https://calendar.app.google/KNLFST4CNxViPPN3A'; a.target = '_blank'; a.rel = 'noopener'; a.className = 'underline font-bold'; a.textContent = 'Book your free onboarding call';
-        msg.appendChild(a);
-        msg.appendChild(document.createTextNode(' while we set up your account.'));
-        document.getElementById('lead-capture-form').reset();
+        var leadEmail = document.getElementById('lead-email').value.trim();
+        var leadName = document.getElementById('lead-name').value.trim();
+        var leadCompany = document.getElementById('lead-company').value.trim();
+        window.location.href = '/contact-thanks?email=' + encodeURIComponent(leadEmail) + '&name=' + encodeURIComponent(leadName) + '&company=' + encodeURIComponent(leadCompany);
+        return;
       } else {
         msg.className = 'text-sm font-medium px-4 py-3 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30';
         msg.textContent = '';
@@ -5444,7 +5452,7 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
       msg.className = 'text-sm font-medium px-4 py-3 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30';
       msg.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i>Network error. Please try again.';
     }
-    btn.disabled = false; btn.innerHTML = '<i class="fas fa-rocket mr-2"></i>Get My Free Reports';
+    btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Send Message';
   }
   </script>`
 }
@@ -7601,15 +7609,6 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           </div>
         </div>
         <a href="/pricing" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Pricing</a>
-        <!-- Alternatives dropdown -->
-        <div class="relative rm-features-dd">
-          <button class="flex items-center gap-1 text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Alternatives <i class="fas fa-chevron-down text-[10px] rm-features-chevron"></i></button>
-          <div class="rm-features-panel absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-[#111111] border border-white/10 rounded-xl shadow-2xl z-50 py-2">
-            <div class="px-4 pt-2 pb-1 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Compare</div>
-            <a href="/vs-eagleview" class="flex items-start gap-2.5 px-4 py-2.5 text-gray-400 hover:text-white hover:bg-white/5 text-sm transition-colors"><i class="fas fa-balance-scale text-[#00FF88] w-4 text-xs mt-1"></i><span><span class="block font-medium">Roof Manager vs EagleView</span><span class="block text-[11px] text-gray-500">$8 vs $50&ndash;$95 per report</span></span></a>
-            <a href="/vs-roofsnap" class="flex items-start gap-2.5 px-4 py-2.5 text-gray-400 hover:text-white hover:bg-white/5 text-sm transition-colors"><i class="fas fa-balance-scale text-[#22d3ee] w-4 text-xs mt-1"></i><span><span class="block font-medium">Roof Manager vs RoofSnap</span><span class="block text-[11px] text-gray-500">Free CRM, no per-seat fees</span></span></a>
-          </div>
-        </div>
         <a href="/customer/login" onclick="rrTrack('cta_click',{location:'nav_login'})" class="border border-white/20 hover:border-white/40 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-all duration-200 hover:bg-white/5 whitespace-nowrap">
           <i class="fas fa-sign-in-alt mr-1.5 text-gray-400"></i>Log In</a>
         <a href="/register" onclick="rrTrack('cta_click',{location:'nav_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2.5 px-5 rounded-xl text-sm transition-all duration-200 hover:scale-105 shadow-lg shadow-[#00FF88]/20 whitespace-nowrap">
@@ -7641,8 +7640,6 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <a href="/condo-reserve-fund-cheat-sheet" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-building text-[#a78bfa] mr-2 text-xs"></i>Commercial / Condo Boards</a>
         <a href="/services" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">All Features</a>
         <a href="/pricing" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Pricing</a>
-        <a href="/vs-eagleview" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-balance-scale text-[#00FF88] mr-2 text-xs"></i>vs EagleView</a>
-        <a href="/vs-roofsnap" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-balance-scale text-[#22d3ee] mr-2 text-xs"></i>vs RoofSnap</a>
         <a href="/blog" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Blog</a>
         <a href="/coverage" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Coverage</a>
         <a href="/lander" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Get Started</a>
@@ -9445,6 +9442,210 @@ function getSettingsPageHTML() {
 // ============================================================
 // CUSTOMER PAGES
 // ============================================================
+
+function getContactThanksPageHTML(prefillEmail = '', prefillName = '', prefillCompany = '', googleClientId = '') {
+  const safeEmail = prefillEmail.replace(/"/g, '&quot;')
+  const safeName = prefillName.replace(/"/g, '&quot;')
+  const safeCompany = prefillCompany.replace(/"/g, '&quot;')
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Thanks — we'll be in touch | Roof Manager</title>
+  <meta name="robots" content="noindex">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&display=fallback" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    body { background: #0A0A0A; color: #fff; margin: 0; min-height: 100vh; }
+    .wrap { max-width: 640px; margin: 0 auto; padding: 48px 20px 80px; }
+    .card { background: #111111; border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 32px; }
+    .input { width: 100%; padding: 12px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #fff; font-size: 15px; box-sizing: border-box; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+    .input::placeholder { color: #6b7280; }
+    .input:focus { border-color: #00FF88; box-shadow: 0 0 0 3px rgba(0,255,136,0.15); }
+    .btn-primary { width: 100%; padding: 14px; background: #00FF88; color: #0A0A0A; font-weight: 800; border: none; border-radius: 10px; font-size: 16px; cursor: pointer; transition: background 0.15s; }
+    .btn-primary:hover { background: #00e67a; }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .divider { display: flex; align-items: center; gap: 12px; margin: 18px 0; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.08); }
+    .divider span { font-size: 12px; color: #6b7280; white-space: nowrap; }
+  </style>
+  ${googleClientId ? '<script src="https://accounts.google.com/gsi/client" async defer><\/script>' : ''}
+</head>
+<body>
+  <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.06);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between">
+    <a href="/" style="display:flex;align-items:center;gap:10px;text-decoration:none">
+      <img src="/static/logo.png?v=20260504" alt="Roof Manager" style="width:32px;height:32px;border-radius:8px;object-fit:cover">
+      <span style="font-weight:800;font-size:16px;color:#fff">Roof Manager</span>
+    </a>
+    <a href="/customer/login" style="color:#9ca3af;font-size:13px;text-decoration:none">Sign in</a>
+  </nav>
+
+  <main class="wrap">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:50%;background:rgba(0,255,136,0.12);border:1px solid rgba(0,255,136,0.3);margin-bottom:18px">
+        <i class="fas fa-check" style="color:#00FF88;font-size:32px"></i>
+      </div>
+      <h1 style="font-size:28px;font-weight:900;margin:0 0 10px;color:#fff">Thanks — we got your message.</h1>
+      <p style="color:#9ca3af;font-size:15px;margin:0;line-height:1.6">We'll get back to you within <strong style="color:#fff">1-2 business days</strong>. Keep an eye on your inbox${prefillEmail ? ` at <strong style="color:#fff">${safeEmail}</strong>` : ''}.</p>
+    </div>
+
+    <div class="card">
+      <div style="text-align:center;margin-bottom:22px">
+        <div style="display:inline-block;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.25);border-radius:999px;padding:4px 14px;font-size:11px;font-weight:700;color:#00FF88;letter-spacing:0.04em;margin-bottom:12px">DON'T WAIT — START NOW</div>
+        <h2 style="font-size:20px;font-weight:800;margin:0 0 6px;color:#fff">Want to get started right now?</h2>
+        <p style="color:#9ca3af;font-size:14px;margin:0">Create your free account &mdash; 4 free reports, no credit card.</p>
+      </div>
+
+      <div id="reg-error" style="display:none;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#fca5a5;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px"></div>
+
+      ${googleClientId ? `
+      <div id="g_id_onload"
+        data-client_id="${googleClientId}"
+        data-callback="handleGoogleCredential"
+        data-auto_prompt="false"></div>
+      <div style="display:flex;justify-content:center;margin-bottom:8px">
+        <div class="g_id_signin"
+          data-type="standard"
+          data-shape="pill"
+          data-theme="filled_black"
+          data-text="continue_with"
+          data-size="large"
+          data-width="280"
+          data-logo_alignment="left"></div>
+      </div>
+      <p style="text-align:center;margin:0 0 6px;font-size:12px;color:#6b7280">Fastest &mdash; 1-click, no password</p>
+      <div class="divider"><span>or use email &amp; password</span></div>
+      ` : ''}
+
+      <form id="thanks-reg-form" autocomplete="on" onsubmit="event.preventDefault();submitThanksReg();return false">
+        <div style="display:grid;gap:10px;margin-bottom:10px">
+          <input id="t-email" type="email" name="email" autocomplete="email" required class="input" placeholder="Work email" value="${safeEmail}">
+          <input id="t-name" type="text" name="name" autocomplete="name" required class="input" placeholder="Full name" value="${safeName}">
+          <input id="t-password" type="password" name="password" autocomplete="new-password" required minlength="8" class="input" placeholder="Password (min. 8 characters)">
+          <input id="t-company" type="text" name="company_name" autocomplete="organization" class="input" placeholder="Company (optional)" value="${safeCompany}">
+        </div>
+        <button type="submit" id="t-submit" class="btn-primary"><i class="fas fa-rocket" style="margin-right:6px"></i>Create Free Account</button>
+        <p style="text-align:center;color:#6b7280;font-size:11px;margin:12px 0 0"><i class="fas fa-lock" style="margin-right:5px"></i>256-bit SSL &middot; Hosted in Canada &middot; PIPEDA compliant</p>
+      </form>
+    </div>
+
+    <p style="text-align:center;margin:24px 0 0;color:#6b7280;font-size:13px">
+      Already have an account? <a href="/customer/login" style="color:#00FF88;text-decoration:none;font-weight:600">Sign in</a>
+    </p>
+  </main>
+
+  <script>
+    function setRegError(msg) {
+      var el = document.getElementById('reg-error');
+      if (!el) return;
+      if (msg) { el.textContent = msg; el.style.display = 'block'; }
+      else { el.textContent = ''; el.style.display = 'none'; }
+    }
+
+    async function submitThanksReg() {
+      setRegError('');
+      var email = document.getElementById('t-email').value.trim();
+      var password = document.getElementById('t-password').value;
+      var name = document.getElementById('t-name').value.trim();
+      var company = document.getElementById('t-company').value.trim();
+      if (!email || !password || !name) { setRegError('Please fill in email, name, and password.'); return; }
+      if (password.length < 8) { setRegError('Password must be at least 8 characters.'); return; }
+      var btn = document.getElementById('t-submit');
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:6px"></i>Creating account...';
+
+      // Send a 6-digit code, prompt the user inline, then submit register with the verification token.
+      try {
+        var sendRes = await fetch('/api/customer-auth/send-verification', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({email: email})
+        });
+        var sendJson = await sendRes.json().catch(function(){ return {}; });
+        if (!sendRes.ok || !sendJson.success) {
+          setRegError(sendJson.error || 'Could not send verification code. Try again.');
+          btn.disabled = false; btn.innerHTML = '<i class="fas fa-rocket" style="margin-right:6px"></i>Create Free Account';
+          return;
+        }
+      } catch (e) {
+        setRegError('Network error. Please try again.');
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-rocket" style="margin-right:6px"></i>Create Free Account';
+        return;
+      }
+
+      var code = window.prompt('We sent a 6-digit verification code to ' + email + '. Enter it below to finish:');
+      if (!code) {
+        setRegError('Verification cancelled. Try again when you\\'re ready.');
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-rocket" style="margin-right:6px"></i>Create Free Account';
+        return;
+      }
+      var verificationToken = '';
+      try {
+        var vRes = await fetch('/api/customer-auth/verify-code', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({email: email, code: String(code).trim()})
+        });
+        var vJson = await vRes.json().catch(function(){ return {}; });
+        if (!vRes.ok || !vJson.success || !vJson.verification_token) {
+          setRegError(vJson.error || 'Invalid or expired code. Please retry.');
+          btn.disabled = false; btn.innerHTML = '<i class="fas fa-rocket" style="margin-right:6px"></i>Create Free Account';
+          return;
+        }
+        verificationToken = vJson.verification_token;
+      } catch (e) {
+        setRegError('Network error verifying code. Try again.');
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-rocket" style="margin-right:6px"></i>Create Free Account';
+        return;
+      }
+
+      try {
+        var res = await fetch('/api/customer-auth/register', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            email: email, password: password, name: name,
+            company_name: company, verification_token: verificationToken
+          })
+        });
+        var data = await res.json();
+        if (data.success) {
+          if (typeof gtag === 'function') gtag('event', 'sign_up', { method: 'email_post_contact' });
+          if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 50.0, currency: 'CAD' });
+          if (data.customer) localStorage.setItem('rc_customer', JSON.stringify(data.customer));
+          if (data.token) localStorage.setItem('rc_customer_token', data.token);
+          window.location.href = '/onboarding';
+        } else {
+          setRegError(data.error || 'Registration failed. Please try again.');
+          btn.disabled = false; btn.innerHTML = '<i class="fas fa-rocket" style="margin-right:6px"></i>Create Free Account';
+        }
+      } catch (e) {
+        setRegError('Network error. Please try again.');
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-rocket" style="margin-right:6px"></i>Create Free Account';
+      }
+    }
+
+    async function handleGoogleCredential(response) {
+      try {
+        var res = await fetch('/api/customer-auth/google', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({credential: response.credential})
+        });
+        var data = await res.json();
+        if (data.success) {
+          if ((data.is_new || data.welcome) && typeof gtag === 'function') gtag('event', 'sign_up', { method: 'google_post_contact' });
+          if (data.customer) localStorage.setItem('rc_customer', JSON.stringify(data.customer));
+          if (data.token) localStorage.setItem('rc_customer_token', data.token);
+          window.location.href = (data.is_new || data.welcome) ? '/onboarding' : '/customer/dashboard';
+        } else {
+          setRegError(data.error || 'Google sign-in failed. Try email instead.');
+        }
+      } catch (e) {
+        setRegError('Network error. Try email instead.');
+      }
+    }
+  </script>
+</body>
+</html>`
+}
 
 function getCustomerRegisterPageHTML(prefillEmail = '', googleClientId = '', previewId = '', refCode = '') {
   return `<!DOCTYPE html>
