@@ -2,9 +2,14 @@
 // FUNNEL MONITOR — Hourly signup-funnel regression detector.
 // ============================================================
 // Called by the /funnel-monitor slash command (typically wrapped in
-// `/loop 1h /funnel-monitor`). Reads site_analytics + customers, compares
-// the last hour to the same hour-of-day averaged over the last 7 days,
-// and queues a super-admin notification when conversion drops sharply.
+// `/loop 1h /funnel-monitor`). Reads site_analytics + customers and runs
+// two checks:
+//   1. CONVERSION TREND — last 24h vs. trailing 7×24h baseline avg.
+//      Window is 24h (not 1h) because /register traffic is ~7-8 pv/day;
+//      hourly buckets give 0-1 visits each — no statistical signal.
+//   2. BACKEND TRIPWIRE — last 1h: form_submits ≥ 3 with 0 customer rows
+//      means /api/customer/register is failing. Fires regardless of (1).
+// Either check can queue a super-admin funnel_regression notification.
 //
 // Auth: bearer token matched against env.FUNNEL_MONITOR_TOKEN. The slash
 // command stores the token in a local gitignored file. We deliberately
@@ -18,11 +23,21 @@ export const funnelMonitorRoutes = new Hono<{ Bindings: Bindings }>()
 
 // Conversion-rate drop (relative) that triggers an alert. 0.25 = "current
 // stage rate is 25% below baseline". Tunable; pick conservatively because
-// hourly samples are noisy.
+// daily samples are still moderately noisy at low traffic.
 const REGRESSION_RATIO = 0.25
 
 // Don't fire on tiny samples — n=3 visitors converting at 0% means nothing.
-const MIN_BASELINE_VISITS = 20
+// 5 is set for a site with ~7-8 register pv/day; raise as traffic grows.
+const MIN_BASELINE_VISITS = 5
+
+// Window the conversion-trend check spans, in hours. 24 = trailing 1d vs.
+// 7-day-of-1d-windows avg.
+const TREND_WINDOW_HOURS = 24
+
+// Backend-failure tripwire window. Stays at 1h — a sudden break should fire
+// fast and doesn't need statistical baselines.
+const BACKEND_TRIPWIRE_HOURS = 1
+const BACKEND_TRIPWIRE_MIN_SUBMITS = 3
 
 // Pages that count as the signup funnel entry. /signup is a 302 to /register
 // but is occasionally hit directly. utm/query strings are stripped via LIKE.
@@ -44,6 +59,12 @@ interface FunnelStage {
   rate: number | null
   baseline_rate: number | null
   delta_pct: number | null
+  // Informational stages (form_start/form_submit) are surfaced in the
+  // response for context but never trigger alerts — their tracking is
+  // client-side and brittle (Google OAuth signups skip the form_submit
+  // beacon; redirects can race the beacon). Only stages backed by D1
+  // ground truth (customers, email_verified) gate the verdict.
+  alerts_on_drop: boolean
 }
 
 interface TickResult {
@@ -55,6 +76,7 @@ interface TickResult {
   drop_stage: string | null
   alert_id: number | null
   notes: string[]
+  last_hour: { form_submits: number; customers_created: number }
 }
 
 funnelMonitorRoutes.use('*', async (c, next) => {
@@ -84,12 +106,14 @@ funnelMonitorRoutes.post('/tick', async (c) => {
 })
 
 async function evaluateFunnel(env: Bindings): Promise<TickResult> {
+  const HOUR_MS = 60 * 60 * 1000
   const now = new Date()
-  const currentEnd = new Date(now)
-  const currentStart = new Date(now.getTime() - 60 * 60 * 1000)
+  const windowEnd = new Date(now)
+  const windowStart = new Date(now.getTime() - TREND_WINDOW_HOURS * HOUR_MS)
+  const tripwireStart = new Date(now.getTime() - BACKEND_TRIPWIRE_HOURS * HOUR_MS)
 
-  // 8 days of analytics events covers: current hour + 7 same-hour-of-day buckets
-  const fetchStart = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000)
+  // Pull trend-window + 7 baseline windows of identical width = 8 windows total.
+  const fetchStart = new Date(now.getTime() - 8 * TREND_WINDOW_HOURS * HOUR_MS)
   const fetchStartIso = isoForSqlite(fetchStart)
 
   const registerLikes = REGISTER_PATH_PATTERNS.map(() => 'page_url LIKE ?').join(' OR ')
@@ -118,8 +142,16 @@ async function evaluateFunnel(env: Bindings): Promise<TickResult> {
   const currentVisitors = new Set<string>()
   const baselineVisitors: Array<Set<string>> = baselineBuckets.map(() => new Set())
 
+  // Backend tripwire counters — last BACKEND_TRIPWIRE_HOURS only.
+  let tripwireSubmits = 0
+  let tripwireCustomers = 0
+
   for (const row of analyticsRows) {
-    const slot = classifySlot(row.created_at, currentStart, currentEnd)
+    const ts = parseSqliteTs(row.created_at).getTime()
+    if (ts >= tripwireStart.getTime() && ts < windowEnd.getTime() && row.event_type === 'form_submit') {
+      tripwireSubmits++
+    }
+    const slot = classifySlot(row.created_at, windowStart, windowEnd, TREND_WINDOW_HOURS)
     if (slot === null) continue
     const bucket = slot === 'current' ? current : baselineBuckets[slot]
     const vSet = slot === 'current' ? currentVisitors : baselineVisitors[slot]
@@ -130,7 +162,9 @@ async function evaluateFunnel(env: Bindings): Promise<TickResult> {
   }
 
   for (const row of customerRows) {
-    const slot = classifySlot(row.created_at, currentStart, currentEnd)
+    const ts = parseSqliteTs(row.created_at).getTime()
+    if (ts >= tripwireStart.getTime() && ts < windowEnd.getTime()) tripwireCustomers++
+    const slot = classifySlot(row.created_at, windowStart, windowEnd, TREND_WINDOW_HOURS)
     if (slot === null) continue
     const bucket = slot === 'current' ? current : baselineBuckets[slot]
     bucket.customers_created++
@@ -150,10 +184,11 @@ async function evaluateFunnel(env: Bindings): Promise<TickResult> {
   const baselineTotalVisits = baseline.pageviews
   if (baselineTotalVisits < MIN_BASELINE_VISITS) {
     verdict = 'insufficient_data'
-    notes.push(`baseline pageviews avg ${baselineTotalVisits.toFixed(1)} < ${MIN_BASELINE_VISITS}; not enough history to flag regressions`)
+    notes.push(`baseline pageviews avg ${baselineTotalVisits.toFixed(1)} < ${MIN_BASELINE_VISITS}; not enough history to flag conversion regressions`)
   } else {
     let worstDrop = 0
     for (const s of stages) {
+      if (!s.alerts_on_drop) continue
       if (s.delta_pct === null || s.baseline_rate === null) continue
       // We care about NEGATIVE deltas (rate fell below baseline)
       if (s.delta_pct < -worstDrop) {
@@ -163,23 +198,24 @@ async function evaluateFunnel(env: Bindings): Promise<TickResult> {
     }
     if (worstDrop >= REGRESSION_RATIO * 100) {
       verdict = 'alert'
-      notes.push(`${dropStage} dropped ${worstDrop.toFixed(0)}% vs same-hour-of-day 7d avg`)
+      notes.push(`${dropStage} dropped ${worstDrop.toFixed(0)}% vs trailing 7×24h baseline`)
     } else if (worstDrop >= (REGRESSION_RATIO * 100) / 2) {
       verdict = 'watch'
       notes.push(`${dropStage} down ${worstDrop.toFixed(0)}%, below alert threshold`)
     }
   }
 
-  // Backend-failure heuristic: form_submit rate normal but customer rows missing.
-  // If submits exist but no rows landed, /api/customer/register is probably broken.
-  if (current.form_submits >= 3 && current.customers_created === 0) {
+  // Backend-failure tripwire (1h): if visitors are submitting the form but
+  // no customer rows are landing, /api/customer/register is failing. Fires
+  // regardless of trend verdict; this is a different kind of problem.
+  if (tripwireSubmits >= BACKEND_TRIPWIRE_MIN_SUBMITS && tripwireCustomers === 0) {
     verdict = 'alert'
     dropStage = dropStage || 'submit_to_customer'
-    notes.push(`${current.form_submits} form_submits but 0 customer rows — registration endpoint likely failing`)
+    notes.push(`backend tripwire: ${tripwireSubmits} form_submits in last ${BACKEND_TRIPWIRE_HOURS}h but 0 customer rows — registration endpoint likely failing`)
   }
 
   return {
-    window: { start: isoForSqlite(currentStart), end: isoForSqlite(currentEnd) },
+    window: { start: isoForSqlite(windowStart), end: isoForSqlite(windowEnd) },
     current,
     baseline_avg: baseline,
     stages,
@@ -187,6 +223,7 @@ async function evaluateFunnel(env: Bindings): Promise<TickResult> {
     drop_stage: dropStage,
     alert_id: null,
     notes,
+    last_hour: { form_submits: tripwireSubmits, customers_created: tripwireCustomers },
   }
 }
 
@@ -195,14 +232,17 @@ function emptyBucket(): BucketCounts {
 }
 
 // Returns 'current' if ts falls in [currentStart, currentEnd], or an index 0..6
-// for the same-hour-of-day window N+1 days ago, else null.
-function classifySlot(ts: string, currentStart: Date, currentEnd: Date): 'current' | number | null {
+// for the Nth contiguous baseline window of the same width preceding the
+// current one (n=1 → window immediately before current, …, n=7 → 7 windows back).
+// With windowHours=24, this gives 7 trailing 24h windows averaged. With 1h,
+// it would give same-hour-of-day buckets (legacy behavior).
+function classifySlot(ts: string, currentStart: Date, currentEnd: Date, windowHours: number): 'current' | number | null {
   const t = parseSqliteTs(ts).getTime()
   if (t >= currentStart.getTime() && t < currentEnd.getTime()) return 'current'
+  const windowMs = windowHours * 60 * 60 * 1000
   for (let n = 1; n <= 7; n++) {
-    const dayMs = 24 * 60 * 60 * 1000
-    const bStart = currentStart.getTime() - n * dayMs
-    const bEnd = currentEnd.getTime() - n * dayMs
+    const bStart = currentStart.getTime() - n * windowMs
+    const bEnd = currentEnd.getTime() - n * windowMs
     if (t >= bStart && t < bEnd) return n - 1
   }
   return null
@@ -231,13 +271,16 @@ function averageBuckets(buckets: BucketCounts[]): BucketCounts {
 }
 
 function buildStages(cur: BucketCounts, base: BucketCounts): FunnelStage[] {
-  const definitions: Array<{ name: string; num: keyof BucketCounts; den: keyof BucketCounts }> = [
-    { name: 'pageview_to_form_start', num: 'form_starts', den: 'pageviews' },
-    { name: 'form_start_to_submit', num: 'form_submits', den: 'form_starts' },
-    { name: 'submit_to_customer', num: 'customers_created', den: 'form_submits' },
-    { name: 'customer_to_verified', num: 'email_verified', den: 'customers_created' },
+  const definitions: Array<{ name: string; num: keyof BucketCounts; den: keyof BucketCounts; alerts_on_drop: boolean }> = [
+    // Informational only — client-side tracking is leaky (OAuth skips form
+    // events, redirects race the beacon). Reported for visibility.
+    { name: 'pageview_to_form_start', num: 'form_starts', den: 'pageviews', alerts_on_drop: false },
+    { name: 'form_start_to_submit',   num: 'form_submits', den: 'form_starts', alerts_on_drop: false },
+    // Authoritative — D1-backed. These gate the verdict.
+    { name: 'pageview_to_customer',   num: 'customers_created', den: 'pageviews', alerts_on_drop: true },
+    { name: 'customer_to_verified',   num: 'email_verified', den: 'customers_created', alerts_on_drop: true },
   ]
-  return definitions.map(({ name, num, den }) => {
+  return definitions.map(({ name, num, den, alerts_on_drop }) => {
     const curRate = rate(cur[num], cur[den])
     const baseRate = rate(base[num], base[den])
     const delta = curRate !== null && baseRate !== null && baseRate > 0
@@ -250,6 +293,7 @@ function buildStages(cur: BucketCounts, base: BucketCounts): FunnelStage[] {
       rate: curRate,
       baseline_rate: baseRate,
       delta_pct: delta,
+      alerts_on_drop,
     }
   })
 }

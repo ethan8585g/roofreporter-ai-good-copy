@@ -1,5 +1,5 @@
 ---
-description: Run one tick of the signup-funnel monitor — alerts on conversion regressions vs same-hour-of-day 7d baseline. Wrap in `/loop 1h /funnel-monitor` for hourly cadence.
+description: Run one tick of the signup-funnel monitor. Trend check = trailing 24h vs. last 7×24h baseline. Backend tripwire = last 1h. Wrap in `/loop 1h /funnel-monitor` for hourly cadence.
 allowed-tools: Bash(cat:*), Bash(curl:*), Bash(test:*), Bash(ls:*), Read
 ---
 
@@ -38,10 +38,10 @@ If the HTTP call fails (non-JSON response, 401, 503), surface the raw error in o
 
 Parse the JSON. Map `verdict` → status line:
 
-- `healthy` → `🟢 Funnel healthy — {current.pageviews} views, {current.form_submits} submits, {current.customers_created} signups in last hour`
-- `watch` → `🟡 Watch: {drop_stage} {first note from notes[]}`
+- `healthy` → `🟢 Funnel healthy — last 24h: {current.pageviews} views, {current.form_submits} submits, {current.customers_created} signups (last 1h: {last_hour.form_submits} submits, {last_hour.customers_created} signups)`
+- `watch` → `🟡 Watch: {drop_stage} — {first note from notes[]}`
 - `alert` → `🔴 Alert queued (#{alert_id}): {first note from notes[]}`
-- `insufficient_data` → `⚪ Insufficient data — {first note from notes[]}`
+- `insufficient_data` → `⚪ Insufficient data — {first note from notes[]} (last 24h: {current.pageviews} views, {current.form_submits} submits, {current.customers_created} signups)`
 
 Append a single bullet line per stage ONLY when verdict is `alert` or `watch`, formatted as:
 `  • {stage.name}: {rate as %} (baseline {baseline_rate as %}, Δ {delta_pct}%)`
