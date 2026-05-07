@@ -173,6 +173,11 @@ export type Bindings = {
   // ── Meta Pixel & Conversions API — Facebook/Instagram tracking ──
   META_PIXEL_ID: string            // Facebook Pixel ID (numeric) from Meta Events Manager
   META_CAPI_ACCESS_TOKEN: string   // System User Access Token for server-side Conversions API
+
+  // ── Funnel Monitor — bearer token for the /loop /funnel-monitor slash command ─
+  // The local slash command sends this in `Authorization: Bearer …` to evaluate
+  // the signup funnel and queue super-admin alerts on regressions.
+  FUNNEL_MONITOR_TOKEN?: string
 }
 
 // ============================================================

@@ -12,6 +12,9 @@ dist/
 .env.local
 .dev.vars
 
+# Local secrets for slash commands (e.g. funnel-monitor bearer)
+.claude/*.token
+
 # PM2
 .pm2/
 pids/

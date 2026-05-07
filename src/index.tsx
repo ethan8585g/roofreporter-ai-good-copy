@@ -12,6 +12,7 @@ import { reportsRoutes } from './routes/reports'
 import { measureRoutes } from './routes/measure'
 import { insuranceRoutes } from './routes/insurance'
 import { adminRoutes } from './routes/admin'
+import { funnelMonitorRoutes } from './routes/funnel-monitor'
 import { aiAnalysisRoutes } from './routes/ai-analysis'
 import { authRoutes } from './routes/auth'
 import { customerAuthRoutes } from './routes/customer-auth'
@@ -556,6 +557,7 @@ app.route('/api/reports', reportsRoutes)
 app.route('/api/measure', measureRoutes)
 app.route('/api/insurance', insuranceRoutes)
 app.route('/api/admin', adminRoutes)
+app.route('/api/funnel-monitor', funnelMonitorRoutes)
 app.route('/api/ai', aiAnalysisRoutes)
 app.route('/api/auth', authRoutes)
 // More-specific route MUST register first — Hono matches in order.
