@@ -984,8 +984,6 @@ ${buildMeasurementSummaryPage(report, reportNum, reportDate, fullAddress)}
 
 ${report.solar_panel_layout ? buildSolarProposalPage(report, reportNum, reportDate, fullAddress) : ''}
 
-${report.vision_findings ? buildVisionFindingsHTML(report.vision_findings) : ''}
-
 
 </body>
 </html>`
