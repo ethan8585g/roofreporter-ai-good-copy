@@ -14,6 +14,7 @@ import { measureRoutes } from './routes/measure'
 import { insuranceRoutes } from './routes/insurance'
 import { adminRoutes } from './routes/admin'
 import { funnelMonitorRoutes } from './routes/funnel-monitor'
+import { emailHealthRoutes } from './routes/email-health'
 import { reportsMonitorRoutes } from './routes/reports-monitor'
 import { aiAnalysisRoutes } from './routes/ai-analysis'
 import { authRoutes } from './routes/auth'
@@ -563,6 +564,7 @@ app.route('/api/measure', measureRoutes)
 app.route('/api/insurance', insuranceRoutes)
 app.route('/api/admin', adminRoutes)
 app.route('/api/funnel-monitor', funnelMonitorRoutes)
+app.route('/api/email-health', emailHealthRoutes)
 app.route('/api/reports-monitor', reportsMonitorRoutes)
 app.route('/api/ai', aiAnalysisRoutes)
 app.route('/api/auth', authRoutes)

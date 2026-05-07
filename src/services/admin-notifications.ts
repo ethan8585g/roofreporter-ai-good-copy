@@ -16,6 +16,7 @@ export type NotificationKind =
   | 'trace_completed'
   | 'payment_unmatched'
   | 'funnel_regression'
+  | 'email_health'
 
 export type NotificationSeverity = 'info' | 'warn' | 'urgent'
 
@@ -43,6 +44,7 @@ export interface RecordAndNotifyArgs {
 
 function defaultSeverity(kind: NotificationKind): NotificationSeverity {
   if (kind === 'payment_unmatched') return 'urgent'
+  if (kind === 'email_health') return 'urgent'
   if (kind === 'needs_trace') return 'warn'
   if (kind === 'funnel_regression') return 'warn'
   return 'info'
