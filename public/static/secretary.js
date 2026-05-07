@@ -353,12 +353,32 @@
     try {
       var result = await _sqCard.tokenize();
       if (result.status !== 'OK') throw new Error(result.errors && result.errors[0] && result.errors[0].message || 'Card tokenization failed');
+
+      // SCA verification for card-on-file. Required by Square for cards from
+      // banks that mandate Strong Customer Authentication (most Canadian Visas).
+      // Without this, /v2/cards rejects with INVALID_CARD_DATA.
+      var verificationToken;
+      try {
+        var nameParts = cardholderEl.value.trim().split(/\s+/);
+        var givenName = nameParts.shift() || '';
+        var familyName = nameParts.join(' ') || undefined;
+        var verificationResults = await _sqPayments.verifyBuyer(result.token, {
+          intent: 'STORE',
+          billingContact: { givenName: givenName, familyName: familyName },
+          customerInitiated: true,
+          sellerKeyedIn: false,
+        });
+        verificationToken = verificationResults && verificationResults.token;
+      } catch (vbErr) {
+        console.warn('[secretary] verifyBuyer failed, attempting save without SCA token:', vbErr);
+      }
+
       var res = await fetch('/api/secretary/start-trial', {
         method: 'POST', headers: authHeaders(),
         body: JSON.stringify({
           cardNonce: result.token,
           cardholderName: cardholderEl.value.trim(),
-          verificationToken: result.verificationToken,
+          verificationToken: verificationToken,
         }),
       });
       var data = await res.json();

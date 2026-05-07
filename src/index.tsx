@@ -17739,7 +17739,7 @@ function getSecretaryPageHTML() {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/secretary.js?v=20260503d"></script>
+  <script src="/static/secretary.js?v=20260507a"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
