@@ -761,12 +761,6 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <!-- Pro-tier: version diff banner (only on v >= 2) -->
   ${renderVersionDiffBanner(report)}
 
-  <!-- Pro-tier: per-section confidence breakdown (renders below the global score) -->
-  ${renderConfidenceBreakdown(report)}
-
-  <!-- Pro-tier: imagery date / shingle age / regional replacement-cost band / weather risk -->
-  ${renderInsuranceExtras(report)}
-
   <!-- Needs-review banner: rendered when reconciliation gate flagged a footprint mismatch >10% -->
   ${renderNeedsReviewBanner(report)}
 
