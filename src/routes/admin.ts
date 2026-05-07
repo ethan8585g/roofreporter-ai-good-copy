@@ -1083,13 +1083,21 @@ adminRoutes.get('/superadmin/people', async (c) => {
     const limit = parseInt(c.req.query('limit') || '50')
     const people: any[] = []
 
+    // Probe customer_login_events; older local DBs may not have migration 0214 applied yet.
+    let hasLoginEvents = true
+    try { await c.env.DB.prepare(`SELECT 1 FROM customer_login_events LIMIT 1`).first() }
+    catch { hasLoginEvents = false }
+    const loginCountSql = hasLoginEvents
+      ? `, (SELECT COUNT(*) FROM customer_login_events WHERE customer_id = customers.id) as login_count`
+      : `, 0 as login_count`
+
     // 1. Platform users (customers table)
     if (!typeFilter || typeFilter === 'platform_user') {
       const q = search
-        ? `SELECT id, name, email, phone, company_name, 'platform_user' as person_type, created_at, is_active, last_login
+        ? `SELECT id, name, email, phone, company_name, 'platform_user' as person_type, created_at, is_active, last_login${loginCountSql}
            FROM customers WHERE name LIKE ? OR email LIKE ? OR phone LIKE ? OR company_name LIKE ?
            ORDER BY created_at DESC LIMIT ?`
-        : `SELECT id, name, email, phone, company_name, 'platform_user' as person_type, created_at, is_active, last_login
+        : `SELECT id, name, email, phone, company_name, 'platform_user' as person_type, created_at, is_active, last_login${loginCountSql}
            FROM customers ORDER BY created_at DESC LIMIT ?`
       const res = search
         ? await c.env.DB.prepare(q).bind(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, limit).all()
