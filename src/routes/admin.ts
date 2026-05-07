@@ -421,6 +421,7 @@ adminRoutes.get('/proposal-pricing', async (c) => {
       headwall_flashing_lf: 1.40,
       chimney_flashing_kit: 65,
       pipe_boot_each: 12,
+      gutter_lf: 4.50,
       nails_box: 48,
       caulk_tube: 8,
       labor_per_square: 180,
@@ -451,6 +452,7 @@ adminRoutes.put('/proposal-pricing', async (c) => {
     const mupAllowed = ['shingle_bundle', 'underlayment_roll', 'ice_water_roll', 'ridge_cap_bundle',
       'drip_edge_lf', 'starter_strip_lf', 'valley_flashing_lf',
       'step_flashing_lf', 'headwall_flashing_lf', 'chimney_flashing_kit', 'pipe_boot_each',
+      'gutter_lf',
       'nails_box', 'caulk_tube',
       'labor_per_square', 'tearoff_per_square', 'dumpster_flat', 'dumpster_sqft_per_unit', 'tax_rate']
     const mup: any = {}

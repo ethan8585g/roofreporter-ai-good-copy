@@ -36,6 +36,7 @@ import { generatePanelLayout } from '../services/solar-panel-layout'
 import { estimateMaterials, generateAccuLynxCSV, generateXactimateXML, type DetailedMaterialBOM } from '../services/material-estimation-engine'
 import { enhanceReportViaGemini } from '../services/gemini-enhance'
 import { enrichReportWithFlashing } from '../services/flashing-enrichment'
+import { enrichReportWithGutters } from '../services/gutter-enrichment'
 import { segmentWithGemini, geminiOutlineToTracePayload } from '../services/sam3-segmentation'
 import { generateReportImagery, buildAIImageryHTML } from '../services/ai-image-generation'
 import { buildEmailWrapper, buildReportLinkEmail, sendGmailEmail, sendViaResend, sendGmailOAuth2 } from '../services/email'
@@ -2085,6 +2086,14 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
     console.warn(`[GenerateEnhanced] Order ${orderId}: flashing enrichment skipped: ${flashErr?.message}`)
   }
 
+  try {
+    await enrichReportWithGutters(reportData as any, c.env.DB, {
+      customerId: order?.customer_id ?? null,
+    })
+  } catch (gutterErr: any) {
+    console.warn(`[GenerateEnhanced] Order ${orderId}: gutter enrichment skipped: ${gutterErr?.message}`)
+  }
+
   // ── PHASE 1 COMPLETE: Save base report first, then attempt enhancement inline ──
   const baseHtml = generateProfessionalReportHTML(reportData)
   const baseVer = '3.0'
@@ -3713,6 +3722,16 @@ async function _generateReportForOrderInner(
       })
     } catch (flashErr: any) {
       console.warn(`[Generate] Order ${orderId}: flashing enrichment skipped: ${flashErr?.message}`)
+    }
+
+    // ── GUTTERS — derive gutter LF + downspouts from eaves and append a
+    //   priced BOM line. Sync, no vision needed; never blocks the report.
+    try {
+      await enrichReportWithGutters(reportData as any, env.DB, {
+        customerId: order?.customer_id ?? null,
+      })
+    } catch (gutterErr: any) {
+      console.warn(`[Generate] Order ${orderId}: gutter enrichment skipped: ${gutterErr?.message}`)
     }
 
     console.log(`[Generate] Order ${orderId}: generating HTML report...`)

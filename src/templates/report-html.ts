@@ -637,6 +637,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       ${wallFlashingFt > 0 ? `<div class="pt-row"><span class="pt-label" style="font-weight:700">Headwall Flashing</span><span class="pt-value">${wallFlashingFt} LF</span></div>` : ''}
       ${(es as any).chimney_flashing_count > 0 ? `<div class="pt-row"><span class="pt-label" style="font-weight:700">Chimney Flashing</span><span class="pt-value">${(es as any).chimney_flashing_count} ea</span></div>` : ''}
       ${(es as any).pipe_boot_count > 0 ? `<div class="pt-row"><span class="pt-label" style="font-weight:700">Pipe Boots</span><span class="pt-value">${(es as any).pipe_boot_count} ea</span></div>` : ''}
+      ${(es as any).gutter_lf > 0 ? `<div class="pt-row"><span class="pt-label" style="font-weight:700">Gutters</span><span class="pt-value">${(es as any).gutter_lf} LF${(es as any).downspout_count > 0 ? ` &nbsp;·&nbsp; ${(es as any).downspout_count} downspouts` : ''}</span></div>` : ''}
     </div>
 
     <!-- RIGHT COLUMN: Aerial Satellite Image -->
@@ -1495,7 +1496,8 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         ${(es.total_step_flashing_ft || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Step Flashing</span><span style="font-weight:700">${es.total_step_flashing_ft} LF</span></div>` : ''}
         ${(es.total_wall_flashing_ft || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Headwall Flashing</span><span style="font-weight:700">${es.total_wall_flashing_ft} LF</span></div>` : ''}
         ${((es as any).chimney_flashing_count || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Chimney Flashing</span><span style="font-weight:700">${(es as any).chimney_flashing_count} ea</span></div>` : ''}
-        ${((es as any).pipe_boot_count || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px"><span style="color:#555">Pipe Boots</span><span style="font-weight:700">${(es as any).pipe_boot_count} ea</span></div>` : ''}
+        ${((es as any).pipe_boot_count || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Pipe Boots</span><span style="font-weight:700">${(es as any).pipe_boot_count} ea</span></div>` : ''}
+        ${((es as any).gutter_lf || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px"><span style="color:#555">Gutters</span><span style="font-weight:700">${(es as any).gutter_lf} LF${((es as any).downspout_count || 0) > 0 ? ` · ${(es as any).downspout_count} ds` : ''}</span></div>` : ''}
       </div>
     </div>
 
@@ -1614,6 +1616,8 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
     headwall_flashing_lf: Math.round(((report.edge_summary as any)?.total_headwall_flashing_ft) || (report.edge_summary as any)?.total_wall_flashing_ft || 0),
     chimney_flashing_count: (report.edge_summary as any)?.chimney_flashing_count || 0,
     pipe_boot_count:        (report.edge_summary as any)?.pipe_boot_count || 0,
+    gutter_lf:              Math.round((report.edge_summary as any)?.gutter_lf || 0),
+    downspout_count:        (report.edge_summary as any)?.downspout_count || 0,
     roofing_nails_lbs: Math.ceil(grossArea / 100 * 2.5),
     caulk_tubes: Math.max(2, Math.ceil(netArea / 1000))
   }
@@ -1683,6 +1687,7 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
     ...(((m as any).headwall_flashing_lf || 0) > 0 ? [{ cat: 'Headwall Flashing', desc: 'Continuous headwall / apron flashing (10ft sticks)', qty: Math.ceil((m as any).headwall_flashing_lf / 10), unit: 'sticks', note: `${(m as any).headwall_flashing_lf} LF horizontal wall junction`, icon: '&#9644;', color: '#F97316', code: 'RFG FLHEAD' }] : []),
     ...(((m as any).chimney_flashing_count || 0) > 0 ? [{ cat: 'Chimney Flashing Kit', desc: 'Pre-formed chimney flashing kit (apron + step + counter)', qty: (m as any).chimney_flashing_count, unit: 'kits', note: `${(m as any).chimney_flashing_count} chimney(s) on roof`, icon: '&#9632;', color: '#B45309', code: 'RFG FLCHIM' }] : []),
     ...(((m as any).pipe_boot_count || 0) > 0 ? [{ cat: 'Pipe Boot Flashings', desc: 'Lead/EPDM pipe-boot flashings for plumbing/vent stacks', qty: (m as any).pipe_boot_count, unit: 'each', note: `${(m as any).pipe_boot_count} penetration(s)`, icon: '&#9711;', color: '#0891b2', code: 'RFG FLBOOT' }] : []),
+    ...(((m as any).gutter_lf || 0) > 0 ? [{ cat: 'Gutters', desc: '5" K-style aluminum gutter (eave run)', qty: (m as any).gutter_lf, unit: 'LF', note: `${(m as any).downspout_count || 0} downspout(s) at 1 per ${35} LF`, icon: '&#9644;', color: '#0e7490', code: 'GTR 5K' }] : []),
     { cat: 'Roofing Nails', desc: '1.25″ galvanized coil nails', qty: m.roofing_nails_lbs, unit: 'lbs', note: 'Approx 2.5 lbs per square', icon: '&#9733;', color: '#64748b', code: 'RFG NAIL' },
     { cat: 'Caulk / Sealant', desc: 'Roofing sealant tubes', qty: m.caulk_tubes, unit: 'tubes', note: 'Flashings, vents, and penetrations', icon: '&#9679;', color: '#0891b2', code: 'RFG CLK' }
   ]
@@ -2229,6 +2234,12 @@ function buildMeasurementSummaryPage(report: RoofReport, reportNum: string, repo
             <td style="padding:4px 10px;text-align:center;font-weight:800;color:#0891b2;border-bottom:1px solid #eee">${(m as any).pipe_boot_count}</td>
             <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">each</td>
             <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">Plumbing / vent stacks</td>
+          </tr>` : ''}
+          ${((m as any).gutter_lf || 0) > 0 ? `<tr>
+            <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#0e7490;margin-right:3px">&#9644;</span>Gutters</td>
+            <td style="padding:4px 10px;text-align:center;font-weight:800;color:#0e7490;border-bottom:1px solid #eee">${(m as any).gutter_lf}</td>
+            <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">LF</td>
+            <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">${(m as any).downspout_count || 0} downspouts · 5&quot; K-style aluminum</td>
           </tr>` : ''}
           <tr>
             <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#64748b;margin-right:3px">&#9733;</span>Roofing Nails</td>

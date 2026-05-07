@@ -597,6 +597,10 @@ export interface RoofReport {
     total_headwall_flashing_ft?: number
     chimney_flashing_count?: number
     pipe_boot_count?: number
+    /** Gutters — derived from eaves. gutter_lf ≈ total_eave_ft;
+     *  downspout_count is a count, ceil(gutter_lf / 35). */
+    gutter_lf?: number
+    downspout_count?: number
   }
 
   // ---- MATERIAL ESTIMATE (Section 5) ----
