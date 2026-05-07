@@ -658,6 +658,7 @@ squareRoutes.post('/use-credit', async (c) => {
             service_tier, latitude, longitude, roof_trace_json, price_per_bundle, trace_measurement_json,
             needs_admin_trace, crm_customer_id,
             invoice_customer_name, invoice_customer_email, invoice_customer_phone,
+            send_report_to_email, house_sqft,
             idempotency_key } = await c.req.json()
 
     // Idempotency: the client generates a UUID per "Use Credit" click. If the
@@ -778,6 +779,13 @@ squareRoutes.post('/use-credit', async (c) => {
       // trace_source: 'self' when the customer submitted their own trace
       // (roof_trace_json populated AND not queued for admin trace).
       const traceSource = (roof_trace_json && !needs_admin_trace) ? 'self' : null
+      const sendReportEmailRaw = send_report_to_email ? String(send_report_to_email).trim().toLowerCase() : ''
+      const sendReportEmail = sendReportEmailRaw && isValidEmail(sendReportEmailRaw) ? sendReportEmailRaw : null
+      const houseSqftNum = (typeof house_sqft === 'number' && isFinite(house_sqft) && house_sqft > 0)
+        ? house_sqft
+        : (typeof house_sqft === 'string' && house_sqft.trim() && isFinite(parseFloat(house_sqft)))
+          ? parseFloat(house_sqft)
+          : null
       result = await c.env.DB.prepare(`
         INSERT INTO orders (
           order_number, master_company_id, customer_id,
@@ -790,8 +798,9 @@ squareRoutes.post('/use-credit', async (c) => {
           trace_source,
           crm_customer_id,
           invoice_customer_name, invoice_customer_email, invoice_customer_phone,
+          send_report_to_email, house_sqft,
           idempotency_key
-        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         orderNumber, customer.customer_id,
         property_address, property_city || null, property_province || null, property_postal_code || null,
@@ -807,6 +816,7 @@ squareRoutes.post('/use-credit', async (c) => {
         traceSource,
         attachedCrmCustomerId,
         autoInvName, autoInvEmail, autoInvPhone,
+        sendReportEmail, houseSqftNum,
         idemKey
       ).run()
     } catch (insertErr: any) {
