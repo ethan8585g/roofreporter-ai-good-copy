@@ -6,7 +6,7 @@
 
 import type { Bindings } from '../types'
 import { getAnthropicClient, CLAUDE_MODEL, extractJson } from './anthropic-client'
-import { sendViaResend } from './email'
+import { sendViaResend, sendGmailOAuth2, loadGmailCreds } from './email'
 
 export interface LeadRow {
   id: number
@@ -109,8 +109,16 @@ export async function runLeadAgent(env: Bindings): Promise<LeadRunResult> {
   if (!env.ANTHROPIC_API_KEY) {
     return { ...result, ok: false, errors: ['ANTHROPIC_API_KEY not configured'], duration_ms: 0 }
   }
-  if (!env.RESEND_API_KEY) {
-    return { ...result, ok: false, errors: ['RESEND_API_KEY not configured'], duration_ms: 0 }
+  // Email transport: prefer Resend if configured, fall back to Gmail OAuth2
+  // (which IS the working production transport — see Loop Tracker docs).
+  // Bail with a clean "skipped" if neither is available.
+  const hasResend = !!env.RESEND_API_KEY
+  const gmailCreds = await loadGmailCreds(env as any)
+  const hasGmail = !!(gmailCreds.clientId && gmailCreds.clientSecret && gmailCreds.refreshToken)
+  if (!hasResend && !hasGmail) {
+    // Skip cleanly — not an error. Treats the cron worker missing email
+    // creds as "no work today" rather than alarming on every tick.
+    return { ...result, ok: true, errors: ['skipped: no email transport configured (RESEND_API_KEY + GMAIL_* both missing on cron Worker)'], duration_ms: 0 }
   }
 
   // Fetch new leads not yet responded to
@@ -140,13 +148,25 @@ export async function runLeadAgent(env: Bindings): Promise<LeadRunResult> {
       const text = msg.content[0].type === 'text' ? msg.content[0].text : ''
       const email = parseLeadEmail(text)
 
-      await sendViaResend(
-        env.RESEND_API_KEY,
-        lead.email,
-        email.subject,
-        email.html,
-        env.GMAIL_SENDER_EMAIL || null,
-      )
+      if (hasResend) {
+        await sendViaResend(
+          env.RESEND_API_KEY!,
+          lead.email,
+          email.subject,
+          email.html,
+          env.GMAIL_SENDER_EMAIL || null,
+        )
+      } else {
+        await sendGmailOAuth2(
+          gmailCreds.clientId!,
+          gmailCreds.clientSecret!,
+          gmailCreds.refreshToken!,
+          lead.email,
+          email.subject,
+          email.html,
+          gmailCreds.senderEmail || env.GMAIL_SENDER_EMAIL || null,
+        )
+      }
 
       await env.DB.prepare(
         `INSERT OR IGNORE INTO lead_responses (lead_email, lead_source, response_subject, success)

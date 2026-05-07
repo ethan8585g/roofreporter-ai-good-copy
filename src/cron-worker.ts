@@ -321,11 +321,16 @@ export default {
         const t0 = Date.now()
         try {
           const result = await runLeadAgent(env)
+          // First error string starting with 'skipped:' indicates a graceful
+          // skip (no email transport configured) — surface as skipped status.
+          const skipReason = result.errors.find(e => e.startsWith('skipped:'))
           const summary = !result.ok ? `Failed: ${result.errors[0] || 'unknown error'}`
+            : skipReason ? skipReason
             : result.responded === 0 ? 'No new leads'
             : `Responded to ${result.responded} lead(s)`
+          const status = !result.ok ? 'error' : (skipReason ? 'skipped' : 'success')
           console.log(`[CRON:lead] ${summary}`)
-          await logRun('lead', result.ok ? 'success' : 'error', summary, result, Date.now() - t0)
+          await logRun('lead', status, summary, result, Date.now() - t0)
         } catch (err: any) {
           console.error('[CRON:lead] Error:', err.message)
           await logRun('lead', 'error', err.message, {}, Date.now() - t0)
