@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { getAccessToken, getProjectId, getServiceAccountEmail } from './services/gcp-auth'
 import { trackProposalViewed } from './services/ga4-events'
+import { trackReportView } from './services/report-view-tracker'
 import { buildClientAnalyticsScript } from './services/analytics-events'
 import { AB_SCRIPT } from './lib/ab'
 import { blogLeadMagnetHTML, freeMeasurementReportFormHTML } from './lib/lead-forms'
@@ -13,6 +14,7 @@ import { measureRoutes } from './routes/measure'
 import { insuranceRoutes } from './routes/insurance'
 import { adminRoutes } from './routes/admin'
 import { funnelMonitorRoutes } from './routes/funnel-monitor'
+import { reportsMonitorRoutes } from './routes/reports-monitor'
 import { aiAnalysisRoutes } from './routes/ai-analysis'
 import { authRoutes } from './routes/auth'
 import { customerAuthRoutes } from './routes/customer-auth'
@@ -561,6 +563,7 @@ app.route('/api/measure', measureRoutes)
 app.route('/api/insurance', insuranceRoutes)
 app.route('/api/admin', adminRoutes)
 app.route('/api/funnel-monitor', funnelMonitorRoutes)
+app.route('/api/reports-monitor', reportsMonitorRoutes)
 app.route('/api/ai', aiAnalysisRoutes)
 app.route('/api/auth', authRoutes)
 // More-specific route MUST register first — Hono matches in order.
@@ -3503,7 +3506,7 @@ app.get('/report/share/:token', async (c) => {
     const token = c.req.param('token')
     const row = await c.env.DB.prepare(`
       SELECT r.professional_report_html, r.api_response_raw, r.share_view_count,
-             o.property_address, o.property_city, o.property_province
+             o.id AS order_id, o.property_address, o.property_city, o.property_province
       FROM reports r JOIN orders o ON o.id = r.order_id
       WHERE r.share_token = ?
     `).bind(token).first<any>()
@@ -3522,8 +3525,13 @@ app.get('/report/share/:token', async (c) => {
 </body></html>`, 404)
     }
 
-    // Increment view count (non-blocking)
+    // Increment view count (non-blocking) — kept as a fast cache; events table is now source of truth.
     c.env.DB.prepare("UPDATE reports SET share_view_count = COALESCE(share_view_count, 0) + 1 WHERE share_token = ?").bind(token).run().catch(() => {})
+
+    // Log a structured view event (per-event source of truth for super-admin analytics).
+    if (row.order_id) {
+      trackReportView(c, { orderId: row.order_id, viewType: 'share', shareToken: token })
+    }
 
     const addr = [row.property_address, row.property_city, row.property_province].filter(Boolean).join(', ')
     // P0-02: customer-entered address fields are interpolated into OG meta + header HTML below.
@@ -4962,10 +4970,11 @@ export default {
     // Rendering invocations against the same edge node. The daily system
     // health check runs at 09:00 UTC (~02-04 local depending on DST).
     const minute = now.getUTCMinutes()
-    const SCAN_AT: Array<[number, 'public' | 'customer' | 'admin']> = [
+    const SCAN_AT: Array<[number, 'public' | 'customer' | 'admin' | 'reports']> = [
       [0, 'public'],   [30, 'public'],
       [10, 'customer'], [40, 'customer'],
       [20, 'admin'],   [50, 'admin'],
+      [5, 'reports'],  [35, 'reports'],
     ]
     for (const [m, type] of SCAN_AT) {
       if (minute === m && await isAgentEnabled(`scan_${type}`)) {
@@ -4983,6 +4992,24 @@ export default {
         })())
       }
     }
+    // ── Reports error sweep (hourly at :15) ──────────────────
+    // DB-only scan — no external fetches, no Browser Rendering — so it runs
+    // without the agent_configs gate that the public/customer/admin scanners
+    // use. Findings land in loop_scan_runs/loop_scan_findings alongside the
+    // inline scan rows produced by report generation itself.
+    if (minute === 15) {
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const r = await runLoopScan(env, 'reports', 'cron')
+          await logRun('scan_reports', r.status === 'pass' ? 'success' : 'error', r.summary, { runId: r.runId, fail_count: r.failCount, pages: r.pagesChecked }, Date.now() - t0)
+        } catch (err: any) {
+          console.error('[CRON:scan_reports] Error:', err.message)
+          await logRun('scan_reports', 'error', err.message, {}, Date.now() - t0)
+        }
+      })())
+    }
+
     // Daily system health check — 09:00 UTC.
     if (hour === 9 && minute === 0 && await isAgentEnabled('scan_health')) {
       ctx.waitUntil((async () => {

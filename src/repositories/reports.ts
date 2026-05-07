@@ -576,3 +576,103 @@ export async function getReportIdByOrder(
   const row = await db.prepare('SELECT id FROM reports WHERE order_id = ?').bind(orderId).first<{ id: number }>()
   return row?.id ?? null
 }
+
+// ── REPORT VIEW EVENTS (migration 0216) ──
+
+export type ReportViewType = 'share' | 'portal' | 'pdf' | 'admin'
+
+export async function logReportView(
+  db: D1Database,
+  args: {
+    order_id: number
+    report_id: number | null
+    view_type: ReportViewType
+    customer_id: number | null
+    ip_address: string | null
+    user_agent: string | null
+    share_token: string | null
+    is_bot: boolean
+  },
+): Promise<void> {
+  await db.prepare(`
+    INSERT INTO report_view_events
+      (order_id, report_id, view_type, customer_id, ip_address, user_agent, share_token, is_bot)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    args.order_id,
+    args.report_id ?? null,
+    args.view_type,
+    args.customer_id ?? null,
+    args.ip_address ?? null,
+    args.user_agent ?? null,
+    args.share_token ?? null,
+    args.is_bot ? 1 : 0,
+  ).run()
+}
+
+export type ReportViewEventRow = {
+  id: number
+  viewed_at: string
+  view_type: ReportViewType
+  customer_id: number | null
+  customer_name: string | null
+  customer_email: string | null
+  ip_address: string | null
+  user_agent: string | null
+  share_token: string | null
+  is_bot: number
+}
+
+export async function getReportViewEvents(
+  db: D1Database,
+  orderId: number | string,
+  limit: number = 20,
+): Promise<ReportViewEventRow[]> {
+  const res = await db.prepare(`
+    SELECT rve.id, rve.viewed_at, rve.view_type, rve.customer_id,
+           c.name AS customer_name, c.email AS customer_email,
+           rve.ip_address, rve.user_agent, rve.share_token, rve.is_bot
+    FROM report_view_events rve
+    LEFT JOIN customers c ON c.id = rve.customer_id
+    WHERE rve.order_id = ?
+    ORDER BY rve.viewed_at DESC
+    LIMIT ?
+  `).bind(orderId, Math.max(1, Math.min(200, limit))).all<ReportViewEventRow>()
+  return res.results ?? []
+}
+
+export type ReportViewSummary = {
+  total_views: number
+  share_views: number
+  portal_views: number
+  pdf_views: number
+  admin_views: number
+  bot_views: number
+}
+
+export async function getReportViewSummary(
+  db: D1Database,
+  orderId: number | string,
+): Promise<ReportViewSummary> {
+  // total_views excludes admin self-views and bots — that's the headline count.
+  // Per-type breakdowns also exclude bots; admin_views is a separate bucket.
+  const row = await db.prepare(`
+    SELECT
+      SUM(CASE WHEN view_type IN ('share','portal','pdf') AND is_bot = 0 THEN 1 ELSE 0 END) AS total_views,
+      SUM(CASE WHEN view_type = 'share'  AND is_bot = 0 THEN 1 ELSE 0 END) AS share_views,
+      SUM(CASE WHEN view_type = 'portal' AND is_bot = 0 THEN 1 ELSE 0 END) AS portal_views,
+      SUM(CASE WHEN view_type = 'pdf'    AND is_bot = 0 THEN 1 ELSE 0 END) AS pdf_views,
+      SUM(CASE WHEN view_type = 'admin'  AND is_bot = 0 THEN 1 ELSE 0 END) AS admin_views,
+      SUM(CASE WHEN is_bot = 1 THEN 1 ELSE 0 END) AS bot_views
+    FROM report_view_events
+    WHERE order_id = ?
+  `).bind(orderId).first<Record<keyof ReportViewSummary, number | null>>()
+  return {
+    total_views:  row?.total_views  ?? 0,
+    share_views:  row?.share_views  ?? 0,
+    portal_views: row?.portal_views ?? 0,
+    pdf_views:    row?.pdf_views    ?? 0,
+    admin_views:  row?.admin_views  ?? 0,
+    bot_views:    row?.bot_views    ?? 0,
+  }
+}

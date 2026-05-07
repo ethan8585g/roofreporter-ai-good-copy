@@ -14,6 +14,7 @@ import { logAdminAction } from '../lib/audit-log'
 import { clientIp } from '../lib/rate-limit'
 import { encryptSecret, decryptSecret } from '../lib/secret-vault'
 import { trackActivity } from '../services/activity-tracker'
+import { getReportViewEvents, getReportViewSummary } from '../repositories/reports'
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -1465,6 +1466,10 @@ adminRoutes.get('/superadmin/orders', async (c) => {
         r.status as report_status, r.created_at as report_started_at, r.updated_at as report_completed_at,
         r.gross_squares, r.confidence_score, r.complexity_class,
         r.share_token, r.share_view_count, r.share_sent_at,
+        (SELECT COUNT(*) FROM report_view_events
+           WHERE order_id = o.id
+             AND view_type IN ('share','portal','pdf')
+             AND is_bot = 0) as view_count,
         CASE
           WHEN r.updated_at IS NOT NULL AND r.created_at IS NOT NULL
           THEN CAST((julianday(r.updated_at) - julianday(r.created_at)) * 86400 AS INTEGER)
@@ -1520,6 +1525,31 @@ adminRoutes.get('/superadmin/orders', async (c) => {
     })
   } catch (err: any) {
     return c.json({ error: 'Failed to load orders', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// GET /superadmin/orders/:id/views
+// Per-report view activity for the super-admin drill-down: aggregate counts
+// (share / portal / pdf / admin / bot) plus the most recent ~20 events.
+// Sourced from `report_view_events` (migration 0216).
+// ============================================================
+adminRoutes.get('/superadmin/orders/:id/views', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  try {
+    const orderId = parseInt(c.req.param('id'))
+    if (!Number.isFinite(orderId) || orderId <= 0) {
+      return c.json({ error: 'Invalid order id' }, 400)
+    }
+    const limit = Math.max(1, Math.min(parseInt(c.req.query('limit') || '20'), 100))
+    const [summary, events] = await Promise.all([
+      getReportViewSummary(c.env.DB, orderId),
+      getReportViewEvents(c.env.DB, orderId, limit),
+    ])
+    return c.json({ summary, events })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to load report views', details: err.message }, 500)
   }
 })
 
@@ -4854,6 +4884,105 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
     })
   } catch (err: any) {
     return c.json({ error: 'Failed to submit trace: ' + err.message }, 500)
+  }
+})
+
+// ============================================================
+// CANCEL & RE-TRACE — Hard-reset a generated report and put the
+// order back in the manual trace queue. Used when a generated
+// report is wrong (broken diagram, duplicated structure, etc.)
+// and the super-admin wants to redraw the trace from scratch.
+//
+// Hard reset wipes:
+//   reports.professional_report_html
+//   reports.api_response_raw, reports.customer_report_html
+//   reports.status='pending', generation_attempts=0, needs_review=0
+//   orders.roof_trace_json=NULL, trace_source=NULL
+//   orders.needs_admin_trace=1, status='processing'
+// ============================================================
+adminRoutes.post('/superadmin/orders/:id/cancel-and-retrace', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const orderId = parseInt(c.req.param('id'))
+  if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
+
+  try {
+    const body = await c.req.json().catch(() => ({}))
+    const reason = (body?.reason || '').toString().slice(0, 500) || 'manual_retrace'
+
+    const order = await c.env.DB.prepare(
+      'SELECT id, order_number, property_address FROM orders WHERE id = ?'
+    ).bind(orderId).first<any>()
+    if (!order) return c.json({ error: 'Order not found' }, 404)
+
+    // Hard-reset the report row (keeps the row so foreign keys stay intact;
+    // wipes everything that would otherwise let the customer dashboard show
+    // the broken report).
+    await c.env.DB.prepare(`
+      UPDATE reports SET
+        professional_report_html = NULL,
+        customer_report_html = NULL,
+        api_response_raw = NULL,
+        status = 'pending',
+        generation_attempts = 0,
+        generation_started_at = NULL,
+        generation_completed_at = NULL,
+        error_message = NULL,
+        needs_review = 0,
+        review_reason = NULL,
+        review_detail = NULL,
+        enhancement_status = NULL,
+        enhancement_error = NULL,
+        updated_at = datetime('now')
+      WHERE order_id = ?
+    `).bind(orderId).run()
+
+    // Re-queue the order for manual trace.
+    await c.env.DB.prepare(`
+      UPDATE orders SET
+        roof_trace_json = NULL,
+        trace_measurement_json = NULL,
+        trace_source = NULL,
+        needs_admin_trace = 1,
+        status = 'processing',
+        delivered_at = NULL,
+        updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(orderId).run()
+
+    // Audit row — survives a re-trace cycle so we can see who cancelled and why.
+    try {
+      await c.env.DB.prepare(
+        "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'admin_cancel_and_retrace', ?)"
+      ).bind(JSON.stringify({
+        order_id: orderId,
+        admin_id: admin.id,
+        admin_email: admin.email,
+        reason,
+        order_number: order.order_number,
+        property_address: order.property_address,
+      })).run()
+    } catch { /* non-fatal audit */ }
+
+    // Resolve any open loop_scan_findings for this order so the Loop Tracker
+    // doesn't keep re-flagging the same broken report after we've cancelled it.
+    try {
+      await c.env.DB.prepare(
+        `UPDATE loop_scan_findings
+         SET resolved_at = datetime('now'), resolved_by = ?
+         WHERE resolved_at IS NULL
+           AND details_json LIKE ?`
+      ).bind(admin.email || 'admin', `%"order_id":${orderId}%`).run()
+    } catch { /* non-fatal */ }
+
+    return c.json({
+      success: true,
+      order_id: orderId,
+      order_number: order.order_number,
+      message: `Order ${order.order_number} reset and queued for re-trace`,
+    })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to cancel and re-trace: ' + err.message }, 500)
   }
 })
 

@@ -1291,7 +1291,7 @@ function renderReportRequestsView() {
     html += '<div style="background:#1e293b;border:1px solid #334155;border-radius:14px;overflow:hidden">' +
       '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">' +
         '<thead><tr style="background:#0f172a;border-bottom:1px solid #334155">' +
-          ['Order #', 'Customer', 'Property Address', 'Date', 'Status', 'Report', 'Trace', 'Share Views', 'Actions'].map(function(h) {
+          ['Order #', 'Customer', 'Property Address', 'Date', 'Status', 'Report', 'Trace', 'Views', 'Actions'].map(function(h) {
             return '<th style="padding:12px 14px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap">' + h + '</th>';
           }).join('') +
         '</tr></thead><tbody>';
@@ -1299,14 +1299,12 @@ function renderReportRequestsView() {
     orders.forEach(function(o, i) {
       var rs = o.report_status || 'pending';
       var os = o.status || 'pending';
-      var views = (o.share_view_count != null) ? o.share_view_count : 0;
+      var views = (o.view_count != null) ? o.view_count : ((o.share_view_count != null) ? o.share_view_count : 0);
       var hasShare = !!o.share_token;
-      var shareCell = hasShare
-        ? '<div style="display:flex;align-items:center;gap:6px;white-space:nowrap">' +
-            '<span style="padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;background:rgba(56,189,248,0.15);color:#38bdf8" title="Times the shared link has been opened"><i class="fas fa-eye mr-1"></i>' + views + '</span>' +
-            '<button onclick="saCopyShareLink(\'' + o.share_token + '\')" title="Copy share link" style="padding:3px 8px;background:#1f2937;color:#94a3b8;font-size:11px;border:1px solid #374151;border-radius:6px;cursor:pointer"><i class="fas fa-link"></i></button>' +
-          '</div>'
-        : '<span style="color:#4b5563;font-size:11px">—</span>';
+      var shareCell = '<div style="display:flex;align-items:center;gap:6px;white-space:nowrap">' +
+          '<button onclick="saShowReportViews(' + o.id + ')" title="View activity (last 20 opens)" style="padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;background:rgba(56,189,248,0.15);color:#38bdf8;border:0;cursor:pointer"><i class="fas fa-eye mr-1"></i>' + views + '</button>' +
+          (hasShare ? '<button onclick="saCopyShareLink(\'' + o.share_token + '\')" title="Copy share link" style="padding:3px 8px;background:#1f2937;color:#94a3b8;font-size:11px;border:1px solid #374151;border-radius:6px;cursor:pointer"><i class="fas fa-link"></i></button>' : '') +
+        '</div>';
       html += '<tr style="border-bottom:1px solid #1e293b;background:' + (i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)') + '">' +
         '<td style="padding:11px 14px;font-family:monospace;font-size:12px;color:#94a3b8;white-space:nowrap">' + (o.order_number || '#' + o.id) + '</td>' +
         '<td style="padding:11px 14px;color:#cbd5e1;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
@@ -1329,7 +1327,8 @@ function renderReportRequestsView() {
         '<td style="padding:11px 14px;white-space:nowrap">' +
           (o.needs_admin_trace ?
             '<button onclick="saOpenTraceModal(' + o.id + ',' + (o.latitude || 0) + ',' + (o.longitude || 0) + ',\'' + (o.property_address || '').replace(/'/g, "\\'") + '\',\'' + (o.order_number || '') + '\')" style="padding:5px 12px;background:#f59e0b;color:#111;font-size:11px;font-weight:700;border:none;border-radius:6px;cursor:pointer"><i class="fas fa-drafting-compass mr-1"></i>Trace</button>' :
-            '<a href="/api/reports/' + o.id + '/html" target="_blank" style="padding:5px 12px;background:rgba(14,165,233,0.15);color:#38bdf8;font-size:11px;font-weight:600;border:none;border-radius:6px;text-decoration:none;display:inline-block"><i class="fas fa-file-alt mr-1"></i>View</a>'
+            '<a href="/api/reports/' + o.id + '/html" target="_blank" style="padding:5px 12px;background:rgba(14,165,233,0.15);color:#38bdf8;font-size:11px;font-weight:600;border:none;border-radius:6px;text-decoration:none;display:inline-block;margin-right:6px"><i class="fas fa-file-alt mr-1"></i>View</a>' +
+            '<button onclick="saConfirmRetrace(' + o.id + ',\'' + (o.order_number || ('#' + o.id)).replace(/\'/g, "\\\'") + '\')" title="Cancel current report and re-queue for manual trace" style="padding:5px 10px;background:rgba(239,68,68,0.15);color:#fca5a5;font-size:11px;font-weight:700;border:1px solid rgba(239,68,68,0.4);border-radius:6px;cursor:pointer"><i class="fas fa-rotate-left mr-1"></i>Re-Trace</button>'
           ) +
         '</td>' +
       '</tr>';
@@ -1351,6 +1350,149 @@ window.saCopyShareLink = function(token) {
     });
   } else {
     window.prompt('Copy this share link:', url);
+  }
+};
+
+// ── Cancel a generated report and re-queue for manual trace ──
+window.saConfirmRetrace = async function(orderId, orderNumber) {
+  var ok = window.confirm(
+    'Cancel current report for ' + orderNumber + ' and move back to the manual trace queue?\n\n' +
+    'This wipes the existing diagram, measurements, and HTML so you can redraw the trace from scratch. ' +
+    'Customer-visible delivery is paused until the new trace is submitted.'
+  );
+  if (!ok) return;
+  var reason = window.prompt('Optional — reason for re-trace (e.g. "duplicate structure", "broken diagram"):', '') || '';
+  try {
+    var res = await saFetch('/api/admin/superadmin/orders/' + orderId + '/cancel-and-retrace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason })
+    });
+    if (!res) return;
+    var data = await res.json();
+    if (!res.ok || !data.success) {
+      saToast('Re-trace failed: ' + (data && data.error ? data.error : 'unknown error'));
+      return;
+    }
+    saToast(data.message || ('Order ' + orderNumber + ' queued for re-trace'));
+    loadView('report-requests');
+  } catch (err) {
+    saToast('Re-trace failed: ' + ((err && err.message) || 'network error'));
+  }
+};
+
+// ── Per-report view activity modal (last 20 opens) ──────────
+function saEscape(s) {
+  return String(s == null ? '' : s).replace(/[&<>"'`]/g, function(ch) {
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#x60;'})[ch];
+  });
+}
+function saMaskIp(ip) {
+  if (!ip) return '—';
+  // IPv4: 1.2.3.4 → 1.2.3.x   IPv6: keep first 3 hextets only
+  var v4 = String(ip).match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.\d{1,3}$/);
+  if (v4) return v4[1] + '.' + v4[2] + '.' + v4[3] + '.x';
+  if (String(ip).indexOf(':') >= 0) {
+    var parts = String(ip).split(':');
+    return parts.slice(0, 3).join(':') + '::x';
+  }
+  return ip;
+}
+function saViewerLabel(ev) {
+  if (ev.view_type === 'admin')  return '<span style="color:#fbbf24">Admin (you)</span>';
+  if (ev.view_type === 'share')  return '<span style="color:#94a3b8">Public link</span>';
+  if (ev.customer_name) return '<span style="color:#cbd5e1">' + saEscape(ev.customer_name) + '</span>';
+  if (ev.customer_email) return '<span style="color:#cbd5e1">' + saEscape(ev.customer_email) + '</span>';
+  return '<span style="color:#94a3b8">Anonymous</span>';
+}
+function saTypeBadge(t) {
+  var styles = {
+    share:  'background:rgba(56,189,248,0.15);color:#38bdf8',
+    portal: 'background:rgba(34,197,94,0.15);color:#22c55e',
+    pdf:    'background:rgba(167,139,250,0.18);color:#a78bfa',
+    admin:  'background:rgba(251,191,36,0.15);color:#fbbf24'
+  };
+  return '<span style="padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;' + (styles[t] || 'background:#1f2937;color:#94a3b8') + '">' + t + '</span>';
+}
+
+window.saShowReportViews = async function(orderId) {
+  var existing = document.getElementById('sa-report-views-modal');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'sa-report-views-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML =
+    '<div style="background:#111827;border:1px solid #374151;border-radius:16px;width:100%;max-width:780px;max-height:90vh;overflow-y:auto">' +
+      '<div style="padding:18px 22px;border-bottom:1px solid #1f2937;display:flex;align-items:center;justify-content:space-between">' +
+        '<div><div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">Order #' + orderId + '</div>' +
+        '<div style="font-size:18px;font-weight:700;color:#f9fafb">Report view activity</div></div>' +
+        '<button onclick="document.getElementById(\'sa-report-views-modal\').remove()" style="background:transparent;border:0;color:#94a3b8;font-size:22px;cursor:pointer;line-height:1">&times;</button>' +
+      '</div>' +
+      '<div id="sa-rv-body" style="padding:20px 22px"><div style="color:#94a3b8;font-size:13px">Loading…</div></div>' +
+    '</div>';
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+
+  var body = document.getElementById('sa-rv-body');
+  try {
+    var res = await saFetch('/api/admin/superadmin/orders/' + orderId + '/views?limit=20');
+    if (!res.ok) {
+      body.innerHTML = '<div style="color:#fca5a5;font-size:13px">Failed to load activity (' + res.status + ')</div>';
+      return;
+    }
+    var data = await res.json();
+    var s = data.summary || {};
+    var events = data.events || [];
+
+    var statBox = function(label, n, color) {
+      return '<div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:10px 14px;flex:1;min-width:90px">' +
+        '<div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">' + label + '</div>' +
+        '<div style="font-size:22px;font-weight:800;color:' + (color || '#f9fafb') + ';margin-top:4px">' + (n || 0) + '</div>' +
+      '</div>';
+    };
+
+    var summaryRow =
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">' +
+        statBox('Total',  s.total_views,  '#38bdf8') +
+        statBox('Share',  s.share_views,  '#38bdf8') +
+        statBox('Portal', s.portal_views, '#22c55e') +
+        statBox('PDF',    s.pdf_views,    '#a78bfa') +
+        statBox('Admin',  s.admin_views,  '#fbbf24') +
+        statBox('Bots',   s.bot_views,    '#475569') +
+      '</div>' +
+      '<div style="font-size:11px;color:#64748b;margin-bottom:10px">Total = customer + share + PDF opens (admin self-views and bot/preview hits excluded).</div>';
+
+    if (events.length === 0) {
+      body.innerHTML = summaryRow + '<div style="color:#64748b;font-size:13px;padding:24px;text-align:center;background:#0f172a;border-radius:10px">No views logged yet.</div>';
+      return;
+    }
+
+    var rows = events.map(function(ev) {
+      var when = ev.viewed_at ? new Date(ev.viewed_at + 'Z').toLocaleString() : '—';
+      var faded = ev.is_bot ? 'opacity:0.55' : '';
+      return '<tr style="border-bottom:1px solid #1f2937;' + faded + '">' +
+        '<td style="padding:8px 10px;color:#cbd5e1;font-size:12px;white-space:nowrap">' + saEscape(when) + '</td>' +
+        '<td style="padding:8px 10px">' + saTypeBadge(ev.view_type) + '</td>' +
+        '<td style="padding:8px 10px;font-size:12px">' + saViewerLabel(ev) + '</td>' +
+        '<td style="padding:8px 10px;font-family:monospace;font-size:11px;color:#94a3b8">' + saEscape(saMaskIp(ev.ip_address)) + '</td>' +
+        '<td style="padding:8px 10px;font-size:11px;color:' + (ev.is_bot ? '#f59e0b' : '#475569') + '">' + (ev.is_bot ? 'preview' : '') + '</td>' +
+      '</tr>';
+    }).join('');
+
+    body.innerHTML = summaryRow +
+      '<div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;overflow:hidden">' +
+        '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+          '<thead><tr style="background:#1f2937">' +
+            ['When','Type','Viewer','IP','Flag'].map(function(h) {
+              return '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">' + h + '</th>';
+            }).join('') +
+          '</tr></thead>' +
+          '<tbody>' + rows + '</tbody>' +
+        '</table>' +
+      '</div>';
+  } catch (err) {
+    body.innerHTML = '<div style="color:#fca5a5;font-size:13px">' + saEscape(err && err.message ? err.message : 'Error') + '</div>';
   }
 };
 
