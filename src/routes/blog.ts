@@ -20,7 +20,7 @@ blogRoutes.get('/posts', async (c) => {
     const search = c.req.query('search') || ''
     const featured = c.req.query('featured') || ''
 
-    let query = `SELECT id, slug, title, excerpt, cover_image_url, category, tags, author_name, author_avatar_url, is_featured, read_time_minutes, view_count, published_at, created_at FROM blog_posts WHERE status = 'published'`
+    let query = `SELECT id, slug, title, excerpt, cover_image_url, cover_image_alt, category, tags, author_name, author_avatar_url, author_slug, is_featured, read_time_minutes, view_count, published_at, created_at FROM blog_posts WHERE status = 'published'`
     const params: any[] = []
 
     if (category) {
@@ -147,7 +147,7 @@ blogRoutes.post('/admin/posts', async (c) => {
 
   try {
     const body = await c.req.json()
-    const { title, slug, excerpt, content, cover_image_url, category, tags, author_name, status, is_featured, meta_title, meta_description, read_time_minutes } = body
+    const { title, slug, excerpt, content, cover_image_url, cover_image_alt, category, tags, author_name, author_slug, status, is_featured, meta_title, meta_description, read_time_minutes } = body
 
     if (!title || !content) {
       return c.json({ error: 'Title and content are required' }, 400)
@@ -172,17 +172,19 @@ blogRoutes.post('/admin/posts', async (c) => {
     const safeExcerpt = sanitizeHtml(String(excerpt || ''))
 
     const result = await c.env.DB.prepare(
-      `INSERT INTO blog_posts (slug, title, excerpt, content, cover_image_url, category, tags, author_name, status, is_featured, meta_title, meta_description, read_time_minutes, published_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO blog_posts (slug, title, excerpt, content, cover_image_url, cover_image_alt, category, tags, author_name, author_slug, status, is_featured, meta_title, meta_description, read_time_minutes, published_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       finalSlug,
       title,
       safeExcerpt,
       safeContent,
       cover_image_url || '',
+      cover_image_alt || '',
       category || 'roofing',
       tags || '',
       author_name || 'Roof Manager Team',
+      author_slug || 'roof-manager-editorial-team',
       status || 'draft',
       is_featured ? 1 : 0,
       meta_title || title,
@@ -210,7 +212,7 @@ blogRoutes.put('/admin/posts/:id', async (c) => {
   try {
     const id = c.req.param('id')
     const body = await c.req.json()
-    const { title, slug, excerpt, content, cover_image_url, category, tags, author_name, status, is_featured, meta_title, meta_description, read_time_minutes } = body
+    const { title, slug, excerpt, content, cover_image_url, cover_image_alt, category, tags, author_name, author_slug, status, is_featured, meta_title, meta_description, read_time_minutes } = body
 
     // Check if transitioning to published
     const existing = await c.env.DB.prepare(`SELECT status, published_at FROM blog_posts WHERE id = ?`).bind(id).first()
@@ -229,10 +231,12 @@ blogRoutes.put('/admin/posts/:id', async (c) => {
     const safeExcerpt = sanitizeHtml(String(excerpt || ''))
 
     await c.env.DB.prepare(
-      `UPDATE blog_posts SET title=?, slug=?, excerpt=?, content=?, cover_image_url=?, category=?, tags=?, author_name=?, status=?, is_featured=?, meta_title=?, meta_description=?, read_time_minutes=?, published_at=?, updated_at=datetime('now') WHERE id=?`
+      `UPDATE blog_posts SET title=?, slug=?, excerpt=?, content=?, cover_image_url=?, cover_image_alt=?, category=?, tags=?, author_name=?, author_slug=?, status=?, is_featured=?, meta_title=?, meta_description=?, read_time_minutes=?, published_at=?, updated_at=datetime('now') WHERE id=?`
     ).bind(
       title, slug, safeExcerpt, safeContent, cover_image_url || '',
+      cover_image_alt || '',
       category || 'roofing', tags || '', author_name || 'Roof Manager Team',
+      author_slug || 'roof-manager-editorial-team',
       status || 'draft', is_featured ? 1 : 0,
       meta_title || title, meta_description || excerpt || '',
       estimatedReadTime, publishedAt, id
@@ -276,10 +280,12 @@ blogRoutes.post('/admin/init', async (c) => {
         excerpt TEXT,
         content TEXT NOT NULL,
         cover_image_url TEXT,
+        cover_image_alt TEXT,
         category TEXT DEFAULT 'roofing',
         tags TEXT,
         author_name TEXT DEFAULT 'Roof Manager Team',
         author_avatar_url TEXT,
+        author_slug TEXT DEFAULT 'roof-manager-editorial-team',
         status TEXT DEFAULT 'draft',
         is_featured INTEGER DEFAULT 0,
         meta_title TEXT,

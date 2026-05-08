@@ -1738,14 +1738,22 @@ function renderBlogEditor() {
           <input type="text" id="bp-cover" value="${(p.cover_image_url||'').replace(/"/g,'&quot;')}" placeholder="https://..." class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400">
         </div>
         <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1">Cover Image Alt Text <span class="text-gray-400 font-normal">(image SEO + accessibility)</span></label>
+          <input type="text" id="bp-cover-alt" value="${(p.cover_image_alt||'').replace(/"/g,'&quot;')}" placeholder="Descriptive alt text for the cover image" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400">
+        </div>
+        <div>
           <label class="block text-sm font-semibold text-gray-700 mb-1">Tags (comma-separated)</label>
           <input type="text" id="bp-tags" value="${(p.tags||'').replace(/"/g,'&quot;')}" placeholder="roofing, measurement, AI" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400">
         </div>
       </div>
       <div class="grid md:grid-cols-3 gap-4">
         <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-1">Author Name</label>
-          <input type="text" id="bp-author" value="${(p.author_name||'Roof Manager Team').replace(/"/g,'&quot;')}" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400">
+          <label class="block text-sm font-semibold text-gray-700 mb-1">Byline (Author Desk)</label>
+          <select id="bp-author-slug" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400">
+            <option value="roof-manager-editorial-team" ${(p.author_slug||'roof-manager-editorial-team')==='roof-manager-editorial-team'?'selected':''}>Roof Manager Editorial Team</option>
+            <option value="sarah-mitchell" ${p.author_slug==='sarah-mitchell'?'selected':''}>Sarah Mitchell — Operations & Insurance Desk</option>
+            <option value="daniel-reeves" ${p.author_slug==='daniel-reeves'?'selected':''}>Daniel Reeves — Measurement & AI Systems Desk</option>
+          </select>
         </div>
         <div>
           <label class="block text-sm font-semibold text-gray-700 mb-1">SEO Meta Title</label>
@@ -1772,15 +1780,25 @@ function renderBlogEditor() {
 }
 
 async function saveBlogPost(status) {
+  // Derive author_name from author_slug so the byline string matches the
+  // selected desk identity even on older clients that haven't refreshed.
+  const slugToName = {
+    'roof-manager-editorial-team': 'Roof Manager Editorial Team',
+    'sarah-mitchell': 'Sarah Mitchell',
+    'daniel-reeves': 'Daniel Reeves',
+  };
+  const authorSlug = document.getElementById('bp-author-slug')?.value || 'roof-manager-editorial-team';
   const data = {
     title: document.getElementById('bp-title')?.value?.trim(),
     slug: document.getElementById('bp-slug')?.value?.trim(),
     excerpt: document.getElementById('bp-excerpt')?.value?.trim(),
     content: document.getElementById('bp-content')?.value?.trim(),
     cover_image_url: document.getElementById('bp-cover')?.value?.trim(),
+    cover_image_alt: document.getElementById('bp-cover-alt')?.value?.trim(),
     category: document.getElementById('bp-category')?.value,
     tags: document.getElementById('bp-tags')?.value?.trim(),
-    author_name: document.getElementById('bp-author')?.value?.trim(),
+    author_slug: authorSlug,
+    author_name: slugToName[authorSlug] || 'Roof Manager Editorial Team',
     meta_title: document.getElementById('bp-meta-title')?.value?.trim(),
     meta_description: document.getElementById('bp-meta-desc')?.value?.trim(),
     is_featured: document.getElementById('bp-featured')?.checked,

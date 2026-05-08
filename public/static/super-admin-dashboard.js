@@ -4821,10 +4821,11 @@ window.bmOpenEdit = async function(id) {
   document.getElementById('bm-status').value = post.status || 'draft';
   document.getElementById('bm-featured').checked = !!post.is_featured;
   document.getElementById('bm-cover').value = post.cover_image_url || '';
+  if (document.getElementById('bm-cover-alt')) document.getElementById('bm-cover-alt').value = post.cover_image_alt || '';
   document.getElementById('bm-excerpt').value = post.excerpt || '';
   document.getElementById('bm-meta-desc').value = post.meta_description || '';
   document.getElementById('bm-tags').value = post.tags || '';
-  document.getElementById('bm-author').value = post.author_name || 'Roof Manager Team';
+  if (document.getElementById('bm-author-slug')) document.getElementById('bm-author-slug').value = post.author_slug || 'roof-manager-editorial-team';
   document.getElementById('bm-read-time').value = post.read_time_minutes || 5;
   document.getElementById('bm-content').value = post.content || '';
   document.getElementById('bm-modal').classList.remove('hidden');
@@ -4843,6 +4844,12 @@ window.bmAutoSlug = function() {
 };
 
 window.bmSave = async function() {
+  var bmSlugToName = {
+    'roof-manager-editorial-team': 'Roof Manager Editorial Team',
+    'sarah-mitchell': 'Sarah Mitchell',
+    'daniel-reeves': 'Daniel Reeves',
+  };
+  var bmAuthorSlug = (document.getElementById('bm-author-slug') && document.getElementById('bm-author-slug').value) || 'roof-manager-editorial-team';
   var payload = {
     title: document.getElementById('bm-title').value.trim(),
     slug: document.getElementById('bm-slug').value.trim(),
@@ -4850,10 +4857,12 @@ window.bmSave = async function() {
     status: document.getElementById('bm-status').value,
     is_featured: document.getElementById('bm-featured').checked ? 1 : 0,
     cover_image_url: document.getElementById('bm-cover').value.trim(),
+    cover_image_alt: (document.getElementById('bm-cover-alt') && document.getElementById('bm-cover-alt').value.trim()) || '',
     excerpt: document.getElementById('bm-excerpt').value.trim(),
     meta_description: document.getElementById('bm-meta-desc').value.trim(),
     tags: document.getElementById('bm-tags').value.trim(),
-    author_name: document.getElementById('bm-author').value.trim() || 'Roof Manager Team',
+    author_slug: bmAuthorSlug,
+    author_name: bmSlugToName[bmAuthorSlug] || 'Roof Manager Editorial Team',
     read_time_minutes: parseInt(document.getElementById('bm-read-time').value) || 5,
     content: document.getElementById('bm-content').value.trim()
   };
@@ -5013,8 +5022,16 @@ function renderBlogManagerView() {
               <input id="bm-cover" type="url" placeholder="https://..." class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none">
             </div>
             <div>
-              <label class="block text-xs font-semibold text-gray-600 mb-1">Author Name</label>
-              <input id="bm-author" type="text" placeholder="Roof Manager Team" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none">
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Cover Image Alt Text <span class="text-gray-400 font-normal">(image SEO)</span></label>
+              <input id="bm-cover-alt" type="text" placeholder="Descriptive alt text for the cover image" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Byline (Author Desk)</label>
+              <select id="bm-author-slug" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none">
+                <option value="roof-manager-editorial-team">Roof Manager Editorial Team</option>
+                <option value="sarah-mitchell">Sarah Mitchell — Operations &amp; Insurance Desk</option>
+                <option value="daniel-reeves">Daniel Reeves — Measurement &amp; AI Systems Desk</option>
+              </select>
             </div>
             <div>
               <label class="block text-xs font-semibold text-gray-600 mb-1">Read Time (mins)</label>

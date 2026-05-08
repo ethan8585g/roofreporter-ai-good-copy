@@ -15,6 +15,7 @@ import { runTrafficAgent } from './services/traffic-agent'
 import { runNightlyAttributionRollup } from './services/attribution'
 import { runScan as runLoopScan, writeHeartbeat as writeLoopHeartbeat, touchDefinition as touchLoopDefinition, type ScanType } from './services/loop-scanner'
 import { pruneExpiredScanSessions } from './services/synthetic-auth'
+import { runBacklinkHealthSweep } from './routes/backlinks'
 
 // ── Abandoned signup recovery ─────────────────────────────────────────────────
 async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number; skipped: number }> {
@@ -280,6 +281,25 @@ export default {
         .then(() => touchLoopDefinition(env, 'cron_worker_tick', 'pass', null))
         .catch(() => {})
     )
+
+    // ── Backlinks health sweep — Mondays at 13:00 UTC (one cron tick) ──
+    // Checks ~50 oldest live/verified placements per week. Updates
+    // last_check_status and stamps removed_at on rot. Manual run available
+    // from /super-admin/seo/backlinks.
+    if (dayOfWeek === 1 && hour === 13 && minute < 10) {
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const result = await runBacklinkHealthSweep(env, 50)
+          const summary = `Checked ${result.checked}: ok=${result.ok} rot=${result.rot} err=${result.errors}`
+          console.log(`[CRON:backlink-health] ${summary}`)
+          await logRun('backlink_health', result.rot > 0 ? 'warning' : 'success', summary, result, Date.now() - t0)
+        } catch (err: any) {
+          console.error('[CRON:backlink-health] Error:', err.message)
+          await logRun('backlink_health', 'error', err.message, {}, Date.now() - t0)
+        }
+      })())
+    }
 
     // ── Tracing Agent (every cron tick — every 10 min) ────────
     if (await isAgentEnabled('tracing')) {

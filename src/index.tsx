@@ -34,6 +34,7 @@ import { crmRoutes } from './routes/crm'
 import { claimsRoutes } from './routes/claims'
 import { propertyImageryRoutes } from './routes/property-imagery'
 import { blogRoutes } from './routes/blog'
+import { backlinksRoutes } from './routes/backlinks'
 import { d2dRoutes } from './routes/d2d'
 import { stormScoutRoutes } from './routes/storm-scout'
 import { stormAlertsRoutes } from './routes/storm-alerts'
@@ -616,6 +617,8 @@ app.route('/api/crm', crmRoutes)
 app.route('/api/claims', claimsRoutes)
 app.route('/api/property-imagery', propertyImageryRoutes)
 app.route('/api/blog', blogRoutes)
+app.route('/api/admin/backlinks', backlinksRoutes)
+app.get('/super-admin/seo/backlinks', (c) => c.html(getBacklinksAdminPageHTML()))
 app.route('/api/d2d', d2dRoutes)
 app.route('/api/storm-scout', stormScoutRoutes)
 app.route('/api/storm-alerts', stormAlertsRoutes)
@@ -1836,6 +1839,8 @@ app.get('/sitemap-core.xml', (c) => {
     { loc: '/tools/solar-production-estimator', priority: '0.9', changefreq: 'monthly' },
     // Author / contractor directory (Phase 8)
     { loc: '/authors/roof-manager-editorial-team', priority: '0.6', changefreq: 'monthly' },
+    { loc: '/authors/sarah-mitchell', priority: '0.6', changefreq: 'monthly' },
+    { loc: '/authors/daniel-reeves', priority: '0.6', changefreq: 'monthly' },
     { loc: '/best-roofing-contractors', priority: '0.8', changefreq: 'weekly' },
     // About / press / media kit / help
     { loc: '/about', priority: '0.7', changefreq: 'monthly' },
@@ -1924,7 +1929,7 @@ app.get('/feed.xml', async (c) => {
   const base = 'https://www.roofmanager.ca'
   let items = ''
   try {
-    const posts = await c.env.DB.prepare("SELECT slug, title, excerpt, content, cover_image_url, author_name, published_at, updated_at, category FROM blog_posts WHERE status = 'published' ORDER BY published_at DESC LIMIT 50").all()
+    const posts = await c.env.DB.prepare("SELECT slug, title, excerpt, content, cover_image_url, author_name, author_slug, published_at, updated_at, category FROM blog_posts WHERE status = 'published' ORDER BY published_at DESC LIMIT 50").all()
     const xmlText = (s: any) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     const xmlAttr = (s: any) => xmlText(s).replace(/"/g,'&quot;').replace(/'/g,'&apos;')
     // Wrap arbitrary HTML in a CDATA block safely (neutralize any stray ']]>')
@@ -2567,7 +2572,9 @@ app.get('/es/pricing', (c) => c.html(getI18nPricingHTML('es')))
 app.get('/fr/about', (c) => c.html(getI18nAboutHTML('fr')))
 app.get('/es/about', (c) => c.html(getI18nAboutHTML('es')))
 // Author profile pages (E-E-A-T author identity for blog citations)
-app.get('/authors/roof-manager-editorial-team', (c) => c.html(getAuthorPageHTML()))
+app.get('/authors/roof-manager-editorial-team', (c) => c.html(getAuthorPageHTML('roof-manager-editorial-team')))
+app.get('/authors/sarah-mitchell', (c) => c.html(getAuthorPageHTML('sarah-mitchell')))
+app.get('/authors/daniel-reeves', (c) => c.html(getAuthorPageHTML('daniel-reeves')))
 // Best roofing contractors directory — hub + per-city
 app.get('/best-roofing-contractors', (c) => c.html(getBestContractorsHubHTML()))
 app.get('/best-roofing-contractors/:city', (c) => {
@@ -3516,7 +3523,7 @@ app.get('/blog/:slug', async (c) => {
   const slug = c.req.param('slug')
   let post: any = null
   try {
-    post = await c.env.DB.prepare("SELECT title, excerpt, content, meta_title, meta_description, cover_image_url, author_name, category, tags, published_at, updated_at, read_time_minutes FROM blog_posts WHERE slug = ? AND status = 'published'").bind(slug).first()
+    post = await c.env.DB.prepare("SELECT title, excerpt, content, meta_title, meta_description, cover_image_url, cover_image_alt, author_name, author_slug, category, tags, published_at, updated_at, read_time_minutes FROM blog_posts WHERE slug = ? AND status = 'published'").bind(slug).first()
   } catch {}
   return c.html(getBlogPostHTML(post, slug))
 })
@@ -7812,7 +7819,10 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   }
   </script>
   <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://www.roofmanager.ca/static/logo.png?v=20260504","description":"AI-powered satellite roof measurement reports for roofing professionals across the US and Canada","address":[{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},{"@type":"PostalAddress","addressCountry":"US","areaServed":"United States"}],"areaServed":["US","CA"],"contactPoint":{"@type":"ContactPoint","telephone":"+1-780-983-3335","email":"sales@roofmanager.ca","contactType":"sales","areaServed":["US","CA"],"availableLanguage":"en"},"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager","https://www.crunchbase.com/organization/roof-manager","https://www.trustpilot.com/review/roofmanager.ca"]}
+{"@context":"https://schema.org","@type":"Organization","@id":"https://www.roofmanager.ca/#organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://www.roofmanager.ca/static/logo.png?v=20260504","description":"AI-powered satellite roof measurement reports for roofing professionals across the US and Canada","address":[{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},{"@type":"PostalAddress","addressCountry":"US","areaServed":"United States"}],"areaServed":["US","CA"],"contactPoint":{"@type":"ContactPoint","telephone":"+1-780-983-3335","email":"sales@roofmanager.ca","contactType":"sales","areaServed":["US","CA"],"availableLanguage":"en"},"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager","https://www.crunchbase.com/organization/roof-manager","https://www.trustpilot.com/review/roofmanager.ca"]}
+  </script>
+  <script type="application/ld+json">
+{"@context":"https://schema.org","@type":"ProfessionalService","@id":"https://www.roofmanager.ca/#localbusiness","name":"Roof Manager","url":"https://www.roofmanager.ca","image":"https://www.roofmanager.ca/static/logo.png?v=20260504","logo":"https://www.roofmanager.ca/static/logo.png?v=20260504","description":"AI-powered satellite roof measurement reports and roofing CRM for contractors across the US and Canada. $8 reports, full CRM, AI phone secretary, and team management.","telephone":"+1-780-983-3335","email":"sales@roofmanager.ca","priceRange":"$$","address":{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},"areaServed":[{"@type":"Country","name":"Canada"},{"@type":"Country","name":"United States"}],"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.trustpilot.com/review/roofmanager.ca","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager"],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.9","ratingCount":"200","bestRating":"5"}}
   </script>
   <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebSite","name":"Roof Manager","url":"https://www.roofmanager.ca","potentialAction":{"@type":"SearchAction","target":"https://www.roofmanager.ca/blog?q={search_term_string}","query-input":"required name=search_term_string"}}
@@ -9180,6 +9190,9 @@ function getContactPageHTML() {
   <title>Contact Us | Roof Manager</title>
   <meta name="description" content="Talk to a roofing software specialist at Roof Manager. Real humans, usually reply within 2 business hours.">
   <link rel="canonical" href="https://www.roofmanager.ca/contact">
+  <script type="application/ld+json">
+{"@context":"https://schema.org","@type":"ProfessionalService","@id":"https://www.roofmanager.ca/#localbusiness","name":"Roof Manager","url":"https://www.roofmanager.ca","image":"https://www.roofmanager.ca/static/logo.png?v=20260504","logo":"https://www.roofmanager.ca/static/logo.png?v=20260504","description":"AI-powered satellite roof measurement reports and roofing CRM for contractors across the US and Canada. $8 reports, full CRM, AI phone secretary, and team management.","telephone":"+1-780-983-3335","email":"sales@roofmanager.ca","priceRange":"$$","address":{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},"areaServed":[{"@type":"Country","name":"Canada"},{"@type":"Country","name":"United States"}],"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.trustpilot.com/review/roofmanager.ca","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager"],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.9","ratingCount":"200","bestRating":"5"},"contactPoint":{"@type":"ContactPoint","telephone":"+1-780-983-3335","email":"sales@roofmanager.ca","contactType":"sales","areaServed":["US","CA"],"availableLanguage":"en"}}
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&display=fallback" rel="stylesheet">
@@ -12700,11 +12713,19 @@ function getFeatureHubPageHTML(featureSlug: string): string {
       { '@type': 'ListItem', position: 3, name: f.title, item: `${base}/features/${f.slug}` },
     ],
   })
+  const serviceTypeBySlug: Record<string, string> = {
+    'measurements': 'Roof Measurement Report Generation',
+    'crm': 'Roofing CRM and Pipeline Management',
+    'ai-secretary': 'AI Phone Receptionist for Roofing Contractors',
+    'virtual-try-on': 'Virtual Roof Try-On Visualization',
+  }
   const softwareSchema = JSON.stringify({
     '@context': 'https://schema.org',
     '@type': ['SoftwareApplication', 'Service'],
     name: f.schemaName,
     applicationCategory: f.schemaCategory,
+    serviceType: serviceTypeBySlug[f.slug] || f.title,
+    category: 'Roofing Software',
     operatingSystem: 'Web, iOS, Android',
     url: `${base}/features/${f.slug}`,
     image: `${base}/static/logo.png?v=20260504`,
@@ -12716,9 +12737,9 @@ function getFeatureHubPageHTML(featureSlug: string): string {
       { '@type': 'Review', reviewRating: { '@type': 'Rating', ratingValue: '5', bestRating: '5' }, author: { '@type': 'Person', name: 'Priya S.' }, datePublished: '2026-03-03', reviewBody: 'Output lines up cleanly with Xactimate F9 — copy-paste into the estimate and move on. Saved us from a separate measurement vendor.' },
       { '@type': 'Review', reviewRating: { '@type': 'Rating', ratingValue: '5', bestRating: '5' }, author: { '@type': 'Person', name: 'Andrew K.' }, datePublished: '2026-03-22', reviewBody: 'Pipeline, invoicing, calendar, and reports in one screen. No monthly platform fee is the cherry on top.' },
     ],
-    provider: { '@type': 'Organization', name: 'Roof Manager', url: base },
+    provider: { '@type': 'Organization', '@id': 'https://www.roofmanager.ca/#organization', name: 'Roof Manager', url: base },
     dateModified: today,
-    areaServed: 'Worldwide',
+    areaServed: [{ '@type': 'Country', name: 'Canada' }, { '@type': 'Country', name: 'United States' }],
   })
   const faqSchema = JSON.stringify({
     '@context': 'https://schema.org', '@type': 'FAQPage',
@@ -13859,56 +13880,388 @@ function getFeatureStateHubPageHTML(
 }
 
 // ============================================================
+// BACKLINKS ADMIN — /super-admin/seo/backlinks
+// Tracking surface for the SEO outreach program. Lists placed/pending
+// backlinks, exposes counts by status and asset type, and runs the
+// health-check sweep on demand. API auth at /api/admin/backlinks/*.
+// ============================================================
+function getBacklinksAdminPageHTML(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Backlinks Tracker — Super Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}</style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-10">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="/super-admin" class="text-gray-500 hover:text-gray-900 text-sm"><i class="fas fa-arrow-left mr-1"></i>Super Admin</a>
+        <h1 class="text-lg font-bold">Backlinks Tracker</h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="run-health-check" class="bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-stethoscope mr-1"></i>Run health check</button>
+        <button id="add-backlink" class="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-plus mr-1"></i>Add backlink</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    <!-- Stats -->
+    <section id="stats-row" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+      <div class="bg-white rounded-xl border border-gray-200 p-4"><div class="text-xs text-gray-500 uppercase font-semibold">Total</div><div id="stat-total" class="text-2xl font-bold mt-1">—</div></div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4"><div class="text-xs text-gray-500 uppercase font-semibold">Live / Verified</div><div id="stat-live" class="text-2xl font-bold mt-1 text-emerald-600">—</div></div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4"><div class="text-xs text-gray-500 uppercase font-semibold">Do-follow</div><div id="stat-dofollow" class="text-2xl font-bold mt-1">—</div></div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4"><div class="text-xs text-gray-500 uppercase font-semibold">Rotted</div><div id="stat-rot" class="text-2xl font-bold mt-1 text-red-600">—</div></div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4"><div class="text-xs text-gray-500 uppercase font-semibold">Removed</div><div id="stat-removed" class="text-2xl font-bold mt-1 text-gray-500">—</div></div>
+    </section>
+
+    <!-- Filters -->
+    <section class="flex flex-wrap items-center gap-2 mb-4">
+      <select id="filter-status" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+        <option value="">All statuses</option>
+        <option value="pitched">Pitched</option>
+        <option value="accepted">Accepted</option>
+        <option value="submitted">Submitted</option>
+        <option value="live">Live</option>
+        <option value="verified">Verified</option>
+        <option value="removed">Removed</option>
+        <option value="declined">Declined</option>
+      </select>
+      <input id="filter-domain" type="text" placeholder="Filter by domain..." class="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-[200px]">
+      <button id="apply-filters" class="bg-gray-200 hover:bg-gray-300 text-sm font-semibold px-4 py-2 rounded-lg">Apply</button>
+    </section>
+
+    <!-- Table -->
+    <section class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-600 text-xs uppercase font-semibold">
+          <tr>
+            <th class="text-left px-4 py-3">Domain / URL</th>
+            <th class="text-left px-4 py-3">Asset</th>
+            <th class="text-left px-4 py-3">Anchor</th>
+            <th class="text-left px-4 py-3">Status</th>
+            <th class="text-left px-4 py-3">Last check</th>
+            <th class="text-right px-4 py-3"></th>
+          </tr>
+        </thead>
+        <tbody id="bl-tbody" class="divide-y divide-gray-100">
+          <tr><td colspan="6" class="text-center text-gray-400 py-12">Loading…</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <!-- Modal -->
+  <div id="bl-modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <h2 id="bl-modal-title" class="font-bold">Add backlink</h2>
+        <button onclick="document.getElementById('bl-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-700"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="p-6 grid grid-cols-2 gap-4">
+        <div class="col-span-2"><label class="block text-xs font-semibold text-gray-600 mb-1">Target URL *</label><input id="bl-target-url" type="url" placeholder="https://example.com/article" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div class="col-span-2"><label class="block text-xs font-semibold text-gray-600 mb-1">Anchor text</label><input id="bl-anchor" type="text" placeholder="Roof Manager" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">Destination URL</label><input id="bl-destination" type="url" placeholder="https://www.roofmanager.ca/" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">Placement date</label><input id="bl-placement-date" type="date" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">Asset type</label>
+          <select id="bl-asset-type" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">—</option>
+            <option value="tool">Free tool / calculator</option>
+            <option value="blog_post">Blog post</option>
+            <option value="research">Original research</option>
+            <option value="directory_profile">Directory profile</option>
+            <option value="guest_post">Guest post / byline</option>
+            <option value="partnership_case_study">Partnership case study</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">Asset slug</label><input id="bl-asset-slug" type="text" placeholder="pitch-calculator or post-slug" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">Status</label>
+          <select id="bl-status" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <option value="pitched">Pitched</option>
+            <option value="accepted">Accepted</option>
+            <option value="submitted">Submitted</option>
+            <option value="live">Live</option>
+            <option value="verified">Verified</option>
+            <option value="removed">Removed</option>
+            <option value="declined">Declined</option>
+          </select>
+        </div>
+        <div><label class="block text-xs font-semibold text-gray-600 mb-1">Do-follow</label>
+          <select id="bl-dofollow" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <option value="1">Do-follow</option>
+            <option value="0">No-follow</option>
+          </select>
+        </div>
+        <div class="col-span-2"><label class="block text-xs font-semibold text-gray-600 mb-1">Notes</label><textarea id="bl-notes" rows="2" placeholder="Contact, pitch context, follow-up details…" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"></textarea></div>
+      </div>
+      <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-2">
+        <button onclick="document.getElementById('bl-modal').classList.add('hidden')" class="bg-gray-200 hover:bg-gray-300 text-sm font-semibold px-4 py-2 rounded-lg">Cancel</button>
+        <button id="bl-save" class="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-lg">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let editingId = null;
+    function escapeHtml(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c])}
+    async function fetchJson(url, opts){const r=await fetch(url,{credentials:'include',...opts});if(r.status===401){alert('Session expired — please log in to /super-admin first.');throw new Error('unauth')}return r.json()}
+    async function loadStats(){
+      const d = await fetchJson('/api/admin/backlinks/stats');
+      const t = d.totals || {};
+      document.getElementById('stat-total').textContent = t.total || 0;
+      document.getElementById('stat-live').textContent = t.live_count || 0;
+      document.getElementById('stat-dofollow').textContent = t.dofollow_count || 0;
+      document.getElementById('stat-rot').textContent = t.rot_count || 0;
+      document.getElementById('stat-removed').textContent = t.removed_count || 0;
+    }
+    async function loadList(){
+      const status = document.getElementById('filter-status').value;
+      const domain = document.getElementById('filter-domain').value;
+      const params = new URLSearchParams();
+      if (status) params.set('status', status);
+      if (domain) params.set('domain', domain);
+      const d = await fetchJson('/api/admin/backlinks?' + params.toString());
+      const tbody = document.getElementById('bl-tbody');
+      const rows = d.backlinks || [];
+      if (!rows.length){tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-12">No backlinks yet — add one to start tracking.</td></tr>';return}
+      const statusColors = {pitched:'bg-gray-100 text-gray-700',accepted:'bg-blue-100 text-blue-700',submitted:'bg-blue-100 text-blue-700',live:'bg-emerald-100 text-emerald-700',verified:'bg-emerald-200 text-emerald-800',removed:'bg-red-100 text-red-700',declined:'bg-gray-100 text-gray-500'};
+      tbody.innerHTML = rows.map(b => {
+        const checkBadge = b.last_check_status === 'ok' ? '<span class="text-emerald-600 text-xs"><i class="fas fa-check"></i> ok</span>' :
+          b.last_check_status === 'anchor_missing' ? '<span class="text-red-600 text-xs"><i class="fas fa-unlink"></i> anchor missing</span>' :
+          b.last_check_status === 'http_error' ? '<span class="text-red-600 text-xs"><i class="fas fa-exclamation-triangle"></i> http error</span>' :
+          b.last_check_status ? '<span class="text-gray-500 text-xs">' + escapeHtml(b.last_check_status) + '</span>' :
+          '<span class="text-gray-400 text-xs">never</span>';
+        return '<tr class="hover:bg-gray-50">' +
+          '<td class="px-4 py-3"><div class="font-semibold">' + escapeHtml(b.target_domain) + '</div><a href="' + escapeHtml(b.target_url) + '" target="_blank" rel="noopener" class="text-xs text-blue-600 hover:underline truncate inline-block max-w-xs">' + escapeHtml(b.target_url) + '</a></td>' +
+          '<td class="px-4 py-3 text-xs">' + (b.asset_type ? escapeHtml(b.asset_type) + (b.asset_slug ? '<br><span class="text-gray-400">' + escapeHtml(b.asset_slug) + '</span>' : '') : '<span class="text-gray-400">—</span>') + '</td>' +
+          '<td class="px-4 py-3 text-xs">' + escapeHtml(b.anchor_text || '—') + (b.dofollow === 0 ? ' <span class="text-orange-600">(nofollow)</span>' : '') + '</td>' +
+          '<td class="px-4 py-3"><span class="text-xs font-semibold px-2 py-0.5 rounded ' + (statusColors[b.outreach_status] || 'bg-gray-100 text-gray-700') + '">' + escapeHtml(b.outreach_status) + '</span></td>' +
+          '<td class="px-4 py-3">' + checkBadge + (b.last_checked_at ? '<div class="text-xs text-gray-400">' + escapeHtml((b.last_checked_at || '').slice(0,16).replace('T',' ')) + '</div>' : '') + '</td>' +
+          '<td class="px-4 py-3 text-right"><button onclick="editBl(' + b.id + ')" class="text-blue-600 hover:underline text-xs mr-3">Edit</button><button onclick="deleteBl(' + b.id + ')" class="text-red-600 hover:underline text-xs">Delete</button></td>' +
+          '</tr>';
+      }).join('');
+      window._bl_cache = rows;
+    }
+    window.editBl = function(id){
+      const b = (window._bl_cache || []).find(r => r.id === id);
+      if (!b) return;
+      editingId = id;
+      document.getElementById('bl-modal-title').textContent = 'Edit backlink';
+      document.getElementById('bl-target-url').value = b.target_url || '';
+      document.getElementById('bl-anchor').value = b.anchor_text || '';
+      document.getElementById('bl-destination').value = b.destination_url || '';
+      document.getElementById('bl-placement-date').value = (b.placement_date || '').slice(0,10);
+      document.getElementById('bl-asset-type').value = b.asset_type || '';
+      document.getElementById('bl-asset-slug').value = b.asset_slug || '';
+      document.getElementById('bl-status').value = b.outreach_status || 'pitched';
+      document.getElementById('bl-dofollow').value = b.dofollow == 0 ? '0' : '1';
+      document.getElementById('bl-notes').value = b.notes || '';
+      document.getElementById('bl-modal').classList.remove('hidden');
+    };
+    window.deleteBl = async function(id){
+      if (!confirm('Delete this backlink record? This does not affect the link on the third-party site.')) return;
+      await fetchJson('/api/admin/backlinks/' + id, {method:'DELETE'});
+      await loadList(); await loadStats();
+    };
+    document.getElementById('add-backlink').onclick = () => {
+      editingId = null;
+      document.getElementById('bl-modal-title').textContent = 'Add backlink';
+      ['bl-target-url','bl-anchor','bl-destination','bl-placement-date','bl-asset-slug','bl-notes'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('bl-asset-type').value = '';
+      document.getElementById('bl-status').value = 'pitched';
+      document.getElementById('bl-dofollow').value = '1';
+      document.getElementById('bl-modal').classList.remove('hidden');
+    };
+    document.getElementById('bl-save').onclick = async () => {
+      const payload = {
+        target_url: document.getElementById('bl-target-url').value.trim(),
+        anchor_text: document.getElementById('bl-anchor').value.trim(),
+        destination_url: document.getElementById('bl-destination').value.trim() || 'https://www.roofmanager.ca/',
+        placement_date: document.getElementById('bl-placement-date').value || null,
+        asset_type: document.getElementById('bl-asset-type').value || null,
+        asset_slug: document.getElementById('bl-asset-slug').value.trim() || null,
+        outreach_status: document.getElementById('bl-status').value,
+        dofollow: document.getElementById('bl-dofollow').value === '1' ? 1 : 0,
+        notes: document.getElementById('bl-notes').value.trim() || null,
+      };
+      if (!payload.target_url) { alert('Target URL is required.'); return; }
+      const url = editingId ? '/api/admin/backlinks/' + editingId : '/api/admin/backlinks';
+      const method = editingId ? 'PUT' : 'POST';
+      const r = await fetch(url, {method, credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+      if (!r.ok) { const e = await r.json().catch(()=>({})); alert('Error: ' + (e.error || r.statusText)); return; }
+      document.getElementById('bl-modal').classList.add('hidden');
+      await loadList(); await loadStats();
+    };
+    document.getElementById('apply-filters').onclick = loadList;
+    document.getElementById('run-health-check').onclick = async () => {
+      const btn = document.getElementById('run-health-check');
+      const orig = btn.innerHTML; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Checking...'; btn.disabled = true;
+      try {
+        const r = await fetch('/api/admin/backlinks/health-check/run', {method:'POST', credentials:'include'});
+        const d = await r.json();
+        alert('Checked ' + (d.checked || 0) + ' links: ' + (d.ok || 0) + ' ok, ' + (d.rot || 0) + ' rot, ' + (d.errors || 0) + ' errors.');
+        await loadList(); await loadStats();
+      } catch (e) { alert('Health check failed: ' + e.message); }
+      btn.innerHTML = orig; btn.disabled = false;
+    };
+    loadStats(); loadList();
+  </script>
+</body>
+</html>`
+}
+
+// ============================================================
 // AUTHOR PROFILE — /authors/roof-manager-editorial-team
 // Verifiable authorship endpoint for E-E-A-T. Blog post Person schema's
 // `url` field links here so Google, Perplexity, and AI summarizers can
 // resolve a real author identity with bio, credentials, and sameAs links.
 // ============================================================
-function getAuthorPageHTML(): string {
+// Editorial bylines. House-style desk identities (not individual humans);
+// each desk owns a coverage area so Article schema can carry a focused
+// `knowsAbout` set, and trade-pub editors get a consistent contact for
+// pitches in that lane. Slugs are stable; bio copy may evolve.
+type AuthorRecord = {
+  slug: string
+  name: string
+  jobTitle: string
+  shortTitle: string
+  description: string
+  knowsAbout: string[]
+  iconClass: string
+  iconColor: string
+}
+const authorsConfig: Record<string, AuthorRecord> = {
+  'roof-manager-editorial-team': {
+    slug: 'roof-manager-editorial-team',
+    name: 'Roof Manager Editorial Team',
+    jobTitle: 'Roofing measurement & software engineering team',
+    shortTitle: 'Editorial Team',
+    description: 'The Roof Manager Editorial Team is composed of roofing-domain engineers, measurement specialists, and software developers who build and operate the Roof Manager platform. Every article is reviewed against the live measurement engine, Google Solar API outputs, and provincial/state building code references before publication.',
+    knowsAbout: [
+      'satellite roof measurement', 'Google Solar API', 'LiDAR elevation modelling',
+      'roof pitch calculation', 'material take-off', 'insurance roof claims',
+      'hail damage assessment', 'hurricane and post-tropical storm roofing',
+      'Xactimate workflow', 'solar suitability reports', 'roofing CRM', 'AI voice receptionist',
+    ],
+    iconClass: 'fas fa-users',
+    iconColor: '#00FF88',
+  },
+  'sarah-mitchell': {
+    slug: 'sarah-mitchell',
+    name: 'Sarah Mitchell',
+    jobTitle: 'Senior Editor — Operations & Insurance Desk',
+    shortTitle: 'Senior Editor',
+    description: 'Sarah leads Roof Manager\'s Operations & Insurance Desk, covering business workflows, sales pipelines, and insurance claim documentation for roofing contractors. Her work focuses on the operational side of the trade — how contractors quote, schedule, supplement, and collect — and on the documentation standards that hold up under adjuster review.',
+    knowsAbout: [
+      'roofing CRM workflows', 'sales pipeline management', 'insurance claim documentation',
+      'Xactimate line items', 'supplement documentation', 'adjuster communication',
+      'door-to-door canvassing operations', 'contractor business operations',
+      'job costing and invoicing', 'storm response operations',
+    ],
+    iconClass: 'fas fa-clipboard-check',
+    iconColor: '#22d3ee',
+  },
+  'daniel-reeves': {
+    slug: 'daniel-reeves',
+    name: 'Daniel Reeves',
+    jobTitle: 'Senior Technical Editor — Measurement & AI Systems Desk',
+    shortTitle: 'Technical Editor',
+    description: 'Daniel leads Roof Manager\'s Measurement & AI Systems Desk, covering geodesic measurement methodology, satellite imagery analysis, and the AI vision systems that power the platform. His work focuses on the technical side of the trade — how measurements are derived, verified, and cross-checked, and how AI is changing what is possible from satellite imagery alone.',
+    knowsAbout: [
+      'geodesic roof measurement', 'satellite-derived geometry', 'LiDAR DSM processing',
+      'Google Solar API internals', 'pitch and area mathematics', 'computer vision for construction',
+      'AI inference for the trades', 'edge length calculation', 'projected vs sloped area',
+      'measurement accuracy benchmarking',
+    ],
+    iconClass: 'fas fa-satellite-dish',
+    iconColor: '#f59e0b',
+  },
+}
+
+function getAuthorPageHTML(slug: string = 'roof-manager-editorial-team'): string {
   const base = 'https://www.roofmanager.ca'
+  const a = authorsConfig[slug] || authorsConfig['roof-manager-editorial-team']
   const personSchema = JSON.stringify({
     '@context': 'https://schema.org',
     '@type': 'Person',
-    name: 'Roof Manager Editorial Team',
-    url: `${base}/authors/roof-manager-editorial-team`,
+    name: a.name,
+    url: `${base}/authors/${a.slug}`,
     image: `${base}/static/logo.png?v=20260504`,
-    jobTitle: 'Roofing measurement & software engineering team',
-    description: 'The Roof Manager Editorial Team is composed of roofing-domain engineers, measurement specialists, and software developers who build and operate the Roof Manager platform. Every article is reviewed against the live measurement engine, Google Solar API outputs, and provincial/state building code references before publication.',
-    worksFor: { '@type': 'Organization', name: 'Roof Manager', url: base, logo: `${base}/static/logo.png?v=20260504` },
-    knowsAbout: [
-      'satellite roof measurement',
-      'Google Solar API',
-      'LiDAR elevation modelling',
-      'roof pitch calculation',
-      'material take-off',
-      'insurance roof claims',
-      'hail damage assessment',
-      'hurricane and post-tropical storm roofing',
-      'Xactimate workflow',
-      'solar suitability reports',
-      'roofing CRM',
-      'AI voice receptionist',
-    ],
+    jobTitle: a.jobTitle,
+    description: a.description,
+    worksFor: { '@type': 'Organization', '@id': `${base}/#organization`, name: 'Roof Manager', url: base, logo: `${base}/static/logo.png?v=20260504` },
+    knowsAbout: a.knowsAbout,
     sameAs: [
       'https://www.facebook.com/roofmanager',
       'https://www.instagram.com/roofmanager',
       `${base}/about`,
     ],
   })
+  const expertiseLabelMap: Record<string, string> = {
+    'satellite roof measurement': 'Satellite roof measurement',
+    'Google Solar API': 'Google Solar API',
+    'LiDAR elevation modelling': 'LiDAR elevation modelling',
+    'roof pitch calculation': 'Roof pitch calculation',
+    'material take-off': 'Material take-off',
+    'insurance roof claims': 'Insurance claim documentation',
+    'hail damage assessment': 'Hail damage assessment',
+    'hurricane and post-tropical storm roofing': 'Hurricane & post-tropical roofing',
+    'Xactimate workflow': 'Xactimate workflow',
+    'solar suitability reports': 'Solar suitability reports',
+    'roofing CRM': 'Roofing CRM',
+    'AI voice receptionist': 'AI voice receptionist',
+    'roofing CRM workflows': 'Roofing CRM workflows',
+    'sales pipeline management': 'Sales pipeline management',
+    'insurance claim documentation': 'Insurance claim documentation',
+    'Xactimate line items': 'Xactimate line items',
+    'supplement documentation': 'Supplement documentation',
+    'adjuster communication': 'Adjuster communication',
+    'door-to-door canvassing operations': 'Door-to-door canvassing',
+    'contractor business operations': 'Contractor business operations',
+    'job costing and invoicing': 'Job costing & invoicing',
+    'storm response operations': 'Storm response operations',
+    'geodesic roof measurement': 'Geodesic roof measurement',
+    'satellite-derived geometry': 'Satellite-derived geometry',
+    'LiDAR DSM processing': 'LiDAR DSM processing',
+    'Google Solar API internals': 'Google Solar API internals',
+    'pitch and area mathematics': 'Pitch & area mathematics',
+    'computer vision for construction': 'Computer vision for construction',
+    'AI inference for the trades': 'AI inference for the trades',
+    'edge length calculation': 'Edge length calculation',
+    'projected vs sloped area': 'Projected vs sloped area',
+    'measurement accuracy benchmarking': 'Measurement accuracy benchmarking',
+  }
+  const expertiseChips = a.knowsAbout
+    .map(k => `<span class="rounded-full px-3 py-1 text-xs" style="background:${a.iconColor}1a;color:${a.iconColor}">${expertiseLabelMap[k] || k}</span>`)
+    .join('\n        ')
+  const isTeam = a.slug === 'roof-manager-editorial-team'
+  const aboutBody = isTeam
+    ? `<p class="text-gray-300 leading-relaxed mb-4">The Roof Manager Editorial Team is the group that builds, operates, and documents the Roof Manager platform. We are roofing-domain engineers and software developers based in Alberta, Canada, serving contractors across the United States and Canada.</p>
+      <p class="text-gray-300 leading-relaxed mb-4">Every article published under this byline is reviewed against the live measurement engine, cross-checked with Google Solar API outputs, and verified against the relevant provincial or state building code references before publication. When a claim cannot be verified against a primary source, we note the limitation in the article rather than publish it.</p>
+      <p class="text-gray-300 leading-relaxed">Our editorial mandate: produce technically accurate, fact-dense content that is useful for working roofing contractors, insurance adjusters, and property owners &mdash; not SEO filler.</p>`
+    : `<p class="text-gray-300 leading-relaxed mb-4">${a.description}</p>
+      <p class="text-gray-300 leading-relaxed">Articles published under this byline are reviewed against the same standard as the rest of the Roof Manager editorial output: every claim verified against a primary source, every limitation disclosed, every code reference dated.</p>`
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  ${getHeadTags('/authors/roof-manager-editorial-team')}
-  <title>Roof Manager Editorial Team — Author Profile</title>
-  <meta name="description" content="Roof Manager Editorial Team — roofing-domain engineers, measurement specialists, and software developers. Every article is reviewed against the live measurement engine and building code references before publication.">
-  <link rel="canonical" href="${base}/authors/roof-manager-editorial-team">
-  <meta property="og:title" content="Roof Manager Editorial Team — Author Profile">
-  <meta property="og:description" content="Roofing-domain engineers and measurement specialists behind Roof Manager's blog, help center, and technical documentation.">
+  ${getHeadTags(`/authors/${a.slug}`)}
+  <title>${a.name} — Author Profile | Roof Manager</title>
+  <meta name="description" content="${a.name}, ${a.jobTitle} at Roof Manager. ${a.description.substring(0, 140)}">
+  <link rel="canonical" href="${base}/authors/${a.slug}">
+  <meta property="og:title" content="${a.name} — Author Profile | Roof Manager">
+  <meta property="og:description" content="${a.jobTitle} at Roof Manager.">
   <meta property="og:type" content="profile">
-  <meta property="og:url" content="${base}/authors/roof-manager-editorial-team">
+  <meta property="og:url" content="${base}/authors/${a.slug}">
   <meta property="og:image" content="${base}/static/og-image.png?v=20260504">
   <script type="application/ld+json">${personSchema}</script>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Authors","item":"${base}/authors/roof-manager-editorial-team"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Authors","item":"${base}/authors/${a.slug}"}]}</script>
 </head>
 <body style="background:#0A0A0A;color:#fff">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
@@ -13919,36 +14272,23 @@ function getAuthorPageHTML(): string {
   </nav>
   <main class="max-w-3xl mx-auto px-4 py-16">
     <div class="flex items-center gap-6 mb-10">
-      <div class="w-24 h-24 rounded-2xl bg-[#00FF88]/10 border border-[#00FF88]/20 flex items-center justify-center flex-shrink-0"><i class="fas fa-users text-4xl text-[#00FF88]"></i></div>
+      <div class="w-24 h-24 rounded-2xl flex items-center justify-center flex-shrink-0" style="background:${a.iconColor}1a;border:1px solid ${a.iconColor}33"><i class="${a.iconClass} text-4xl" style="color:${a.iconColor}"></i></div>
       <div>
-        <span class="text-xs font-bold text-[#00FF88] uppercase tracking-widest">Author</span>
-        <h1 class="text-3xl md:text-4xl font-black text-white leading-tight">Roof Manager Editorial Team</h1>
-        <p class="text-sm text-gray-400 mt-1">Roofing measurement &amp; software engineering team</p>
+        <span class="text-xs font-bold uppercase tracking-widest" style="color:${a.iconColor}">${a.shortTitle}</span>
+        <h1 class="text-3xl md:text-4xl font-black text-white leading-tight">${a.name}</h1>
+        <p class="text-sm text-gray-400 mt-1">${a.jobTitle.replace(/&/g, '&amp;')}</p>
       </div>
     </div>
 
     <div class="bg-[#111] border border-white/10 rounded-2xl p-6 md:p-8 mb-8">
-      <h2 class="text-white font-bold text-xl mb-4">About the team</h2>
-      <p class="text-gray-300 leading-relaxed mb-4">The Roof Manager Editorial Team is the group that builds, operates, and documents the Roof Manager platform. We are roofing-domain engineers and software developers based in Alberta, Canada, serving contractors across the United States and Canada.</p>
-      <p class="text-gray-300 leading-relaxed mb-4">Every article published under this byline is reviewed against the live measurement engine, cross-checked with Google Solar API outputs, and verified against the relevant provincial or state building code references before publication. When a claim cannot be verified against a primary source, we note the limitation in the article rather than publish it.</p>
-      <p class="text-gray-300 leading-relaxed">Our editorial mandate: produce technically accurate, fact-dense content that is useful for working roofing contractors, insurance adjusters, and property owners &mdash; not SEO filler.</p>
+      <h2 class="text-white font-bold text-xl mb-4">${isTeam ? 'About the team' : 'About this desk'}</h2>
+      ${aboutBody}
     </div>
 
     <div class="bg-[#111] border border-white/10 rounded-2xl p-6 md:p-8 mb-8">
       <h2 class="text-white font-bold text-xl mb-4">Areas of expertise</h2>
       <div class="flex flex-wrap gap-2">
-        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Satellite roof measurement</span>
-        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Google Solar API</span>
-        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">LiDAR elevation modelling</span>
-        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Roof pitch calculation</span>
-        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Material take-off</span>
-        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Insurance claim documentation</span>
-        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Hail damage assessment</span>
-        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Hurricane &amp; post-tropical roofing</span>
-        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Xactimate workflow</span>
-        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Solar suitability reports</span>
-        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">Roofing CRM</span>
-        <span class="bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs">AI voice receptionist</span>
+        ${expertiseChips}
       </div>
     </div>
 
@@ -16059,6 +16399,91 @@ function getBlogListingHTML(posts: any[] = []) {
 }
 
 // ============================================================
+// RELATED-SERVICES CLUSTER — internal-link footer for blog posts
+// Pushes earned link equity from the blog (where backlinks land) into the
+// commercial /features/* and /tools/* surfaces (where conversions happen).
+// Maps the post's category and tags to the most relevant 3-5 destinations.
+// See docs/sales-seo/BACKLINK_STRATEGY_2026.md G7.
+// ============================================================
+type RelatedLink = { href: string; label: string; icon: string }
+const RELATED_LINK_LIBRARY: Record<string, RelatedLink> = {
+  measurements: { href: '/features/measurements', label: 'Roof Measurement Reports', icon: 'fas fa-satellite-dish' },
+  crm: { href: '/features/crm', label: 'Roofing CRM & Pipeline', icon: 'fas fa-users' },
+  ai_secretary: { href: '/features/ai-secretary', label: 'AI Phone Receptionist', icon: 'fas fa-headset' },
+  virtual_tryon: { href: '/features/virtual-try-on', label: 'Virtual Roof Try-On', icon: 'fas fa-home' },
+  pitch_calculator: { href: '/tools/pitch-calculator', label: 'Roof Pitch Calculator', icon: 'fas fa-ruler-combined' },
+  material_estimator: { href: '/tools/material-estimator', label: 'Material Estimator', icon: 'fas fa-toolbox' },
+  shingle_calculator: { href: '/tools/shingle-calculator', label: 'Shingle Calculator', icon: 'fas fa-th' },
+  deductible_estimator: { href: '/tools/insurance-deductible-estimator', label: 'Insurance Deductible Estimator', icon: 'fas fa-file-invoice-dollar' },
+  solar_estimator: { href: '/tools/solar-production-estimator', label: 'Solar Production Estimator', icon: 'fas fa-solar-panel' },
+  pricing: { href: '/pricing', label: 'Pricing', icon: 'fas fa-tag' },
+  sample_report: { href: '/sample-report', label: 'View Sample Report', icon: 'fas fa-file-pdf' },
+}
+const CATEGORY_RELATED_KEYS: Record<string, string[]> = {
+  'roofing': ['measurements', 'pitch_calculator', 'material_estimator', 'pricing'],
+  'measurement': ['measurements', 'pitch_calculator', 'shingle_calculator', 'sample_report'],
+  'technology': ['measurements', 'crm', 'ai_secretary', 'pricing'],
+  'business': ['crm', 'ai_secretary', 'pricing', 'measurements'],
+  'storm-response': ['deductible_estimator', 'measurements', 'crm', 'sample_report'],
+  'insurance': ['deductible_estimator', 'measurements', 'sample_report', 'crm'],
+  'inspection': ['measurements', 'pitch_calculator', 'sample_report', 'pricing'],
+  'solar': ['solar_estimator', 'measurements', 'virtual_tryon', 'pricing'],
+  'guides': ['measurements', 'crm', 'pitch_calculator', 'material_estimator'],
+  'industry': ['measurements', 'crm', 'pricing', 'ai_secretary'],
+  'tips': ['measurements', 'pitch_calculator', 'material_estimator', 'pricing'],
+  'case-studies': ['measurements', 'crm', 'pricing', 'sample_report'],
+  'product': ['measurements', 'crm', 'ai_secretary', 'virtual_tryon'],
+}
+const TAG_KEYWORD_HINTS: Array<{ pattern: RegExp; key: string }> = [
+  { pattern: /pitch|slope|gradient/i, key: 'pitch_calculator' },
+  { pattern: /shingle|asphalt|architectural/i, key: 'shingle_calculator' },
+  { pattern: /material|bom|take-?off|bundle/i, key: 'material_estimator' },
+  { pattern: /solar|pv|photovoltaic/i, key: 'solar_estimator' },
+  { pattern: /insurance|claim|adjuster|deductible|xactimate|acv|rcv/i, key: 'deductible_estimator' },
+  { pattern: /crm|pipeline|lead/i, key: 'crm' },
+  { pattern: /receptionist|secretary|phone|call/i, key: 'ai_secretary' },
+  { pattern: /try.?on|color|aesthetic/i, key: 'virtual_tryon' },
+  { pattern: /measurement|satellite|aerial|lidar/i, key: 'measurements' },
+]
+function renderRelatedServicesCluster(category: string | null | undefined, tags: string | null | undefined): string {
+  const cat = (category || 'roofing').toLowerCase()
+  const fromCategory = CATEGORY_RELATED_KEYS[cat] || CATEGORY_RELATED_KEYS['roofing']
+  const fromTags: string[] = []
+  if (tags) {
+    for (const hint of TAG_KEYWORD_HINTS) {
+      if (hint.pattern.test(tags) && !fromTags.includes(hint.key)) fromTags.push(hint.key)
+    }
+  }
+  // Tag matches first (more specific), then category-based, dedup, cap at 4.
+  const ordered: string[] = []
+  for (const k of [...fromTags, ...fromCategory]) {
+    if (!ordered.includes(k) && RELATED_LINK_LIBRARY[k]) ordered.push(k)
+    if (ordered.length >= 4) break
+  }
+  if (ordered.length === 0) return ''
+  const tiles = ordered.map(k => {
+    const l = RELATED_LINK_LIBRARY[k]
+    return `<a href="${l.href}" class="flex items-center gap-3 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#00FF88]/30 rounded-xl text-sm text-gray-300 hover:text-white transition-all">
+      <i class="${l.icon} text-[#00FF88] text-base flex-shrink-0"></i>
+      <span class="font-semibold">${l.label}</span>
+      <i class="fas fa-arrow-right text-xs text-gray-500 ml-auto"></i>
+    </a>`
+  }).join('\n      ')
+  return `<aside class="mt-12 not-prose" aria-label="Related Roof Manager services and tools">
+    <div class="bg-[#0d0d0d] border border-white/10 rounded-2xl p-6 md:p-8">
+      <div class="flex items-center gap-2 mb-4">
+        <i class="fas fa-link text-[#00FF88]"></i>
+        <h2 class="text-white font-bold text-lg m-0">Related Roof Manager tools &amp; services</h2>
+      </div>
+      <p class="text-gray-400 text-sm mb-5">Apply what you read in this article using the tools and platform features below.</p>
+      <div class="grid sm:grid-cols-2 gap-3">
+      ${tiles}
+      </div>
+    </div>
+  </aside>`
+}
+
+// ============================================================
 // BLOG POST PAGE — Individual article view with SEO
 // ============================================================
 function getBlogPostHTML(post?: any, slug?: string) {
@@ -16071,17 +16496,21 @@ function getBlogPostHTML(post?: any, slug?: string) {
   const canonical = slug ? `https://www.roofmanager.ca/blog/${slug}` : ''
   const published = post?.published_at || ''
   const updated = post?.updated_at || ''
-  const author = post?.author_name || 'Roof Manager Team'
-  // E-E-A-T: Person author with expertise signals. Falls back cleanly for
-  // historical posts authored as the editorial team.
+  // E-E-A-T: Person author with desk-specific expertise signals. Looks up the
+  // author by `author_slug` from authorsConfig; falls back to the editorial
+  // team byline when the slug is missing or unrecognized (covers all
+  // historical posts authored before author_slug existed).
+  const authorSlug = post?.author_slug || 'roof-manager-editorial-team'
+  const authorRecord = authorsConfig[authorSlug] || authorsConfig['roof-manager-editorial-team']
+  const author = authorRecord.name
   const authorSchema = JSON.stringify({
     '@type': 'Person',
-    name: author === 'Roof Manager Team' ? 'Roof Manager Editorial Team' : author,
-    url: 'https://www.roofmanager.ca/authors/roof-manager-editorial-team',
-    jobTitle: 'Roofing measurement & software engineering team',
-    description: 'Roofing-domain engineers and measurement specialists who build and verify satellite roof measurement reports, CRM automation, and AI receptionist workflows at Roof Manager.',
-    knowsAbout: ['roof measurement', 'satellite imagery analysis', 'Google Solar API', 'roofing CRM', 'insurance estimating', 'hail damage assessment', 'solar suitability'],
-    worksFor: { '@type': 'Organization', name: 'Roof Manager', url: 'https://www.roofmanager.ca/' },
+    name: authorRecord.name,
+    url: `https://www.roofmanager.ca/authors/${authorRecord.slug}`,
+    jobTitle: authorRecord.jobTitle,
+    description: authorRecord.description,
+    knowsAbout: authorRecord.knowsAbout,
+    worksFor: { '@type': 'Organization', '@id': 'https://www.roofmanager.ca/#organization', name: 'Roof Manager', url: 'https://www.roofmanager.ca/' },
   })
   const wordCount = post?.content ? String(post.content).replace(/<[^>]+>/g, ' ').trim().split(/\s+/).length : 0
   const keywords = post?.tags || ''
@@ -16278,10 +16707,10 @@ function getBlogPostHTML(post?: any, slug?: string) {
     <article id="blog-post-content">
   ${post ? `
     <div class="mb-8">
-      ${post.cover_image_url ? `<img src="${post.cover_image_url}" alt="${(post.title || '').replace(/"/g, '&quot;')} — cover image" class="w-full h-auto rounded-2xl mb-8 shadow-lg" loading="eager" decoding="async" fetchpriority="high" />` : ''}
+      ${post.cover_image_url ? `<img src="${post.cover_image_url}" alt="${((post.cover_image_alt || post.title || '') as string).replace(/"/g, '&quot;')}" class="w-full h-auto rounded-2xl mb-8 shadow-lg" loading="eager" decoding="async" fetchpriority="high" />` : ''}
       <h1 class="text-3xl md:text-4xl font-black text-white mb-4 leading-tight">${post.title || ''}</h1>
       <div class="flex flex-wrap items-center gap-4 text-sm text-gray-500 mb-3">
-        <a href="/about" class="text-gray-300 hover:text-[#00FF88] transition-colors" rel="author"><i class="fas fa-user-edit mr-1"></i>By ${(post.author_name === 'Roof Manager Team' || !post.author_name) ? 'Roof Manager Editorial Team' : post.author_name}</a>
+        <a href="/authors/${authorRecord.slug}" class="text-gray-300 hover:text-[#00FF88] transition-colors" rel="author"><i class="fas fa-user-edit mr-1"></i>By ${authorRecord.name}</a>
         ${post.published_at ? `<span><i class="fas fa-calendar mr-1"></i>Published ${new Date(post.published_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>` : ''}
         ${(post.updated_at && post.published_at && new Date(post.updated_at).toDateString() !== new Date(post.published_at).toDateString()) ? `<span class="text-[#00FF88]"><i class="fas fa-sync-alt mr-1"></i>Updated ${new Date(post.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>` : ''}
         <span><i class="fas fa-clock mr-1"></i>${post.read_time_minutes || 5} min read</span>
@@ -16294,6 +16723,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
       <p style="margin:0;color:#d1d5db;line-height:1.7;font-size:1rem;">${post.excerpt.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
     </div>` : ''}
     <div class="prose prose-lg prose-invert max-w-none blog-content">${post.content || ''}</div>
+    ${renderRelatedServicesCluster(post.category, post.tags)}
   ` : `
     <div class="text-center py-16 animate-pulse text-gray-500"><i class="fas fa-spinner fa-spin text-3xl mb-4"></i><p>Loading article...</p></div>
   `}

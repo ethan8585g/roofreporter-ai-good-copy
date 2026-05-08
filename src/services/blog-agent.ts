@@ -621,6 +621,41 @@ function validateInternalLinks(
 }
 
 /**
+ * Reject lifestyle-hybrid keywords and drafts. Trade-pub editors will not
+ * link to "Best things to do in Tampa (and Monday's roof checklist)" type
+ * content; it dilutes topical authority for the roofing-software domain.
+ * Match against the keyword OR the draft title — either signal is enough
+ * to reject before publish. See docs/sales-seo/BACKLINK_STRATEGY_2026.md G6.
+ */
+const LIFESTYLE_PATTERNS = [
+  /\bthings to do\b/i,
+  /\bbest restaurants?\b/i,
+  /\braise a famil(y|ia)\b/i,
+  /\bart lovers?\b/i,
+  /\bon a budget\b/i,
+  /\bweekend (in|getaway)\b/i,
+  /\bstudent[- ]?friendly\b/i,
+  /\bculture\b/i,
+  /\bauthentic\b/i,
+  /\blocal'?s? guide\b/i,
+  /\blifestyle\b/i,
+  /\bneighborhoods? to live\b/i,
+  /\bbest neighborhoods?\b/i,
+  /\bliving on a (canal|beach|lake)\b/i,
+  /\bvisiting [A-Z]\w+\b/i,
+  /\bdiscovering\b/i,
+  /\bcanal\b/i,
+]
+export function matchesLifestylePattern(text: string): string | null {
+  if (!text) return null
+  for (const re of LIFESTYLE_PATTERNS) {
+    const m = re.exec(text)
+    if (m) return m[0]
+  }
+  return null
+}
+
+/**
  * After a new post is published, append a "Related reading" block linking
  * to 3 recent posts in the same category (excluding self). Grows the
  * topical cluster graph automatically without model calls.
@@ -861,11 +896,49 @@ export async function runOnce(env: Bindings): Promise<RunResult> {
   const row = await pickNextKeyword(db)
   if (!row) return { ok: false, skipped: true, error: 'queue empty' }
 
+  // Lifestyle-hybrid keyword guard. Reject before spending Gemini tokens.
+  // Marks the queue row 'rejected' permanently so it isn't retried.
+  const lifestyleHit = matchesLifestylePattern(row.keyword) || matchesLifestylePattern(row.geo_modifier || '')
+  if (lifestyleHit) {
+    await db.prepare(
+      `UPDATE blog_keyword_queue SET status='rejected', last_error=?, locked_until=NULL, updated_at=datetime('now') WHERE id=?`
+    ).bind(`lifestyle pattern in keyword: "${lifestyleHit}"`, row.id).run()
+    await logEvent(db, {
+      queue_id: row.id,
+      stage: 'lifestyle_reject',
+      passed_gate: false,
+      error: `lifestyle keyword: ${lifestyleHit}`,
+    })
+    return { ok: false, queue_id: row.id, keyword: row.keyword, skipped: true, error: 'lifestyle keyword rejected' }
+  }
+
   const started = Date.now()
   try {
     const ctx = await resolveLiveContext(db, row)
     const draft = await generateDraft(env, row, ctx)
     await logEvent(db, { queue_id: row.id, stage: 'draft', model: MODEL_DRAFT, duration_ms: Date.now() - started })
+
+    // Lifestyle drift catch — Gemini occasionally generates lifestyle-flavored
+    // titles even from professional keywords. If the draft title or excerpt
+    // hits a lifestyle pattern, fail the gate.
+    const draftLifestyleHit = matchesLifestylePattern(draft.title) || matchesLifestylePattern(draft.excerpt || '')
+    if (draftLifestyleHit) {
+      await db.prepare(
+        `UPDATE blog_keyword_queue SET attempts = ?, status = ?, last_error = ?, locked_until = NULL, updated_at = datetime('now') WHERE id = ?`
+      ).bind(
+        row.attempts + 1,
+        (row.attempts + 1) >= MAX_ATTEMPTS ? 'failed' : 'pending',
+        `lifestyle drift in draft title/excerpt: "${draftLifestyleHit}"`,
+        row.id,
+      ).run()
+      await logEvent(db, {
+        queue_id: row.id,
+        stage: 'lifestyle_reject',
+        passed_gate: false,
+        error: `lifestyle draft: ${draftLifestyleHit}`,
+      })
+      return { ok: false, queue_id: row.id, keyword: row.keyword, error: 'lifestyle draft rejected' }
+    }
 
     const score = await scoreDraft(env, row, draft)
     const geoOk = (score as any).geo_optimization === undefined || (score as any).geo_optimization >= 60
