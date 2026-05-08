@@ -2018,7 +2018,39 @@ function buildPitchBreakdownPage(report: RoofReport, reportNum: string, reportDa
     : []
 
   const rows = rowsFromFaces.length ? rowsFromFaces : rowsFromSegments
-  if (!rows.length) return '' // No pitch data — skip page entirely
+
+  // Dormer rows — rendered as a separate sub-table since their footprint sits
+  // INSIDE the main roof and only the differential sloped area is added to the
+  // property total. Engine populates tm.dormer_breakdown when the trace had
+  // dormer polygons.
+  type DormerRow = {
+    label: string
+    pitch_label: string
+    pitch_angle_deg: number
+    pitch_rise: number
+    slope_factor: number
+    main_pitch_label: string
+    footprint_ft2: number
+    extra_sloped_ft2: number
+  }
+  const dormerRows: DormerRow[] = ((tm?.dormer_breakdown || []) as any[]).map((d: any) => {
+    const rise = typeof d.pitch_rise === 'number' ? d.pitch_rise : 0
+    const sf = Math.sqrt(rise * rise + 144) / 12
+    const deg = Math.atan(rise / 12) * 180 / Math.PI
+    const mainRise = typeof d.main_pitch_rise === 'number' ? d.main_pitch_rise : 0
+    return {
+      label: d.label || `Dormer ${d.dormer_index || ''}`.trim(),
+      pitch_label: `${Number.isInteger(rise) ? rise : rise.toFixed(1)}:12`,
+      pitch_angle_deg: deg,
+      pitch_rise: rise,
+      slope_factor: sf,
+      main_pitch_label: `${Number.isInteger(mainRise) ? mainRise : mainRise.toFixed(1)}:12`,
+      footprint_ft2: d.footprint_ft2 || 0,
+      extra_sloped_ft2: d.extra_sloped_ft2 || 0,
+    }
+  })
+
+  if (!rows.length && !dormerRows.length) return '' // No pitch data — skip page entirely
 
   // Compass conversion (azimuth degrees → 8-point cardinal)
   const cardinal = (deg: number | null) => {
@@ -2028,14 +2060,26 @@ function buildPitchBreakdownPage(report: RoofReport, reportNum: string, reportDa
   }
 
   // Hero summary stats
-  const totalSloped = rows.reduce((s, r) => s + r.sloped_area_ft2, 0) || 1
-  // Predominant pitch = pitch label of the row with the largest sloped area
-  const predominant = [...rows].sort((a, b) => b.sloped_area_ft2 - a.sloped_area_ft2)[0]
-  const minPitch = [...rows].sort((a, b) => a.pitch_rise - b.pitch_rise)[0]
-  const maxPitch = [...rows].sort((a, b) => b.pitch_rise - a.pitch_rise)[0]
-  const uniquePitchLabels = Array.from(new Set(rows.map(r => r.pitch_label)))
+  const totalSlopedFaces = rows.reduce((s, r) => s + r.sloped_area_ft2, 0)
+  // Predominant pitch = largest sloped area among main faces (dormers are
+  // small accents — never the "predominant" pitch by definition).
+  const predominant = rows.length
+    ? [...rows].sort((a, b) => b.sloped_area_ft2 - a.sloped_area_ft2)[0]
+    : { pitch_label: '—', pitch_angle_deg: 0, slope_factor: 1 }
+  // Min/Max/Unique — surface dormer pitches too, since steep dormers on a low
+  // main roof are exactly what users come to this page to see.
+  const allPitches: { pitch_label: string; pitch_rise: number; pitch_angle_deg: number }[] = [
+    ...rows.map(r => ({ pitch_label: r.pitch_label, pitch_rise: r.pitch_rise, pitch_angle_deg: r.pitch_angle_deg })),
+    ...dormerRows.map(d => ({ pitch_label: d.pitch_label, pitch_rise: d.pitch_rise, pitch_angle_deg: d.pitch_angle_deg })),
+  ]
+  const minPitch = [...allPitches].sort((a, b) => a.pitch_rise - b.pitch_rise)[0]
+  const maxPitch = [...allPitches].sort((a, b) => b.pitch_rise - a.pitch_rise)[0]
+  const uniquePitchLabels = Array.from(new Set(allPitches.map(p => p.pitch_label)))
 
-  // Pitch class distribution (Flat / Low / Standard / Steep)
+  // Pitch class distribution (Flat / Low / Standard / Steep) — includes the
+  // dormer differential (extra_sloped_ft2) so a steep dormer correctly bumps
+  // the Steep bucket. Footprint is NOT added (already counted under the main
+  // face below it).
   const buckets = { flat: 0, low: 0, standard: 0, steep: 0 }
   for (const r of rows) {
     if (r.pitch_rise <= 2) buckets.flat += r.sloped_area_ft2
@@ -2043,6 +2087,13 @@ function buildPitchBreakdownPage(report: RoofReport, reportNum: string, reportDa
     else if (r.pitch_rise <= 9) buckets.standard += r.sloped_area_ft2
     else buckets.steep += r.sloped_area_ft2
   }
+  for (const d of dormerRows) {
+    if (d.pitch_rise <= 2) buckets.flat += d.extra_sloped_ft2
+    else if (d.pitch_rise <= 4) buckets.low += d.extra_sloped_ft2
+    else if (d.pitch_rise <= 9) buckets.standard += d.extra_sloped_ft2
+    else buckets.steep += d.extra_sloped_ft2
+  }
+  const totalSloped = (totalSlopedFaces + dormerRows.reduce((s, d) => s + d.extra_sloped_ft2, 0)) || 1
   const pct = (v: number) => Math.round((v / totalSloped) * 1000) / 10
 
   return `
@@ -2084,7 +2135,7 @@ function buildPitchBreakdownPage(report: RoofReport, reportNum: string, reportDa
     <div style="flex:1;background:linear-gradient(135deg,#4338ca,#6366f1);border-radius:6px;padding:10px;text-align:center;color:#fff">
       <div style="font-size:7px;font-weight:700;text-transform:uppercase;opacity:0.85;letter-spacing:0.5px">Unique Pitches</div>
       <div style="font-size:20px;font-weight:900">${uniquePitchLabels.length}</div>
-      <div style="font-size:7px;opacity:0.8">${rows.length} face${rows.length === 1 ? '' : 's'} total</div>
+      <div style="font-size:7px;opacity:0.8">${rows.length} face${rows.length === 1 ? '' : 's'}${dormerRows.length ? ` + ${dormerRows.length} dormer${dormerRows.length === 1 ? '' : 's'}` : ''}</div>
     </div>
   </div>
 
@@ -2119,13 +2170,52 @@ function buildPitchBreakdownPage(report: RoofReport, reportNum: string, reportDa
         <tr style="background:#f1f5f9;font-weight:800;border-top:2px solid #1a1a2e">
           <td colspan="4" style="padding:5px 8px;font-size:9px">TOTAL</td>
           <td style="padding:5px 8px;text-align:right;font-size:9px">${Math.round(rows.reduce((s, r) => s + r.projected_area_ft2, 0)).toLocaleString()} SF</td>
-          <td style="padding:5px 8px;text-align:right;font-size:9px;color:${TEAL_DARK}">${Math.round(totalSloped).toLocaleString()} SF</td>
-          <td style="padding:5px 8px;text-align:right;font-size:9px">${(totalSloped / 100).toFixed(1)}</td>
+          <td style="padding:5px 8px;text-align:right;font-size:9px;color:${TEAL_DARK}">${Math.round(totalSlopedFaces).toLocaleString()} SF</td>
+          <td style="padding:5px 8px;text-align:right;font-size:9px">${(totalSlopedFaces / 100).toFixed(1)}</td>
           <td></td>
         </tr>
       </tbody>
     </table>
   </div>
+
+  ${dormerRows.length > 0 ? `
+  <!-- Dormer Pitch Sub-Table — dormers ride at their own pitch on top of the
+       main roof; only the differential sloped area is added to the property
+       total (footprint already counted under the main face). -->
+  <div style="padding:12px 28px 0">
+    <div style="font-size:10px;font-weight:800;color:#7c3aed;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:5px;border-bottom:2px solid #a855f7;padding-bottom:3px">Dormer Pitches <span style="font-size:7.5px;color:#888;font-weight:600;text-transform:none;letter-spacing:0">(steeper accents on top of the main roof)</span></div>
+    <table style="width:100%;border-collapse:collapse;font-size:8.5px">
+      <thead>
+        <tr style="background:#1a1a2e;color:#fff">
+          <th style="padding:5px 8px;text-align:left;font-size:7.5px;font-weight:700">Dormer</th>
+          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700">Pitch</th>
+          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700">Pitch (°)</th>
+          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700">Slope Factor</th>
+          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700">On Main</th>
+          <th style="padding:5px 8px;text-align:right;font-size:7.5px;font-weight:700">Footprint</th>
+          <th style="padding:5px 8px;text-align:right;font-size:7.5px;font-weight:700">+ Sloped Added</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${dormerRows.map((d, i) => `
+        <tr style="${i % 2 === 0 ? '' : 'background:#faf5ff'};border-bottom:1px solid #f1f5f9">
+          <td style="padding:4px 8px;font-weight:700;color:#7c3aed">${d.label}</td>
+          <td style="padding:4px 8px;text-align:center;font-weight:700;color:#7c3aed">${d.pitch_label}</td>
+          <td style="padding:4px 8px;text-align:center;font-size:8px;color:#555">${d.pitch_angle_deg.toFixed(1)}°</td>
+          <td style="padding:4px 8px;text-align:center;font-size:8px;color:#555">×${d.slope_factor.toFixed(4)}</td>
+          <td style="padding:4px 8px;text-align:center;font-size:8px;color:#555">${d.main_pitch_label}</td>
+          <td style="padding:4px 8px;text-align:right">${Math.round(d.footprint_ft2).toLocaleString()} SF</td>
+          <td style="padding:4px 8px;text-align:right;font-weight:700;color:#7c3aed">+${Math.round(d.extra_sloped_ft2).toLocaleString()} SF</td>
+        </tr>`).join('')}
+        <tr style="background:#f5f3ff;font-weight:800;border-top:2px solid #7c3aed">
+          <td colspan="5" style="padding:5px 8px;font-size:9px">DORMER TOTAL</td>
+          <td style="padding:5px 8px;text-align:right;font-size:9px">${Math.round(dormerRows.reduce((s, d) => s + d.footprint_ft2, 0)).toLocaleString()} SF</td>
+          <td style="padding:5px 8px;text-align:right;font-size:9px;color:#7c3aed">+${Math.round(dormerRows.reduce((s, d) => s + d.extra_sloped_ft2, 0)).toLocaleString()} SF</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="margin-top:4px;font-size:7px;color:#666;line-height:1.5">Footprint sits inside the main roof and is already counted in the per-face table above. <strong>+ Sloped Added</strong> is the differential area beyond what the main pitch alone would have produced for the same footprint — that's what gets added to the property's true 3D total.</div>
+  </div>` : ''}
 
   <!-- Pitch Class Distribution -->
   <div style="padding:14px 28px 0">
@@ -2176,7 +2266,7 @@ function buildPitchBreakdownPage(report: RoofReport, reportNum: string, reportDa
   <!-- Notes -->
   <div style="padding:12px 28px 0">
     <div style="padding:6px 10px;background:${TEAL_LIGHT};border:1px solid ${TEAL};border-radius:4px;font-size:7px;color:${TEAL_DARK};line-height:1.5">
-      <strong>Notes:</strong> Pitch ratio expressed as rise per 12&Prime; of horizontal run. Slope factor = &radic;(rise&sup2; + 12&sup2;) / 12 — applied to projected (footprint) area to derive sloped (true 3D) area. Direction is the compass bearing of the downslope normal (where rainwater flows). ${rowsFromFaces.length ? 'Per-face data sourced from traced GPS coordinates.' : 'Per-face data sourced from Solar API roof segments.'}
+      <strong>Notes:</strong> Pitch ratio expressed as rise per 12&Prime; of horizontal run. Slope factor = &radic;(rise&sup2; + 12&sup2;) / 12 — applied to projected (footprint) area to derive sloped (true 3D) area. Direction is the compass bearing of the downslope normal (where rainwater flows). ${rowsFromFaces.length ? 'Per-face data sourced from traced GPS coordinates.' : 'Per-face data sourced from Solar API roof segments.'}${dormerRows.length ? ' Dormer pitches surfaced separately above; their differential sloped area is folded into the Pitch Class Distribution.' : ''}
     </div>
   </div>
 
