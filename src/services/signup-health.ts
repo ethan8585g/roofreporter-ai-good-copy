@@ -401,9 +401,12 @@ async function checkSurfaceScans(env: Bindings): Promise<Omit<SectionResult, 'ke
       ORDER BY id DESC LIMIT 1
     `).bind(t).first<{ id: number; status: string; finished_at: string; ok_count: number; fail_count: number }>()
 
+    // loop_scan_findings has no scan_type column — join through run_id.
     const findings = await env.DB.prepare(`
-      SELECT COUNT(*) as n FROM loop_scan_findings
-      WHERE scan_type = ? AND severity = 'error' AND resolved_at IS NULL
+      SELECT COUNT(*) AS n
+        FROM loop_scan_findings f
+        JOIN loop_scan_runs r ON r.id = f.run_id
+       WHERE r.scan_type = ? AND f.severity = 'error' AND f.resolved_at IS NULL
     `).bind(t).first<{ n: number }>()
 
     const unresolved = findings?.n || 0
