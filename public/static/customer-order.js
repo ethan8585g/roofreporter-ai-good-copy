@@ -3257,7 +3257,9 @@ function openVerify3DModal(lat, lng) {
   ].join(';');
 
   const iframe = document.createElement('iframe');
-  iframe.src = '/3d-verify?lat=' + encodeURIComponent(lat) + '&lng=' + encodeURIComponent(lng);
+  // capture=1 turns the 3D viewer into an active capture surface for ridges/
+  // hips/valleys. Default Pan mode preserves the existing verify-only behavior.
+  iframe.src = '/3d-verify?lat=' + encodeURIComponent(lat) + '&lng=' + encodeURIComponent(lng) + '&capture=1';
   iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:#000';
   iframe.allow = 'fullscreen';
   iframe.referrerPolicy = 'strict-origin-when-cross-origin';
@@ -3267,9 +3269,67 @@ function openVerify3DModal(lat, lng) {
   overlay.appendChild(shell);
   document.body.appendChild(overlay);
 
-  const dismiss = () => { try { overlay.remove(); } catch (_) {} document.removeEventListener('keydown', onKey); };
+  // Listen for features captured in the 3D viewer and inject them into the
+  // existing 2D trace state. This is what makes the 3D modal an active
+  // capture surface instead of a passive verify-only view.
+  const onMessage = (event) => {
+    // Same-origin only — both iframe and parent are served from the Pages app.
+    if (event.origin !== window.location.origin) return;
+    if (event.source !== iframe.contentWindow) return;
+    const data = event.data || {};
+    if (data.type === 'rm-3d-feature-captured') {
+      ingestCaptured3DFeature(data.kind, Array.isArray(data.pts) ? data.pts : []);
+    } else if (data.type === 'rm-3d-feature-undo') {
+      undoLastCaptured3DFeature(data.kind || null);
+    }
+  };
+  window.addEventListener('message', onMessage);
+
+  const dismiss = () => {
+    try { overlay.remove(); } catch (_) {}
+    document.removeEventListener('keydown', onKey);
+    window.removeEventListener('message', onMessage);
+  };
   const onKey = (e) => { if (e.key === 'Escape') dismiss(); };
   close.addEventListener('click', dismiss);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss(); });
   document.addEventListener('keydown', onKey);
+}
+
+// Push a 3D-captured ridge/hip/valley line into the existing trace arrays
+// and render it on the 2D map using the same drawPolyline + color path the
+// 2D click handler uses (see finishCurrentLine + restoreLineOverlays).
+function ingestCaptured3DFeature(kind, pts) {
+  if (!Array.isArray(pts) || pts.length < 2) return;
+  const first = pts[0], second = pts[1];
+  if (!Number.isFinite(first?.lat) || !Number.isFinite(first?.lng)) return;
+  if (!Number.isFinite(second?.lat) || !Number.isFinite(second?.lng)) return;
+  const line = [{ lat: first.lat, lng: first.lng }, { lat: second.lat, lng: second.lng }];
+  const colors = { ridge: '#3b82f6', hip: '#f59e0b', valley: '#ef4444' };
+  if (kind === 'ridge')      orderState.traceRidgeLines.push(line);
+  else if (kind === 'hip')   orderState.traceHipLines.push(line);
+  else if (kind === 'valley') orderState.traceValleyLines.push(line);
+  else return;
+  if (typeof drawPolyline === 'function' && orderState.traceMap) {
+    drawPolyline(line, colors[kind] || '#999', 2.5, false);
+  }
+  if (typeof updateTraceUI === 'function') updateTraceUI();
+}
+
+function undoLastCaptured3DFeature(kind) {
+  let popped = false;
+  if (kind === 'ridge' && orderState.traceRidgeLines.length) {
+    orderState.traceRidgeLines.pop(); popped = true;
+  } else if (kind === 'hip' && orderState.traceHipLines.length) {
+    orderState.traceHipLines.pop(); popped = true;
+  } else if (kind === 'valley' && orderState.traceValleyLines.length) {
+    orderState.traceValleyLines.pop(); popped = true;
+  }
+  if (!popped) return;
+  // Match the existing 2D undo path so the popped polyline is visually removed.
+  if (typeof clearTraceOverlays === 'function' && typeof restoreTraceOverlays === 'function') {
+    clearTraceOverlays(true); // keepPolygon=true
+    restoreTraceOverlays();
+  }
+  if (typeof updateTraceUI === 'function') updateTraceUI();
 }

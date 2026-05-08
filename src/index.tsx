@@ -1162,6 +1162,14 @@ app.get('/3d-verify', async (c) => {
   .btn[disabled]{opacity:.5;cursor:not-allowed;transform:none}
   .btn.ghost{background:rgba(0,0,0,.65);color:#fff;border:1px solid rgba(255,255,255,.18)}
   .btn.capture{background:#22d3ee;color:#0A0A0A}
+  .btn.mode{background:rgba(0,0,0,.65);color:#fff;border:1px solid rgba(255,255,255,.18)}
+  .btn.mode.active{background:#fff;color:#0A0A0A;border-color:#fff}
+  .btn.mode.ridge.active{background:#3b82f6;color:#fff;border-color:#3b82f6}
+  .btn.mode.hip.active{background:#f59e0b;color:#0A0A0A;border-color:#f59e0b}
+  .btn.mode.valley.active{background:#ef4444;color:#fff;border-color:#ef4444}
+  .capturebar{position:fixed;top:60px;left:12px;right:12px;display:flex;gap:6px;z-index:10;flex-wrap:wrap;pointer-events:none}
+  .capturebar > *{pointer-events:auto}
+  .capture-hint{background:rgba(0,0,0,.65);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:6px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.12);font-size:11px;color:#cbd5e1}
   .err{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;z-index:20;background:rgba(0,0,0,.92);font-size:14px;line-height:1.55;color:#fbbf24}
   .err{display:none}
   .err.show{display:flex}
@@ -1183,6 +1191,14 @@ app.get('/3d-verify', async (c) => {
   <button class="btn ghost" onclick="rotate(30)">Rotate ⟳</button>
   ${orderId ? `<button class="btn capture" id="captureBtn" onclick="captureForCover()">📸 Save as Cover</button>` : ''}
 </div>
+<div class="capturebar" id="captureBar" style="display:none">
+  <button class="btn mode active" id="modePan"    onclick="setCaptureMode('pan')">✋ Pan</button>
+  <button class="btn mode ridge"  id="modeRidge"  onclick="setCaptureMode('ridge')">— Ridge</button>
+  <button class="btn mode hip"    id="modeHip"    onclick="setCaptureMode('hip')">⟋ Hip</button>
+  <button class="btn mode valley" id="modeValley" onclick="setCaptureMode('valley')">⟍ Valley</button>
+  <button class="btn ghost" id="undoPickBtn" onclick="undoLastPick()">Undo last point</button>
+  <span class="capture-hint" id="captureHint">Click two points to draw a line. Lines also appear on the 2D map.</span>
+</div>
 <div class="legend">
   Left-drag to rotate · Right-drag to tilt · Scroll to zoom
 </div>
@@ -1196,9 +1212,25 @@ app.get('/3d-verify', async (c) => {
   const AUTOCAPTURE_MODE = new URLSearchParams(location.search).get('autocapture') || '';
   const AUTOCAPTURE = AUTOCAPTURE_MODE === '1';
   const AUTOCAPTURE_CORNERS = AUTOCAPTURE_MODE === 'corners';
+  // ?capture=1 turns this iframe into an active feature-capture surface for
+  // the parent trace UI: clicks become ridge/hip/valley line endpoints which
+  // are postMessage'd back to the parent and pushed onto the 2D trace.
+  const CAPTURE_ENABLED = new URLSearchParams(location.search).get('capture') === '1' && !AUTOCAPTURE && !AUTOCAPTURE_CORNERS;
   const INITIAL_HEIGHT = 250; // meters above ground
   const INITIAL_PITCH_DEG = -45; // looking down 45°
   let viewer = null;
+
+  // ── Active capture state (only meaningful when CAPTURE_ENABLED) ──
+  // Mode: 'pan' (default, no clicks captured) | 'ridge' | 'hip' | 'valley'
+  let captureMode = 'pan';
+  // In-progress line: array of { lat, lng, cartesian } for the current segment.
+  // Once it reaches 2 points, the segment is committed (postMessage + clear draft).
+  const draftPicks = [];
+  // Cesium entities for the current draft (cleared when segment commits/cancels)
+  const draftEntities = [];
+  // All committed segment entities (kept visible until modal closes)
+  const committedEntities = [];
+  const MODE_COLORS = { ridge: '#3b82f6', hip: '#f59e0b', valley: '#ef4444' };
 
   function showErr(msg){
     const el = document.getElementById('err');
@@ -1229,6 +1261,120 @@ app.get('/3d-verify', async (c) => {
     if (!viewer) return;
     const heading = Cesium.Math.toDegrees(viewer.camera.heading);
     flyToInitial((heading + deltaDeg + 360) % 360);
+  }
+
+  // ── Active capture: mode bar + click-to-pick on the photorealistic mesh ──
+  function setCaptureMode(mode){
+    captureMode = mode;
+    ['Pan','Ridge','Hip','Valley'].forEach((label) => {
+      const el = document.getElementById('mode' + label);
+      if (!el) return;
+      el.classList.toggle('active', mode === label.toLowerCase());
+    });
+    // Switching modes mid-segment cancels the in-progress segment so the user
+    // doesn't accidentally connect a hip's first point to a ridge's second.
+    if (draftPicks.length) clearDraft();
+    const hint = document.getElementById('captureHint');
+    if (hint) {
+      if (mode === 'pan') hint.textContent = 'Pan/zoom freely. Switch to Ridge/Hip/Valley to capture lines.';
+      else hint.textContent = 'Click two points on the roof to draw a ' + mode + '. Lines sync to the 2D map.';
+    }
+  }
+
+  function clearDraft(){
+    draftPicks.length = 0;
+    draftEntities.forEach((e) => { try { viewer.entities.remove(e); } catch(_){} });
+    draftEntities.length = 0;
+  }
+
+  function undoLastPick(){
+    if (!CAPTURE_ENABLED) return;
+    if (draftPicks.length > 0) {
+      draftPicks.pop();
+      const last = draftEntities.pop();
+      if (last) { try { viewer.entities.remove(last); } catch(_){} }
+      // If a draft polyline was added (after 2nd pick — though we commit immediately,
+      // this is defensive in case of future multi-vertex modes), drop it too.
+      return;
+    }
+    // No draft to undo — pop the most recently committed segment instead.
+    const lastCommitted = committedEntities.pop();
+    if (lastCommitted) {
+      const kind = lastCommitted._kind || null;
+      lastCommitted.forEach((e) => { try { viewer.entities.remove(e); } catch(_){} });
+      try {
+        window.parent && window.parent.postMessage({ type: 'rm-3d-feature-undo', kind: kind }, '*');
+      } catch(_){}
+    }
+  }
+
+  function commitSegment(kind, pts){
+    // Visual: keep markers + draw a solid polyline between the two picks so
+    // the user sees what they captured. depthFailMaterial keeps it visible
+    // even when a roof slope occludes part of the line at oblique angles.
+    const color = Cesium.Color.fromCssColorString(MODE_COLORS[kind] || '#fff');
+    const cartesians = pts.map((p) => Cesium.Cartesian3.fromDegrees(p.lng, p.lat, p.height));
+    const polyEntity = viewer.entities.add({
+      polyline: {
+        positions: cartesians,
+        width: 4,
+        material: color,
+        depthFailMaterial: color.withAlpha(0.6),
+        clampToGround: false
+      }
+    });
+    // Promote draft markers into the committed bucket so undo can remove them.
+    const segEntities = draftEntities.slice();
+    segEntities.push(polyEntity);
+    segEntities._kind = kind;
+    committedEntities.push(segEntities);
+    draftEntities.length = 0;
+    draftPicks.length = 0;
+    // Tell the parent trace UI: append this line to traceRidgeLines/HipLines/ValleyLines.
+    try {
+      window.parent && window.parent.postMessage({
+        type: 'rm-3d-feature-captured',
+        kind: kind,
+        pts: pts.map((p) => ({ lat: p.lat, lng: p.lng }))
+      }, '*');
+    } catch (e) {
+      console.warn('[3d-capture] postMessage failed:', e);
+    }
+    toast('Captured ' + kind + ' — added to 2D trace.', 'ok');
+  }
+
+  function handleCanvasClick(clickEvent){
+    if (!CAPTURE_ENABLED || captureMode === 'pan' || !viewer) return;
+    let cartesian = null;
+    try {
+      cartesian = viewer.scene.pickPosition(clickEvent.position);
+    } catch (e) {
+      cartesian = null;
+    }
+    if (!Cesium.defined(cartesian)) {
+      toast('No surface there — click directly on the roof.', 'warn');
+      return;
+    }
+    const carto = Cesium.Cartographic.fromCartesian(cartesian);
+    const lat = Cesium.Math.toDegrees(carto.latitude);
+    const lng = Cesium.Math.toDegrees(carto.longitude);
+    const height = carto.height;
+    const color = Cesium.Color.fromCssColorString(MODE_COLORS[captureMode] || '#fff');
+    const markerEntity = viewer.entities.add({
+      position: cartesian,
+      point: {
+        pixelSize: 12,
+        color: color,
+        outlineColor: Cesium.Color.WHITE,
+        outlineWidth: 2,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY
+      }
+    });
+    draftPicks.push({ lat, lng, height });
+    draftEntities.push(markerEntity);
+    if (draftPicks.length === 2) {
+      commitSegment(captureMode, draftPicks.slice());
+    }
   }
 
   async function captureForCover(){
@@ -1340,6 +1486,17 @@ app.get('/3d-verify', async (c) => {
     });
     viewer.scene.skyAtmosphere.show = false;
     viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#000');
+
+    // Active-capture wiring: register a LEFT_CLICK handler that runs only
+    // when ?capture=1 and the user has selected a Ridge/Hip/Valley mode.
+    // Cesium uses LEFT_DRAG for camera rotation, so adding a LEFT_CLICK
+    // handler here doesn't interfere with pan/rotate/zoom.
+    if (CAPTURE_ENABLED) {
+      const bar = document.getElementById('captureBar');
+      if (bar) bar.style.display = 'flex';
+      const captureHandler = new Cesium.ScreenSpaceEventHandler(viewer.canvas);
+      captureHandler.setInputAction(handleCanvasClick, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    }
 
     // Photorealistic 3D Tiles
     Cesium.Cesium3DTileset.fromUrl(
