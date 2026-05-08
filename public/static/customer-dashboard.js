@@ -135,12 +135,6 @@ function renderDashboard() {
 
   var c = custState.customer || {};
 
-  // Redirect to company type selection if not yet chosen
-  if (custState.customer && !c.company_type) {
-    window.location.href = '/customer/select-type';
-    return;
-  }
-
   var isSolar = c.company_type === 'solar';
   var b = custState.billing || {};
   var s = custState.crmStats || {};

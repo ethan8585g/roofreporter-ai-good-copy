@@ -505,8 +505,8 @@ customerAuthRoutes.post('/google', async (c) => {
       // The Google sign-in IS the first login — login_count is derived from
       // customer_login_events (insert below) so nothing extra to seed here.
       const result = await c.env.DB.prepare(`
-        INSERT INTO customers (email, name, google_id, google_avatar, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, auto_invoice_enabled, last_login)
-        VALUES (?, ?, ?, ?, 1, 1, 0, 0, ?, 0, 0, datetime('now'))
+        INSERT INTO customers (email, name, google_id, google_avatar, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, auto_invoice_enabled, company_type, last_login)
+        VALUES (?, ?, ?, ?, 1, 1, 0, 0, ?, 0, 0, 'roofing', datetime('now'))
       `).bind(email, name, googleId, avatar, FREE_TRIAL_REPORTS).run()
 
       customer = {
@@ -717,8 +717,8 @@ customerAuthRoutes.post('/register', async (c) => {
     // Insert with the standard free-trial grant (NOT paid credits) — email_verified = 1 since we verified
     // conv-v5: persist phone, company_size, primary_use for sales-qualification
     const result = await c.env.DB.prepare(`
-      INSERT INTO customers (email, name, phone, company_name, company_size, primary_use, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by, auto_invoice_enabled, last_login, gclid)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 0, 0, ?, 0, ?, ?, 0, datetime('now'), ?)
+      INSERT INTO customers (email, name, phone, company_name, company_size, primary_use, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by, auto_invoice_enabled, company_type, last_login, gclid)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 0, 0, ?, 0, ?, ?, 0, 'roofing', datetime('now'), ?)
     `).bind(cleanEmail, name, cleanPhone, cleanCompanyName, cleanCompanySize, cleanPrimaryUse, storedHash, FREE_TRIAL_REPORTS, refCode, referredBy, cleanGclid).run()
 
     if (!result.meta.last_row_id) {
