@@ -1968,23 +1968,17 @@ function saInitTraceMap(lat, lng, address) {
   s.map = map;
 
   // ── Photorealistic 3D reference map (right pane) ─────────────
-  // Follows the 2D trace map's center on every pan/zoom so admin only
-  // navigates once. Tilt/heading remain user-controlled on the 3D side.
+  // Centered on the property when the modal opens, then fully independent —
+  // panning/zooming the 2D trace map no longer moves it.
   var map3d = document.getElementById('sa-trace-map-3d');
-  function set3dCenter(latLng) {
-    if (!map3d) return;
+  if (map3d) {
     try {
-      map3d.center = { lat: latLng.lat(), lng: latLng.lng(), altitude: 0 };
+      map3d.center = { lat: center.lat, lng: center.lng, altitude: 0 };
       if (map3d.range == null) map3d.range = 180;
       if (map3d.tilt == null) map3d.tilt = 67.5;
       if (map3d.heading == null) map3d.heading = 25;
     } catch (e) { /* maps3d library not ready or unsupported — skip silently */ }
   }
-  set3dCenter(new google.maps.LatLng(center.lat, center.lng));
-  map.addListener('idle', function() {
-    var c = map.getCenter();
-    if (c) set3dCenter(c);
-  });
 
   // Register higher-resolution basemaps (Esri / Mapbox / Nearmap) as
   // selectable map types — same pattern as Storm Scout. Tokens are
