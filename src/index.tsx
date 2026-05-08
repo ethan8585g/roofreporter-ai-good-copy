@@ -502,6 +502,31 @@ window.fireMetaContactEvent=function(d){if(typeof fbq==='function')fbq('track','
   }
 })
 
+// Wrap <body> with Cloudflare's documented `<!--email_off-->` opt-out so the
+// Scrape Shield / Email Address Obfuscation feature stops rewriting our
+// mailto: hrefs and visible emails to /cdn-cgi/l/email-protection (which
+// 404s on this zone, breaking real-user click-through). One markup-level
+// fix instead of touching every email render across the site.
+app.use('*', async (c, next) => {
+  await next()
+  const ct = c.res.headers.get('content-type') || ''
+  if (!ct.includes('text/html')) return
+  const url = new URL(c.req.url)
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/static/')) return
+  try {
+    const body = await c.res.text()
+    const SENTINEL = '<!-- rm-email-off-injected -->'
+    if (body.includes('<body') && body.includes('</body>') && !body.includes(SENTINEL)) {
+      const wrapped = body
+        .replace(/(<body\b[^>]*>)/, `$1\n<!--email_off-->\n${SENTINEL}`)
+        .replace('</body>', '<!--/email_off-->\n</body>')
+      c.res = new Response(wrapped, { status: c.res.status, headers: c.res.headers })
+    } else {
+      c.res = new Response(body, { status: c.res.status, headers: c.res.headers })
+    }
+  } catch {}
+})
+
 // Activity-heartbeat injection — fires every 60s on authenticated HTML pages
 // to feed the super-admin User Activity dashboard. Cheap (< 1KB script) and
 // no-ops when no session cookie is present.
@@ -1168,7 +1193,9 @@ app.get('/3d-verify', async (c) => {
   const TARGET = { lat: ${lat}, lng: ${lng} };
   const ORDER_ID = ${JSON.stringify(orderId)};
   const API_KEY = ${JSON.stringify(mapsKey)};
-  const AUTOCAPTURE = new URLSearchParams(location.search).get('autocapture') === '1';
+  const AUTOCAPTURE_MODE = new URLSearchParams(location.search).get('autocapture') || '';
+  const AUTOCAPTURE = AUTOCAPTURE_MODE === '1';
+  const AUTOCAPTURE_CORNERS = AUTOCAPTURE_MODE === 'corners';
   const INITIAL_HEIGHT = 250; // meters above ground
   const INITIAL_PITCH_DEG = -45; // looking down 45°
   let viewer = null;
