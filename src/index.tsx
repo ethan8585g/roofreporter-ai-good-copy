@@ -982,6 +982,13 @@ app.get('/customer/new-order', (c) => {
   return c.redirect(qs ? `/customer/order?${qs}` : '/customer/order')
 })
 
+// Bare /customer — anyone typing the URL without a sub-path lands on the
+// portal home. Without this, signup-journey trace flags /customer as a 404.
+app.get('/customer', (c) => {
+  const qs = c.req.url.split('?')[1] || ''
+  return c.redirect(qs ? `/customer/dashboard?${qs}` : '/customer/dashboard')
+})
+
 // /dashboard redirect — users may type /dashboard directly
 app.get('/dashboard', (c) => {
   const qs = c.req.url.split('?')[1] || ''
