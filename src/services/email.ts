@@ -322,6 +322,56 @@ export async function sendViaResend(
 }
 
 // ============================================================
+// PDF RENDERING — Cloudflare Browser Rendering REST /pdf endpoint.
+// Used to attach the customer-facing report HTML as a PDF on the
+// trace-completed email. Returns null on any failure (missing tokens,
+// missing report row, render error) so callers degrade to a no-attachment
+// send rather than blocking the whole email.
+// ============================================================
+export async function renderCustomerReportPdf(
+  env: any,
+  orderId: number | string,
+): Promise<Uint8Array | null> {
+  try {
+    const accountId = env?.CLOUDFLARE_ACCOUNT_ID
+    const apiToken = env?.CLOUDFLARE_API_TOKEN
+    if (!accountId || !apiToken || !env?.DB) return null
+    const row = await env.DB.prepare(
+      'SELECT customer_report_html, professional_report_html FROM reports WHERE order_id = ? ORDER BY id DESC LIMIT 1'
+    ).bind(orderId).first<any>()
+    const html = row?.customer_report_html || row?.professional_report_html
+    if (!html) return null
+    const resp = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/browser-rendering/pdf`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          html,
+          viewport: { width: 1200, height: 1600 },
+          gotoOptions: { waitUntil: 'networkidle0', timeout: 30000 },
+        }),
+        signal: AbortSignal.timeout(45000),
+      },
+    )
+    if (!resp.ok) {
+      const detail = await resp.text().catch(() => '')
+      console.warn(`[renderCustomerReportPdf] CF Browser Rendering ${resp.status}: ${detail.slice(0, 200)}`)
+      return null
+    }
+    const buf = await resp.arrayBuffer()
+    if (!buf || buf.byteLength === 0) return null
+    return new Uint8Array(buf)
+  } catch (e: any) {
+    console.warn('[renderCustomerReportPdf] error:', e?.message || e)
+    return null
+  }
+}
+
+// ============================================================
 // CUSTOMER NOTIFICATION — "Your report is ready" after admin trace
 // Sent when the super admin manually completes a trace on a customer's
 // behalf (the submit-for-trace path). Customer dashboard polling is
@@ -344,9 +394,10 @@ export async function notifyTraceCompletedToCustomer(
     order_number: string
     property_address: string
     customer_name?: string
+    order_id?: number | string
   }
 ): Promise<void> {
-  const { to, order_number, property_address, customer_name } = args
+  const { to, order_number, property_address, customer_name, order_id } = args
   if (!to) return
   const firstName = (customer_name || '').split(' ')[0]
   const greeting = firstName ? `Hi ${htmlEsc(firstName)},` : 'Hi,'
@@ -383,14 +434,39 @@ export async function notifyTraceCompletedToCustomer(
     } catch {}
   }
 
+  // Best-effort PDF attachment. Render via Cloudflare Browser Rendering
+  // when configured; degrade silently to a no-attachment send if anything
+  // goes wrong (tokens missing, render fails, no report row yet).
+  let pdfBytes: Uint8Array | null = null
+  if (order_id != null) {
+    pdfBytes = await renderCustomerReportPdf(env, order_id)
+  }
+  const pdfFilename = `roof-report-${String(order_number).replace(/[^\w.\-]/g, '_')}.pdf`
+
   let lastErr: any = null
   if (env?.RESEND_API_KEY) {
     try {
+      // Resend transport stays attachment-less for now; Gmail path below
+      // handles the PDF attach when reached.
       await sendViaResend(env.RESEND_API_KEY, to, subject, html)
       return
     } catch (e: any) { lastErr = e }
   }
   if (clientId && clientSecret && refreshToken) {
+    if (pdfBytes) {
+      try {
+        await sendGmailOAuth2WithAttachment(
+          clientId, clientSecret, refreshToken,
+          to, subject, html,
+          { filename: pdfFilename, mimeType: 'application/pdf', bytes: pdfBytes },
+          senderEmail || null,
+        )
+        return
+      } catch (e: any) {
+        lastErr = e
+        console.warn('[notifyTraceCompletedToCustomer] attachment send failed, retrying without:', e?.message || e)
+      }
+    }
     try {
       await sendGmailOAuth2(clientId, clientSecret, refreshToken, to, subject, html, senderEmail || null)
       return
