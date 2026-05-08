@@ -108,6 +108,14 @@ export interface TracePayload {
   // pitch instead of the dominant default. Use this to model dormers and
   // additions with steeper or shallower pitch than the main roof.
   eaves_section_pitches?: Array<number | null>
+  // Per-section "kind" tag parallel to eaves_sections. 'lower_tier' marks a
+  // lower-eave lip that sits beneath an upper-story roof (the visible strip
+  // around a 2-story home below the second-floor roof line). Treated as a
+  // disjoint section for area math — the user is expected to trace ONLY the
+  // visible lip polygon, not the full lower footprint that extends under the
+  // upper roof. Renderers surface these distinctly ("Lower Eave N" with a
+  // blue-dashed outline) instead of bucketing them under "Structure N".
+  eaves_section_kinds?: Array<'main' | 'lower_tier' | null | undefined>
   // Multi-layer eave depth: per-section overhang depth values.
   // If provided, ice & water shield and starter strip are computed per-layer.
   eave_depths?: EaveDepthLayer[]
@@ -381,7 +389,8 @@ export interface TraceReport {
   // template to show a per-structure pitch breakdown when sections vary.
   section_pitches?: Array<{
     section_index: number       // 0 = primary, 1+ = extra eaves_sections
-    label: string               // 'Main roof' | 'Section 2' | etc.
+    label: string               // 'Main roof' | 'Section 2' | 'Lower Eave 1' | etc.
+    kind?: 'main' | 'lower_tier' // 'lower_tier' = visible lip beneath an upper-story roof
     pitch_rise: number          // rise:12
     projected_ft2: number
     sloped_ft2: number
@@ -1030,6 +1039,10 @@ export class RoofMeasurementEngine {
   // Per-section pitch (rise:12) parallel to rawEavesSections. null = use
   // engine default. Lets dormers/additions ride at their own pitch.
   private rawEavesSectionPitches: Array<number | null> = []
+  // Per-section kind tag parallel to rawEavesSections. 'lower_tier' marks a
+  // visible lower-eave lip beneath an upper-story roof. Drives the report
+  // labeling ("Lower Eave N") and the 2D diagram's distinct rendering.
+  private rawEavesSectionKinds: Array<'main' | 'lower_tier'> = []
   // Dormers — features inside the main outline. Each carries its own pitch.
   // The engine adds only the *differential* sloped area to the totals, never
   // any new footprint, so dormers don't get double-counted on the ground.
@@ -1134,17 +1147,22 @@ export class RoofMeasurementEngine {
     {
       const inputSections = payload.eaves_sections || []
       const inputPitches  = payload.eaves_section_pitches || []
+      const inputKinds    = payload.eaves_section_kinds || []
       const kept: TracePt[][] = []
       const keptPitches: Array<number | null> = []
+      const keptKinds: Array<'main' | 'lower_tier'> = []
       inputSections.forEach((sec, i) => {
         if (sec !== payload.eaves_outline && sec.length >= 3) {
           kept.push(sec.map(p => ({ lat: p.lat, lng: p.lng, elevation: p.elevation ?? null })))
           const p = inputPitches[i]
           keptPitches.push(typeof p === 'number' && isFinite(p) && p > 0 && p <= 30 ? p : null)
+          const k = inputKinds[i]
+          keptKinds.push(k === 'lower_tier' ? 'lower_tier' : 'main')
         }
       })
-      this.rawEavesSections      = kept
+      this.rawEavesSections       = kept
       this.rawEavesSectionPitches = keptPitches
+      this.rawEavesSectionKinds   = keptKinds
     }
     // Dormers — validate polygon (3+ pts) + pitch_rise (0 < p ≤ 30). Drop
     // invalid entries so a malformed dormer can't blow up the run.
@@ -1920,11 +1938,18 @@ export class RoofMeasurementEngine {
       projected_ft2: number
       sloped_ft2: number
       is_user_specified: boolean
+      kind: 'main' | 'lower_tier'
     }> = []
+    // Track per-section projected polygons so we can warn when a 'lower_tier'
+    // lip overlaps another section's footprint by >25% — that means the user
+    // traced under the upper roof (rather than only the visible lip), which
+    // would cause the disjoint-area math to double-count.
+    const sectionPolysCart: { idx: number; poly: CartesianPt[]; kind: 'main' | 'lower_tier' }[] = []
     if (this.rawEavesSections.length > 0) {
       for (let i = 0; i < this.rawEavesSections.length; i++) {
         const secPts = this.rawEavesSections[i]
         const userPitch = this.rawEavesSectionPitches[i]
+        const secKind = this.rawEavesSectionKinds[i] || 'main'
         const secRise = (userPitch != null && userPitch > 0) ? userPitch : this.defPitch
         const { projected: secCart } = projectToCartesian(secPts)
         const secProjFt2 = shoelaceAreaM2(secCart) * M2_TO_FT2
@@ -1937,7 +1962,9 @@ export class RoofMeasurementEngine {
           projected_ft2: secProjFt2,
           sloped_ft2: secSloped,
           is_user_specified: userPitch != null && userPitch > 0,
+          kind: secKind,
         })
+        sectionPolysCart.push({ idx: i + 1, poly: secCart, kind: secKind })
       }
     }
 
@@ -2184,6 +2211,39 @@ export class RoofMeasurementEngine {
         }
       }
     }
+    // Lower-tier lip sanity check — a 'lower_tier' section is the visible lip
+    // beneath an upper-story roof and must NOT extend under the upper roof's
+    // footprint, otherwise the disjoint-area math double-counts. Sample the
+    // lip's centroid (cheap; fine-grained intersection isn't needed for a
+    // warning) against every other section + the primary outline.
+    if (this.rawEavesSections.length > 0) {
+      const primaryCart = this.eavesCart.map(p => ({ x: p.x, y: p.y }))
+      for (let si = 0; si < this.rawEavesSections.length; si++) {
+        if (this.rawEavesSectionKinds[si] !== 'lower_tier') continue
+        const lipPts = this.rawEavesSections[si]
+        const { projected: lipCart } = projectToCartesian(lipPts)
+        if (lipCart.length < 3) continue
+        const cx = lipCart.reduce((s, p) => s + p.x, 0) / lipCart.length
+        const cy = lipCart.reduce((s, p) => s + p.y, 0) / lipCart.length
+        let inside = false
+        if (pointInPolygon2D(cx, cy, primaryCart)) {
+          inside = true
+        } else {
+          for (let oj = 0; oj < this.rawEavesSections.length; oj++) {
+            if (oj === si) continue
+            if (this.rawEavesSectionKinds[oj] === 'lower_tier') continue
+            const { projected: otherCart } = projectToCartesian(this.rawEavesSections[oj])
+            if (pointInPolygon2D(cx, cy, otherCart.map(p => ({ x: p.x, y: p.y })))) {
+              inside = true
+              break
+            }
+          }
+        }
+        if (inside) {
+          geometryWarnings.push(`Lower Eave ${si + 1}: polygon centroid sits under another section. Trace only the visible lip beneath the upper roof — not the full lower footprint — so its area isn't double-counted.`)
+        }
+      }
+    }
     for (const w of geometryWarnings) notes.push(`⚠ GEOMETRY: ${w}`)
 
     // Flag hip/valley lines whose common-run projection was ambiguous
@@ -2300,24 +2360,39 @@ export class RoofMeasurementEngine {
       // rawEavesSections. The report template renders this when section
       // pitches differ from the dominant pitch.
       section_pitches:     this.rawEavesSections.length > 0
-        ? [
-            {
-              section_index: 0,
-              label: 'Main roof',
-              pitch_rise: round(domPitch, 1),
-              projected_ft2: round(primaryProjFt2, 1),
-              sloped_ft2: round(primarySlopedFt2, 1),
-              is_user_specified: false,
-            },
-            ...sectionPitchAreas.map(s => ({
-              section_index: s.section_index,
-              label: `Section ${s.section_index + 1}`,
-              pitch_rise: round(s.pitch_rise, 1),
-              projected_ft2: round(s.projected_ft2, 1),
-              sloped_ft2: round(s.sloped_ft2, 1),
-              is_user_specified: s.is_user_specified,
-            })),
-          ]
+        ? (() => {
+            // Number lower-tier lips and main extras independently so labels
+            // read 'Lower Eave 1, 2…' alongside 'Section 2, 3…' without the
+            // numbering jumping when both kinds are present.
+            let lowerN = 0
+            let mainN = 1   // 'Section 2' is the first extra; main roof is 'Section 1'
+            return [
+              {
+                section_index: 0,
+                label: 'Main roof',
+                kind: 'main' as const,
+                pitch_rise: round(domPitch, 1),
+                projected_ft2: round(primaryProjFt2, 1),
+                sloped_ft2: round(primarySlopedFt2, 1),
+                is_user_specified: false,
+              },
+              ...sectionPitchAreas.map(s => {
+                const isLower = s.kind === 'lower_tier'
+                const label = isLower
+                  ? `Lower Eave ${++lowerN}`
+                  : `Section ${++mainN}`
+                return {
+                  section_index: s.section_index,
+                  label,
+                  kind: s.kind,
+                  pitch_rise: round(s.pitch_rise, 1),
+                  projected_ft2: round(s.projected_ft2, 1),
+                  sloped_ft2: round(s.sloped_ft2, 1),
+                  is_user_specified: s.is_user_specified,
+                }
+              }),
+            ]
+          })()
         : undefined,
       // Dormer breakdown — emitted only when dormers were specified.
       // Each entry is the extra sloped area added by a dormer at its own
@@ -2380,6 +2455,9 @@ export function traceUiToEnginePayload(
     // means "use the default/dominant pitch." Lets dormers and additions
     // ride at a different pitch than the main roof.
     eaves_section_pitches?: Array<number | null | undefined>
+    // Parallel to `eaves_sections`. 'lower_tier' marks a visible lower-eave
+    // lip beneath an upper-story roof. Other values default to 'main'.
+    eaves_section_kinds?: Array<'main' | 'lower_tier' | null | undefined>
     plane_segments_lat_lng?: Array<{
       pitch_rise: number
       centroid: { lat: number; lng: number }
@@ -2425,15 +2503,22 @@ export function traceUiToEnginePayload(
   // default — which is fine, since auto-split fires only when the user did
   // not separate structures themselves and so couldn't tag per-section pitch.
   const sectionPitchByRef = new Map<{ lat: number; lng: number }[], number | null>()
+  // Parallel kind tracker — keyed by section reference for the same reason as
+  // sectionPitchByRef. Auto-split sections (no user kind tag) default to 'main'.
+  const sectionKindByRef = new Map<{ lat: number; lng: number }[], 'main' | 'lower_tier'>()
   const validatePitchRise = (p: unknown): number | null => {
     if (typeof p !== 'number' || !isFinite(p) || p <= 0 || p > 30) return null
     return p
   }
+  const validateKind = (k: unknown): 'main' | 'lower_tier' =>
+    k === 'lower_tier' ? 'lower_tier' : 'main'
   if (traceJson.eaves_sections && traceJson.eaves_sections.length > 0) {
     allSections = traceJson.eaves_sections.filter(s => s.length >= 3)
     const inputPitches = traceJson.eaves_section_pitches || []
+    const inputKinds   = traceJson.eaves_section_kinds   || []
     traceJson.eaves_sections.forEach((sec, i) => {
       sectionPitchByRef.set(sec, validatePitchRise(inputPitches[i]))
+      sectionKindByRef.set(sec, validateKind(inputKinds[i]))
     })
   } else if (Array.isArray(traceJson.eaves)) {
     if (traceJson.eaves.length > 0 && Array.isArray((traceJson.eaves as any)[0])) {
@@ -2441,8 +2526,10 @@ export function traceUiToEnginePayload(
       const arr = traceJson.eaves as { lat: number; lng: number }[][]
       allSections = arr.filter(s => s.length >= 3)
       const inputPitches = traceJson.eaves_section_pitches || []
+      const inputKinds   = traceJson.eaves_section_kinds   || []
       arr.forEach((sec, i) => {
         sectionPitchByRef.set(sec, validatePitchRise(inputPitches[i]))
+        sectionKindByRef.set(sec, validateKind(inputKinds[i]))
       })
     } else {
       // Flat array (old single-section format)
@@ -2467,6 +2554,9 @@ export function traceUiToEnginePayload(
   const extraSections = allSections.filter(s => s !== primary)
   const extraSectionPitches: Array<number | null> = extraSections.map(
     s => sectionPitchByRef.get(s) ?? null
+  )
+  const extraSectionKinds: Array<'main' | 'lower_tier'> = extraSections.map(
+    s => sectionKindByRef.get(s) ?? 'main'
   )
   // The primary outline may itself carry a user-specified pitch. We expose it
   // as `default_pitch` so the engine treats the main roof at the user's value
@@ -2583,6 +2673,9 @@ export function traceUiToEnginePayload(
       : undefined,
     eaves_section_pitches: extraSections.length > 0 && extraSectionPitches.some(p => p != null)
       ? extraSectionPitches
+      : undefined,
+    eaves_section_kinds: extraSections.length > 0 && extraSectionKinds.some(k => k === 'lower_tier')
+      ? extraSectionKinds
       : undefined,
     obstructions:   obstructions.length > 0 ? obstructions : undefined,
     ridges,

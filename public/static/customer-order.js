@@ -932,6 +932,11 @@ function renderTraceStep(root, progressBar) {
             title="Trace another structure such as a detached garage">
             <i class="fas fa-plus mr-1"></i>Add another building
           </button>
+          <button onclick="startNewLowerEave()" id="addLowerEaveBtn"
+            class="px-4 py-2 rounded-lg text-sm font-semibold border border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 ${eavesClosed && orderState.traceMode === 'eaves' ? '' : 'hidden'}"
+            title="Add a visible lower-eave lip beneath an upper-story roof. Use the 3D Reference and Street View to gauge the lip's extent and click points on the satellite to outline only the visible lip below the upper-story face.">
+            <i class="fas fa-arrow-down-short-wide mr-1"></i>Add Lower Eave
+          </button>
           <button onclick="skipTrace()" class="px-4 py-2 text-sm font-medium" style="color:var(--text-secondary)">
             Order Report <i class="fas fa-file-alt ml-1"></i>
           </button>
@@ -1907,6 +1912,9 @@ window.startVerifyPlanes = async function startVerifyPlanes() {
     const _sectionPitches = (orderState.traceEavesSections || []).map(s =>
       (s && typeof s.pitch_rise === 'number' && s.pitch_rise > 0) ? s.pitch_rise : null
     );
+    const _sectionKinds = (orderState.traceEavesSections || []).map(s =>
+      (s && s.kind === 'lower_tier') ? 'lower_tier' : 'main'
+    );
     const _dormers = (orderState.traceDormers || [])
       .filter(d => d && Array.isArray(d.points) && d.points.length >= 3 && typeof d.pitch_rise === 'number' && d.pitch_rise > 0)
       .map(d => ({ polygon: d.points.map(p => ({ lat: p.lat, lng: p.lng })), pitch_rise: d.pitch_rise, label: d.label }));
@@ -1914,6 +1922,7 @@ window.startVerifyPlanes = async function startVerifyPlanes() {
       eaves: _primary,
       eaves_sections: _sections,
       eaves_section_pitches: _sectionPitches,
+      eaves_section_kinds: _sectionKinds,
       dormers: _dormers.length > 0 ? _dormers : undefined,
       ridges: orderState.traceRidgeLines,
       hips: orderState.traceHipLines,
@@ -2597,15 +2606,23 @@ function closeEavesPolygon() {
     orderState.traceEavesPolygon = null;
   }
 
+  // kind: 'lower_tier' marks a visible lower-eave lip beneath an upper-story
+  // roof — flagged via the "+ Add Lower Eave" button so the engine surfaces
+  // it as "Lower Eave N" and the 2D diagram renders it with a blue-dashed
+  // outline. Default 'main' (current detached-structure styling).
+  const pendingKind = (orderState._pendingSectionKind === 'lower_tier') ? 'lower_tier' : 'main';
+  orderState._pendingSectionKind = null;
+  const strokeHex = pendingKind === 'lower_tier' ? '#2563eb' : '#22c55e';
+
   // Create closed section polygon. Editable so the user can drag any vertex after
   // placement to fix tiny mis-clicks without restarting the section.
   const polygon = new google.maps.Polygon({
     paths: orderState.traceEavesPoints.map(p => new google.maps.LatLng(p.lat, p.lng)),
     map: orderState.traceMap,
-    strokeColor: '#22c55e',
+    strokeColor: strokeHex,
     strokeWeight: 3,
     strokeOpacity: 0.9,
-    fillColor: '#22c55e',
+    fillColor: strokeHex,
     fillOpacity: 0.15,
     editable: true,
     draggable: false,
@@ -2625,17 +2642,25 @@ function closeEavesPolygon() {
     points: [...orderState.traceEavesPoints],
     tags: sectionTags,
     pitch_rise: defaultPitch,
+    kind: pendingKind,
   });
   if (!Array.isArray(orderState.traceEavesSectionsTags)) orderState.traceEavesSectionsTags = [];
   orderState.traceEavesSectionsTags.push(sectionTags);
   orderState.traceEavesSectionPolygons.push(polygon);
   attachSectionPolygonEditListeners(polygon, sectionIdx);
 
-  // Add section label at centroid
+  // Add section centroid label — S# for regular structures, L# for lower-eave
+  // lips, with each track numbered independently.
   const pts = orderState.traceEavesPoints;
   const cx = pts.reduce((s, p) => s + p.lat, 0) / pts.length;
   const cy = pts.reduce((s, p) => s + p.lng, 0) / pts.length;
-  addTraceMarker({ lat: cx, lng: cy }, '#22c55e', `S${sectionIdx + 1}`);
+  let sameKindCount = 0;
+  for (let k = 0; k < orderState.traceEavesSections.length; k++) {
+    if ((orderState.traceEavesSections[k].kind || 'main') === pendingKind) sameKindCount++;
+  }
+  const badgePrefix = pendingKind === 'lower_tier' ? 'L' : 'S';
+  const badgeColor  = pendingKind === 'lower_tier' ? '#2563eb' : '#22c55e';
+  addTraceMarker({ lat: cx, lng: cy }, badgeColor, `${badgePrefix}${sameKindCount}`);
 
   // Reset current in-progress section
   orderState.traceEavesPoints = [];
@@ -3142,6 +3167,8 @@ function startNewBuilding() {
     showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Maximum of 5 buildings per report. Contact support if you need more.');
     return;
   }
+  // Mark the *next* section as a regular structure (clear any pending lower-tier flag).
+  orderState._pendingSectionKind = 'main';
   // Discard any in-progress draft points/markers/polygon (keeps closed sections intact).
   orderState.traceEavesPoints = [];
   if (orderState.traceEavesPolygon) {
@@ -3151,13 +3178,18 @@ function startNewBuilding() {
   // Draft point markers live in traceMarkers when in eaves mode; clear them but restore section labels.
   orderState.traceMarkers.forEach(m => m.setMap(null));
   orderState.traceMarkers = [];
-  // Re-draw section centroid labels (S1, S2, ...) since we just cleared all markers.
-  orderState.traceEavesSections.forEach((section, idx) => {
+  // Re-draw centroid labels — preserve each section's S/L badge (independent counters).
+  let sLabelN = 0, lLabelN = 0;
+  orderState.traceEavesSections.forEach((section) => {
     const pts = section.points;
     if (pts.length === 0) return;
     const cx = pts.reduce((s, p) => s + p.lat, 0) / pts.length;
     const cy = pts.reduce((s, p) => s + p.lng, 0) / pts.length;
-    addTraceMarker({ lat: cx, lng: cy }, '#22c55e', `S${idx + 1}`);
+    const isLower = section.kind === 'lower_tier';
+    const prefix = isLower ? 'L' : 'S';
+    const num    = isLower ? (++lLabelN) : (++sLabelN);
+    const color  = isLower ? '#2563eb' : '#22c55e';
+    addTraceMarker({ lat: cx, lng: cy }, color, `${prefix}${num}`);
   });
   if (orderState.traceMode !== 'eaves') {
     setTraceMode('eaves');
@@ -3167,11 +3199,57 @@ function startNewBuilding() {
   updateTraceUI();
 }
 
+// Lower-eave lip: a roof section that sits BENEATH an upper-story roof line.
+// On a 2-story home, the front face often has a small lower-eave overhang
+// extending out below the second-floor roof — visible from street view and
+// 3D map but typically hidden on a top-down satellite. Pressing this flags
+// the *next* closed eaves section as kind:'lower_tier' so the engine labels
+// it "Lower Eave N" and the 2D diagram renders it with a blue-dashed outline
+// beneath the main roof. Trace ONLY the visible lip polygon (NOT the full
+// lower footprint extending under the upper roof) to avoid double-counting.
+function startNewLowerEave() {
+  if (orderState.traceEavesSections.length === 0) {
+    showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Close the upper roof first, then add a lower eave lip below it.');
+    return;
+  }
+  if (orderState.traceEavesSections.length >= 5) {
+    showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Maximum of 5 sections per report.');
+    return;
+  }
+  orderState._pendingSectionKind = 'lower_tier';
+  orderState.traceEavesPoints = [];
+  if (orderState.traceEavesPolygon) {
+    orderState.traceEavesPolygon.setMap(null);
+    orderState.traceEavesPolygon = null;
+  }
+  orderState.traceMarkers.forEach(m => m.setMap(null));
+  orderState.traceMarkers = [];
+  let sLabelN = 0, lLabelN = 0;
+  orderState.traceEavesSections.forEach((section) => {
+    const pts = section.points;
+    if (pts.length === 0) return;
+    const cx = pts.reduce((s, p) => s + p.lat, 0) / pts.length;
+    const cy = pts.reduce((s, p) => s + p.lng, 0) / pts.length;
+    const isLower = section.kind === 'lower_tier';
+    const prefix = isLower ? 'L' : 'S';
+    const num    = isLower ? (++lLabelN) : (++sLabelN);
+    const color  = isLower ? '#2563eb' : '#22c55e';
+    addTraceMarker({ lat: cx, lng: cy }, color, `${prefix}${num}`);
+  });
+  if (orderState.traceMode !== 'eaves') {
+    setTraceMode('eaves');
+  }
+  showMsg('info', `<i class="fas fa-info-circle mr-1"></i>Lower-eave mode: outline ONLY the visible lip below the upper-story roof. Use the 3D / Street View as your visual guide; click points on the satellite then click the first point to close.`);
+  updateTraceUI();
+}
+window.startNewLowerEave = startNewLowerEave;
+
 async function clearAllTraces() {
   if (!(await window.rmConfirm('Clear all traces?'))) return
   orderState.traceEavesPoints = [];
   orderState.traceEavesTags = [];
   orderState.traceEavesSectionsTags = [];
+  orderState._pendingSectionKind = null;
   orderState.traceEavesSectionPolygons.forEach(p => { if (p) p.setMap(null); });
   orderState.traceEavesSectionPolygons = [];
   orderState.traceEavesSections = [];
@@ -3301,11 +3379,17 @@ function updateTraceUI() {
       // dormers. Defaults to the live Solar-API pitch captured on close.
       let sectionPitchesHtml = '';
       if (orderState.traceEavesSections.length > 0) {
+        // Independent S/L counters so labels read "S1, S2…" for regular
+        // structures and "L1, L2…" for lower-eave lips.
+        let sN = 0, lN = 0;
         const rows = orderState.traceEavesSections.map((sec, i) => {
           const val = (sec.pitch_rise && sec.pitch_rise > 0) ? sec.pitch_rise : '';
+          const isLower = sec.kind === 'lower_tier';
+          const prefix = isLower ? `L${++lN}` : `S${++sN}`;
+          const labelColor = isLower ? '#60a5fa' : '#9ca3af';
           return `
             <div class="flex justify-between items-center text-xs">
-              <span class="text-gray-400">S${i + 1}</span>
+              <span style="color:${labelColor};font-weight:700">${prefix}</span>
               <span class="flex items-center gap-1">
                 <input
                   type="number" min="0" max="24" step="0.5"
@@ -3374,11 +3458,17 @@ function updateTraceUI() {
     }
   }
 
-  // Show the "Add another building" button only when in eaves mode and at least one section is closed.
+  // Show the "Add another building" + "Add Lower Eave" buttons only when in
+  // eaves mode and at least one section is closed.
   const addBuildingBtn = document.getElementById('addBuildingBtn');
   if (addBuildingBtn) {
     const showAdd = eavesClosed && orderState.traceMode === 'eaves' && eavesSections < 5;
     addBuildingBtn.classList.toggle('hidden', !showAdd);
+  }
+  const addLowerEaveBtn = document.getElementById('addLowerEaveBtn');
+  if (addLowerEaveBtn) {
+    const showLower = eavesClosed && orderState.traceMode === 'eaves' && eavesSections < 5;
+    addLowerEaveBtn.classList.toggle('hidden', !showLower);
   }
 
   // Update mode bar text
@@ -3598,6 +3688,12 @@ async function confirmTrace() {
   const _sectionPitches = (orderState.traceEavesSections || []).map(s =>
     (s && typeof s.pitch_rise === 'number' && s.pitch_rise > 0) ? s.pitch_rise : null
   );
+  // Per-section kind — 'lower_tier' marks a visible lower-eave lip beneath an
+  // upper-story roof. Engine surfaces it as "Lower Eave N" + the 2D diagram
+  // renders it with a blue-dashed outline.
+  const _sectionKinds = (orderState.traceEavesSections || []).map(s =>
+    (s && s.kind === 'lower_tier') ? 'lower_tier' : 'main'
+  );
   // Dormers — closed polygons inside the main outline that ride at their own
   // pitch. Engine adds only the differential sloped area; renderer doesn't
   // split per-dormer (unlike eaves_sections, which become separate buildings).
@@ -3628,6 +3724,7 @@ async function confirmTrace() {
     eaves: _primary,
     eaves_sections: _sections,
     eaves_section_pitches: _sectionPitches,
+    eaves_section_kinds: _sectionKinds,
     dormers: _dormers.length > 0 ? _dormers : undefined,
     verified_faces: _verifiedFaces.length > 0 ? _verifiedFaces : undefined,
     ridges: orderState.traceRidgeLines,

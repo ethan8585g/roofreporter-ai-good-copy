@@ -30,6 +30,11 @@ export interface UiTrace {
    *  separate structures (detached garages, sheds) whose slope differs from
    *  the main roof. NOT for dormers — see `dormers` below. */
   eaves_section_pitches?: Array<number | null | undefined>
+  /** Per-section "kind" tag, parallel to eaves_sections. 'lower_tier' marks
+   *  a visible lower-eave lip beneath an upper-story roof; the renderer
+   *  surfaces these as "Lower Eave N" with a distinct outline. Other values
+   *  default to 'main'. */
+  eaves_section_kinds?: Array<'main' | 'lower_tier' | null | undefined>
   /** Dormers — roof features inside the main outline that ride at their own
    *  pitch (e.g. 12:12 A-frame dormer on a 6:12 main roof). Each entry is a
    *  closed polygon plus a pitch in rise:12. The engine adds only the

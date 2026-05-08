@@ -1733,6 +1733,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<button onclick="saTraceSetTool(\'downspout\')" id="sa-tool-downspout" title="Click each eave corner where a downspout drops to the ground. Each point becomes one downspout in the materials list." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Downspout</button>' +
           '<button onclick="saAutoDetectOutline()" id="sa-tool-auto-outline" title="AI-detect the eaves outline of the building at the current map center" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.4)"><i class="fas fa-wand-magic-sparkles mr-1"></i>AI Outline</button>' +
           '<button onclick="saAddStructure()" id="sa-tool-add-structure" title="Trace another structure such as a detached garage" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.4)"><i class="fas fa-plus mr-1"></i>Add another building</button>' +
+          '<button onclick="saAddLowerEave()" id="sa-tool-add-lower-eave" title="Add a visible lower-eave lip beneath an upper-story roof. Use the 3D Reference and Street View to gauge the lip\'s extent — click points on the satellite to outline only the visible lip below the upper-story face." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(37,99,235,0.15);color:#93c5fd;border:1px solid rgba(37,99,235,0.4)"><i class="fas fa-arrow-down-short-wide mr-1"></i>Add Lower Eave</button>' +
           '<button onclick="saTraceUndo()" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">Undo</button>' +
           '<button onclick="saTraceClear()" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#ef4444;border:1px solid #374151">Clear All</button>' +
         '</div>' +
@@ -1916,6 +1917,7 @@ window.saTraceClear = function() {
   (s._downspoutMarkers || []).forEach(function(m) { m.setMap(null); }); s._downspoutMarkers = [];
   if (s._segStartMarker) { s._segStartMarker.setMap(null); s._segStartMarker = null; }
   s.eavePoints = []; s._eaveLatLngs = []; s._segStart = null;
+  s._nextSectionKind = null;
   s._ridgeData = []; s._hipData = []; s._valleyData = [];
   s.vents = []; s.skylights = []; s.chimneys = []; s.downspouts = [];
   // Dormers — clear closed polygons + draft + labels
@@ -2335,6 +2337,8 @@ window.saAddStructure = function() {
     alert('Maximum of 5 buildings per report.');
     return;
   }
+  // Mark the *next* section as a regular structure (clears any pending lower-eave flag).
+  s._nextSectionKind = 'main';
   // Discard any leftover in-progress draft (markers + draft polyline) so the next click starts fresh
   s._eaveLatLngs = [];
   s.eavePoints = [];
@@ -2342,6 +2346,37 @@ window.saAddStructure = function() {
   (s._eaveMarkers || []).forEach(function(m) { m.setMap(null); }); s._eaveMarkers = [];
   // Make sure tool is set back to eave so the next click starts the new structure's first point
   if (typeof saTraceSetTool === 'function') saTraceSetTool('eave');
+};
+
+// Lower-eave lip: a roof section that sits BENEATH an upper-story roof line.
+// On a 2-story home, the front face often has a small lower-eave overhang
+// extending out below the second-floor roof — visible from street view and
+// 3D map but typically hidden on a top-down satellite. Pressing this button
+// flags the *next* closed eaves section as kind:'lower_tier' so the engine
+// labels it "Lower Eave N" and the 2D diagram renders it with a distinct
+// blue-dashed outline beneath the main roof. Trace ONLY the visible lip
+// polygon (NOT the full lower footprint that extends under the upper roof),
+// otherwise its area gets double-counted alongside the upper section.
+window.saAddLowerEave = function() {
+  var s = window._saTraceState; if (!s || !s.map) { return; }
+  var draft = s._eaveLatLngs || [];
+  if (draft.length >= 3) {
+    saCloseEaveSection();
+  } else if (!s.eaveSections || s.eaveSections.length === 0) {
+    alert('Close the upper roof first by clicking back to the first eave point. Then press "+ Add Lower Eave" and outline only the lip below the upper-story roof — use the 3D Reference and Street View as visual guides.');
+    return;
+  }
+  if (s.eaveSections.length >= 5) {
+    alert('Maximum of 5 sections per report.');
+    return;
+  }
+  s._nextSectionKind = 'lower_tier';
+  s._eaveLatLngs = [];
+  s.eavePoints = [];
+  if (s.eavePoly) { s.eavePoly.setMap(null); s.eavePoly = null; }
+  (s._eaveMarkers || []).forEach(function(m) { m.setMap(null); }); s._eaveMarkers = [];
+  if (typeof saTraceSetTool === 'function') saTraceSetTool('eave');
+  alert('Lower-eave mode: outline ONLY the visible lip beneath the upper-story roof — not the full lower footprint. Use the 3D Reference and Street View as your visual guide; click points on the satellite where the lip extends, then click the first point to close.');
 };
 
 // Close the in-progress dormer polygon, prompt for its pitch, and persist.
@@ -2558,6 +2593,9 @@ window.saStartVerifyPlanes = async function saStartVerifyPlanes(orderId) {
     var eaves_section_pitches = s.eaveSections.map(function(sec) {
       return (sec && typeof sec.pitch_rise === 'number' && sec.pitch_rise > 0) ? sec.pitch_rise : null;
     });
+    var eaves_section_kinds = s.eaveSections.map(function(sec) {
+      return (sec && sec.kind === 'lower_tier') ? 'lower_tier' : 'main';
+    });
     var dormersOut = (s.dormers || [])
       .filter(function(d) {
         return d && Array.isArray(d.points) && d.points.length >= 3
@@ -2573,6 +2611,7 @@ window.saStartVerifyPlanes = async function saStartVerifyPlanes(orderId) {
       eaves: eaves_sections[0],
       eaves_sections: eaves_sections,
       eaves_section_pitches: eaves_section_pitches,
+      eaves_section_kinds: eaves_section_kinds,
       dormers: dormersOut.length > 0 ? dormersOut : undefined,
       ridges: s._ridgeData || [],
       hips: s._hipData || [],
@@ -3083,8 +3122,12 @@ window.saReDetectPlanes = async function saReDetectPlanes() {
   // Auto-add-missing: re-run preview, append only non-overlapping detected planes.
   try {
     var eaves_sections = s.eaveSections.map(function(sec) { return sec.points; });
+    var eaves_section_kinds = s.eaveSections.map(function(sec) {
+      return (sec && sec.kind === 'lower_tier') ? 'lower_tier' : 'main';
+    });
     var traceJson = {
       eaves: eaves_sections[0], eaves_sections: eaves_sections,
+      eaves_section_kinds: eaves_section_kinds,
       ridges: s._ridgeData || [], hips: s._hipData || [], valleys: s._valleyData || [],
     };
     var token = localStorage.getItem('rc_token') || '';
@@ -3272,12 +3315,21 @@ function saCloseEaveSection() {
   if (pts.length < 3) return;
   if (s.eavePoly) { s.eavePoly.setMap(null); s.eavePoly = null; }
   (s._eaveMarkers || []).forEach(function(m) { m.setMap(null); }); s._eaveMarkers = [];
+  // kind: 'lower_tier' marks a visible lower-eave lip that sits beneath an
+  // upper-story roof — flagged via the "+ Add Lower Eave" button so the
+  // engine surfaces it as "Lower Eave N" instead of "Section N" and the
+  // 2D diagram renders it with a distinct blue-dashed outline.
+  var pendingKind = (s._nextSectionKind === 'lower_tier') ? 'lower_tier' : 'main';
+  s._nextSectionKind = null;
   // Closed section polygon — editable so admin can drag vertices to fix mis-clicks,
   // clickable:false so taps inside it pass through to start a stacked upper layer.
+  // Lower-tier lips are rendered with a blue stroke + dashed icon so they
+  // visually distinguish from regular structures (green) on the trace map.
+  var strokeHex = pendingKind === 'lower_tier' ? '#2563eb' : '#22c55e';
   var poly = new google.maps.Polygon({
     paths: pts.slice(),
-    strokeColor: '#22c55e', strokeWeight: 3, strokeOpacity: 0.9,
-    fillColor: '#22c55e', fillOpacity: 0.15,
+    strokeColor: strokeHex, strokeWeight: 3, strokeOpacity: 0.9,
+    fillColor: strokeHex, fillOpacity: 0.15,
     clickable: false, editable: true, draggable: false,
     map: s.map, zIndex: 1
   });
@@ -3286,7 +3338,7 @@ function saCloseEaveSection() {
   // a steep A-frame dormer). null defers to the engine default. Admin sets
   // it via the Section Pitches panel; engine uses it to compute that
   // section's sloped area independent of the main roof.
-  var section = { points: sectionPoints, polygon: poly, pitch_rise: null };
+  var section = { points: sectionPoints, polygon: poly, pitch_rise: null, kind: pendingKind };
   s.eaveSections.push(section);
 
   // Sync vertex drags / midpoint adds back into section.points
@@ -3304,14 +3356,22 @@ function saCloseEaveSection() {
   google.maps.event.addListener(path, 'insert_at', syncPath);
   google.maps.event.addListener(path, 'remove_at', syncPath);
 
-  // S1, S2... centroid label
+  // Centroid label — S1, S2… for regular structures, L1, L2… for lower-eave
+  // lips, numbered independently of each other so the two badge tracks don't
+  // collide visually.
   var cx = 0, cy = 0;
   for (var i = 0; i < sectionPoints.length; i++) { cx += sectionPoints[i].lat; cy += sectionPoints[i].lng; }
   cx /= sectionPoints.length; cy /= sectionPoints.length;
+  var sameKindCount = 0;
+  for (var k = 0; k < s.eaveSections.length; k++) {
+    if ((s.eaveSections[k].kind || 'main') === pendingKind) sameKindCount++;
+  }
+  var badgePrefix = pendingKind === 'lower_tier' ? 'L' : 'S';
+  var badgeColor = pendingKind === 'lower_tier' ? '#2563eb' : '#22c55e';
   var labelMk = new google.maps.Marker({
     position: { lat: cx, lng: cy }, map: s.map, clickable: false, zIndex: 10,
-    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: '#22c55e', fillOpacity: 0.95, strokeColor: '#fff', strokeWeight: 1.5 },
-    label: { text: 'S' + s.eaveSections.length, color: '#fff', fontSize: '10px', fontWeight: '700' }
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: badgeColor, fillOpacity: 0.95, strokeColor: '#fff', strokeWeight: 1.5 },
+    label: { text: badgePrefix + sameKindCount, color: '#fff', fontSize: '10px', fontWeight: '700' }
   });
   s._sectionLabelMarkers.push(labelMk);
 
@@ -3395,10 +3455,16 @@ function saRenderSectionPitches() {
     return;
   }
   panel.style.display = 'block';
+  // Independent S/L counters so labels read 'S1, S2…' for regular structures
+  // and 'L1, L2…' for lower-eave lips, regardless of trace order.
+  var sCount = 0, lCount = 0;
   var html = sections.map(function(sec, i) {
     var val = (sec.pitch_rise != null && sec.pitch_rise > 0) ? sec.pitch_rise : '';
+    var isLower = sec.kind === 'lower_tier';
+    var prefix = isLower ? ('L' + (++lCount)) : ('S' + (++sCount));
+    var color  = isLower ? '#60a5fa' : '#22c55e';
     return '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">' +
-      '<span style="color:#22c55e;font-size:11px;font-weight:700;width:24px">S' + (i + 1) + '</span>' +
+      '<span style="color:' + color + ';font-size:11px;font-weight:700;width:24px">' + prefix + '</span>' +
       '<input type="number" min="0" max="24" step="0.5" value="' + val + '" data-sa-section-pitch="' + i + '" placeholder="—" ' +
       'style="width:55px;padding:3px 6px;font-size:12px;font-weight:700;color:#fbbf24;background:#0f172a;border:1px solid #374151;border-radius:5px;text-align:right" />' +
       '<span style="color:#6b7280;font-size:11px">:12</span>' +
@@ -3454,6 +3520,11 @@ window.saSubmitTrace = async function(orderId) {
   var eaves_section_pitches = s.eaveSections.map(function(sec) {
     return (sec && typeof sec.pitch_rise === 'number' && sec.pitch_rise > 0) ? sec.pitch_rise : null;
   });
+  // Per-section kinds — 'lower_tier' marks a visible lower-eave lip beneath an
+  // upper-story roof. Drives engine label ("Lower Eave N") + diagram styling.
+  var eaves_section_kinds = s.eaveSections.map(function(sec) {
+    return (sec && sec.kind === 'lower_tier') ? 'lower_tier' : 'main';
+  });
   // Dormers — only ship those with a valid pitch. Engine adds only the
   // differential sloped area; renderer keeps the report as a single
   // structure (so dormers don't get split into separate buildings).
@@ -3491,6 +3562,7 @@ window.saSubmitTrace = async function(orderId) {
     eaves: eaves_sections[0],
     eaves_sections: eaves_sections,
     eaves_section_pitches: eaves_section_pitches,
+    eaves_section_kinds: eaves_section_kinds,
     dormers: dormersOut.length > 0 ? dormersOut : undefined,
     verified_faces: verifiedFacesOut.length > 0 ? verifiedFacesOut : undefined,
     ridges: s._ridgeData || [],

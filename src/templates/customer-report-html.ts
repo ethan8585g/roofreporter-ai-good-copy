@@ -39,6 +39,8 @@ export function generateCustomerReportHTML(report: RoofReport): string {
         {
           eaves: trace.eaves || [],
           eaves_sections: trace.eaves_sections || undefined,
+          eaves_section_pitches: trace.eaves_section_pitches || undefined,
+          eaves_section_kinds: trace.eaves_section_kinds || undefined,
           ridges: trace.ridges || [],
           hips: trace.hips || [],
           valleys: trace.valleys || [],

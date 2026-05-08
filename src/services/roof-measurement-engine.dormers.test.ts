@@ -332,3 +332,90 @@ describe('traceUiToEnginePayload — dormers passthrough', () => {
     expect(payload.dormers).toBeUndefined()
   })
 })
+
+// ─── Lower-tier eave lip (kind: 'lower_tier') ────────────────────────────
+// A "lower eave" is the visible lip below an upper-story roof on a 2-story
+// home — typically wraps around the front face under the second-story
+// roofline. The user traces ONLY the visible lip polygon (not the full
+// lower footprint extending under the upper roof) so the disjoint-area
+// math sums correctly without double-counting under the upper section.
+describe('lower-tier eave sections', () => {
+  function squareAtPolyM(centerLat: number, centerLng: number, sideMeters: number) {
+    const halfDeg = (sideMeters / 2) / 111_320
+    const halfLng = halfDeg / Math.cos(centerLat * Math.PI / 180)
+    return [
+      { lat: centerLat - halfDeg, lng: centerLng - halfLng, elevation: null },
+      { lat: centerLat - halfDeg, lng: centerLng + halfLng, elevation: null },
+      { lat: centerLat + halfDeg, lng: centerLng + halfLng, elevation: null },
+      { lat: centerLat + halfDeg, lng: centerLng - halfLng, elevation: null },
+    ]
+  }
+
+  it('emits a "Lower Eave N" row in section_pitches with kind=lower_tier', () => {
+    const upper = squareAtPolyM(40, -75, 10)
+    const lip   = squareAtPolyM(40, -74.9999, 3) // disjoint, alongside the upper
+    const result = new RoofMeasurementEngine({
+      address: 'Test',
+      default_pitch: 6,
+      eaves_outline: upper,
+      eaves_sections: [lip],
+      eaves_section_kinds: ['lower_tier'],
+    }).run()
+    const sps = result.section_pitches
+    expect(sps).toBeDefined()
+    expect(sps?.length).toBe(2)
+    const lower = sps?.find(s => s.section_index === 1)
+    expect(lower?.label).toBe('Lower Eave 1')
+    expect(lower?.kind).toBe('lower_tier')
+    // Sloped area should still be > 0 (engine sums it the same way as a
+    // disjoint detached section — the kind tag is purely for labeling).
+    expect(lower?.sloped_ft2).toBeGreaterThan(0)
+  })
+
+  it('lower-tier polygon overlapping the primary footprint surfaces a geometry warning', () => {
+    const upper = squareAtPolyM(40, -75, 10)
+    // Lip traced INSIDE the upper outline — wrong: would double-count.
+    const lip   = squareAtPolyM(40, -75, 3)
+    const result = new RoofMeasurementEngine({
+      address: 'Test',
+      default_pitch: 6,
+      eaves_outline: upper,
+      eaves_sections: [lip],
+      eaves_section_kinds: ['lower_tier'],
+    }).run()
+    expect(result.geometry_warnings).toBeDefined()
+    expect(
+      result.geometry_warnings?.some(w => w.includes('Lower Eave 1') && w.includes('under another section'))
+    ).toBe(true)
+  })
+
+  it('traceUiToEnginePayload threads eaves_section_kinds through, preserving labels post-reorder', () => {
+    // 5-point hex-ish polygon for upper, 4-point square for lip — the engine
+    // chooses primary by vertex count, so the 5-point upper becomes primary
+    // and the 4-point lip stays as the extra section. Kind map is keyed by
+    // reference so the lip's 'lower_tier' tag follows it through the swap.
+    const upper = [
+      { lat: 40 - 0.00005, lng: -75 - 0.00005 },
+      { lat: 40 - 0.00005, lng: -75 + 0.00005 },
+      { lat: 40 + 0.00000, lng: -75 + 0.00007 },
+      { lat: 40 + 0.00005, lng: -75 + 0.00005 },
+      { lat: 40 + 0.00005, lng: -75 - 0.00005 },
+    ]
+    const lip = [
+      { lat: 40 - 0.00001, lng: -74.9998 },
+      { lat: 40 - 0.00001, lng: -74.9997 },
+      { lat: 40 + 0.00001, lng: -74.9997 },
+      { lat: 40 + 0.00001, lng: -74.9998 },
+    ]
+    const payload = traceUiToEnginePayload(
+      {
+        eaves_sections: [lip, upper],
+        eaves_section_kinds: ['lower_tier', 'main'],
+      },
+      { property_address: 'Test' },
+      6,
+    )
+    expect(payload.eaves_section_kinds).toBeDefined()
+    expect(payload.eaves_section_kinds).toEqual(['lower_tier'])
+  })
+})

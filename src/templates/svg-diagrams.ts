@@ -2356,6 +2356,11 @@ export function generateTraceBasedDiagramSVG(
      *  sloped-area label using its own slope multiplier instead of the
      *  global dominant pitch. */
     eaves_section_pitches?: Array<number | null | undefined>
+    /** Per-section kind tag, parallel to eaves_sections. 'lower_tier' marks
+     *  a visible lower-eave lip beneath an upper-story roof; rendered with a
+     *  distinct blue-dashed outline + "Lower Eave N" label. Other values
+     *  default to 'main' (current dashed-green detached-structure styling). */
+    eaves_section_kinds?: Array<'main' | 'lower_tier' | null | undefined>
     ridges?: { lat: number; lng: number }[][]
     hips?: { lat: number; lng: number }[][]
     valleys?: { lat: number; lng: number }[][]
@@ -2424,11 +2429,17 @@ export function generateTraceBasedDiagramSVG(
   // didn't supply a per-section pitch, the entry stays null and the diagram
   // falls back to the global avgPitchDeg for that structure.
   const extraSectionPitches: Array<number | null> = []
+  // Per-extra-section kind tag — drives distinct styling for "lower_tier"
+  // sections (visible lower-eave lip beneath an upper-story roof). Other
+  // values default to 'main' (existing detached-structure styling).
+  const extraSectionKinds: Array<'main' | 'lower_tier'> = []
   if (allEaveSections.length > 0) {
     for (let i = 0; i < allEaveSections.length; i++) {
       if (allEaveSections[i] === eaves) continue
       const p = roofTrace.eaves_section_pitches?.[i]
       extraSectionPitches.push(typeof p === 'number' && p > 0 ? p : null)
+      const k = roofTrace.eaves_section_kinds?.[i]
+      extraSectionKinds.push(k === 'lower_tier' ? 'lower_tier' : 'main')
     }
   }
 
@@ -2868,18 +2879,44 @@ export function generateTraceBasedDiagramSVG(
   const eavePts = eavesXY.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
   svg += `<polygon points="${eavePts}" fill="none" stroke="#1a1a1a" stroke-width="2.2" stroke-linejoin="round"/>`
 
-  // ── EXTRA EAVE SECTIONS (detached structures, dormers, etc. — dashed outline) ──
+  // ── EXTRA EAVE SECTIONS (detached structures, lower-eave lips, etc.) ──
   // Each extra section gets its own per-edge dimension labels and an area label
   // so multi-structure reports clearly show measurements for every building.
+  // Lower-tier sections render first (underneath) with a blue-dashed outline +
+  // "Lower Eave N" label, distinct from the green-dashed "Structure N" treatment
+  // used for detached buildings. Render order is sorted by kind so a 'lower_tier'
+  // section visually sits *under* any same-area 'main' extras drawn alongside.
   const slopeMultForExtras = Math.max(1, 1 / Math.cos((avgPitchDeg || 0) * Math.PI / 180))
-  extraSections.forEach((sec, si) => {
+  // Build a render-order index list, lower_tier first, preserving original
+  // index for label numbering and pitch lookup.
+  const renderOrder: number[] = extraSections
+    .map((_, i) => i)
+    .sort((a, b) => {
+      const ka = extraSectionKinds[a] === 'lower_tier' ? 0 : 1
+      const kb = extraSectionKinds[b] === 'lower_tier' ? 0 : 1
+      return ka - kb
+    })
+  // Independent counters for the two kinds so labels read "Lower Eave 1, 2…"
+  // and "Structure N+1, N+2…" without the numbering jumping when both are present.
+  let lowerEaveCounter = 0
+  let mainStructCounter = 0
+  renderOrder.forEach(si => {
+    const sec = extraSections[si]
+    const isLower = extraSectionKinds[si] === 'lower_tier'
+    // Lower-tier styling: blue dashed (#2563eb) on a faint blue tint, evoking
+    // a step-down beneath the upper roof. Main extras keep the legacy green.
+    const stroke = isLower ? '#2563eb' : '#0d9668'
+    const strokeDeep = isLower ? '#1e3a8a' : '#0d6b4a'
+    const tintFill = isLower ? 'rgba(37,99,235,0.06)' : 'rgba(22,163,74,0.05)'
+    const dasharray = isLower ? '4,3' : '6,3'
+
     const secXY = sec.map(toXY)
     const secPts = secXY.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
-    svg += `<polygon points="${secPts}" fill="rgba(22,163,74,0.05)" stroke="#0d9668" stroke-width="1.8" stroke-linejoin="round" stroke-dasharray="6,3"/>`
+    svg += `<polygon points="${secPts}" fill="${tintFill}" stroke="${stroke}" stroke-width="1.8" stroke-linejoin="round" stroke-dasharray="${dasharray}"/>`
 
     // Vertex dots
     secXY.forEach(p => {
-      svg += `<circle cx="${tx(p.x).toFixed(1)}" cy="${ty(p.y).toFixed(1)}" r="1.8" fill="#0d9668"/>`
+      svg += `<circle cx="${tx(p.x).toFixed(1)}" cy="${ty(p.y).toFixed(1)}" r="1.8" fill="${stroke}"/>`
     })
 
     // Per-edge dimension labels (haversine length) with collision avoidance
@@ -2903,12 +2940,12 @@ export function generateTraceBasedDiagramSVG(
         const dimOffset = 18
         const extEnd = dimOffset + 6
         // Extension lines
-        svg += `<line x1="${(sx + nx * 3).toFixed(1)}" y1="${(sy + ny * 3).toFixed(1)}" x2="${(sx + nx * extEnd).toFixed(1)}" y2="${(sy + ny * extEnd).toFixed(1)}" stroke="#0d9668" stroke-width="0.4" stroke-opacity="0.7"/>`
-        svg += `<line x1="${(ex + nx * 3).toFixed(1)}" y1="${(ey + ny * 3).toFixed(1)}" x2="${(ex + nx * extEnd).toFixed(1)}" y2="${(ey + ny * extEnd).toFixed(1)}" stroke="#0d9668" stroke-width="0.4" stroke-opacity="0.7"/>`
+        svg += `<line x1="${(sx + nx * 3).toFixed(1)}" y1="${(sy + ny * 3).toFixed(1)}" x2="${(sx + nx * extEnd).toFixed(1)}" y2="${(sy + ny * extEnd).toFixed(1)}" stroke="${stroke}" stroke-width="0.4" stroke-opacity="0.7"/>`
+        svg += `<line x1="${(ex + nx * 3).toFixed(1)}" y1="${(ey + ny * 3).toFixed(1)}" x2="${(ex + nx * extEnd).toFixed(1)}" y2="${(ey + ny * extEnd).toFixed(1)}" stroke="${stroke}" stroke-width="0.4" stroke-opacity="0.7"/>`
         // Dim line
         const dsx = sx + nx * dimOffset, dsy = sy + ny * dimOffset
         const dex = ex + nx * dimOffset, dey = ey + ny * dimOffset
-        svg += `<line x1="${dsx.toFixed(1)}" y1="${dsy.toFixed(1)}" x2="${dex.toFixed(1)}" y2="${dey.toFixed(1)}" stroke="#0d9668" stroke-width="0.5" stroke-opacity="0.85"/>`
+        svg += `<line x1="${dsx.toFixed(1)}" y1="${dsy.toFixed(1)}" x2="${dex.toFixed(1)}" y2="${dey.toFixed(1)}" stroke="${stroke}" stroke-width="0.5" stroke-opacity="0.85"/>`
 
         let mx = (dsx + dex) / 2, my = (dsy + dey) / 2
         let angle = Math.atan2(dey - dsy, dex - dsx) * 180 / Math.PI
@@ -2921,8 +2958,8 @@ export function generateTraceBasedDiagramSVG(
         placedLabels.push({ cx: mx, cy: my, w: bgW, h: bgH })
 
         svg += `<g transform="translate(${mx.toFixed(1)},${my.toFixed(1)}) rotate(${angle.toFixed(1)})">`
-        svg += `<rect x="${(-bgW / 2).toFixed(1)}" y="-7.5" width="${bgW.toFixed(1)}" height="${bgH}" rx="2" fill="#fff" stroke="#0d9668" stroke-width="0.3" opacity="0.97"/>`
-        svg += `<text x="0" y="3" text-anchor="middle" font-size="7.5" font-weight="700" fill="#0d6b4a" ${FONT}>${label}</text>`
+        svg += `<rect x="${(-bgW / 2).toFixed(1)}" y="-7.5" width="${bgW.toFixed(1)}" height="${bgH}" rx="2" fill="#fff" stroke="${stroke}" stroke-width="0.3" opacity="0.97"/>`
+        svg += `<text x="0" y="3" text-anchor="middle" font-size="7.5" font-weight="700" fill="${strokeDeep}" ${FONT}>${label}</text>`
         svg += `</g>`
       }
     }
@@ -2945,16 +2982,18 @@ export function generateTraceBasedDiagramSVG(
       const sectionSlopeMult = Math.max(1, 1 / Math.cos(sectionPitchDeg * Math.PI / 180))
       const slopedFt2 = Math.round(footprintFt2 * (sectionPitchRise != null ? sectionSlopeMult : slopeMultForExtras))
 
-      // Centroid label (Structure name + sloped area + pitch)
+      // Centroid label
       const cx = secXY.reduce((s, p) => s + p.x, 0) / secXY.length
       const cy = secXY.reduce((s, p) => s + p.y, 0) / secXY.length
       const lcx = tx(cx), lcy = ty(cy)
-      const structIdx = facets.length + si + 1
       const pitchLabel = sectionPitchRise != null
         ? `${Number.isInteger(sectionPitchRise) ? sectionPitchRise : sectionPitchRise.toFixed(1)}:12`
         : null
-      svg += `<text x="${lcx.toFixed(1)}" y="${(lcy - 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="800" fill="#0d6b4a" fill-opacity="0.85" ${FONT}>Structure ${structIdx}</text>`
-      svg += `<text x="${lcx.toFixed(1)}" y="${(lcy + 9).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="#0d6b4a" fill-opacity="0.85" ${FONT}>${slopedFt2.toLocaleString()} SF${pitchLabel ? ` · ${pitchLabel}` : ''}</text>`
+      const titleText = isLower
+        ? `Lower Eave ${++lowerEaveCounter}`
+        : `Structure ${facets.length + (++mainStructCounter)}`
+      svg += `<text x="${lcx.toFixed(1)}" y="${(lcy - 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="800" fill="${strokeDeep}" fill-opacity="0.85" ${FONT}>${titleText}</text>`
+      svg += `<text x="${lcx.toFixed(1)}" y="${(lcy + 9).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="${strokeDeep}" fill-opacity="0.85" ${FONT}>${slopedFt2.toLocaleString()} SF${pitchLabel ? ` · ${pitchLabel}` : ''}</text>`
     }
   })
 

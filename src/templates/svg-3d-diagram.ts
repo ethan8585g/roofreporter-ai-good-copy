@@ -18,8 +18,11 @@ export interface LatLng { lat: number; lng: number }
 export interface StructurePartition {
   /** 1-based index ("Structure 1") */
   index: number
-  /** "Main House" / "Detached Garage" / etc. */
+  /** "Main House" / "Detached Garage" / "Lower Eave" / etc. */
   label: string
+  /** Section kind tag — drives label assignment + per-card styling. 'lower_tier'
+   *  marks a visible lower-eave lip beneath an upper-story roof. */
+  kind?: 'main' | 'lower_tier'
   /** WGS84 footprint polygon (closed, 3+ points) */
   eaves: LatLng[]
   /** Internal lines that fall inside this footprint */
@@ -198,15 +201,27 @@ export function splitStructures(report: RoofReport): StructurePartition[] {
     || (report.segments && report.segments[0]?.pitch_ratio)
     || `${(12 * Math.tan(dominantPitchDeg * Math.PI / 180)).toFixed(1)}:12`
 
-  // Build candidate partitions, area-sorted descending.
-  type Cand = { eaves: LatLng[]; eavesXY: { x: number; y: number }[]; footprint_sqft: number; perimeter_ft: number }
-  const cands: Cand[] = sections.map(eaves => {
+  // Build candidate partitions, area-sorted descending. Kind is captured
+  // per-section so the post-sort label/styling can distinguish lower-tier
+  // lips from regular detached structures.
+  type Cand = {
+    eaves: LatLng[]
+    eavesXY: { x: number; y: number }[]
+    footprint_sqft: number
+    perimeter_ft: number
+    kind: 'main' | 'lower_tier'
+  }
+  const sectionKinds: Array<'main' | 'lower_tier'> = Array.isArray(rt.eaves_section_kinds)
+    ? rt.eaves_section_kinds.map((k: any) => k === 'lower_tier' ? 'lower_tier' : 'main')
+    : []
+  const cands: Cand[] = sections.map((eaves, i) => {
     const xy = projectLatLngToMeters(eaves, cosLat, refLat, refLng)
     return {
       eaves,
       eavesXY: xy,
       footprint_sqft: shoelaceFt2(xy),
       perimeter_ft: perimeterFt(xy),
+      kind: sectionKinds[i] || 'main',
     }
   }).sort((a, b) => b.footprint_sqft - a.footprint_sqft)
 
@@ -254,11 +269,20 @@ export function splitStructures(report: RoofReport): StructurePartition[] {
     return total
   }
 
+  // Independent counters so lower-tier lips read "Lower Eave 1, 2…" while
+  // main extras follow the legacy "Main House / Detached Garage / …" track.
+  let lowerEaveN = 0
+  let mainN = 0
   return cands.map((c, i) => {
     const trueArea = c.footprint_sqft * slopeMult
+    const partitionLabel = c.kind === 'lower_tier'
+      ? `Lower Eave ${++lowerEaveN}`
+      : (labels[mainN] || `Structure ${mainN + 1}`)
+    if (c.kind !== 'lower_tier') mainN++
     return {
       index: i + 1,
-      label: labels[i] || `Structure ${i + 1}`,
+      label: partitionLabel,
+      kind: c.kind,
       eaves: c.eaves,
       ridges: ridges[i],
       hips: hips[i],
