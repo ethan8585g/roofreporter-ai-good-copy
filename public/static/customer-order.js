@@ -902,7 +902,7 @@ function renderTraceStep(root, progressBar) {
               </div>
               <div style="font-size:10px;color:#94a3b8;line-height:1.4;margin-bottom:8px">Drag any plane vertex on the map to fix the split. Edit the pitch input to override the detected pitch. Each plane’s area = shoelace × slopeFactor(pitch).</div>
               <div style="display:flex;gap:6px">
-                <button onclick="reDetectPlanes()" title="Throw away edits and re-run auto-split" style="flex:1;padding:7px 10px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer"><i class="fas fa-arrows-rotate mr-1"></i>Re-detect</button>
+                <button onclick="reDetectPlanes()" title="OK = auto-add only the planes the detector finds that don't overlap yours. Cancel = wipe + fresh detect." style="flex:1;padding:7px 10px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer"><i class="fas fa-arrows-rotate mr-1"></i>Re-detect</button>
                 <button onclick="confirmVerifyPlanes()" id="cust-confirm-verify-planes-btn" style="flex:2;padding:7px 10px;background:#10b981;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer"><i class="fas fa-check mr-1"></i>Confirm Planes</button>
               </div>
             </div>
@@ -1797,6 +1797,79 @@ function handleTraceClick(pt) {
 
 const CUST_PLANE_COLORS = ['#dc2626','#2563eb','#16a34a','#ea580c','#7c3aed','#db2777','#0d9488','#f59e0b','#0891b2','#8b5cf6'];
 
+// ── Plane validation: self-intersection + pairwise overlap ──
+// Geometry on raw lat/lng with ray-cast for containment + segment-segment
+// CCW test for crossings. Lat/lng are close enough to a Cartesian frame at
+// the polygon's local scale that the ordering checks are robust.
+function _segmentsCross(a1, a2, b1, b2) {
+  const ccw = (p, q, r) => (q.lat - p.lat) * (r.lng - p.lng) - (q.lng - p.lng) * (r.lat - p.lat);
+  const o1 = ccw(a1, a2, b1), o2 = ccw(a1, a2, b2);
+  const o3 = ccw(b1, b2, a1), o4 = ccw(b1, b2, a2);
+  // Ignore segments that merely share an endpoint (touch ≠ cross)
+  const eq = (p, q) => Math.abs(p.lat - q.lat) < 1e-9 && Math.abs(p.lng - q.lng) < 1e-9;
+  if (eq(a1, b1) || eq(a1, b2) || eq(a2, b1) || eq(a2, b2)) return false;
+  return ((o1 > 0) !== (o2 > 0)) && ((o3 > 0) !== (o4 > 0));
+}
+function _polyHasSelfIntersection(pts) {
+  const n = pts.length;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue;  // skip wrap-around adjacency
+      if (_segmentsCross(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n])) return true;
+    }
+  }
+  return false;
+}
+function _pointInLatLngPoly(pt, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].lng, yi = poly[i].lat;
+    const xj = poly[j].lng, yj = poly[j].lat;
+    const intersect = ((yi > pt.lat) !== (yj > pt.lat))
+      && (pt.lng < ((xj - xi) * (pt.lat - yi)) / ((yj - yi) || 1e-12) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+function _planesOverlap(a, b) {
+  for (const p of a) if (_pointInLatLngPoly(p, b)) return true;
+  for (const p of b) if (_pointInLatLngPoly(p, a)) return true;
+  for (let i = 0; i < a.length; i++) {
+    const ai = a[i], aj = a[(i + 1) % a.length];
+    for (let k = 0; k < b.length; k++) {
+      const bi = b[k], bj = b[(k + 1) % b.length];
+      if (_segmentsCross(ai, aj, bi, bj)) return true;
+    }
+  }
+  return false;
+}
+// Returns array of { kind, a, b?, message } for any issues found.
+function validateVerifiedPlanes(faces) {
+  const issues = [];
+  for (let i = 0; i < faces.length; i++) {
+    if (faces[i].points && faces[i].points.length >= 4 && _polyHasSelfIntersection(faces[i].points)) {
+      issues.push({ kind: 'self-intersect', a: i, message: `${faces[i].label} has crossing edges — fix or delete.` });
+    }
+  }
+  for (let i = 0; i < faces.length; i++) {
+    for (let j = i + 1; j < faces.length; j++) {
+      const a = faces[i].points, b = faces[j].points;
+      if (a && b && a.length >= 3 && b.length >= 3 && _planesOverlap(a, b)) {
+        issues.push({ kind: 'overlap', a: i, b: j, message: `${faces[i].label} overlaps ${faces[j].label} — area would double-count.` });
+      }
+    }
+  }
+  return issues;
+}
+
+// Compass label from azimuth degrees (0=N, 90=E, 180=S, 270=W).
+function azimuthToCompass(deg) {
+  if (deg == null || !isFinite(deg)) return '';
+  const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  const idx = Math.round(((deg % 360) + 360) % 360 / 45) % 8;
+  return dirs[idx];
+}
+
 function custShoelaceAreaFt2(latLngs) {
   if (!latLngs || latLngs.length < 3) return 0;
   let meanLat = 0, meanLng = 0;
@@ -1870,9 +1943,20 @@ window.startVerifyPlanes = async function startVerifyPlanes() {
       showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>No planes detected. Trace at least one ridge or hip line so the engine can split the eaves polygon into faces.');
       return;
     }
+    // Snapshot auto-detect totals so the confirm toast can show the user
+    // exactly how much their edits shifted the math vs. what the engine
+    // detected on its own.
+    let autoFootprint = 0, autoSloped = 0;
+    for (const ff of faces) {
+      const proj = ff.projected_area_ft2 || 0;
+      autoFootprint += proj;
+      autoSloped += proj * custSlopeFactor(ff.pitch_rise);
+    }
+    orderState._autoDetectSnapshot = { footprint: autoFootprint, sloped: autoSloped, count: faces.length };
     custRenderVerifyPlanes(faces);
     orderState._verifyPlanesActive = true;
     document.getElementById('cust-verify-planes-panel').style.display = 'block';
+    custUpdateMultiStructureNote();
   } catch (e) {
     showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Plane detection failed: ' + (e && e.message ? e.message : e));
   } finally {
@@ -1901,6 +1985,7 @@ function custRenderVerifyPlanes(faces) {
       points: f.polygon.map(p => ({ lat: p.lat, lng: p.lng })),
       pitch_rise: f.pitch_rise,
       projected_area_ft2: f.projected_area_ft2,
+      azimuth_deg: f.azimuth_deg ?? null,
       color,
     };
     orderState.verifiedFaces.push(entry);
@@ -1940,30 +2025,110 @@ function custRenderVerifyPlaneList() {
   const listEl = document.getElementById('cust-verify-planes-list'); if (!listEl) return;
   if (!orderState.verifiedFaces || orderState.verifiedFaces.length === 0) {
     listEl.innerHTML = '<div style="color:#94a3b8;font-size:11px;font-style:italic">No planes yet — click Add Plane to draw one, or Re-detect to auto-split.</div>';
+    custUpdateValidationUI([]);
     return;
   }
+  // Validate per-render so the cards reflect overlap/self-intersect issues
+  // immediately as the user drags vertices.
+  const issues = validateVerifiedPlanes(orderState.verifiedFaces);
+  const issueByIdx = new Set();
+  for (const it of issues) { issueByIdx.add(it.a); if (it.b != null) issueByIdx.add(it.b); }
+
   let html = '';
   for (let i = 0; i < orderState.verifiedFaces.length; i++) {
     const f = orderState.verifiedFaces[i];
     const sloped = f.projected_area_ft2 * custSlopeFactor(f.pitch_rise);
+    const compass = azimuthToCompass(f.azimuth_deg);
+    const flagged = issueByIdx.has(i);
+    const borderColor = flagged ? '#ef4444' : f.color;
+    const borderWidth = flagged ? '2px' : '1px';
     html += `
-      <div onclick="focusVerifyPlane(${i})" style="background:#0f172a;border:1px solid ${f.color};border-left:4px solid ${f.color};border-radius:8px;padding:8px 10px;cursor:pointer">
+      <div onclick="focusVerifyPlane(${i})" style="background:#0f172a;border:${borderWidth} solid ${borderColor};border-left:4px solid ${f.color};border-radius:8px;padding:8px 10px;cursor:pointer">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;gap:6px">
-          <div style="color:#fff;font-size:13px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.label}</div>
+          <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:0">
+            <span id="cust-verify-label-${i}" ondblclick="event.stopPropagation(); custStartEditLabel(${i})" title="Double-click to rename" style="color:#fff;font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:text">${f.label}</span>
+            ${flagged ? '<i class="fas fa-triangle-exclamation" title="Polygon issue — see warnings below" style="color:#ef4444;font-size:11px;flex-shrink:0"></i>' : ''}
+          </div>
           <div style="display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()">
             <input type="number" min="0.5" max="24" step="0.5" value="${f.pitch_rise}" oninput="setVerifyPlanePitch(${i}, this.value)" style="width:54px;padding:3px 6px;background:#1e293b;color:#fff;border:1px solid #334155;border-radius:5px;font-size:11px;font-weight:700;text-align:center" />
             <span style="color:#94a3b8;font-size:11px;font-weight:600">:12</span>
             <button onclick="deleteVerifyPlane(${i})" title="Delete this plane" style="background:transparent;color:#f87171;border:none;cursor:pointer;padding:2px 4px;font-size:11px"><i class="fas fa-trash"></i></button>
           </div>
         </div>
-        <div style="display:flex;justify-content:space-between;font-size:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;gap:6px">
           <span id="cust-verify-area-${i}" style="color:#94a3b8">${Math.round(f.projected_area_ft2).toLocaleString()} SF footprint</span>
+          ${compass ? `<span style="color:#cbd5e1;font-weight:600" title="Face direction">↑ ${compass}</span>` : ''}
           <span id="cust-verify-sloped-${i}" style="color:${f.color};font-weight:700">${Math.round(sloped).toLocaleString()} SF sloped</span>
         </div>
       </div>`;
   }
   listEl.innerHTML = html;
+  custUpdateValidationUI(issues);
 }
+
+// Render validation banner above the per-plane list (or hide it when clean).
+// Block-then-allow pattern: confirm button is disabled while issues exist.
+function custUpdateValidationUI(issues) {
+  let banner = document.getElementById('cust-verify-banner');
+  const panel = document.getElementById('cust-verify-planes-panel');
+  if (!panel) return;
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'cust-verify-banner';
+    panel.insertBefore(banner, document.getElementById('cust-verify-planes-list'));
+  }
+  const confirmBtn = document.getElementById('cust-confirm-verify-planes-btn');
+  if (issues.length === 0) {
+    banner.style.display = 'none';
+    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.style.opacity = 1; confirmBtn.style.cursor = 'pointer'; }
+    return;
+  }
+  const lis = issues.map(i => `<li style="margin:0">${i.message}</li>`).join('');
+  banner.style.cssText = 'background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.45);border-radius:8px;padding:8px 10px;margin-bottom:8px;color:#fca5a5;font-size:10.5px;line-height:1.45';
+  banner.innerHTML = `<div style="font-weight:700;margin-bottom:4px"><i class="fas fa-triangle-exclamation mr-1"></i>${issues.length} issue${issues.length === 1 ? '' : 's'} to fix</div><ul style="margin:0;padding-left:14px">${lis}</ul>`;
+  banner.style.display = 'block';
+  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.style.opacity = 0.5; confirmBtn.style.cursor = 'not-allowed'; }
+}
+
+function custUpdateMultiStructureNote() {
+  const panel = document.getElementById('cust-verify-planes-panel'); if (!panel) return;
+  let existing = document.getElementById('cust-multi-structure-note');
+  const sectionCount = (orderState.traceEavesSections || []).length;
+  if (sectionCount <= 1) {
+    if (existing) existing.style.display = 'none';
+    return;
+  }
+  if (!existing) {
+    existing = document.createElement('div');
+    existing.id = 'cust-multi-structure-note';
+    panel.insertBefore(existing, document.getElementById('cust-verify-planes-list'));
+  }
+  existing.style.cssText = 'background:rgba(99,102,241,0.10);border:1px solid rgba(99,102,241,0.35);border-radius:8px;padding:8px 10px;margin-bottom:8px;color:#a5b4fc;font-size:10.5px;line-height:1.45';
+  existing.innerHTML = `<i class="fas fa-info-circle mr-1"></i><strong>Primary structure only.</strong> ${sectionCount - 1} additional structure${sectionCount - 1 === 1 ? '' : 's'} (e.g. detached garage) ride at their own per-section pitch. Verify Planes only splits the primary outline.`;
+  existing.style.display = 'block';
+}
+
+// Inline rename: double-click the label → swap to <input> → blur saves.
+window.custStartEditLabel = function(idx) {
+  const span = document.getElementById(`cust-verify-label-${idx}`); if (!span) return;
+  const f = orderState.verifiedFaces[idx]; if (!f) return;
+  const input = document.createElement('input');
+  input.type = 'text'; input.value = f.label; input.maxLength = 40;
+  input.style.cssText = 'background:#1e293b;color:#fff;border:1px solid #4f46e5;border-radius:4px;padding:2px 6px;font-size:12px;font-weight:700;width:140px';
+  span.replaceWith(input);
+  input.focus(); input.select();
+  const commit = () => {
+    const v = (input.value || '').trim();
+    if (v.length > 0) { f.label = v; }
+    custRenderVerifyPlaneList();
+    custPersistVerifyState();
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    else if (e.key === 'Escape') { custRenderVerifyPlaneList(); }
+  });
+};
 
 window.deleteVerifyPlane = function(idx) {
   const f = orderState.verifiedFaces?.[idx]; if (!f) return;
@@ -2133,7 +2298,8 @@ function custPersistVerifyState() {
   const key = custVerifyStateKey(); if (!key) return;
   try {
     const serializable = (orderState.verifiedFaces || []).map(f => ({
-      face_id: f.face_id, label: f.label, points: f.points, pitch_rise: f.pitch_rise, color: f.color, projected_area_ft2: f.projected_area_ft2,
+      face_id: f.face_id, label: f.label, points: f.points, pitch_rise: f.pitch_rise, color: f.color,
+      projected_area_ft2: f.projected_area_ft2, azimuth_deg: f.azimuth_deg ?? null,
     }));
     localStorage.setItem(key, JSON.stringify(serializable));
   } catch {}
@@ -2166,6 +2332,7 @@ function custLoadVerifyState() {
       points: f.points,
       pitch_rise: f.pitch_rise,
       projected_area_ft2: f.projected_area_ft2 || custShoelaceAreaFt2(f.points),
+      azimuth_deg: f.azimuth_deg ?? null,
       color,
     };
     orderState.verifiedFaces.push(entry);
@@ -2213,12 +2380,34 @@ window.confirmVerifyPlanes = function() {
       return;
     }
   }
+  // Block confirm if any geometry issues remain
+  const issues = validateVerifiedPlanes(orderState.verifiedFaces);
+  if (issues.length > 0) {
+    showMsg('error', `<i class="fas fa-triangle-exclamation mr-1"></i>${issues.length} plane issue${issues.length === 1 ? '' : 's'} to fix: ${issues[0].message}`);
+    return;
+  }
   document.getElementById('cust-verify-planes-panel').style.display = 'none';
   orderState._verifyPlanesActive = false;
   for (const f of orderState.verifiedFaces) {
     if (f.polygon) f.polygon.setOptions({ fillOpacity: 0.10, editable: false, clickable: false });
   }
-  showMsg('success', `<i class="fas fa-check-circle mr-1"></i>${orderState.verifiedFaces.length} plane${orderState.verifiedFaces.length === 1 ? '' : 's'} verified — areas locked to user-confirmed values.`);
+  // Diff toast: compare confirmed totals to the auto-detect snapshot so the
+  // user sees how much their edits shifted the math.
+  const auto = orderState._autoDetectSnapshot;
+  let userFootprint = 0, userSloped = 0;
+  for (const f of orderState.verifiedFaces) {
+    userFootprint += f.projected_area_ft2 || 0;
+    userSloped    += (f.projected_area_ft2 || 0) * custSlopeFactor(f.pitch_rise);
+  }
+  let diffMsg = '';
+  if (auto && auto.sloped > 0) {
+    const dSloped = userSloped - auto.sloped;
+    const sign = dSloped >= 0 ? '+' : '−';
+    if (Math.abs(dSloped) >= 1) {
+      diffMsg = ` Your edits ${sign === '+' ? 'added' : 'removed'} <strong>${sign}${Math.round(Math.abs(dSloped)).toLocaleString()} SF</strong> sloped area vs. auto-detect.`;
+    }
+  }
+  showMsg('success', `<i class="fas fa-check-circle mr-1"></i>${orderState.verifiedFaces.length} plane${orderState.verifiedFaces.length === 1 ? '' : 's'} verified — areas locked to user-confirmed values.${diffMsg}`);
   custPersistVerifyState();
   renderOrderPage();
 };
@@ -2233,13 +2422,95 @@ window.cancelVerifyPlanes = function() {
   renderOrderPage();
 };
 
-window.reDetectPlanes = function() {
-  if (!confirm('Discard your edits and re-run auto-split?')) return;
-  custTearDownVerifyPlaneOverlays();
-  orderState.verifiedFaces = [];
-  document.getElementById('cust-verify-planes-panel').style.display = 'none';
-  orderState._verifyPlanesActive = false;
-  startVerifyPlanes();
+// Re-detect strategy: if planes already exist, default to a non-destructive
+// "Auto-add missing" — fetch fresh auto-split results and append only those
+// that don't overlap any existing plane. Prompt the user with both options
+// (add-only vs full reset) so they're never surprised.
+window.reDetectPlanes = async function() {
+  if ((orderState.verifiedFaces || []).length === 0) { startVerifyPlanes(); return; }
+  const choice = confirm('Click OK to AUTO-ADD MISSING planes (keep your edits, only add planes the auto-detector finds that don\'t overlap yours).\n\nClick Cancel to RESET to a fresh auto-detect (loses your edits).');
+  if (!choice) {
+    // Reset path
+    custTearDownVerifyPlaneOverlays();
+    orderState.verifiedFaces = [];
+    document.getElementById('cust-verify-planes-panel').style.display = 'none';
+    orderState._verifyPlanesActive = false;
+    startVerifyPlanes();
+    return;
+  }
+  // Auto-add-missing path: re-run auto-detect, append only non-overlapping
+  // detected planes. User-edited planes (and their pitches) are untouched.
+  const btn = document.getElementById('cust-add-plane-btn');
+  if (btn) { btn.disabled = true; }
+  try {
+    const _sections = orderState.traceEavesSections.map(s => s.points);
+    const _primary = _sections.length > 0 ? _sections.reduce((b, s) => s.length > b.length ? s : b, _sections[0]) : orderState.traceEavesPoints;
+    const traceJson = {
+      eaves: _primary, eaves_sections: _sections,
+      ridges: orderState.traceRidgeLines, hips: orderState.traceHipLines, valleys: orderState.traceValleyLines,
+    };
+    const res = await fetch('/api/reports/calculate-from-trace', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trace: traceJson, address: orderState.address || `${orderState.lat}, ${orderState.lng}` }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showMsg('error', `<i class="fas fa-exclamation-triangle mr-1"></i>Auto-detect failed: ${data.error || 'unknown error'}`);
+      return;
+    }
+    const detected = (data.face_details || []).filter(f => f && f.polygon && f.polygon.length >= 3);
+    let added = 0;
+    for (const df of detected) {
+      // Skip if this detected plane overlaps any existing user plane
+      const overlapsExisting = orderState.verifiedFaces.some(ef => _planesOverlap(ef.points, df.polygon));
+      if (overlapsExisting) continue;
+      const idx = orderState.verifiedFaces.length;
+      const color = CUST_PLANE_COLORS[idx % CUST_PLANE_COLORS.length];
+      const poly = new google.maps.Polygon({
+        paths: df.polygon.map(p => new google.maps.LatLng(p.lat, p.lng)),
+        map: orderState.traceMap,
+        strokeColor: color, strokeWeight: 3, strokeOpacity: 0.95,
+        fillColor: color, fillOpacity: 0.20,
+        clickable: true, editable: true, draggable: false, zIndex: 5,
+      });
+      const entry = {
+        face_id: df.face_id || `face_${String.fromCharCode(65 + idx)}`,
+        label: `Plane ${String.fromCharCode(65 + idx)}`,
+        polygon: poly,
+        points: df.polygon.map(p => ({ lat: p.lat, lng: p.lng })),
+        pitch_rise: df.pitch_rise,
+        projected_area_ft2: df.projected_area_ft2,
+        azimuth_deg: df.azimuth_deg ?? null,
+        color,
+      };
+      orderState.verifiedFaces.push(entry);
+      const path = poly.getPath();
+      const local = idx;
+      const syncFacePath = () => {
+        const newPts = [];
+        for (let k = 0; k < path.getLength(); k++) {
+          const llp = path.getAt(k); newPts.push({ lat: llp.lat(), lng: llp.lng() });
+        }
+        if (newPts.length < 3) return;
+        orderState.verifiedFaces[local].points = newPts;
+        orderState.verifiedFaces[local].projected_area_ft2 = custShoelaceAreaFt2(newPts);
+        custUpdateVerifyPlaneCard(local);
+        custPersistVerifyState();
+      };
+      google.maps.event.addListener(path, 'set_at', syncFacePath);
+      google.maps.event.addListener(path, 'insert_at', syncFacePath);
+      google.maps.event.addListener(path, 'remove_at', syncFacePath);
+      google.maps.event.addListener(poly, 'click', () => focusVerifyPlane(local));
+      added++;
+    }
+    custRenderVerifyPlaneList();
+    custPersistVerifyState();
+    showMsg(added > 0 ? 'success' : 'info', `<i class="fas ${added > 0 ? 'fa-check-circle' : 'fa-info-circle'} mr-1"></i>${added > 0 ? `Added ${added} new plane${added === 1 ? '' : 's'}` : 'No new planes found — every detected plane already overlaps one of yours'}.`);
+  } catch (e) {
+    showMsg('error', `<i class="fas fa-exclamation-triangle mr-1"></i>Auto-detect failed: ${e?.message || e}`);
+  } finally {
+    if (btn) { btn.disabled = false; }
+  }
 };
 
 // Toolbar handler — finalizes the in-progress dormer polygon (≥ 3 points)

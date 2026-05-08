@@ -119,6 +119,35 @@ describe('verified_faces (Verify Planes path)', () => {
     expect(report.key_measurements.total_roof_area_sloped_ft2).toBeGreaterThan(0)
   })
 
+  it('dormer differential rides the underlying plane pitch, not the dominant pitch', () => {
+    // Two faces at very different pitches: West at 4:12 (low), East at 12:12.
+    // Place a dormer at 18:12 entirely inside the East face. The dormer
+    // differential should be relative to East's 12:12, not the dominant
+    // pitch of the whole roof.
+    const dormerEast = rectAt(40, -75 + halfDegLng / 2, 0.5, 0.5)
+    const payload = traceUiToEnginePayload(
+      {
+        eaves: mainEaves,
+        eaves_sections: [mainEaves],
+        verified_faces: [
+          { polygon: westFace, pitch_rise: 4 },
+          { polygon: eastFace, pitch_rise: 12 },
+        ],
+        dormers: [{ polygon: dormerEast, pitch_rise: 18, label: 'Front Dormer' }],
+      } as any,
+      { property_address: 'dormer-on-plane' },
+      6,
+    )
+    const report = new RoofMeasurementEngine(payload).run()
+    expect(report.dormer_breakdown).toBeDefined()
+    expect(report.dormer_breakdown!.length).toBe(1)
+    // Engine must attribute the dormer to the East face's 12:12 pitch.
+    expect(report.dormer_breakdown![0].main_pitch_rise).toBe(12)
+    // Differential math sanity: 0.25 m² ≈ 2.69 ft² × (sf(18) − sf(12))
+    const expectedExtra = 0.25 * 10.7639 * (slopeFactor(18) - slopeFactor(12))
+    expect(Math.abs(report.dormer_breakdown![0].extra_sloped_ft2 - expectedExtra)).toBeLessThan(1)
+  })
+
   it('verified_faces coexist with dormers — dormer differential still applies on top', () => {
     const dormer = rectAt(40, -75, 1, 1)
     const payload = traceUiToEnginePayload(

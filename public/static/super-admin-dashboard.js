@@ -1773,7 +1773,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
         '</div>' +
         '<div style="font-size:10px;color:#94a3b8;line-height:1.4;margin-bottom:8px">Drag any plane vertex on the map to fix the split. Edit the pitch input to override the detected pitch. Each plane’s area = shoelace × slopeFactor(pitch).</div>' +
         '<div style="display:flex;gap:6px">' +
-          '<button onclick="saReDetectPlanes()" title="Throw away edits and re-run auto-split" style="flex:1;padding:7px 10px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer"><i class="fas fa-arrows-rotate mr-1"></i>Re-detect</button>' +
+          '<button onclick="saReDetectPlanes()" title="OK = auto-add only the planes the detector finds that don\'t overlap yours. Cancel = wipe + fresh detect." style="flex:1;padding:7px 10px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer"><i class="fas fa-arrows-rotate mr-1"></i>Re-detect</button>' +
           '<button onclick="saConfirmVerifyPlanes()" id="sa-confirm-verify-planes-btn" style="flex:2;padding:7px 10px;background:#10b981;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer"><i class="fas fa-check mr-1"></i>Confirm Planes</button>' +
         '</div>' +
       '</div>' +
@@ -2428,6 +2428,73 @@ function saUpdateDormerCompleteBtn() {
 // mathematically determined by the user-confirmed polygon and pitch.
 // ─────────────────────────────────────────────────────────────────────────
 
+// ── Plane validation: self-intersection + pairwise overlap (super-admin) ──
+function _saSegmentsCross(a1, a2, b1, b2) {
+  var ccw = function(p, q, r) { return (q.lat - p.lat) * (r.lng - p.lng) - (q.lng - p.lng) * (r.lat - p.lat); };
+  var o1 = ccw(a1, a2, b1), o2 = ccw(a1, a2, b2);
+  var o3 = ccw(b1, b2, a1), o4 = ccw(b1, b2, a2);
+  var eq = function(p, q) { return Math.abs(p.lat - q.lat) < 1e-9 && Math.abs(p.lng - q.lng) < 1e-9; };
+  if (eq(a1, b1) || eq(a1, b2) || eq(a2, b1) || eq(a2, b2)) return false;
+  return ((o1 > 0) !== (o2 > 0)) && ((o3 > 0) !== (o4 > 0));
+}
+function _saPolyHasSelfIntersection(pts) {
+  var n = pts.length;
+  for (var i = 0; i < n; i++) {
+    for (var j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue;
+      if (_saSegmentsCross(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n])) return true;
+    }
+  }
+  return false;
+}
+function _saPointInLatLngPoly(pt, poly) {
+  var inside = false;
+  for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    var xi = poly[i].lng, yi = poly[i].lat;
+    var xj = poly[j].lng, yj = poly[j].lat;
+    var intersect = ((yi > pt.lat) !== (yj > pt.lat))
+      && (pt.lng < ((xj - xi) * (pt.lat - yi)) / ((yj - yi) || 1e-12) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+function _saPlanesOverlap(a, b) {
+  for (var i = 0; i < a.length; i++) if (_saPointInLatLngPoly(a[i], b)) return true;
+  for (var k = 0; k < b.length; k++) if (_saPointInLatLngPoly(b[k], a)) return true;
+  for (var ii = 0; ii < a.length; ii++) {
+    var ai = a[ii], aj = a[(ii + 1) % a.length];
+    for (var kk = 0; kk < b.length; kk++) {
+      var bi = b[kk], bj = b[(kk + 1) % b.length];
+      if (_saSegmentsCross(ai, aj, bi, bj)) return true;
+    }
+  }
+  return false;
+}
+function saValidateVerifiedPlanes(faces) {
+  var issues = [];
+  for (var i = 0; i < faces.length; i++) {
+    if (faces[i].points && faces[i].points.length >= 4 && _saPolyHasSelfIntersection(faces[i].points)) {
+      issues.push({ kind: 'self-intersect', a: i, message: faces[i].label + ' has crossing edges — fix or delete.' });
+    }
+  }
+  for (var ii = 0; ii < faces.length; ii++) {
+    for (var jj = ii + 1; jj < faces.length; jj++) {
+      var a = faces[ii].points, b = faces[jj].points;
+      if (a && b && a.length >= 3 && b.length >= 3 && _saPlanesOverlap(a, b)) {
+        issues.push({ kind: 'overlap', a: ii, b: jj, message: faces[ii].label + ' overlaps ' + faces[jj].label + ' — area would double-count.' });
+      }
+    }
+  }
+  return issues;
+}
+
+function saAzimuthToCompass(deg) {
+  if (deg == null || !isFinite(deg)) return '';
+  var dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  var idx = Math.round(((deg % 360) + 360) % 360 / 45) % 8;
+  return dirs[idx];
+}
+
 // Shoelace area for a lat/lng polygon in ft². Used to live-update each
 // plane card's area as the admin drags vertices.
 function saShoelaceAreaFt2(latLngs) {
@@ -2508,9 +2575,23 @@ window.saStartVerifyPlanes = async function saStartVerifyPlanes(orderId) {
       alert('No planes detected. Trace at least one ridge or hip line so the engine can split the eaves polygon into faces.');
       return;
     }
+    // Snapshot auto-detect totals so the confirm toast shows the user how
+    // much their edits shifted the math vs. the engine's auto-detect.
+    var autoFP = 0, autoSL = 0;
+    for (var fi = 0; fi < faces.length; fi++) {
+      var pp = faces[fi].projected_area_ft2 || 0;
+      autoFP += pp;
+      autoSL += pp * saSlopeFactor(faces[fi].pitch_rise);
+    }
+    s._autoDetectSnapshot = { footprint: autoFP, sloped: autoSL, count: faces.length };
     saRenderVerifyPlanes(faces);
     s._verifyPlanesActive = true;
     document.getElementById('sa-verify-planes-panel').style.display = 'block';
+    // Multi-structure note — when the trace has detached garage/porch
+    // sections, surface a banner so the admin doesn't forget those
+    // structures ride at their own (per-section) pitch separately from
+    // verify-planes (which only operates on the primary structure).
+    saUpdateMultiStructureNote();
     var submitBtn = document.getElementById('sa-submit-trace-btn');
     if (submitBtn) submitBtn.disabled = true;
   } catch (e) {
@@ -2546,6 +2627,7 @@ function saRenderVerifyPlanes(faces) {
       points: f.polygon.map(function(p) { return { lat: p.lat, lng: p.lng }; }),
       pitch_rise: f.pitch_rise,
       projected_area_ft2: f.projected_area_ft2,
+      azimuth_deg: (f.azimuth_deg != null ? f.azimuth_deg : null),
       color: color,
     };
     s.verifiedFaces.push(entry);
@@ -2591,29 +2673,109 @@ function saRenderVerifyPlaneList() {
   var listEl = document.getElementById('sa-verify-planes-list'); if (!listEl) return;
   if (!s.verifiedFaces || s.verifiedFaces.length === 0) {
     listEl.innerHTML = '<div style="color:#94a3b8;font-size:11px;font-style:italic">No planes yet — click Add Plane to draw one, or Re-detect to auto-split.</div>';
+    saUpdateValidationUI([]);
     return;
   }
+  var issues = saValidateVerifiedPlanes(s.verifiedFaces);
+  var issueByIdx = {};
+  for (var ii = 0; ii < issues.length; ii++) { issueByIdx[issues[ii].a] = true; if (issues[ii].b != null) issueByIdx[issues[ii].b] = true; }
   var html = '';
   for (var i = 0; i < s.verifiedFaces.length; i++) {
     var f = s.verifiedFaces[i];
     var sloped = f.projected_area_ft2 * saSlopeFactor(f.pitch_rise);
-    html += '<div onclick="saFocusVerifyPlane(' + i + ')" style="background:#0f172a;border:1px solid ' + f.color + ';border-left:4px solid ' + f.color + ';border-radius:8px;padding:8px 10px;cursor:pointer;transition:background 0.15s">' +
+    var compass = saAzimuthToCompass(f.azimuth_deg);
+    var flagged = !!issueByIdx[i];
+    var borderColor = flagged ? '#ef4444' : f.color;
+    var borderWidth = flagged ? '2px' : '1px';
+    html += '<div onclick="saFocusVerifyPlane(' + i + ')" style="background:#0f172a;border:' + borderWidth + ' solid ' + borderColor + ';border-left:4px solid ' + f.color + ';border-radius:8px;padding:8px 10px;cursor:pointer;transition:background 0.15s">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;gap:6px">' +
-        '<div style="color:#fff;font-size:13px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + f.label + '</div>' +
+        '<div style="display:flex;align-items:center;gap:4px;flex:1;min-width:0">' +
+          '<span id="sa-verify-label-' + i + '" ondblclick="event.stopPropagation(); saStartEditLabel(' + i + ')" title="Double-click to rename" style="color:#fff;font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:text">' + f.label + '</span>' +
+          (flagged ? '<i class="fas fa-triangle-exclamation" title="Polygon issue — see warnings below" style="color:#ef4444;font-size:11px;flex-shrink:0"></i>' : '') +
+        '</div>' +
         '<div style="display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()">' +
           '<input type="number" min="0.5" max="24" step="0.5" value="' + f.pitch_rise + '" oninput="saSetVerifyPlanePitch(' + i + ', this.value)" style="width:54px;padding:3px 6px;background:#1e293b;color:#fff;border:1px solid #334155;border-radius:5px;font-size:11px;font-weight:700;text-align:center" />' +
           '<span style="color:#94a3b8;font-size:11px;font-weight:600">:12</span>' +
           '<button onclick="saDeleteVerifyPlane(' + i + ')" title="Delete this plane" style="background:transparent;color:#f87171;border:none;cursor:pointer;padding:2px 4px;font-size:11px"><i class="fas fa-trash"></i></button>' +
         '</div>' +
       '</div>' +
-      '<div style="display:flex;justify-content:space-between;font-size:10px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;gap:6px">' +
         '<span id="sa-verify-area-' + i + '" style="color:#94a3b8">' + Math.round(f.projected_area_ft2).toLocaleString() + ' SF footprint</span>' +
+        (compass ? '<span style="color:#cbd5e1;font-weight:600" title="Face direction">↑ ' + compass + '</span>' : '') +
         '<span id="sa-verify-sloped-' + i + '" style="color:' + f.color + ';font-weight:700">' + Math.round(sloped).toLocaleString() + ' SF sloped</span>' +
       '</div>' +
     '</div>';
   }
   listEl.innerHTML = html;
+  saUpdateValidationUI(issues);
 }
+
+function saUpdateValidationUI(issues) {
+  var banner = document.getElementById('sa-verify-banner');
+  var panel = document.getElementById('sa-verify-planes-panel'); if (!panel) return;
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'sa-verify-banner';
+    panel.insertBefore(banner, document.getElementById('sa-verify-planes-list'));
+  }
+  var confirmBtn = document.getElementById('sa-confirm-verify-planes-btn');
+  if (issues.length === 0) {
+    banner.style.display = 'none';
+    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.style.opacity = 1; confirmBtn.style.cursor = 'pointer'; }
+    return;
+  }
+  var lis = issues.map(function(x) { return '<li style="margin:0">' + x.message + '</li>'; }).join('');
+  banner.style.cssText = 'background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.45);border-radius:8px;padding:8px 10px;margin-bottom:8px;color:#fca5a5;font-size:10.5px;line-height:1.45';
+  banner.innerHTML = '<div style="font-weight:700;margin-bottom:4px"><i class="fas fa-triangle-exclamation mr-1"></i>' + issues.length + ' issue' + (issues.length === 1 ? '' : 's') + ' to fix</div><ul style="margin:0;padding-left:14px">' + lis + '</ul>';
+  banner.style.display = 'block';
+  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.style.opacity = 0.5; confirmBtn.style.cursor = 'not-allowed'; }
+}
+
+// Per-structure context note. Verify Planes operates on the PRIMARY (largest)
+// eaves polygon. Detached garages / other closed structures keep their own
+// per-section pitch (set via the "Section Pitches" floating panel on the
+// trace map) and aren't split into faces here. This banner makes that
+// boundary visible so the admin doesn't expect to verify the garage's faces.
+function saUpdateMultiStructureNote() {
+  var s = window._saTraceState; if (!s) return;
+  var panel = document.getElementById('sa-verify-planes-panel'); if (!panel) return;
+  var existing = document.getElementById('sa-multi-structure-note');
+  var sectionCount = (s.eaveSections || []).length;
+  if (sectionCount <= 1) {
+    if (existing) existing.style.display = 'none';
+    return;
+  }
+  if (!existing) {
+    existing = document.createElement('div');
+    existing.id = 'sa-multi-structure-note';
+    var listEl = document.getElementById('sa-verify-planes-list');
+    panel.insertBefore(existing, listEl);
+  }
+  existing.style.cssText = 'background:rgba(99,102,241,0.10);border:1px solid rgba(99,102,241,0.35);border-radius:8px;padding:8px 10px;margin-bottom:8px;color:#a5b4fc;font-size:10.5px;line-height:1.45';
+  existing.innerHTML = '<i class="fas fa-info-circle mr-1"></i><strong>Primary structure only.</strong> ' + (sectionCount - 1) + ' additional structure' + (sectionCount - 1 === 1 ? '' : 's') + ' (e.g. detached garage) ride at their own per-section pitch — set those via the Section Pitches panel on the trace map. Verify Planes only splits the primary outline.';
+  existing.style.display = 'block';
+}
+
+window.saStartEditLabel = function saStartEditLabel(idx) {
+  var span = document.getElementById('sa-verify-label-' + idx); if (!span) return;
+  var s = window._saTraceState; var f = s.verifiedFaces[idx]; if (!f) return;
+  var input = document.createElement('input');
+  input.type = 'text'; input.value = f.label; input.maxLength = 40;
+  input.style.cssText = 'background:#1e293b;color:#fff;border:1px solid #4f46e5;border-radius:4px;padding:2px 6px;font-size:12px;font-weight:700;width:140px';
+  span.replaceWith(input);
+  input.focus(); input.select();
+  function commit() {
+    var v = (input.value || '').trim();
+    if (v.length > 0) f.label = v;
+    saRenderVerifyPlaneList();
+    saPersistVerifyState();
+  }
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    else if (e.key === 'Escape') { saRenderVerifyPlaneList(); }
+  });
+};
 
 window.saDeleteVerifyPlane = function saDeleteVerifyPlane(idx) {
   var s = window._saTraceState; if (!s || !s.verifiedFaces) return;
@@ -2737,6 +2899,7 @@ window.saFinishAddPlane = function saFinishAddPlane() {
     points: pts.map(function(ll) { return { lat: ll.lat(), lng: ll.lng() }; }),
     pitch_rise: pitchRise,
     projected_area_ft2: 0,
+    azimuth_deg: null,  // user-drawn plane — no auto-detect azimuth
     color: color,
   };
   entry.projected_area_ft2 = saShoelaceAreaFt2(entry.points);
@@ -2797,7 +2960,7 @@ function saPersistVerifyState() {
   var s = window._saTraceState; if (!s || !s.orderId) return;
   try {
     var serializable = (s.verifiedFaces || []).map(function(f) {
-      return { face_id: f.face_id, label: f.label, points: f.points, pitch_rise: f.pitch_rise, color: f.color, projected_area_ft2: f.projected_area_ft2 };
+      return { face_id: f.face_id, label: f.label, points: f.points, pitch_rise: f.pitch_rise, color: f.color, projected_area_ft2: f.projected_area_ft2, azimuth_deg: (f.azimuth_deg != null ? f.azimuth_deg : null) };
     });
     localStorage.setItem('saVerifyFaces:' + s.orderId, JSON.stringify(serializable));
   } catch {}
@@ -2831,6 +2994,7 @@ function saLoadVerifyState() {
       points: f.points,
       pitch_rise: f.pitch_rise,
       projected_area_ft2: f.projected_area_ft2 || saShoelaceAreaFt2(f.points),
+      azimuth_deg: (f.azimuth_deg != null ? f.azimuth_deg : null),
       color: color,
     };
     s.verifiedFaces.push(entry);
@@ -2882,16 +3046,97 @@ window.saFocusVerifyPlane = function saFocusVerifyPlane(idx) {
   s.map.panTo({ lat: cx, lng: cy });
 };
 
-window.saReDetectPlanes = function saReDetectPlanes() {
+window.saReDetectPlanes = async function saReDetectPlanes() {
   var s = window._saTraceState; if (!s) return;
-  if (!confirm('Discard your edits and re-run auto-split?')) return;
-  saTearDownVerifyPlaneOverlays();
-  s.verifiedFaces = [];
-  document.getElementById('sa-verify-planes-panel').style.display = 'none';
-  s._verifyPlanesActive = false;
-  var submitBtn = document.getElementById('sa-submit-trace-btn');
-  if (submitBtn) submitBtn.disabled = false;
-  saStartVerifyPlanes(s.orderId);
+  if ((s.verifiedFaces || []).length === 0) { saStartVerifyPlanes(s.orderId); return; }
+  var addOnly = confirm('Click OK to AUTO-ADD MISSING planes (keep your edits, only add planes the detector finds that don\'t overlap yours).\n\nClick Cancel to RESET to a fresh auto-detect (loses your edits).');
+  if (!addOnly) {
+    saTearDownVerifyPlaneOverlays();
+    s.verifiedFaces = [];
+    document.getElementById('sa-verify-planes-panel').style.display = 'none';
+    s._verifyPlanesActive = false;
+    var submitBtn = document.getElementById('sa-submit-trace-btn');
+    if (submitBtn) submitBtn.disabled = false;
+    saStartVerifyPlanes(s.orderId);
+    return;
+  }
+  // Auto-add-missing: re-run preview, append only non-overlapping detected planes.
+  try {
+    var eaves_sections = s.eaveSections.map(function(sec) { return sec.points; });
+    var traceJson = {
+      eaves: eaves_sections[0], eaves_sections: eaves_sections,
+      ridges: s._ridgeData || [], hips: s._hipData || [], valleys: s._valleyData || [],
+    };
+    var token = localStorage.getItem('rc_token') || '';
+    var res = await fetch('/api/admin/superadmin/orders/' + s.orderId + '/preview-trace', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roof_trace_json: traceJson }),
+    });
+    var data = await res.json();
+    if (!data.success || !data.proposed) {
+      alert('Auto-detect failed: ' + (data.error || 'unknown error'));
+      return;
+    }
+    var detected = (data.proposed.face_details || []).filter(function(f) { return f && f.polygon && f.polygon.length >= 3; });
+    var added = 0;
+    for (var di = 0; di < detected.length; di++) {
+      var df = detected[di];
+      // Skip if overlaps an existing user plane
+      var overlaps = false;
+      for (var ei = 0; ei < s.verifiedFaces.length; ei++) {
+        if (_saPlanesOverlap(s.verifiedFaces[ei].points, df.polygon)) { overlaps = true; break; }
+      }
+      if (overlaps) continue;
+      var localIdx = s.verifiedFaces.length;
+      var color = SA_PLANE_COLORS[localIdx % SA_PLANE_COLORS.length];
+      var poly = new google.maps.Polygon({
+        paths: df.polygon.map(function(p) { return new google.maps.LatLng(p.lat, p.lng); }),
+        map: s.map,
+        strokeColor: color, strokeWeight: 3, strokeOpacity: 0.95,
+        fillColor: color, fillOpacity: 0.20,
+        clickable: true, editable: true, draggable: false, zIndex: 5,
+      });
+      var entry = {
+        face_id: df.face_id || ('face_' + String.fromCharCode(65 + localIdx)),
+        label: 'Plane ' + String.fromCharCode(65 + localIdx),
+        polygon: poly,
+        points: df.polygon.map(function(p) { return { lat: p.lat, lng: p.lng }; }),
+        pitch_rise: df.pitch_rise,
+        projected_area_ft2: df.projected_area_ft2,
+        azimuth_deg: (df.azimuth_deg != null ? df.azimuth_deg : null),
+        color: color,
+      };
+      s.verifiedFaces.push(entry);
+      (function(idx) {
+        var path = poly.getPath();
+        function syncFacePath() {
+          var newPts = [];
+          for (var k = 0; k < path.getLength(); k++) {
+            var llp = path.getAt(k);
+            newPts.push({ lat: llp.lat(), lng: llp.lng() });
+          }
+          if (newPts.length < 3) return;
+          s.verifiedFaces[idx].points = newPts;
+          s.verifiedFaces[idx].projected_area_ft2 = saShoelaceAreaFt2(newPts);
+          saUpdateVerifyPlaneCard(idx);
+          saPersistVerifyState();
+        }
+        google.maps.event.addListener(path, 'set_at', syncFacePath);
+        google.maps.event.addListener(path, 'insert_at', syncFacePath);
+        google.maps.event.addListener(path, 'remove_at', syncFacePath);
+        google.maps.event.addListener(poly, 'click', function() { saFocusVerifyPlane(idx); });
+      })(localIdx);
+      added++;
+    }
+    saRenderVerifyPlaneList();
+    saPersistVerifyState();
+    if (added === 0) {
+      alert('No new planes found — every detected plane overlaps one of yours.');
+    }
+  } catch (e) {
+    alert('Auto-detect failed: ' + (e && e.message ? e.message : e));
+  }
 };
 
 // Hydrate any previously-persisted verified planes when the trace map is
@@ -2931,6 +3176,28 @@ window.saConfirmVerifyPlanes = function saConfirmVerifyPlanes() {
       return;
     }
   }
+  // Block if any geometry issues remain (overlap / self-intersect)
+  var issues = saValidateVerifiedPlanes(s.verifiedFaces);
+  if (issues.length > 0) {
+    alert(issues.length + ' plane issue' + (issues.length === 1 ? '' : 's') + ' to fix:\n\n' + issues.map(function(x) { return '• ' + x.message; }).join('\n'));
+    return;
+  }
+  // Diff vs auto-detect — surface in the verify-button label so the admin
+  // can see at a glance how much their edits shifted the math.
+  var auto = s._autoDetectSnapshot;
+  var userSL = 0;
+  for (var ii = 0; ii < s.verifiedFaces.length; ii++) {
+    userSL += (s.verifiedFaces[ii].projected_area_ft2 || 0) * saSlopeFactor(s.verifiedFaces[ii].pitch_rise);
+  }
+  var diffStr = '';
+  if (auto && auto.sloped > 0) {
+    var dSloped = userSL - auto.sloped;
+    if (Math.abs(dSloped) >= 1) {
+      var sign = dSloped >= 0 ? '+' : '−';
+      diffStr = ' (' + sign + Math.round(Math.abs(dSloped)).toLocaleString() + ' SF vs auto)';
+    }
+  }
+  s._verifyDiffStr = diffStr;
   document.getElementById('sa-verify-planes-panel').style.display = 'none';
   s._verifyPlanesActive = false;
   var submitBtn = document.getElementById('sa-submit-trace-btn');
@@ -2946,7 +3213,7 @@ window.saConfirmVerifyPlanes = function saConfirmVerifyPlanes() {
     btn.style.background = 'rgba(16,185,129,0.18)';
     btn.style.color = '#6ee7b7';
     btn.style.borderColor = 'rgba(16,185,129,0.5)';
-    btn.innerHTML = '<i class="fas fa-check mr-1.5"></i>' + s.verifiedFaces.length + ' Plane' + (s.verifiedFaces.length === 1 ? '' : 's') + ' Verified';
+    btn.innerHTML = '<i class="fas fa-check mr-1.5"></i>' + s.verifiedFaces.length + ' Plane' + (s.verifiedFaces.length === 1 ? '' : 's') + ' Verified' + (s._verifyDiffStr || '');
   }
   saPersistVerifyState();
 };

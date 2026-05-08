@@ -111,6 +111,12 @@ export interface TracePayload {
   // Multi-layer eave depth: per-section overhang depth values.
   // If provided, ice & water shield and starter strip are computed per-layer.
   eave_depths?: EaveDepthLayer[]
+  // Per-edge eave/rake tags for SECONDARY structures, parallel to
+  // `eaves_sections`. Each inner array has one entry per vertex of that
+  // section (tag[i] applies to the edge starting at vertex i). When omitted
+  // or shorter than a section's vertex count, that section's perimeter
+  // defaults to all-eave (matches pre-multistructure-tagging behavior).
+  eaves_sections_tags?: Array<Array<'eave' | 'rake'>>
   // Obstructions to exclude: chimneys, skylights, vents, etc.
   // Each obstruction polygon area is subtracted from total roof area.
   obstructions?: Obstruction[]
@@ -178,6 +184,10 @@ export interface EaveEdge {
   length_3d_ft: number
   length_ft: number  // backward compat alias
   bearing_deg: number
+  // Which structure this edge belongs to: 0 = primary, 1+ = secondary
+  // sections (detached garage, etc.). Optional for backward-compat with
+  // pre-multistructure callers; treat undefined as 0.
+  section_index?: number
 }
 
 export interface LineDetail {
@@ -860,7 +870,13 @@ export function computeIceWaterBreakdown(
   faces: { pitch_rise: number; sloped_area_ft2: number }[],
   totalEaveFt: number,
   totalValleyFt: number,
-  eaveDepths: EaveDepthLayer[]
+  eaveDepths: EaveDepthLayer[],
+  // Per-section eave LF + depth. Index 0 = primary, 1+ = secondary structures.
+  // When provided, the eave-strip area is integrated per section so a 6"
+  // garage overhang isn't inflated to a 24" house overhang. Falls back to
+  // the global max(depth) approximation when omitted (keeps test fixtures
+  // and pre-multistructure traces working unchanged).
+  perSectionEave?: Array<{ section_index: number; eave_lf_ft: number; depth_ft: number }>
 ): IceWaterBreakdown {
   const lowSlopeFaces = faces.filter(f => f.pitch_rise > 0 && f.pitch_rise < LOW_SLOPE_RISE_THRESHOLD)
   const lowSlopeSqft = lowSlopeFaces.reduce((s, f) => s + f.sloped_area_ft2, 0)
@@ -869,16 +885,36 @@ export function computeIceWaterBreakdown(
 
   // Eave LF on standard-pitch faces only — proportional approximation
   // since face-to-edge mapping is not resolved at this layer.
-  const standardPitchEaveFt = totalFaces > 0
-    ? totalEaveFt * (1 - lowSlopeCount / totalFaces)
-    : totalEaveFt
+  const lowSlopeFraction = totalFaces > 0 ? lowSlopeCount / totalFaces : 0
+  const standardPitchFraction = 1 - lowSlopeFraction
+  const standardPitchEaveFt = totalEaveFt * standardPitchFraction
 
-  const overhangFt = eaveDepths.length > 0
-    ? Math.max(...eaveDepths.map(l => l.depth_ft), EAVE_OVERHANG_DEFAULT_FT)
-    : EAVE_OVERHANG_DEFAULT_FT
-  const stripDepthFt = overhangFt + EAVE_PAST_WALL_FT
-
-  const eaveStripSqft = standardPitchEaveFt * stripDepthFt
+  // Per-section integration when caller supplied per-section data. Each
+  // structure's eave strip is independent: low-slope faces still excluded by
+  // the same proportional fraction, but the strip *width* is each section's
+  // own overhang + heated-wall offset rather than a global max.
+  let eaveStripSqft = 0
+  let stripDepthForReport = 0
+  let perSectionUsed = false
+  if (perSectionEave && perSectionEave.length > 0) {
+    perSectionUsed = true
+    let weightedDepthNum = 0
+    let weightedDepthDen = 0
+    for (const sec of perSectionEave) {
+      const eaveLf = Math.max(0, sec.eave_lf_ft) * standardPitchFraction
+      const depth = (sec.depth_ft && sec.depth_ft > 0 ? sec.depth_ft : EAVE_OVERHANG_DEFAULT_FT) + EAVE_PAST_WALL_FT
+      eaveStripSqft += eaveLf * depth
+      weightedDepthNum += depth * eaveLf
+      weightedDepthDen += eaveLf
+    }
+    stripDepthForReport = weightedDepthDen > 0 ? weightedDepthNum / weightedDepthDen : EAVE_OVERHANG_DEFAULT_FT + EAVE_PAST_WALL_FT
+  } else {
+    const overhangFt = eaveDepths.length > 0
+      ? Math.max(...eaveDepths.map(l => l.depth_ft), EAVE_OVERHANG_DEFAULT_FT)
+      : EAVE_OVERHANG_DEFAULT_FT
+    stripDepthForReport = overhangFt + EAVE_PAST_WALL_FT
+    eaveStripSqft = standardPitchEaveFt * stripDepthForReport
+  }
   const valleySqft = totalValleyFt * IW_VALLEY_HALF_WIDTH_FT * 2
 
   const totalSqft = lowSlopeSqft + eaveStripSqft + valleySqft
@@ -889,7 +925,14 @@ export function computeIceWaterBreakdown(
     notes.push(`Low-slope coverage: ${lowSlopeCount} face(s) below 2:12 → ${round(lowSlopeSqft, 0)} sqft full I&W per IRC R905.1.2.`)
   }
   if (eaveStripSqft > 0) {
-    notes.push(`Eave strip: ${round(standardPitchEaveFt, 0)} LF × ${round(stripDepthFt, 1)} ft (overhang ${round(overhangFt, 1)} + 24" past heated wall) = ${round(eaveStripSqft, 0)} sqft.`)
+    if (perSectionUsed && perSectionEave!.length > 1) {
+      const segs = perSectionEave!
+        .map(s => `${round(Math.max(0, s.eave_lf_ft) * standardPitchFraction, 0)}LF × ${round((s.depth_ft || EAVE_OVERHANG_DEFAULT_FT) + EAVE_PAST_WALL_FT, 1)}ft`)
+        .join(' + ')
+      notes.push(`Eave strip (per-structure): ${segs} = ${round(eaveStripSqft, 0)} sqft.`)
+    } else {
+      notes.push(`Eave strip: ${round(standardPitchEaveFt, 0)} LF × ${round(stripDepthForReport, 1)} ft (overhang + 24" past heated wall) = ${round(eaveStripSqft, 0)} sqft.`)
+    }
   }
   if (valleySqft > 0) {
     notes.push(`Valley coverage: ${round(totalValleyFt, 0)} LF × 3 ft × 2 sides = ${round(valleySqft, 0)} sqft.`)
@@ -902,7 +945,7 @@ export function computeIceWaterBreakdown(
     low_slope_full_coverage_sqft: round(lowSlopeSqft, 1),
     low_slope_face_count: lowSlopeCount,
     eave_strip_sqft: round(eaveStripSqft, 1),
-    eave_strip_depth_ft: round(stripDepthFt, 2),
+    eave_strip_depth_ft: round(stripDepthForReport, 2),
     valley_sqft: round(valleySqft, 1),
     total_sqft: round(totalSqft, 1),
     total_rolls_2sq: totalRolls,
@@ -920,10 +963,11 @@ function materialsEstimate(
     headwall_flashing_ft?: number
     chimney_count?: number
     pipe_boot_count?: number
-  }
+  },
+  perSectionEave?: Array<{ section_index: number; eave_lf_ft: number; depth_ft: number }>
 ): TraceMaterialEstimate {
   const gross = netSquares * (1 + wasteFrac)
-  const iw = computeIceWaterBreakdown(faces || [], eaveFt, valleyFt, eaveDepths || [])
+  const iw = computeIceWaterBreakdown(faces || [], eaveFt, valleyFt, eaveDepths || [], perSectionEave)
   const f = flashings || {}
   return {
     shingles_squares_net:       round(netSquares, 2),
@@ -1015,6 +1059,8 @@ export class RoofMeasurementEngine {
   // Per-eave-edge tags ('eave' | 'rake') captured during tracing. Index aligns
   // with the from_pt index of each EaveEdge. Empty array = infer (legacy).
   private eavesTags: Array<'eave' | 'rake'> = []
+  // Tags parallel to rawEavesSections — see TracePayload.eaves_sections_tags.
+  private eavesSectionsTags: Array<Array<'eave' | 'rake'>> = []
   // Flashings — pre-computed haversine totals from traceUiToEnginePayload.
   // Engine doesn't need to project these (flat metal pieces, no slope correction).
   private stepFlashingFt = 0
@@ -1046,6 +1092,17 @@ export class RoofMeasurementEngine {
     // can never silently shift accounting.
     this.eavesTags = Array.isArray(payload.eaves_tags)
       ? payload.eaves_tags.filter((t): t is 'eave' | 'rake' => t === 'eave' || t === 'rake')
+      : []
+    // Per-section eave/rake tags for secondary structures. Each entry is a
+    // tag array for the corresponding `eaves_sections[i]`. Honored only when
+    // length ≥ section vertex count; otherwise that section falls back to
+    // all-eave attribution.
+    this.eavesSectionsTags = Array.isArray(payload.eaves_sections_tags)
+      ? payload.eaves_sections_tags.map(arr =>
+          Array.isArray(arr)
+            ? arr.filter((t): t is 'eave' | 'rake' => t === 'eave' || t === 'rake')
+            : []
+        )
       : []
 
     // Flashings (haversine LF + counts) — passthrough from trace payload.
@@ -1793,23 +1850,52 @@ export class RoofMeasurementEngine {
       totalRakeFt = totalRakeFt + rakeFromTags
     }
 
-    // Multi-structure: add perimeter LF from each secondary eaves section
-    // (detached garage, porch, dormer outline, etc.) to the eave total.
-    // The primary structure already supports rake tagging; secondary
-    // sections currently have no per-edge tagging UI, so their full
-    // perimeter is treated as eave LF — which matches how gutter +
-    // drip-edge are quoted in practice for detached garages.
+    // Multi-structure: walk each secondary eaves section per-edge so we can
+    // (a) honor per-section eave/rake tags when the UI ships them — falling
+    // back to all-eave attribution otherwise, (b) yield individual edges for
+    // the report's eave_edge_breakdown so a customer can see "Garage East:
+    // 20 ft" instead of just a summed total, and (c) record per-section
+    // eave LF for the per-section ice & water strip integration.
+    const perSectionEaveLF: Array<{ section_index: number; eave_lf_ft: number; depth_ft: number }> = []
+    const secondaryEaveEdges: EaveEdge[] = []
+    // Primary section's eave LF & depth (section_index 0). Computed AFTER
+    // primary tag handling above so it reflects the post-tag totalEaveFt.
+    {
+      const primaryDepthFt = this.eaveDepths.find(l => l.section_index === 0)?.depth_ft ?? EAVE_OVERHANG_DEFAULT_FT
+      perSectionEaveLF.push({ section_index: 0, eave_lf_ft: totalEaveFt, depth_ft: primaryDepthFt })
+    }
     if (this.rawEavesSections.length > 0) {
-      for (const secPts of this.rawEavesSections) {
+      for (let si = 0; si < this.rawEavesSections.length; si++) {
+        const secPts = this.rawEavesSections[si]
         const { projected: secCart } = projectToCartesian(secPts)
         if (secCart.length < 3) continue
-        let secPerimM = 0
+        const tags = this.eavesSectionsTags[si] || []
+        const tagsValid = tags.length >= secCart.length
+        let secEaveFt = 0
+        let secRakeFt = 0
         for (let i = 0; i < secCart.length; i++) {
           const a = secCart[i]
           const b = secCart[(i + 1) % secCart.length]
-          secPerimM += dist2D(a, b)
+          const len2D = dist2D(a, b) * M_TO_FT
+          const bearing = ((Math.atan2(b.x - a.x, b.y - a.y) * 180 / Math.PI) % 360 + 360) % 360
+          const tag: 'eave' | 'rake' = tagsValid && tags[i] === 'rake' ? 'rake' : 'eave'
+          if (tag === 'rake') secRakeFt += len2D
+          else secEaveFt += len2D
+          secondaryEaveEdges.push({
+            edge_num: i + 1,
+            from_pt: i + 1,
+            to_pt: ((i + 1) % secCart.length) + 1,
+            length_2d_ft: round(len2D, 2),
+            length_3d_ft: round(len2D, 2),
+            length_ft: round(len2D, 2),
+            bearing_deg: round(bearing, 1),
+            section_index: si + 1,
+          } as EaveEdge & { section_index: number })
         }
-        totalEaveFt += secPerimM * M_TO_FT
+        totalEaveFt += secEaveFt
+        totalRakeFt += secRakeFt
+        const secDepthFt = this.eaveDepths.find(l => l.section_index === si + 1)?.depth_ft ?? EAVE_OVERHANG_DEFAULT_FT
+        perSectionEaveLF.push({ section_index: si + 1, eave_lf_ft: secEaveFt, depth_ft: secDepthFt })
       }
     }
 
@@ -1882,18 +1968,47 @@ export class RoofMeasurementEngine {
       main_pitch_rise: number
     }> = []
     if (this.rawDormers.length > 0) {
-      const mainSlopeFactor = slopeFactor(domPitch)
+      // Helper — point-in-polygon (ray cast in lat/lng space).
+      const dormerPointInPoly = (lat: number, lng: number, poly: { lat: number; lng: number }[]) => {
+        let inside = false
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+          const xi = poly[i].lng, yi = poly[i].lat
+          const xj = poly[j].lng, yj = poly[j].lat
+          const intersect = ((yi > lat) !== (yj > lat))
+            && (lng < ((xj - xi) * (lat - yi)) / ((yj - yi) || 1e-12) + xi)
+          if (intersect) inside = !inside
+        }
+        return inside
+      }
       for (let i = 0; i < this.rawDormers.length; i++) {
         const d = this.rawDormers[i]
         const { projected: dCart } = projectToCartesian(d.polygon)
         const dProjFt2 = shoelaceAreaM2(dCart) * M2_TO_FT2
         if (dProjFt2 <= 0) continue
-        const dSlopeFactor = slopeFactor(d.pitch_rise)
+        // Find the underlying face that contains this dormer's centroid; use
+        // THAT face's pitch as the "main" pitch the differential rides on.
+        // Falls back to domPitch when the dormer doesn't sit cleanly inside
+        // any single face (e.g. crosses a ridge — rare).
+        let underlyingPitch = domPitch
+        if (facesData.length > 0 && Array.isArray(d.polygon) && d.polygon.length >= 3) {
+          let cLat = 0, cLng = 0
+          for (const p of d.polygon) { cLat += p.lat; cLng += p.lng }
+          cLat /= d.polygon.length; cLng /= d.polygon.length
+          for (const f of facesData) {
+            if (Array.isArray(f.polygon) && f.polygon.length >= 3
+                && dormerPointInPoly(cLat, cLng, f.polygon)) {
+              underlyingPitch = f.pitch_rise
+              break
+            }
+          }
+        }
+        const mainSlopeFactor = slopeFactor(underlyingPitch)
+        const dSlopeFactor    = slopeFactor(d.pitch_rise)
         const extraSloped = dProjFt2 * (dSlopeFactor - mainSlopeFactor)
-        // Only add if the dormer is steeper than the main; a "flatter" dormer
-        // would conceptually subtract area, but that's a strange edge case
-        // (low-slope addition on a steep main roof) — clamp to ≥ 0 to avoid
-        // surprise area drops from minor pitch differences.
+        // Only add if the dormer is steeper than its underlying face; a
+        // "flatter" dormer would conceptually subtract area, but that's a
+        // strange edge case (low-slope addition on a steep main roof) —
+        // clamp to ≥ 0 to avoid surprise area drops from minor pitch deltas.
         const extraClamped = Math.max(0, extraSloped)
         totalSloped += extraClamped
         dormerBreakdown.push({
@@ -1902,7 +2017,7 @@ export class RoofMeasurementEngine {
           pitch_rise: d.pitch_rise,
           footprint_ft2: dProjFt2,
           extra_sloped_ft2: extraClamped,
-          main_pitch_rise: domPitch,
+          main_pitch_rise: underlyingPitch,
         })
       }
     }
@@ -1936,6 +2051,18 @@ export class RoofMeasurementEngine {
     //   • Low-slope faces (rise < 2:12) → full sloped-area coverage
     //   • Standard-pitch eaves           → eave LF × (overhang + 24")
     //   • Valleys                        → LF × 3 ft × 2 sides
+    // Update primary section's recorded eave LF to the post-secondary-walk
+    // total contribution from the primary outline only — perSectionEaveLF[0]
+    // was set before secondary edges added their LF to totalEaveFt, so
+    // subtract the secondaries' contribution back out for the primary entry
+    // before passing to the I&W integrator. This keeps each section's
+    // entry as its OWN eave LF rather than a running total.
+    if (perSectionEaveLF.length > 1) {
+      const secondaryEaveLfSum = perSectionEaveLF.slice(1).reduce((s, x) => s + x.eave_lf_ft, 0)
+      perSectionEaveLF[0].eave_lf_ft = Math.max(0, totalEaveFt - secondaryEaveLfSum)
+    } else {
+      perSectionEaveLF[0].eave_lf_ft = totalEaveFt
+    }
     const mat = materialsEstimate(
       netSquares, wFrac,
       totalEaveFt, totalRidgeFt, totalHipFt, totalValleyFt, totalRakeFt,
@@ -1945,7 +2072,8 @@ export class RoofMeasurementEngine {
         headwall_flashing_ft: this.headwallFlashingFt,
         chimney_count:       this.chimneyCount,
         pipe_boot_count:     this.pipeBootCount,
-      }
+      },
+      perSectionEaveLF
     )
 
     const perimeterFt = totalEaveFt + totalRakeFt
@@ -2155,7 +2283,10 @@ export class RoofMeasurementEngine {
         chimney_flashing_count:     this.chimneyCount,
         pipe_boot_count:            this.pipeBootCount,
       },
-      eave_edge_breakdown: edges,
+      // Combined edge breakdown: primary edges (section_index undefined/0) +
+      // secondary section edges (section_index 1+) so the per-edge table
+      // shows every structure's edges, not just the main house's.
+      eave_edge_breakdown: edges.concat(secondaryEaveEdges),
       eave_corner_analysis: cornerAnalysis,
       eave_depth_layers: this.eaveDepths,
       obstruction_details: obstructionDetails,
@@ -2487,6 +2618,9 @@ export function traceUiToEnginePayload(
     cross_check:    crossCheck,
     plane_segments_lat_lng: traceJson.plane_segments_lat_lng,
     eaves_tags: traceJson.eaves_tags,
+    eaves_sections_tags: Array.isArray(traceJson.eaves_sections_tags) && traceJson.eaves_sections_tags.length > 0
+      ? traceJson.eaves_sections_tags
+      : undefined,
     dormers: Array.isArray(traceJson.dormers) && traceJson.dormers.length > 0
       ? traceJson.dormers
           .filter(d =>
