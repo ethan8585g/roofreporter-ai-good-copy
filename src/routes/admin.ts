@@ -4735,6 +4735,20 @@ adminRoutes.post('/superadmin/orders/:id/preview-trace', async (c) => {
           hips_ft:       report.linear_measurements.hips_total_ft,
           valleys_ft:    report.linear_measurements.valleys_total_ft,
           advisory_notes: report.advisory_notes,
+          // Per-face polygons + pitches — used by the Verify Planes UI to let
+          // the admin confirm or override each plane individually. When the
+          // engine could not bound a face polygon (no ridges/hips traced),
+          // polygon will be undefined for that entry.
+          face_details:  (report.face_details || []).map(f => ({
+            face_id:            f.face_id,
+            label:              f.face_id,
+            pitch_rise:         f.pitch_rise,
+            pitch_label:        f.pitch_label,
+            projected_area_ft2: f.projected_area_ft2,
+            sloped_area_ft2:    f.sloped_area_ft2,
+            polygon:            f.polygon || null,
+            azimuth_deg:        f.azimuth_deg ?? null,
+          })),
         }
       } catch (e: any) {
         return { error: e.message }

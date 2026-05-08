@@ -51,6 +51,13 @@ const orderState = {
   traceRidgeLines: [],
   traceHipLines: [],
   traceValleyLines: [],
+  // Parallel polyline overlays so each line is editable (drag endpoints) and
+  // can be removed precisely on undo without nuking other overlays. Indices
+  // stay in sync with traceRidgeLines/HipLines/ValleyLines via push/pop and
+  // splice. Used by drawEditableLine + the 3D-capture undo path.
+  traceRidgePolylines: [],
+  traceHipPolylines: [],
+  traceValleyPolylines: [],
   traceCurrentLine: [],
   tracePolylines: [],
   traceEavesPolygon: null,
@@ -65,6 +72,12 @@ const orderState = {
   traceDormerCurrent: [],          // in-progress dormer points
   traceDormerCurrentPolyline: null,
   traceDormerCurrentMarkers: [],
+  // Verified planes — per-face polygons + pitches the user has confirmed via
+  // the Verify Planes overlay. When non-empty, confirmTrace sends them as
+  // `verified_faces` so the engine uses them directly (shoelace × slope
+  // factor) instead of inferring face boundaries from ridges/hips.
+  verifiedFaces: [],               // [{face_id,label,points:[{lat,lng}],pitch_rise,projected_area_ft2,polygon:google.maps.Polygon,color}]
+  _verifyPlanesActive: false,
   traceMarkers: [],
   // Annotation markers (vents, skylights, chimneys, pipe boots) — single-click point placement
   traceVents: [],
@@ -858,6 +871,28 @@ function renderTraceStep(root, progressBar) {
                 <i class="fas fa-check" style="margin-right:4px;"></i>Finish Line
               </button>
             </div>
+            <!--
+              Verify Planes overlay panel — slides in from the right when the
+              user clicks "Verify Planes". Lists each detected plane (auto-
+              split or user-edited) with its label, live area, and a pitch
+              input. The polygons themselves are rendered as editable
+              overlays directly on the trace map. Confirming stashes the
+              per-plane polygons + pitches in orderState.verifiedFaces, which
+              confirmTrace then sends as `verified_faces` so the engine
+              computes each plane's area exactly (shoelace × slopeFactor).
+            -->
+            <div id="cust-verify-planes-panel" style="display:none;position:absolute;top:14px;right:14px;width:300px;max-height:78%;overflow-y:auto;z-index:8;background:rgba(15,23,42,0.97);border:1px solid #4f46e5;border-radius:12px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,0.5)">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #1e293b">
+                <div style="color:#a5b4fc;font-size:12px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase"><i class="fas fa-vector-square mr-1.5"></i>Verify Planes</div>
+                <button onclick="cancelVerifyPlanes()" title="Cancel — throws away plane edits" style="background:transparent;color:#94a3b8;border:none;font-size:14px;cursor:pointer;padding:2px 6px"><i class="fas fa-times"></i></button>
+              </div>
+              <div id="cust-verify-planes-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
+              <div style="font-size:10px;color:#94a3b8;line-height:1.4;margin-bottom:8px">Drag any plane vertex on the map to fix the split. Edit the pitch input to override the detected pitch. Each plane’s area = shoelace × slopeFactor(pitch).</div>
+              <div style="display:flex;gap:6px">
+                <button onclick="reDetectPlanes()" title="Throw away edits and re-run auto-split" style="flex:1;padding:7px 10px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer"><i class="fas fa-arrows-rotate mr-1"></i>Re-detect</button>
+                <button onclick="confirmVerifyPlanes()" id="cust-confirm-verify-planes-btn" style="flex:2;padding:7px 10px;background:#10b981;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer"><i class="fas fa-check mr-1"></i>Confirm Planes</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -879,6 +914,14 @@ function renderTraceStep(root, progressBar) {
           </button>
           <button onclick="skipTrace()" class="px-4 py-2 text-sm font-medium" style="color:var(--text-secondary)">
             Order Report <i class="fas fa-file-alt ml-1"></i>
+          </button>
+          <button onclick="startVerifyPlanes()" id="verifyPlanesBtn"
+            title="Confirm or override each detected roof plane's polygon and pitch. Locks per-plane area to user-verified values for exact measurements."
+            class="px-4 py-3 rounded-xl font-bold text-sm transition-all shadow-md flex items-center gap-2
+              ${eavesClosed ? ((orderState.verifiedFaces || []).length > 0 ? 'bg-emerald-500/15 border border-emerald-500/50 text-emerald-300' : 'bg-indigo-500/15 border border-indigo-500/50 text-indigo-300 hover:bg-indigo-500/25') : 'bg-gray-200/10 text-gray-500 cursor-not-allowed'}"
+            ${!eavesClosed ? 'disabled' : ''}>
+            <i class="fas fa-vector-square"></i>
+            ${(orderState.verifiedFaces || []).length > 0 ? `${orderState.verifiedFaces.length} Plane${orderState.verifiedFaces.length === 1 ? '' : 's'} Verified` : 'Verify Planes'}
           </button>
           <button onclick="confirmTrace()" id="traceNextBtn"
             class="px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-md flex items-center gap-2
@@ -1717,6 +1760,237 @@ function handleTraceClick(pt) {
   updateTraceUI();
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// VERIFY PLANES — customer confirms or overrides each detected roof plane's
+// polygon and pitch. The engine uses these per-face polygons directly so
+// every plane's area = shoelace × slopeFactor(pitch), no inference, no
+// remainder distribution. Mirrors the super-admin flow.
+// ─────────────────────────────────────────────────────────────────────────
+
+const CUST_PLANE_COLORS = ['#dc2626','#2563eb','#16a34a','#ea580c','#7c3aed','#db2777','#0d9488','#f59e0b','#0891b2','#8b5cf6'];
+
+function custShoelaceAreaFt2(latLngs) {
+  if (!latLngs || latLngs.length < 3) return 0;
+  let meanLat = 0, meanLng = 0;
+  for (const p of latLngs) { meanLat += p.lat; meanLng += p.lng; }
+  meanLat /= latLngs.length; meanLng /= latLngs.length;
+  const cosLat = Math.cos(meanLat * Math.PI / 180);
+  const pts = latLngs.map(p => ({ x: (p.lng - meanLng) * 111320 * cosLat, y: (p.lat - meanLat) * 111320 }));
+  let area2 = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    area2 += a.x * b.y - b.x * a.y;
+  }
+  return Math.abs(area2 / 2) * 10.7639;
+}
+
+function custSlopeFactor(rise) {
+  return Math.sqrt(((rise || 0) * (rise || 0) + 144) / 144);
+}
+
+function custTearDownVerifyPlaneOverlays() {
+  for (const f of (orderState.verifiedFaces || [])) {
+    if (f && f.polygon) { try { f.polygon.setMap(null); } catch {} }
+  }
+}
+
+window.startVerifyPlanes = async function startVerifyPlanes() {
+  if (!orderState.traceMap) { showMsg('error', 'Trace map not ready.'); return; }
+  if (!orderState.traceEavesSections || orderState.traceEavesSections.length === 0) {
+    showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Close the eaves polygon before verifying planes.');
+    return;
+  }
+  const btn = document.getElementById('verifyPlanesBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Detecting planes...'; }
+  try {
+    // Build a no-verified_faces trace (we want fresh auto-detect)
+    const _sections = orderState.traceEavesSections.map(s => s.points);
+    const _primary = _sections.length > 0
+      ? _sections.reduce((best, s) => (s.length > best.length ? s : best), _sections[0])
+      : orderState.traceEavesPoints;
+    const _sectionPitches = (orderState.traceEavesSections || []).map(s =>
+      (s && typeof s.pitch_rise === 'number' && s.pitch_rise > 0) ? s.pitch_rise : null
+    );
+    const _dormers = (orderState.traceDormers || [])
+      .filter(d => d && Array.isArray(d.points) && d.points.length >= 3 && typeof d.pitch_rise === 'number' && d.pitch_rise > 0)
+      .map(d => ({ polygon: d.points.map(p => ({ lat: p.lat, lng: p.lng })), pitch_rise: d.pitch_rise, label: d.label }));
+    const traceJson = {
+      eaves: _primary,
+      eaves_sections: _sections,
+      eaves_section_pitches: _sectionPitches,
+      dormers: _dormers.length > 0 ? _dormers : undefined,
+      ridges: orderState.traceRidgeLines,
+      hips: orderState.traceHipLines,
+      valleys: orderState.traceValleyLines,
+      annotations: {
+        vents: orderState.traceVents, skylights: orderState.traceSkylights,
+        chimneys: orderState.traceChimneys, pipe_boots: orderState.tracePipeBoots,
+      },
+    };
+    const res = await fetch('/api/reports/calculate-from-trace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trace: traceJson, address: orderState.address || `${orderState.lat}, ${orderState.lng}` }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Plane detection failed: ' + (data.error || 'unknown error'));
+      return;
+    }
+    const faces = (data.face_details || []).filter(f => f && f.polygon && f.polygon.length >= 3);
+    if (faces.length === 0) {
+      showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>No planes detected. Trace at least one ridge or hip line so the engine can split the eaves polygon into faces.');
+      return;
+    }
+    custRenderVerifyPlanes(faces);
+    orderState._verifyPlanesActive = true;
+    document.getElementById('cust-verify-planes-panel').style.display = 'block';
+  } catch (e) {
+    showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Plane detection failed: ' + (e && e.message ? e.message : e));
+  } finally {
+    if (btn) { btn.disabled = false; renderOrderPage(); }
+  }
+};
+
+function custRenderVerifyPlanes(faces) {
+  custTearDownVerifyPlaneOverlays();
+  orderState.verifiedFaces = [];
+  for (let i = 0; i < faces.length; i++) {
+    const f = faces[i];
+    if (!f.polygon || f.polygon.length < 3) continue;
+    const color = CUST_PLANE_COLORS[i % CUST_PLANE_COLORS.length];
+    const poly = new google.maps.Polygon({
+      paths: f.polygon.map(p => new google.maps.LatLng(p.lat, p.lng)),
+      map: orderState.traceMap,
+      strokeColor: color, strokeWeight: 3, strokeOpacity: 0.95,
+      fillColor: color, fillOpacity: 0.20,
+      clickable: true, editable: true, draggable: false, zIndex: 5,
+    });
+    const entry = {
+      face_id: f.face_id || ('face_' + String.fromCharCode(65 + i)),
+      label: f.face_id || ('Plane ' + String.fromCharCode(65 + i)),
+      polygon: poly,
+      points: f.polygon.map(p => ({ lat: p.lat, lng: p.lng })),
+      pitch_rise: f.pitch_rise,
+      projected_area_ft2: f.projected_area_ft2,
+      color,
+    };
+    orderState.verifiedFaces.push(entry);
+    const idx = orderState.verifiedFaces.length - 1;
+    const path = poly.getPath();
+    const syncFacePath = () => {
+      const newPts = [];
+      for (let k = 0; k < path.getLength(); k++) {
+        const ll = path.getAt(k);
+        newPts.push({ lat: ll.lat(), lng: ll.lng() });
+      }
+      if (newPts.length < 3) return;
+      orderState.verifiedFaces[idx].points = newPts;
+      orderState.verifiedFaces[idx].projected_area_ft2 = custShoelaceAreaFt2(newPts);
+      custUpdateVerifyPlaneCard(idx);
+    };
+    google.maps.event.addListener(path, 'set_at', syncFacePath);
+    google.maps.event.addListener(path, 'insert_at', syncFacePath);
+    google.maps.event.addListener(path, 'remove_at', syncFacePath);
+    google.maps.event.addListener(poly, 'click', () => focusVerifyPlane(idx));
+  }
+  custRenderVerifyPlaneList();
+}
+
+function custUpdateVerifyPlaneCard(idx) {
+  const f = orderState.verifiedFaces[idx]; if (!f) return;
+  const areaEl = document.getElementById('cust-verify-area-' + idx);
+  const slopedEl = document.getElementById('cust-verify-sloped-' + idx);
+  if (areaEl) areaEl.textContent = Math.round(f.projected_area_ft2).toLocaleString() + ' SF footprint';
+  if (slopedEl) {
+    const sloped = f.projected_area_ft2 * custSlopeFactor(f.pitch_rise);
+    slopedEl.textContent = Math.round(sloped).toLocaleString() + ' SF sloped';
+  }
+}
+
+function custRenderVerifyPlaneList() {
+  const listEl = document.getElementById('cust-verify-planes-list'); if (!listEl) return;
+  if (!orderState.verifiedFaces || orderState.verifiedFaces.length === 0) {
+    listEl.innerHTML = '<div style="color:#94a3b8;font-size:11px;font-style:italic">No planes detected yet.</div>';
+    return;
+  }
+  let html = '';
+  for (let i = 0; i < orderState.verifiedFaces.length; i++) {
+    const f = orderState.verifiedFaces[i];
+    const sloped = f.projected_area_ft2 * custSlopeFactor(f.pitch_rise);
+    html += `
+      <div onclick="focusVerifyPlane(${i})" style="background:#0f172a;border:1px solid ${f.color};border-left:4px solid ${f.color};border-radius:8px;padding:8px 10px;cursor:pointer">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="color:#fff;font-size:13px;font-weight:700">${f.label}</div>
+          <div style="display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()">
+            <input type="number" min="0.5" max="24" step="0.5" value="${f.pitch_rise}" oninput="setVerifyPlanePitch(${i}, this.value)" style="width:54px;padding:3px 6px;background:#1e293b;color:#fff;border:1px solid #334155;border-radius:5px;font-size:11px;font-weight:700;text-align:center" />
+            <span style="color:#94a3b8;font-size:11px;font-weight:600">:12</span>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px">
+          <span id="cust-verify-area-${i}" style="color:#94a3b8">${Math.round(f.projected_area_ft2).toLocaleString()} SF footprint</span>
+          <span id="cust-verify-sloped-${i}" style="color:${f.color};font-weight:700">${Math.round(sloped).toLocaleString()} SF sloped</span>
+        </div>
+      </div>`;
+  }
+  listEl.innerHTML = html;
+}
+
+window.setVerifyPlanePitch = function(idx, val) {
+  const f = orderState.verifiedFaces[idx]; if (!f) return;
+  const v = parseFloat(val);
+  if (!isFinite(v) || v <= 0 || v > 24) return;
+  f.pitch_rise = v;
+  custUpdateVerifyPlaneCard(idx);
+};
+
+window.focusVerifyPlane = function(idx) {
+  const f = orderState.verifiedFaces[idx]; if (!f || !f.polygon) return;
+  f.polygon.setOptions({ strokeWeight: 5 });
+  setTimeout(() => { try { f.polygon.setOptions({ strokeWeight: 3 }); } catch {} }, 600);
+  let cx = 0, cy = 0;
+  for (const p of f.points) { cx += p.lat; cy += p.lng; }
+  cx /= f.points.length; cy /= f.points.length;
+  if (orderState.traceMap) orderState.traceMap.panTo({ lat: cx, lng: cy });
+};
+
+window.confirmVerifyPlanes = function() {
+  for (const f of orderState.verifiedFaces) {
+    if (!f.points || f.points.length < 3) {
+      showMsg('error', `<i class="fas fa-exclamation-triangle mr-1"></i>${f.label} has fewer than 3 vertices — fix or re-detect before confirming.`);
+      return;
+    }
+    if (!isFinite(f.pitch_rise) || f.pitch_rise <= 0 || f.pitch_rise > 24) {
+      showMsg('error', `<i class="fas fa-exclamation-triangle mr-1"></i>${f.label} has an invalid pitch (${f.pitch_rise}:12). Set a pitch between 0.5 and 24.`);
+      return;
+    }
+  }
+  document.getElementById('cust-verify-planes-panel').style.display = 'none';
+  orderState._verifyPlanesActive = false;
+  for (const f of orderState.verifiedFaces) {
+    if (f.polygon) f.polygon.setOptions({ fillOpacity: 0.10, editable: false, clickable: false });
+  }
+  showMsg('success', `<i class="fas fa-check-circle mr-1"></i>${orderState.verifiedFaces.length} plane${orderState.verifiedFaces.length === 1 ? '' : 's'} verified — areas locked to user-confirmed values.`);
+  renderOrderPage();
+};
+
+window.cancelVerifyPlanes = function() {
+  custTearDownVerifyPlaneOverlays();
+  orderState.verifiedFaces = [];
+  orderState._verifyPlanesActive = false;
+  document.getElementById('cust-verify-planes-panel').style.display = 'none';
+  renderOrderPage();
+};
+
+window.reDetectPlanes = function() {
+  if (!confirm('Discard your edits and re-run auto-split?')) return;
+  custTearDownVerifyPlaneOverlays();
+  orderState.verifiedFaces = [];
+  document.getElementById('cust-verify-planes-panel').style.display = 'none';
+  orderState._verifyPlanesActive = false;
+  startVerifyPlanes();
+};
+
 // Toolbar handler — finalizes the in-progress dormer polygon (≥ 3 points)
 // then prompts for the dormer's own pitch. Wraps closeDormerPolygon() so the
 // editable-vertex behaviour and downstream submit path stay identical.
@@ -1903,12 +2177,24 @@ function finishCurrentLine() {
   const mode = orderState.traceMode;
   const colors = { ridge: '#3b82f6', hip: '#f59e0b', valley: '#ef4444', step_flashing: '#F59E0B', headwall_flashing: '#F97316' };
   const dashed = (mode === 'step_flashing' || mode === 'headwall_flashing');
-  if (mode === 'ridge') orderState.traceRidgeLines.push(line);
-  else if (mode === 'hip') orderState.traceHipLines.push(line);
-  else if (mode === 'valley') orderState.traceValleyLines.push(line);
-  else if (mode === 'step_flashing')     orderState.traceWallLines.push({ kind: 'step',     pts: line });
-  else if (mode === 'headwall_flashing') orderState.traceWallLines.push({ kind: 'headwall', pts: line });
-  drawPolyline(line, colors[mode] || '#999', 2.5, dashed);
+  if (mode === 'ridge') {
+    orderState.traceRidgeLines.push(line);
+    drawEditableLine(line, '#3b82f6', 'ridge');
+  } else if (mode === 'hip') {
+    orderState.traceHipLines.push(line);
+    drawEditableLine(line, '#f59e0b', 'hip');
+  } else if (mode === 'valley') {
+    orderState.traceValleyLines.push(line);
+    drawEditableLine(line, '#ef4444', 'valley');
+  } else if (mode === 'step_flashing') {
+    orderState.traceWallLines.push({ kind: 'step', pts: line });
+    drawPolyline(line, colors[mode] || '#999', 2.5, dashed);
+  } else if (mode === 'headwall_flashing') {
+    orderState.traceWallLines.push({ kind: 'headwall', pts: line });
+    drawPolyline(line, colors[mode] || '#999', 2.5, dashed);
+  } else {
+    drawPolyline(line, colors[mode] || '#999', 2.5, dashed);
+  }
   orderState.traceCurrentLine = [];
   updateTraceUI();
 }
@@ -2006,6 +2292,84 @@ function drawPolyline(points, color, weight, dashed) {
   orderState.tracePolylines.push(polyline);
 }
 
+// Equirectangular distance (meters) between two {lat,lng} points. Accurate
+// to <1cm at the residential scales we snap at (≤ a few hundred meters).
+function _metersBetween(a, b) {
+  if (!a || !b) return Infinity;
+  const R = 6371000;
+  const toRad = Math.PI / 180;
+  const meanLat = (a.lat + b.lat) * 0.5 * toRad;
+  const x = (b.lng - a.lng) * toRad * Math.cos(meanLat);
+  const y = (b.lat - a.lat) * toRad;
+  return Math.sqrt(x * x + y * y) * R;
+}
+
+// Editable polyline for ridges/hips/valleys. Drag endpoints to fix small 2D-
+// imagery vs 3D-mesh geolocation offsets, and edits write back to the
+// underlying line array. Index lookup via indexOf(polyline) keeps writes in
+// sync even after items are popped from the middle of the array.
+function drawEditableLine(line, color, kind) {
+  const polyline = new google.maps.Polyline({
+    path: line.map(p => new google.maps.LatLng(p.lat, p.lng)),
+    map: orderState.traceMap,
+    strokeColor: color,
+    strokeWeight: 2.5,
+    strokeOpacity: 0.9,
+    editable: true,
+    clickable: true,
+    zIndex: 5
+  });
+  const arrName = kind === 'ridge' ? 'traceRidgeLines'
+                : kind === 'hip'   ? 'traceHipLines'
+                : kind === 'valley' ? 'traceValleyLines' : null;
+  const polyArrName = kind === 'ridge' ? 'traceRidgePolylines'
+                    : kind === 'hip'   ? 'traceHipPolylines'
+                    : kind === 'valley' ? 'traceValleyPolylines' : null;
+  if (!arrName || !polyArrName) return polyline;
+  orderState[polyArrName].push(polyline);
+  const path = polyline.getPath();
+  const sync = () => {
+    const idx = orderState[polyArrName].indexOf(polyline);
+    if (idx < 0) return;
+    const pts = [];
+    for (let i = 0; i < path.getLength(); i++) {
+      const ll = path.getAt(i);
+      pts.push({ lat: ll.lat(), lng: ll.lng() });
+    }
+    if (pts.length >= 2) orderState[arrName][idx] = pts;
+    if (typeof updateTraceUI === 'function') updateTraceUI();
+  };
+  google.maps.event.addListener(path, 'set_at', sync);
+  google.maps.event.addListener(path, 'insert_at', sync);
+  google.maps.event.addListener(path, 'remove_at', sync);
+  return polyline;
+}
+
+// Find the nearest existing trace vertex (eave-section corner or another
+// ridge/hip/valley endpoint) within `maxMeters`. Returns the snapped point
+// or null. Used by 3D-capture ingest so 3D picks land exactly on existing
+// 2D corners — protects against the small 3D-mesh-vs-2D-imagery offset.
+function _findNearestSnap(pt, maxMeters) {
+  if (!Number.isFinite(pt?.lat) || !Number.isFinite(pt?.lng)) return null;
+  let best = null, bestD = maxMeters;
+  const consider = (target) => {
+    if (!target) return;
+    const d = _metersBetween(pt, target);
+    if (d < bestD) { bestD = d; best = target; }
+  };
+  // Eave-section vertices
+  (orderState.traceEavesSections || []).forEach(sec => {
+    (sec?.points || []).forEach(consider);
+  });
+  // In-progress eave outline (single-section legacy)
+  (orderState.traceEavesPoints || []).forEach(consider);
+  // Endpoints of existing ridge/hip/valley lines
+  (orderState.traceRidgeLines || []).forEach(l => { consider(l[0]); consider(l[l.length - 1]); });
+  (orderState.traceHipLines    || []).forEach(l => { consider(l[0]); consider(l[l.length - 1]); });
+  (orderState.traceValleyLines || []).forEach(l => { consider(l[0]); consider(l[l.length - 1]); });
+  return best ? { lat: best.lat, lng: best.lng } : null;
+}
+
 // Clear visual overlays from the map.
 // keepPolygon=true preserves eaves polygons (current + all sections) — used during undo in ridge/hip/valley mode
 function clearTraceOverlays(keepPolygon) {
@@ -2065,9 +2429,19 @@ function restoreTraceOverlays() {
 }
 
 function restoreLineOverlays() {
-  orderState.traceRidgeLines.forEach(l => drawPolyline(l, '#3b82f6', 2.5, false));
-  orderState.traceHipLines.forEach(l => drawPolyline(l, '#f59e0b', 2.5, false));
-  orderState.traceValleyLines.forEach(l => drawPolyline(l, '#ef4444', 2.5, false));
+  // Clear any stale per-kind polyline references from a prior render
+  // (clearTraceOverlays already removed them from the map but our parallel
+  // tracking arrays held the JS handles — drop them so indexOf() lookups in
+  // the edit listeners can't match stale entries).
+  orderState.traceRidgePolylines.forEach(p => { try { p.setMap(null); } catch(_){} });
+  orderState.traceHipPolylines.forEach(p   => { try { p.setMap(null); } catch(_){} });
+  orderState.traceValleyPolylines.forEach(p=> { try { p.setMap(null); } catch(_){} });
+  orderState.traceRidgePolylines = [];
+  orderState.traceHipPolylines   = [];
+  orderState.traceValleyPolylines = [];
+  orderState.traceRidgeLines.forEach(l => drawEditableLine(l, '#3b82f6', 'ridge'));
+  orderState.traceHipLines.forEach(l   => drawEditableLine(l, '#f59e0b', 'hip'));
+  orderState.traceValleyLines.forEach(l=> drawEditableLine(l, '#ef4444', 'valley'));
   orderState.traceWallLines.forEach(w => {
     const color = w.kind === 'headwall' ? '#F97316' : '#F59E0B';
     drawPolyline(w.pts, color, 2.5, true);
@@ -2711,11 +3085,26 @@ async function confirmTrace() {
     }))
     .filter(d => d.pitch_rise != null);
 
+  // Verified faces — when the user walked Verify Planes, each entry is a
+  // confirmed polygon + pitch. Engine uses these directly (shoelace ×
+  // slopeFactor) so per-plane area is exact. Validated client-side here
+  // and again server-side in traceUiToEnginePayload.
+  const _verifiedFaces = (orderState.verifiedFaces || [])
+    .filter(f => f && Array.isArray(f.points) && f.points.length >= 3
+      && typeof f.pitch_rise === 'number' && f.pitch_rise > 0 && f.pitch_rise <= 24)
+    .map(f => ({
+      face_id: f.face_id,
+      label: f.label,
+      polygon: f.points.map(p => ({ lat: p.lat, lng: p.lng })),
+      pitch_rise: f.pitch_rise,
+    }));
+
   orderState.roofTraceJson = {
     eaves: _primary,
     eaves_sections: _sections,
     eaves_section_pitches: _sectionPitches,
     dormers: _dormers.length > 0 ? _dormers : undefined,
+    verified_faces: _verifiedFaces.length > 0 ? _verifiedFaces : undefined,
     ridges: orderState.traceRidgeLines,
     hips: orderState.traceHipLines,
     valleys: orderState.traceValleyLines,
@@ -3272,13 +3661,18 @@ function openVerify3DModal(lat, lng) {
   // Listen for features captured in the 3D viewer and inject them into the
   // existing 2D trace state. This is what makes the 3D modal an active
   // capture surface instead of a passive verify-only view.
+  // TODO: if/when this iframe is ever embedded cross-origin (e.g. inside a
+  // partner CRM), make the origin allowlist explicit via a URL param. Today
+  // the iframe is always same-origin with this page, so the strict check is
+  // correct.
+  let lastCapturedKind = null;
   const onMessage = (event) => {
-    // Same-origin only — both iframe and parent are served from the Pages app.
     if (event.origin !== window.location.origin) return;
     if (event.source !== iframe.contentWindow) return;
     const data = event.data || {};
     if (data.type === 'rm-3d-feature-captured') {
-      ingestCaptured3DFeature(data.kind, Array.isArray(data.pts) ? data.pts : []);
+      const ok = ingestCaptured3DFeature(data.kind, Array.isArray(data.pts) ? data.pts : []);
+      if (ok) lastCapturedKind = data.kind;
     } else if (data.type === 'rm-3d-feature-undo') {
       undoLastCaptured3DFeature(data.kind || null);
     }
@@ -3289,6 +3683,16 @@ function openVerify3DModal(lat, lng) {
     try { overlay.remove(); } catch (_) {}
     document.removeEventListener('keydown', onKey);
     window.removeEventListener('message', onMessage);
+    // R4: After a 3D capture session, switch the 2D trace mode to whatever
+    // was captured last so the existing 2D Undo button operates on those
+    // lines. Without this, the user closes the modal in (say) Eaves mode
+    // and Undo silently does nothing for the 3D-captured ridges.
+    if (lastCapturedKind && typeof setTraceMode === 'function') {
+      setTraceMode(lastCapturedKind);
+      if (typeof showMsg === 'function') {
+        showMsg('info', 'Switched to ' + lastCapturedKind + ' mode — Undo will pop your 3D-captured lines.');
+      }
+    }
   };
   const onKey = (e) => { if (e.key === 'Escape') dismiss(); };
   close.addEventListener('click', dismiss);
@@ -3297,39 +3701,50 @@ function openVerify3DModal(lat, lng) {
 }
 
 // Push a 3D-captured ridge/hip/valley line into the existing trace arrays
-// and render it on the 2D map using the same drawPolyline + color path the
-// 2D click handler uses (see finishCurrentLine + restoreLineOverlays).
+// and render it as an editable polyline on the 2D map. Endpoints are snapped
+// to existing eave/ridge/hip/valley vertices within 0.5 m so the line lands
+// exactly on a 2D corner when the user clearly intended that — eliminating
+// the 3D-mesh-vs-2D-imagery offset for the common case. Returns true on
+// success (used by the modal-close handler to set traceMode for undo).
 function ingestCaptured3DFeature(kind, pts) {
-  if (!Array.isArray(pts) || pts.length < 2) return;
+  if (!Array.isArray(pts) || pts.length < 2) return false;
   const first = pts[0], second = pts[1];
-  if (!Number.isFinite(first?.lat) || !Number.isFinite(first?.lng)) return;
-  if (!Number.isFinite(second?.lat) || !Number.isFinite(second?.lng)) return;
-  const line = [{ lat: first.lat, lng: first.lng }, { lat: second.lat, lng: second.lng }];
+  if (!Number.isFinite(first?.lat) || !Number.isFinite(first?.lng)) return false;
+  if (!Number.isFinite(second?.lat) || !Number.isFinite(second?.lng)) return false;
+  if (kind !== 'ridge' && kind !== 'hip' && kind !== 'valley') return false;
+
+  const SNAP_M = 0.5;
+  const a = _findNearestSnap({ lat: first.lat,  lng: first.lng  }, SNAP_M) || { lat: first.lat,  lng: first.lng  };
+  const b = _findNearestSnap({ lat: second.lat, lng: second.lng }, SNAP_M) || { lat: second.lat, lng: second.lng };
+  // If both endpoints snapped to the *same* target the segment would degenerate
+  // to a zero-length line — keep the 3D-picked second point in that case so
+  // we don't silently drop the user's input.
+  const degenerate = (a.lat === b.lat && a.lng === b.lng);
+  const line = degenerate
+    ? [a, { lat: second.lat, lng: second.lng }]
+    : [a, b];
+
   const colors = { ridge: '#3b82f6', hip: '#f59e0b', valley: '#ef4444' };
   if (kind === 'ridge')      orderState.traceRidgeLines.push(line);
   else if (kind === 'hip')   orderState.traceHipLines.push(line);
-  else if (kind === 'valley') orderState.traceValleyLines.push(line);
-  else return;
-  if (typeof drawPolyline === 'function' && orderState.traceMap) {
-    drawPolyline(line, colors[kind] || '#999', 2.5, false);
-  }
+  else /* valley */          orderState.traceValleyLines.push(line);
+  if (orderState.traceMap) drawEditableLine(line, colors[kind], kind);
   if (typeof updateTraceUI === 'function') updateTraceUI();
+  return true;
 }
 
 function undoLastCaptured3DFeature(kind) {
-  let popped = false;
-  if (kind === 'ridge' && orderState.traceRidgeLines.length) {
-    orderState.traceRidgeLines.pop(); popped = true;
-  } else if (kind === 'hip' && orderState.traceHipLines.length) {
-    orderState.traceHipLines.pop(); popped = true;
-  } else if (kind === 'valley' && orderState.traceValleyLines.length) {
-    orderState.traceValleyLines.pop(); popped = true;
-  }
-  if (!popped) return;
-  // Match the existing 2D undo path so the popped polyline is visually removed.
-  if (typeof clearTraceOverlays === 'function' && typeof restoreTraceOverlays === 'function') {
-    clearTraceOverlays(true); // keepPolygon=true
-    restoreTraceOverlays();
-  }
+  // Pop both the line and its parallel polyline overlay precisely. No
+  // clearTraceOverlays/restoreTraceOverlays cycle, so in-progress dormer or
+  // eaves draft markers are untouched.
+  let lineArr, polyArr;
+  if (kind === 'ridge')       { lineArr = 'traceRidgeLines';  polyArr = 'traceRidgePolylines'; }
+  else if (kind === 'hip')    { lineArr = 'traceHipLines';    polyArr = 'traceHipPolylines'; }
+  else if (kind === 'valley') { lineArr = 'traceValleyLines'; polyArr = 'traceValleyPolylines'; }
+  else return;
+  if (!orderState[lineArr]?.length) return;
+  orderState[lineArr].pop();
+  const poly = orderState[polyArr]?.pop();
+  if (poly) { try { poly.setMap(null); } catch(_){} }
   if (typeof updateTraceUI === 'function') updateTraceUI();
 }

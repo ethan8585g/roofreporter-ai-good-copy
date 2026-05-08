@@ -2262,6 +2262,17 @@ export function traceUiToEnginePayload(
       pitch_rise: number
       label?: string
     }>
+    // User-verified per-face polygons + pitches. When present, the engine
+    // skips its ridge/hip-based auto-splitter and computes each face's area
+    // from the supplied polygon (shoelace × slopeFactor(pitch)). This is the
+    // exactness path: every plane's area = user-confirmed polygon × user-
+    // confirmed pitch, no inference, no remainder distribution.
+    verified_faces?: Array<{
+      polygon: { lat: number; lng: number }[]
+      pitch_rise: number
+      label?: string
+      face_id?: string
+    }>
   },
   order: {
     property_address?: string
@@ -2453,7 +2464,23 @@ export function traceUiToEnginePayload(
       pipe_boots: (ann.pipe_boots || []).length,
     },
     rakes:          [],
-    faces:          [],
+    // Verified faces (user-confirmed plane polygons + pitches) take priority
+    // over the engine's auto-splitter. Each entry validated: polygon ≥ 3 pts,
+    // pitch in (0, 30]. Bad entries dropped silently so a malformed plane
+    // can't blow up the run.
+    faces:          Array.isArray(traceJson.verified_faces) && traceJson.verified_faces.length > 0
+      ? traceJson.verified_faces
+          .filter(f =>
+            f && Array.isArray(f.polygon) && f.polygon.length >= 3 &&
+            typeof f.pitch_rise === 'number' && f.pitch_rise > 0 && f.pitch_rise <= 30
+          )
+          .map((f, i) => ({
+            face_id: f.face_id || `face_${String.fromCharCode(65 + i)}`,
+            poly: f.polygon.map(p => ({ lat: p.lat, lng: p.lng, elevation: null })),
+            pitch: f.pitch_rise,
+            label: f.label,
+          }))
+      : [],
     slope_map:      traceJson.slope_map && Object.keys(traceJson.slope_map).length > 0
       ? traceJson.slope_map
       : undefined,
