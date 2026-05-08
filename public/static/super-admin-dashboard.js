@@ -1725,6 +1725,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<button onclick="saTraceSetTool(\'hip\')" id="sa-tool-hip" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Hip</button>' +
           '<button onclick="saTraceSetTool(\'valley\')" id="sa-tool-valley" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Valley</button>' +
           '<button onclick="saTraceSetTool(\'dormer\')" id="sa-tool-dormer" title="Trace a polygon around a dormer on top of the main roof, then enter its pitch (e.g. 12 for 12:12). Engine adds only the steeper sloped surface — no double-counted footprint." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Dormer</button>' +
+          '<button onclick="saCompleteDormer()" id="sa-tool-dormer-complete" title="Finalize the in-progress dormer polygon and enter its pitch" style="display:none;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:#a855f7;color:#fff;border:1px solid #a855f7"><i class="fas fa-check mr-1"></i>Complete Dormer Trace</button>' +
           '<button onclick="saTraceSetTool(\'vent\')" id="sa-tool-vent" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Vent</button>' +
           '<button onclick="saTraceSetTool(\'skylight\')" id="sa-tool-skylight" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Skylight</button>' +
           '<button onclick="saTraceSetTool(\'chimney\')" id="sa-tool-chimney" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Chimney</button>' +
@@ -1837,6 +1838,7 @@ window.saTraceSetTool = function(tool) {
       btn.style.borderColor = active ? 'transparent' : '#374151';
     }
   });
+  if (typeof saUpdateDormerCompleteBtn === 'function') saUpdateDormerCompleteBtn();
 };
 
 window.saTraceClear = function() {
@@ -1865,6 +1867,7 @@ window.saTraceClear = function() {
   (s._dormerLabelMarkers || []).forEach(function(m) { m.setMap(null); }); s._dormerLabelMarkers = [];
   s._dormerLatLngs = [];
   saRenderSectionPitches();
+  if (typeof saUpdateDormerCompleteBtn === 'function') saUpdateDormerCompleteBtn();
 };
 
 window.saTraceUndo = function() {
@@ -1895,6 +1898,7 @@ window.saTraceUndo = function() {
           strokeColor: '#a855f7', strokeWeight: 2.5, map: s.map, zIndex: 4,
         });
       } else { s._dormerPoly = null; }
+      saUpdateDormerCompleteBtn();
       return;
     }
     if (s.dormers && s.dormers.length > 0) {
@@ -2184,6 +2188,7 @@ function saInitTraceMap(lat, lng, address) {
         path: dpts.concat([dpts[0]]),
         strokeColor: '#a855f7', strokeWeight: 2.5, map: map, zIndex: 4,
       });
+      saUpdateDormerCompleteBtn();
     } else if (tool === 'vent' || tool === 'skylight' || tool === 'chimney') {
       var colors = { vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626' };
       var annMk = new google.maps.Marker({
@@ -2307,6 +2312,34 @@ function saCloseDormerPolygon() {
   s._dormerLabelMarkers.push(labelMk);
   // Reset draft for next dormer
   s._dormerLatLngs = [];
+  saUpdateDormerCompleteBtn();
+}
+
+// Toolbar handler — finalizes the in-progress dormer polygon and prompts for
+// pitch. Only visible when there's a draft polygon ≥ 3 points and the dormer
+// tool is selected. Wraps the existing close path so editable-vertex listeners
+// stay wired up the same way.
+window.saCompleteDormer = function saCompleteDormer() {
+  var s = window._saTraceState; if (!s) return;
+  var dpts = s._dormerLatLngs || [];
+  if (dpts.length < 3) {
+    alert('Place at least 3 points around the dormer before completing the trace.');
+    return;
+  }
+  saCloseDormerPolygon();
+  saUpdateDormerCompleteBtn();
+};
+
+// Show the "Complete Dormer Trace" button only while the dormer tool is
+// selected AND there's a draft polygon with ≥ 3 points. Called from every
+// place that mutates the draft (click, undo, tool switch, close).
+function saUpdateDormerCompleteBtn() {
+  var btn = document.getElementById('sa-tool-dormer-complete');
+  if (!btn) return;
+  var s = window._saTraceState;
+  var draftLen = (s && s._dormerLatLngs) ? s._dormerLatLngs.length : 0;
+  var inDormerMode = !!(s && s.tool === 'dormer');
+  btn.style.display = (inDormerMode && draftLen >= 3) ? 'inline-block' : 'none';
 }
 
 function saCloseEaveSection() {

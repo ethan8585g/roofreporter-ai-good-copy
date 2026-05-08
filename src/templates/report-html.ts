@@ -188,6 +188,38 @@ function renderNeedsReviewBanner(report: RoofReport): string {
   </div>`
 }
 
+// Ray-cast point-in-polygon test. Used to assign each dormer to whichever
+// structure partition contains its centroid, so dormers don't appear on the
+// wrong building's report page when the trace has multiple structures.
+function dormerPointInLatLngPoly(
+  pt: { lat: number; lng: number },
+  poly: { lat: number; lng: number }[],
+): boolean {
+  let inside = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].lng, yi = poly[i].lat
+    const xj = poly[j].lng, yj = poly[j].lat
+    const intersect = ((yi > pt.lat) !== (yj > pt.lat))
+      && (pt.lng < ((xj - xi) * (pt.lat - yi)) / ((yj - yi) || 1e-12) + xi)
+    if (intersect) inside = !inside
+  }
+  return inside
+}
+
+function dormersForPartition(
+  allDormers: any[] | undefined,
+  partitionEaves: { lat: number; lng: number }[],
+): any[] | undefined {
+  if (!Array.isArray(allDormers) || allDormers.length === 0) return undefined
+  const filtered = allDormers.filter(d => {
+    if (!d || !Array.isArray(d.polygon) || d.polygon.length < 3) return false
+    const cx = d.polygon.reduce((s: number, p: any) => s + p.lat, 0) / d.polygon.length
+    const cy = d.polygon.reduce((s: number, p: any) => s + p.lng, 0) / d.polygon.length
+    return dormerPointInLatLngPoly({ lat: cx, lng: cy }, partitionEaves)
+  })
+  return filtered.length > 0 ? filtered : undefined
+}
+
 // ============================================================
 // MULTI-STRUCTURE: re-run the engine on each traced building so each
 // structure gets its own complete 5-page report. The trace UI lets a
@@ -208,6 +240,7 @@ function runEngineForPartition(
       ridges: partition.ridges,
       hips: partition.hips,
       valleys: partition.valleys,
+      dormers: dormersForPartition(origTrace?.dormers, partition.eaves),
       annotations: origTrace?.annotations || {},
       traced_at: origTrace?.traced_at || new Date().toISOString(),
     }
@@ -265,6 +298,7 @@ function buildPerStructureSynthReport(
     ridges: partition.ridges,
     hips: partition.hips,
     valleys: partition.valleys,
+    dormers: dormersForPartition(origRt.dormers, partition.eaves),
     traced_at: origRt.traced_at || new Date().toISOString(),
   }
 
@@ -898,6 +932,7 @@ ${aerialTiles.length === 4 ? `
           ridges: partition.ridges,
           hips: partition.hips,
           valleys: partition.valleys,
+          dormers: dormersForPartition((report as any).roof_trace?.dormers, partition.eaves),
         },
         {
           total_ridge_ft: partition.ridge_lf,
@@ -958,7 +993,14 @@ ${aerialTiles.length === 4 ? `
     ${structureDiagrams.length === 1 ? (() => {
       const p = structureDiagrams[0].partition
       const flat = generateTraceBasedDiagramSVG(
-        { eaves: p.eaves, eaves_sections: [p.eaves], ridges: p.ridges, hips: p.hips, valleys: p.valleys },
+        {
+          eaves: p.eaves,
+          eaves_sections: [p.eaves],
+          ridges: p.ridges,
+          hips: p.hips,
+          valleys: p.valleys,
+          dormers: dormersForPartition((report as any).roof_trace?.dormers, p.eaves),
+        },
         { total_ridge_ft: p.ridge_lf, total_hip_ft: p.hip_lf, total_valley_ft: p.valley_lf, total_eave_ft: p.eave_lf, total_rake_ft: p.rake_lf },
         p.footprint_sqft, p.dominant_pitch_deg, p.dominant_pitch_label,
         Math.round(p.true_area_sqft / 100 * (1 + (mat.waste_pct || 5) / 100) * 10) / 10,
@@ -982,6 +1024,7 @@ ${aerialTiles.length === 4 ? `
       <div style="display:flex;align-items:center;gap:4px"><span style="width:18px;height:3px;background:#EA580C;display:inline-block;border-radius:1px"></span>Hip</div>
       <div style="display:flex;align-items:center;gap:4px"><span style="width:18px;height:3px;background:#7C3AED;display:inline-block;border-radius:1px"></span>Rake Edge</div>
       <div style="display:flex;align-items:center;gap:4px"><span style="width:18px;height:3px;background:#0891B2;display:inline-block;border-radius:1px"></span>Drip Edge</div>
+      ${(((report as any).roof_trace?.dormers || []).length > 0) ? `<div style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:8px;background:rgba(168,85,247,0.18);border:1.5px solid #A855F7;display:inline-block;border-radius:2px"></span>Dormer</div>` : ''}
     </div>
   </div>
 

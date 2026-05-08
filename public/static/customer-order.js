@@ -715,6 +715,18 @@ function renderTraceStep(root, progressBar) {
                   </span>
                 </button>`
               }).join('')}
+              <!--
+                Inline "Complete Dormer Trace" button. Always rendered so
+                updateTraceUI() can flip it on/off without a full re-render
+                (which would destroy the live trace map). Visible only when
+                the dormer tool is active AND a draft polygon has 3+ points.
+              -->
+              <button id="complete-dormer-btn" onclick="completeDormerTraceFromUI()"
+                style="display:${orderState.traceMode === 'dormer' && (orderState.traceDormerCurrent || []).length >= 3 ? 'flex' : 'none'}"
+                class="w-full items-center justify-center gap-2 px-3 py-2 mt-1 rounded-lg text-sm font-bold transition-all bg-purple-500 text-white hover:bg-purple-400 shadow-md">
+                <i class="fas fa-check text-xs"></i>
+                <span>Complete Dormer Trace</span>
+              </button>
             </div>
           </div>
 
@@ -1705,6 +1717,20 @@ function handleTraceClick(pt) {
   updateTraceUI();
 }
 
+// Toolbar handler — finalizes the in-progress dormer polygon (≥ 3 points)
+// then prompts for the dormer's own pitch. Wraps closeDormerPolygon() so the
+// editable-vertex behaviour and downstream submit path stay identical.
+window.completeDormerTraceFromUI = function() {
+  const cur = orderState.traceDormerCurrent || [];
+  if (cur.length < 3) {
+    showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Place at least 3 points around the dormer before completing the trace.');
+    return;
+  }
+  closeDormerPolygon();
+  // Re-render so the now-stale "Complete Dormer Trace" button hides itself.
+  renderOrderPage();
+};
+
 // Close the in-progress dormer polygon, prompt for its pitch, and persist.
 // Each dormer becomes one entry in orderState.traceDormers, sent at submit
 // as a `dormers` field. Engine adds only differential sloped area on top of
@@ -2344,6 +2370,16 @@ function updateTraceUI() {
       if (id === 'summary-eaves') el.className = 'font-semibold ' + (eavesClosed ? 'text-emerald-400' : 'text-gray-400');
     }
   });
+
+  // Show/hide "Complete Dormer Trace" button — only when the dormer tool is
+  // selected AND at least 3 draft points have been placed. updateTraceUI
+  // intentionally avoids a full re-render, so this flips display directly.
+  const dormerCompleteBtn = document.getElementById('complete-dormer-btn');
+  if (dormerCompleteBtn) {
+    const draftDormerPts = (orderState.traceDormerCurrent || []).length;
+    const showBtn = orderState.traceMode === 'dormer' && draftDormerPts >= 3;
+    dormerCompleteBtn.style.display = showBtn ? 'flex' : 'none';
+  }
 
   // ── Update live metrics panel ──
   const metricsPanel = document.getElementById('liveMetricsPanel');

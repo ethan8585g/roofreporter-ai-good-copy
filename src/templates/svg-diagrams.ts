@@ -2365,6 +2365,14 @@ export function generateTraceBasedDiagramSVG(
       pipe_boots?: { lat: number; lng: number }[]
       skylights?: { lat: number; lng: number }[]
     }
+    /** Dormer overlays — purple polygon + label, drawn on top of the main
+     *  facet fill. Don't add new footprint; engine handles the differential
+     *  area math. Each dormer carries its own pitch (rise:12). */
+    dormers?: Array<{
+      polygon: { lat: number; lng: number }[]
+      pitch_rise: number
+      label?: string
+    }>
   },
   edgeSummary: {
     total_ridge_ft: number
@@ -2464,6 +2472,17 @@ export function generateTraceBasedDiagramSVG(
   ridgesXY.forEach(line => allPts.push(...line))
   hipsXY.forEach(line => allPts.push(...line))
   valleysXY.forEach(line => allPts.push(...line))
+
+  // Dormers — projected polygon + pitch label. Included in bounding box so a
+  // dormer that sticks past the main eaves doesn't get clipped.
+  const dormersXY = (roofTrace.dormers || [])
+    .filter(d => d && Array.isArray(d.polygon) && d.polygon.length >= 3)
+    .map(d => ({
+      pts: d.polygon.map(toXY),
+      pitch_rise: d.pitch_rise,
+      label: d.label || '',
+    }))
+  dormersXY.forEach(d => allPts.push(...d.pts))
 
   // Bounding box
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
@@ -3044,6 +3063,28 @@ export function generateTraceBasedDiagramSVG(
     }
     drawIfNew(l.start)
     drawIfNew(l.end)
+  })
+
+  // ── DORMER OVERLAYS ──
+  // Drawn last (on top of facets, edges, vertex dots) so the purple outline
+  // and pitch pill remain visible. Translucent fill keeps anything underneath
+  // legible. Centroid label like "D-A · 12:12".
+  dormersXY.forEach((d, di) => {
+    if (d.pts.length < 3) return
+    const path = d.pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${tx(p.x).toFixed(1)} ${ty(p.y).toFixed(1)}`).join(' ') + ' Z'
+    svg += `<path d="${path}" fill="rgba(168,85,247,0.18)" stroke="#a855f7" stroke-width="2" stroke-linejoin="round"/>`
+    // Centroid for the label pill
+    const cx = d.pts.reduce((s, p) => s + p.x, 0) / d.pts.length
+    const cy = d.pts.reduce((s, p) => s + p.y, 0) / d.pts.length
+    const lx = tx(cx), ly = ty(cy)
+    const lblText = (d.label || `Dormer ${String.fromCharCode(65 + di)}`).replace(/^Dormer\s+/, 'D-')
+    const pitchLbl = `${(d.pitch_rise || 0).toFixed(d.pitch_rise % 1 === 0 ? 0 : 1)}:12`
+    const pillW = Math.max(46, lblText.length * 5.5 + 18)
+    svg += `<g transform="translate(${lx.toFixed(1)},${ly.toFixed(1)})">`
+    svg += `<rect x="${(-pillW / 2).toFixed(1)}" y="-11" width="${pillW.toFixed(1)}" height="22" rx="4" fill="#a855f7" stroke="#fff" stroke-width="0.8"/>`
+    svg += `<text x="0" y="-1.5" text-anchor="middle" font-size="8" font-weight="800" fill="#fff" ${FONT}>${lblText}</text>`
+    svg += `<text x="0" y="8.5" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff" fill-opacity="0.95" ${FONT}>${pitchLbl}</text>`
+    svg += `</g>`
   })
 
   // ── LEGEND / SCALE BAR / SOURCE BADGE — all gated together so the customer
