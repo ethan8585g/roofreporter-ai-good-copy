@@ -372,6 +372,48 @@ export async function renderCustomerReportPdf(
 }
 
 // ============================================================
+// REPORT ATTACHMENT — Resolves the best-available attachment for a
+// trace-completed email. Tries PDF (Cloudflare Browser Rendering) first;
+// falls back to attaching the customer_report_html as a self-contained
+// .html file when the PDF path is unavailable (token missing scope, BR
+// not enabled, or render failed). Returns null only when there is no
+// report row at all — in which case the caller sends a plain email.
+// ============================================================
+export async function getCustomerReportAttachment(
+  env: any,
+  orderId: number | string,
+  orderNumber: string,
+): Promise<{ filename: string; mimeType: string; bytes: Uint8Array } | null> {
+  const safe = String(orderNumber).replace(/[^\w.\-]/g, '_')
+
+  const pdf = await renderCustomerReportPdf(env, orderId)
+  if (pdf) {
+    return { filename: `roof-report-${safe}.pdf`, mimeType: 'application/pdf', bytes: pdf }
+  }
+
+  // HTML fallback — the customer can open it in any browser and print/save
+  // as PDF themselves. The stored markup is already self-contained
+  // (inline styles, embedded SVG, no external scripts).
+  if (!env?.DB) return null
+  try {
+    const row = await env.DB.prepare(
+      'SELECT customer_report_html, professional_report_html FROM reports WHERE order_id = ? ORDER BY id DESC LIMIT 1'
+    ).bind(orderId).first<any>()
+    const html = row?.customer_report_html || row?.professional_report_html
+    if (!html) return null
+    const wrapped = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Roof Report ${safe}</title></head><body style="margin:0;padding:0;background:#fff">${html}</body></html>`
+    return {
+      filename: `roof-report-${safe}.html`,
+      mimeType: 'text/html; charset=utf-8',
+      bytes: new TextEncoder().encode(wrapped),
+    }
+  } catch (e: any) {
+    console.warn('[getCustomerReportAttachment] HTML fallback error:', e?.message || e)
+    return null
+  }
+}
+
+// ============================================================
 // CUSTOMER NOTIFICATION — "Your report is ready" after admin trace
 // Sent when the super admin manually completes a trace on a customer's
 // behalf (the submit-for-trace path). Customer dashboard polling is
@@ -434,31 +476,30 @@ export async function notifyTraceCompletedToCustomer(
     } catch {}
   }
 
-  // Best-effort PDF attachment. Render via Cloudflare Browser Rendering
-  // when configured; degrade silently to a no-attachment send if anything
-  // goes wrong (tokens missing, render fails, no report row yet).
-  let pdfBytes: Uint8Array | null = null
-  if (order_id != null) {
-    pdfBytes = await renderCustomerReportPdf(env, order_id)
-  }
-  const pdfFilename = `roof-report-${String(order_number).replace(/[^\w.\-]/g, '_')}.pdf`
+  // Best-effort attachment: PDF if Browser Rendering is reachable, else
+  // a self-contained HTML file the customer can open + print-to-PDF. Any
+  // failure degrades to a plain (no-attachment) send so the email itself
+  // is never blocked.
+  const attachment = order_id != null
+    ? await getCustomerReportAttachment(env, order_id, order_number)
+    : null
 
   let lastErr: any = null
   if (env?.RESEND_API_KEY) {
     try {
-      // Resend transport stays attachment-less for now; Gmail path below
-      // handles the PDF attach when reached.
+      // Resend path stays attachment-less for now; Gmail path handles
+      // the attach when reached.
       await sendViaResend(env.RESEND_API_KEY, to, subject, html)
       return
     } catch (e: any) { lastErr = e }
   }
   if (clientId && clientSecret && refreshToken) {
-    if (pdfBytes) {
+    if (attachment) {
       try {
         await sendGmailOAuth2WithAttachment(
           clientId, clientSecret, refreshToken,
           to, subject, html,
-          { filename: pdfFilename, mimeType: 'application/pdf', bytes: pdfBytes },
+          attachment,
           senderEmail || null,
         )
         return
