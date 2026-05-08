@@ -3013,6 +3013,22 @@ export function generateTraceBasedDiagramSVG(
     svg += `<polygon points="${tri}" fill="#475569" stroke="#fff" stroke-width="1"/>`
   })
 
+  // ── VENTS (filled green circles with "V" label) ──
+  ;((roofTrace.annotations && roofTrace.annotations.vents) || []).forEach((pt) => {
+    const xy = toXY(pt)
+    const px = tx(xy.x), py = ty(xy.y)
+    svg += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="#15803D" stroke="#fff" stroke-width="1"/>`
+    svg += `<text x="${px.toFixed(1)}" y="${(py+2.5).toFixed(1)}" text-anchor="middle" font-size="6" font-weight="800" fill="#fff" ${FONT}>V</text>`
+  })
+
+  // ── SKYLIGHTS (filled amber rectangles with "S" label) ──
+  ;((roofTrace.annotations && roofTrace.annotations.skylights) || []).forEach((pt) => {
+    const xy = toXY(pt)
+    const px = tx(xy.x), py = ty(xy.y)
+    svg += `<rect x="${(px-5).toFixed(1)}" y="${(py-5).toFixed(1)}" width="10" height="10" fill="#EAB308" stroke="#fff" stroke-width="1"/>`
+    svg += `<text x="${px.toFixed(1)}" y="${(py+3).toFixed(1)}" text-anchor="middle" font-size="7" font-weight="800" fill="#fff" ${FONT}>S</text>`
+  })
+
   // ── EAVE EDGE DIMENSION LABELS (collision-aware architectural style) ──
   // `placedLabels` + `labelCollides` are declared earlier (above the eave
   // perimeter block) so the extra-sections loop can use them without TDZ.

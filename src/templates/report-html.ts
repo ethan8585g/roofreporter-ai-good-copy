@@ -933,6 +933,7 @@ ${aerialTiles.length === 4 ? `
           hips: partition.hips,
           valleys: partition.valleys,
           dormers: dormersForPartition((report as any).roof_trace?.dormers, partition.eaves),
+          annotations: (report as any).roof_trace?.annotations,
         },
         {
           total_ridge_ft: partition.ridge_lf,
@@ -1000,6 +1001,7 @@ ${aerialTiles.length === 4 ? `
           hips: p.hips,
           valleys: p.valleys,
           dormers: dormersForPartition((report as any).roof_trace?.dormers, p.eaves),
+          annotations: (report as any).roof_trace?.annotations,
         },
         { total_ridge_ft: p.ridge_lf, total_hip_ft: p.hip_lf, total_valley_ft: p.valley_lf, total_eave_ft: p.eave_lf, total_rake_ft: p.rake_lf },
         p.footprint_sqft, p.dominant_pitch_deg, p.dominant_pitch_label,
@@ -1026,6 +1028,10 @@ ${aerialTiles.length === 4 ? `
       <div style="display:flex;align-items:center;gap:4px"><span style="width:18px;height:3px;background:#0891B2;display:inline-block;border-radius:1px"></span>Drip Edge</div>
       ${(((report as any).roof_trace?.dormers || []).length > 0) ? `<div style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:8px;background:rgba(168,85,247,0.18);border:1.5px solid #A855F7;display:inline-block;border-radius:2px"></span>Dormer</div>` : ''}
       ${(((report as any).roof_trace?.annotations?.downspouts || []).length > 0) ? `<div style="display:flex;align-items:center;gap:4px"><svg width="10" height="10" viewBox="0 0 16 16"><polygon points="2,3 14,3 8,14" fill="#475569" stroke="#fff" stroke-width="1"/></svg>Downspout</div>` : ''}
+      ${(((report as any).roof_trace?.annotations?.vents || []).length > 0) ? `<div style="display:flex;align-items:center;gap:4px"><svg width="10" height="10" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="#15803D" stroke="#fff" stroke-width="1"/><text x="8" y="10.5" text-anchor="middle" font-size="8" font-weight="800" fill="#fff">V</text></svg>Vent</div>` : ''}
+      ${(((report as any).roof_trace?.annotations?.skylights || []).length > 0) ? `<div style="display:flex;align-items:center;gap:4px"><svg width="10" height="10" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" fill="#EAB308" stroke="#fff" stroke-width="1"/><text x="8" y="11" text-anchor="middle" font-size="9" font-weight="800" fill="#fff">S</text></svg>Skylight</div>` : ''}
+      ${(((report as any).roof_trace?.annotations?.chimneys || []).length > 0) ? `<div style="display:flex;align-items:center;gap:4px"><svg width="10" height="10" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" fill="#B45309" stroke="#fff" stroke-width="1"/><text x="8" y="11" text-anchor="middle" font-size="9" font-weight="800" fill="#fff">C</text></svg>Chimney</div>` : ''}
+      ${(((report as any).roof_trace?.annotations?.pipe_boots || []).length > 0) ? `<div style="display:flex;align-items:center;gap:4px"><svg width="10" height="10" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="#0891B2" stroke="#fff" stroke-width="1"/><text x="8" y="10.5" text-anchor="middle" font-size="8" font-weight="800" fill="#fff">P</text></svg>Pipe Boot</div>` : ''}
     </div>
   </div>
 
