@@ -56,6 +56,10 @@ export interface UiTrace {
      *  flashing in the BOM. Separate from `vents` so contractors can
      *  distinguish powered vents from boot-only penetrations. */
     pipe_boots?: LatLng[]
+    /** Vertical downspout drops — one point per eave corner where a
+     *  downspout drains to the ground. Drives the report's downspout
+     *  count (no auto-derivation: zero placed = zero shown). */
+    downspouts?: LatLng[]
   }
   traced_at?: string
 }

@@ -1025,6 +1025,7 @@ ${aerialTiles.length === 4 ? `
       <div style="display:flex;align-items:center;gap:4px"><span style="width:18px;height:3px;background:#7C3AED;display:inline-block;border-radius:1px"></span>Rake Edge</div>
       <div style="display:flex;align-items:center;gap:4px"><span style="width:18px;height:3px;background:#0891B2;display:inline-block;border-radius:1px"></span>Drip Edge</div>
       ${(((report as any).roof_trace?.dormers || []).length > 0) ? `<div style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:8px;background:rgba(168,85,247,0.18);border:1.5px solid #A855F7;display:inline-block;border-radius:2px"></span>Dormer</div>` : ''}
+      ${(((report as any).roof_trace?.annotations?.downspouts || []).length > 0) ? `<div style="display:flex;align-items:center;gap:4px"><svg width="10" height="10" viewBox="0 0 16 16"><polygon points="2,3 14,3 8,14" fill="#475569" stroke="#fff" stroke-width="1"/></svg>Downspout</div>` : ''}
     </div>
   </div>
 
@@ -1609,6 +1610,11 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
   const fbValleySqft = (report.edge_summary?.total_valley_ft || 0) * 3 * 2
   const fbIwbTotalSqft = Math.round(fbLowSlopeSqft + fbEaveStripSqft + fbValleySqft)
 
+  // Gutter LF + downspout count: trace_measurement.materials_estimate doesn't
+  // include them, so fall back to the gutter-enrichment values on edge_summary.
+  const gutterLf = (traceMat as any)?.gutter_lf || (report.edge_summary as any)?.gutter_lf || 0
+  const downspoutCount = (traceMat as any)?.downspout_count || (report.edge_summary as any)?.downspout_count || 0
+
   // Use trace materials if available, otherwise calculate from report.materials
   const m = traceMat || {
     shingles_squares_net: Math.round(netArea / 100 * 10) / 10,
@@ -1712,7 +1718,7 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
     ...(((m as any).headwall_flashing_lf || 0) > 0 ? [{ cat: 'Headwall Flashing', desc: 'Continuous headwall / apron flashing (10ft sticks)', qty: Math.ceil((m as any).headwall_flashing_lf / 10), unit: 'sticks', note: `${(m as any).headwall_flashing_lf} LF horizontal wall junction`, icon: '&#9644;', color: '#F97316', code: 'RFG FLHEAD' }] : []),
     ...(((m as any).chimney_flashing_count || 0) > 0 ? [{ cat: 'Chimney Flashing Kit', desc: 'Pre-formed chimney flashing kit (apron + step + counter)', qty: (m as any).chimney_flashing_count, unit: 'kits', note: `${(m as any).chimney_flashing_count} chimney(s) on roof`, icon: '&#9632;', color: '#B45309', code: 'RFG FLCHIM' }] : []),
     ...(((m as any).pipe_boot_count || 0) > 0 ? [{ cat: 'Pipe Boot Flashings', desc: 'Lead/EPDM pipe-boot flashings for plumbing/vent stacks', qty: (m as any).pipe_boot_count, unit: 'each', note: `${(m as any).pipe_boot_count} penetration(s)`, icon: '&#9711;', color: '#0891b2', code: 'RFG FLBOOT' }] : []),
-    ...(((m as any).gutter_lf || 0) > 0 ? [{ cat: 'Gutters', desc: '5" K-style aluminum gutter (eave run)', qty: (m as any).gutter_lf, unit: 'LF', note: `${(m as any).downspout_count || 0} downspout(s) at 1 per ${35} LF`, icon: '&#9644;', color: '#0e7490', code: 'GTR 5K' }] : []),
+    ...(gutterLf > 0 ? [{ cat: 'Gutters', desc: '5" K-style aluminum gutter (eave run)', qty: gutterLf, unit: 'LF', note: `${downspoutCount} downspout(s)${downspoutCount > 0 ? ' (manually placed)' : ''}`, icon: '&#9644;', color: '#0e7490', code: 'GTR 5K' }] : []),
     { cat: 'Roofing Nails', desc: '1.25″ galvanized coil nails', qty: m.roofing_nails_lbs, unit: 'lbs', note: 'Approx 2.5 lbs per square', icon: '&#9733;', color: '#64748b', code: 'RFG NAIL' },
     { cat: 'Caulk / Sealant', desc: 'Roofing sealant tubes', qty: m.caulk_tubes, unit: 'tubes', note: 'Flashings, vents, and penetrations', icon: '&#9679;', color: '#0891b2', code: 'RFG CLK' }
   ]
@@ -2448,12 +2454,16 @@ function buildMeasurementSummaryPage(report: RoofReport, reportNum: string, repo
             <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">each</td>
             <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">Plumbing / vent stacks</td>
           </tr>` : ''}
-          ${((m as any).gutter_lf || 0) > 0 ? `<tr>
+          ${(((m as any).gutter_lf || (es as any).gutter_lf || 0) > 0) ? (() => {
+            const gLf = (m as any).gutter_lf || (es as any).gutter_lf || 0
+            const dsCount = (m as any).downspout_count || (es as any).downspout_count || 0
+            return `<tr>
             <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#0e7490;margin-right:3px">&#9644;</span>Gutters</td>
-            <td style="padding:4px 10px;text-align:center;font-weight:800;color:#0e7490;border-bottom:1px solid #eee">${(m as any).gutter_lf}</td>
+            <td style="padding:4px 10px;text-align:center;font-weight:800;color:#0e7490;border-bottom:1px solid #eee">${gLf}</td>
             <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">LF</td>
-            <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">${(m as any).downspout_count || 0} downspouts · 5&quot; K-style aluminum</td>
-          </tr>` : ''}
+            <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">${dsCount} downspouts &middot; 5&quot; K-style aluminum</td>
+          </tr>`
+          })() : ''}
           <tr>
             <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#64748b;margin-right:3px">&#9733;</span>Roofing Nails</td>
             <td style="padding:4px 10px;text-align:center;font-weight:800;color:#64748b;border-bottom:1px solid #eee">${m.roofing_nails_lbs}</td>

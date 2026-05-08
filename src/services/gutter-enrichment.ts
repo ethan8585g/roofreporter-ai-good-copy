@@ -1,16 +1,16 @@
 // ============================================================
-// Gutter enrichment — derives gutter LF + downspout count from the
-// eaves the report already measured, then appends one BOM line at
-// the contractor's per-team gutter price.
+// Gutter enrichment — derives gutter LF from the eaves the report
+// already measured, then appends one BOM line at the contractor's
+// per-team gutter price. Downspout count comes from manual tracing
+// only (annotations.downspouts placed on the super-admin trace map).
 // ============================================================
 //
-// Synchronous compute, no vision needed: gutter LF ≈ eave LF and
-// downspouts are a fixed-spacing heuristic (1 per 35 LF).
+// Synchronous compute, no vision needed: gutter LF ≈ eave LF.
+// Downspouts are NOT auto-derived — admins must place each one on
+// the trace so the count reflects what's actually on the building.
 
 import type { RoofReport, MaterialLineItem } from '../types'
 import { resolveTeamOwner } from '../routes/team'
-
-const DOWNSPOUT_SPACING_FT = 35
 
 interface GutterPrices {
   gutter_lf?: number
@@ -20,15 +20,14 @@ interface EnrichGutterOpts {
   customerId?: number | null
 }
 
-/** Gutter LF = total eave LF; downspouts at 1 per 35 LF (rounded up). */
+/** Gutter LF = total eave LF (downspout count is sourced separately from
+ *  manually-placed `annotations.downspouts` points on the trace). */
 export function deriveGutterMeasurements(edgeSummary: any | null | undefined): {
   gutter_lf: number
-  downspout_count: number
 } {
   const eaveLf = Math.max(0, Number(edgeSummary?.total_eave_ft) || 0)
   const gutterLf = Math.round(eaveLf)
-  const downspoutCount = gutterLf > 0 ? Math.ceil(gutterLf / DOWNSPOUT_SPACING_FT) : 0
-  return { gutter_lf: gutterLf, downspout_count: downspoutCount }
+  return { gutter_lf: gutterLf }
 }
 
 /** Pull this contractor's per-team gutter price, falling back to platform default. */
@@ -84,9 +83,10 @@ export function appendGutterBom(
   ) / 100
 }
 
-/** End-to-end: derive gutter LF + downspout count from edge_summary,
- *  write to edge_summary (without overwriting trace input), append the
- *  gutter BOM line at this contractor's price. Never throws. */
+/** End-to-end: derive gutter LF from edge_summary, count downspouts from
+ *  manually-traced annotations, write to edge_summary (without overwriting
+ *  trace input), append the gutter BOM line at this contractor's price.
+ *  Never throws. */
 export async function enrichReportWithGutters(
   reportData: RoofReport,
   db: any,
@@ -96,8 +96,14 @@ export async function enrichReportWithGutters(
     const es: any = reportData.edge_summary || (reportData.edge_summary = {} as any)
     const derived = deriveGutterMeasurements(es)
 
-    if (!(es.gutter_lf > 0))      es.gutter_lf = derived.gutter_lf
-    if (!(es.downspout_count > 0)) es.downspout_count = derived.downspout_count
+    if (!(es.gutter_lf > 0)) es.gutter_lf = derived.gutter_lf
+
+    // Downspouts: manual placement only. Count = number of points dropped
+    // on the super-admin trace map under annotations.downspouts. Zero when
+    // none were placed — we never auto-derive from spacing heuristics.
+    const tracedDownspouts =
+      (reportData as any)?.roof_trace?.annotations?.downspouts?.length || 0
+    es.downspout_count = tracedDownspouts
 
     const prices = await loadGutterPrices(db, opts.customerId ?? null)
     if (reportData.materials) {

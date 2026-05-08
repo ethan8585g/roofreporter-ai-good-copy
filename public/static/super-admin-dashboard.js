@@ -1685,7 +1685,8 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
         '<span style="margin-right:12px"><span style="display:inline-block;width:12px;height:3px;background:#2563eb;margin-right:4px;vertical-align:middle"></span>Valley</span>' +
         '<span style="margin-right:12px"><span style="display:inline-block;width:10px;height:10px;background:#a855f7;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Vent</span>' +
         '<span style="margin-right:12px"><span style="display:inline-block;width:10px;height:10px;background:#eab308;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Skylight</span>' +
-        '<span><span style="display:inline-block;width:10px;height:10px;background:#dc2626;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Chimney</span>' +
+        '<span style="margin-right:12px"><span style="display:inline-block;width:10px;height:10px;background:#dc2626;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Chimney</span>' +
+        '<span><span style="display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid #475569;margin-right:4px;vertical-align:middle"></span>Downspout</span>' +
         '<span style="display:block;margin-top:6px;color:#9ca3af;font-size:11px">' +
           '<i class="fas fa-mouse-pointer mr-1"></i>Click = Add point &nbsp; ' +
           '<i class="fas fa-draw-polygon mr-1" style="color:#22c55e"></i>Click 1st point to close a section &nbsp; ' +
@@ -1729,6 +1730,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<button onclick="saTraceSetTool(\'vent\')" id="sa-tool-vent" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Vent</button>' +
           '<button onclick="saTraceSetTool(\'skylight\')" id="sa-tool-skylight" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Skylight</button>' +
           '<button onclick="saTraceSetTool(\'chimney\')" id="sa-tool-chimney" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Chimney</button>' +
+          '<button onclick="saTraceSetTool(\'downspout\')" id="sa-tool-downspout" title="Click each eave corner where a downspout drops to the ground. Each point becomes one downspout in the materials list." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Downspout</button>' +
           '<button onclick="saAutoDetectOutline()" id="sa-tool-auto-outline" title="AI-detect the eaves outline of the building at the current map center" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.4)"><i class="fas fa-wand-magic-sparkles mr-1"></i>AI Outline</button>' +
           '<button onclick="saAddStructure()" id="sa-tool-add-structure" title="Trace another structure such as a detached garage" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.4)"><i class="fas fa-plus mr-1"></i>Add another building</button>' +
           '<button onclick="saTraceUndo()" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">Undo</button>' +
@@ -1801,8 +1803,8 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
     ridges: [], hips: [], valleys: [],
     _ridgeData: [], _hipData: [], _valleyData: [],
     _segStart: null, _segStartMarker: null,
-    vents: [], skylights: [], chimneys: [],
-    _ventMarkers: [], _skylightMarkers: [], _chimneyMarkers: [],
+    vents: [], skylights: [], chimneys: [], downspouts: [],
+    _ventMarkers: [], _skylightMarkers: [], _chimneyMarkers: [], _downspoutMarkers: [],
     // Dormers — polygons drawn ON TOP of the main outline that ride at their
     // own pitch. Engine adds only the differential sloped area (no new
     // footprint), so Harry-style A-frame dormers measure correctly without
@@ -1884,11 +1886,11 @@ window.saTraceSetTool = function(tool) {
     }
   }
   s.tool = tool;
-  ['eave','ridge','hip','valley','dormer','vent','skylight','chimney'].forEach(function(t) {
+  ['eave','ridge','hip','valley','dormer','vent','skylight','chimney','downspout'].forEach(function(t) {
     var btn = document.getElementById('sa-tool-' + t);
     if (btn) {
       var active = t === tool;
-      var colors = { eave: '#22c55e', ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb', dormer: '#a855f7', vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626' };
+      var colors = { eave: '#22c55e', ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb', dormer: '#a855f7', vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626', downspout: '#475569' };
       btn.style.background = active ? (colors[t] || '#0ea5e9') : '#1f2937';
       btn.style.color = active ? '#fff' : '#9ca3af';
       btn.style.borderColor = active ? 'transparent' : '#374151';
@@ -1911,10 +1913,11 @@ window.saTraceClear = function() {
   (s._ventMarkers || []).forEach(function(m) { m.setMap(null); }); s._ventMarkers = [];
   (s._skylightMarkers || []).forEach(function(m) { m.setMap(null); }); s._skylightMarkers = [];
   (s._chimneyMarkers || []).forEach(function(m) { m.setMap(null); }); s._chimneyMarkers = [];
+  (s._downspoutMarkers || []).forEach(function(m) { m.setMap(null); }); s._downspoutMarkers = [];
   if (s._segStartMarker) { s._segStartMarker.setMap(null); s._segStartMarker = null; }
   s.eavePoints = []; s._eaveLatLngs = []; s._segStart = null;
   s._ridgeData = []; s._hipData = []; s._valleyData = [];
-  s.vents = []; s.skylights = []; s.chimneys = [];
+  s.vents = []; s.skylights = []; s.chimneys = []; s.downspouts = [];
   // Dormers — clear closed polygons + draft + labels
   (s.dormers || []).forEach(function(d) { if (d.polygon) d.polygon.setMap(null); });
   s.dormers = [];
@@ -1980,7 +1983,7 @@ window.saTraceUndo = function() {
       return;
     }
   }
-  if ((s.tool === 'vent' || s.tool === 'skylight' || s.tool === 'chimney')) {
+  if ((s.tool === 'vent' || s.tool === 'skylight' || s.tool === 'chimney' || s.tool === 'downspout')) {
     var arr = s[s.tool + 's']; var marr = s['_' + s.tool + 'Markers'];
     if (arr && arr.length > 0) { arr.pop(); var mk = marr.pop(); if (mk) mk.setMap(null); return; }
   }
@@ -2267,12 +2270,26 @@ function saInitTraceMap(lat, lng, address) {
         strokeColor: '#a855f7', strokeWeight: 2.5, map: map, zIndex: 4,
       });
       saUpdateDormerCompleteBtn();
-    } else if (tool === 'vent' || tool === 'skylight' || tool === 'chimney') {
-      var colors = { vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626' };
+    } else if (tool === 'vent' || tool === 'skylight' || tool === 'chimney' || tool === 'downspout') {
+      var colors = { vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626', downspout: '#475569' };
+      var iconCfg;
+      if (tool === 'downspout') {
+        // Down-pointing triangle so the marker reads "water flows down here"
+        var dsSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="18" height="18">' +
+          '<polygon points="2,3 14,3 8,14" fill="#475569" stroke="#fff" stroke-width="1.5"/>' +
+          '</svg>';
+        iconCfg = {
+          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(dsSvg),
+          scaledSize: new google.maps.Size(14, 14),
+          anchor: new google.maps.Point(7, 3),
+        };
+      } else {
+        iconCfg = { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: colors[tool], fillOpacity: 0.9, strokeColor: '#fff', strokeWeight: 2 };
+      }
       var annMk = new google.maps.Marker({
         position: e.latLng, map: map,
         clickable: false,
-        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: colors[tool], fillOpacity: 0.9, strokeColor: '#fff', strokeWeight: 2 },
+        icon: iconCfg,
         title: tool
       });
       var pt = { lat: e.latLng.lat(), lng: e.latLng.lng() };
@@ -2557,7 +2574,7 @@ window.saStartVerifyPlanes = async function saStartVerifyPlanes(orderId) {
       ridges: s._ridgeData || [],
       hips: s._hipData || [],
       valleys: s._valleyData || [],
-      annotations: { vents: s.vents || [], skylights: s.skylights || [], chimneys: s.chimneys || [] },
+      annotations: { vents: s.vents || [], skylights: s.skylights || [], chimneys: s.chimneys || [], downspouts: s.downspouts || [] },
     };
     var token = localStorage.getItem('rc_token') || '';
     var res = await fetch('/api/admin/superadmin/orders/' + orderId + '/preview-trace', {
@@ -3479,7 +3496,8 @@ window.saSubmitTrace = async function(orderId) {
     annotations: {
       vents: s.vents || [],
       skylights: s.skylights || [],
-      chimneys: s.chimneys || []
+      chimneys: s.chimneys || [],
+      downspouts: s.downspouts || []
     },
     traced_at: new Date().toISOString()
   };

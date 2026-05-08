@@ -3,14 +3,12 @@ import { deriveGutterMeasurements, appendGutterBom } from './gutter-enrichment'
 
 describe('deriveGutterMeasurements', () => {
   it('returns zero for empty edge summary', () => {
-    expect(deriveGutterMeasurements(null)).toEqual({ gutter_lf: 0, downspout_count: 0 })
-    expect(deriveGutterMeasurements({})).toEqual({ gutter_lf: 0, downspout_count: 0 })
+    expect(deriveGutterMeasurements(null)).toEqual({ gutter_lf: 0 })
+    expect(deriveGutterMeasurements({})).toEqual({ gutter_lf: 0 })
   })
 
   it('uses total_eave_ft as gutter LF', () => {
-    expect(deriveGutterMeasurements({ total_eave_ft: 100 })).toEqual({
-      gutter_lf: 100, downspout_count: 3, // ceil(100/35) = 3
-    })
+    expect(deriveGutterMeasurements({ total_eave_ft: 100 })).toEqual({ gutter_lf: 100 })
   })
 
   it('rounds gutter LF to nearest foot', () => {
@@ -18,17 +16,8 @@ describe('deriveGutterMeasurements', () => {
     expect(deriveGutterMeasurements({ total_eave_ft: 87.6 }).gutter_lf).toBe(88)
   })
 
-  it('downspouts: ceil(gutter_lf / 35)', () => {
-    expect(deriveGutterMeasurements({ total_eave_ft: 35 }).downspout_count).toBe(1)
-    expect(deriveGutterMeasurements({ total_eave_ft: 36 }).downspout_count).toBe(2)
-    expect(deriveGutterMeasurements({ total_eave_ft: 70 }).downspout_count).toBe(2)
-    expect(deriveGutterMeasurements({ total_eave_ft: 71 }).downspout_count).toBe(3)
-  })
-
   it('floors negative input to zero', () => {
-    expect(deriveGutterMeasurements({ total_eave_ft: -10 })).toEqual({
-      gutter_lf: 0, downspout_count: 0,
-    })
+    expect(deriveGutterMeasurements({ total_eave_ft: -10 })).toEqual({ gutter_lf: 0 })
   })
 })
 

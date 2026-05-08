@@ -2369,6 +2369,7 @@ export function generateTraceBasedDiagramSVG(
       vents?: { lat: number; lng: number }[]
       pipe_boots?: { lat: number; lng: number }[]
       skylights?: { lat: number; lng: number }[]
+      downspouts?: { lat: number; lng: number }[]
     }
     /** Dormer overlays — purple polygon + label, drawn on top of the main
      *  facet fill. Don't add new footprint; engine handles the differential
@@ -2993,6 +2994,14 @@ export function generateTraceBasedDiagramSVG(
     const px = tx(xy.x), py = ty(xy.y)
     svg += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="#0891b2" stroke="#fff" stroke-width="1"/>`
     svg += `<text x="${px.toFixed(1)}" y="${(py+2.5).toFixed(1)}" text-anchor="middle" font-size="6" font-weight="800" fill="#fff" ${FONT}>P</text>`
+  })
+
+  // ── DOWNSPOUTS (down-pointing dark-gray triangles — water flows down here) ──
+  ;((roofTrace.annotations && (roofTrace.annotations as any).downspouts) || []).forEach((pt: any) => {
+    const xy = toXY(pt)
+    const px = tx(xy.x), py = ty(xy.y)
+    const tri = `${(px-4).toFixed(1)},${(py-3).toFixed(1)} ${(px+4).toFixed(1)},${(py-3).toFixed(1)} ${px.toFixed(1)},${(py+5).toFixed(1)}`
+    svg += `<polygon points="${tri}" fill="#475569" stroke="#fff" stroke-width="1"/>`
   })
 
   // ── EAVE EDGE DIMENSION LABELS (collision-aware architectural style) ──
