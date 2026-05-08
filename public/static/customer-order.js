@@ -376,6 +376,12 @@ function placeMarker(lat, lng) {
     adminBtn.style.background = '#f59e0b';
     adminBtn.style.cursor = 'pointer';
   }
+  const reqBtn = document.getElementById('requestReportBtn');
+  if (reqBtn) {
+    reqBtn.disabled = false;
+    reqBtn.style.background = '#10b981';
+    reqBtn.style.cursor = 'pointer';
+  }
 
   const msgEl = document.getElementById('orderMsg');
   if (msgEl) msgEl.classList.add('hidden');
