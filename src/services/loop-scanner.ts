@@ -232,7 +232,9 @@ function extractInternalHrefs(html: string): string[] {
   let m: RegExpExecArray | null
   while ((m = re.exec(html)) !== null) {
     const href = m[1]
-    if (href.startsWith('/') && !href.startsWith('//') && !href.startsWith('/static/') && !href.match(/\.(jpg|jpeg|png|svg|webp|css|js|ico|pdf|xml|map)$/i)) {
+    // /cdn-cgi/ paths are Cloudflare-internal endpoints (email-protection,
+    // challenge-platform, etc.), not application routes — skip them.
+    if (href.startsWith('/') && !href.startsWith('//') && !href.startsWith('/static/') && !href.startsWith('/cdn-cgi/') && !href.match(/\.(jpg|jpeg|png|svg|webp|css|js|ico|pdf|xml|map)$/i)) {
       out.add(href)
     }
   }
@@ -338,7 +340,9 @@ async function captureConsoleErrors(
   const acct = (env as any).CLOUDFLARE_ACCOUNT_ID
   const token = (env as any).CLOUDFLARE_API_TOKEN
   if (!acct || !token) {
-    return [{ severity: 'warn', category: 'console_error', message: 'Browser Rendering not configured (CLOUDFLARE_ACCOUNT_ID/API_TOKEN unset) — console errors skipped' }]
+    // Documented degraded mode — Browser Rendering is optional. Stay silent
+    // so we don't pollute the findings feed with a warning every 30 min.
+    return []
   }
 
   for (const path of paths) {
@@ -409,22 +413,40 @@ async function runHealthCheck(env: Bindings, metrics: ProbeMetric[]): Promise<Fi
     findings.push({ severity: 'error', category: 'health_check', message: `D1 SELECT 1 failed: ${e?.message}` })
   }
 
-  // 2. Critical secrets present. Each entry is a tuple of equivalent keys —
-  // the secret is OK if ANY one of them is populated. (The codebase has a few
-  // historical aliases for Gemini and email delivery; we only care that
-  // *some* working path is configured.)
-  const requiredAny: Array<{ label: string; keys: string[] }> = [
+  // 2. Critical secrets present. Probe the Pages app's /api/health rather
+  // than reading env directly: scan_health runs in the cron worker, which
+  // has its own (mostly empty) secret store, so checking `env` here would
+  // false-flag every key that's only bound on the Pages deployment.
+  // /api/health returns an env_configured map of booleans (no values).
+  let envConfigured: Record<string, boolean | string> = {}
+  try {
+    const res = await fetch(`${PROD_BASE}/api/health`, { headers: { 'User-Agent': 'RoofManagerLoopScanner/1.0' } })
+    if (res.ok) {
+      const j: any = await res.json().catch(() => ({}))
+      envConfigured = j?.env_configured || {}
+    } else {
+      findings.push({ severity: 'warn', category: 'health_check', message: `/api/health returned ${res.status} — secret presence not verified this run` })
+    }
+  } catch (e: any) {
+    findings.push({ severity: 'warn', category: 'health_check', message: `/api/health unreachable: ${e?.message} — secret presence not verified this run` })
+  }
+  // GMAIL_REFRESH_TOKEN by design lives in D1 settings table when not in env
+  // (loadGmailCreds() in services/email.ts resolves env-first, then D1).
+  // Treat the D1-stored token as equivalent for the email-delivery check.
+  let d1HasGmailRefresh = false
+  try {
+    const r = await env.DB.prepare(`SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1 LIMIT 1`).first<{ setting_value: string }>()
+    d1HasGmailRefresh = !!(r?.setting_value && r.setting_value.length >= 4)
+  } catch {}
+  const requiredAny: Array<{ label: string; keys: string[]; extraOk?: () => boolean }> = [
     { label: 'Google Solar API', keys: ['GOOGLE_SOLAR_API_KEY'] },
     { label: 'Google Maps', keys: ['GOOGLE_MAPS_API_KEY'] },
     { label: 'Gemini API', keys: ['GEMINI_API_KEY', 'GEMINI_ENHANCE_API_KEY', 'default_gemini_googleaistudio_key', 'google_ai_studio_secret_key', 'GOOGLE_VERTEX_API_KEY'] },
     { label: 'Square payments', keys: ['SQUARE_ACCESS_TOKEN'] },
-    { label: 'Email delivery (Resend or Gmail OAuth)', keys: ['RESEND_API_KEY', 'GMAIL_REFRESH_TOKEN'] },
+    { label: 'Email delivery (Resend or Gmail OAuth)', keys: ['RESEND_API_KEY', 'GMAIL_REFRESH_TOKEN'], extraOk: () => d1HasGmailRefresh },
   ]
-  for (const { label, keys } of requiredAny) {
-    const ok = keys.some(k => {
-      const v = (env as any)[k]
-      return v && typeof v === 'string' && v.length >= 4
-    })
+  for (const { label, keys, extraOk } of requiredAny) {
+    const ok = keys.some(k => !!envConfigured[k]) || (extraOk?.() ?? false)
     if (!ok) {
       findings.push({
         severity: 'error',
