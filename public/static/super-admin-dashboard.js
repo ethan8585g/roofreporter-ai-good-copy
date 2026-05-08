@@ -2018,6 +2018,8 @@ function saInitTraceMap(lat, lng, address) {
   if (!mapEl) return;
 
   var center = { lat: lat || 53.5, lng: lng || -113.5 };
+  // 20px white-on-black crosshair — smaller than the browser default for precise roof tracing.
+  var TRACE_CURSOR = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDIwIDIwIj48ZyBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMi41IiBmaWxsPSJub25lIj48bGluZSB4MT0iMTAiIHkxPSIyIiB4Mj0iMTAiIHkyPSI4Ii8+PGxpbmUgeDE9IjEwIiB5MT0iMTIiIHgyPSIxMCIgeTI9IjE4Ii8+PGxpbmUgeDE9IjIiIHkxPSIxMCIgeDI9IjgiIHkyPSIxMCIvPjxsaW5lIHgxPSIxMiIgeTE9IjEwIiB4Mj0iMTgiIHkyPSIxMCIvPjwvZz48ZyBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMSIgZmlsbD0ibm9uZSI+PGxpbmUgeDE9IjEwIiB5MT0iMiIgeDI9IjEwIiB5Mj0iOCIvPjxsaW5lIHgxPSIxMCIgeTE9IjEyIiB4Mj0iMTAiIHkyPSIxOCIvPjxsaW5lIHgxPSIyIiB5MT0iMTAiIHgyPSI4IiB5Mj0iMTAiLz48bGluZSB4MT0iMTIiIHkxPSIxMCIgeDI9IjE4IiB5Mj0iMTAiLz48L2c+PGNpcmNsZSBjeD0iMTAiIGN5PSIxMCIgcj0iMS4yIiBmaWxsPSIjZmZmIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMC41Ii8+PC9zdmc+") 10 10, crosshair';
   var map = new google.maps.Map(mapEl, {
     center: center, zoom: 20,
     mapTypeId: 'satellite', tilt: 0, rotateControl: false,
@@ -2032,6 +2034,7 @@ function saInitTraceMap(lat, lng, address) {
     scrollwheel: true,
     disableDoubleClickZoom: false,
     clickableIcons: false,
+    draggableCursor: TRACE_CURSOR,
     styles: [
       { elementType: 'labels', stylers: [{ visibility: 'off' }] },
       { featureType: 'poi', elementType: 'all', stylers: [{ visibility: 'off' }] },
