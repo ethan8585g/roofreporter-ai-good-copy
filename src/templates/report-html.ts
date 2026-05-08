@@ -15,7 +15,8 @@ import {
 import {
   generateSatelliteOverlaySVG, generateOverlayLegend, generateBlueprintSVG,
   generateArchitecturalDiagramSVG, generatePreciseAIOverlaySVG,
-  generateSquaresGridDiagramSVG, generateTraceBasedDiagramSVG
+  generateSquaresGridDiagramSVG, generateTraceBasedDiagramSVG,
+  generateEdgeBreakdownSVG,
 } from './svg-diagrams'
 import {
   generateAllStructureSVGs, splitStructures, allocateMaterialsToStructures,
@@ -947,6 +948,26 @@ ${aerialTiles.length === 4 ? `
         Math.round(partition.true_area_sqft / 100 * (1 + (mat.waste_pct || 5) / 100) * 10) / 10,
         partition.true_area_sqft,
       )
+      // Edge Breakdown Schematic — color-coded wireframe with per-segment
+      // length labels. Sits directly under the 2D plan view per spec.
+      const edgeBreakdownSvg = generateEdgeBreakdownSVG(
+        {
+          eaves: partition.eaves,
+          eaves_sections: [partition.eaves],
+          ridges: partition.ridges,
+          hips: partition.hips,
+          valleys: partition.valleys,
+          rakes: partition.rakes,
+          dormers: dormersForPartition((report as any).roof_trace?.dormers, partition.eaves),
+        },
+        {
+          total_eave_ft: partition.eave_lf,
+          total_rake_ft: partition.rake_lf,
+          total_ridge_ft: partition.ridge_lf,
+          total_valley_ft: partition.valley_lf,
+          total_hip_ft: partition.hip_lf,
+        },
+      )
       return `
       <div style="border:1.5px solid #cbd5e1;border-radius:6px;background:#fff;overflow:hidden;margin-bottom:10px">
         <div style="background:linear-gradient(90deg,${TEAL},${TEAL_DARK});color:#fff;padding:6px 12px;display:flex;align-items:center;justify-content:space-between">
@@ -985,6 +1006,17 @@ ${aerialTiles.length === 4 ? `
           <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">2D Plan View &mdash; Edge Dimensions</div>
           <div style="background:#fff;border:1px solid #e2e8f0;border-radius:3px;overflow:hidden">${flat2dSvg}</div>
         </div>
+        <div style="border-top:1px solid #e2e8f0;padding:6px 12px 8px;background:#fafbfc">
+          <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Edge Breakdown Schematic &mdash; Color-Coded Lengths</div>
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:3px;overflow:hidden">${edgeBreakdownSvg}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px 14px;padding:6px 8px;margin-top:4px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:3px;font-size:8px;font-weight:600;color:#334155">
+            <div style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:3px;background:#16A34A;display:inline-block;border-radius:1px"></span>Eave <span style="color:#64748b;font-weight:500">${partition.eave_lf.toLocaleString()} LF</span></div>
+            <div style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:3px;background:#7C3AED;display:inline-block;border-radius:1px"></span>Rake <span style="color:#64748b;font-weight:500">${partition.rake_lf.toLocaleString()} LF</span></div>
+            <div style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:3px;background:#DC2626;display:inline-block;border-radius:1px"></span>Ridge <span style="color:#64748b;font-weight:500">${partition.ridge_lf.toLocaleString()} LF</span></div>
+            <div style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:3px;background:#2563EB;display:inline-block;border-radius:1px"></span>Valley <span style="color:#64748b;font-weight:500">${partition.valley_lf.toLocaleString()} LF</span></div>
+            <div style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:3px;background:#EA580C;display:inline-block;border-radius:1px"></span>Hip <span style="color:#64748b;font-weight:500">${partition.hip_lf.toLocaleString()} LF</span></div>
+          </div>
+        </div>
       </div>
     `}).join('')}
     <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">2D Plan View shows every traced edge with its haversine length. Each traced building rendered separately.</div>
@@ -1006,9 +1038,36 @@ ${aerialTiles.length === 4 ? `
         Math.round(p.true_area_sqft / 100 * (1 + (mat.waste_pct || 5) / 100) * 10) / 10,
         p.true_area_sqft,
       )
+      const edgeBreakdown = generateEdgeBreakdownSVG(
+        {
+          eaves: p.eaves,
+          eaves_sections: [p.eaves],
+          ridges: p.ridges,
+          hips: p.hips,
+          valleys: p.valleys,
+          rakes: p.rakes,
+          dormers: dormersForPartition((report as any).roof_trace?.dormers, p.eaves),
+        },
+        {
+          total_eave_ft: p.eave_lf,
+          total_rake_ft: p.rake_lf,
+          total_ridge_ft: p.ridge_lf,
+          total_valley_ft: p.valley_lf,
+          total_hip_ft: p.hip_lf,
+        },
+      )
       return `
       <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center">${flat}</div>
       <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">2D top-down plan with haversine edge lengths. All dimensions in feet.</div>
+      <div style="margin-top:10px;border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center">${edgeBreakdown}</div>
+      <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px 16px;padding:6px 10px;margin-top:4px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;font-size:8.5px;font-weight:600;color:#334155">
+        <div style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:3px;background:#16A34A;display:inline-block;border-radius:1px"></span>Eave <span style="color:#64748b;font-weight:500">${p.eave_lf.toLocaleString()} LF</span></div>
+        <div style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:3px;background:#7C3AED;display:inline-block;border-radius:1px"></span>Rake <span style="color:#64748b;font-weight:500">${p.rake_lf.toLocaleString()} LF</span></div>
+        <div style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:3px;background:#DC2626;display:inline-block;border-radius:1px"></span>Ridge <span style="color:#64748b;font-weight:500">${p.ridge_lf.toLocaleString()} LF</span></div>
+        <div style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:3px;background:#2563EB;display:inline-block;border-radius:1px"></span>Valley <span style="color:#64748b;font-weight:500">${p.valley_lf.toLocaleString()} LF</span></div>
+        <div style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:3px;background:#EA580C;display:inline-block;border-radius:1px"></span>Hip <span style="color:#64748b;font-weight:500">${p.hip_lf.toLocaleString()} LF</span></div>
+      </div>
+      <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">Edge Breakdown Schematic &mdash; color-coded wireframe with per-segment lengths.</div>
     `})() : `
       <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center">${architecturalDiagramSVG}</div>
       <div style="text-align:center;font-size:6.5px;color:#999;margin:2px 0 8px">AI-Generated Roof Diagram &mdash; All dimensions in feet. Pitch multiplier applied for true sloped area.</div>
