@@ -878,8 +878,8 @@ function renderTraceStep(root, progressBar) {
               input. The polygons themselves are rendered as editable
               overlays directly on the trace map. Confirming stashes the
               per-plane polygons + pitches in orderState.verifiedFaces, which
-              confirmTrace then sends as `verified_faces` so the engine
-              computes each plane's area exactly (shoelace × slopeFactor).
+              confirmTrace then sends as 'verified_faces' so the engine
+              computes each plane's area exactly (shoelace x slopeFactor).
             -->
             <div id="cust-verify-planes-panel" class="cust-verify-planes-panel" style="display:none">
               <div class="cust-verify-handle" onclick="toggleVerifyPanel()"></div>
