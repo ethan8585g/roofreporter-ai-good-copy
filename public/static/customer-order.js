@@ -3957,16 +3957,9 @@ function showOrderSuccessOverlay(order) {
       <div style="width:80px;height:80px;margin:0 auto 20px;background:linear-gradient(135deg,#22c55e,#16a34a);border-radius:50%;display:flex;align-items:center;justify-content:center;animation:popIn 0.5s ease-out 0.2s both">
         <i class="fas fa-check" style="color:white;font-size:36px"></i>
       </div>
-      <h2 style="font-size:22px;font-weight:800;color:#111;margin-bottom:8px">Order Placed!</h2>
+      <h2 style="font-size:22px;font-weight:800;color:#111;margin-bottom:8px">Your order's on the way</h2>
       <p style="color:#6b7280;font-size:14px;margin-bottom:4px">${orderNum ? '<span style="font-family:monospace;background:#f3f4f6;padding:2px 8px;border-radius:6px;font-size:12px">' + orderNum + '</span><br>' : ''}
         ${address}</p>
-      <div style="margin:20px auto;padding:16px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border-radius:16px;border:1px solid #bfdbfe">
-        <div style="display:flex;align-items:center;justify-content:center;gap:8px">
-          <div class="animate-spin" style="width:20px;height:20px;border:3px solid #93c5fd;border-top-color:#2563eb;border-radius:50%"></div>
-          <span style="font-size:14px;font-weight:600;color:#1d4ed8">Generating your roof report...</span>
-        </div>
-        <p style="color:#3b82f6;font-size:12px;margin-top:6px">This takes 20-40 seconds. You'll see it on your dashboard.</p>
-      </div>
       ${autoPropLine}
       ${designBtn}
       <p style="color:#9ca3af;font-size:12px;margin-top:12px"><i class="fas fa-arrow-right mr-1"></i>${_isSolarCust ? 'Or wait — redirecting to dashboard...' : 'Redirecting to dashboard...'}</p>
