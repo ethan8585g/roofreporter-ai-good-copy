@@ -345,7 +345,7 @@ reportsRoutes.get('/:orderId/html', async (c) => {
   @keyframes rm3dspin{to{transform:rotate(360deg)}}
 </style>
 <div class="rm-3d-autocap" id="rm3dAutoCap"><span class="spin"></span><span>Generating 3D cover…</span></div>
-<iframe id="rm3dAutoFrame" src="/3d-verify?autocapture=1&orderId=${encodeURIComponent(orderId)}" style="position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;border:0;opacity:0;pointer-events:none" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+<iframe id="rm3dAutoFrame" src="/3d-verify?autocapture=1&orderId=${encodeURIComponent(orderId)}" style="position:fixed;width:1280px;height:800px;left:-9999px;top:-9999px;border:0;pointer-events:none" referrerpolicy="strict-origin-when-cross-origin"></iframe>
 <script>
   (function(){
     var banner = document.getElementById('rm3dAutoCap');
@@ -375,7 +375,7 @@ reportsRoutes.get('/:orderId/html', async (c) => {
   // iframe that runs the corners autocapture. Independent of the cover
   // block above so we can re-fill aerials even when the cover is fine.
   const aerialsCaptureBlock = hasAerialViews ? '' : `
-<iframe id="rmAerialsAutoFrame" src="/3d-verify?autocapture=corners&orderId=${encodeURIComponent(orderId)}" style="position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;border:0;opacity:0;pointer-events:none" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+<iframe id="rmAerialsAutoFrame" src="/3d-verify?autocapture=corners&orderId=${encodeURIComponent(orderId)}" style="position:fixed;width:1280px;height:800px;left:-9999px;top:-9999px;border:0;pointer-events:none" referrerpolicy="strict-origin-when-cross-origin"></iframe>
 <script>
   (function(){
     var frame = document.getElementById('rmAerialsAutoFrame');

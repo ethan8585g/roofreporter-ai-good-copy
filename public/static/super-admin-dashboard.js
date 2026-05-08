@@ -2549,7 +2549,7 @@ window.saSubmitTrace = async function(orderId) {
         var aerialFrame = document.createElement('iframe');
         aerialFrame.id = 'rm-aerials-frame-' + orderId;
         aerialFrame.src = '/3d-verify?autocapture=corners&orderId=' + encodeURIComponent(orderId);
-        aerialFrame.setAttribute('style', 'position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;border:0;opacity:0;pointer-events:none');
+        aerialFrame.setAttribute('style', 'position:fixed;width:1280px;height:800px;left:-9999px;top:-9999px;border:0;pointer-events:none');
         aerialFrame.referrerPolicy = 'strict-origin-when-cross-origin';
         document.body.appendChild(aerialFrame);
         var aerialsDone = false;
