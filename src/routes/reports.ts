@@ -1441,6 +1441,9 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
       `footprint=${report.key_measurements.total_projected_footprint_ft2}sqft, ` +
       `sloped=${report.key_measurements.total_roof_area_sloped_ft2}sqft, ` +
       `eave_pts=${report.key_measurements.num_eave_points}, ` +
+      `ridges=${report.key_measurements.num_ridges} (${report.key_measurements.ridges_total_ft}ft), ` +
+      `hips=${report.key_measurements.num_hips} (${report.key_measurements.hips_total_ft}ft), ` +
+      `valleys=${report.key_measurements.num_valleys} (${report.key_measurements.valleys_total_ft}ft), ` +
       `pitch=${report.key_measurements.dominant_pitch_label}, ` +
       `pitch_source=${pitchSource}`)
 

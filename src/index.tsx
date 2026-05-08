@@ -17,6 +17,7 @@ import { funnelMonitorRoutes } from './routes/funnel-monitor'
 import { emailHealthRoutes } from './routes/email-health'
 import { reportsMonitorRoutes } from './routes/reports-monitor'
 import { signupHealthRoutes } from './routes/signup-health'
+import { signupJourneyRoutes } from './routes/signup-journey'
 import { marketingBlastRoutes } from './routes/marketing-blast'
 import { aiAnalysisRoutes } from './routes/ai-analysis'
 import { authRoutes } from './routes/auth'
@@ -596,6 +597,7 @@ app.route('/api/funnel-monitor', funnelMonitorRoutes)
 app.route('/api/email-health', emailHealthRoutes)
 app.route('/api/reports-monitor', reportsMonitorRoutes)
 app.route('/api/signup-health', signupHealthRoutes)
+app.route('/api/signup-journey', signupJourneyRoutes)
 app.route('/api/marketing', marketingBlastRoutes)
 app.route('/api/ai', aiAnalysisRoutes)
 app.route('/api/auth', authRoutes)
@@ -1159,10 +1161,18 @@ app.get('/3d-verify', async (c) => {
   .cesium-viewer-bottom{display:none}
   .topbar{position:fixed;top:12px;left:12px;right:12px;display:flex;gap:8px;z-index:10;flex-wrap:wrap;pointer-events:none}
   .pill{background:rgba(0,0,0,.65);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:8px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.12);font-size:12px;font-weight:600;letter-spacing:.2px;pointer-events:auto;color:#fff}
-  .btn{cursor:pointer;border:none;background:#00FF88;color:#0A0A0A;font-weight:800;font-size:12px;padding:8px 14px;border-radius:999px;pointer-events:auto;transition:transform .12s ease}
+  .btn{cursor:pointer;border:none;background:#00FF88;color:#0A0A0A;font-weight:800;font-size:12px;padding:8px 14px;border-radius:999px;pointer-events:auto;transition:transform .12s ease;min-height:36px;min-width:44px;touch-action:manipulation}
   .btn:hover{transform:translateY(-1px)}
   .btn[disabled]{opacity:.5;cursor:not-allowed;transform:none}
   .btn.ghost{background:rgba(0,0,0,.65);color:#fff;border:1px solid rgba(255,255,255,.18)}
+  /* Mobile: bigger tap targets, no fixed modal padding so the iframe fills the viewport */
+  @media (max-width: 480px) {
+    .btn{padding:10px 14px;font-size:13px;min-height:40px}
+    .topbar{top:8px;left:8px;right:8px;gap:6px}
+    .capturebar{top:54px;left:8px;right:8px;gap:6px}
+    .pill{padding:6px 10px;font-size:11px}
+    .legend{font-size:10px;padding:6px 10px;left:8px;bottom:8px}
+  }
   .btn.capture{background:#22d3ee;color:#0A0A0A}
   .btn.mode{background:rgba(0,0,0,.65);color:#fff;border:1px solid rgba(255,255,255,.18)}
   .btn.mode.active{background:#fff;color:#0A0A0A;border-color:#fff}
@@ -1345,22 +1355,49 @@ app.get('/3d-verify', async (c) => {
     toast('Captured ' + kind + ' — added to 2D trace.', 'ok');
   }
 
+  // Median-filtered pick: pickPosition reads the GPU depth buffer at a single
+  // pixel, which is noisy on photogrammetric meshes (shingle texture, floating
+  // artifacts) and can shift the result 0.3–1.0 m. We sample 9 pixels (center
+  // + 8 in a 4-pixel ring), drop nulls, and take the median by height. This
+  // reduces single-pixel noise to ~10–20 cm at typical residential zoom levels.
+  function pickPositionRobust(centerWindowPos){
+    const RING = 4;
+    const offsets = [
+      { dx:  0, dy:  0 },
+      { dx:  RING, dy:  0 }, { dx: -RING, dy:  0 },
+      { dx:  0, dy:  RING }, { dx:  0, dy: -RING },
+      { dx:  RING, dy:  RING }, { dx: -RING, dy:  RING },
+      { dx:  RING, dy: -RING }, { dx: -RING, dy: -RING }
+    ];
+    const samples = [];
+    for (const o of offsets) {
+      const win = new Cesium.Cartesian2(centerWindowPos.x + o.dx, centerWindowPos.y + o.dy);
+      let cart = null;
+      try { cart = viewer.scene.pickPosition(win); } catch(_) { cart = null; }
+      if (!Cesium.defined(cart)) continue;
+      const carto = Cesium.Cartographic.fromCartesian(cart);
+      samples.push({
+        lat: Cesium.Math.toDegrees(carto.latitude),
+        lng: Cesium.Math.toDegrees(carto.longitude),
+        height: carto.height
+      });
+    }
+    if (samples.length < 4) return null;
+    samples.sort((a, b) => a.height - b.height);
+    return samples[Math.floor(samples.length / 2)];
+  }
+
   function handleCanvasClick(clickEvent){
     if (!CAPTURE_ENABLED || captureMode === 'pan' || !viewer) return;
-    let cartesian = null;
-    try {
-      cartesian = viewer.scene.pickPosition(clickEvent.position);
-    } catch (e) {
-      cartesian = null;
-    }
-    if (!Cesium.defined(cartesian)) {
+    const robust = pickPositionRobust(clickEvent.position);
+    if (!robust) {
       toast('No surface there — click directly on the roof.', 'warn');
       return;
     }
-    const carto = Cesium.Cartographic.fromCartesian(cartesian);
-    const lat = Cesium.Math.toDegrees(carto.latitude);
-    const lng = Cesium.Math.toDegrees(carto.longitude);
-    const height = carto.height;
+    const lat = robust.lat;
+    const lng = robust.lng;
+    const height = robust.height;
+    const cartesian = Cesium.Cartesian3.fromDegrees(lng, lat, height);
     const color = Cesium.Color.fromCssColorString(MODE_COLORS[captureMode] || '#fff');
     const markerEntity = viewer.entities.add({
       position: cartesian,
@@ -1492,7 +1529,12 @@ app.get('/3d-verify', async (c) => {
     // Active-capture wiring: register a LEFT_CLICK handler that runs only
     // when ?capture=1 and the user has selected a Ridge/Hip/Valley mode.
     // Cesium uses LEFT_DRAG for camera rotation, so adding a LEFT_CLICK
-    // handler here doesn't interfere with pan/rotate/zoom.
+    // handler here doesn't interfere with pan/rotate/zoom. On touch devices,
+    // ScreenSpaceEventType.LEFT_CLICK fires for single-finger tap (pinch-zoom
+    // is PINCH_*, two-finger pan is also separate — no conflict). Cesium's
+    // default LEFT_CLICK selects an entity, but we have selectionIndicator:
+    // false + infoBox: false above so the default action was already a no-op.
+    // If Cesium is upgraded, re-verify this assumption.
     if (CAPTURE_ENABLED) {
       const bar = document.getElementById('captureBar');
       if (bar) bar.style.display = 'flex';

@@ -2316,7 +2316,10 @@ function drawEditableLine(line, color, kind) {
     strokeWeight: 2.5,
     strokeOpacity: 0.9,
     editable: true,
-    clickable: true,
+    // clickable:false matches the existing eaves polygon pattern — drag
+    // handles still work via the editable vertices, but clicks on the line
+    // body pass through to the map so the user can keep adding new lines.
+    clickable: false,
     zIndex: 5
   });
   const arrName = kind === 'ridge' ? 'traceRidgeLines'

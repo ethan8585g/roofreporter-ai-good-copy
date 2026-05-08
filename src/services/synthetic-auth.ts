@@ -36,6 +36,36 @@ export async function issueScanCustomerJWT(env: Bindings): Promise<string> {
   return token
 }
 
+// Persistent synthetic customer used by the /signup-journey loop.
+// Created on demand on first invocation; stays in D1 forever (filtered out
+// of metrics by its sentinel email). The /signup-health funnel_regression
+// check eventually drops it once it falls outside the 8-day baseline window.
+const JOURNEY_PROBE_EMAIL = 'signup-journey-probe@roofmanager.ca'
+const JOURNEY_PROBE_NAME = 'Journey Probe (synthetic)'
+const JOURNEY_PROBE_NOTES = '[journey-probe] synthetic test account for /loop /signup-journey — do not contact, exclude from metrics.'
+
+export async function ensureJourneyProbeCustomer(env: Bindings): Promise<{ id: number; email: string; created: boolean }> {
+  const existing = await env.DB.prepare(
+    `SELECT id FROM customers WHERE email = ? LIMIT 1`
+  ).bind(JOURNEY_PROBE_EMAIL).first<{ id: number }>()
+  if (existing) return { id: existing.id, email: JOURNEY_PROBE_EMAIL, created: false }
+  const ins = await env.DB.prepare(
+    `INSERT INTO customers (email, name, is_active, email_verified, notes, free_trial_total, free_trial_used)
+     VALUES (?, ?, 1, 1, ?, 3, 0)`
+  ).bind(JOURNEY_PROBE_EMAIL, JOURNEY_PROBE_NAME, JOURNEY_PROBE_NOTES).run()
+  const id = (ins?.meta?.last_row_id as number) || 0
+  return { id, email: JOURNEY_PROBE_EMAIL, created: true }
+}
+
+export async function issueJourneyProbeSession(env: Bindings): Promise<{ token: string; customerId: number; createdProbe: boolean }> {
+  const probe = await ensureJourneyProbeCustomer(env)
+  const token = mintToken('scan-journey')
+  await env.DB.prepare(
+    `INSERT INTO customer_sessions (customer_id, session_token, expires_at) VALUES (?, ?, ?)`
+  ).bind(probe.id, token, new Date(Date.now() + SESSION_TTL_MS).toISOString()).run()
+  return { token, customerId: probe.id, createdProbe: probe.created }
+}
+
 // Delete all scan-prefixed sessions older than 1 hour. Called opportunistically.
 export async function pruneExpiredScanSessions(env: Bindings): Promise<void> {
   try {
