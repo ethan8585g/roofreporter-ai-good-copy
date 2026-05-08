@@ -2773,7 +2773,46 @@ export function generateTraceBasedDiagramSVG(
       })
     }
 
-    // Normalize facet areas to match total
+    // ── DORMER DIFFERENTIAL ATTRIBUTION ──
+    // Engine adds extra sloped area for each dormer = footprint × (slopeFactor(dormer) − slopeFactor(main)).
+    // Credit that extra to whichever facet contains the dormer's centroid so the displayed
+    // per-facet number reflects WHERE the dormer area lives, instead of getting smeared by
+    // the uniform-scale reconciliation below.
+    if (dormersXY.length > 0 && facets.length > 0) {
+      const mainSlopeFactor = 1 / Math.cos(avgPitchDeg * Math.PI / 180)
+      const pointInFacet = (pt: { x: number; y: number }, poly: { x: number; y: number }[]) => {
+        let inside = false
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+          const xi = poly[i].x, yi = poly[i].y
+          const xj = poly[j].x, yj = poly[j].y
+          const intersect = ((yi > pt.y) !== (yj > pt.y))
+            && (pt.x < ((xj - xi) * (pt.y - yi)) / ((yj - yi) || 1e-12) + xi)
+          if (intersect) inside = !inside
+        }
+        return inside
+      }
+      for (const d of dormersXY) {
+        if (d.pts.length < 3) continue
+        const dCx = d.pts.reduce((s, p) => s + p.x, 0) / d.pts.length
+        const dCy = d.pts.reduce((s, p) => s + p.y, 0) / d.pts.length
+        let dArea2 = 0
+        for (let i = 0; i < d.pts.length; i++) {
+          const j = (i + 1) % d.pts.length
+          dArea2 += d.pts[i].x * d.pts[j].y - d.pts[j].x * d.pts[i].y
+        }
+        const dProjFt2 = Math.abs(dArea2) / 2 * 10.7639
+        const dRise = d.pitch_rise || 0
+        const dSlopeFactor = Math.sqrt(dRise * dRise + 144) / 12
+        const extraSloped = dProjFt2 * Math.max(0, dSlopeFactor - mainSlopeFactor)
+        if (extraSloped <= 0) continue
+        const owner = facets.find(f => pointInFacet({ x: dCx, y: dCy }, f.points))
+        if (owner) owner.areaSqft = Math.round(owner.areaSqft + extraSloped)
+      }
+    }
+
+    // Normalize facet areas to match total — only as a small-tolerance safety net.
+    // With dormer differentials now attributed correctly above, the sum should already
+    // be very close to trueAreaSqft. Trigger only on extreme mismatches (geometry drift).
     const totalFacetArea = facets.reduce((s, f) => s + f.areaSqft, 0)
     if (totalFacetArea > 0 && Math.abs(totalFacetArea - trueAreaSqft) > 50) {
       const scale = trueAreaSqft / totalFacetArea
