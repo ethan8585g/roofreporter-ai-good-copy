@@ -50,15 +50,20 @@ export interface JourneyResult {
 }
 
 // Customer-facing pages a freshly-signed-up user would land on.
-// Kept narrow on purpose — adding URLs is cheap, but a runaway crawler
-// is expensive (especially when it hits the same auth-gated page
-// dozens of times via in-page links).
+// Kept narrow on purpose — Cloudflare Workers cap us at 50 subrequests
+// per invocation. Budget: pages + apis + toggles*3 + 2 (email) <= 50.
+// Including /customer (bare) on purpose — it currently 404s, which is
+// a real dead end for any user who types the URL without a sub-path.
 const CUSTOMER_PAGES = [
   '/customer',
   '/customer/dashboard',
-  '/customer/orders',
   '/customer/new-order',
   '/customer/order',
+  '/customer/buy-reports',
+  '/customer/profile',
+  '/customer/integrations',
+  '/customer/material-calculator',
+  '/customer/property-imagery',
   '/customer/reports',
   '/customer/customers',
   '/customer/invoices',
@@ -66,26 +71,10 @@ const CUSTOMER_PAGES = [
   '/customer/jobs',
   '/customer/pipeline',
   '/customer/leads',
-  '/customer/commissions',
-  '/customer/email-outreach',
-  '/customer/suppliers',
-  '/customer/catalog',
-  '/customer/referrals',
-  '/customer/integrations',
-  '/customer/buy-reports',
-  '/customer/profile',
-  '/customer/material-calculator',
-  '/customer/property-imagery',
   '/customer/widget',
-  '/customer/widget-leads',
   '/customer/google-business',
   '/customer/google-ads',
   '/customer/website-builder',
-  '/customer/select-type',
-  '/customer/solar-design',
-  '/customer/design-builder',
-  '/customer/solar-pipeline',
-  '/customer/certificate-automations',
 ]
 
 // Authenticated GETs that drive the dashboard. A 5xx here means the
@@ -99,11 +88,7 @@ const CUSTOMER_API_GETS = [
   '/api/customer-auth/invoices',
   '/api/customer-auth/reports-list',
   '/api/customer-auth/item-library',
-  '/api/customer-auth/referrals',
-  '/api/customer-auth/referrals/payouts',
-  '/api/customer-auth/gcal/status',
   '/api/customer-auth/material-preferences',
-  '/api/customer-auth/proposal-pricing',
 ]
 
 // Strings that, when present in an HTML response with status 200,
@@ -297,16 +282,20 @@ const TOGGLES: Toggle[] = [
     getEndpoint: '/api/customer-auth/profile',
     putEndpoint: '/api/customer-auth/profile',
     extract: (j) => {
-      const p = j?.profile || j
-      if (!p || typeof p !== 'object') return null
+      // GET /profile returns { customer: { ... } }; the PUT endpoint expects
+      // top-level name/phone/etc. Send the existing values back so the
+      // round-trip is idempotent (name uses COALESCE so null wouldn't
+      // overwrite anyway, but we'd then mis-flag drift).
+      const c = j?.customer || j?.profile || j
+      if (!c || typeof c !== 'object' || !c.name) return null
       return {
-        name: p.name ?? null,
-        phone: p.phone ?? null,
-        company_name: p.company_name ?? null,
+        name: c.name,
+        phone: c.phone ?? null,
+        company_name: c.company_name ?? null,
       }
     },
     verify: (sent, after) => {
-      const a = after?.profile || after
+      const a = after?.customer || after?.profile || after
       if (!a) return 'response shape changed'
       for (const k of ['name', 'phone', 'company_name']) {
         if ((sent as any)[k] !== a[k]) return k
@@ -329,28 +318,6 @@ const TOGGLES: Toggle[] = [
       const a = after?.preferences || after
       if (!a) return 'response shape changed'
       if ('preferred_shingle' in sent && sent.preferred_shingle !== a.preferred_shingle) return 'preferred_shingle'
-      return null
-    },
-  },
-  {
-    name: 'proposal-pricing',
-    getEndpoint: '/api/customer-auth/proposal-pricing',
-    putEndpoint: '/api/customer-auth/proposal-pricing',
-    extract: (j) => {
-      const p = j?.pricing || j
-      if (!p || typeof p !== 'object') return null
-      // Only round-trip the per-square / per-bundle numbers — they're idempotent.
-      const out: Record<string, any> = {}
-      if (typeof p.invoice_price_per_square === 'number') out.invoice_price_per_square = p.invoice_price_per_square
-      if (typeof p.invoice_price_per_bundle === 'number') out.invoice_price_per_bundle = p.invoice_price_per_bundle
-      return out
-    },
-    verify: (sent, after) => {
-      const a = after?.pricing || after
-      if (!a) return 'response shape changed'
-      for (const k of Object.keys(sent)) {
-        if ((sent as any)[k] !== a[k]) return k
-      }
       return null
     },
   },
