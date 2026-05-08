@@ -249,21 +249,13 @@ function initMap() {
   orderState.map = new google.maps.Map(mapEl, {
     center: center,
     zoom: zoom,
-    mapTypeId: 'hybrid',
-    mapTypeControl: true,
-    mapTypeControlOptions: {
-      style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
-      position: google.maps.ControlPosition.TOP_RIGHT,
-      mapTypeIds: ['roadmap', 'satellite', 'hybrid', 'esri']
-    },
+    mapTypeId: 'satellite',
+    mapTypeControl: false,
     streetViewControl: false,
     fullscreenControl: true,
     zoomControl: true,
     gestureHandling: 'greedy',
   });
-
-  registerEsriBasemap(orderState.map);
-  orderState.map.setMapTypeId('esri');
 
   orderState.map.addListener('click', (e) => {
     placeMarker(e.latLng.lat(), e.latLng.lng());
@@ -1199,12 +1191,9 @@ function initTraceMap() {
     ],
     mapTypeControlOptions: {
       style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
-      mapTypeIds: ['satellite', 'hybrid', 'esri']
+      mapTypeIds: ['satellite', 'hybrid']
     }
   });
-
-  registerEsriBasemap(orderState.traceMap);
-  orderState.traceMap.setMapTypeId('esri');
 
   // Mark the map "ready" only after the first 'idle' event — i.e. tiles loaded
   // and the map is interactive. Until then the mobile FAB stays visually
@@ -3557,9 +3546,14 @@ function confirmSkipTrace() {
   orderState.measurementResult = null;
   orderState.measurementError = null;
   orderState.measurementLoading = false;
-  orderState.step = 'review';
-  renderOrderPage();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  const b = orderState.billing || {};
+  const hasFreeTrial = (b.free_trial_remaining || 0) > 0;
+  const hasPaidCredits = (b.paid_credits_remaining || 0) > 0;
+  if (hasFreeTrial || hasPaidCredits) {
+    useCredit();
+  } else {
+    payWithSquare();
+  }
 }
 
 async function confirmTrace() {
