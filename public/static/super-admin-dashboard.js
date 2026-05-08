@@ -1750,18 +1750,44 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
       // stashes the per-plane polygons + pitches in window._saTraceState.verifiedFaces
       // which the submit path threads into the engine as payload.faces —
       // exact shoelace × slopeFactor with no inference.
-      '<div id="sa-verify-planes-panel" style="display:none;position:fixed;top:54px;right:14px;width:300px;max-height:78vh;overflow-y:auto;z-index:10001;background:rgba(15,23,42,0.97);border:1px solid #4f46e5;border-radius:12px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,0.5)">' +
+      '<div id="sa-verify-planes-panel" class="sa-verify-planes-panel" style="display:none">' +
+        '<div class="sa-verify-handle" onclick="saToggleVerifyPanel()"></div>' +
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #1e293b">' +
           '<div style="color:#a5b4fc;font-size:12px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase"><i class="fas fa-vector-square mr-1.5"></i>Verify Planes</div>' +
-          '<button onclick="saCancelVerifyPlanes()" title="Cancel — throws away plane edits and returns to the trace toolbar" style="background:transparent;color:#94a3b8;border:none;font-size:14px;cursor:pointer;padding:2px 6px"><i class="fas fa-times"></i></button>' +
+          '<div style="display:flex;gap:4px;align-items:center">' +
+            '<button onclick="saStartAddPlane()" id="sa-add-plane-btn" title="Draw a new plane polygon by clicking points on the map" style="padding:4px 9px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.5);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer"><i class="fas fa-plus mr-1"></i>Add Plane</button>' +
+            '<button onclick="saCancelVerifyPlanes()" title="Cancel — throws away plane edits and returns to the trace toolbar" style="background:transparent;color:#94a3b8;border:none;font-size:14px;cursor:pointer;padding:2px 6px"><i class="fas fa-times"></i></button>' +
+          '</div>' +
         '</div>' +
         '<div id="sa-verify-planes-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>' +
+        // Add-plane drafting hint — visible only while drawing a new plane.
+        '<div id="sa-add-plane-hint" style="display:none;background:rgba(99,102,241,0.10);border:1px solid rgba(99,102,241,0.4);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:10px;color:#a5b4fc;line-height:1.4">' +
+          '<div style="font-weight:700;margin-bottom:4px"><i class="fas fa-pen-ruler mr-1"></i>Drawing new plane</div>' +
+          'Click points on the map to outline the plane. ' +
+          '<span id="sa-add-plane-count">0 points</span>. ' +
+          'Click the first point to close, or use the buttons below.' +
+          '<div style="display:flex;gap:6px;margin-top:6px">' +
+            '<button onclick="saCancelAddPlane()" style="flex:1;padding:5px 8px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer">Cancel</button>' +
+            '<button onclick="saFinishAddPlane()" id="sa-finish-add-plane-btn" disabled style="flex:1;padding:5px 8px;background:#10b981;color:#fff;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;opacity:0.5">Finish (3+ pts)</button>' +
+          '</div>' +
+        '</div>' +
         '<div style="font-size:10px;color:#94a3b8;line-height:1.4;margin-bottom:8px">Drag any plane vertex on the map to fix the split. Edit the pitch input to override the detected pitch. Each plane’s area = shoelace × slopeFactor(pitch).</div>' +
         '<div style="display:flex;gap:6px">' +
           '<button onclick="saReDetectPlanes()" title="Throw away edits and re-run auto-split" style="flex:1;padding:7px 10px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer"><i class="fas fa-arrows-rotate mr-1"></i>Re-detect</button>' +
           '<button onclick="saConfirmVerifyPlanes()" id="sa-confirm-verify-planes-btn" style="flex:2;padding:7px 10px;background:#10b981;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer"><i class="fas fa-check mr-1"></i>Confirm Planes</button>' +
         '</div>' +
       '</div>' +
+      '<style>' +
+        '.sa-verify-planes-panel{position:fixed;top:54px;right:14px;width:300px;max-height:78vh;overflow-y:auto;z-index:10001;background:rgba(15,23,42,0.97);border:1px solid #4f46e5;border-radius:12px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,0.5)}' +
+        '.sa-verify-handle{display:none}' +
+        // Mobile: bottom sheet — covers the lower half of the screen so the
+        // map stays visible above. Drag handle at the top expands/collapses.
+        '@media (max-width:768px){' +
+          '.sa-verify-planes-panel{top:auto;bottom:0;right:0;left:0;width:auto;max-height:60vh;border-radius:14px 14px 0 0;border-left:none;border-right:none;border-bottom:none;padding:14px 14px 18px;transition:transform 0.25s ease;z-index:10002}' +
+          '.sa-verify-planes-panel.collapsed{transform:translateY(calc(100% - 64px))}' +
+          '.sa-verify-handle{display:block;width:44px;height:5px;background:#475569;border-radius:3px;margin:-6px auto 8px;cursor:pointer}' +
+        '}' +
+      '</style>' +
     '</div>';
   document.body.appendChild(overlay);
 
@@ -2085,6 +2111,12 @@ function saInitTraceMap(lat, lng, address) {
     console.warn('[SA Trace] basemaps load failed', err);
   });
 
+  // Hydrate any previously-confirmed verified planes for this order. Runs
+  // after the map is bound so polygons + listeners attach to the right map.
+  if (typeof saMaybeRestoreVerifyState === 'function') {
+    setTimeout(saMaybeRestoreVerifyState, 200);
+  }
+
   // Render the user-placed pin so admin can see where the customer marked their house
   if (lat && lng) {
     s.userPinMarker = new google.maps.Marker({
@@ -2159,6 +2191,9 @@ function saInitTraceMap(lat, lng, address) {
   }
 
   map.addListener('click', function(e) {
+    // Add-Plane mode short-circuits the normal toolbar — clicks build a new
+    // verified-plane polygon instead of placing eaves/ridges/etc.
+    if (s._addPlaneActive) { saAddPlaneClickHandler(e); return; }
     var tool = s.tool;
     if (tool === 'eave') {
       // Phone-only: snap near-miss taps to existing vertices so structures share corners
@@ -2555,7 +2590,7 @@ function saRenderVerifyPlaneList() {
   var s = window._saTraceState;
   var listEl = document.getElementById('sa-verify-planes-list'); if (!listEl) return;
   if (!s.verifiedFaces || s.verifiedFaces.length === 0) {
-    listEl.innerHTML = '<div style="color:#94a3b8;font-size:11px;font-style:italic">No planes detected yet.</div>';
+    listEl.innerHTML = '<div style="color:#94a3b8;font-size:11px;font-style:italic">No planes yet — click Add Plane to draw one, or Re-detect to auto-split.</div>';
     return;
   }
   var html = '';
@@ -2563,11 +2598,12 @@ function saRenderVerifyPlaneList() {
     var f = s.verifiedFaces[i];
     var sloped = f.projected_area_ft2 * saSlopeFactor(f.pitch_rise);
     html += '<div onclick="saFocusVerifyPlane(' + i + ')" style="background:#0f172a;border:1px solid ' + f.color + ';border-left:4px solid ' + f.color + ';border-radius:8px;padding:8px 10px;cursor:pointer;transition:background 0.15s">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
-        '<div style="color:#fff;font-size:13px;font-weight:700">' + f.label + '</div>' +
-        '<div style="display:flex;align-items:center;gap:4px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;gap:6px">' +
+        '<div style="color:#fff;font-size:13px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + f.label + '</div>' +
+        '<div style="display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()">' +
           '<input type="number" min="0.5" max="24" step="0.5" value="' + f.pitch_rise + '" oninput="saSetVerifyPlanePitch(' + i + ', this.value)" style="width:54px;padding:3px 6px;background:#1e293b;color:#fff;border:1px solid #334155;border-radius:5px;font-size:11px;font-weight:700;text-align:center" />' +
           '<span style="color:#94a3b8;font-size:11px;font-weight:600">:12</span>' +
+          '<button onclick="saDeleteVerifyPlane(' + i + ')" title="Delete this plane" style="background:transparent;color:#f87171;border:none;cursor:pointer;padding:2px 4px;font-size:11px"><i class="fas fa-trash"></i></button>' +
         '</div>' +
       '</div>' +
       '<div style="display:flex;justify-content:space-between;font-size:10px">' +
@@ -2577,6 +2613,253 @@ function saRenderVerifyPlaneList() {
     '</div>';
   }
   listEl.innerHTML = html;
+}
+
+window.saDeleteVerifyPlane = function saDeleteVerifyPlane(idx) {
+  var s = window._saTraceState; if (!s || !s.verifiedFaces) return;
+  var f = s.verifiedFaces[idx]; if (!f) return;
+  if (!confirm('Delete ' + f.label + '? This removes the plane from the verified set.')) return;
+  if (f.polygon) { try { f.polygon.setMap(null); } catch {} }
+  s.verifiedFaces.splice(idx, 1);
+  // Relabel remaining planes A, B, C... so labels stay sequential.
+  for (var i = 0; i < s.verifiedFaces.length; i++) {
+    if (/^Plane [A-Z]$/.test(s.verifiedFaces[i].label)) {
+      s.verifiedFaces[i].label = 'Plane ' + String.fromCharCode(65 + i);
+    }
+  }
+  saRenderVerifyPlaneList();
+  saPersistVerifyState();
+};
+
+// ── ADD PLANE — admin draws a new plane polygon by clicking points on map ──
+window.saStartAddPlane = function saStartAddPlane() {
+  var s = window._saTraceState; if (!s || !s.map) return;
+  if (s._addPlaneActive) return;
+  s._addPlaneActive = true;
+  s._addPlanePts = [];
+  s._addPlaneMarkers = [];
+  s._addPlanePoly = null;
+  document.getElementById('sa-add-plane-hint').style.display = 'block';
+  document.getElementById('sa-add-plane-btn').style.opacity = 0.5;
+  document.getElementById('sa-add-plane-btn').disabled = true;
+  s.map.setOptions({ draggableCursor: 'crosshair' });
+  // Make verified plane polygons un-clickable while drawing so map clicks
+  // hit the map listener instead of bubbling into existing polygons.
+  for (var i = 0; i < s.verifiedFaces.length; i++) {
+    if (s.verifiedFaces[i].polygon) {
+      s.verifiedFaces[i].polygon.setOptions({ clickable: false });
+    }
+  }
+};
+
+window.saAddPlaneClickHandler = function saAddPlaneClickHandler(e) {
+  var s = window._saTraceState; if (!s || !s._addPlaneActive) return;
+  var ll = e.latLng;
+  // If clicking near the first point and we have ≥ 3 pts, finish.
+  if (s._addPlanePts.length >= 3) {
+    var proj = s.map.getProjection();
+    if (proj) {
+      var scale = Math.pow(2, s.map.getZoom());
+      var p1 = proj.fromLatLngToPoint(s._addPlanePts[0]);
+      var pc = proj.fromLatLngToPoint(ll);
+      var dxPx = (p1.x - pc.x) * scale;
+      var dyPx = (p1.y - pc.y) * scale;
+      if (Math.sqrt(dxPx * dxPx + dyPx * dyPx) < 12) {
+        saFinishAddPlane();
+        return;
+      }
+    }
+  }
+  s._addPlanePts.push(ll);
+  var mk = new google.maps.Marker({
+    position: ll, map: s.map, clickable: false,
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 5, fillColor: '#a5b4fc', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1.5 },
+    label: { text: String(s._addPlanePts.length), color: '#fff', fontSize: '10px', fontWeight: '700' },
+    zIndex: 11,
+  });
+  s._addPlaneMarkers.push(mk);
+  if (s._addPlanePoly) s._addPlanePoly.setMap(null);
+  s._addPlanePoly = new google.maps.Polyline({
+    path: s._addPlanePts.concat([s._addPlanePts[0]]),
+    strokeColor: '#a5b4fc', strokeWeight: 2.5, strokeOpacity: 0.95, map: s.map, zIndex: 6,
+  });
+  document.getElementById('sa-add-plane-count').textContent = s._addPlanePts.length + (s._addPlanePts.length === 1 ? ' point' : ' points');
+  var finishBtn = document.getElementById('sa-finish-add-plane-btn');
+  if (s._addPlanePts.length >= 3) {
+    finishBtn.disabled = false; finishBtn.style.opacity = 1;
+  } else {
+    finishBtn.disabled = true; finishBtn.style.opacity = 0.5;
+  }
+};
+
+window.saFinishAddPlane = function saFinishAddPlane() {
+  var s = window._saTraceState; if (!s || !s._addPlaneActive) return;
+  var pts = s._addPlanePts || [];
+  if (pts.length < 3) return;
+  // Tear down draft markers + polyline
+  if (s._addPlanePoly) { s._addPlanePoly.setMap(null); s._addPlanePoly = null; }
+  (s._addPlaneMarkers || []).forEach(function(m) { try { m.setMap(null); } catch {} });
+  s._addPlaneMarkers = [];
+  // Prompt for pitch
+  var defaultPitch = 6;
+  if (s.verifiedFaces && s.verifiedFaces.length > 0) {
+    // Use mode of existing pitches as a smart default
+    var freq = {};
+    var maxCount = 0, modePitch = s.verifiedFaces[0].pitch_rise;
+    for (var i = 0; i < s.verifiedFaces.length; i++) {
+      var p = s.verifiedFaces[i].pitch_rise;
+      freq[p] = (freq[p] || 0) + 1;
+      if (freq[p] > maxCount) { maxCount = freq[p]; modePitch = p; }
+    }
+    defaultPitch = modePitch;
+  }
+  var pitchInput = window.prompt('Pitch for this plane (rise:12). Common values: 4, 6, 8, 12.', String(defaultPitch));
+  var pitchRise = parseFloat(pitchInput);
+  if (!isFinite(pitchRise) || pitchRise <= 0 || pitchRise > 24) {
+    alert('Invalid pitch — plane discarded.');
+    saCancelAddPlane();
+    return;
+  }
+  // Append to verifiedFaces with a fresh color
+  var idx = s.verifiedFaces.length;
+  var color = SA_PLANE_COLORS[idx % SA_PLANE_COLORS.length];
+  var poly = new google.maps.Polygon({
+    paths: pts.slice(),
+    map: s.map,
+    strokeColor: color, strokeWeight: 3, strokeOpacity: 0.95,
+    fillColor: color, fillOpacity: 0.20,
+    clickable: true, editable: true, draggable: false, zIndex: 5,
+  });
+  var entry = {
+    face_id: 'face_' + String.fromCharCode(65 + idx),
+    label: 'Plane ' + String.fromCharCode(65 + idx),
+    polygon: poly,
+    points: pts.map(function(ll) { return { lat: ll.lat(), lng: ll.lng() }; }),
+    pitch_rise: pitchRise,
+    projected_area_ft2: 0,
+    color: color,
+  };
+  entry.projected_area_ft2 = saShoelaceAreaFt2(entry.points);
+  s.verifiedFaces.push(entry);
+  // Wire vertex drag listeners on the new plane
+  (function(localIdx) {
+    var path = poly.getPath();
+    function syncFacePath() {
+      var newPts = [];
+      for (var k = 0; k < path.getLength(); k++) {
+        var llp = path.getAt(k);
+        newPts.push({ lat: llp.lat(), lng: llp.lng() });
+      }
+      if (newPts.length < 3) return;
+      s.verifiedFaces[localIdx].points = newPts;
+      s.verifiedFaces[localIdx].projected_area_ft2 = saShoelaceAreaFt2(newPts);
+      saUpdateVerifyPlaneCard(localIdx);
+      saPersistVerifyState();
+    }
+    google.maps.event.addListener(path, 'set_at', syncFacePath);
+    google.maps.event.addListener(path, 'insert_at', syncFacePath);
+    google.maps.event.addListener(path, 'remove_at', syncFacePath);
+    google.maps.event.addListener(poly, 'click', function() { saFocusVerifyPlane(localIdx); });
+  })(idx);
+  saCancelAddPlane();
+  saRenderVerifyPlaneList();
+  saPersistVerifyState();
+};
+
+window.saCancelAddPlane = function saCancelAddPlane() {
+  var s = window._saTraceState; if (!s) return;
+  s._addPlaneActive = false;
+  if (s._addPlanePoly) { s._addPlanePoly.setMap(null); s._addPlanePoly = null; }
+  (s._addPlaneMarkers || []).forEach(function(m) { try { m.setMap(null); } catch {} });
+  s._addPlaneMarkers = [];
+  s._addPlanePts = [];
+  document.getElementById('sa-add-plane-hint').style.display = 'none';
+  var addBtn = document.getElementById('sa-add-plane-btn');
+  if (addBtn) { addBtn.style.opacity = 1; addBtn.disabled = false; }
+  if (s.map) s.map.setOptions({ draggableCursor: '' });
+  // Restore clickability on existing planes
+  for (var i = 0; i < s.verifiedFaces.length; i++) {
+    if (s.verifiedFaces[i].polygon) {
+      s.verifiedFaces[i].polygon.setOptions({ clickable: true });
+    }
+  }
+};
+
+// Mobile bottom-sheet toggle: tap the drag handle to expand/collapse.
+window.saToggleVerifyPanel = function saToggleVerifyPanel() {
+  var p = document.getElementById('sa-verify-planes-panel'); if (!p) return;
+  p.classList.toggle('collapsed');
+};
+
+// Persist verifiedFaces to localStorage so the admin doesn't lose work
+// across page reloads or trace-modal close/reopen. Keyed by orderId.
+function saPersistVerifyState() {
+  var s = window._saTraceState; if (!s || !s.orderId) return;
+  try {
+    var serializable = (s.verifiedFaces || []).map(function(f) {
+      return { face_id: f.face_id, label: f.label, points: f.points, pitch_rise: f.pitch_rise, color: f.color, projected_area_ft2: f.projected_area_ft2 };
+    });
+    localStorage.setItem('saVerifyFaces:' + s.orderId, JSON.stringify(serializable));
+  } catch {}
+}
+
+function saLoadVerifyState() {
+  var s = window._saTraceState; if (!s || !s.orderId || !s.map) return false;
+  var raw;
+  try { raw = localStorage.getItem('saVerifyFaces:' + s.orderId); } catch { return false; }
+  if (!raw) return false;
+  var saved;
+  try { saved = JSON.parse(raw); } catch { return false; }
+  if (!Array.isArray(saved) || saved.length === 0) return false;
+  // Hydrate each plane: re-create the google.maps.Polygon overlay + listeners.
+  s.verifiedFaces = [];
+  for (var i = 0; i < saved.length; i++) {
+    var f = saved[i];
+    if (!f || !Array.isArray(f.points) || f.points.length < 3) continue;
+    var color = f.color || SA_PLANE_COLORS[i % SA_PLANE_COLORS.length];
+    var poly = new google.maps.Polygon({
+      paths: f.points.map(function(p) { return new google.maps.LatLng(p.lat, p.lng); }),
+      map: s.map,
+      strokeColor: color, strokeWeight: 3, strokeOpacity: 0.95,
+      fillColor: color, fillOpacity: 0.20,
+      clickable: true, editable: true, draggable: false, zIndex: 5,
+    });
+    var entry = {
+      face_id: f.face_id || ('face_' + String.fromCharCode(65 + i)),
+      label: f.label || ('Plane ' + String.fromCharCode(65 + i)),
+      polygon: poly,
+      points: f.points,
+      pitch_rise: f.pitch_rise,
+      projected_area_ft2: f.projected_area_ft2 || saShoelaceAreaFt2(f.points),
+      color: color,
+    };
+    s.verifiedFaces.push(entry);
+    (function(idx) {
+      var path = poly.getPath();
+      function syncFacePath() {
+        var newPts = [];
+        for (var k = 0; k < path.getLength(); k++) {
+          var llp = path.getAt(k);
+          newPts.push({ lat: llp.lat(), lng: llp.lng() });
+        }
+        if (newPts.length < 3) return;
+        s.verifiedFaces[idx].points = newPts;
+        s.verifiedFaces[idx].projected_area_ft2 = saShoelaceAreaFt2(newPts);
+        saUpdateVerifyPlaneCard(idx);
+        saPersistVerifyState();
+      }
+      google.maps.event.addListener(path, 'set_at', syncFacePath);
+      google.maps.event.addListener(path, 'insert_at', syncFacePath);
+      google.maps.event.addListener(path, 'remove_at', syncFacePath);
+      google.maps.event.addListener(poly, 'click', function() { saFocusVerifyPlane(idx); });
+    })(s.verifiedFaces.length - 1);
+  }
+  return s.verifiedFaces.length > 0;
+}
+
+function saClearVerifyState() {
+  var s = window._saTraceState; if (!s || !s.orderId) return;
+  try { localStorage.removeItem('saVerifyFaces:' + s.orderId); } catch {}
 }
 
 window.saSetVerifyPlanePitch = function saSetVerifyPlanePitch(idx, val) {
@@ -2611,6 +2894,29 @@ window.saReDetectPlanes = function saReDetectPlanes() {
   saStartVerifyPlanes(s.orderId);
 };
 
+// Hydrate any previously-persisted verified planes when the trace map is
+// ready. Called from saInitTraceMap once the map instance is available.
+window.saMaybeRestoreVerifyState = function saMaybeRestoreVerifyState() {
+  if (saLoadVerifyState()) {
+    var s = window._saTraceState;
+    var btn = document.getElementById('sa-verify-planes-btn');
+    if (btn && s.verifiedFaces.length > 0) {
+      btn.style.background = 'rgba(16,185,129,0.18)';
+      btn.style.color = '#6ee7b7';
+      btn.style.borderColor = 'rgba(16,185,129,0.5)';
+      btn.innerHTML = '<i class="fas fa-check mr-1.5"></i>' + s.verifiedFaces.length + ' Plane' + (s.verifiedFaces.length === 1 ? '' : 's') + ' Verified';
+    }
+    // Don't auto-open the panel — the polygons are visible on the map and
+    // the button reflects the count. Admin can re-open via the button to
+    // edit if needed.
+    for (var k = 0; k < s.verifiedFaces.length; k++) {
+      if (s.verifiedFaces[k].polygon) {
+        s.verifiedFaces[k].polygon.setOptions({ fillOpacity: 0.10, editable: false, clickable: false });
+      }
+    }
+  }
+};
+
 window.saConfirmVerifyPlanes = function saConfirmVerifyPlanes() {
   var s = window._saTraceState; if (!s) return;
   // Validate every plane has a sane pitch + ≥3 vertices.
@@ -2642,10 +2948,13 @@ window.saConfirmVerifyPlanes = function saConfirmVerifyPlanes() {
     btn.style.borderColor = 'rgba(16,185,129,0.5)';
     btn.innerHTML = '<i class="fas fa-check mr-1.5"></i>' + s.verifiedFaces.length + ' Plane' + (s.verifiedFaces.length === 1 ? '' : 's') + ' Verified';
   }
+  saPersistVerifyState();
 };
 
 window.saCancelVerifyPlanes = function saCancelVerifyPlanes() {
   var s = window._saTraceState; if (!s) return;
+  // Cancel any in-progress add-plane draft first
+  if (s._addPlaneActive) saCancelAddPlane();
   saTearDownVerifyPlaneOverlays();
   s.verifiedFaces = [];
   s._verifyPlanesActive = false;
@@ -2659,6 +2968,7 @@ window.saCancelVerifyPlanes = function saCancelVerifyPlanes() {
     btn.style.borderColor = 'rgba(99,102,241,0.5)';
     btn.innerHTML = '<i class="fas fa-vector-square mr-1.5"></i>Verify Planes';
   }
+  saClearVerifyState();
 };
 
 function saTearDownVerifyPlaneOverlays() {
@@ -2919,6 +3229,10 @@ window.saSubmitTrace = async function(orderId) {
     });
     var data = await res.json();
     if (data.success) {
+      // Verified planes are now baked into the saved trace — drop the
+      // localStorage cache so a re-open doesn't restore stale work on top
+      // of what's already on the order.
+      try { localStorage.removeItem('saVerifyFaces:' + orderId); } catch {}
       // Fire-and-forget 4-corner aerial capture in a hidden iframe so the
       // generated report includes NE/SE/SW/NW oblique aerials. The iframe
       // is appended to <body> (survives loadView()) and removes itself on
