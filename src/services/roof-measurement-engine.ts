@@ -155,6 +155,19 @@ export interface TracePayload {
   // and lengths match, the engine attributes per-edge linear footage to the
   // explicit category instead of inferring rakes from line geometry.
   eaves_tags?: Array<'eave' | 'rake'>
+  // Dormers — roof features inside the main outline that ride at their own
+  // pitch (e.g. 12:12 A-frame dormer on a 6:12 main roof). Unlike
+  // eaves_sections, dormers do NOT add new footprint; instead the engine
+  // adds only the *differential* sloped area (footprint × (slopeFactor(dormer)
+  // − slopeFactor(main))). This avoids the double-count problem that comes
+  // from modeling a dormer as a separate eaves_section. Renderers must NOT
+  // split per-dormer (unlike eaves_sections, which become separate
+  // structures in multi-structure reports).
+  dormers?: Array<{
+    polygon: TracePt[]            // closed polygon, 3+ vertices
+    pitch_rise: number            // rise:12 (e.g. 12 = 12:12)
+    label?: string                // optional display name
+  }>
 }
 
 export interface EaveEdge {
@@ -363,6 +376,19 @@ export interface TraceReport {
     projected_ft2: number
     sloped_ft2: number
     is_user_specified: boolean  // true when section's pitch came from eaves_section_pitches
+  }>
+  // Dormer breakdown — emitted when dormers were specified in the payload.
+  // Each entry shows the differential sloped area added by that dormer (extra
+  // surface beyond what the main roof's pitch would have produced for the
+  // same footprint). Footprint stays attributed to the main roof; the engine
+  // does NOT add the dormer's footprint as new ground area.
+  dormer_breakdown?: Array<{
+    dormer_index: number       // 1-based for display
+    label: string              // 'Dormer A' | user-supplied
+    pitch_rise: number         // rise:12
+    footprint_ft2: number      // dormer's projected polygon area (sits inside main)
+    extra_sloped_ft2: number   // differential added to total: footprint × (sf(dormer) − sf(main))
+    main_pitch_rise: number    // for reference — what the main roof was at
   }>
   materials_estimate: TraceMaterialEstimate
   advisory_notes: string[]
@@ -960,6 +986,10 @@ export class RoofMeasurementEngine {
   // Per-section pitch (rise:12) parallel to rawEavesSections. null = use
   // engine default. Lets dormers/additions ride at their own pitch.
   private rawEavesSectionPitches: Array<number | null> = []
+  // Dormers — features inside the main outline. Each carries its own pitch.
+  // The engine adds only the *differential* sloped area to the totals, never
+  // any new footprint, so dormers don't get double-counted on the ground.
+  private rawDormers: Array<{ polygon: TracePt[]; pitch_rise: number; label?: string }> = []
   private rawRidges: TraceLine[]
   private rawHips: TraceLine[]
   private rawValleys: TraceLine[]
@@ -1058,6 +1088,21 @@ export class RoofMeasurementEngine {
       })
       this.rawEavesSections      = kept
       this.rawEavesSectionPitches = keptPitches
+    }
+    // Dormers — validate polygon (3+ pts) + pitch_rise (0 < p ≤ 30). Drop
+    // invalid entries so a malformed dormer can't blow up the run.
+    if (Array.isArray(payload.dormers)) {
+      this.rawDormers = payload.dormers
+        .filter(d =>
+          d && Array.isArray(d.polygon) && d.polygon.length >= 3 &&
+          typeof d.pitch_rise === 'number' && isFinite(d.pitch_rise) &&
+          d.pitch_rise > 0 && d.pitch_rise <= 30
+        )
+        .map(d => ({
+          polygon: d.polygon.map(p => ({ lat: p.lat, lng: p.lng, elevation: p.elevation ?? null })),
+          pitch_rise: d.pitch_rise,
+          label: d.label,
+        }))
     }
     this.rawRidges  = this.parseLines(payload.ridges || [])
     this.rawHips    = this.parseLines(payload.hips || [])
@@ -1822,6 +1867,46 @@ export class RoofMeasurementEngine {
       })
     }
 
+    // ── DORMERS (within the main outline, ride at their own pitch) ──
+    // Each dormer adds only the differential sloped area:
+    //   extra = footprint × (slopeFactor(dormer_pitch) − slopeFactor(main_pitch))
+    // Footprint stays attributed to the main roof — no double-count on the
+    // ground. This is what differentiates a dormer from a separate
+    // eaves_section (which DOES add new footprint, e.g. detached garage).
+    const dormerBreakdown: Array<{
+      dormer_index: number
+      label: string
+      pitch_rise: number
+      footprint_ft2: number
+      extra_sloped_ft2: number
+      main_pitch_rise: number
+    }> = []
+    if (this.rawDormers.length > 0) {
+      const mainSlopeFactor = slopeFactor(domPitch)
+      for (let i = 0; i < this.rawDormers.length; i++) {
+        const d = this.rawDormers[i]
+        const { projected: dCart } = projectToCartesian(d.polygon)
+        const dProjFt2 = shoelaceAreaM2(dCart) * M2_TO_FT2
+        if (dProjFt2 <= 0) continue
+        const dSlopeFactor = slopeFactor(d.pitch_rise)
+        const extraSloped = dProjFt2 * (dSlopeFactor - mainSlopeFactor)
+        // Only add if the dormer is steeper than the main; a "flatter" dormer
+        // would conceptually subtract area, but that's a strange edge case
+        // (low-slope addition on a steep main roof) — clamp to ≥ 0 to avoid
+        // surprise area drops from minor pitch differences.
+        const extraClamped = Math.max(0, extraSloped)
+        totalSloped += extraClamped
+        dormerBreakdown.push({
+          dormer_index: i + 1,
+          label: d.label || `Dormer ${String.fromCharCode(65 + i)}`,
+          pitch_rise: d.pitch_rise,
+          footprint_ft2: dProjFt2,
+          extra_sloped_ft2: extraClamped,
+          main_pitch_rise: domPitch,
+        })
+      }
+    }
+
     // ── OBSTRUCTION DEDUCTION (chimneys, skylights, vents) ──
     const obstructionDetails = this.computeObstructions(domPitch)
     let obstructionDeductProjFt2 = 0
@@ -1881,6 +1966,16 @@ export class RoofMeasurementEngine {
       notes.push(`Hip roof confirmed (${round(totalHipFt, 1)} ft total hip length).`)
     if (this.eavesCart.length > 10)
       notes.push('Complex perimeter (>10 eave points) — Allow extra cut waste.')
+    if (dormerBreakdown.length > 0) {
+      const list = dormerBreakdown
+        .map(d => `${d.label} ${round(d.pitch_rise, 1)}:12 (+${round(d.extra_sloped_ft2, 0)} sf)`)
+        .join(', ')
+      const totalExtra = dormerBreakdown.reduce((s, d) => s + d.extra_sloped_ft2, 0)
+      notes.push(
+        `${dormerBreakdown.length} dormer(s) measured at their own pitch — ` +
+        `+${round(totalExtra, 0)} sf sloped area added to main roof: ${list}.`
+      )
+    }
     if (this.rawEavesSections.length > 0) {
       const customPitched = sectionPitchAreas.filter(s => s.is_user_specified)
       if (customPitched.length > 0) {
@@ -2093,6 +2188,21 @@ export class RoofMeasurementEngine {
             })),
           ]
         : undefined,
+      // Dormer breakdown — emitted only when dormers were specified.
+      // Each entry is the extra sloped area added by a dormer at its own
+      // pitch on top of the main roof. footprint stays in totalProj and
+      // belongs to the main roof; extra_sloped_ft2 is what got added to
+      // totalSloped.
+      dormer_breakdown:    dormerBreakdown.length > 0
+        ? dormerBreakdown.map(d => ({
+            dormer_index: d.dormer_index,
+            label: d.label,
+            pitch_rise: round(d.pitch_rise, 1),
+            footprint_ft2: round(d.footprint_ft2, 1),
+            extra_sloped_ft2: round(d.extra_sloped_ft2, 1),
+            main_pitch_rise: round(d.main_pitch_rise, 1),
+          }))
+        : undefined,
       materials_estimate:  mat,
       advisory_notes:      notes,
       cross_check:         crossCheck,
@@ -2143,6 +2253,14 @@ export function traceUiToEnginePayload(
       pitch_rise: number
       centroid: { lat: number; lng: number }
       area_m2?: number
+    }>
+    // Dormers — features within the main outline. Engine adds only the
+    // differential sloped area; renderers MUST NOT split dormers into
+    // separate "structures" the way eaves_sections get split.
+    dormers?: Array<{
+      polygon: { lat: number; lng: number }[]
+      pitch_rise: number
+      label?: string
     }>
   },
   order: {
@@ -2342,6 +2460,18 @@ export function traceUiToEnginePayload(
     cross_check:    crossCheck,
     plane_segments_lat_lng: traceJson.plane_segments_lat_lng,
     eaves_tags: traceJson.eaves_tags,
+    dormers: Array.isArray(traceJson.dormers) && traceJson.dormers.length > 0
+      ? traceJson.dormers
+          .filter(d =>
+            d && Array.isArray(d.polygon) && d.polygon.length >= 3 &&
+            typeof d.pitch_rise === 'number' && d.pitch_rise > 0 && d.pitch_rise <= 30
+          )
+          .map(d => ({
+            polygon: d.polygon.map(p => ({ lat: p.lat, lng: p.lng, elevation: null })),
+            pitch_rise: d.pitch_rise,
+            label: d.label,
+          }))
+      : undefined,
   }
 }
 

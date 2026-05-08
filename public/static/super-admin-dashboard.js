@@ -1716,6 +1716,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<button onclick="saTraceSetTool(\'ridge\')" id="sa-tool-ridge" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Ridge</button>' +
           '<button onclick="saTraceSetTool(\'hip\')" id="sa-tool-hip" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Hip</button>' +
           '<button onclick="saTraceSetTool(\'valley\')" id="sa-tool-valley" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Valley</button>' +
+          '<button onclick="saTraceSetTool(\'dormer\')" id="sa-tool-dormer" title="Trace a polygon around a dormer on top of the main roof, then enter its pitch (e.g. 12 for 12:12). Engine adds only the steeper sloped surface — no double-counted footprint." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Dormer</button>' +
           '<button onclick="saTraceSetTool(\'vent\')" id="sa-tool-vent" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Vent</button>' +
           '<button onclick="saTraceSetTool(\'skylight\')" id="sa-tool-skylight" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Skylight</button>' +
           '<button onclick="saTraceSetTool(\'chimney\')" id="sa-tool-chimney" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Chimney</button>' +
@@ -1743,6 +1744,15 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
     _segStart: null, _segStartMarker: null,
     vents: [], skylights: [], chimneys: [],
     _ventMarkers: [], _skylightMarkers: [], _chimneyMarkers: [],
+    // Dormers — polygons drawn ON TOP of the main outline that ride at their
+    // own pitch. Engine adds only the differential sloped area (no new
+    // footprint), so Harry-style A-frame dormers measure correctly without
+    // breaking the report's single-structure rendering.
+    dormers: [],                 // [{points:[{lat,lng}], pitch_rise:number, polygon:google.maps.Polygon}]
+    _dormerLatLngs: [],          // in-progress dormer polygon points
+    _dormerMarkers: [],          // in-progress dormer point markers
+    _dormerPoly: null,           // in-progress dormer polyline overlay
+    _dormerLabelMarkers: [],     // D-A, D-B... centroid labels (per closed dormer)
     _isPhone: _isPhoneUA
   };
   setTimeout(function() {
@@ -1796,11 +1806,11 @@ window.saTraceSetTool = function(tool) {
     s._segStart = null;
   }
   s.tool = tool;
-  ['eave','ridge','hip','valley','vent','skylight','chimney'].forEach(function(t) {
+  ['eave','ridge','hip','valley','dormer','vent','skylight','chimney'].forEach(function(t) {
     var btn = document.getElementById('sa-tool-' + t);
     if (btn) {
       var active = t === tool;
-      var colors = { eave: '#22c55e', ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb', vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626' };
+      var colors = { eave: '#22c55e', ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb', dormer: '#a855f7', vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626' };
       btn.style.background = active ? (colors[t] || '#0ea5e9') : '#1f2937';
       btn.style.color = active ? '#fff' : '#9ca3af';
       btn.style.borderColor = active ? 'transparent' : '#374151';
@@ -1826,6 +1836,13 @@ window.saTraceClear = function() {
   s.eavePoints = []; s._eaveLatLngs = []; s._segStart = null;
   s._ridgeData = []; s._hipData = []; s._valleyData = [];
   s.vents = []; s.skylights = []; s.chimneys = [];
+  // Dormers — clear closed polygons + draft + labels
+  (s.dormers || []).forEach(function(d) { if (d.polygon) d.polygon.setMap(null); });
+  s.dormers = [];
+  if (s._dormerPoly) { s._dormerPoly.setMap(null); s._dormerPoly = null; }
+  (s._dormerMarkers || []).forEach(function(m) { m.setMap(null); }); s._dormerMarkers = [];
+  (s._dormerLabelMarkers || []).forEach(function(m) { m.setMap(null); }); s._dormerLabelMarkers = [];
+  s._dormerLatLngs = [];
   saRenderSectionPitches();
 };
 
@@ -1844,6 +1861,30 @@ window.saTraceUndo = function() {
       s.eavePoly = new google.maps.Polyline({ path: s._eaveLatLngs.concat([s._eaveLatLngs[0]]), strokeColor: '#22c55e', strokeWeight: 2.5, map: s.map });
     } else { s.eavePoly = null; }
     return;
+  }
+  if (s.tool === 'dormer') {
+    // Priority: 1) drop last in-progress dormer point, 2) drop last closed dormer
+    if (s._dormerLatLngs && s._dormerLatLngs.length > 0) {
+      s._dormerLatLngs.pop();
+      var dm = (s._dormerMarkers || []).pop(); if (dm) dm.setMap(null);
+      if (s._dormerPoly) s._dormerPoly.setMap(null);
+      if (s._dormerLatLngs.length >= 2) {
+        s._dormerPoly = new google.maps.Polyline({
+          path: s._dormerLatLngs.concat([s._dormerLatLngs[0]]),
+          strokeColor: '#a855f7', strokeWeight: 2.5, map: s.map, zIndex: 4,
+        });
+      } else { s._dormerPoly = null; }
+      return;
+    }
+    if (s.dormers && s.dormers.length > 0) {
+      var lastD = s.dormers.pop();
+      if (lastD && lastD.polygon) lastD.polygon.setMap(null);
+      if (s._dormerLabelMarkers && s._dormerLabelMarkers.length > 0) {
+        var dl = s._dormerLabelMarkers.pop();
+        if (dl) dl.setMap(null);
+      }
+      return;
+    }
   }
   if ((s.tool === 'vent' || s.tool === 'skylight' || s.tool === 'chimney')) {
     var arr = s[s.tool + 's']; var marr = s['_' + s.tool + 'Markers'];
@@ -2096,6 +2137,38 @@ function saInitTraceMap(lat, lng, address) {
         strokeColor: '#22c55e', strokeWeight: 2.5, map: map
       });
       s.eavePoints = pts.map(function(p) { return { lat: p.lat(), lng: p.lng() }; });
+    } else if (tool === 'dormer') {
+      // Dormer polygon — drawn ON TOP of the main outline, closes onto its
+      // first point. After closing, prompt for pitch (rise:12). Engine adds
+      // only the differential sloped area; renderer keeps the report as a
+      // single structure (unlike eaves_sections, which split into separate
+      // buildings).
+      var dpts = s._dormerLatLngs || (s._dormerLatLngs = []);
+      if (dpts.length >= 3) {
+        var dproj = map.getProjection();
+        if (dproj) {
+          var dscale = Math.pow(2, map.getZoom());
+          var dp1 = dproj.fromLatLngToPoint(dpts[0]);
+          var dpc = dproj.fromLatLngToPoint(e.latLng);
+          var ddxPx = (dp1.x - dpc.x) * dscale;
+          var ddyPx = (dp1.y - dpc.y) * dscale;
+          var ddistPx = Math.sqrt(ddxPx * ddxPx + ddyPx * ddyPx);
+          if (ddistPx < 12) { saCloseDormerPolygon(); return; }
+        }
+      }
+      dpts.push(e.latLng);
+      var dmk = new google.maps.Marker({
+        position: e.latLng, map: map,
+        clickable: false,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 5, fillColor: '#a855f7', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1.5 },
+        label: { text: String(dpts.length), color: '#fff', fontSize: '10px', fontWeight: '700' }
+      });
+      s._dormerMarkers.push(dmk);
+      if (s._dormerPoly) s._dormerPoly.setMap(null);
+      s._dormerPoly = new google.maps.Polyline({
+        path: dpts.concat([dpts[0]]),
+        strokeColor: '#a855f7', strokeWeight: 2.5, map: map, zIndex: 4,
+      });
     } else if (tool === 'vent' || tool === 'skylight' || tool === 'chimney') {
       var colors = { vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626' };
       var annMk = new google.maps.Marker({
@@ -2152,6 +2225,74 @@ window.saAddStructure = function() {
   // Make sure tool is set back to eave so the next click starts the new structure's first point
   if (typeof saTraceSetTool === 'function') saTraceSetTool('eave');
 };
+
+// Close the in-progress dormer polygon, prompt for its pitch, and persist.
+// Each dormer becomes one entry in s.dormers; submitted in the trace payload
+// as `dormers`. Engine adds only differential sloped area on top of the main
+// roof; the report renderer treats them as part of the single structure.
+function saCloseDormerPolygon() {
+  var s = window._saTraceState; if (!s || !s.map) return;
+  var dpts = s._dormerLatLngs || [];
+  if (dpts.length < 3) return;
+  // Clear in-progress overlays (markers + polyline)
+  if (s._dormerPoly) { s._dormerPoly.setMap(null); s._dormerPoly = null; }
+  (s._dormerMarkers || []).forEach(function(m) { m.setMap(null); }); s._dormerMarkers = [];
+  // Closed dormer polygon — purple. Editable so admin can drag corners.
+  var poly = new google.maps.Polygon({
+    paths: dpts.slice(),
+    strokeColor: '#a855f7', strokeWeight: 3, strokeOpacity: 0.95,
+    fillColor: '#a855f7',  fillOpacity: 0.20,
+    clickable: false, editable: true, draggable: false,
+    map: s.map, zIndex: 3,
+  });
+  var dormerPoints = dpts.map(function(p) { return { lat: p.lat(), lng: p.lng() }; });
+  var pitchInput = window.prompt(
+    'Dormer pitch (rise:12). Common values: 8, 10, 12. ' +
+    'Cancel/blank to skip — the dormer will use the main roof pitch.',
+    '12'
+  );
+  var pitch_rise = null;
+  if (pitchInput != null) {
+    var v = parseFloat(pitchInput);
+    if (isFinite(v) && v > 0 && v <= 24) pitch_rise = v;
+  }
+  var dormerIdx = (s.dormers || []).length;
+  s.dormers = s.dormers || [];
+  s.dormers.push({
+    points: dormerPoints,
+    pitch_rise: pitch_rise,
+    label: 'Dormer ' + String.fromCharCode(65 + dormerIdx),
+    polygon: poly,
+  });
+  // Sync vertex drags back into points
+  var path = poly.getPath();
+  var dormerEntry = s.dormers[dormerIdx];
+  function syncDormerPath() {
+    var newPts = [];
+    for (var i = 0; i < path.getLength(); i++) {
+      var ll = path.getAt(i);
+      newPts.push({ lat: ll.lat(), lng: ll.lng() });
+    }
+    if (newPts.length < 3) return;
+    dormerEntry.points = newPts;
+  }
+  google.maps.event.addListener(path, 'set_at', syncDormerPath);
+  google.maps.event.addListener(path, 'insert_at', syncDormerPath);
+  google.maps.event.addListener(path, 'remove_at', syncDormerPath);
+  // D-A, D-B... centroid label
+  var cx = 0, cy = 0;
+  for (var i = 0; i < dormerPoints.length; i++) { cx += dormerPoints[i].lat; cy += dormerPoints[i].lng; }
+  cx /= dormerPoints.length; cy /= dormerPoints.length;
+  var labelMk = new google.maps.Marker({
+    position: { lat: cx, lng: cy }, map: s.map, clickable: false, zIndex: 11,
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: '#a855f7', fillOpacity: 0.95, strokeColor: '#fff', strokeWeight: 1.5 },
+    label: { text: 'D' + String.fromCharCode(65 + dormerIdx), color: '#fff', fontSize: '10px', fontWeight: '700' }
+  });
+  s._dormerLabelMarkers = s._dormerLabelMarkers || [];
+  s._dormerLabelMarkers.push(labelMk);
+  // Reset draft for next dormer
+  s._dormerLatLngs = [];
+}
 
 function saCloseEaveSection() {
   var s = window._saTraceState; if (!s || !s.map) return;
@@ -2341,10 +2482,26 @@ window.saSubmitTrace = async function(orderId) {
   var eaves_section_pitches = s.eaveSections.map(function(sec) {
     return (sec && typeof sec.pitch_rise === 'number' && sec.pitch_rise > 0) ? sec.pitch_rise : null;
   });
+  // Dormers — only ship those with a valid pitch. Engine adds only the
+  // differential sloped area; renderer keeps the report as a single
+  // structure (so dormers don't get split into separate buildings).
+  var dormersOut = (s.dormers || [])
+    .filter(function(d) {
+      return d && Array.isArray(d.points) && d.points.length >= 3
+        && typeof d.pitch_rise === 'number' && d.pitch_rise > 0;
+    })
+    .map(function(d) {
+      return {
+        polygon: d.points.map(function(p) { return { lat: p.lat, lng: p.lng }; }),
+        pitch_rise: d.pitch_rise,
+        label: d.label,
+      };
+    });
   var traceJson = {
     eaves: eaves_sections[0],
     eaves_sections: eaves_sections,
     eaves_section_pitches: eaves_section_pitches,
+    dormers: dormersOut.length > 0 ? dormersOut : undefined,
     ridges: s._ridgeData || [],
     hips: s._hipData || [],
     valleys: s._valleyData || [],

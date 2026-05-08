@@ -173,3 +173,162 @@ describe('traceUiToEnginePayload — per-section pitch routing', () => {
     expect(payload.default_pitch).toBe(6)  // main's pitch still routes through
   })
 })
+
+describe('dormers (within main outline, differential-only)', () => {
+  // Harry-style: a 6:12 main roof with an A-frame dormer ON TOP of the main
+  // outline. Unlike eaves_sections (which are separate buildings + add new
+  // footprint), a dormer adds ONLY the differential sloped area:
+  //   extra = footprint × (slopeFactor(dormer_pitch) − slopeFactor(main_pitch))
+  // and footprint stays attributed to the main roof.
+  const mainEaves = squareAt(40, -75, 10)        // ~107.6 m² ≈ 1158 ft²
+  // Dormer polygon — small square inside the main roof (geographically within)
+  const dormerPoly = squareAt(40, -75, 2).map(p => ({ lat: p.lat, lng: p.lng, elevation: null }))
+
+  function slopeFactor(rise: number) {
+    return Math.sqrt(rise * rise + 144) / 12
+  }
+
+  it('dormer adds differential sloped area but does NOT add new footprint', () => {
+    const baseline = new RoofMeasurementEngine({
+      address: 'Test', default_pitch: 6, eaves_outline: mainEaves,
+    }).run()
+
+    const withDormer = new RoofMeasurementEngine({
+      address: 'Test', default_pitch: 6, eaves_outline: mainEaves,
+      dormers: [{ polygon: dormerPoly, pitch_rise: 12 }],
+    }).run()
+
+    // Footprint must NOT change — dormer sits inside main outline
+    expect(withDormer.key_measurements.total_projected_footprint_ft2)
+      .toBe(baseline.key_measurements.total_projected_footprint_ft2)
+    // Sloped area MUST be larger (steeper dormer adds extra surface)
+    expect(withDormer.key_measurements.total_roof_area_sloped_ft2)
+      .toBeGreaterThan(baseline.key_measurements.total_roof_area_sloped_ft2)
+  })
+
+  it('extra sloped area equals footprint × (slopeFactor(dormer) − slopeFactor(main))', () => {
+    const result = new RoofMeasurementEngine({
+      address: 'Test', default_pitch: 6, eaves_outline: mainEaves,
+      dormers: [{ polygon: dormerPoly, pitch_rise: 12 }],
+    }).run()
+
+    const dormers = result.dormer_breakdown
+    expect(dormers).toBeDefined()
+    expect(dormers?.length).toBe(1)
+    const d = dormers![0]
+    expect(d.pitch_rise).toBe(12)
+    expect(d.main_pitch_rise).toBe(6)
+    // Math check: differential = footprint × (sf(12) − sf(6))
+    //            = footprint × (1.4142 − 1.1180) = footprint × 0.2962
+    const expected = d.footprint_ft2 * (slopeFactor(12) - slopeFactor(6))
+    expect(Math.abs(d.extra_sloped_ft2 - expected)).toBeLessThan(0.5)
+  })
+
+  it('multiple dormers each contribute their own differential', () => {
+    const dA = squareAt(40, -75,        2).map(p => ({ lat: p.lat, lng: p.lng, elevation: null }))
+    const dB = squareAt(40, -74.99995,  2).map(p => ({ lat: p.lat, lng: p.lng, elevation: null }))
+    const result = new RoofMeasurementEngine({
+      address: 'Test', default_pitch: 6, eaves_outline: mainEaves,
+      dormers: [
+        { polygon: dA, pitch_rise: 12 },
+        { polygon: dB, pitch_rise: 10 },
+      ],
+    }).run()
+    expect(result.dormer_breakdown?.length).toBe(2)
+    expect(result.dormer_breakdown![0].pitch_rise).toBe(12)
+    expect(result.dormer_breakdown![1].pitch_rise).toBe(10)
+    // dormer at 12:12 must contribute more extra area than dormer at 10:12
+    expect(result.dormer_breakdown![0].extra_sloped_ft2)
+      .toBeGreaterThan(result.dormer_breakdown![1].extra_sloped_ft2)
+  })
+
+  it('dormer at same pitch as main contributes zero (clamped to ≥ 0)', () => {
+    const result = new RoofMeasurementEngine({
+      address: 'Test', default_pitch: 6, eaves_outline: mainEaves,
+      dormers: [{ polygon: dormerPoly, pitch_rise: 6 }],
+    }).run()
+    expect(result.dormer_breakdown?.length).toBe(1)
+    // 6:12 dormer on 6:12 main → sf(6) − sf(6) = 0
+    expect(result.dormer_breakdown![0].extra_sloped_ft2).toBe(0)
+  })
+
+  it('dormer flatter than main is clamped to 0 extra (no surprise area drop)', () => {
+    // A 4:12 "dormer" on a 12:12 main would mathematically subtract area,
+    // but we clamp to ≥ 0 — flatter additions on steep main roofs are an
+    // edge case better represented as a separate eaves_section, not a dormer.
+    const result = new RoofMeasurementEngine({
+      address: 'Test', default_pitch: 12, eaves_outline: mainEaves,
+      dormers: [{ polygon: dormerPoly, pitch_rise: 4 }],
+    }).run()
+    expect(result.dormer_breakdown?.length).toBe(1)
+    expect(result.dormer_breakdown![0].extra_sloped_ft2).toBe(0)
+  })
+
+  it('invalid dormer entries (bad pitch, < 3 points) are dropped silently', () => {
+    const result = new RoofMeasurementEngine({
+      address: 'Test', default_pitch: 6, eaves_outline: mainEaves,
+      dormers: [
+        { polygon: dormerPoly,            pitch_rise: 12 },     // valid
+        { polygon: dormerPoly,            pitch_rise: 0  },     // invalid pitch
+        { polygon: dormerPoly,            pitch_rise: 50 },     // out-of-range
+        { polygon: dormerPoly.slice(0, 2), pitch_rise: 12 },    // < 3 points
+      ],
+    }).run()
+    // Only the first dormer is kept
+    expect(result.dormer_breakdown?.length).toBe(1)
+    expect(result.dormer_breakdown![0].pitch_rise).toBe(12)
+  })
+
+  it('advisory note summarizes dormer count + pitch + extra area', () => {
+    const result = new RoofMeasurementEngine({
+      address: 'Test', default_pitch: 6, eaves_outline: mainEaves,
+      dormers: [{ polygon: dormerPoly, pitch_rise: 12, label: 'East dormer' }],
+    }).run()
+    const note = result.advisory_notes.find(n =>
+      n.includes('dormer(s) measured') && n.includes('12') && n.includes('East dormer')
+    )
+    expect(note).toBeDefined()
+  })
+})
+
+describe('traceUiToEnginePayload — dormers passthrough', () => {
+  function llSquare(lat: number, lng: number, side: number) {
+    const halfDeg = (side / 2) / 111_320
+    const halfLng = halfDeg / Math.cos(lat * Math.PI / 180)
+    return [
+      { lat: lat - halfDeg, lng: lng - halfLng },
+      { lat: lat - halfDeg, lng: lng + halfLng },
+      { lat: lat + halfDeg, lng: lng + halfLng },
+      { lat: lat + halfDeg, lng: lng - halfLng },
+    ]
+  }
+
+  it('valid dormers pass through; invalid ones are dropped', () => {
+    const main = llSquare(40, -75, 10)
+    const dormerPoly = llSquare(40, -75, 2)
+    const payload = traceUiToEnginePayload(
+      {
+        eaves_sections: [main],
+        dormers: [
+          { polygon: dormerPoly,             pitch_rise: 12 },         // valid
+          { polygon: dormerPoly,             pitch_rise: -1 as any },  // bad
+          { polygon: dormerPoly.slice(0, 2), pitch_rise: 10 },         // < 3 pts
+        ],
+      },
+      { property_address: 'Test', homeowner_name: 'T', order_number: 'X' },
+      4,
+    )
+    expect(payload.dormers?.length).toBe(1)
+    expect(payload.dormers![0].pitch_rise).toBe(12)
+  })
+
+  it('omits dormers field when no dormers supplied', () => {
+    const main = llSquare(40, -75, 10)
+    const payload = traceUiToEnginePayload(
+      { eaves_sections: [main] },
+      { property_address: 'Test' },
+      4,
+    )
+    expect(payload.dormers).toBeUndefined()
+  })
+})

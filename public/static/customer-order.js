@@ -56,6 +56,15 @@ const orderState = {
   traceEavesPolygon: null,
   traceEavesSections: [],          // [{points:[{lat,lng}]}] completed closed sections
   traceEavesSectionPolygons: [],   // [google.maps.Polygon] polygon objects for each section
+  // Dormers — closed polygons inside the main outline that ride at their own
+  // pitch. Each entry: {points:[{lat,lng}], pitch_rise:number, label?:string}.
+  // The engine adds only the differential sloped area (no new footprint), and
+  // renderers don't split dormers into separate "structures".
+  traceDormers: [],
+  traceDormerPolygons: [],         // google.maps.Polygon overlay per closed dormer
+  traceDormerCurrent: [],          // in-progress dormer points
+  traceDormerCurrentPolyline: null,
+  traceDormerCurrentMarkers: [],
   traceMarkers: [],
   // Annotation markers (vents, skylights, chimneys, pipe boots) — single-click point placement
   traceVents: [],
@@ -637,6 +646,7 @@ function renderTraceStep(root, progressBar) {
     ridge:   { color: '#3b82f6', icon: 'fa-grip-lines',   label: 'Ridges',     desc: 'Click start and end of each ridge line.' },
     hip:     { color: '#f59e0b', icon: 'fa-slash',         label: 'Hips',       desc: 'Click start and end of each hip line.' },
     valley:  { color: '#ef4444', icon: 'fa-angle-down',    label: 'Valleys',    desc: 'Click start and end of each valley.' },
+    dormer:  { color: '#a855f7', icon: 'fa-mountain',      label: 'Dormers',    desc: 'Trace a polygon AROUND each dormer on top of the main roof — click corners, click first point to close, then enter the dormer’s pitch (e.g. 12 for 12:12). Adds the steeper-slope area without double-counting footprint.' },
     step_flashing:    { color: '#F59E0B', icon: 'fa-bars-staggered', label: 'Step Flashing',    desc: 'Click start & end where the roof slope meets a vertical wall (along the slope).' },
     headwall_flashing:{ color: '#F97316', icon: 'fa-grip-lines-vertical', label: 'Headwall Flashing', desc: 'Click start & end where the top of a slope meets a wall (across the slope).' },
     vent:    { color: '#a855f7', icon: 'fa-wind',           label: 'Vents',      desc: 'Click to mark each roof vent.' },
@@ -683,7 +693,17 @@ function renderTraceStep(root, progressBar) {
                 { key: 'ridge',  info: modeInfo.ridge },
                 { key: 'hip',    info: modeInfo.hip },
                 { key: 'valley', info: modeInfo.valley },
-              ].map(({ key, info }) => `
+                { key: 'dormer', info: modeInfo.dormer },
+              ].map(({ key, info }) => {
+                const dormerCount = (orderState.traceDormers || []).length;
+                const draftCount  = (orderState.traceDormerCurrent || []).length;
+                const countLabel = key === 'eaves' ? (eavesSections > 0 ? eavesSections + (eavesSections === 1 ? ' sect' : ' sects') + (eavesCount > 0 ? '+' : '') : eavesCount + ' pts')
+                  : key === 'ridge' ? ridgeCount
+                  : key === 'hip'   ? hipCount
+                  : key === 'valley' ? valleyCount
+                  : key === 'dormer' ? (dormerCount > 0 ? dormerCount + (dormerCount === 1 ? ' dormer' : ' dormers') + (draftCount > 0 ? '+' : '') : (draftCount > 0 ? draftCount + ' pts' : '0'))
+                  : 0;
+                return `
                 <button onclick="setTraceMode('${key}')" data-trace-mode="${key}"
                   class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all
                     ${orderState.traceMode === key ? 'bg-gray-800 text-white shadow-md' : 'bg-[#0A0A0A] text-gray-400 hover:bg-[#111111]/10'}">
@@ -691,10 +711,10 @@ function renderTraceStep(root, progressBar) {
                   <i class="fas ${info.icon} text-xs"></i>
                   <span>${info.label}</span>
                   <span class="ml-auto text-xs opacity-70" data-trace-count="${key}">
-                    ${key === 'eaves' ? (eavesSections > 0 ? eavesSections + (eavesSections === 1 ? ' sect' : ' sects') + (eavesCount > 0 ? '+' : '') : eavesCount + ' pts') : key === 'ridge' ? ridgeCount : key === 'hip' ? hipCount : valleyCount}
+                    ${countLabel}
                   </span>
-                </button>
-              `).join('')}
+                </button>`
+              }).join('')}
             </div>
           </div>
 
@@ -745,6 +765,7 @@ function renderTraceStep(root, progressBar) {
               <div class="flex justify-between"><span class="text-gray-500">Ridges</span><span id="summary-ridges" class="font-semibold">${ridgeCount}</span></div>
               <div class="flex justify-between"><span class="text-gray-500">Hips</span><span id="summary-hips" class="font-semibold">${hipCount}</span></div>
               <div class="flex justify-between"><span class="text-gray-500">Valleys</span><span id="summary-valleys" class="font-semibold">${valleyCount}</span></div>
+              <div class="flex justify-between"><span class="text-gray-500">Dormers</span><span id="summary-dormers" class="font-semibold ${(orderState.traceDormers || []).length > 0 ? 'text-purple-400' : 'text-gray-400'}">${(orderState.traceDormers || []).length}</span></div>
               <div class="flex justify-between"><span class="text-gray-500">Vents</span><span id="summary-vents" class="font-semibold text-gray-400">${ventCount}</span></div>
               <div class="flex justify-between"><span class="text-gray-500">Skylights</span><span id="summary-skylights" class="font-semibold text-gray-400">${skylightCount}</span></div>
               <div class="flex justify-between"><span class="text-gray-500">Chimneys</span><span id="summary-chimneys" class="font-semibold text-gray-400">${chimneyCount}</span></div>
@@ -1639,6 +1660,31 @@ function handleTraceClick(pt) {
     if (orderState.traceEavesPoints.length > 1) {
       drawPolyline(orderState.traceEavesPoints, '#22c55e', 3, false);
     }
+  } else if (mode === 'dormer') {
+    // Dormer polygon — closes onto first point like eaves. Each closed
+    // dormer prompts for a pitch and is sent in the trace payload as a
+    // dormer object the engine treats as differential-only (no new
+    // footprint). Multiple dormers can be drawn.
+    const cur = orderState.traceDormerCurrent || (orderState.traceDormerCurrent = []);
+    if (cur.length >= 3) {
+      const first = cur[0];
+      if (getDistanceM(pt, first) < 1.5) {
+        closeDormerPolygon();
+        return;
+      }
+    }
+    cur.push(pt);
+    addTraceMarker(pt, '#a855f7', null);
+    if (cur.length > 1) {
+      // Use a dedicated polyline for the in-progress dormer so it doesn't
+      // collide with the eaves draft polyline.
+      if (orderState.traceDormerCurrentPolyline) {
+        orderState.traceDormerCurrentPolyline.setMap(null);
+      }
+      orderState.traceDormerCurrentPolyline = new google.maps.Polyline({
+        path: cur, strokeColor: '#a855f7', strokeWeight: 2.5, map: orderState.traceMap, zIndex: 4,
+      });
+    }
   } else if (mode === 'vent' || mode === 'skylight' || mode === 'chimney' || mode === 'pipe_boot') {
     const arrays = {
       vent: orderState.traceVents,
@@ -1656,6 +1702,68 @@ function handleTraceClick(pt) {
       finishCurrentLine();
     }
   }
+  updateTraceUI();
+}
+
+// Close the in-progress dormer polygon, prompt for its pitch, and persist.
+// Each dormer becomes one entry in orderState.traceDormers, sent at submit
+// as a `dormers` field. Engine adds only differential sloped area on top of
+// the main roof — no new footprint, no separate "structure" in the report.
+function closeDormerPolygon() {
+  const cur = orderState.traceDormerCurrent || [];
+  if (cur.length < 3) return;
+  // Clear in-progress overlays (markers + polyline)
+  if (orderState.traceDormerCurrentPolyline) {
+    orderState.traceDormerCurrentPolyline.setMap(null);
+    orderState.traceDormerCurrentPolyline = null;
+  }
+  // Closed polygon — purple stroke + faint fill, editable so user can drag.
+  const polygon = new google.maps.Polygon({
+    paths: cur.map(p => new google.maps.LatLng(p.lat, p.lng)),
+    map: orderState.traceMap,
+    strokeColor: '#a855f7', strokeWeight: 3, strokeOpacity: 0.95,
+    fillColor: '#a855f7',  fillOpacity: 0.20,
+    editable: true, draggable: false, clickable: false,
+    zIndex: 3,
+  });
+  // Default pitch suggestion: live-detected + 6:12 (steeper) capped at 12.
+  // Most dormers run 8:12-12:12 even on shallow main roofs.
+  const liveBase = (orderState.livePitchRise && orderState.livePitchRise > 0)
+    ? orderState.livePitchRise : 6;
+  const suggested = Math.min(12, Math.max(8, Math.round(liveBase + 6)));
+  let pitchInput = window.prompt(
+    'Dormer pitch (rise:12). Common values: 8, 10, 12. ' +
+    'Leave blank to skip — the dormer will use the main roof pitch.',
+    String(suggested)
+  );
+  let pitch_rise = null;
+  if (pitchInput != null) {
+    const v = parseFloat(pitchInput);
+    if (isFinite(v) && v > 0 && v <= 24) pitch_rise = v;
+  }
+  if (!Array.isArray(orderState.traceDormers)) orderState.traceDormers = [];
+  if (!Array.isArray(orderState.traceDormerPolygons)) orderState.traceDormerPolygons = [];
+  const dormerIdx = orderState.traceDormers.length;
+  orderState.traceDormers.push({
+    points: cur.slice(),
+    pitch_rise: pitch_rise,
+    label: `Dormer ${String.fromCharCode(65 + dormerIdx)}`,
+  });
+  orderState.traceDormerPolygons.push(polygon);
+  // Centroid label (D-A, D-B, ...)
+  const cx = cur.reduce((s, p) => s + p.lat, 0) / cur.length;
+  const cy = cur.reduce((s, p) => s + p.lng, 0) / cur.length;
+  addTraceMarker(
+    { lat: cx, lng: cy }, '#a855f7',
+    'D' + String.fromCharCode(65 + dormerIdx)
+  );
+  // Reset draft state for the next dormer.
+  orderState.traceDormerCurrent = [];
+  showMsg(
+    'success',
+    `<i class="fas fa-check-circle mr-1"></i>Dormer ${String.fromCharCode(65 + dormerIdx)} added` +
+    (pitch_rise ? ` at ${pitch_rise}:12.` : ' (no pitch — using main roof default).')
+  );
   updateTraceUI();
 }
 
@@ -2550,15 +2658,28 @@ async function confirmTrace() {
 
   // Per-section pitches parallel to _sections. Engine routes the largest
   // section's pitch to default_pitch and the rest to per-section overrides,
-  // letting steeper dormers measure correctly without affecting the main roof.
+  // letting genuinely separate structures (e.g. detached garage) ride at
+  // their own pitch without affecting the main roof.
   const _sectionPitches = (orderState.traceEavesSections || []).map(s =>
     (s && typeof s.pitch_rise === 'number' && s.pitch_rise > 0) ? s.pitch_rise : null
   );
+  // Dormers — closed polygons inside the main outline that ride at their own
+  // pitch. Engine adds only the differential sloped area; renderer doesn't
+  // split per-dormer (unlike eaves_sections, which become separate buildings).
+  const _dormers = (orderState.traceDormers || [])
+    .filter(d => d && Array.isArray(d.points) && d.points.length >= 3)
+    .map(d => ({
+      polygon: d.points.map(p => ({ lat: p.lat, lng: p.lng })),
+      pitch_rise: (typeof d.pitch_rise === 'number' && d.pitch_rise > 0) ? d.pitch_rise : null,
+      label: d.label,
+    }))
+    .filter(d => d.pitch_rise != null);
 
   orderState.roofTraceJson = {
     eaves: _primary,
     eaves_sections: _sections,
     eaves_section_pitches: _sectionPitches,
+    dormers: _dormers.length > 0 ? _dormers : undefined,
     ridges: orderState.traceRidgeLines,
     hips: orderState.traceHipLines,
     valleys: orderState.traceValleyLines,

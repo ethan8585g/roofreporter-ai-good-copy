@@ -26,9 +26,21 @@ export interface UiTrace {
   eaves?: LatLng[] | LatLng[][]
   eaves_sections?: LatLng[][]
   /** Per-section roof pitch (rise:12), parallel to eaves_sections. null/0
-   *  means "use the engine's default/dominant pitch." Used for dormers and
-   *  additions whose slope differs from the main roof. */
+   *  means "use the engine's default/dominant pitch." Used for genuinely
+   *  separate structures (detached garages, sheds) whose slope differs from
+   *  the main roof. NOT for dormers — see `dormers` below. */
   eaves_section_pitches?: Array<number | null | undefined>
+  /** Dormers — roof features inside the main outline that ride at their own
+   *  pitch (e.g. 12:12 A-frame dormer on a 6:12 main roof). Each entry is a
+   *  closed polygon plus a pitch in rise:12. The engine adds only the
+   *  *differential* sloped area (no new footprint), and the report renderer
+   *  treats dormers as part of the main structure (not separate buildings
+   *  the way eaves_sections become in multi-structure reports). */
+  dormers?: Array<{
+    polygon: LatLng[]
+    pitch_rise: number
+    label?: string
+  }>
   ridges?: UiTraceLine[]
   hips?: UiTraceLine[]
   valleys?: UiTraceLine[]
