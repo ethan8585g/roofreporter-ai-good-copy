@@ -22,6 +22,38 @@ function clearCustomerSessionCookie(c: any) {
   c.header('Set-Cookie', `${CUSTOMER_SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`, { append: true })
 }
 
+// Bumps customer_login_events with a 'resume' row when an authenticated
+// customer hits a tracked endpoint. Gap-deduped at 15 min so a single
+// browsing session (React re-renders, multi-tab polling, dashboard
+// mounts) doesn't produce dozens of rows, while a return visit later
+// the same day or the next day does. Awaited (not waitUntil-deferred)
+// so the row is committed before the response returns — a single
+// SELECT + at most one INSERT is cheap (~10ms) and eliminates the
+// "promise dropped after response" failure mode that left the counter
+// pinned at 1 for everyone post-deploy.
+async function recordCustomerVisit(env: Bindings, customerId: number, ip: string | null): Promise<void> {
+  try {
+    const last = await env.DB.prepare(
+      "SELECT created_at FROM customer_login_events WHERE customer_id = ? ORDER BY created_at DESC LIMIT 1"
+    ).bind(customerId).first<{ created_at: string }>()
+    const lastMs = last?.created_at
+      ? Date.parse(last.created_at.replace(' ', 'T') + 'Z')
+      : 0
+    if (lastMs && (Date.now() - lastMs) <= 15 * 60 * 1000) return
+    await env.DB.prepare(
+      "INSERT INTO customer_login_events (customer_id, auth_method, ip_address) VALUES (?, 'resume', ?)"
+    ).bind(customerId, ip).run()
+  } catch (e: any) {
+    console.warn('[customer-auth] recordCustomerVisit failed:', e?.message)
+  }
+}
+
+function ipFromRequest(c: any): string | null {
+  return c.req.header('CF-Connecting-IP')
+    || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim()
+    || null
+}
+
 export const customerAuthRoutes = new Hono<{ Bindings: Bindings }>()
 
 // Seeds the 12 default material catalog items for a new account so users have
@@ -952,26 +984,8 @@ customerAuthRoutes.get('/me', async (c) => {
     return c.json({ error: 'Session expired or invalid' }, 401)
   }
 
-  // Session-resume tracking: bump customer_login_events when a returning user
-  // hits the portal after a gap. Without this the counter is effectively pinned
-  // at 1 for everyone, because customer cookies last 7 days and most users
-  // never re-enter credentials. Gap-deduped at 1h so a single browsing session
-  // produces ~1 event, not hundreds.
-  try {
-    const last = await c.env.DB.prepare(
-      "SELECT created_at FROM customer_login_events WHERE customer_id = ? ORDER BY created_at DESC LIMIT 1"
-    ).bind(session.customer_id).first<{ created_at: string }>()
-    const lastMs = last?.created_at ? Date.parse(last.created_at.replace(' ', 'T') + 'Z') : 0
-    if (!lastMs || (Date.now() - lastMs) > 60 * 60 * 1000) {
-      const ipForLog = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || null
-      c.executionCtx.waitUntil(
-        c.env.DB.prepare(
-          "INSERT INTO customer_login_events (customer_id, auth_method, ip_address) VALUES (?, 'resume', ?)"
-        ).bind(session.customer_id, ipForLog).run()
-          .catch((e: any) => console.warn('[customer-auth] resume event insert failed:', e?.message))
-      )
-    }
-  } catch (e: any) { console.warn('[customer-auth] resume event probe failed:', e?.message) }
+  // Session-resume tracking — see recordCustomerVisit() for rationale.
+  await recordCustomerVisit(c.env, session.customer_id, ipFromRequest(c))
 
   // DEV ACCOUNT: always unlimited
   const isDev = isDevAccount(session.email || '', c.env)
@@ -1468,6 +1482,10 @@ customerAuthRoutes.get('/orders', async (c) => {
   `).bind(token).first<any>()
 
   if (!session) return c.json({ error: 'Session expired' }, 401)
+
+  // Tracked alongside /me — the dashboard hits both on mount, so even if /me
+  // 401s on a stale Bearer token, an /orders hit still records the visit.
+  await recordCustomerVisit(c.env, session.customer_id, ipFromRequest(c))
 
   // Resolve team membership — show owner's orders if team member
   const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
