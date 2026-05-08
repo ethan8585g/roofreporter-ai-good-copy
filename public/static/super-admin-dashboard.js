@@ -1270,10 +1270,18 @@ function renderReportRequestsView() {
           ? (o.api_company_name || 'API Client') + ' · ' + (o.order_number || '#' + o.id) + ' · ' + new Date(o.created_at).toLocaleString()
           : (o.customer_name || o.customer_email || '') + ' · ' + (o.order_number || '#' + o.id) + ' · ' + new Date(o.created_at).toLocaleString();
         var borderColor = isApi ? '#7c3aed44' : '#374151';
+        var note = (o.customer_notes || '').toString().trim();
+        var noteHtml = note ? (
+          '<div style="margin-top:8px;background:rgba(96,165,250,0.10);border-left:3px solid #60a5fa;border-radius:6px;padding:8px 10px;color:#dbeafe;font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word">' +
+            '<div style="color:#93c5fd;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px"><i class="fas fa-comment-dots mr-1"></i>Customer note</div>' +
+            note.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') +
+          '</div>'
+        ) : '';
         return '<div style="background:#111827;border:1px solid ' + borderColor + ';border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;flex-wrap:wrap">' +
           '<div style="flex:1;min-width:0">' +
             '<div style="color:#f9fafb;font-weight:600;font-size:13px">' + (o.property_address || 'Unknown') + sourceBadge + '</div>' +
             '<div style="color:#6b7280;font-size:11px;margin-top:2px">' + subLabel + '</div>' +
+            noteHtml +
           '</div>' +
           '<button onclick="saOpenTraceModal(' + o.id + ',' + (o.latitude || 0) + ',' + (o.longitude || 0) + ',\'' + (o.property_address || '').replace(/'/g, "\\'") + '\',\'' + (o.order_number || '') + '\')" ' +
             'style="padding:8px 16px;background:' + (isApi ? '#7c3aed' : '#f59e0b') + ';color:#fff;font-size:12px;font-weight:700;border:none;border-radius:8px;cursor:pointer;white-space:nowrap">' +
@@ -1935,6 +1943,27 @@ function saInitTraceMap(lat, lng, address) {
         anchor: new google.maps.Point(0, 0)
       }
     });
+
+    // Mirror the pin onto the photorealistic 3D map so admin can identify the
+    // exact property among neighbouring rooftops.
+    if (map3d) {
+      (function add3dPin() {
+        var ready = window.customElements && window.customElements.whenDefined
+          ? window.customElements.whenDefined('gmp-marker-3d')
+          : Promise.resolve();
+        ready.then(function() {
+          try {
+            var marker3d = document.createElement('gmp-marker-3d');
+            marker3d.position = { lat: lat, lng: lng, altitude: 25 };
+            marker3d.altitudeMode = 'RELATIVE_TO_GROUND';
+            marker3d.extruded = true;
+            marker3d.label = 'User pin';
+            map3d.appendChild(marker3d);
+            s.userPinMarker3d = marker3d;
+          } catch (e) { /* maps3d marker not supported — silently skip */ }
+        }).catch(function() { /* element never registered — skip */ });
+      })();
+    }
   }
 
   // Geocode address to ensure map is centered on the right property
