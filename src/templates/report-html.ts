@@ -2276,6 +2276,147 @@ function buildPitchBreakdownPage(report: RoofReport, reportNum: string, reportDa
     </div>
   </div>
 
+  ${(() => {
+    // ───────────── GUTTERS BREAKDOWN ─────────────
+    // Renders only when the report has measured eaves (gutter_lf derived from
+    // total_eave_ft). Reuses tm.eave_edge_breakdown (per-eave-segment data
+    // already populated by the measurement engine) and the existing 'gutters'
+    // line in materials.line_items for unit price / line total — no new data
+    // plumbing. When the report is Solar-API-only (no trace), gutter_lf is 0
+    // and we skip the entire section.
+    const es: any = (report.edge_summary as any) || {}
+    const gutterLf = Number(es.gutter_lf) || 0
+    if (gutterLf <= 0) return ''
+
+    const downspoutCount = Number(es.downspout_count) || 0
+    const eaveEdges: any[] = Array.isArray(tm?.eave_edge_breakdown) ? tm.eave_edge_breakdown : []
+    const eaveSectionCount = eaveEdges.length
+    const recommendedDs = Math.max(1, Math.ceil(gutterLf / 35))
+
+    const gutterLine = ((report.materials as any)?.line_items || [])
+      .find((i: any) => i?.category === 'gutters') || null
+    const unitPrice = Number(gutterLine?.unit_price_cad) || 0
+    const orderQty  = Number(gutterLine?.order_quantity) || Math.ceil(gutterLf * 1.05)
+    const lineTotal = Number(gutterLine?.line_total_cad) || 0
+
+    const sectionLabel = (idx: any) => {
+      const n = Number(idx)
+      if (!Number.isFinite(n) || n <= 0) return 'Main'
+      return n === 1 ? 'Garage' : `Section ${n + 1}`
+    }
+    const dsForRun = (lenFt: number) => {
+      if (!Number.isFinite(lenFt) || lenFt < 8) return '—'
+      return String(Math.max(1, Math.ceil(lenFt / 35)))
+    }
+
+    const VISIBLE_ROW_CAP = 12
+    const visibleEaves = eaveEdges.slice(0, VISIBLE_ROW_CAP)
+    const hiddenCount = Math.max(0, eaveEdges.length - VISIBLE_ROW_CAP)
+    const hiddenLf = eaveEdges.slice(VISIBLE_ROW_CAP)
+      .reduce((s, e: any) => s + (Number(e?.length_2d_ft) || 0), 0)
+
+    return `
+  <!-- Gutters Breakdown -->
+  <div style="padding:14px 28px 0">
+    <div style="font-size:10px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.8px;margin-bottom:5px;border-bottom:2px solid ${TEAL};padding-bottom:3px">Gutters Breakdown <span style="font-size:7.5px;color:#888;font-weight:600;text-transform:none;letter-spacing:0">(derived from traced eave perimeter)</span></div>
+
+    <!-- Hero summary cards -->
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <div style="flex:1;background:linear-gradient(135deg,${TEAL},#26a69a);border-radius:6px;padding:8px 10px;text-align:center;color:#fff">
+        <div style="font-size:7px;font-weight:700;text-transform:uppercase;opacity:0.85;letter-spacing:0.5px">Total Gutter</div>
+        <div style="font-size:18px;font-weight:900;line-height:1.1">${gutterLf.toLocaleString()} <span style="font-size:9px;font-weight:700">LF</span></div>
+        <div style="font-size:7px;opacity:0.85">5&Prime; K-style aluminum</div>
+      </div>
+      <div style="flex:1;background:linear-gradient(135deg,#0891b2,#06b6d4);border-radius:6px;padding:8px 10px;text-align:center;color:#fff">
+        <div style="font-size:7px;font-weight:700;text-transform:uppercase;opacity:0.85;letter-spacing:0.5px">Downspouts</div>
+        <div style="font-size:18px;font-weight:900;line-height:1.1">${downspoutCount > 0 ? downspoutCount : '—'}</div>
+        <div style="font-size:7px;opacity:0.85">${downspoutCount > 0 ? 'manually placed' : 'not placed on trace'}</div>
+      </div>
+      <div style="flex:1;background:linear-gradient(135deg,#4338ca,#6366f1);border-radius:6px;padding:8px 10px;text-align:center;color:#fff">
+        <div style="font-size:7px;font-weight:700;text-transform:uppercase;opacity:0.85;letter-spacing:0.5px">Eave Sections</div>
+        <div style="font-size:18px;font-weight:900;line-height:1.1">${eaveSectionCount > 0 ? eaveSectionCount : '—'}</div>
+        <div style="font-size:7px;opacity:0.85">${eaveSectionCount > 0 ? 'continuous gutter runs' : 'breakdown unavailable'}</div>
+      </div>
+      <div style="flex:1;background:linear-gradient(135deg,#d97706,#f59e0b);border-radius:6px;padding:8px 10px;text-align:center;color:#fff">
+        <div style="font-size:7px;font-weight:700;text-transform:uppercase;opacity:0.85;letter-spacing:0.5px">Recommended DS</div>
+        <div style="font-size:18px;font-weight:900;line-height:1.1">${recommendedDs}</div>
+        <div style="font-size:7px;opacity:0.85">1 per &le;35 LF</div>
+      </div>
+    </div>
+
+    ${eaveEdges.length > 0 ? `
+    <!-- Per-Section Eave Run Table -->
+    <table style="width:100%;border-collapse:collapse;font-size:8px">
+      <thead>
+        <tr style="background:#1a1a2e;color:#fff">
+          <th style="padding:4px 8px;text-align:left;font-size:7px;font-weight:700">Run #</th>
+          <th style="padding:4px 8px;text-align:left;font-size:7px;font-weight:700">Section</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7px;font-weight:700">Length</th>
+          <th style="padding:4px 8px;text-align:center;font-size:7px;font-weight:700">Bearing</th>
+          <th style="padding:4px 8px;text-align:center;font-size:7px;font-weight:700">Compass</th>
+          <th style="padding:4px 8px;text-align:center;font-size:7px;font-weight:700">Rec. DS</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${visibleEaves.map((e: any, i: number) => {
+          const lenFt = Number(e?.length_2d_ft) || Number(e?.length_ft) || 0
+          const bearing = Number(e?.bearing_deg)
+          const bearingTxt = Number.isFinite(bearing) ? `${Math.round(bearing)}°` : '—'
+          const compassTxt = Number.isFinite(bearing) ? cardinal(bearing) : '—'
+          return `
+        <tr style="${i % 2 === 0 ? '' : 'background:#f8fafc'};border-bottom:1px solid #f1f5f9">
+          <td style="padding:3px 8px;font-weight:700;color:${TEAL_DARK}">${e?.edge_num ?? (i + 1)}</td>
+          <td style="padding:3px 8px;font-size:7.5px;color:#555">${sectionLabel(e?.section_index)}</td>
+          <td style="padding:3px 8px;text-align:right;font-weight:700">${lenFt.toFixed(1)} LF</td>
+          <td style="padding:3px 8px;text-align:center;font-size:7.5px;color:#555">${bearingTxt}</td>
+          <td style="padding:3px 8px;text-align:center;font-weight:700;color:${TEAL_DARK}">${compassTxt}</td>
+          <td style="padding:3px 8px;text-align:center;font-size:7.5px">${dsForRun(lenFt)}</td>
+        </tr>`
+        }).join('')}
+        ${hiddenCount > 0 ? `
+        <tr style="background:#f8fafc;border-bottom:1px solid #f1f5f9">
+          <td colspan="2" style="padding:3px 8px;font-size:7px;color:#888;font-style:italic">…and ${hiddenCount} more eave run${hiddenCount === 1 ? '' : 's'}</td>
+          <td style="padding:3px 8px;text-align:right;font-size:7px;color:#888">${hiddenLf.toFixed(1)} LF</td>
+          <td colspan="3"></td>
+        </tr>` : ''}
+        <tr style="background:#f1f5f9;font-weight:800;border-top:2px solid #1a1a2e">
+          <td colspan="2" style="padding:4px 8px;font-size:8px">TOTAL EAVE RUNS</td>
+          <td style="padding:4px 8px;text-align:right;font-size:8px;color:${TEAL_DARK}">${gutterLf.toLocaleString()} LF</td>
+          <td colspan="2"></td>
+          <td style="padding:4px 8px;text-align:center;font-size:8px">${recommendedDs}</td>
+        </tr>
+      </tbody>
+    </table>` : ''}
+
+    <!-- Specs + Cost panel -->
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <div style="flex:1;padding:6px 10px;background:${TEAL_LIGHT};border:1px solid ${TEAL};border-radius:4px;font-size:7px;color:${TEAL_DARK};line-height:1.55">
+        <div style="font-weight:800;text-transform:uppercase;letter-spacing:0.5px;font-size:7px;margin-bottom:2px">Material Specs</div>
+        <div>Profile: 5&Prime; K-style aluminum</div>
+        <div>Hangers: 24&Prime; on-center, hidden screw</div>
+        <div>Downspout: 2&Prime;&times;3&Prime; rectangular</div>
+        <div>Slope: &frac14;&Prime; per 10 ft toward downspouts</div>
+        <div>Order qty includes 5% waste</div>
+      </div>
+      <div style="flex:1;padding:6px 10px;background:#fff;border:1px solid #e2e8f0;border-radius:4px;font-size:7px;color:#334155;line-height:1.55">
+        <div style="font-weight:800;text-transform:uppercase;letter-spacing:0.5px;font-size:7px;margin-bottom:2px;color:${TEAL_DARK}">Cost Summary</div>
+        ${gutterLine ? `
+        <div style="display:flex;justify-content:space-between"><span>Unit price</span><span style="font-weight:700">$${unitPrice.toFixed(2)} / LF</span></div>
+        <div style="display:flex;justify-content:space-between"><span>Order quantity (w/ waste)</span><span style="font-weight:700">${orderQty.toLocaleString()} LF</span></div>
+        <div style="display:flex;justify-content:space-between;border-top:1px solid #e2e8f0;margin-top:2px;padding-top:2px"><span style="font-weight:700">Line total</span><span style="font-weight:800;color:${TEAL_DARK}">$${lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CAD</span></div>
+        <div style="font-size:6.5px;color:#94a3b8;margin-top:2px">Pulled from Material Take-Off — gutters line.</div>
+        ` : `
+        <div style="color:#94a3b8;font-style:italic">Gutter pricing not yet attached to this report. See Material Take-Off page once enrichment runs.</div>
+        `}
+      </div>
+    </div>
+
+    <div style="margin-top:5px;font-size:6.5px;color:#666;line-height:1.5;font-style:italic">
+      Gutter LF derives from total traced eave perimeter; assumes one continuous run per eave segment. Downspout positions reflect manually-placed annotations on the trace map. Recommended count assumes 1 downspout per &le;35 LF of run; verify against local rainfall and roof drainage area.
+    </div>
+  </div>`
+  })()}
+
   <!-- Footer bar -->
   <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,${TEAL},${TEAL_DARK});display:flex;align-items:center;justify-content:space-between;padding:0 28px">
     <span style="color:#fff;font-size:9px;font-weight:700">Roof Manager</span>
