@@ -361,9 +361,18 @@
     var taxPct = ((p.tax_rate != null ? p.tax_rate : 0.05) * 100).toFixed(1);
     var wasteOptions = [10, 12, 15, 17, 20];
 
+    var userShingleBundle = (mup.shingle_bundle != null && isFinite(mup.shingle_bundle)) ? mup.shingle_bundle : null;
     var shingleCards = Object.keys(SHINGLE_CATALOG).map(function (key) {
       var s = SHINGLE_CATALOG[key];
       var sel = p.shingle_type === key;
+      var priceLabel, priceTag;
+      if (sel && userShingleBundle != null) {
+        priceLabel = '$' + userShingleBundle.toFixed(2) + '/bdl';
+        priceTag = '<span class="ml-1 text-[9px] text-blue-600 font-semibold uppercase tracking-wide">yours</span>';
+      } else {
+        priceLabel = esc(s.price);
+        priceTag = '<span class="ml-1 text-[9px] text-gray-400 font-semibold uppercase tracking-wide">default</span>';
+      }
       return '<div onclick="selectShingleCust(\'' + key + '\')" ' +
         'class="cursor-pointer rounded-xl border-2 p-3 transition-all hover:shadow-md ' +
         (sel ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : 'border-gray-200 bg-white hover:border-gray-300') + '">' +
@@ -373,7 +382,7 @@
         '</div>' +
         '<p class="text-[11px] text-gray-500 mb-2 leading-snug">' + esc(s.desc) + '</p>' +
         '<div class="grid grid-cols-2 gap-1 text-[11px]">' +
-          '<div><i class="fas fa-dollar-sign text-green-500 mr-1"></i>' + esc(s.price) + '</div>' +
+          '<div><i class="fas fa-dollar-sign text-green-500 mr-1"></i>' + priceLabel + priceTag + '</div>' +
           '<div><i class="fas fa-shield-alt text-blue-500 mr-1"></i>' + esc(s.warranty) + '</div>' +
           '<div><i class="fas fa-wind text-cyan-500 mr-1"></i>' + esc(s.wind) + '</div>' +
           '<div><i class="fas fa-weight-hanging text-amber-500 mr-1"></i>' + esc(s.weight) + '</div>' +
@@ -444,10 +453,10 @@
             (p.include_pipe_boots !== false ? 'Yes' : 'No') + '</button></div>' +
       '</div>' +
 
-      // Per-unit prices
-      '<details class="mb-5"><summary class="cursor-pointer text-xs font-semibold text-gray-700 mb-3">' +
-        '<i class="fas fa-dollar-sign text-green-500 mr-1"></i>Per-unit prices for proposals (optional)</summary>' +
-        '<p class="text-[11px] text-gray-500 mb-3 mt-2">Used when generating proposals from a report. Leave blank to use defaults.</p>' +
+      // Per-unit prices — open by default so contractors can set their own pricing
+      '<details class="mb-5" open><summary class="cursor-pointer text-xs font-semibold text-gray-700 mb-3">' +
+        '<i class="fas fa-dollar-sign text-green-500 mr-1"></i>Your material pricing</summary>' +
+        '<p class="text-[11px] text-gray-500 mb-3 mt-2">Set your own prices below. These override the platform defaults shown on the shingle cards above and are used in every report and proposal.</p>' +
         '<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">' + unitPriceRows + '</div>' +
       '</details>' +
 
