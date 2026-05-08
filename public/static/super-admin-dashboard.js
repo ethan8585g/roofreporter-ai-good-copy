@@ -1745,8 +1745,48 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
     _ventMarkers: [], _skylightMarkers: [], _chimneyMarkers: [],
     _isPhone: _isPhoneUA
   };
-  setTimeout(function() { saInitTraceMap(lat, lng, address); }, 100);
+  setTimeout(function() {
+    saInitTraceMap(lat, lng, address);
+    saInitTraceStreetView(lat, lng);
+  }, 100);
 };
+
+// Street View panel under the 2D + 3D maps. Auto-points at the property
+// using a heading computed from the nearest panorama → house lat/lng.
+function saInitTraceStreetView(lat, lng) {
+  if (!window._saGoogleMapsLoaded || !window.google || !window.google.maps) {
+    setTimeout(function() { saInitTraceStreetView(lat, lng); }, 300);
+    return;
+  }
+  var el = document.getElementById('sa-trace-streetview');
+  if (!el || lat == null || lng == null) return;
+  var house = { lat: lat, lng: lng };
+  var svService = new google.maps.StreetViewService();
+  svService.getPanorama({ location: house, radius: 50, source: 'outdoor' }, function(data, status) {
+    if (status !== 'OK' || !data || !data.location) {
+      el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#6b7280;font-size:12px">No street view available for this address</div>';
+      return;
+    }
+    var panoLatLng = data.location.latLng;
+    // Compute heading from pano → house so the camera looks at the property
+    var fromLat = panoLatLng.lat() * Math.PI / 180;
+    var toLat = house.lat * Math.PI / 180;
+    var dLng = (house.lng - panoLatLng.lng()) * Math.PI / 180;
+    var y = Math.sin(dLng) * Math.cos(toLat);
+    var x = Math.cos(fromLat) * Math.sin(toLat) - Math.sin(fromLat) * Math.cos(toLat) * Math.cos(dLng);
+    var heading = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    new google.maps.StreetViewPanorama(el, {
+      pano: data.location.pano,
+      pov: { heading: heading, pitch: 10 },
+      zoom: 0,
+      addressControl: false,
+      fullscreenControl: true,
+      motionTracking: false,
+      motionTrackingControl: false,
+      showRoadLabels: false
+    });
+  });
+}
 
 window.saTraceSetTool = function(tool) {
   var s = window._saTraceState; if (!s) return;
