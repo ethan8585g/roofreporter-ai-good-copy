@@ -4664,7 +4664,7 @@ adminRoutes.get('/superadmin/orders/needs-trace', async (c) => {
   try {
     const orders = await c.env.DB.prepare(`
       SELECT o.id, o.order_number, o.property_address, o.latitude, o.longitude,
-             o.created_at, o.customer_id, o.source, o.api_job_id,
+             o.created_at, o.customer_id, o.source, o.api_job_id, o.customer_notes,
              c.name as customer_name, c.email as customer_email,
              a.company_name as api_company_name
       FROM orders o

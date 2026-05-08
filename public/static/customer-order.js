@@ -73,6 +73,8 @@ const orderState = {
   invoicingAutoEnabled: false,
   // Auto-send finished report to this email (optional)
   sendReportToEmail: '',
+  // Customer special notes / requests (e.g. "include detached garage")
+  customerNotes: '',
   // Pricing
   pricePerBundle: null,
   roofTraceJson: null,
@@ -586,6 +588,22 @@ function renderPinStep(root, progressBar) {
                 </div>
               </div>
             </div>
+          </div>
+
+          <!-- Special Notes / Requests for the trace team -->
+          <div style="background:#0A0A0A;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+              <label for="orderCustomerNotes" style="font-size:13px;font-weight:700;color:#e5e7eb;display:flex;align-items:center;gap:8px;margin:0">
+                <i class="fas fa-comment-dots" style="color:#60a5fa"></i>Special Notes / Requests
+              </label>
+              <span style="font-size:10px;background:rgba(96,165,250,0.15);color:#93c5fd;padding:3px 10px;border-radius:6px;font-weight:600">OPTIONAL</span>
+            </div>
+            <p style="font-size:11px;color:#9ca3af;margin:0 0 10px;line-height:1.5">Anything the trace team should know — e.g. <em>include the detached garage</em>, <em>include the shed</em>, <em>note the flat roof section in the back</em>.</p>
+            <textarea id="orderCustomerNotes" rows="3" maxlength="1000"
+              placeholder="Include detached garage. Note the flat roof on the back addition."
+              oninput="orderState.customerNotes=this.value"
+              style="width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,0.15);border-radius:10px;font-size:13px;background:rgba(255,255,255,0.04);color:white;outline:none;resize:vertical;min-height:72px;font-family:inherit"
+              onfocus="this.style.borderColor='#60a5fa'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'">${orderState.customerNotes || ''}</textarea>
           </div>
 
           <div id="orderMsg" class="hidden p-4 rounded-xl text-sm"></div>
@@ -2650,6 +2668,9 @@ function buildOrderPayload() {
   if (orderState.invoiceCustomerEmail) payload.invoice_customer_email = orderState.invoiceCustomerEmail.trim();
   if (orderState.invoiceCustomerPhone) payload.invoice_customer_phone = orderState.invoiceCustomerPhone.trim();
   if (orderState.sendReportToEmail) payload.send_report_to_email = orderState.sendReportToEmail.trim();
+  if (orderState.customerNotes && orderState.customerNotes.trim()) {
+    payload.customer_notes = orderState.customerNotes.trim().slice(0, 1000);
+  }
   return payload;
 }
 
