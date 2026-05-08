@@ -438,8 +438,7 @@ function renderOrderPage() {
   // Step progress bar
   const steps = [
     { id: 'pin', label: 'Pin Roof', icon: 'fa-crosshairs' },
-    { id: 'trace', label: 'Trace Outline', icon: 'fa-draw-polygon' },
-    { id: 'review', label: 'Review & Pay', icon: 'fa-credit-card' },
+    { id: 'review', label: 'Review & Submit', icon: 'fa-paper-plane' },
   ];
   const stepIdx = steps.findIndex(s => s.id === orderState.step);
 
@@ -591,16 +590,11 @@ function renderPinStep(root, progressBar) {
 
           <div id="orderMsg" class="hidden p-4 rounded-xl text-sm"></div>
 
-          <button onclick="goToTrace()" id="pinNextBtn"
-            class="w-full py-3 ${orderState.pinPlaced ? 'bg-emerald-600 hover:bg-brand-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'} font-bold rounded-xl transition-all shadow-lg text-base"
+          <button onclick="skipTrace()" id="requestReportBtn"
+            style="width:100%;padding:14px;font-size:16px;font-weight:800;border:none;border-radius:12px;cursor:${orderState.pinPlaced ? 'pointer' : 'not-allowed'};background:${orderState.pinPlaced ? '#10b981' : '#e5e7eb'};color:#ffffff;box-shadow:0 6px 16px rgba(16,185,129,0.25);transition:background 0.2s"
             ${!orderState.pinPlaced ? 'disabled' : ''}>
-            <i class="fas fa-arrow-right mr-2"></i>Next: Trace Roof Outline
-          </button>
-          <button onclick="skipTrace()" id="adminMeasureBtn"
-            style="width:100%;padding:12px;font-size:15px;font-weight:700;border:none;border-radius:12px;cursor:${orderState.pinPlaced ? 'pointer' : 'not-allowed'};background:${orderState.pinPlaced ? '#f59e0b' : '#e5e7eb'};color:#ffffff;margin-top:2px;transition:background 0.2s"
-            ${!orderState.pinPlaced ? 'disabled' : ''}>
-            <i class="fas fa-hard-hat" style="margin-right:8px"></i>Order Measurement Report Now
-            <span style="font-size:12px;font-weight:400;opacity:0.9">&nbsp;(1–2 hr arrival)</span>
+            <i class="fas fa-paper-plane" style="margin-right:8px"></i>Request Report
+            <span style="font-size:12px;font-weight:500;opacity:0.95;display:block;margin-top:2px">Delivered in 1–2 hours</span>
           </button>
         </div>
       </div>
@@ -749,7 +743,6 @@ function renderTraceStep(root, progressBar) {
           </div>
 
           <div class="space-y-2">
-            <button onclick="autoDetectRoof()" class="w-full px-3 py-2 bg-emerald-500/10 hover:bg-emerald-200 text-emerald-400 rounded-lg text-sm font-medium" id="autoDetectBtn"><i class="fas fa-magic mr-1"></i>Auto-Detect Roof</button>
             <button onclick="undoLastTrace()" class="w-full px-3 py-2 bg-white/5 hover:bg-gray-200 text-gray-400 rounded-lg text-sm font-medium"><i class="fas fa-undo mr-1"></i>Undo</button>
             <button onclick="clearAllTraces()" class="w-full px-3 py-2 bg-red-500/10 hover:bg-red-100 text-red-400 rounded-lg text-sm font-medium"><i class="fas fa-trash mr-1"></i>Clear All</button>
             <div class="text-[10px] text-gray-500 text-center pt-1" id="eaveTagHint">Hotkeys: <kbd class="px-1 bg-white/10 rounded text-gray-300">E</kbd>=Eave <kbd class="px-1 bg-white/10 rounded text-gray-300">R</kbd>=Rake — current: <span id="nextEaveTag" class="text-emerald-400 font-bold">EAVE</span></div>
@@ -2475,16 +2468,16 @@ function skipTrace() {
     '<div style="background:#111827;border:1px solid #374151;border-radius:16px;padding:28px;max-width:440px;width:100%;box-shadow:0 25px 60px rgba(0,0,0,0.5)">' +
       '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">' +
         '<div style="width:44px;height:44px;background:rgba(245,158,11,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-clock" style="color:#f59e0b;font-size:20px"></i></div>' +
-        '<div><h3 style="color:#f9fafb;font-size:17px;font-weight:700;margin:0">Manual Trace Required</h3><p style="color:#9ca3af;font-size:12px;margin:2px 0 0">Our team will trace this roof for you</p></div>' +
+        '<div><h3 style="color:#f9fafb;font-size:17px;font-weight:700;margin:0">Confirm Report Request</h3><p style="color:#9ca3af;font-size:12px;margin:2px 0 0">Our team will measure this roof for you</p></div>' +
       '</div>' +
-      '<p style="color:#d1d5db;font-size:14px;line-height:1.6;margin-bottom:8px">Since you\'re skipping the trace, <strong style="color:#f9fafb">our team will manually trace this roof</strong> to ensure accurate measurements.</p>' +
-      '<p style="color:#d1d5db;font-size:14px;line-height:1.6;margin-bottom:20px">Your report will be ready within <strong style="color:#f59e0b">1–2 hours</strong>. You\'ll receive a notification when it\'s done.</p>' +
-      '<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:10px 12px;margin-bottom:20px;font-size:12px;color:#fbbf24">' +
-        '<i class="fas fa-info-circle mr-1.5"></i>This uses one report credit. Manual trace ensures the highest accuracy.' +
+      '<p style="color:#d1d5db;font-size:14px;line-height:1.6;margin-bottom:8px"><strong style="color:#f9fafb">Our team will measure this roof</strong> and deliver your report within <strong style="color:#f59e0b">1–2 hours</strong>.</p>' +
+      '<p style="color:#d1d5db;font-size:14px;line-height:1.6;margin-bottom:20px">You\'ll get a notification the moment it\'s ready.</p>' +
+      '<div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 12px;margin-bottom:20px;font-size:12px;color:#6ee7b7">' +
+        '<i class="fas fa-info-circle mr-1.5"></i>This uses one report credit.' +
       '</div>' +
       '<div style="display:flex;gap:10px">' +
         '<button onclick="document.getElementById(\'skip-trace-modal\').remove()" style="flex:1;padding:11px;background:#1f2937;color:#9ca3af;border:1px solid #374151;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">Cancel</button>' +
-        '<button onclick="confirmSkipTrace()" style="flex:1;padding:11px;background:#f59e0b;color:#111;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer"><i class="fas fa-check mr-1.5"></i>Yes, Submit for Manual Trace</button>' +
+        '<button onclick="confirmSkipTrace()" style="flex:1;padding:11px;background:#10b981;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer"><i class="fas fa-check mr-1.5"></i>Submit Request</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(overlay);
