@@ -1813,6 +1813,19 @@ window.saTraceSetTool = function(tool) {
     if (s._segStartMarker) { s._segStartMarker.setMap(null); s._segStartMarker = null; }
     s._segStart = null;
   }
+  // Pressing "+ Dormer" while a dormer draft is open finalizes (or discards)
+  // the draft so the next click starts a fresh polygon instead of extending
+  // the previous one.
+  if (tool === 'dormer' && s._dormerLatLngs && s._dormerLatLngs.length > 0) {
+    if (s._dormerLatLngs.length >= 3) {
+      saCloseDormerPolygon();
+    } else {
+      if (s._dormerPoly) { s._dormerPoly.setMap(null); s._dormerPoly = null; }
+      (s._dormerMarkers || []).forEach(function(m) { m.setMap(null); });
+      s._dormerMarkers = [];
+      s._dormerLatLngs = [];
+    }
+  }
   s.tool = tool;
   ['eave','ridge','hip','valley','dormer','vent','skylight','chimney'].forEach(function(t) {
     var btn = document.getElementById('sa-tool-' + t);
