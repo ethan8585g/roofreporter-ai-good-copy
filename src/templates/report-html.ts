@@ -480,6 +480,23 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   const satelliteUrl = report.imagery?.satellite_url || ''
   const overheadUrl = oblique3dUrl || eagleViewUrl || report.imagery?.satellite_overhead_url || satelliteUrl
 
+  // 4-corner aerial views (NE/SE/SW/NW) — captured automatically from
+  // /3d-verify Cesium/Photorealistic 3D Tiles when the trace is saved or
+  // on first report view. Renders an "Aerial Views" page only when all
+  // four are present; otherwise the section is omitted entirely.
+  const aerialViewsRaw = (report as any).imagery?.aerial_views
+  const aerialViews: Array<{ heading: number; label: string; data_url: string }> =
+    Array.isArray(aerialViewsRaw) && aerialViewsRaw.length === 4 ? aerialViewsRaw : []
+  // Order tiles in display sequence: NE (top-left), NW (top-right),
+  // SW (bottom-left), SE (bottom-right) — matches a top-down compass grid.
+  const aerialOrder = ['NE', 'NW', 'SW', 'SE']
+  const aerialTiles = aerialViews.length === 4
+    ? aerialOrder.map(label => aerialViews.find(v => String(v.label).toUpperCase() === label)).filter(Boolean) as typeof aerialViews
+    : []
+  const aerialLabelMap: Record<string, string> = {
+    NE: 'Northeast View', NW: 'Northwest View', SW: 'Southwest View', SE: 'Southeast View'
+  }
+
   // ── Per-structure breakdown (house + detached garage/shed/etc.) ──
   // Computed from roof_trace GPS coordinates so each traced building gets its own measurement row.
   const structuresBreakdown = computeStructuresBreakdown(report)
@@ -828,6 +845,33 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
     <span style="color:#E0F2F1;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; p.1</span>
   </div>
 </div>
+
+<!-- ==================== PAGE 1.5: AERIAL VIEWS (4 CORNERS) ==================== -->
+${aerialTiles.length === 4 ? `
+<div class="page">
+  <!-- Top teal bar -->
+  <div style="height:4px;background:linear-gradient(90deg,${TEAL},${TEAL_DARK})"></div>
+  <!-- Title -->
+  <div style="padding:14px 28px 8px">
+    <div style="font-size:14px;font-weight:800;color:#222">Aerial Views — Photorealistic 3D</div>
+    <div style="font-size:9.5px;color:#666;margin-top:2px">Four oblique birds-eye angles captured from Google Photorealistic 3D Tiles. Compass labels indicate camera position relative to the roof.</div>
+  </div>
+  <!-- 2×2 grid -->
+  <div style="padding:8px 28px 0;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:10px;height:8.5in">
+    ${aerialTiles.map(tile => `
+    <div style="border:1px solid #ccc;border-radius:6px;overflow:hidden;background:#1a2332;display:flex;flex-direction:column;position:relative">
+      <div style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.65);color:#fff;font-size:9px;font-weight:700;padding:4px 8px;border-radius:4px;letter-spacing:0.5px;z-index:2">${aerialLabelMap[String(tile.label).toUpperCase()] || tile.label}</div>
+      <img src="${tile.data_url}" alt="${tile.label} aerial view" style="width:100%;height:100%;object-fit:cover;display:block">
+    </div>`).join('')}
+  </div>
+  <div style="font-size:7.5px;color:#888;text-align:right;padding:4px 28px 0">&copy; Google Maps · Photorealistic 3D Tiles &mdash; Imagery for reference</div>
+  <!-- Footer bar -->
+  <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,${TEAL},${TEAL_DARK});display:flex;align-items:center;justify-content:space-between;padding:0 28px">
+    <span style="color:#fff;font-size:9px;font-weight:700">Roof Manager</span>
+    <span style="color:#E0F2F1;font-size:7.5px">roofmanager.ca &bull; Aerial Views</span>
+  </div>
+</div>
+` : ''}
 
 <!-- ==================== PAGE 2: ROOF AREA ANALYSIS ==================== -->
 <div class="page">

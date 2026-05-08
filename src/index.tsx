@@ -1261,6 +1261,64 @@ app.get('/3d-verify', async (c) => {
     }
   }
 
+  // Wait for Cesium to settle (camera flight done + tiles streamed in) before
+  // grabbing the back buffer. Returns a JPEG data URL.
+  function flyAndCapture(headingDeg, settleMs){
+    return new Promise((resolve, reject) => {
+      try {
+        viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, INITIAL_HEIGHT),
+          orientation: {
+            heading: Cesium.Math.toRadians(headingDeg),
+            pitch: Cesium.Math.toRadians(INITIAL_PITCH_DEG),
+            roll: 0
+          },
+          duration: 1.0
+        });
+      } catch (e) { return reject(e); }
+      setTimeout(() => {
+        try {
+          viewer.render();
+          const canvas = viewer.scene.canvas;
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.78);
+          if (!dataUrl || dataUrl.length < 5000) return reject(new Error('Empty capture at heading ' + headingDeg));
+          resolve(dataUrl);
+        } catch (e) { reject(e); }
+      }, settleMs || 1800);
+    });
+  }
+
+  // 4-corner aerial capture: NE/SE/SW/NW oblique birds-eye shots, batched
+  // and POSTed to /api/reports/:orderId/3d-aerials. Used by the trace tool's
+  // auto-capture-on-save and by the report-viewer backstop when missing.
+  async function captureCornerAerials(){
+    if (!viewer || !ORDER_ID) return;
+    const corners = [
+      { heading: 45,  label: 'NE' },
+      { heading: 135, label: 'SE' },
+      { heading: 225, label: 'SW' },
+      { heading: 315, label: 'NW' },
+    ];
+    const images = [];
+    for (let i = 0; i < corners.length; i++){
+      const c = corners[i];
+      // First flight gets a longer settle to let new tiles stream in;
+      // subsequent flights are nearby so they settle faster.
+      const settleMs = i === 0 ? 2400 : 1600;
+      const dataUrl = await flyAndCapture(c.heading, settleMs);
+      images.push({ heading: c.heading, label: c.label, data_url: dataUrl });
+    }
+    const res = await fetch('/api/reports/' + encodeURIComponent(ORDER_ID) + '/3d-aerials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ images: images })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || ('HTTP ' + res.status));
+    return data;
+  }
+
   try {
     viewer = new Cesium.Viewer('cesiumContainer', {
       // preserveDrawingBuffer is mandatory for canvas.toDataURL() capture
@@ -1328,10 +1386,38 @@ app.get('/3d-verify', async (c) => {
           try { window.parent && window.parent.postMessage({ type: 'rm-3d-cover-done', orderId: ORDER_ID, ok: false, error: 'timeout' }, '*'); } catch(_) {}
         }, 30000);
       }
+
+      // Auto-capture-corners mode: ?autocapture=corners + ?orderId= triggers
+      // a 4-shot oblique aerial sequence (NE/SE/SW/NW). Used by the trace
+      // tool on save and by the report viewer as a backstop when missing.
+      if (AUTOCAPTURE_CORNERS && ORDER_ID) {
+        const onceLoaded = tileset.initialTilesLoaded;
+        const fireCorners = () => {
+          captureCornerAerials().then(() => {
+            try { window.parent && window.parent.postMessage({ type: 'rm-3d-aerials-done', orderId: ORDER_ID, ok: true }, '*'); } catch(_) {}
+          }).catch((e) => {
+            console.warn('[3d-aerials] capture failed:', e);
+            try { window.parent && window.parent.postMessage({ type: 'rm-3d-aerials-done', orderId: ORDER_ID, ok: false, error: String(e && e.message || e) }, '*'); } catch(_) {}
+          });
+        };
+        if (onceLoaded && onceLoaded.addEventListener) {
+          onceLoaded.addEventListener(fireCorners);
+        } else {
+          setTimeout(fireCorners, 6000);
+        }
+        // 4 corners × ~2s = ~8s of capture + 6s of tile streaming;
+        // hard cap at 60s so the parent never hangs forever.
+        setTimeout(() => {
+          try { window.parent && window.parent.postMessage({ type: 'rm-3d-aerials-done', orderId: ORDER_ID, ok: false, error: 'timeout' }, '*'); } catch(_) {}
+        }, 60000);
+      }
     }).catch((err) => {
       showErr('Could not load Photorealistic 3D Tiles. Verify the Map Tiles API is enabled for this key. (' + (err && err.message || err) + ')');
       if (AUTOCAPTURE && ORDER_ID) {
         try { window.parent && window.parent.postMessage({ type: 'rm-3d-cover-done', orderId: ORDER_ID, ok: false, error: String(err && err.message || err) }, '*'); } catch(_) {}
+      }
+      if (AUTOCAPTURE_CORNERS && ORDER_ID) {
+        try { window.parent && window.parent.postMessage({ type: 'rm-3d-aerials-done', orderId: ORDER_ID, ok: false, error: String(err && err.message || err) }, '*'); } catch(_) {}
       }
     });
   } catch (err) {

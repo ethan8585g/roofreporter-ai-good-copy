@@ -490,3 +490,95 @@ activityRoutes.get('/live', async (c) => {
     return c.json({ error: 'Failed to load live activity', details: err.message }, 500)
   }
 })
+
+// ─────────────────────────────────────────────────────────────────────
+// CUSTOMER RECENT LOGINS — last 10 distinct customers to log in, with
+// time-spent-since-login and the actual pages they hit during this
+// session. Powers the super-admin "Live Activity" dashboard.
+// ─────────────────────────────────────────────────────────────────────
+
+activityRoutes.get('/customer-recent-logins', async (c) => {
+  const blocked = await requireSuperadminGuard(c)
+  if (blocked) return blocked
+
+  try {
+    // 10 most-recent distinct customer logins. The subquery picks the latest
+    // login_at per customer; the outer query orders those by recency.
+    const recent = await c.env.DB.prepare(
+      `SELECT customer_id, MAX(created_at) AS login_at, MAX(ip_address) AS ip_address
+       FROM customer_login_events
+       GROUP BY customer_id
+       ORDER BY login_at DESC
+       LIMIT 10`,
+    ).all<{ customer_id: number; login_at: string; ip_address: string | null }>()
+
+    const rows = recent?.results || []
+    if (!rows.length) return c.json({ logins: [] })
+
+    const ids = rows.map(r => r.customer_id)
+    const custLookup = await c.env.DB.prepare(
+      `SELECT id, name, email, company_name FROM customers WHERE id IN (${ids.map(() => '?').join(',')})`,
+    ).bind(...ids).all<{ id: number; name: string | null; email: string | null; company_name: string | null }>()
+    const custMap = new Map<number, { name: string | null; email: string | null; company_name: string | null }>()
+    for (const r of (custLookup?.results || [])) custMap.set(r.id, r)
+
+    // For each customer, gather session pages + duration in parallel.
+    const enriched = await Promise.all(rows.map(async (r) => {
+      const c0 = custMap.get(r.customer_id)
+      const loginAt = r.login_at
+
+      const [pagesRes, closedRes, activeRes] = await Promise.all([
+        // Last 25 distinct paths since login, newest first.
+        c.env.DB.prepare(
+          `SELECT path, occurred_at FROM user_path_events
+           WHERE user_type = 'customer' AND user_id = ? AND occurred_at >= ?
+           ORDER BY occurred_at DESC
+           LIMIT 25`,
+        ).bind(r.customer_id, loginAt).all<{ path: string; occurred_at: string }>(),
+
+        // Closed module visits since login — time already accounted for.
+        c.env.DB.prepare(
+          `SELECT COALESCE(SUM(duration_seconds), 0) AS s
+           FROM user_module_visits
+           WHERE user_type = 'customer' AND user_id = ? AND started_at >= ?`,
+        ).bind(r.customer_id, loginAt).first<{ s: number }>(),
+
+        // Currently-open visits — last_seen - max(started, login_at) seconds.
+        // Also doubles as the "live now" signal if last_seen is fresh.
+        c.env.DB.prepare(
+          `SELECT started_at, last_seen_at,
+                  (julianday(last_seen_at) - julianday(MAX(started_at, ?))) * 86400 AS s
+           FROM active_visits
+           WHERE user_type = 'customer' AND user_id = ? AND last_seen_at >= ?`,
+        ).bind(loginAt, r.customer_id, loginAt).all<{ started_at: string; last_seen_at: string; s: number }>(),
+      ])
+
+      const closedSec = Math.max(0, Math.round((closedRes?.s || 0)))
+      const activeRows = (activeRes?.results || []) as Array<{ last_seen_at: string; s: number }>
+      const activeSec = activeRows.reduce((sum, row) => sum + Math.max(0, row.s || 0), 0)
+
+      // Live = any active_visits row's last_seen_at is within the last 2 min.
+      const nowMs = Date.now()
+      const isLive = activeRows.some(row => {
+        const t = Date.parse(row.last_seen_at + 'Z')
+        return Number.isFinite(t) && (nowMs - t) < 2 * 60 * 1000
+      })
+
+      return {
+        customer_id: r.customer_id,
+        name: c0?.name || '(unknown)',
+        email: c0?.email || '',
+        company: c0?.company_name || '',
+        login_at: loginAt,
+        ip_address: r.ip_address,
+        time_spent_seconds: closedSec + Math.round(activeSec),
+        live: isLive,
+        pages: (pagesRes?.results || []).map(p => ({ path: p.path, at: p.occurred_at })),
+      }
+    }))
+
+    return c.json({ logins: enriched, server_time: new Date().toISOString() })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to load customer activity', details: err?.message }, 500)
+  }
+})

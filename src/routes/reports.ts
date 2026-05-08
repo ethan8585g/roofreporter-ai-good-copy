@@ -331,9 +331,11 @@ reportsRoutes.get('/:orderId/html', async (c) => {
   // inject a hidden auto-capture iframe so the FIRST view of any report
   // upgrades the cover with zero user action. One-shot per order.
   let hasOblique3d = false
+  let hasAerialViews = false
   try {
     const parsed = row.api_response_raw ? JSON.parse(row.api_response_raw) : null
     hasOblique3d = !!(parsed?.imagery?.oblique_3d_url)
+    hasAerialViews = Array.isArray(parsed?.imagery?.aerial_views) && parsed.imagery.aerial_views.length >= 4
   } catch {}
 
   const autoCaptureBlock = hasOblique3d ? '' : `
@@ -365,6 +367,29 @@ reportsRoutes.get('/:orderId/html', async (c) => {
     });
     // Safety timeout
     setTimeout(function(){ done(false); }, 35000);
+  })();
+</script>`
+
+  // Aerials backstop — when the report has no 4-corner aerial views yet
+  // (older orders, or capture failed on trace-save), inject a second hidden
+  // iframe that runs the corners autocapture. Independent of the cover
+  // block above so we can re-fill aerials even when the cover is fine.
+  const aerialsCaptureBlock = hasAerialViews ? '' : `
+<iframe id="rmAerialsAutoFrame" src="/3d-verify?autocapture=corners&orderId=${encodeURIComponent(orderId)}" style="position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;border:0;opacity:0;pointer-events:none" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+<script>
+  (function(){
+    var frame = document.getElementById('rmAerialsAutoFrame');
+    var settled = false;
+    function done(ok){
+      if (settled) return; settled = true;
+      try { frame.remove(); } catch(_){}
+      if (ok) { setTimeout(function(){ try{location.reload();}catch(_){} }, 1500); }
+    }
+    window.addEventListener('message', function(e){
+      var d = e && e.data;
+      if (d && d.type === 'rm-3d-aerials-done' && d.orderId === ${JSON.stringify(orderId)}) done(!!d.ok);
+    });
+    setTimeout(function(){ done(false); }, 90000);
   })();
 </script>`
 
@@ -407,7 +432,7 @@ reportsRoutes.get('/:orderId/html', async (c) => {
   })();
 </script>`
 
-  const tail = `${autoCaptureBlock}${cover3dWidget}${proWidget}`
+  const tail = `${autoCaptureBlock}${aerialsCaptureBlock}${cover3dWidget}${proWidget}`
   if (augmented.includes('</body>')) {
     augmented = augmented.replace('</body>', `${tail}</body>`)
   } else {
@@ -735,6 +760,62 @@ reportsRoutes.post('/:orderId/3d-cover', async (c) => {
     .bind(JSON.stringify(parsed), orderId).run()
 
   return c.json({ success: true, captured_at: parsed.imagery.oblique_3d_captured_at })
+})
+
+// ============================================================
+// POST /:orderId/3d-aerials — Save 4 corner aerial captures
+// (NE/SE/SW/NW oblique birds-eye) from /3d-verify autocapture=corners.
+// Stored as api_response_raw.imagery.aerial_views = [{heading,label,
+// data_url,captured_at}]; the report template renders a 2×2 grid.
+// ============================================================
+reportsRoutes.post('/:orderId/3d-aerials', async (c) => {
+  const orderId = c.req.param('orderId')
+  const user = (c as any).get('user')
+  if (!user) return c.json({ error: 'Authentication required' }, 401)
+
+  let body: any
+  try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON' }, 400) }
+  const images = Array.isArray(body?.images) ? body.images : null
+  if (!images || images.length < 1 || images.length > 4) {
+    return c.json({ error: 'images must be an array of 1-4 captures' }, 400)
+  }
+
+  const validLabels = new Set(['NE', 'SE', 'SW', 'NW'])
+  const cleaned: Array<{ heading: number; label: string; data_url: string; captured_at: string }> = []
+  const capturedAt = new Date().toISOString()
+  for (const img of images) {
+    const headingNum = Number(img?.heading)
+    const label = String(img?.label || '').toUpperCase()
+    const dataUrl = String(img?.data_url || '')
+    if (!Number.isFinite(headingNum)) return c.json({ error: 'Each image needs numeric heading' }, 400)
+    if (!validLabels.has(label)) return c.json({ error: 'label must be NE/SE/SW/NW' }, 400)
+    if (!dataUrl.startsWith('data:image/')) return c.json({ error: 'data_url must be a data:image/* URL' }, 400)
+    // Cap each at ~3MB after base64 decoding (≈4MB encoded). 4×4MB = 16MB max.
+    if (dataUrl.length > 4_400_000) return c.json({ error: 'Image too large (max ~3MB each)' }, 413)
+    cleaned.push({ heading: headingNum, label, data_url: dataUrl, captured_at: capturedAt })
+  }
+
+  // Ownership check for non-admins
+  if (user.role !== 'admin') {
+    const own = await c.env.DB.prepare('SELECT customer_id FROM orders WHERE id = ?').bind(orderId).first<{ customer_id: number | null }>()
+    if (!own) return c.json({ error: 'Order not found' }, 404)
+    if (own.customer_id && own.customer_id !== user.id) return c.json({ error: 'Forbidden' }, 403)
+  }
+
+  const row = await c.env.DB.prepare('SELECT api_response_raw FROM reports WHERE order_id = ?')
+    .bind(orderId).first<{ api_response_raw: string | null }>()
+  if (!row) return c.json({ error: 'Report not found' }, 404)
+
+  let parsed: any = {}
+  try { parsed = row.api_response_raw ? JSON.parse(row.api_response_raw) : {} } catch { parsed = {} }
+  parsed.imagery = parsed.imagery || {}
+  parsed.imagery.aerial_views = cleaned
+  parsed.imagery.aerial_views_captured_at = capturedAt
+
+  await c.env.DB.prepare('UPDATE reports SET api_response_raw = ? WHERE order_id = ?')
+    .bind(JSON.stringify(parsed), orderId).run()
+
+  return c.json({ success: true, count: cleaned.length, captured_at: capturedAt })
 })
 
 // ============================================================

@@ -39,6 +39,7 @@ const SA_SECTIONS = {
     label: 'Customers', icon: 'fa-users',
     tabs: [
       { id: 'people-directory', label: 'Directory', icon: 'fa-address-book' },
+      { id: 'live-activity', label: 'Live Activity', icon: 'fa-broadcast-tower' },
       { id: 'users', label: 'Platform Users', icon: 'fa-users' },
       { id: 'signups', label: 'Sign-ups', icon: 'fa-user-plus' },
       { id: 'customer-onboarding', label: 'Onboarding', icon: 'fa-user-cog' }
@@ -491,6 +492,12 @@ async function loadView(view) {
         var pdRes = await saFetch(pdUrl);
         if (pdRes && pdRes.ok) SA.data.people = await pdRes.json();
         break;
+      case 'live-activity':
+        try {
+          var laRes = await saFetch('/api/activity/customer-recent-logins');
+          if (laRes && laRes.ok) SA.data.liveActivity = await laRes.json();
+        } catch(e) { console.warn('Live activity load error:', e); }
+        break;
       case 'users':
         const usersRes = await saFetch('/api/admin/superadmin/users');
         if (usersRes && usersRes.ok) SA.data.users = await usersRes.json();
@@ -865,6 +872,7 @@ function renderContent() {
     case 'platform-health-log': root.innerHTML = tabBar + renderHealthCheckLogView(); break;
     case 'platform-settings': root.innerHTML = tabBar + renderPlatformSettingsView(); break;
     case 'people-directory': root.innerHTML = tabBar + renderPeopleDirectoryView(); break;
+    case 'live-activity': root.innerHTML = tabBar + renderLiveActivityView(); saLiveActivityStartPolling(); break;
     case 'users': root.innerHTML = tabBar + renderUsersView(); break;
     case 'sales': root.innerHTML = tabBar + renderSalesView(); break;
     case 'report-requests': root.innerHTML = tabBar + renderReportRequestsView(); break;
@@ -2525,6 +2533,33 @@ window.saSubmitTrace = async function(orderId) {
     });
     var data = await res.json();
     if (data.success) {
+      // Fire-and-forget 4-corner aerial capture in a hidden iframe so the
+      // generated report includes NE/SE/SW/NW oblique aerials. The iframe
+      // is appended to <body> (survives loadView()) and removes itself on
+      // completion / timeout. Failures are silent — the report viewer has
+      // its own backstop that re-runs the capture if these are missing.
+      try {
+        var aerialFrame = document.createElement('iframe');
+        aerialFrame.id = 'rm-aerials-frame-' + orderId;
+        aerialFrame.src = '/3d-verify?autocapture=corners&orderId=' + encodeURIComponent(orderId);
+        aerialFrame.setAttribute('style', 'position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;border:0;opacity:0;pointer-events:none');
+        aerialFrame.referrerPolicy = 'strict-origin-when-cross-origin';
+        document.body.appendChild(aerialFrame);
+        var aerialsDone = false;
+        var cleanup = function() {
+          if (aerialsDone) return; aerialsDone = true;
+          try { aerialFrame.remove(); } catch(_) {}
+          window.removeEventListener('message', onMsg);
+        };
+        var onMsg = function(e) {
+          var d = e && e.data;
+          if (d && d.type === 'rm-3d-aerials-done' && d.orderId === orderId) cleanup();
+        };
+        window.addEventListener('message', onMsg);
+        // Hard timeout: 90s — capture is ~12s end-to-end so this is generous.
+        setTimeout(cleanup, 90000);
+      } catch (_) { /* never block the success path on aerial capture */ }
+
       document.getElementById('sa-trace-modal')?.remove();
       alert('✅ Report generated and delivered to customer!');
       loadView('orders');
@@ -13812,6 +13847,146 @@ window.hclResolveInsight = async function(id) {
 // ============================================================
 // UNIFIED CUSTOMERS DIRECTORY
 // ============================================================
+
+// ───────────────────────────────────────────────────────────────────────
+// LIVE ACTIVITY — last 10 customer logins, time-spent, pages visited.
+// Data source: GET /api/activity/customer-recent-logins.
+// Auto-refreshes every 20s while the tab is active; saLiveActivityStop is
+// called from saSwitchView so we never poll a hidden tab.
+// ───────────────────────────────────────────────────────────────────────
+
+function laTimeAgo(iso) {
+  if (!iso) return '—';
+  var t = Date.parse(iso.indexOf('Z') >= 0 || iso.indexOf('+') >= 0 ? iso : iso + 'Z');
+  if (!isFinite(t)) return '—';
+  var sec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (sec < 60) return sec + 's ago';
+  if (sec < 3600) return Math.floor(sec / 60) + ' min ago';
+  if (sec < 86400) return Math.floor(sec / 3600) + 'h ' + (Math.floor((sec % 3600) / 60)) + 'm ago';
+  return Math.floor(sec / 86400) + 'd ago';
+}
+
+function laFormatDuration(sec) {
+  sec = Math.max(0, Math.round(sec || 0));
+  if (sec < 60) return sec + 's';
+  var m = Math.floor(sec / 60);
+  var s = sec % 60;
+  if (m < 60) return m + 'm ' + s + 's';
+  var h = Math.floor(m / 60);
+  return h + 'h ' + (m % 60) + 'm';
+}
+
+function laFormatPath(p) {
+  if (!p) return '/';
+  // Hide the heartbeat / API noise — we only show the page path. The path
+  // sent by the heartbeat client IS the page path (window.location.pathname),
+  // so this guard is mostly defensive.
+  if (p.indexOf('/api/') === 0) return p;
+  return p;
+}
+
+function escapeHTML(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function renderLiveActivityView() {
+  var d = SA.data.liveActivity || { logins: [] };
+  var logins = d.logins || [];
+  var serverTime = d.server_time ? new Date(d.server_time).toLocaleTimeString() : '—';
+
+  var header =
+    '<div class="flex items-center justify-between mb-4">' +
+      '<div>' +
+        '<h2 class="text-xl font-bold text-white">Customer Live Activity</h2>' +
+        '<p class="text-sm text-gray-400 mt-1">Last 10 customers to log in &mdash; with time spent and pages visited this session.</p>' +
+      '</div>' +
+      '<div class="flex items-center gap-3 text-xs text-gray-400">' +
+        '<span class="inline-flex items-center gap-1.5"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;animation:pulse 2s infinite"></span>Auto-refresh 20s</span>' +
+        '<span>Server: ' + serverTime + '</span>' +
+      '</div>' +
+    '</div>';
+
+  if (!logins.length) {
+    return header +
+      '<div class="bg-gray-800 rounded-lg p-8 text-center text-gray-400">' +
+        '<i class="fas fa-user-clock text-4xl mb-3 text-gray-600"></i>' +
+        '<p class="text-sm">No customer logins recorded yet. Once a customer signs in, they\'ll appear here within a few seconds.</p>' +
+      '</div>';
+  }
+
+  var rows = logins.map(function(l) {
+    var liveBadge = l.live
+      ? '<span class="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-900/30 px-2 py-0.5 rounded-full"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#10b981;animation:pulse 1.5s infinite"></span>Live now</span>'
+      : '<span class="text-xs text-gray-500">Last seen ' + laTimeAgo(l.login_at) + '</span>';
+
+    var pages = (l.pages || []).slice(0, 12);
+    var pagesHtml = pages.length
+      ? pages.map(function(p) {
+          return '<div class="flex items-center justify-between py-1 px-2 hover:bg-gray-700/40 rounded text-xs">' +
+            '<span class="font-mono text-gray-300 truncate">' + escapeHTML(laFormatPath(p.path)) + '</span>' +
+            '<span class="text-gray-500 ml-2 flex-shrink-0">' + laTimeAgo(p.at) + '</span>' +
+          '</div>';
+        }).join('')
+      : '<div class="text-xs text-gray-500 italic px-2 py-1">No page navigation recorded yet for this session.</div>';
+
+    var pageCountSuffix = (l.pages || []).length > 12 ? ' <span class="text-gray-500">(showing 12 of ' + l.pages.length + ')</span>' : '';
+
+    return (
+      '<div class="bg-gray-800 rounded-lg p-4 mb-3 border border-gray-700">' +
+        '<div class="flex items-start justify-between gap-4 mb-3">' +
+          '<div class="min-w-0 flex-1">' +
+            '<div class="flex items-center gap-2 flex-wrap">' +
+              '<h3 class="text-base font-bold text-white truncate">' + escapeHTML(l.name || '(unknown)') + '</h3>' +
+              liveBadge +
+            '</div>' +
+            '<div class="text-xs text-gray-400 mt-1">' +
+              escapeHTML(l.email || '') +
+              (l.company ? ' &middot; ' + escapeHTML(l.company) : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="text-right flex-shrink-0">' +
+            '<div class="text-xs text-gray-500">Logged in</div>' +
+            '<div class="text-sm font-bold text-amber-400" title="' + escapeHTML(l.login_at || '') + '">' + laTimeAgo(l.login_at) + '</div>' +
+            '<div class="text-xs text-gray-500 mt-1">Time on site</div>' +
+            '<div class="text-sm font-bold text-emerald-400">' + laFormatDuration(l.time_spent_seconds) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="border-t border-gray-700 pt-2">' +
+          '<div class="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Pages visited' + pageCountSuffix + '</div>' +
+          '<div class="space-y-0.5">' + pagesHtml + '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+
+  return header + rows;
+}
+
+window._saLiveActivityTimer = null;
+
+function saLiveActivityStartPolling() {
+  saLiveActivityStop();
+  window._saLiveActivityTimer = setInterval(async function() {
+    if (SA.view !== 'live-activity') { saLiveActivityStop(); return; }
+    try {
+      var res = await saFetch('/api/activity/customer-recent-logins');
+      if (res && res.ok) {
+        SA.data.liveActivity = await res.json();
+        var root = document.getElementById('sa-root');
+        if (root) root.innerHTML = renderSectionTabs() + renderLiveActivityView();
+      }
+    } catch (e) { /* swallow — next tick will retry */ }
+  }, 20000);
+}
+
+function saLiveActivityStop() {
+  if (window._saLiveActivityTimer) {
+    clearInterval(window._saLiveActivityTimer);
+    window._saLiveActivityTimer = null;
+  }
+}
 
 function renderPeopleDirectoryView() {
   var d = SA.data.people || {};
