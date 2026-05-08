@@ -932,7 +932,7 @@ export async function sendWelcomeEmail(env: any, data: {
   const esc = (v: any) => String(v ?? '').replace(/[&<>"']/g, (m) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' } as any)[m])
   const firstName = (data.name || '').trim().split(/\s+/)[0] || ''
   const greeting = firstName ? `Hi ${esc(firstName)},` : 'Hi there,'
-  const demoUrl = 'https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb'
+  const demoUrl = 'https://calendar.app.google/KNLFST4CNxViPPN3A'
 
   const subject = 'Welcome to Roof Manager'
   const html = `
