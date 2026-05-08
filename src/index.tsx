@@ -16,6 +16,7 @@ import { adminRoutes } from './routes/admin'
 import { funnelMonitorRoutes } from './routes/funnel-monitor'
 import { emailHealthRoutes } from './routes/email-health'
 import { reportsMonitorRoutes } from './routes/reports-monitor'
+import { signupHealthRoutes } from './routes/signup-health'
 import { marketingBlastRoutes } from './routes/marketing-blast'
 import { aiAnalysisRoutes } from './routes/ai-analysis'
 import { authRoutes } from './routes/auth'
@@ -594,6 +595,7 @@ app.route('/api/admin', adminRoutes)
 app.route('/api/funnel-monitor', funnelMonitorRoutes)
 app.route('/api/email-health', emailHealthRoutes)
 app.route('/api/reports-monitor', reportsMonitorRoutes)
+app.route('/api/signup-health', signupHealthRoutes)
 app.route('/api/marketing', marketingBlastRoutes)
 app.route('/api/ai', aiAnalysisRoutes)
 app.route('/api/auth', authRoutes)
