@@ -1686,22 +1686,28 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<i class="fas fa-expand-arrows-alt mr-1 text-blue-400"></i>Trace the outermost roof edge (drip line), not the walls' +
         '</span>' +
       '</div>' +
-      '<div style="flex:1;min-height:0;display:flex;gap:8px;padding:0 8px">' +
-        '<div style="flex:1;min-height:0;display:flex;flex-direction:column;position:relative">' +
-          '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Trace</div>' +
-          '<div id="sa-trace-map" style="flex:1;min-height:0;border-radius:8px;overflow:hidden"></div>' +
-          // Floating per-section pitch panel — overlays the trace map. Hidden
-          // until the first eaves section closes; lets the admin set a
-          // different rise:12 pitch per structure (dormers / additions).
-          '<div id="sa-section-pitches" style="position:absolute;top:34px;right:10px;z-index:5;background:rgba(17,24,39,0.95);border:1px solid #374151;border-radius:10px;padding:8px 10px;min-width:170px;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.4)">' +
-            '<div style="color:#f59e0b;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:flex;align-items:center;gap:4px"><i class="fas fa-mountain"></i>Section Pitches</div>' +
-            '<div id="sa-section-pitches-body" style="display:flex;flex-direction:column;gap:5px"></div>' +
-            '<div style="font-size:9px;color:#6b7280;font-style:italic;margin-top:6px;line-height:1.3">Steeper for A-frame dormers (e.g. 12). Leave blank to use roof default.</div>' +
+      '<div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:0 8px">' +
+        '<div style="flex:2;min-height:0;display:flex;gap:8px">' +
+          '<div style="flex:1;min-height:0;display:flex;flex-direction:column;position:relative">' +
+            '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Trace</div>' +
+            '<div id="sa-trace-map" style="flex:1;min-height:0;border-radius:8px;overflow:hidden"></div>' +
+            // Floating per-section pitch panel — overlays the trace map. Hidden
+            // until the first eaves section closes; lets the admin set a
+            // different rise:12 pitch per structure (dormers / additions).
+            '<div id="sa-section-pitches" style="position:absolute;top:34px;right:10px;z-index:5;background:rgba(17,24,39,0.95);border:1px solid #374151;border-radius:10px;padding:8px 10px;min-width:170px;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.4)">' +
+              '<div style="color:#f59e0b;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:flex;align-items:center;gap:4px"><i class="fas fa-mountain"></i>Section Pitches</div>' +
+              '<div id="sa-section-pitches-body" style="display:flex;flex-direction:column;gap:5px"></div>' +
+              '<div style="font-size:9px;color:#6b7280;font-style:italic;margin-top:6px;line-height:1.3">Steeper for A-frame dormers (e.g. 12). Leave blank to use roof default.</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="flex:1;min-height:0;display:flex;flex-direction:column">' +
+            '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">3D Reference</div>' +
+            '<gmp-map-3d id="sa-trace-map-3d" mode="HYBRID" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;width:100%;height:100%"></gmp-map-3d>' +
           '</div>' +
         '</div>' +
         '<div style="flex:1;min-height:0;display:flex;flex-direction:column">' +
-          '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">3D Reference</div>' +
-          '<gmp-map-3d id="sa-trace-map-3d" mode="HYBRID" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;width:100%;height:100%"></gmp-map-3d>' +
+          '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Street View</div>' +
+          '<div id="sa-trace-streetview" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;background:#0b1220"></div>' +
         '</div>' +
       '</div>' +
       '<div style="padding:14px 20px;border-top:1px solid #374151;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;flex-shrink:0">' +
@@ -1713,6 +1719,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<button onclick="saTraceSetTool(\'vent\')" id="sa-tool-vent" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Vent</button>' +
           '<button onclick="saTraceSetTool(\'skylight\')" id="sa-tool-skylight" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Skylight</button>' +
           '<button onclick="saTraceSetTool(\'chimney\')" id="sa-tool-chimney" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Chimney</button>' +
+          '<button onclick="saAutoDetectOutline()" id="sa-tool-auto-outline" title="AI-detect the eaves outline of the building at the current map center" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.4)"><i class="fas fa-wand-magic-sparkles mr-1"></i>AI Outline</button>' +
           '<button onclick="saAddStructure()" id="sa-tool-add-structure" title="Trace another structure such as a detached garage" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.4)"><i class="fas fa-plus mr-1"></i>Add another building</button>' +
           '<button onclick="saTraceUndo()" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">Undo</button>' +
           '<button onclick="saTraceClear()" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#ef4444;border:1px solid #374151">Clear All</button>' +
@@ -2159,6 +2166,65 @@ function saCloseEaveSection() {
   s.eavePoints = [];
   saRenderSectionPitches();
 }
+
+// AI Outline — POSTs the current map view to /api/measure/auto-detect, which
+// runs Gemini vision against a Google Static Maps satellite tile and returns a
+// roof eaves polygon (lat/lng). The polygon is dropped in as a closed editable
+// section, mirroring saCloseEaveSection's flow so vertex drag/insert/remove
+// already work for refinement. Outline only — ridges/hips/valleys from the AI
+// are intentionally ignored (low precision; admin traces them manually).
+window.saAutoDetectOutline = async function() {
+  var s = window._saTraceState;
+  if (!s || !s.map) return;
+  var btn = document.getElementById('sa-tool-auto-outline');
+  var origHTML = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Detecting…';
+    btn.style.opacity = '0.7';
+    btn.style.cursor = 'wait';
+  }
+  try {
+    var c = s.map.getCenter();
+    if (!c) { alert('Map not ready yet.'); return; }
+    var zoom = s.map.getZoom() || 20;
+    var mapEl = document.getElementById('sa-trace-map');
+    var w = (mapEl && mapEl.clientWidth) || 1024;
+    var h = (mapEl && mapEl.clientHeight) || 1024;
+    var resp = await saFetch('/api/measure/auto-detect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat: c.lat(), lng: c.lng(), zoom: zoom, imageWidth: w, imageHeight: h })
+    });
+    var data = null;
+    try { data = await resp.json(); } catch (_) { data = {}; }
+    if (!resp.ok || !data || !Array.isArray(data.eaves) || data.eaves.length < 3) {
+      var msg = (data && (data.message || data.error)) || ('HTTP ' + resp.status);
+      alert('Could not detect a roof outline here. Center the building, zoom in, and try again.\n\nDetail: ' + msg);
+      return;
+    }
+    // Hand the AI polygon to saCloseEaveSection by populating the same draft
+    // state a manual trace would. Any in-progress draft is discarded; closed
+    // sections are preserved (admin can keep auto-outline of the house and
+    // manually trace a detached garage afterwards).
+    s._eaveLatLngs = data.eaves.map(function(p) { return new google.maps.LatLng(p.lat, p.lng); });
+    s.eavePoints = data.eaves.slice();
+    if (s.eavePoly) { s.eavePoly.setMap(null); s.eavePoly = null; }
+    (s._eaveMarkers || []).forEach(function(m) { m.setMap(null); });
+    s._eaveMarkers = [];
+    saCloseEaveSection();
+  } catch (err) {
+    console.warn('[SA Trace] auto-detect failed', err);
+    alert('Outline detection failed. Check the console for details.');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHTML;
+      btn.style.opacity = '1';
+      btn.style.cursor = 'pointer';
+    }
+  }
+};
 
 // Render the per-section pitch panel (visible only when 1+ eaves sections
 // exist). Each input persists into eaveSections[i].pitch_rise on change so
