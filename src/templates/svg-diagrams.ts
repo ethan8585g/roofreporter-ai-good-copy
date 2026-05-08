@@ -2834,6 +2834,12 @@ export function generateTraceBasedDiagramSVG(
   svg += `<pattern id="tr-hatch-b" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(-45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#1565C0" stroke-width="0.3" stroke-opacity="0.12"/></pattern>`
   svg += `<pattern id="tr-hatch-c" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(30)"><line x1="0" y1="0" x2="0" y2="8" stroke="#2E7D32" stroke-width="0.3" stroke-opacity="0.12"/></pattern>`
   svg += `<pattern id="tr-hatch-d" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(-30)"><line x1="0" y1="0" x2="0" y2="8" stroke="#E65100" stroke-width="0.3" stroke-opacity="0.12"/></pattern>`
+  // Dormer cross-hatch — heavier than facet hatches so dormers stay visually
+  // distinct on top of any underlying facet hatch + tint.
+  svg += `<pattern id="tr-hatch-dormer" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">`
+  svg += `<line x1="0" y1="0" x2="0" y2="6" stroke="#7c3aed" stroke-width="0.8" stroke-opacity="0.35"/>`
+  svg += `<line x1="3" y1="0" x2="3" y2="6" stroke="#7c3aed" stroke-width="0.4" stroke-opacity="0.18"/>`
+  svg += `</pattern>`
   svg += `</defs>`
 
   // ── FACET FILLS (subtle shading per facet) ──
@@ -2953,18 +2959,21 @@ export function generateTraceBasedDiagramSVG(
   })
 
   // ── RIDGE LINES (red, solid, prominent) ──
+  // Stroke hierarchy: ridge (3.0) > hip (2.2) > valley (1.8 dashed) so the
+  // diagram reads as a structural hierarchy at a glance instead of a flat
+  // web of lines.
   internalLines.filter(l => l.type === 'RIDGE').forEach(l => {
-    svg += `<line x1="${tx(l.start.x).toFixed(1)}" y1="${ty(l.start.y).toFixed(1)}" x2="${tx(l.end.x).toFixed(1)}" y2="${ty(l.end.y).toFixed(1)}" stroke="${EDGE_COLOR['RIDGE']}" stroke-width="2.2" stroke-linecap="round"/>`
+    svg += `<line x1="${tx(l.start.x).toFixed(1)}" y1="${ty(l.start.y).toFixed(1)}" x2="${tx(l.end.x).toFixed(1)}" y2="${ty(l.end.y).toFixed(1)}" stroke="${EDGE_COLOR['RIDGE']}" stroke-width="3.0" stroke-linecap="round"/>`
   })
 
-  // ── HIP LINES (orange, thinner) ──
+  // ── HIP LINES (orange, mid-weight) ──
   internalLines.filter(l => l.type === 'HIP').forEach(l => {
-    svg += `<line x1="${tx(l.start.x).toFixed(1)}" y1="${ty(l.start.y).toFixed(1)}" x2="${tx(l.end.x).toFixed(1)}" y2="${ty(l.end.y).toFixed(1)}" stroke="${EDGE_COLOR['HIP']}" stroke-width="1.6" stroke-linecap="round"/>`
+    svg += `<line x1="${tx(l.start.x).toFixed(1)}" y1="${ty(l.start.y).toFixed(1)}" x2="${tx(l.end.x).toFixed(1)}" y2="${ty(l.end.y).toFixed(1)}" stroke="${EDGE_COLOR['HIP']}" stroke-width="2.2" stroke-linecap="round"/>`
   })
 
-  // ── VALLEY LINES (blue, dashed) ──
+  // ── VALLEY LINES (blue, dashed, slightly heavier than before) ──
   internalLines.filter(l => l.type === 'VALLEY').forEach(l => {
-    svg += `<line x1="${tx(l.start.x).toFixed(1)}" y1="${ty(l.start.y).toFixed(1)}" x2="${tx(l.end.x).toFixed(1)}" y2="${ty(l.end.y).toFixed(1)}" stroke="${EDGE_COLOR['VALLEY']}" stroke-width="1.6" stroke-dasharray="6,3" stroke-linecap="round"/>`
+    svg += `<line x1="${tx(l.start.x).toFixed(1)}" y1="${ty(l.start.y).toFixed(1)}" x2="${tx(l.end.x).toFixed(1)}" y2="${ty(l.end.y).toFixed(1)}" stroke="${EDGE_COLOR['VALLEY']}" stroke-width="1.8" stroke-dasharray="6,3" stroke-linecap="round"/>`
   })
 
   // ── WALL FLASHING LINES (amber=step, orange=headwall, hash pattern) ──
@@ -3122,6 +3131,57 @@ export function generateTraceBasedDiagramSVG(
     })
   }
 
+  // ── PER-FACET DOWNSLOPE ARROWS ──
+  // For each facet, draw a small arrow perpendicular to the nearest ridge,
+  // pointing toward the centroid (= the eave side). Tells you at a glance
+  // which face drains where — useful for downspout / gutter planning.
+  // Skipped for tiny facets (< 60px diameter) where the arrow would just
+  // crowd the area label.
+  if (!HIDE && facets.length > 0 && internalLines.some(l => l.type === 'RIDGE')) {
+    const ridgeLines = internalLines.filter(l => l.type === 'RIDGE')
+    facets.forEach(f => {
+      // Nearest ridge to this facet's centroid
+      let bestRidge = ridgeLines[0]
+      let bestDist = Infinity
+      for (const r of ridgeLines) {
+        const rmx = (r.start.x + r.end.x) / 2
+        const rmy = (r.start.y + r.end.y) / 2
+        const d = Math.hypot(f.centerX - rmx, f.centerY - rmy)
+        if (d < bestDist) { bestDist = d; bestRidge = r }
+      }
+      // Perpendicular to ridge in data space; pick the side that points to
+      // the centroid (always the downslope side — ridge sits at the peak).
+      const dx = bestRidge.end.x - bestRidge.start.x
+      const dy = bestRidge.end.y - bestRidge.start.y
+      const dlen = Math.hypot(dx, dy) || 1
+      let nx = -dy / dlen, ny = dx / dlen
+      const rmx = (bestRidge.start.x + bestRidge.end.x) / 2
+      const rmy = (bestRidge.start.y + bestRidge.end.y) / 2
+      if ((f.centerX - rmx) * nx + (f.centerY - rmy) * ny < 0) { nx = -nx; ny = -ny }
+      // Skip arrow on very small facets (would just clutter the label)
+      const xs = f.points.map(p => tx(p.x))
+      const ys = f.points.map(p => ty(p.y))
+      const facetDiameterPx = Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys))
+      if (facetDiameterPx < 60) return
+      // Place arrow offset from centroid in downslope direction so it sits
+      // clear of the area-label cluster (which extends ~16px below centroid).
+      const cx = tx(f.centerX), cy = ty(f.centerY)
+      const offset = 24, arrowLen = 18
+      const ax = cx + nx * offset, ay = cy + ny * offset
+      const ex2 = ax + nx * arrowLen, ey2 = ay + ny * arrowLen
+      const ang = Math.atan2(ey2 - ay, ex2 - ax)
+      const headLen = 5.5, headAng = Math.PI / 7
+      const hx1 = ex2 - headLen * Math.cos(ang - headAng)
+      const hy1 = ey2 - headLen * Math.sin(ang - headAng)
+      const hx2 = ex2 - headLen * Math.cos(ang + headAng)
+      const hy2 = ey2 - headLen * Math.sin(ang + headAng)
+      svg += `<g opacity="0.78">`
+      svg += `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${ex2.toFixed(1)}" y2="${ey2.toFixed(1)}" stroke="#475569" stroke-width="1.6" stroke-linecap="round"/>`
+      svg += `<polygon points="${ex2.toFixed(1)},${ey2.toFixed(1)} ${hx1.toFixed(1)},${hy1.toFixed(1)} ${hx2.toFixed(1)},${hy2.toFixed(1)}" fill="#475569"/>`
+      svg += `</g>`
+    })
+  }
+
   // ── VERTEX DOTS (clean small circles at intersections — slightly smaller for cleanliness) ──
   eavesXY.forEach(p => {
     svg += `<circle cx="${tx(p.x).toFixed(1)}" cy="${ty(p.y).toFixed(1)}" r="2" fill="#1a1a1a"/>`
@@ -3147,7 +3207,10 @@ export function generateTraceBasedDiagramSVG(
   dormersXY.forEach((d, di) => {
     if (d.pts.length < 3) return
     const path = d.pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${tx(p.x).toFixed(1)} ${ty(p.y).toFixed(1)}`).join(' ') + ' Z'
-    svg += `<path d="${path}" fill="rgba(168,85,247,0.18)" stroke="#a855f7" stroke-width="2" stroke-linejoin="round"/>`
+    // Layered fill: tinted base + diagonal cross-hatch makes dormers pop even
+    // when sitting on top of a facet hatch / pastel fill.
+    svg += `<path d="${path}" fill="rgba(168,85,247,0.32)" stroke="none"/>`
+    svg += `<path d="${path}" fill="url(#tr-hatch-dormer)" stroke="#7c3aed" stroke-width="2.5" stroke-linejoin="round"/>`
     // Centroid for the label pill
     const cx = d.pts.reduce((s, p) => s + p.x, 0) / d.pts.length
     const cy = d.pts.reduce((s, p) => s + p.y, 0) / d.pts.length
