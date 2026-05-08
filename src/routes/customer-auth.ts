@@ -952,6 +952,27 @@ customerAuthRoutes.get('/me', async (c) => {
     return c.json({ error: 'Session expired or invalid' }, 401)
   }
 
+  // Session-resume tracking: bump customer_login_events when a returning user
+  // hits the portal after a gap. Without this the counter is effectively pinned
+  // at 1 for everyone, because customer cookies last 7 days and most users
+  // never re-enter credentials. Gap-deduped at 1h so a single browsing session
+  // produces ~1 event, not hundreds.
+  try {
+    const last = await c.env.DB.prepare(
+      "SELECT created_at FROM customer_login_events WHERE customer_id = ? ORDER BY created_at DESC LIMIT 1"
+    ).bind(session.customer_id).first<{ created_at: string }>()
+    const lastMs = last?.created_at ? Date.parse(last.created_at.replace(' ', 'T') + 'Z') : 0
+    if (!lastMs || (Date.now() - lastMs) > 60 * 60 * 1000) {
+      const ipForLog = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || null
+      c.executionCtx.waitUntil(
+        c.env.DB.prepare(
+          "INSERT INTO customer_login_events (customer_id, auth_method, ip_address) VALUES (?, 'resume', ?)"
+        ).bind(session.customer_id, ipForLog).run()
+          .catch((e: any) => console.warn('[customer-auth] resume event insert failed:', e?.message))
+      )
+    }
+  } catch (e: any) { console.warn('[customer-auth] resume event probe failed:', e?.message) }
+
   // DEV ACCOUNT: always unlimited
   const isDev = isDevAccount(session.email || '', c.env)
   const paidCreditsRemaining = isDev ? 999999 : ((session.report_credits || 0) - (session.credits_used || 0))
