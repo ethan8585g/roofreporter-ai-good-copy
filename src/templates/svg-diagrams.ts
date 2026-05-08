@@ -2351,6 +2351,11 @@ export function generateTraceBasedDiagramSVG(
   roofTrace: {
     eaves?: { lat: number; lng: number }[]
     eaves_sections?: { lat: number; lng: number }[][]
+    /** Per-section pitch (rise:12) parallel to eaves_sections. Used to label
+     *  each secondary structure with its own pitch and to compute its
+     *  sloped-area label using its own slope multiplier instead of the
+     *  global dominant pitch. */
+    eaves_section_pitches?: Array<number | null | undefined>
     ridges?: { lat: number; lng: number }[][]
     hips?: { lat: number; lng: number }[][]
     valleys?: { lat: number; lng: number }[][]
@@ -2413,6 +2418,18 @@ export function generateTraceBasedDiagramSVG(
     ? allEaveSections.reduce((best, s) => s.length > best.length ? s : best, allEaveSections[0])
     : (roofTrace.eaves || [])
   const extraSections = allEaveSections.filter(s => s !== eaves)
+  // Track each extra section's user-specified pitch (rise:12) by walking
+  // allEaveSections in order and skipping the primary. When the trace UI
+  // didn't supply a per-section pitch, the entry stays null and the diagram
+  // falls back to the global avgPitchDeg for that structure.
+  const extraSectionPitches: Array<number | null> = []
+  if (allEaveSections.length > 0) {
+    for (let i = 0; i < allEaveSections.length; i++) {
+      if (allEaveSections[i] === eaves) continue
+      const p = roofTrace.eaves_section_pitches?.[i]
+      extraSectionPitches.push(typeof p === 'number' && p > 0 ? p : null)
+    }
+  }
 
   if (eaves.length < 3) {
     return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#fff">
@@ -2873,15 +2890,25 @@ export function generateTraceBasedDiagramSVG(
       }
       const footprintM2 = Math.abs(area2) / 2
       const footprintFt2 = Math.round(footprintM2 * 10.7639)
-      const slopedFt2 = Math.round(footprintFt2 * slopeMultForExtras)
+      // Per-section slope multiplier when the user specified this structure's
+      // pitch. Otherwise fall back to the global average (legacy behavior).
+      const sectionPitchRise = extraSectionPitches[si]
+      const sectionPitchDeg = sectionPitchRise != null
+        ? Math.atan(sectionPitchRise / 12) * 180 / Math.PI
+        : (avgPitchDeg || 0)
+      const sectionSlopeMult = Math.max(1, 1 / Math.cos(sectionPitchDeg * Math.PI / 180))
+      const slopedFt2 = Math.round(footprintFt2 * (sectionPitchRise != null ? sectionSlopeMult : slopeMultForExtras))
 
-      // Centroid label (Structure name + sloped area)
+      // Centroid label (Structure name + sloped area + pitch)
       const cx = secXY.reduce((s, p) => s + p.x, 0) / secXY.length
       const cy = secXY.reduce((s, p) => s + p.y, 0) / secXY.length
       const lcx = tx(cx), lcy = ty(cy)
       const structIdx = facets.length + si + 1
+      const pitchLabel = sectionPitchRise != null
+        ? `${Number.isInteger(sectionPitchRise) ? sectionPitchRise : sectionPitchRise.toFixed(1)}:12`
+        : null
       svg += `<text x="${lcx.toFixed(1)}" y="${(lcy - 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="800" fill="#0d6b4a" fill-opacity="0.85" ${FONT}>Structure ${structIdx}</text>`
-      svg += `<text x="${lcx.toFixed(1)}" y="${(lcy + 9).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="#0d6b4a" fill-opacity="0.85" ${FONT}>${slopedFt2.toLocaleString()} SF</text>`
+      svg += `<text x="${lcx.toFixed(1)}" y="${(lcy + 9).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="#0d6b4a" fill-opacity="0.85" ${FONT}>${slopedFt2.toLocaleString()} SF${pitchLabel ? ` · ${pitchLabel}` : ''}</text>`
     }
   })
 
