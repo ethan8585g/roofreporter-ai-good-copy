@@ -1687,9 +1687,17 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
         '</span>' +
       '</div>' +
       '<div style="flex:1;min-height:0;display:flex;gap:8px;padding:0 8px">' +
-        '<div style="flex:1;min-height:0;display:flex;flex-direction:column">' +
+        '<div style="flex:1;min-height:0;display:flex;flex-direction:column;position:relative">' +
           '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Trace</div>' +
           '<div id="sa-trace-map" style="flex:1;min-height:0;border-radius:8px;overflow:hidden"></div>' +
+          // Floating per-section pitch panel — overlays the trace map. Hidden
+          // until the first eaves section closes; lets the admin set a
+          // different rise:12 pitch per structure (dormers / additions).
+          '<div id="sa-section-pitches" style="position:absolute;top:34px;right:10px;z-index:5;background:rgba(17,24,39,0.95);border:1px solid #374151;border-radius:10px;padding:8px 10px;min-width:170px;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.4)">' +
+            '<div style="color:#f59e0b;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:flex;align-items:center;gap:4px"><i class="fas fa-mountain"></i>Section Pitches</div>' +
+            '<div id="sa-section-pitches-body" style="display:flex;flex-direction:column;gap:5px"></div>' +
+            '<div style="font-size:9px;color:#6b7280;font-style:italic;margin-top:6px;line-height:1.3">Steeper for A-frame dormers (e.g. 12). Leave blank to use roof default.</div>' +
+          '</div>' +
         '</div>' +
         '<div style="flex:1;min-height:0;display:flex;flex-direction:column">' +
           '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">3D Reference</div>' +
@@ -1771,6 +1779,7 @@ window.saTraceClear = function() {
   s.eavePoints = []; s._eaveLatLngs = []; s._segStart = null;
   s._ridgeData = []; s._hipData = []; s._valleyData = [];
   s.vents = []; s.skylights = []; s.chimneys = [];
+  saRenderSectionPitches();
 };
 
 window.saTraceUndo = function() {
@@ -1810,6 +1819,7 @@ window.saTraceUndo = function() {
       var lbl = s._sectionLabelMarkers.pop();
       if (lbl) lbl.setMap(null);
     }
+    saRenderSectionPitches();
   }
 };
 
@@ -2112,7 +2122,11 @@ function saCloseEaveSection() {
     map: s.map, zIndex: 1
   });
   var sectionPoints = pts.map(function(p) { return { lat: p.lat(), lng: p.lng() }; });
-  var section = { points: sectionPoints, polygon: poly };
+  // pitch_rise is the per-section roof pitch in rise:12 (e.g. 12 = 12:12 for
+  // a steep A-frame dormer). null defers to the engine default. Admin sets
+  // it via the Section Pitches panel; engine uses it to compute that
+  // section's sloped area independent of the main roof.
+  var section = { points: sectionPoints, polygon: poly, pitch_rise: null };
   s.eaveSections.push(section);
 
   // Sync vertex drags / midpoint adds back into section.points
@@ -2143,6 +2157,52 @@ function saCloseEaveSection() {
 
   s._eaveLatLngs = [];
   s.eavePoints = [];
+  saRenderSectionPitches();
+}
+
+// Render the per-section pitch panel (visible only when 1+ eaves sections
+// exist). Each input persists into eaveSections[i].pitch_rise on change so
+// the submit-trace payload can ship eaves_section_pitches and the engine
+// applies that pitch to that section's sloped-area calculation.
+function saRenderSectionPitches() {
+  var s = window._saTraceState; if (!s) return;
+  var panel = document.getElementById('sa-section-pitches');
+  var body  = document.getElementById('sa-section-pitches-body');
+  if (!panel || !body) return;
+  var sections = s.eaveSections || [];
+  if (sections.length === 0) {
+    panel.style.display = 'none';
+    body.innerHTML = '';
+    return;
+  }
+  panel.style.display = 'block';
+  var html = sections.map(function(sec, i) {
+    var val = (sec.pitch_rise != null && sec.pitch_rise > 0) ? sec.pitch_rise : '';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">' +
+      '<span style="color:#22c55e;font-size:11px;font-weight:700;width:24px">S' + (i + 1) + '</span>' +
+      '<input type="number" min="0" max="24" step="0.5" value="' + val + '" data-sa-section-pitch="' + i + '" placeholder="—" ' +
+      'style="width:55px;padding:3px 6px;font-size:12px;font-weight:700;color:#fbbf24;background:#0f172a;border:1px solid #374151;border-radius:5px;text-align:right" />' +
+      '<span style="color:#6b7280;font-size:11px">:12</span>' +
+      '</div>';
+  }).join('');
+  body.innerHTML = html;
+  body.querySelectorAll('[data-sa-section-pitch]').forEach(function(input) {
+    input.addEventListener('change', function(e) {
+      var idx = parseInt(e.target.getAttribute('data-sa-section-pitch'), 10);
+      var sec = (window._saTraceState && window._saTraceState.eaveSections) ? window._saTraceState.eaveSections[idx] : null;
+      if (!sec) return;
+      var raw = parseFloat(e.target.value);
+      if (!isFinite(raw) || raw <= 0) {
+        sec.pitch_rise = null;
+        e.target.value = '';
+      } else if (raw > 24) {
+        sec.pitch_rise = 24;
+        e.target.value = '24';
+      } else {
+        sec.pitch_rise = raw;
+      }
+    });
+  });
 }
 
 window.saSubmitTrace = async function(orderId) {
@@ -2169,9 +2229,16 @@ window.saSubmitTrace = async function(orderId) {
     return;
   }
   var eaves_sections = s.eaveSections.map(function(sec) { return sec.points; });
+  // Per-section pitches parallel to eaves_sections. Engine routes the largest
+  // section's pitch to default_pitch and the rest to per-section overrides,
+  // letting steeper dormers measure correctly without affecting the main roof.
+  var eaves_section_pitches = s.eaveSections.map(function(sec) {
+    return (sec && typeof sec.pitch_rise === 'number' && sec.pitch_rise > 0) ? sec.pitch_rise : null;
+  });
   var traceJson = {
     eaves: eaves_sections[0],
     eaves_sections: eaves_sections,
+    eaves_section_pitches: eaves_section_pitches,
     ridges: s._ridgeData || [],
     hips: s._hipData || [],
     valleys: s._valleyData || [],

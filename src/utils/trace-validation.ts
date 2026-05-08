@@ -25,6 +25,10 @@ export type UiWallLine =
 export interface UiTrace {
   eaves?: LatLng[] | LatLng[][]
   eaves_sections?: LatLng[][]
+  /** Per-section roof pitch (rise:12), parallel to eaves_sections. null/0
+   *  means "use the engine's default/dominant pitch." Used for dormers and
+   *  additions whose slope differs from the main roof. */
+  eaves_section_pitches?: Array<number | null | undefined>
   ridges?: UiTraceLine[]
   hips?: UiTraceLine[]
   valleys?: UiTraceLine[]
