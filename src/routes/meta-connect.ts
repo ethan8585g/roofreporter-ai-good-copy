@@ -25,7 +25,26 @@ async function sendMetaConversion(env: any, opts: {
 }): Promise<{ success: boolean; error?: string }> {
   const pixelId = env.META_PIXEL_ID || ''
   const accessToken = env.META_CAPI_ACCESS_TOKEN || ''
-  if (!pixelId || !accessToken) return { success: false, error: 'CAPI not configured' }
+  if (!pixelId || !accessToken) {
+    // Write a 'skipped' row so the gap is visible in the meta_conversion_events
+    // table instead of silently dropping. Without this, the table looked empty
+    // and we couldn't tell missing-token from no-events-firing.
+    try {
+      await env.DB.prepare(
+        `INSERT INTO meta_conversion_events (event_name, event_id, pixel_id, user_email_hash, user_phone_hash, custom_data, source_page, status, meta_response) VALUES (?,?,?,?,?,?,?,?,?)`
+      ).bind(
+        opts.eventName,
+        `skip_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        pixelId || 'missing',
+        '', '',
+        JSON.stringify(opts.customData || {}),
+        opts.sourcePage || '',
+        'skipped',
+        JSON.stringify({ reason: !pixelId ? 'META_PIXEL_ID unset' : 'META_CAPI_ACCESS_TOKEN unset' })
+      ).run()
+    } catch {}
+    return { success: false, error: 'CAPI not configured' }
+  }
 
   // SHA-256 hash PII per Meta requirements
   async function sha256(val: string): Promise<string> {

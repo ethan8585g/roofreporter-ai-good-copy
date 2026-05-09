@@ -138,6 +138,16 @@ export type Bindings = {
   GA4_API_SECRET: string           // Measurement Protocol API secret for server-side events
   GA4_PROPERTY_ID: string          // e.g. "properties/123456789" — for Analytics Data API queries
 
+  // Google Ads conversion labels — the part AFTER 'AW-18080319225/' in the conversion
+  // tag. Create the actions in Google Ads → Tools & Settings → Conversions, then set
+  // each as a Pages secret so trackAdsConversion() stops silently dropping these events.
+  // Without these, only the 'signup' conversion fires; lead/contact/demo/purchase are
+  // silently no-op'd and Smart Bidding optimizes blind to most of the funnel.
+  GADS_LEAD_LABEL?: string         // hero CTAs, exit-intent, address-preview, gated lead capture
+  GADS_CONTACT_LABEL?: string      // contact form submissions
+  GADS_DEMO_LABEL?: string         // demo bookings
+  GADS_PURCHASE_LABEL?: string     // paid checkout success (Square return URL)
+
   // Meta Connect — Facebook/Instagram Integration (Super Admin)
   // Create a Meta App at: https://developers.facebook.com/apps/
   META_APP_ID: string              // Facebook App ID (used for token exchange)
