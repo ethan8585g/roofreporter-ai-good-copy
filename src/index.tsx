@@ -7556,9 +7556,11 @@ function getOnboardingPageHTML(sessionToken = ''): string {
         <input type="text" id="company-name" placeholder="e.g. Smith Roofing Ltd."
           style="width:100%;padding:16px 18px;background:#111111;border:1.5px solid rgba(255,255,255,0.15);border-radius:12px;color:#fff;font-size:16px;margin-bottom:16px;box-sizing:border-box;outline:none"
           onfocus="this.style.borderColor='#00FF88'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
-        <input type="tel" id="company-phone" placeholder="Phone number (optional)"
-          style="width:100%;padding:16px 18px;background:#111111;border:1.5px solid rgba(255,255,255,0.15);border-radius:12px;color:#fff;font-size:16px;margin-bottom:20px;box-sizing:border-box;outline:none"
+        <label for="company-phone" style="display:block;font-size:13px;color:#9ca3af;margin-bottom:6px">Phone number <span style="color:#00FF88">*</span></label>
+        <input type="tel" id="company-phone" required inputmode="tel" autocomplete="tel" placeholder="(403) 555-0100"
+          style="width:100%;padding:16px 18px;background:#111111;border:1.5px solid rgba(255,255,255,0.15);border-radius:12px;color:#fff;font-size:16px;margin-bottom:8px;box-sizing:border-box;outline:none"
           onfocus="this.style.borderColor='#00FF88'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
+        <p id="step-2-error" style="display:none;color:#f87171;font-size:13px;margin:0 0 12px"></p>
         <button onclick="saveCompany()" style="width:100%;padding:16px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:12px;font-size:17px;cursor:pointer">
           Continue &#x2192;
         </button>
@@ -7657,7 +7659,18 @@ function getOnboardingPageHTML(sessionToken = ''): string {
   async function saveCompany() {
     var name = (document.getElementById('company-name').value || '').trim();
     var phone = (document.getElementById('company-phone').value || '').trim();
-    if (name && sessionToken) {
+    var errEl = document.getElementById('step-2-error');
+    function showErr(msg) {
+      if (!errEl) return;
+      errEl.textContent = msg; errEl.style.display = 'block';
+    }
+    if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+    if (!phone || phone.replace(/\D/g, '').length < 7) {
+      showErr('Please enter a valid phone number to continue.');
+      var phEl = document.getElementById('company-phone'); if (phEl) phEl.focus();
+      return;
+    }
+    if (sessionToken) {
       try {
         await fetch('/api/customer/profile', {
           method: 'PATCH',
@@ -10095,6 +10108,12 @@ ${previewId ? `
               <div id="strength-bar" style="height:100%;width:0%;transition:width 0.3s,background 0.3s;border-radius:2px"></div>
             </div>
 
+            <label for="reg-phone" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Phone Number</label>
+            <input id="reg-phone" type="tel" name="phone" autocomplete="tel" required inputmode="tel"
+              placeholder="(403) 555-0100"
+              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px"
+              onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
+
             <label for="reg-company" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Company Name <span style="font-weight:400;color:#9ca3af">(optional &mdash; you can add this later)</span></label>
             <input id="reg-company" type="text" name="company_name" autocomplete="organization"
               placeholder="Acme Roofing"
@@ -10428,6 +10447,11 @@ ${previewId ? `
       if (password.length < 6) {
         setRegError('Password must be at least 6 characters.');
         var pwEl = document.getElementById('reg-password'); if (pwEl) pwEl.focus();
+        return;
+      }
+      if (!phone || phone.replace(/\D/g, '').length < 7) {
+        setRegError('A valid phone number is required.');
+        var phEl = document.getElementById('reg-phone'); if (phEl) phEl.focus();
         return;
       }
 

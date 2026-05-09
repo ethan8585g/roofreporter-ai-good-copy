@@ -677,8 +677,8 @@ customerAuthRoutes.post('/register', async (c) => {
     if (!email || !password || !name) {
       return c.json({ error: 'Email, password, and name are required' }, 400)
     }
-    if (password.length < 6) {
-      return c.json({ error: 'Password must be at least 6 characters' }, 400)
+    if (password.length < 8) {
+      return c.json({ error: 'Password must be at least 8 characters' }, 400)
     }
     // honeypot — silently accept-and-drop obvious bot signups
     if (website && String(website).trim().length > 0) {
@@ -693,6 +693,9 @@ customerAuthRoutes.post('/register', async (c) => {
       ? String(primary_use)
       : null
     const cleanPhone = (phone && String(phone).trim()) ? String(phone).trim() : null
+    if (!cleanPhone || cleanPhone.replace(/\D/g, '').length < 7) {
+      return c.json({ error: 'A valid phone number is required.' }, 400)
+    }
 
     const cleanEmail = email.toLowerCase().trim()
     // Company name is now optional — empty string when not provided so the user
@@ -1818,8 +1821,11 @@ customerAuthRoutes.post('/forgot-password', async (c) => {
         "SELECT COUNT(*) as cnt FROM password_reset_tokens WHERE email = ? AND account_type = 'customer' AND created_at > datetime('now', '-30 minutes')"
       ).bind(cleanEmail).first<any>()
 
+      const baseUrl = (c.env as any).APP_BASE_URL || 'https://www.roofmanager.ca'
+      let resetToken: string | null = null
+
       if (!recent || recent.cnt < 1) {
-        const token = crypto.randomUUID() + '-' + crypto.randomUUID()
+        resetToken = crypto.randomUUID() + '-' + crypto.randomUUID()
         // P0-06: tighten expiry from 60 → 30 minutes.
         const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString()
 
@@ -1831,10 +1837,19 @@ customerAuthRoutes.post('/forgot-password', async (c) => {
         // Phase 1 #2: bind customer_id so reset consumes by ID, not email.
         await c.env.DB.prepare(
           "INSERT INTO password_reset_tokens (email, token, account_type, expires_at, customer_id) VALUES (?, ?, 'customer', ?, ?)"
-        ).bind(cleanEmail, token, expiresAt, customer.id).run()
+        ).bind(cleanEmail, resetToken, expiresAt, customer.id).run()
+      } else {
+        // Rate-limited: instead of silently dropping the request (which leaves
+        // the user staring at "email sent" with no email), resend the existing
+        // unused token. No new token is issued — rate limit still holds.
+        const existing = await c.env.DB.prepare(
+          "SELECT token FROM password_reset_tokens WHERE email = ? AND account_type = 'customer' AND used = 0 AND expires_at > datetime('now') ORDER BY created_at DESC LIMIT 1"
+        ).bind(cleanEmail).first<any>()
+        resetToken = existing?.token || null
+      }
 
-        const baseUrl = (c.env as any).APP_BASE_URL || 'https://www.roofmanager.ca'
-        const resetUrl = `${baseUrl}/customer/reset-password?token=${token}`
+      if (resetToken) {
+        const resetUrl = `${baseUrl}/customer/reset-password?token=${resetToken}`
         const emailSent = await sendPasswordResetEmail(c.env, cleanEmail, customer.name || 'Customer', resetUrl, c.env.DB)
         if (!emailSent) console.warn('[ForgotPassword] Email failed for:', cleanEmail)
       }
