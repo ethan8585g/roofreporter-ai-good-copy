@@ -323,6 +323,268 @@ superAdminLoopTracker.post('/api/findings/bulk-resolve', async (c) => {
   return c.json({ ok: true, resolved: body.ids.length })
 })
 
+// ── Traffic / Dead-Ends: read-only queries over site_analytics ──
+// Self-contained endpoints — query existing tables only, no schema or
+// other-route changes. Backs the "Traffic / Dead Ends" panel below.
+
+function trafficWindow(c: any): { hours: number; sinceIso: string } {
+  const hours = Math.min(Math.max(Number(c.req.query('hours') || 24), 1), 720) // 1h..30d
+  const sinceIso = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ')
+  return { hours, sinceIso }
+}
+
+// KPI summary for the hero strip in the traffic panel.
+superAdminLoopTracker.get('/api/traffic/summary', async (c) => {
+  const { hours, sinceIso } = trafficWindow(c)
+  const totals = await c.env.DB.prepare(`
+    SELECT
+      COUNT(DISTINCT session_id) AS sessions,
+      SUM(CASE WHEN event_type = 'pageview' THEN 1 ELSE 0 END) AS pageviews,
+      SUM(CASE WHEN event_type = 'click' THEN 1 ELSE 0 END) AS clicks,
+      AVG(CASE WHEN event_type = 'pageview' AND scroll_depth IS NOT NULL THEN scroll_depth END) AS avg_scroll,
+      AVG(CASE WHEN event_type = 'pageview' AND time_on_page IS NOT NULL THEN time_on_page END) AS avg_time
+    FROM site_analytics
+    WHERE created_at >= ? AND session_id IS NOT NULL
+  `).bind(sinceIso).first<any>()
+
+  // Bounce sessions = sessions with exactly 1 pageview
+  const bounceRow = await c.env.DB.prepare(`
+    SELECT COUNT(*) AS bounces FROM (
+      SELECT session_id, COUNT(*) AS pv
+      FROM site_analytics
+      WHERE created_at >= ? AND event_type = 'pageview' AND session_id IS NOT NULL
+      GROUP BY session_id
+      HAVING pv = 1
+    )
+  `).bind(sinceIso).first<{ bounces: number }>()
+
+  // Unresolved traffic insights from the AI agent
+  const insightCount = await c.env.DB.prepare(`
+    SELECT COUNT(*) AS n FROM platform_insights WHERE category = 'traffic' AND status = 'open'
+  `).first<{ n: number }>()
+
+  const sessions = totals?.sessions || 0
+  const bounces = bounceRow?.bounces || 0
+  return c.json({
+    hours,
+    sessions,
+    pageviews: totals?.pageviews || 0,
+    clicks: totals?.clicks || 0,
+    bounces,
+    bounce_rate: sessions > 0 ? bounces / sessions : 0,
+    avg_scroll: totals?.avg_scroll != null ? Math.round(totals.avg_scroll) : null,
+    avg_time: totals?.avg_time != null ? Math.round(totals.avg_time) : null,
+    open_insights: insightCount?.n || 0,
+  })
+})
+
+// Page-level dead-end table — pageviews, exit count, exit rate, scroll, time.
+superAdminLoopTracker.get('/api/traffic/pages', async (c) => {
+  const { hours, sinceIso } = trafficWindow(c)
+  const limit = Math.min(Number(c.req.query('limit') || 100), 500)
+
+  // Per-page aggregates (pageviews + engagement)
+  const pageRows = await c.env.DB.prepare(`
+    SELECT
+      page_url,
+      COUNT(*) AS pageviews,
+      COUNT(DISTINCT session_id) AS sessions,
+      AVG(CASE WHEN scroll_depth IS NOT NULL THEN scroll_depth END) AS avg_scroll,
+      AVG(CASE WHEN time_on_page IS NOT NULL THEN time_on_page END) AS avg_time
+    FROM site_analytics
+    WHERE created_at >= ? AND event_type = 'pageview' AND page_url IS NOT NULL
+    GROUP BY page_url
+  `).bind(sinceIso).all<any>()
+
+  // Exit count = sessions whose LAST pageview was this page
+  const exitRows = await c.env.DB.prepare(`
+    SELECT page_url, COUNT(*) AS exits FROM (
+      SELECT session_id, page_url,
+             ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY created_at DESC, id DESC) AS rn
+      FROM site_analytics
+      WHERE created_at >= ? AND event_type = 'pageview' AND session_id IS NOT NULL AND page_url IS NOT NULL
+    ) WHERE rn = 1
+    GROUP BY page_url
+  `).bind(sinceIso).all<any>()
+
+  // Bounce count per page = sessions where this was the only pageview
+  const bounceRows = await c.env.DB.prepare(`
+    SELECT page_url, COUNT(*) AS bounces FROM (
+      SELECT session_id, MAX(page_url) AS page_url, COUNT(*) AS pv
+      FROM site_analytics
+      WHERE created_at >= ? AND event_type = 'pageview' AND session_id IS NOT NULL
+      GROUP BY session_id
+      HAVING pv = 1
+    )
+    GROUP BY page_url
+  `).bind(sinceIso).all<any>()
+
+  const exits: Record<string, number> = {}
+  for (const r of (exitRows.results || [])) exits[r.page_url] = r.exits
+  const bounces: Record<string, number> = {}
+  for (const r of (bounceRows.results || [])) bounces[r.page_url] = r.bounces
+
+  const pages = (pageRows.results || []).map((r: any) => ({
+    page_url: r.page_url,
+    pageviews: r.pageviews,
+    sessions: r.sessions,
+    exits: exits[r.page_url] || 0,
+    exit_rate: r.sessions > 0 ? (exits[r.page_url] || 0) / r.sessions : 0,
+    bounces: bounces[r.page_url] || 0,
+    bounce_rate: r.sessions > 0 ? (bounces[r.page_url] || 0) / r.sessions : 0,
+    avg_scroll: r.avg_scroll != null ? Math.round(r.avg_scroll) : null,
+    avg_time: r.avg_time != null ? Math.round(r.avg_time) : null,
+  }))
+
+  // Default sort: highest exit rate among pages with material traffic
+  pages.sort((a, b) => {
+    if (a.sessions < 3 && b.sessions >= 3) return 1
+    if (b.sessions < 3 && a.sessions >= 3) return -1
+    return b.exit_rate - a.exit_rate || b.pageviews - a.pageviews
+  })
+
+  return c.json({ hours, pages: pages.slice(0, limit) })
+})
+
+// Recent AI-generated traffic insights (from traffic-agent)
+superAdminLoopTracker.get('/api/traffic/insights', async (c) => {
+  const status = c.req.query('status') || 'open'
+  const limit = Math.min(Number(c.req.query('limit') || 50), 200)
+  const where: string[] = [`category = 'traffic'`]
+  const binds: any[] = []
+  if (status === 'open') where.push(`status = 'open'`)
+  else if (status === 'resolved') where.push(`status = 'resolved'`)
+  const sql = `SELECT id, severity, title, description, suggested_fix, status, created_at, resolved_at
+               FROM platform_insights
+               WHERE ${where.join(' AND ')}
+               ORDER BY
+                 CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
+                 created_at DESC
+               LIMIT ?`
+  binds.push(limit)
+  const rows = await c.env.DB.prepare(sql).bind(...binds).all()
+  return c.json({ insights: rows.results })
+})
+
+// Drill-down for a single page: who exited here, what they clicked last,
+// and what their full session path looked like.
+superAdminLoopTracker.get('/api/traffic/page-detail', async (c) => {
+  const url = c.req.query('url')
+  if (!url) return c.json({ error: 'url required' }, 400)
+  const { hours, sinceIso } = trafficWindow(c)
+  const sessionLimit = Math.min(Number(c.req.query('sessions') || 30), 100)
+
+  // Sessions whose LAST pageview was this URL
+  const exitSessions = await c.env.DB.prepare(`
+    SELECT session_id, MAX(created_at) AS last_seen
+    FROM (
+      SELECT session_id, page_url, created_at,
+             ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY created_at DESC, id DESC) AS rn
+      FROM site_analytics
+      WHERE created_at >= ? AND event_type = 'pageview' AND session_id IS NOT NULL
+    ) WHERE rn = 1 AND page_url = ?
+    GROUP BY session_id
+    ORDER BY last_seen DESC
+    LIMIT ?
+  `).bind(sinceIso, url, sessionLimit).all<any>()
+
+  const sessionIds = (exitSessions.results || []).map((r: any) => r.session_id)
+  if (sessionIds.length === 0) {
+    return c.json({ hours, page_url: url, sessions: [], last_clicks: [], referrers: [] })
+  }
+
+  // All events for those sessions, ordered chronologically — used to reconstruct
+  // the page path and the click immediately before exit.
+  const placeholders = sessionIds.map(() => '?').join(',')
+  const events = await c.env.DB.prepare(`
+    SELECT session_id, event_type, page_url, page_title, click_element, click_text,
+           referrer, utm_source, utm_medium, utm_campaign, country, device_type, browser,
+           scroll_depth, time_on_page, created_at, id
+    FROM site_analytics
+    WHERE session_id IN (${placeholders}) AND created_at >= ?
+    ORDER BY session_id ASC, created_at ASC, id ASC
+  `).bind(...sessionIds, sinceIso).all<any>()
+
+  // Group by session, extract path + last click
+  const bySession = new Map<string, any[]>()
+  for (const e of (events.results || [])) {
+    if (!bySession.has(e.session_id)) bySession.set(e.session_id, [])
+    bySession.get(e.session_id)!.push(e)
+  }
+
+  const sessions: any[] = []
+  const clickTally: Record<string, { count: number; sample_text: string }> = {}
+  const referrerTally: Record<string, number> = {}
+
+  for (const [sid, evs] of bySession.entries()) {
+    const pages: string[] = []
+    let lastClick: any = null
+    let lastScroll = 0
+    let totalTime = 0
+    let firstReferrer = ''
+    let utm = ''
+    let device = ''
+    let browser = ''
+    let country = ''
+    for (const e of evs) {
+      if (e.event_type === 'pageview') {
+        pages.push(e.page_url)
+        if (e.scroll_depth) lastScroll = e.scroll_depth
+        if (e.time_on_page) totalTime += e.time_on_page
+      } else if (e.event_type === 'click') {
+        // Track last click that happened ON the exit page
+        if (e.page_url === url) lastClick = e
+      }
+      if (!firstReferrer && e.referrer) firstReferrer = e.referrer
+      if (!utm && e.utm_source) utm = `${e.utm_source}/${e.utm_medium || '-'}/${e.utm_campaign || '-'}`
+      if (!device && e.device_type) device = e.device_type
+      if (!browser && e.browser) browser = e.browser
+      if (!country && e.country) country = e.country
+    }
+    if (lastClick) {
+      const key = (lastClick.click_element || '?') + '::' + url
+      if (!clickTally[key]) clickTally[key] = { count: 0, sample_text: lastClick.click_text || '' }
+      clickTally[key].count++
+    }
+    if (firstReferrer) referrerTally[firstReferrer] = (referrerTally[firstReferrer] || 0) + 1
+
+    sessions.push({
+      session_id: sid,
+      pages,
+      total_time: totalTime,
+      last_scroll_on_exit: lastScroll,
+      last_click_element: lastClick?.click_element || null,
+      last_click_text: lastClick?.click_text || null,
+      referrer: firstReferrer || null,
+      utm: utm || null,
+      device: device || null,
+      browser: browser || null,
+      country: country || null,
+    })
+  }
+
+  const lastClicks = Object.entries(clickTally)
+    .map(([k, v]) => ({ element: k.split('::')[0], sample_text: v.sample_text, count: v.count }))
+    .sort((a, b) => b.count - a.count).slice(0, 20)
+
+  const referrers = Object.entries(referrerTally)
+    .map(([k, v]) => ({ referrer: k, count: v }))
+    .sort((a, b) => b.count - a.count).slice(0, 20)
+
+  return c.json({ hours, page_url: url, sessions, last_clicks: lastClicks, referrers })
+})
+
+// Mark a traffic insight resolved (re-uses platform_insights, scoped to category='traffic')
+superAdminLoopTracker.post('/api/traffic/insights/:id/resolve', async (c) => {
+  const id = Number(c.req.param('id'))
+  const owner = await c.env.DB.prepare(`SELECT category FROM platform_insights WHERE id = ?`).bind(id).first<{ category: string }>()
+  if (!owner || owner.category !== 'traffic') return c.json({ error: 'not a traffic insight' }, 404)
+  await c.env.DB.prepare(
+    `UPDATE platform_insights SET status = 'resolved', resolved_at = datetime('now') WHERE id = ?`
+  ).bind(id).run()
+  return c.json({ ok: true })
+})
+
 // ── HTML page ────────────────────────────────────────────────
 superAdminLoopTracker.get('/', async (c) => {
   return c.html(renderLoopTrackerPage())
@@ -549,6 +811,62 @@ function renderLoopTrackerPage(): string {
           <th>Summary</th>
         </tr></thead>
         <tbody id="runsBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Traffic / Dead Ends -->
+  <section>
+    <h2><i class="fas fa-route" style="color:var(--info);margin-right:6px"></i>Traffic / Dead Ends <span class="count" id="trafficCount">—</span></h2>
+    <div class="filter-row">
+      <select id="trafficWindow">
+        <option value="24">Last 24h</option>
+        <option value="72">Last 3 days</option>
+        <option value="168" selected>Last 7 days</option>
+        <option value="720">Last 30 days</option>
+      </select>
+      <span class="ts" id="trafficSummary">—</span>
+      <span class="spacer"></span>
+      <span class="ts">Click a page row to drill into the sessions that ended there.</span>
+    </div>
+
+    <!-- KPI strip for traffic -->
+    <div class="hero" style="grid-template-columns:repeat(6,1fr); margin-bottom:14px;">
+      <div class="kpi"><div class="label">Sessions</div><div class="v num" id="trSessions">—</div></div>
+      <div class="kpi"><div class="label">Pageviews</div><div class="v num" id="trPageviews">—</div></div>
+      <div class="kpi failing"><div class="label">Bounce rate</div><div class="v num" id="trBounce">—</div></div>
+      <div class="kpi"><div class="label">Avg scroll</div><div class="v num" id="trScroll">—</div></div>
+      <div class="kpi"><div class="label">Avg time</div><div class="v num" id="trTime">—</div></div>
+      <div class="kpi findings"><div class="label">AI insights open</div><div class="v num" id="trInsights">—</div></div>
+    </div>
+
+    <!-- AI insights from traffic agent -->
+    <div class="card" id="trafficInsightsCard" style="padding:0; margin-bottom:14px;">
+      <div style="padding:12px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+        <strong style="font-size:12px;">AI insights (traffic agent)</strong>
+        <select id="trafficInsightStatus" style="font-size:11px;">
+          <option value="open" selected>Open</option>
+          <option value="resolved">Resolved</option>
+        </select>
+      </div>
+      <div id="trafficInsightsBody"><div class="empty">Loading…</div></div>
+    </div>
+
+    <!-- Page table -->
+    <div class="card" style="padding:0;">
+      <table class="data" id="trafficPagesTable">
+        <thead><tr>
+          <th>Page</th>
+          <th class="num">Pageviews</th>
+          <th class="num">Sessions</th>
+          <th class="num">Exits</th>
+          <th class="num">Exit rate</th>
+          <th class="num">Bounce rate</th>
+          <th class="num">Avg scroll</th>
+          <th class="num">Avg time</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="trafficPagesBody"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
       </table>
     </div>
   </section>
@@ -918,12 +1236,161 @@ document.getElementById('findCheckAll').addEventListener('change', e => {
 ['runsLoopFilter','runsStatusFilter','runsSourceFilter'].forEach(id => document.getElementById(id).addEventListener('change', loadRuns));
 ['findStatusFilter','findSeverityFilter','findCatFilter'].forEach(id => document.getElementById(id).addEventListener('change', loadFindings));
 
+// ────────────────────────────────────────────────────────────
+// Traffic / Dead Ends panel
+// ────────────────────────────────────────────────────────────
+let TRAFFIC_PAGES = [];
+
+function fmtPct(x) { return x == null ? '—' : (Math.round(x * 1000) / 10) + '%'; }
+function fmtSecs(s) { if (s == null) return '—'; if (s < 60) return s + 's'; return (s / 60).toFixed(1) + 'm'; }
+function trafficHours() { return Number(document.getElementById('trafficWindow').value || 24); }
+
+async function loadTrafficSummary() {
+  const data = await getJson('/api/super-admin/loop-tracker/api/traffic/summary?hours=' + trafficHours());
+  if (!data) return;
+  document.getElementById('trSessions').textContent = data.sessions;
+  document.getElementById('trPageviews').textContent = data.pageviews;
+  document.getElementById('trBounce').textContent = fmtPct(data.bounce_rate);
+  document.getElementById('trScroll').textContent = data.avg_scroll != null ? data.avg_scroll + '%' : '—';
+  document.getElementById('trTime').textContent = fmtSecs(data.avg_time);
+  document.getElementById('trInsights').textContent = data.open_insights;
+  document.getElementById('trafficSummary').textContent = data.sessions + ' sessions · ' + data.pageviews + ' pageviews · ' + data.clicks + ' clicks';
+}
+
+async function loadTrafficInsights() {
+  const status = document.getElementById('trafficInsightStatus').value;
+  const data = await getJson('/api/super-admin/loop-tracker/api/traffic/insights?status=' + encodeURIComponent(status) + '&limit=50');
+  if (!data) return;
+  const ins = data.insights || [];
+  const body = document.getElementById('trafficInsightsBody');
+  if (ins.length === 0) {
+    body.innerHTML = '<div class="empty">No ' + escapeHtml(status) + ' traffic insights. The traffic agent runs every hour — once it finds a pattern, it shows up here.</div>';
+    return;
+  }
+  body.innerHTML = ins.map(i =>
+    '<div class="finding-row" style="grid-template-columns:80px 1fr 110px;">' +
+      '<span class="sev-' + (i.severity === 'critical' || i.severity === 'high' ? 'error' : 'warn') + '">' + escapeHtml(i.severity.toUpperCase()) + '</span>' +
+      '<div>' +
+        '<div style="font-weight:600;color:var(--text);">' + escapeHtml(i.title) + '</div>' +
+        (i.description ? '<div class="ts" style="margin-top:3px;">' + escapeHtml(i.description) + '</div>' : '') +
+        (i.suggested_fix ? '<div class="ts" style="margin-top:3px;color:var(--accent);"><i class="fas fa-lightbulb"></i> ' + escapeHtml(i.suggested_fix) + '</div>' : '') +
+        '<div class="ts" style="margin-top:3px;">' + fmtAgo(i.created_at) + '</div>' +
+      '</div>' +
+      (i.resolved_at
+        ? '<span class="ts">resolved</span>'
+        : '<button class="btn-secondary btn-sm" onclick="resolveTrafficInsight(' + i.id + ', event)">Mark resolved</button>') +
+    '</div>'
+  ).join('');
+}
+
+async function resolveTrafficInsight(id, ev) {
+  ev.stopPropagation();
+  const btn = ev.target;
+  btn.disabled = true; btn.textContent = '…';
+  await getJson('/api/super-admin/loop-tracker/api/traffic/insights/' + id + '/resolve', { method:'POST' });
+  loadTrafficSummary(); loadTrafficInsights();
+}
+
+async function loadTrafficPages() {
+  const data = await getJson('/api/super-admin/loop-tracker/api/traffic/pages?hours=' + trafficHours() + '&limit=100');
+  if (!data) return;
+  TRAFFIC_PAGES = data.pages || [];
+  document.getElementById('trafficCount').textContent = TRAFFIC_PAGES.length + ' pages';
+  const body = document.getElementById('trafficPagesBody');
+  if (TRAFFIC_PAGES.length === 0) {
+    body.innerHTML = '<tr><td colspan="9" class="empty">No pageview events in this window. Make sure tracker.js is loading on the page (check &lt;script src=\\"/static/tracker.js&quot;&gt;).</td></tr>';
+    return;
+  }
+  body.innerHTML = TRAFFIC_PAGES.map(p => {
+    const exitColor = p.exit_rate > 0.6 ? 'color:var(--fail);font-weight:700' : p.exit_rate > 0.4 ? 'color:var(--warn);font-weight:600' : '';
+    const bounceColor = p.bounce_rate > 0.5 ? 'color:var(--fail);font-weight:700' : p.bounce_rate > 0.3 ? 'color:var(--warn);font-weight:600' : '';
+    const scrollColor = p.avg_scroll != null && p.avg_scroll < 25 ? 'color:var(--warn);font-weight:600' : '';
+    const safeUrl = encodeURIComponent(p.page_url);
+    return '<tr class="row" onclick="toggleTrafficPage(\\'' + safeUrl + '\\')" id="tr-row-' + safeUrl + '">' +
+      '<td><span class="mono">' + escapeHtml(p.page_url) + '</span></td>' +
+      '<td class="num">' + p.pageviews + '</td>' +
+      '<td class="num">' + p.sessions + '</td>' +
+      '<td class="num">' + p.exits + '</td>' +
+      '<td class="num" style="' + exitColor + '">' + fmtPct(p.exit_rate) + '</td>' +
+      '<td class="num" style="' + bounceColor + '">' + fmtPct(p.bounce_rate) + '</td>' +
+      '<td class="num" style="' + scrollColor + '">' + (p.avg_scroll != null ? p.avg_scroll + '%' : '—') + '</td>' +
+      '<td class="num">' + fmtSecs(p.avg_time) + '</td>' +
+      '<td><i class="fas fa-chevron-down ts"></i></td>' +
+    '</tr>' +
+    '<tr id="tr-detail-' + safeUrl + '" style="display:none"><td colspan="9" style="padding:0"><div id="tr-detail-body-' + safeUrl + '">Loading…</div></td></tr>';
+  }).join('');
+}
+
+async function toggleTrafficPage(safeUrl) {
+  const tr = document.getElementById('tr-detail-' + safeUrl);
+  if (tr.style.display === 'table-row') { tr.style.display = 'none'; return; }
+  tr.style.display = 'table-row';
+  const body = document.getElementById('tr-detail-body-' + safeUrl);
+  body.innerHTML = '<div class="empty">Loading sessions…</div>';
+  const data = await getJson('/api/super-admin/loop-tracker/api/traffic/page-detail?url=' + safeUrl + '&hours=' + trafficHours() + '&sessions=30');
+  if (!data) { body.innerHTML = '<div class="empty">Failed to load</div>'; return; }
+  const sessions = data.sessions || [];
+  const lastClicks = data.last_clicks || [];
+  const referrers = data.referrers || [];
+
+  if (sessions.length === 0) {
+    body.innerHTML = '<div class="empty">No sessions ended on this page in the selected window.</div>';
+    return;
+  }
+
+  const clicksHtml = lastClicks.length === 0
+    ? '<div class="ts" style="padding:12px 14px;">No clicks recorded on this page before exit (silent drop-off — users left without interacting).</div>'
+    : '<div style="padding:12px 14px;"><div class="ts" style="margin-bottom:6px"><strong style="color:var(--text);">Last click before exit</strong> — what users clicked on this page right before leaving</div>' +
+      lastClicks.map(c =>
+        '<div class="waterfall" style="grid-template-columns:1fr 70px;">' +
+          '<div><span class="mono">' + escapeHtml(c.element) + '</span>' + (c.sample_text ? ' <span class="ts">— "' + escapeHtml(c.sample_text.slice(0, 80)) + '"</span>' : '') + '</div>' +
+          '<span class="num ts">' + c.count + 'x</span>' +
+        '</div>'
+      ).join('') + '</div>';
+
+  const referrersHtml = referrers.length === 0 ? '' :
+    '<div style="padding:12px 14px; border-top:1px solid var(--border);"><div class="ts" style="margin-bottom:6px"><strong style="color:var(--text);">Where exiters came from</strong></div>' +
+    referrers.map(r =>
+      '<div class="waterfall" style="grid-template-columns:1fr 70px;">' +
+        '<div class="mono">' + escapeHtml(r.referrer.slice(0, 100)) + '</div>' +
+        '<span class="num ts">' + r.count + 'x</span>' +
+      '</div>'
+    ).join('') + '</div>';
+
+  const sessionsHtml = '<div style="padding:12px 14px; border-top:1px solid var(--border);"><div class="ts" style="margin-bottom:8px"><strong style="color:var(--text);">' + sessions.length + ' session paths ending here</strong> — full page sequence per visitor</div>' +
+    sessions.map(s => {
+      const path = s.pages.map((p, idx) => {
+        const isExit = idx === s.pages.length - 1;
+        return '<span class="mono ' + (isExit ? 'sev-error' : '') + '" style="' + (isExit ? '' : 'color:var(--text-dim)') + '">' + escapeHtml(p) + '</span>';
+      }).join(' <span class="ts">→</span> ');
+      const meta = [s.device, s.browser, s.country].filter(Boolean).join(' · ');
+      const clickInfo = s.last_click_element
+        ? '<div class="ts" style="margin-top:3px;">last click: <span class="mono">' + escapeHtml(s.last_click_element) + '</span>' + (s.last_click_text ? ' "' + escapeHtml(s.last_click_text.slice(0, 60)) + '"' : '') + '</div>'
+        : '<div class="ts" style="margin-top:3px;color:var(--warn);">no click recorded — silent exit</div>';
+      const refInfo = s.referrer ? '<div class="ts">from: <span class="mono">' + escapeHtml(s.referrer.slice(0, 80)) + '</span></div>' : '';
+      const utmInfo = s.utm ? '<div class="ts">utm: ' + escapeHtml(s.utm) + '</div>' : '';
+      return '<div style="padding:8px 0; border-bottom:1px dashed var(--border);">' +
+        '<div style="font-size:12px; line-height:1.6;">' + path + '</div>' +
+        '<div class="ts" style="margin-top:4px;">' + escapeHtml(s.session_id.slice(0, 12)) + '… · ' + escapeHtml(meta) + ' · ' + s.pages.length + ' page' + (s.pages.length === 1 ? '' : 's') + ' · ' + fmtSecs(s.total_time) + ' · scroll ' + s.last_scroll_on_exit + '%</div>' +
+        clickInfo + refInfo + utmInfo +
+      '</div>';
+    }).join('') + '</div>';
+
+  body.innerHTML = '<div style="background:var(--bg-input); border-top:1px solid var(--border);">' + clicksHtml + referrersHtml + sessionsHtml + '</div>';
+}
+
+document.getElementById('trafficWindow').addEventListener('change', () => { loadTrafficSummary(); loadTrafficPages(); });
+document.getElementById('trafficInsightStatus').addEventListener('change', loadTrafficInsights);
+
 function loadAll() {
   loadStatus();
   loadHeatmap();
   loadCatalog();
   loadRuns();
   loadFindings();
+  loadTrafficSummary();
+  loadTrafficInsights();
+  loadTrafficPages();
 }
 loadAll();
 setInterval(loadStatus, 30000);
