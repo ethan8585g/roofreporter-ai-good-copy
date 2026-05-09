@@ -1727,6 +1727,8 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<button onclick="saTraceSetTool(\'valley\')" id="sa-tool-valley" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Valley</button>' +
           '<button onclick="saTraceSetTool(\'dormer\')" id="sa-tool-dormer" title="Trace a polygon around a dormer on top of the main roof, then enter its pitch (e.g. 12 for 12:12). Engine adds only the steeper sloped surface — no double-counted footprint." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Dormer</button>' +
           '<button onclick="saCompleteDormer()" id="sa-tool-dormer-complete" title="Finalize the in-progress dormer polygon and enter its pitch" style="display:none;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:#a855f7;color:#fff;border:1px solid #a855f7"><i class="fas fa-check mr-1"></i>Complete Dormer Trace</button>' +
+          '<button onclick="saTraceSetTool(\'cutout\')" id="sa-tool-cutout" title="Mark a deck, atrium, or other non-roof void inside the outline — click corners, click first point to close. The area is subtracted from the roof square footage." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151"><i class="fas fa-ban mr-1"></i>+ Non-Roof</button>' +
+          '<button onclick="saCompleteCutout()" id="sa-tool-cutout-complete" title="Finalize the in-progress non-roof polygon" style="display:none;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:#6b7280;color:#fff;border:1px solid #6b7280"><i class="fas fa-check mr-1"></i>Complete Non-Roof Area</button>' +
           '<button onclick="saTraceSetTool(\'vent\')" id="sa-tool-vent" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Vent</button>' +
           '<button onclick="saTraceSetTool(\'skylight\')" id="sa-tool-skylight" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Skylight</button>' +
           '<button onclick="saTraceSetTool(\'chimney\')" id="sa-tool-chimney" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Chimney</button>' +
@@ -1815,6 +1817,14 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
     _dormerMarkers: [],          // in-progress dormer point markers
     _dormerPoly: null,           // in-progress dormer polyline overlay
     _dormerLabelMarkers: [],     // D-A, D-B... centroid labels (per closed dormer)
+    // Cutouts — non-roof voids inside the outline (decks between levels,
+    // atriums, courtyards). Engine subtracts each polygon's projected and
+    // sloped area; renderer shades them grey + dashed in the report diagram.
+    cutouts: [],                 // [{points:[{lat,lng}], label?:string, polygon:google.maps.Polygon}]
+    _cutoutLatLngs: [],          // in-progress cutout polygon points
+    _cutoutMarkers: [],          // in-progress cutout point markers
+    _cutoutPoly: null,           // in-progress cutout polyline overlay
+    _cutoutLabelMarkers: [],     // X1, X2... centroid labels (per closed cutout)
     // Verified planes — per-face polygons + pitches the admin has confirmed
     // or overridden via the Verify Planes overlay. When non-empty, submit
     // sends them as `verified_faces` and the engine uses them directly
@@ -1886,18 +1896,31 @@ window.saTraceSetTool = function(tool) {
       s._dormerLatLngs = [];
     }
   }
+  // Same draft-handling for cutout: pressing "+ Non-Roof" while a draft is
+  // open closes (or discards) it so a fresh polygon starts on the next click.
+  if (tool === 'cutout' && s._cutoutLatLngs && s._cutoutLatLngs.length > 0) {
+    if (s._cutoutLatLngs.length >= 3) {
+      saCloseCutoutPolygon();
+    } else {
+      if (s._cutoutPoly) { s._cutoutPoly.setMap(null); s._cutoutPoly = null; }
+      (s._cutoutMarkers || []).forEach(function(m) { m.setMap(null); });
+      s._cutoutMarkers = [];
+      s._cutoutLatLngs = [];
+    }
+  }
   s.tool = tool;
-  ['eave','ridge','hip','valley','dormer','vent','skylight','chimney','downspout'].forEach(function(t) {
+  ['eave','ridge','hip','valley','dormer','cutout','vent','skylight','chimney','downspout'].forEach(function(t) {
     var btn = document.getElementById('sa-tool-' + t);
     if (btn) {
       var active = t === tool;
-      var colors = { eave: '#22c55e', ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb', dormer: '#a855f7', vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626', downspout: '#475569' };
+      var colors = { eave: '#22c55e', ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb', dormer: '#a855f7', cutout: '#6b7280', vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626', downspout: '#475569' };
       btn.style.background = active ? (colors[t] || '#0ea5e9') : '#1f2937';
       btn.style.color = active ? '#fff' : '#9ca3af';
       btn.style.borderColor = active ? 'transparent' : '#374151';
     }
   });
   if (typeof saUpdateDormerCompleteBtn === 'function') saUpdateDormerCompleteBtn();
+  if (typeof saUpdateCutoutCompleteBtn === 'function') saUpdateCutoutCompleteBtn();
 };
 
 window.saTraceClear = function() {
@@ -1927,6 +1950,13 @@ window.saTraceClear = function() {
   (s._dormerMarkers || []).forEach(function(m) { m.setMap(null); }); s._dormerMarkers = [];
   (s._dormerLabelMarkers || []).forEach(function(m) { m.setMap(null); }); s._dormerLabelMarkers = [];
   s._dormerLatLngs = [];
+  // Cutouts — clear closed polygons + draft + labels
+  (s.cutouts || []).forEach(function(c) { if (c.polygon) c.polygon.setMap(null); });
+  s.cutouts = [];
+  if (s._cutoutPoly) { s._cutoutPoly.setMap(null); s._cutoutPoly = null; }
+  (s._cutoutMarkers || []).forEach(function(m) { m.setMap(null); }); s._cutoutMarkers = [];
+  (s._cutoutLabelMarkers || []).forEach(function(m) { m.setMap(null); }); s._cutoutLabelMarkers = [];
+  s._cutoutLatLngs = [];
   // Verified planes — tear down overlays + reset confirmation state.
   if (typeof saTearDownVerifyPlaneOverlays === 'function') saTearDownVerifyPlaneOverlays();
   s.verifiedFaces = [];
@@ -1981,6 +2011,31 @@ window.saTraceUndo = function() {
       if (s._dormerLabelMarkers && s._dormerLabelMarkers.length > 0) {
         var dl = s._dormerLabelMarkers.pop();
         if (dl) dl.setMap(null);
+      }
+      return;
+    }
+  }
+  if (s.tool === 'cutout') {
+    // Priority: 1) drop last in-progress cutout point, 2) drop last closed cutout
+    if (s._cutoutLatLngs && s._cutoutLatLngs.length > 0) {
+      s._cutoutLatLngs.pop();
+      var cm = (s._cutoutMarkers || []).pop(); if (cm) cm.setMap(null);
+      if (s._cutoutPoly) s._cutoutPoly.setMap(null);
+      if (s._cutoutLatLngs.length >= 2) {
+        s._cutoutPoly = new google.maps.Polyline({
+          path: s._cutoutLatLngs.concat([s._cutoutLatLngs[0]]),
+          strokeColor: '#6b7280', strokeWeight: 2.5, map: s.map, zIndex: 4,
+        });
+      } else { s._cutoutPoly = null; }
+      saUpdateCutoutCompleteBtn();
+      return;
+    }
+    if (s.cutouts && s.cutouts.length > 0) {
+      var lastC = s.cutouts.pop();
+      if (lastC && lastC.polygon) lastC.polygon.setMap(null);
+      if (s._cutoutLabelMarkers && s._cutoutLabelMarkers.length > 0) {
+        var cl = s._cutoutLabelMarkers.pop();
+        if (cl) cl.setMap(null);
       }
       return;
     }
@@ -2275,6 +2330,37 @@ function saInitTraceMap(lat, lng, address) {
         strokeColor: '#a855f7', strokeWeight: 2.5, map: map, zIndex: 4,
       });
       saUpdateDormerCompleteBtn();
+    } else if (tool === 'cutout') {
+      // Cutout polygon — non-roof void inside the outline. Closes onto its
+      // first point. Engine subtracts projected and sloped area at submit.
+      var cpts = s._cutoutLatLngs || (s._cutoutLatLngs = []);
+      if (cpts.length >= 3) {
+        var cproj = map.getProjection();
+        if (cproj) {
+          var cscale = Math.pow(2, map.getZoom());
+          var cp1 = cproj.fromLatLngToPoint(cpts[0]);
+          var cpc = cproj.fromLatLngToPoint(e.latLng);
+          var cdxPx = (cp1.x - cpc.x) * cscale;
+          var cdyPx = (cp1.y - cpc.y) * cscale;
+          var cdistPx = Math.sqrt(cdxPx * cdxPx + cdyPx * cdyPx);
+          if (cdistPx < 12) { saCloseCutoutPolygon(); return; }
+        }
+      }
+      cpts.push(e.latLng);
+      var cmk = new google.maps.Marker({
+        position: e.latLng, map: map,
+        clickable: false,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 5, fillColor: '#6b7280', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1.5 },
+        label: { text: String(cpts.length), color: '#fff', fontSize: '10px', fontWeight: '700' }
+      });
+      s._cutoutMarkers.push(cmk);
+      if (s._cutoutPoly) s._cutoutPoly.setMap(null);
+      s._cutoutPoly = new google.maps.Polyline({
+        path: cpts.concat([cpts[0]]),
+        strokeColor: '#6b7280', strokeWeight: 2.5, map: map, zIndex: 4,
+        icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '10px' }],
+      });
+      saUpdateCutoutCompleteBtn();
     } else if (tool === 'vent' || tool === 'skylight' || tool === 'chimney' || tool === 'downspout') {
       var colors = { vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626', downspout: '#475569' };
       var iconCfg;
@@ -2475,6 +2561,86 @@ function saUpdateDormerCompleteBtn() {
   btn.style.display = (inDormerMode && draftLen >= 3) ? 'inline-block' : 'none';
 }
 
+// Close the in-progress cutout polygon and persist it. Each cutout becomes
+// one entry in s.cutouts; submitted in the trace payload as `cutouts`.
+// Engine subtracts the projected and sloped area from the totals.
+function saCloseCutoutPolygon() {
+  var s = window._saTraceState; if (!s || !s.map) return;
+  var cpts = s._cutoutLatLngs || [];
+  if (cpts.length < 3) return;
+  // Clear in-progress overlays
+  if (s._cutoutPoly) { s._cutoutPoly.setMap(null); s._cutoutPoly = null; }
+  (s._cutoutMarkers || []).forEach(function(m) { m.setMap(null); }); s._cutoutMarkers = [];
+  // Closed cutout polygon — grey fill + dashed stroke. Editable so the admin
+  // can drag corners after close. Distinct from dormers (purple) and eaves.
+  var poly = new google.maps.Polygon({
+    paths: cpts.slice(),
+    strokeColor: '#6b7280', strokeWeight: 2.5, strokeOpacity: 0.95,
+    fillColor: '#9ca3af',  fillOpacity: 0.40,
+    clickable: false, editable: true, draggable: false,
+    map: s.map, zIndex: 3,
+  });
+  var cutoutPoints = cpts.map(function(p) { return { lat: p.lat(), lng: p.lng() }; });
+  var cutoutIdx = (s.cutouts || []).length;
+  s.cutouts = s.cutouts || [];
+  s.cutouts.push({
+    points: cutoutPoints,
+    label: 'Non-roof ' + (cutoutIdx + 1),
+    polygon: poly,
+  });
+  // Sync vertex drags back into points
+  var path = poly.getPath();
+  var cutoutEntry = s.cutouts[cutoutIdx];
+  function syncCutoutPath() {
+    var newPts = [];
+    for (var i = 0; i < path.getLength(); i++) {
+      var ll = path.getAt(i);
+      newPts.push({ lat: ll.lat(), lng: ll.lng() });
+    }
+    if (newPts.length < 3) return;
+    cutoutEntry.points = newPts;
+  }
+  google.maps.event.addListener(path, 'set_at', syncCutoutPath);
+  google.maps.event.addListener(path, 'insert_at', syncCutoutPath);
+  google.maps.event.addListener(path, 'remove_at', syncCutoutPath);
+  // X1, X2... centroid label
+  var cx = 0, cy = 0;
+  for (var i = 0; i < cutoutPoints.length; i++) { cx += cutoutPoints[i].lat; cy += cutoutPoints[i].lng; }
+  cx /= cutoutPoints.length; cy /= cutoutPoints.length;
+  var labelMk = new google.maps.Marker({
+    position: { lat: cx, lng: cy }, map: s.map, clickable: false, zIndex: 11,
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: '#6b7280', fillOpacity: 0.95, strokeColor: '#fff', strokeWeight: 1.5 },
+    label: { text: 'X' + (cutoutIdx + 1), color: '#fff', fontSize: '10px', fontWeight: '700' }
+  });
+  s._cutoutLabelMarkers = s._cutoutLabelMarkers || [];
+  s._cutoutLabelMarkers.push(labelMk);
+  // Reset draft for next cutout
+  s._cutoutLatLngs = [];
+  saUpdateCutoutCompleteBtn();
+}
+
+// Toolbar handler — finalizes the in-progress cutout polygon. Visible only
+// when the cutout tool is selected AND ≥ 3 draft points are placed.
+window.saCompleteCutout = function saCompleteCutout() {
+  var s = window._saTraceState; if (!s) return;
+  var cpts = s._cutoutLatLngs || [];
+  if (cpts.length < 3) {
+    alert('Place at least 3 points around the non-roof area before completing the trace.');
+    return;
+  }
+  saCloseCutoutPolygon();
+  saUpdateCutoutCompleteBtn();
+};
+
+function saUpdateCutoutCompleteBtn() {
+  var btn = document.getElementById('sa-tool-cutout-complete');
+  if (!btn) return;
+  var s = window._saTraceState;
+  var draftLen = (s && s._cutoutLatLngs) ? s._cutoutLatLngs.length : 0;
+  var inCutoutMode = !!(s && s.tool === 'cutout');
+  btn.style.display = (inCutoutMode && draftLen >= 3) ? 'inline-block' : 'none';
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // VERIFY PLANES — admin confirms or overrides each detected roof plane's
 // polygon and pitch. The engine then uses these per-face polygons directly
@@ -2607,12 +2773,21 @@ window.saStartVerifyPlanes = async function saStartVerifyPlanes(orderId) {
           pitch_rise: d.pitch_rise, label: d.label,
         };
       });
+    var cutoutsOut = (s.cutouts || [])
+      .filter(function(c) { return c && Array.isArray(c.points) && c.points.length >= 3; })
+      .map(function(c) {
+        return {
+          polygon: c.points.map(function(p) { return { lat: p.lat, lng: p.lng }; }),
+          label: c.label,
+        };
+      });
     var traceJson = {
       eaves: eaves_sections[0],
       eaves_sections: eaves_sections,
       eaves_section_pitches: eaves_section_pitches,
       eaves_section_kinds: eaves_section_kinds,
       dormers: dormersOut.length > 0 ? dormersOut : undefined,
+      cutouts: cutoutsOut.length > 0 ? cutoutsOut : undefined,
       ridges: s._ridgeData || [],
       hips: s._hipData || [],
       valleys: s._valleyData || [],
@@ -3540,6 +3715,18 @@ window.saSubmitTrace = async function(orderId, force) {
         label: d.label,
       };
     });
+  // Cutouts — non-roof voids (decks between levels, atriums, courtyards).
+  // Engine subtracts each polygon's projected and sloped area from the
+  // totals; report shades them grey + dashed in the diagram and shows an
+  // "Excluded non-roof" row in the area breakdown.
+  var cutoutsOut = (s.cutouts || [])
+    .filter(function(c) { return c && Array.isArray(c.points) && c.points.length >= 3; })
+    .map(function(c) {
+      return {
+        polygon: c.points.map(function(p) { return { lat: p.lat, lng: p.lng }; }),
+        label: c.label,
+      };
+    });
   // Verified faces — when the admin walked through "Verify Planes", each
   // entry carries a confirmed polygon + pitch. The engine uses these
   // directly (shoelace × slopeFactor) so per-plane area is exact, no
@@ -3564,6 +3751,7 @@ window.saSubmitTrace = async function(orderId, force) {
     eaves_section_pitches: eaves_section_pitches,
     eaves_section_kinds: eaves_section_kinds,
     dormers: dormersOut.length > 0 ? dormersOut : undefined,
+    cutouts: cutoutsOut.length > 0 ? cutoutsOut : undefined,
     verified_faces: verifiedFacesOut.length > 0 ? verifiedFacesOut : undefined,
     ridges: s._ridgeData || [],
     hips: s._hipData || [],
