@@ -5,7 +5,8 @@ import { identifySession } from '../services/attribution'
 import { resolveTeamOwner } from './team'
 import { hashPassword, verifyPassword, isLegacyHash, dummyVerify } from '../lib/password'
 import { getCustomerSessionToken } from '../lib/session-tokens'
-import { notifyNewUserSignup, sendWelcomeEmail } from '../services/email'
+import { notifyNewUserSignup, sendWelcomeEmail, loadGmailCreds, sendGmailOAuth2 } from '../services/email'
+import { generateCsrfToken, csrfCookieAttrs, makeCsrfMiddleware } from '../lib/csrf'
 
 // P1-11: sanitize values before splicing into MIME headers. Strips CR/LF and
 // control chars that could be used for header injection (inject Bcc, etc.).
@@ -17,9 +18,15 @@ function mimeHeader(v: string | undefined | null): string {
 const CUSTOMER_SESSION_COOKIE = 'rm_customer_session'
 function setCustomerSessionCookie(c: any, token: string, maxAgeSeconds: number) {
   c.header('Set-Cookie', `${CUSTOMER_SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAgeSeconds}`, { append: true })
+  // CSRF: issue a non-HttpOnly companion cookie at session-creation. JS reads
+  // this and echoes it as X-RM-CSRF on cookie-only state-change requests.
+  // Bearer-token clients ignore this; they bypass CSRF entirely.
+  const csrf = generateCsrfToken()
+  c.header('Set-Cookie', csrfCookieAttrs(csrf, maxAgeSeconds), { append: true })
 }
 function clearCustomerSessionCookie(c: any) {
   c.header('Set-Cookie', `${CUSTOMER_SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`, { append: true })
+  c.header('Set-Cookie', `rm_csrf=; Path=/; SameSite=Lax; Secure; Max-Age=0`, { append: true })
 }
 
 // Bumps customer_login_events with a 'resume' row when an authenticated
@@ -55,6 +62,13 @@ function ipFromRequest(c: any): string | null {
 }
 
 export const customerAuthRoutes = new Hono<{ Bindings: Bindings }>()
+
+// CSRF: enforce double-submit cookie on all customer state-change endpoints.
+// The middleware bypasses GET/HEAD/OPTIONS, Bearer-token requests (programmatic
+// API), and any request without the customer session cookie (pre-auth POSTs
+// like /login, /register, /google, /forgot-password). Authenticated cookie-only
+// requests must echo the rm_csrf cookie value in the X-RM-CSRF header.
+customerAuthRoutes.use('*', makeCsrfMiddleware(CUSTOMER_SESSION_COOKIE))
 
 // Seeds the 12 default material catalog items for a new account so users have
 // context on what the Material Catalog section is for when they first open it.
@@ -1568,6 +1582,79 @@ customerAuthRoutes.post('/logout', async (c) => {
   // P0-05: clear cookie.
   clearCustomerSessionCookie(c)
   return c.json({ success: true })
+})
+
+// ============================================================
+// ACCOUNT DELETION REQUEST
+// Inserts a row into account_deletion_requests (queue) and emails a notice
+// to the platform admin. Super-admin processes the queue and completes the
+// deletion (or refunds + deletes) within the SLA shown in the UI.
+// Replaces the prior placeholder that showed a success toast but did
+// nothing on the server.
+// ============================================================
+customerAuthRoutes.post('/account/request-deletion', async (c) => {
+  const token = getCustomerSessionToken(c)
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+
+  const session = await c.env.DB.prepare(`
+    SELECT cs.customer_id, c.email, c.name FROM customer_sessions cs
+    JOIN customers c ON c.id = cs.customer_id
+    WHERE cs.session_token = ? AND cs.expires_at > datetime('now')
+  `).bind(token).first<{ customer_id: number; email: string; name: string }>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+
+  const body = await c.req.json().catch(() => ({})) as { email_confirmation?: string; reason?: string }
+  const confirmation = String(body.email_confirmation || '').trim().toLowerCase()
+  if (!confirmation || confirmation !== (session.email || '').toLowerCase()) {
+    return c.json({ error: 'Email confirmation does not match account email' }, 400)
+  }
+
+  // Block duplicate pending requests
+  const existing = await c.env.DB.prepare(
+    `SELECT id FROM account_deletion_requests WHERE customer_id = ? AND status = 'pending' LIMIT 1`
+  ).bind(session.customer_id).first<{ id: number }>()
+  if (existing) {
+    return c.json({ success: true, already_pending: true, message: 'Your deletion request is already in the queue. Support will reach out shortly.' })
+  }
+
+  const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || null
+  const ua = c.req.header('user-agent') || null
+  const reason = String(body.reason || '').slice(0, 1000) || null
+
+  const result = await c.env.DB.prepare(
+    `INSERT INTO account_deletion_requests (customer_id, email, email_confirmation, reason, ip_address, user_agent)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).bind(session.customer_id, session.email, confirmation, reason, ip, ua).run().catch((err: any) => {
+    console.error('[account-deletion] insert failed:', err?.message || err)
+    return null
+  })
+  if (!result) return c.json({ error: 'Could not record deletion request — please email support@roofmanager.ca' }, 500)
+
+  // Notify admin (best-effort — don't fail the request if email send fails)
+  try {
+    const creds = await loadGmailCreds(c.env as any)
+    if (creds.clientId && creds.clientSecret && creds.refreshToken) {
+      const adminEmail = (c.env as any).SCAN_ADMIN_EMAIL || 'support@roofmanager.ca'
+      const html = `<div style="font-family:-apple-system,sans-serif;max-width:560px;margin:0 auto;padding:32px 20px">
+  <h2 style="margin:0 0 16px;color:#0f172a;font-size:20px">Account deletion request</h2>
+  <p style="color:#475569;font-size:14px;line-height:1.6">A logged-in customer has requested permanent account deletion via /customer/profile. Review and process within the SLA.</p>
+  <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px">
+    <tr><td style="padding:6px 8px;color:#64748b;width:120px">Customer ID</td><td style="padding:6px 8px;font-family:monospace">${session.customer_id}</td></tr>
+    <tr><td style="padding:6px 8px;color:#64748b">Email</td><td style="padding:6px 8px">${session.email}</td></tr>
+    <tr><td style="padding:6px 8px;color:#64748b">Name</td><td style="padding:6px 8px">${session.name || '—'}</td></tr>
+    <tr><td style="padding:6px 8px;color:#64748b">Reason</td><td style="padding:6px 8px">${reason || '<em>not provided</em>'}</td></tr>
+    <tr><td style="padding:6px 8px;color:#64748b">IP</td><td style="padding:6px 8px;font-family:monospace">${ip || '—'}</td></tr>
+    <tr><td style="padding:6px 8px;color:#64748b">Request ID</td><td style="padding:6px 8px;font-family:monospace">${result.meta?.last_row_id || '—'}</td></tr>
+  </table>
+  <p style="color:#64748b;font-size:12px">Process at <a href="https://www.roofmanager.ca/super-admin">/super-admin</a> (queue review pending — see account_deletion_requests table for now).</p>
+</div>`
+      await sendGmailOAuth2(creds.clientId, creds.clientSecret, creds.refreshToken, adminEmail, `[ACTION] Account deletion request — ${session.email}`, html, creds.senderEmail || undefined)
+    }
+  } catch (emailErr: any) {
+    console.warn('[account-deletion] admin notify failed:', emailErr?.message || emailErr)
+  }
+
+  return c.json({ success: true, message: 'Deletion request submitted. Support will contact you within 24 hours to confirm and process.' })
 })
 
 // ============================================================

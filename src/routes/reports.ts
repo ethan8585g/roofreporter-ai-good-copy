@@ -40,7 +40,7 @@ import { enrichReportWithFlashing } from '../services/flashing-enrichment'
 import { enrichReportWithGutters } from '../services/gutter-enrichment'
 import { segmentWithGemini, geminiOutlineToTracePayload } from '../services/sam3-segmentation'
 import { generateReportImagery, buildAIImageryHTML } from '../services/ai-image-generation'
-import { buildEmailWrapper, buildReportLinkEmail, sendGmailEmail, sendViaResend, sendGmailOAuth2 } from '../services/email'
+import { buildEmailWrapper, buildReportLinkEmail, sendGmailEmail, sendViaResend, sendGmailOAuth2, loadGmailCreds } from '../services/email'
 import { signPdfUrl } from '../services/pdf-signing'
 import { debitCredit, refundCredit } from '../services/api-billing'
 import { deliverWebhook, buildWebhookPayload } from '../services/api-webhook'
@@ -2335,20 +2335,26 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
   }
 
   // Send email with base report (no enhancement or enhancement failed)
+  // Uses loadGmailCreds() so missing GMAIL_REFRESH_TOKEN env var falls back to
+  // the gmail_refresh_token row in D1 settings (per memory: prod stores refresh
+  // token in D1, env may be partial). Without this, customers with auto-email
+  // enabled silently never received their report.
   if (email_report || autoEmailEnabled || order.send_report_to_email) {
     const recipient = to_email || order.send_report_to_email || (autoEmailEnabled ? autoEmailRecipient : '') || order.homeowner_email || order.requester_email
     if (recipient) {
       try {
         const emailHtml = buildReportLinkEmail(new URL(c.req.url).origin, orderId, order.property_address, `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`, recipient)
-        const rt = (c.env as any).GMAIL_REFRESH_TOKEN, ci = (c.env as any).GMAIL_CLIENT_ID, cs = (c.env as any).GMAIL_CLIENT_SECRET
-        if (rt && ci && cs) {
-          await sendGmailOAuth2(ci, cs, rt, recipient, `Roof Report - ${order.property_address}`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
+        const creds = await loadGmailCreds(c.env as any)
+        if (creds.refreshToken && creds.clientId && creds.clientSecret) {
+          await sendGmailOAuth2(creds.clientId, creds.clientSecret, creds.refreshToken, recipient, `Roof Report - ${order.property_address}`, emailHtml, creds.senderEmail || (c.env as any).GMAIL_SENDER_EMAIL)
           try {
-            await sendGmailOAuth2(ci, cs, rt, 'sales@roofmanager.ca', `[Self-Trace Copy] Roof Report - ${order.property_address} (sent to ${recipient})`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
+            await sendGmailOAuth2(creds.clientId, creds.clientSecret, creds.refreshToken, 'sales@roofmanager.ca', `[Self-Trace Copy] Roof Report - ${order.property_address} (sent to ${recipient})`, emailHtml, creds.senderEmail || (c.env as any).GMAIL_SENDER_EMAIL)
           } catch (salesErr: any) { console.warn(`[SalesCopy] Failed for order ${orderId}: ${salesErr.message}`) }
+        } else {
+          console.warn(`[AutoEmail] Order ${orderId}: Gmail creds incomplete — recipient=${recipient}, sources=${JSON.stringify(creds.source)}`)
         }
         if (autoEmailEnabled) console.log(`[AutoEmail] Report ${orderId} auto-sent to ${recipient}`)
-      } catch {}
+      } catch (emailErr: any) { console.warn(`[AutoEmail] Order ${orderId} send error: ${emailErr?.message || emailErr}`) }
     }
   }
 

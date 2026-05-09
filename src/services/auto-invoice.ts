@@ -1,6 +1,6 @@
 import type { Bindings } from '../types'
 import { logAutoInvoiceStep } from './auto-invoice-audit'
-import { sendGmailOAuth2 } from './email'
+import { sendGmailOAuth2, loadGmailCreds } from './email'
 
 function escHtml(s: string): string {
   return String(s || '').replace(/[&<>"']/g, (c) =>
@@ -242,10 +242,15 @@ export async function createAutoInvoiceForOrder(
     // remains in 'draft' and the roofer can retry from the dashboard.
     let emailSent = false
     let emailError = ''
-    const clientId = (env as any).GMAIL_CLIENT_ID
-    const clientSecret = (env as any).GMAIL_CLIENT_SECRET
-    const platformRefresh = (env as any).GMAIL_REFRESH_TOKEN
-    const platformSender = (env as any).GMAIL_SENDER_EMAIL
+    // Use loadGmailCreds() so the platform fallback also reads the D1
+    // gmail_refresh_token setting when GMAIL_REFRESH_TOKEN env var is absent.
+    // Without the D1 fallback, auto-proposals to homeowners silently failed
+    // when only the env client_id/client_secret were configured.
+    const platformCreds = await loadGmailCreds(env as any)
+    const clientId = platformCreds.clientId || (env as any).GMAIL_CLIENT_ID
+    const clientSecret = platformCreds.clientSecret || (env as any).GMAIL_CLIENT_SECRET
+    const platformRefresh = platformCreds.refreshToken || ''
+    const platformSender = platformCreds.senderEmail || (env as any).GMAIL_SENDER_EMAIL
 
     // Per-customer Gmail (populated when the roofer connected their account
     // via Settings → Gmail integration).

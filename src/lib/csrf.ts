@@ -60,3 +60,27 @@ export const csrfMiddleware: MiddlewareHandler = async (c, next) => {
 export function csrfCookieAttrs(token: string, maxAgeSeconds: number): string {
   return `${CSRF_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax; Secure`
 }
+
+// Make a CSRF middleware gated on the presence of a specific session-cookie name.
+// Use case: customerAuthRoutes mounts pre-auth endpoints (login/register/etc) on
+// the same router as authenticated state-change endpoints. Pre-auth requests
+// have no session cookie → no CSRF attack surface → bypass. Authenticated
+// requests carrying the session cookie are enforced.
+export function makeCsrfMiddleware(sessionCookieName: string): MiddlewareHandler {
+  return async (c, next) => {
+    if (SAFE_METHODS.has(c.req.method)) return next()
+    // Bearer-token API clients bypass CSRF (no cookie → no CSRF attack surface).
+    const auth = c.req.header('authorization') || ''
+    if (auth.startsWith('Bearer ')) return next()
+    // No session cookie present = pre-auth request (login, register, etc.) — bypass.
+    const cookieHeader = c.req.header('cookie') || ''
+    if (!cookieHeader.includes(`${sessionCookieName}=`)) return next()
+
+    const cookieTok = readCookie(c, CSRF_COOKIE)
+    const headerTok = c.req.header(CSRF_HEADER) || ''
+    if (!cookieTok || !headerTok || !eq(cookieTok, headerTok)) {
+      return c.json({ error: 'CSRF token missing or invalid' }, 403)
+    }
+    return next()
+  }
+}

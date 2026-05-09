@@ -18,6 +18,7 @@ import { emailHealthRoutes } from './routes/email-health'
 import { reportsMonitorRoutes } from './routes/reports-monitor'
 import { signupHealthRoutes } from './routes/signup-health'
 import { signupJourneyRoutes } from './routes/signup-journey'
+import { adsHealthRoutes } from './routes/ads-health'
 import { marketingBlastRoutes } from './routes/marketing-blast'
 import { aiAnalysisRoutes } from './routes/ai-analysis'
 import { authRoutes } from './routes/auth'
@@ -489,7 +490,13 @@ window.fireMetaContactEvent=function(d){if(typeof fbq==='function')fbq('track','
       // Inject translate widget right after opening <body> tag
       let bodyWithWidget = body.replace(/<body([^>]*)>/, `<body$1>\n${translateWidget}`)
 
-      const injected = bodyWithWidget.replace('</body>', `${ga4Script}${googleAdsScript}${metaPixelScript}${claritySnippet}${AB_SCRIPT}
+      // CSRF auto-attach: every cookie-only state-change fetch echoes the
+      // rm_csrf cookie value as the X-RM-CSRF header. Bearer-token requests are
+      // unaffected. Inlined and runs synchronously so it patches fetch BEFORE
+      // any application script can fire a request.
+      const csrfAutoAttach = `<script>(function(){try{var c=document.cookie||'';var v='';var pre='rm_csrf=';for(var part of c.split(/;\\s*/)){if(part.indexOf(pre)===0){v=decodeURIComponent(part.substring(pre.length));break;}}var of=window.fetch;window.fetch=function(input,init){init=init||{};var m=(init.method||'GET').toUpperCase();if(m!=='GET'&&m!=='HEAD'&&m!=='OPTIONS'){var url=typeof input==='string'?input:(input&&input.url)||'';if(v&&(url.charAt(0)==='/'||url.indexOf(location.origin)===0)){if(!init.headers)init.headers={};if(init.headers instanceof Headers){if(!init.headers.has('x-rm-csrf'))init.headers.set('x-rm-csrf',v);}else if(Array.isArray(init.headers)){var has=false;for(var h of init.headers){if(h[0]&&h[0].toLowerCase()==='x-rm-csrf'){has=true;break;}}if(!has)init.headers.push(['x-rm-csrf',v]);}else{if(!init.headers['x-rm-csrf']&&!init.headers['X-RM-CSRF'])init.headers['x-rm-csrf']=v;}}}return of.call(this,input,init);};}catch(e){}})();</script>`
+
+      const injected = bodyWithWidget.replace('</body>', `${csrfAutoAttach}${ga4Script}${googleAdsScript}${metaPixelScript}${claritySnippet}${AB_SCRIPT}
 <script src="/static/toast.js"></script>
 <script src="/static/tracker.js" defer></script>
 <script src="/static/exit-intent.js" defer></script>
@@ -606,6 +613,7 @@ app.route('/api/email-health', emailHealthRoutes)
 app.route('/api/reports-monitor', reportsMonitorRoutes)
 app.route('/api/signup-health', signupHealthRoutes)
 app.route('/api/signup-journey', signupJourneyRoutes)
+app.route('/api/ads-health', adsHealthRoutes)
 app.route('/api/marketing', marketingBlastRoutes)
 app.route('/api/ai', aiAnalysisRoutes)
 app.route('/api/auth', authRoutes)

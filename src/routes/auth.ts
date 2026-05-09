@@ -396,10 +396,25 @@ authRoutes.post('/forgot-password', async (c) => {
           } catch (e: any) { console.error('[AdminPasswordReset] Resend error:', e?.message || e) }
         }
         if (!sent) {
-          // Fallback: Gmail OAuth2
-          const gmailRefreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ''
+          // Fallback: Gmail OAuth2 with D1 fallback for refresh token + client
+          // secret (per memory: prod stores refresh_token in D1, env may have
+          // only client_id/secret). Without this, admin password-reset emails
+          // silently failed when env was partial.
+          let gmailRefreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ''
           const gmailClientId = (c.env as any).GMAIL_CLIENT_ID || ''
-          const gmailClientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
+          let gmailClientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
+          if (c.env.DB && !gmailRefreshToken) {
+            try {
+              const r = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
+              if (r?.setting_value) gmailRefreshToken = r.setting_value
+            } catch {}
+          }
+          if (c.env.DB && !gmailClientSecret) {
+            try {
+              const r = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
+              if (r?.setting_value) gmailClientSecret = r.setting_value
+            } catch {}
+          }
           if (gmailRefreshToken && gmailClientId && gmailClientSecret) {
             try {
               const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
