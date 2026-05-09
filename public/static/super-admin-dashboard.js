@@ -4919,7 +4919,7 @@ window.saTestGA4Event = function() {
   }).then(async r => {
     if (!r) return;
     const d = await r.json();
-    window.rmToast(d.success ? 'Test event sent successfully to GA4!' : 'Event send failed: ' + JSON.stringify(d, 'info'));
+    window.rmToast(d.success ? 'Test event sent successfully to GA4!' : 'Event send failed: ' + JSON.stringify(d), 'info');
   });
 };
 
@@ -5622,7 +5622,7 @@ window.saTestGA4Event = async function() {
       })
     });
     const d = await res.json();
-    window.rmToast(d.success ? 'Test event sent successfully to GA4!' : 'Event send failed: ' + JSON.stringify(d, 'info'));
+    window.rmToast(d.success ? 'Test event sent successfully to GA4!' : 'Event send failed: ' + JSON.stringify(d), 'info');
   } catch(e) {
     window.rmToast('Error: ' + e.message, 'error');
   }
@@ -10972,7 +10972,7 @@ async function smSetupLiveKit(customerId) {
     } else if (data.already_configured) {
       window.rmToast('Already configured!\n\nTrunk: ' + data.trunk_id + '\nDispatch: ' + data.dispatch_rule_id, 'info');
     } else {
-      window.rmToast('Error: ' + (data.error || 'Failed', 'error'));
+      window.rmToast('Error: ' + (data.error || 'Failed'), 'error');
     }
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
@@ -11406,7 +11406,7 @@ window.geminiAutoGenerateConfig = async function() {
     });
     var data = await res.json();
     if (!data.success || !data.config) {
-      window.rmToast('AI generation failed: ' + (data.error || 'No config returned', 'error'));
+      window.rmToast('AI generation failed: ' + (data.error || 'No config returned'), 'error');
       btn.disabled = false; btn.innerHTML = origHtml;
       return;
     }

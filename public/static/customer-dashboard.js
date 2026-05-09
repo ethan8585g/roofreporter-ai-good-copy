@@ -694,10 +694,15 @@ window.retryReport = function(orderId, btn) {
         setTimeout(function() { loadDashData().then(function() { renderDashboard(); startEnhancementPolling(); }); }, 2000);
       } else {
         console.warn('Retry failed:', data.error || data.message || 'Unknown error');
+        if (window.rmToast) window.rmToast('Retry failed: ' + (data.error || data.message || 'Unknown error'), 'error');
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo mr-1"></i>Retry'; }
       }
     })
-    .catch(function() { console.warn('Retry failed'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo mr-1"></i>Retry'; } });
+    .catch(function() {
+      console.warn('Retry failed');
+      if (window.rmToast) window.rmToast('Retry failed (network error)', 'error');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo mr-1"></i>Retry'; }
+    });
 };
 
 // ============================================================

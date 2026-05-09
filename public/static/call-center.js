@@ -810,7 +810,7 @@
         window.rmToast('Imported ' + prospects.length + ' prospects from Email Outreach list!', 'info');
         ccLoadTab('outreach');
       } else {
-        window.rmToast('Import failed: ' + (importRes?.error || 'Unknown error', 'error'));
+        window.rmToast('Import failed: ' + (importRes?.error || 'Unknown error'), 'error');
       }
     } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
   };

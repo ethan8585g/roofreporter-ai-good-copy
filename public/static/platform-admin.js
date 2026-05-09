@@ -896,7 +896,7 @@ async function paCCStartAgent(agentId) {
     var res = await saFetch('/api/call-center/agents/' + agentId + '/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
     var data = await res.json();
     if (data.success) paLoadCCAgents();
-    else window.rmToast('Error: ' + (data.error || 'Could not start agent', 'error'));
+    else window.rmToast('Error: ' + (data.error || 'Could not start agent'), 'error');
   } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
@@ -905,7 +905,7 @@ async function paCCStopAgent(agentId) {
     var res = await saFetch('/api/call-center/agents/' + agentId + '/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
     var data = await res.json();
     if (data.success) paLoadCCAgents();
-    else window.rmToast('Error: ' + (data.error || 'Could not stop agent', 'error'));
+    else window.rmToast('Error: ' + (data.error || 'Could not stop agent'), 'error');
   } catch(e) { window.rmToast(e.message, 'info'); }
 }
 

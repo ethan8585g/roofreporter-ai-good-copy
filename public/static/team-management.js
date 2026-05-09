@@ -462,40 +462,62 @@ async function sendInvite(e) {
 }
 
 // ── Actions ──
+async function _teamMutate(url, opts, errMsg) {
+  try {
+    const r = await fetch(url, opts);
+    if (!r.ok) {
+      let detail = '';
+      try { const d = await r.json(); detail = d?.error ? ': ' + d.error : ''; } catch {}
+      if (window.rmToast) window.rmToast(errMsg + detail, 'error');
+      return false;
+    }
+    await loadTeamData(); renderTeam();
+    return true;
+  } catch(e) {
+    if (window.rmToast) window.rmToast(errMsg + ' (network error)', 'error');
+    return false;
+  }
+}
+
 async function toggleRole(memberId, newRole) {
   if (!(await window.rmConfirm('Change role to ' + newRole + '?'))) return
-  await fetch('/api/team/members/' + memberId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ role: newRole }) });
-  await loadTeamData(); renderTeam();
+  await _teamMutate('/api/team/members/' + memberId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ role: newRole }) }, 'Failed to change role');
 }
 
 async function suspendMember(memberId) {
   if (!(await window.rmConfirm('Suspend this team member? Their access and billing will be paused.'))) return
-  await fetch('/api/team/members/' + memberId + '/suspend', { method: 'POST', headers: authHeaders() });
-  await loadTeamData(); renderTeam();
+  await _teamMutate('/api/team/members/' + memberId + '/suspend', { method: 'POST', headers: authHeaders() }, 'Failed to suspend member');
 }
 
 async function reactivateMember(memberId) {
   if (!(await window.rmConfirm('Reactivate this member? They will regain access to the team account.'))) return
-  await fetch('/api/team/members/' + memberId + '/reactivate', { method: 'POST', headers: authHeaders() });
-  await loadTeamData(); renderTeam();
+  await _teamMutate('/api/team/members/' + memberId + '/reactivate', { method: 'POST', headers: authHeaders() }, 'Failed to reactivate member');
 }
 
 async function removeMember(memberId, name) {
   if (!(await window.rmConfirm('Remove ' + name + ' from your team? This will revoke their access immediately.'))) return
-  await fetch('/api/team/members/' + memberId, { method: 'DELETE', headers: authHeaders() });
-  await loadTeamData(); renderTeam();
+  await _teamMutate('/api/team/members/' + memberId, { method: 'DELETE', headers: authHeaders() }, 'Failed to remove member');
 }
 
 async function cancelInvite(inviteId) {
   if (!(await window.rmConfirm('Cancel this invitation?'))) return
-  await fetch('/api/team/invite/' + inviteId, { method: 'DELETE', headers: authHeaders() });
-  await loadTeamData(); renderTeam();
+  await _teamMutate('/api/team/invite/' + inviteId, { method: 'DELETE', headers: authHeaders() }, 'Failed to cancel invite');
 }
 
 async function leaveTeam() {
   if (!(await window.rmConfirm('Are you sure you want to leave this team? You will lose access to the team account.'))) return
-  await fetch('/api/team/leave', { method: 'POST', headers: authHeaders() });
-  window.location.href = '/customer/dashboard';
+  try {
+    const r = await fetch('/api/team/leave', { method: 'POST', headers: authHeaders() });
+    if (!r.ok) {
+      let detail = '';
+      try { const d = await r.json(); detail = d?.error ? ': ' + d.error : ''; } catch {}
+      if (window.rmToast) window.rmToast('Failed to leave team' + detail, 'error');
+      return;
+    }
+    window.location.href = '/customer/dashboard';
+  } catch(e) {
+    if (window.rmToast) window.rmToast('Failed to leave team (network error)', 'error');
+  }
 }
 
 // ── Action menu (••• per-row dropdown) ──

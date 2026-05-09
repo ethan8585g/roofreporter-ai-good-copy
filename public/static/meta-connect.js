@@ -552,7 +552,7 @@
       mcF('/api/meta/sync-groups', { method: 'POST', body: '{}' }),
       mcF('/api/meta/sync-pages', { method: 'POST', body: '{}' })
     ]);
-    window.rmToast('Synced ' + (g?.synced||0, 'info') + ' groups and ' + (p?.synced||0) + ' pages');
+    window.rmToast('Synced ' + (g?.synced||0) + ' groups and ' + (p?.synced||0) + ' pages', 'info');
     mcLoadTab(MC.tab);
   };
 
@@ -639,7 +639,7 @@
   window.mcPublishAd = async function(id) {
     if (!(await window.rmConfirm('Publish this campaign to Meta Ads?'))) return
     const data = await mcF('/api/meta/ads/' + id + '/publish', { method: 'POST', body: '{}' });
-    window.rmToast(data?.success ? data.message : (data?.error || 'Failed', 'info'));
+    window.rmToast(data?.success ? data.message : (data?.error || 'Failed'), 'info');
     mcLoadTab('ads');
   };
   window.mcSyncAd = async function(id) {
