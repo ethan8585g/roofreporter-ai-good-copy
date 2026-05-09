@@ -3490,7 +3490,7 @@ function saRenderSectionPitches() {
   });
 }
 
-window.saSubmitTrace = async function(orderId) {
+window.saSubmitTrace = async function(orderId, force) {
   var s = window._saTraceState;
   if (!s) return;
   // Auto-close any pending eave draft (handles the "user added a 2nd structure
@@ -3585,7 +3585,7 @@ window.saSubmitTrace = async function(orderId) {
     var res = await fetch('/api/admin/superadmin/orders/' + orderId + '/submit-trace', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roof_trace_json: traceJson })
+      body: JSON.stringify({ roof_trace_json: traceJson, force: !!force })
     });
     var data = await res.json();
     if (data.success) {
@@ -3624,7 +3624,13 @@ window.saSubmitTrace = async function(orderId) {
       alert('✅ Report generated and delivered to customer!');
       loadView('orders');
     } else {
-      alert('Error: ' + (data.error || 'Failed to generate report'));
+      var errs = Array.isArray(data.validation_errors) ? data.validation_errors : [];
+      var warns = Array.isArray(data.validation_warnings) ? data.validation_warnings : [];
+      if ((errs.length || warns.length) && !force) {
+        saShowValidationOverride(orderId, errs, warns);
+      } else {
+        alert('Error: ' + (data.error || 'Failed to generate report'));
+      }
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1.5"></i>Submit Report to Customer'; }
     }
   } catch(e) {
@@ -3632,6 +3638,36 @@ window.saSubmitTrace = async function(orderId) {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1.5"></i>Submit Report to Customer'; }
   }
 };
+
+// Validation-failure dialog: lists the actual issues and offers a one-click
+// override that re-submits with force=true. Without this, admins only see
+// the server's generic "Re-submit with force=true" hint with no way to act
+// on it from the UI.
+function saShowValidationOverride(orderId, errors, warnings) {
+  document.getElementById('sa-trace-validation-modal')?.remove();
+  var esc = function(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); };
+  var renderIssue = function(issue, color) {
+    var at = issue && issue.at ? ' <span style="opacity:0.6;font-family:ui-monospace,monospace;font-size:11px">@ ' + esc(issue.at) + '</span>' : '';
+    var code = issue && issue.code ? '<span style="opacity:0.5;font-family:ui-monospace,monospace;font-size:11px;margin-right:6px">' + esc(issue.code) + '</span>' : '';
+    return '<li style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);color:' + color + '">' + code + esc(issue && issue.message || String(issue)) + at + '</li>';
+  };
+  var errList = errors.length ? '<div style="margin-top:14px"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#f87171;margin-bottom:6px">Errors (' + errors.length + ')</div><ul style="list-style:none;padding:0;margin:0;font-size:13px;line-height:1.45">' + errors.map(function(e){return renderIssue(e,'#fca5a5');}).join('') + '</ul></div>' : '';
+  var warnList = warnings.length ? '<div style="margin-top:14px"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#fbbf24;margin-bottom:6px">Warnings (' + warnings.length + ')</div><ul style="list-style:none;padding:0;margin:0;font-size:13px;line-height:1.45">' + warnings.map(function(w){return renderIssue(w,'#fde68a');}).join('') + '</ul></div>' : '';
+  var canOverride = errors.length > 0 || warnings.length > 0;
+  var html =
+    '<div id="sa-trace-validation-modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px">' +
+      '<div style="background:#1a1a1a;border:1px solid rgba(255,255,255,0.1);border-radius:14px;max-width:640px;width:100%;max-height:80vh;overflow:auto;padding:24px;color:#e5e7eb">' +
+        '<div style="font-size:18px;font-weight:700;margin-bottom:6px">Trace validation failed</div>' +
+        '<div style="font-size:13px;opacity:0.75;margin-bottom:4px">The trace has issues that block automatic submission. Review them below — if you’ve verified the trace is correct (e.g. unusual roof shape that triggers a false positive), you can override and submit anyway.</div>' +
+        errList + warnList +
+        '<div style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end">' +
+          '<button onclick="document.getElementById(\'sa-trace-validation-modal\').remove()" style="padding:9px 18px;background:#374151;color:#e5e7eb;font-size:13px;font-weight:600;border:none;border-radius:8px;cursor:pointer">Cancel</button>' +
+          (canOverride ? '<button onclick="document.getElementById(\'sa-trace-validation-modal\').remove(); window.saSubmitTrace(' + orderId + ', true)" style="padding:9px 18px;background:#dc2626;color:#fff;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer"><i class="fas fa-exclamation-triangle mr-1.5"></i>Override and submit anyway</button>' : '') +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
 
 function renderOrdersView() {
   const d = SA.data.orders || {};
