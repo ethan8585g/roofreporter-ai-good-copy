@@ -7,6 +7,7 @@ import { resolveTeamOwner } from './team'
 import { loadPermissionContext, can, redactFinancials, type PermissionContext } from '../lib/permissions'
 import { getCustomerSessionToken } from '../lib/session-tokens'
 import { getMerchantSquareCreds } from '../services/square-token'
+import { verifySquareSignature } from '../routes/square'
 
 export const invoiceRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -77,10 +78,12 @@ function escapeHtml(str: string): string {
 }
 
 function generateShareToken(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-  let token = ''
-  for (let i = 0; i < 32; i++) token += chars[Math.floor(Math.random() * chars.length)]
-  return token
+  // Use crypto.getRandomValues — Math.random is not a CSPRNG and tokens grant
+  // unauthenticated access to invoices/proposals. 32 base36 chars from 24 bytes
+  // of entropy ≈ 192 bits, well above brute-force range.
+  const buf = new Uint8Array(24)
+  crypto.getRandomValues(buf)
+  return Array.from(buf, b => b.toString(36).padStart(2, '0')).join('').slice(0, 32)
 }
 
 // Email format validation
@@ -919,10 +922,31 @@ invoiceRoutes.post('/:id/payment-link', async (c) => {
 
 // ============================================================
 // SQUARE WEBHOOK — Payment completed callback
+// Verifies HMAC-SHA256 signature against SQUARE_WEBHOOK_SIGNATURE_KEY before
+// processing. Without this check anyone could POST a forged payment.completed
+// payload and flip any invoice (by guessing square_order_id) to status='paid'.
 // ============================================================
 invoiceRoutes.post('/webhook/square', async (c) => {
   try {
     const body = await c.req.text()
+
+    // ── Signature verification (matches src/routes/square.ts handler) ──
+    // Without this, anyone could POST a forged payment.completed payload and
+    // flip any invoice (by guessing square_order_id) to status='paid'.
+    const sigKey = (c.env as any).SQUARE_WEBHOOK_SIGNATURE_KEY as string | undefined
+    const webhookUrl = (c.env as any).SQUARE_WEBHOOK_URL as string | undefined
+    if (!sigKey || !webhookUrl) {
+      console.error('[invoices/webhook/square] SQUARE_WEBHOOK_SIGNATURE_KEY or SQUARE_WEBHOOK_URL not configured — rejecting webhook')
+      return c.json({ error: 'webhook verification not configured' }, 500)
+    }
+    const sig = c.req.header('x-square-hmacsha256-signature') || ''
+    if (!sig) return c.json({ error: 'missing signature' }, 400)
+    const valid = await verifySquareSignature(body, sig, sigKey, webhookUrl)
+    if (!valid) {
+      console.warn('[invoices/webhook/square] invalid signature')
+      return c.json({ error: 'invalid signature' }, 400)
+    }
+
     const payload = JSON.parse(body)
     const eventType = payload.type || ''
 
@@ -1148,17 +1172,19 @@ invoiceRoutes.post('/:id/send-gmail', async (c) => {
     const origin = new URL(c.req.url).origin
     const viewUrl = `${origin}/proposal/view/${shareToken}`
 
-    // Get or create Square payment link
+    // Get or create Square payment link — MUST use the invoice owner's
+    // per-merchant Square credentials, not the platform admin token. Sending
+    // homeowner payments to the platform's Square account routes funds to the
+    // wrong place (matches the pattern at line ~860 above).
     let paymentUrl = invoice.square_payment_link_url || ''
-    if (!paymentUrl) {
-      const accessToken = (c.env as any).SQUARE_ACCESS_TOKEN
-      const locationId = (c.env as any).SQUARE_LOCATION_ID
-      if (accessToken && locationId && invoice.total > 0) {
+    if (!paymentUrl && invoice.customer_id && invoice.total > 0) {
+      const creds = await getMerchantSquareCreds(c.env as any, invoice.customer_id)
+      if (!('error' in creds)) {
         try {
           const sqResp = await fetch('https://connect.squareup.com/v2/online-checkout/payment-links', {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'Square-Version': '2025-01-23' },
-            body: JSON.stringify({ idempotency_key: `inv-email-${id}-${Date.now()}`, quick_pay: { name: `Invoice ${invoice.invoice_number}`, price_money: { amount: Math.round(invoice.total * 100), currency: invoice.currency || 'CAD' }, location_id: locationId } })
+            headers: { 'Authorization': `Bearer ${creds.accessToken}`, 'Content-Type': 'application/json', 'Square-Version': '2025-01-23' },
+            body: JSON.stringify({ idempotency_key: `inv-email-${id}-${Date.now()}`, quick_pay: { name: `Invoice ${invoice.invoice_number}`, price_money: { amount: Math.round(invoice.total * 100), currency: invoice.currency || 'CAD' }, location_id: creds.locationId } })
           })
           const sqData: any = await sqResp.json()
           if (sqData.payment_link?.url) {
@@ -1168,6 +1194,8 @@ invoiceRoutes.post('/:id/send-gmail', async (c) => {
         } catch (sqErr: any) {
           console.warn('[Square] send-gmail payment link failed:', sqErr.message)
         }
+      } else {
+        console.warn('[Square] send-gmail: no merchant credentials for customer', invoice.customer_id, '-', (creds as any).error)
       }
     }
 
@@ -1196,7 +1224,7 @@ invoiceRoutes.post('/:id/send-gmail', async (c) => {
     <div style="background:#f8fafc;border-radius:12px;padding:16px;margin:16px 0">
       <div style="display:flex;justify-content:space-between;font-size:13px;color:#64748b;margin-bottom:4px"><span>Subtotal</span><span>$${Number(invoice.subtotal || 0).toFixed(2)}</span></div>
       ${invoice.tax_amount ? `<div style="display:flex;justify-content:space-between;font-size:13px;color:#64748b;margin-bottom:4px"><span>Tax</span><span>$${Number(invoice.tax_amount).toFixed(2)}</span></div>` : ''}
-      <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:800;color:#0f172a;border-top:2px solid #e2e8f0;padding-top:8px;margin-top:8px"><span>Total</span><span>$${Number(invoice.total || 0).toFixed(2)} USD</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:800;color:#0f172a;border-top:2px solid #e2e8f0;padding-top:8px;margin-top:8px"><span>Total</span><span>$${Number(invoice.total || 0).toFixed(2)} ${invoice.currency || 'CAD'}</span></div>
     </div>
     ${paymentUrl ? `<div style="text-align:center;margin:24px 0"><a href="${paymentUrl}" style="display:inline-block;background:#16a34a;color:white;padding:14px 32px;border-radius:12px;text-decoration:none;font-size:16px;font-weight:700">Pay Now — $${Number(invoice.total || 0).toFixed(2)}</a><p style="color:#94a3b8;font-size:11px;margin:8px 0 0">Secure payment powered by Square</p></div>` : ''}
     <div style="text-align:center;margin:16px 0"><a href="${viewUrl}" style="color:#0ea5e9;font-size:13px;text-decoration:underline">View ${docLabel} Online</a></div>

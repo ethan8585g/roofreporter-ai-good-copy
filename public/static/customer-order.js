@@ -1535,10 +1535,10 @@ function snapRightAngle(prev, anchor, cand) {
   return metersToLL(newX, newY, anchor.lat, anchor.lng);
 }
 
-// 2D segment-segment intersection test (proper crossing only — touching at a
-// shared endpoint does not count). Mirrors the server-side check in
-// src/utils/trace-validation.ts.
-function _segmentsCross(p1, p2, p3, p4) {
+// 2D segment-segment intersection test on x/y points (proper crossing only —
+// touching at a shared endpoint does not count). Mirrors the server-side check
+// in src/utils/trace-validation.ts.
+function _segmentsCrossXY(p1, p2, p3, p4) {
   const ccw = (A, B, C) => (C.y - A.y) * (B.x - A.x) - (B.y - A.y) * (C.x - A.x);
   const a = ccw(p1, p2, p3);
   const b = ccw(p1, p2, p4);
@@ -1558,7 +1558,7 @@ function wouldSelfIntersect(pts, cand) {
   // Check the new edge (last → cand) against every prior non-adjacent edge.
   const last = xy[xy.length - 1];
   for (let i = 0; i < xy.length - 2; i++) {
-    if (_segmentsCross(xy[i], xy[i + 1], last, candXY)) return true;
+    if (_segmentsCrossXY(xy[i], xy[i + 1], last, candXY)) return true;
   }
   return false;
 }
@@ -4223,8 +4223,13 @@ async function payWithSquare() {
 }
 
 async function buyPackage(pkgId) {
+  // Disable any matching button to prevent double-submit creating duplicate
+  // Square Payment Links. Idempotency key sent so the server can dedupe retries.
+  const btn = document.querySelector('[data-pkg-id="' + pkgId + '"]') || document.activeElement;
+  const oldHtml = btn && btn.tagName === 'BUTTON' ? btn.innerHTML : null;
+  if (btn && btn.tagName === 'BUTTON') { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Loading…'; }
   try {
-    const payload = { package_id: pkgId };
+    const payload = { package_id: pkgId, idempotency_key: (window.crypto && crypto.randomUUID ? crypto.randomUUID() : ('pkg-' + pkgId + '-' + Date.now() + '-' + Math.random().toString(36).slice(2))) };
     const promo = (document.getElementById('promoCodeInput') || {}).value;
     if (promo && promo.trim()) payload.promo_code = promo.trim();
     const res = await fetch('/api/square/checkout', {
@@ -4232,11 +4237,14 @@ async function buyPackage(pkgId) {
       headers: authHeaders(),
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
+    const data = await res.json().catch(function(){ return {}; });
+    if (!res.ok) { showMsg('error', data.error || 'Checkout failed. Please try again.'); return; }
     if (data.checkout_url) window.location.href = data.checkout_url;
     else showMsg('error', data.error || 'Checkout failed. Please try again.');
   } catch (e) {
     showMsg('error', 'Network error. Please check your connection and try again.');
+  } finally {
+    if (btn && btn.tagName === 'BUTTON' && oldHtml != null) { btn.disabled = false; btn.innerHTML = oldHtml; }
   }
 }
 
@@ -4257,7 +4265,12 @@ async function validatePromoCode() {
       headers: authHeaders(),
       body: JSON.stringify({ code, original_cents: 700 })
     });
-    const data = await res.json();
+    const data = await res.json().catch(function(){ return {}; });
+    if (!res.ok) {
+      status.innerHTML = '<i class="fas fa-times-circle mr-1"></i>' + (data.error || 'Invalid code');
+      status.style.color = '#dc2626';
+      return;
+    }
     if (data.valid) {
       status.innerHTML = '<i class="fas fa-check-circle mr-1"></i>' + (data.message || 'Code applied');
       status.style.color = '#15803d';
@@ -4276,6 +4289,7 @@ window.validatePromoCode = validatePromoCode;
 // CRM CUSTOMER ATTACHMENT (optional)
 // ============================================================
 let _crmSearchTimer = null;
+let _crmSearchCtrl = null;
 function searchCrmCustomers(q) {
   const resultsEl = document.getElementById('crmCustomerResults');
   if (!resultsEl) return;
@@ -4287,8 +4301,12 @@ function searchCrmCustomers(q) {
   }
   clearTimeout(_crmSearchTimer);
   _crmSearchTimer = setTimeout(async () => {
+    // Abort any in-flight earlier search so a slow response can't overwrite newer results.
+    if (_crmSearchCtrl) { try { _crmSearchCtrl.abort(); } catch (_) {} }
+    _crmSearchCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     try {
-      const res = await fetch('/api/crm/customers?search=' + encodeURIComponent(query), { headers: authHeaders() });
+      const res = await fetch('/api/crm/customers?search=' + encodeURIComponent(query), { headers: authHeaders(), signal: _crmSearchCtrl ? _crmSearchCtrl.signal : undefined });
+      if (!res.ok) throw new Error('search failed');
       const data = await res.json();
       const list = (data.customers || []).slice(0, 8);
       if (!list.length) {

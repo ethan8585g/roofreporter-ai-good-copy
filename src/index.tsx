@@ -311,15 +311,15 @@ gtag('config', 'AW-18080319225');
 gtag('config', 'AW-17810045368');
 // Conversion labels — real labels look like '26MMCMOgxaYcEPmNr61D'. The trackAdsConversion()
 // helper no-ops on XXX_ values, so all wired fires below stay safe until labels are pasted.
-// TODO(google-ads): create the four conversion actions in Google Ads → Tools → Conversions
-// (Lead, Contact Lead, Demo Booked, Purchase) and replace each XXX_*_LABEL below with the
-// real label. Without this, Smart Bidding only sees the signup event — campaigns can't optimize CPA.
+// Labels are server-injected from env so non-engineers can hot-swap them without a deploy:
+//   GADS_LEAD_LABEL, GADS_CONTACT_LABEL, GADS_DEMO_LABEL, GADS_PURCHASE_LABEL
+// Each is the part AFTER 'AW-18080319225/'. Empty falls back to the placeholder.
 window.GOOGLE_ADS_CONVERSIONS = {
-  lead:         'AW-18080319225/XXX_LEAD_LABEL',         // TODO: hero CTAs, exit-intent, address-preview, gated lead capture
-  contact_lead: 'AW-18080319225/XXX_CONTACT_LABEL',      // TODO: contact form submission
-  demo:         'AW-18080319225/XXX_DEMO_LABEL',         // TODO: demo booked
+  lead:         'AW-18080319225/${(c.env as any).GADS_LEAD_LABEL || 'XXX_LEAD_LABEL'}',
+  contact_lead: 'AW-18080319225/${(c.env as any).GADS_CONTACT_LABEL || 'XXX_CONTACT_LABEL'}',
+  demo:         'AW-18080319225/${(c.env as any).GADS_DEMO_LABEL || 'XXX_DEMO_LABEL'}',
   signup:       'AW-18080319225/eMC-CPy_yagcEPmNr61D',   // account created (LIVE)
-  purchase:     'AW-18080319225/XXX_PURCHASE_LABEL'      // TODO: paid checkout success (Square return URL)
+  purchase:     'AW-18080319225/${(c.env as any).GADS_PURCHASE_LABEL || 'XXX_PURCHASE_LABEL'}'
 };
 // Phone tracking removed — phone is not a lead source for this business and
 // the Call-from-Ads gtag('config') was causing repeated failed "Calls (uploads)"
@@ -394,13 +394,20 @@ window.trackAdsConversion = function(kind, params) {
     if (typeof gtag === 'function') gtag('event', 'conversion', payload);
   } catch(e) { /* no-op */ }
 };
-// Fire purchase conversion when returning from Square checkout
+// Fire purchase conversion when returning from Square checkout. Both Google Ads
+// (via trackAdsConversion) AND Meta Pixel (via fbq) — without the Meta side, Meta's
+// optimization can match leads to ad clicks but has no revenue signal at all.
 (function(){
   try {
     var p = new URLSearchParams(window.location.search);
-    if (p.get('payment') === 'success' && !sessionStorage.getItem('_ads_purchase_fired')) {
-      sessionStorage.setItem('_ads_purchase_fired', '1');
-      window.trackAdsConversion('purchase', { value: Number(p.get('amount') || 0) || undefined, currency: 'USD', transaction_id: p.get('order_id') || undefined });
+    if (p.get('payment') === 'success' && !sessionStorage.getItem('_purchase_fired')) {
+      sessionStorage.setItem('_purchase_fired', '1');
+      var v = Number(p.get('amount') || 0) || undefined;
+      var oid = p.get('order_id') || undefined;
+      window.trackAdsConversion('purchase', { value: v, currency: 'CAD', transaction_id: oid });
+      if (typeof fbq === 'function') {
+        try { fbq('track', 'Purchase', { value: v, currency: 'CAD', content_ids: oid ? [oid] : undefined }); } catch(_){}
+      }
     }
   } catch(e) {}
 })();
@@ -7653,7 +7660,9 @@ function getOnboardingPageHTML(sessionToken = ''): string {
     if (nextDot) nextDot.classList.add('active');
     // When the user lands on the final step, mark onboarding complete so the
     // "Welcome back, finish setup" banner doesn't reappear on the dashboard.
-    if (currentStep === 3) trackStep(3, 'completed');
+    // Server requires step >= 4 to flip onboarding_completed; pass 4 explicitly
+    // even though the wizard's UI only has 3 visible steps.
+    if (currentStep === 3) trackStep(4, 'completed');
   }
 
   async function saveCompany() {
@@ -7672,12 +7681,13 @@ function getOnboardingPageHTML(sessionToken = ''): string {
     }
     if (sessionToken) {
       try {
-        await fetch('/api/customer/profile', {
-          method: 'PATCH',
+        var res = await fetch('/api/customer/profile', {
+          method: 'PUT',
           headers: authHeaders(),
           body: JSON.stringify({ company_name: name, phone: phone })
         });
-      } catch(e) {}
+        if (!res.ok) { showErr('Could not save your details — please try again.'); return; }
+      } catch(e) { showErr('Network error saving details — please try again.'); return; }
     }
     nextStep(2);
   }
@@ -8163,7 +8173,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         </div>
         <div class="bg-[#111111] border border-white/10 rounded-2xl overflow-hidden shadow-2xl shadow-black/50 neon-glow">
           <div class="relative" style="padding-bottom:56.25%;height:0;">
-            <iframe class="absolute top-0 left-0 w-full h-full" src="https://www.youtube.com/embed/NQW3EgEhldA" title="Roof Manager — Product Tutorial" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+            <iframe loading="lazy" class="absolute top-0 left-0 w-full h-full" src="https://www.youtube.com/embed/NQW3EgEhldA" title="Roof Manager — Product Tutorial" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
           </div>
         </div>
       </div>
@@ -8186,7 +8196,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         ${(() => {
           const items = [
             {i:'fas fa-shield-alt', c:'#22d3ee', t:'SOC 2 Compliant', bold:true},
-            {i:'fab fa-trustpilot', c:'#00B67A', t:'Trustpilot', bold:true, href:'https://www.trustpilot.com/review/roofmanager.ca'},
+            {i:'fas fa-star', c:'#00B67A', t:'Trustpilot', bold:true, href:'https://www.trustpilot.com/review/roofmanager.ca'},
             {i:'fas fa-shield-alt', c:'#00FF88', t:'PCI DSS Compliant'},
             {i:'fas fa-map-marker-alt', c:'#22d3ee', t:'Calgary'},
             {i:'fas fa-lock', c:'#22d3ee', t:'256-bit SSL'},
@@ -8272,7 +8282,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
                     <li class="flex items-center gap-2"><i class="fas fa-check text-[#00FF88] text-[10px]"></i>Confidence score on every report</li>
                   </ul>
                 </div>
-                <a href="#pricing" onclick="rrTrack('cta_click',{location:'value_prop',card:'Quote With 99% Confidence'})" class="inline-flex items-center gap-2 font-semibold text-sm group/link transition-colors mt-2" style="color:#00FF88">See Accuracy Data <i class="fas fa-arrow-right text-xs group-hover/link:translate-x-1 transition-transform"></i></a>
+                <a href="#how-it-works" onclick="rrTrack('cta_click',{location:'value_prop',card:'Quote With 99% Confidence'})" class="inline-flex items-center gap-2 font-semibold text-sm group/link transition-colors mt-2" style="color:#00FF88">See How It Works <i class="fas fa-arrow-right text-xs group-hover/link:translate-x-1 transition-transform"></i></a>
               </div>
             </div>
           </div>
@@ -8327,7 +8337,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
                     <li class="flex items-center gap-2"><i class="fas fa-check text-[#a78bfa] text-[10px]"></i>Full CRM, invoicing &amp; AI secretary</li>
                   </ul>
                 </div>
-                <a href="#features" onclick="rrTrack('cta_click',{location:'value_prop',card:'AI Admin That Never Sleeps'})" class="inline-flex items-center gap-2 font-semibold text-sm group/link transition-colors mt-2" style="color:#a78bfa">Explore Platform <i class="fas fa-arrow-right text-xs group-hover/link:translate-x-1 transition-transform"></i></a>
+                <a href="/register" onclick="rrTrack('cta_click',{location:'value_prop',card:'AI Admin That Never Sleeps'})" class="inline-flex items-center gap-2 font-semibold text-sm group/link transition-colors mt-2" style="color:#a78bfa">Start Free Trial <i class="fas fa-arrow-right text-xs group-hover/link:translate-x-1 transition-transform"></i></a>
               </div>
             </div>
           </div>
@@ -9058,55 +9068,12 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     </div>
   </div>
   <script>
+    // Hero form handlers — defined OUTSIDE the exit-intent modal IIFE so they work
+    // on touch/mobile devices (where the modal IIFE early-returns). Mobile users
+    // were getting ReferenceError: startPreview is not defined when tapping
+    // "Measure this roof", killing the email-gated preview funnel.
     (function(){
-      try {
-        // Desktop only — no touch/mobile
-        var isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-        if (isTouch) return;
-        if (window.innerWidth < 900) return;
-        if (sessionStorage.getItem('rm_exit_intent_shown') === '1') return;
-      } catch(e) { return; }
-
       var modal = document.getElementById('exitIntentModal');
-      if (!modal) return;
-      var shown = false;
-
-      function show() {
-        if (shown) return;
-        shown = true;
-        try { sessionStorage.setItem('rm_exit_intent_shown','1'); } catch(e){}
-        modal.style.display = 'flex';
-        if (typeof rrTrack === 'function') rrTrack('exit_intent_shown', {});
-      }
-      function hide() { modal.style.display = 'none'; }
-
-      document.addEventListener('mouseleave', function(e){
-        if (e.clientY < 10 && (e.relatedTarget === null || e.relatedTarget === undefined)) {
-          show();
-        }
-      });
-
-      document.getElementById('exitIntentClose').addEventListener('click', hide);
-      modal.addEventListener('click', function(e){ if (e.target === modal) hide(); });
-
-      // Mobile engagement trigger: ≥30s on page + >40% scroll depth + no CTA clicked
-      var isTouch2 = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-      if (isTouch2 && window.innerWidth < 900) {
-        var ctaClicked = false;
-        document.querySelectorAll('a[href="/register"],a[href="/demo"]').forEach(function(a){
-          a.addEventListener('click',function(){ ctaClicked=true; },{passive:true});
-        });
-        var engTimer = setTimeout(function(){
-          var scrollPct = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight || 1);
-          if (!ctaClicked && scrollPct > 0.4) {
-            modal.style.display = 'flex';
-            try { rrTrack('exit_intent_shown', { trigger: 'mobile_engagement' }); } catch(_){}
-            shown = true;
-            try { sessionStorage.setItem('rm_exit_intent_shown','1'); } catch(e){}
-          }
-        }, 30000);
-        window.addEventListener('beforeunload', function(){ clearTimeout(engTimer); });
-      }
 
       window.submitExitIntent = function(e) {
         e.preventDefault();
@@ -9193,6 +9160,58 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         })
         .catch(function() { btn.disabled = false; btn.textContent = 'Measure this roof \u2192'; });
       };
+    })();
+
+    // Exit-intent modal trigger logic \u2014 desktop-only mouseleave, plus mobile
+    // engagement trigger (30s + scroll). Wrapped in its own IIFE because the
+    // form handlers above must work even when this whole block early-returns.
+    (function(){
+      try {
+        if (sessionStorage.getItem('rm_exit_intent_shown') === '1') return;
+      } catch(e) { return; }
+
+      var modal = document.getElementById('exitIntentModal');
+      if (!modal) return;
+      var shown = false;
+      function show() {
+        if (shown) return;
+        shown = true;
+        try { sessionStorage.setItem('rm_exit_intent_shown','1'); } catch(e){}
+        modal.style.display = 'flex';
+        if (typeof rrTrack === 'function') rrTrack('exit_intent_shown', {});
+      }
+      function hide() { modal.style.display = 'none'; }
+
+      var isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+      // Desktop only: mouseleave-out-the-top trigger.
+      if (!isTouch && window.innerWidth >= 900) {
+        document.addEventListener('mouseleave', function(e){
+          if (e.clientY < 10 && (e.relatedTarget === null || e.relatedTarget === undefined)) {
+            show();
+          }
+        });
+      }
+
+      var closeBtn = document.getElementById('exitIntentClose');
+      if (closeBtn) closeBtn.addEventListener('click', hide);
+      modal.addEventListener('click', function(e){ if (e.target === modal) hide(); });
+
+      // Mobile engagement trigger: \u226530s on page + >40% scroll depth + no CTA clicked
+      if (isTouch && window.innerWidth < 900) {
+        var ctaClicked = false;
+        document.querySelectorAll('a[href="/register"],a[href="/demo"]').forEach(function(a){
+          a.addEventListener('click',function(){ ctaClicked=true; },{passive:true});
+        });
+        var engTimer = setTimeout(function(){
+          var scrollPct = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight || 1);
+          if (!ctaClicked && scrollPct > 0.4) {
+            show();
+            try { rrTrack('exit_intent_shown', { trigger: 'mobile_engagement' }); } catch(_){}
+          }
+        }, 30000);
+        window.addEventListener('beforeunload', function(){ clearTimeout(engTimer); });
+      }
     })();
   </script>
 </body>
@@ -10460,6 +10479,8 @@ ${previewId ? `
       // Pull persisted Google Ads click ID + UTMs (captured on landing).
       var gclidRecord = null;
       try { var gr = localStorage.getItem('rm_ads_gclid'); if (gr) gclidRecord = JSON.parse(gr); } catch(_) {}
+      var utmRecord = null;
+      try { var ur = localStorage.getItem('rm_ads_utm'); if (ur) utmRecord = JSON.parse(ur); } catch(_) {}
       var res = await fetch('/api/customer-auth/register', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -10474,7 +10495,12 @@ ${previewId ? `
           website: honeypot,
           verification_token: verificationToken,
           referred_by_code: refCode,
-          gclid: (gclidRecord && gclidRecord.gclid) || null
+          gclid: (gclidRecord && gclidRecord.gclid) || null,
+          utm_source: (utmRecord && utmRecord.utm_source) || null,
+          utm_medium: (utmRecord && utmRecord.utm_medium) || null,
+          utm_campaign: (utmRecord && utmRecord.utm_campaign) || null,
+          utm_content: (utmRecord && utmRecord.utm_content) || null,
+          utm_term: (utmRecord && utmRecord.utm_term) || null
         })
       });
       var data = await res.json();
@@ -10716,8 +10742,6 @@ function getCustomerLoginHTML(googleClientId = '') {
 
     <!-- Links -->
     <div class="text-center mt-6 space-y-2">
-      <a href="/login" class="text-brand-300 hover:text-white text-sm transition-colors"><i class="fas fa-shield-alt mr-1"></i>Admin Login</a>
-      <span class="text-brand-700 mx-2">|</span>
       <a href="/" class="text-brand-300 hover:text-white text-sm transition-colors"><i class="fas fa-arrow-left mr-1"></i>Back to homepage</a>
     </div>
   </div>
@@ -12761,7 +12785,7 @@ function getFeatureHubPageHTML(featureSlug: string): string {
     url: `${base}/features/${f.slug}`,
     image: `${base}/static/logo.png?v=20260504`,
     description: f.metaDesc,
-    offers: { '@type': 'Offer', price: '7.00', priceCurrency: 'USD', description: 'Per report after 4 free reports' },
+    offers: { '@type': 'Offer', price: '8.00', priceCurrency: 'CAD', description: 'Per report after 4 free reports' },
     aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.9', ratingCount: '200', bestRating: '5' },
     review: [
       { '@type': 'Review', reviewRating: { '@type': 'Rating', ratingValue: '5', bestRating: '5' }, author: { '@type': 'Person', name: 'Derek M.' }, datePublished: '2026-02-11', reviewBody: 'Reports in under a minute, accepted by every Intact and Aviva adjuster we deal with. Cut our measurement cost by ~$1,400/month.' },
@@ -12853,12 +12877,13 @@ function getFeatureHubPageHTML(featureSlug: string): string {
         <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
-      <div class="flex items-center gap-5">
+      <div class="hidden sm:flex items-center gap-5">
         <a href="/services" class="text-gray-400 hover:text-white text-sm font-medium transition-colors">All Features</a>
         <a href="/pricing" class="text-gray-400 hover:text-white text-sm font-medium transition-colors">Pricing</a>
         <a href="/blog" class="text-gray-400 hover:text-white text-sm font-medium transition-colors">Blog</a>
         <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm transition-all">Start Free</a>
       </div>
+      <a href="/register" class="sm:hidden bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-3 rounded-xl text-xs whitespace-nowrap">Start Free</a>
     </div>
   </nav>
 
@@ -13100,7 +13125,7 @@ function getFeatureCityPageHTML(slug: string, city: { name: string; province: st
     geo: { '@type': 'GeoCoordinates', latitude: city.lat, longitude: city.lng },
     areaServed: city.name,
     address: { '@type': 'PostalAddress', addressLocality: city.name, addressRegion: city.province },
-    offers: { '@type': 'Offer', price: '7.00', priceCurrency: 'USD' },
+    offers: { '@type': 'Offer', price: '8.00', priceCurrency: 'CAD' },
     aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.9', ratingCount: '200', bestRating: '5' },
     provider: { '@type': 'Organization', name: 'Roof Manager', url: base },
     dateModified: today,
@@ -16038,7 +16063,7 @@ function getPricingPageHTML() {
             </div>
           </div>
           <div class="mb-4">
-            <span class="text-4xl font-black">$299</span><span class="text-lg font-normal text-purple-200"> CAD /month</span>
+            <span class="text-4xl font-black">$199</span><span class="text-lg font-normal text-purple-200"> CAD /month</span>
           </div>
           <ul class="space-y-2 text-sm mb-6">
             <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Answers calls in a natural human voice</li>
@@ -16916,12 +16941,12 @@ function getLanderFunnelHTML() {
           </p>
 
           <div class="flex flex-col sm:flex-row sm:flex-wrap gap-3 mb-6">
-            <a href="/register" class="group inline-flex items-center justify-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
+            <a href="/register" onclick="if(window.gtag)gtag('event','cta_click',{cta:'lander_hero_register'});if(window.trackAdsConversion)window.trackAdsConversion('lead',{value:5,currency:'CAD'});" class="group inline-flex items-center justify-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
               <i class="fas fa-rocket"></i>
               Claim Your 4 Free Reports
               <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
             </a>
-            <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="group inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-6 rounded-xl text-base border border-white/20 hover:border-white/30 transition-all">
+            <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" rel="noopener" onclick="if(window.gtag)gtag('event','cta_click',{cta:'lander_hero_demo'});" class="group inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-6 rounded-xl text-base border border-white/20 hover:border-white/30 transition-all">
               <i class="fas fa-calendar-check"></i>
               Book a Demo
             </a>
@@ -17048,12 +17073,12 @@ function getLanderFunnelHTML() {
         Sign up in 30 seconds, get 4 free professional roof measurement reports, and access the full CRM — no credit card required.
       </p>
       <div class="flex flex-col sm:flex-row sm:flex-wrap gap-3 justify-center">
-        <a href="/register" class="group inline-flex items-center justify-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
+        <a href="/register" onclick="if(window.gtag)gtag('event','cta_click',{cta:'lander_final_register'});if(window.trackAdsConversion)window.trackAdsConversion('lead',{value:5,currency:'CAD'});" class="group inline-flex items-center justify-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
           <i class="fas fa-rocket"></i>
           Start Free Now
           <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
         </a>
-        <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="group inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-6 rounded-xl text-base border border-white/20 hover:border-white/30 transition-all">
+        <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" rel="noopener" onclick="if(window.gtag)gtag('event','cta_click',{cta:'lander_final_demo'});" class="group inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-6 rounded-xl text-base border border-white/20 hover:border-white/30 transition-all">
           <i class="fas fa-calendar-check"></i>
           Book a Demo
         </a>
@@ -19504,13 +19529,14 @@ function getTermsPageHTML() {
       <section>
         <h2 class="text-xl font-semibold text-gray-900 mb-3">4. Pricing and Payment</h2>
         <ul class="list-disc list-inside space-y-2 text-gray-600">
-          <li><strong>Free reports:</strong> Each new account receives 3 complimentary reports at no charge.</li>
-          <li><strong>Individual report:</strong> $5.00 USD per report.</li>
-          <li><strong>25-Pack:</strong> $99 USD (25 reports, ~$3.96/report — save 21%).</li>
-          <li><strong>100-Pack:</strong> $299 USD (100 reports, ~$2.99/report — save 40%).</li>
-          <li><strong>Team Membership:</strong> $49.99 USD/month. Includes up to 5 team member accounts and an ad-free experience. Reports are billed separately via credits.</li>
+          <li><strong>Free reports:</strong> Each new account receives 4 complimentary reports at no charge.</li>
+          <li><strong>Individual report:</strong> $8.00 CAD per report.</li>
+          <li><strong>25-Pack:</strong> $175 CAD (25 reports, $7.00/report — save 13%).</li>
+          <li><strong>100-Pack:</strong> $595 CAD (100 reports, $5.95/report — save 26%).</li>
+          <li><strong>Team membership:</strong> $50 CAD/month per additional team member.</li>
+          <li><strong>AI Secretary (optional add-on):</strong> $199 CAD/month after a 1-month free trial. Includes 24/7 AI phone answering, appointment booking, and lead capture.</li>
         </ul>
-        <p class="text-gray-600 mt-3">Credits do not expire. All payments are processed by Square. All prices are in USD unless otherwise stated.</p>
+        <p class="text-gray-600 mt-3">Credits do not expire. All payments are processed by Square. Prices are in CAD unless otherwise stated. Current pricing always available at <a href="/pricing" class="text-brand-600 hover:underline">/pricing</a>.</p>
       </section>
 
       <section>
@@ -22014,6 +22040,7 @@ function getAboutPageHTML(): string {
         <a href="/about" class="text-[#00FF88] font-semibold text-sm border-b-2 border-[#00FF88] pb-0.5">About</a>
         <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-lg text-sm">Get 4 Free Reports</a>
       </div>
+      <a href="/register" class="md:hidden bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-3 rounded-lg text-xs whitespace-nowrap">Get 4 Free</a>
     </div>
   </nav>
 

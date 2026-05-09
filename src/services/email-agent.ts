@@ -56,7 +56,7 @@ The email should:
 - Lead with VALUE — a useful tip, industry insight, or money-saving fact about roofing
 - Be educational, NOT promotional. No "BUY NOW" language.
 - Mention Roof Manager naturally as a tool that solves the problem discussed
-- Include one clear CTA to https://roofmanager.ca/quote or https://roofmanager.ca/pricing
+- Include one clear CTA to https://roofmanager.ca/free-roof-estimate or https://roofmanager.ca/pricing
 - Be mobile-friendly HTML with inline styles
 - Subject line: compelling, under 50 chars, no spam trigger words
 - Preheader: 80-100 chars, teases the content

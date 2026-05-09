@@ -541,8 +541,8 @@ function extractCtaSuggestions(reply: string): Array<{ label: string; action: st
   if (lower.includes('/pricing') || lower.includes('$8') || lower.includes('cost')) {
     push({ label: '💰 See pricing', action: 'link', value: '/pricing' })
   }
-  if (lower.includes('sample') || lower.includes('example report') || lower.includes('/customer/sample')) {
-    push({ label: '📄 View sample report', action: 'link', value: '/customer/sample' })
+  if (lower.includes('sample') || lower.includes('example report') || lower.includes('/sample-report')) {
+    push({ label: '📄 View sample report', action: 'link', value: '/sample-report' })
   }
   if (lower.includes('secretary') || lower.includes('answering') || lower.includes('receptionist')) {
     push({ label: '📞 Try Roofer Secretary', action: 'link', value: '/ai-secretary' })
@@ -1621,7 +1621,7 @@ CAPABILITIES YOU CAN HELP WITH:
 5. D2D MANAGER — Door-to-door sales tracking at /customer/d2d.
 6. SECRETARY AI — ${context.secretaryActive ? 'Their AI secretary is active with ' + (context.secretaryCalls || 0) + ' calls handled. Manage at /customer/secretary.' : 'Not subscribed. $199/month after a 1-month free trial — 24/7 AI phone answering. Set up at /customer/secretary.'}
 7. TEAM MANAGEMENT — Add team members at /customer/team. $50/user/month.
-8. SETTINGS & BRANDING — Customize branding at /customer/settings.
+8. SETTINGS & BRANDING — Customize branding at /customer/profile.
 9. BUY CREDITS — Volume discounts at /pricing.
 
 RESPONSE STYLE:

@@ -355,12 +355,18 @@ customerAuthRoutes.post('/send-verification', async (c) => {
       return c.json({ error: 'Invalid email format' }, 400)
     }
 
-    // Check if account already exists
+    // Check if account already exists. SECURITY: do NOT leak account existence
+    // here — return the same neutral 200 we use on success so /send-verification
+    // can't be used as a user-enumeration oracle. (Login already uses constant-
+    // time response per P1-08; this matches that posture.) The actual /register
+    // endpoint still rejects duplicates with a clear error after the user has
+    // proven email ownership via verification code.
     const existing = await c.env.DB.prepare(
       'SELECT id FROM customers WHERE email = ?'
     ).bind(cleanEmail).first()
     if (existing) {
-      return c.json({ error: 'An account with this email already exists. Please sign in instead.' }, 409)
+      // Pretend the verification email was sent. No DB write, no email send.
+      return c.json({ success: true, message: 'If that email is available, a verification code has been sent.' })
     }
 
     // Log verification requests for audit purposes (rate-limit checks removed per product decision).
@@ -501,23 +507,35 @@ customerAuthRoutes.post('/google', async (c) => {
 
     const googleUser: any = await verifyResp.json()
 
-    // Verify the token audience matches our client ID
+    // SECURITY: fail-closed audience check. Without GOOGLE_OAUTH_CLIENT_ID set,
+    // any valid Google ID token from any OAuth client could mint a session.
     const clientId = (c.env as any).GOOGLE_OAUTH_CLIENT_ID || (c.env as any).GMAIL_CLIENT_ID
-    if (clientId && googleUser.aud !== clientId) {
+    if (!clientId) {
+      console.error('[google-oauth] GOOGLE_OAUTH_CLIENT_ID/GMAIL_CLIENT_ID not configured — rejecting sign-in')
+      return c.json({ error: 'OAuth not configured' }, 503)
+    }
+    if (googleUser.aud !== clientId) {
       return c.json({ error: 'Token audience mismatch' }, 401)
     }
 
+    // SECURITY: require email_verified=true. Google tokeninfo returns this as
+    // the string "true". Without this check, an attacker who controls an
+    // unverified Google identity matching a victim's password-only email
+    // could take over the victim's account by linking google_id.
+    if (googleUser.email_verified !== true && googleUser.email_verified !== 'true') {
+      return c.json({ error: 'Google account email is not verified' }, 401)
+    }
+
     const email = googleUser.email?.toLowerCase().trim()
-    const name = googleUser.name || email.split('@')[0]
     const googleId = googleUser.sub
+    if (!email || !googleId) {
+      return c.json({ error: 'Invalid Google profile data' }, 400)
+    }
+    const name = googleUser.name || email.split('@')[0]
     // Phase 2 #8: only persist the picture URL when it parses cleanly and uses
     // https. Defends against malformed or non-https values being rendered into
     // an <img src> downstream and turning into XSS / mixed content.
     const avatar = sanitizeGoogleAvatar(googleUser.picture)
-
-    if (!email || !googleId) {
-      return c.json({ error: 'Invalid Google profile data' }, 400)
-    }
 
     // Check if customer exists by google_id or email
     let customer = await c.env.DB.prepare(
@@ -525,6 +543,11 @@ customerAuthRoutes.post('/google', async (c) => {
     ).bind(googleId, email).first<any>()
 
     if (customer) {
+      // SECURITY: refuse Google sign-in for deactivated/banned accounts.
+      // /login already enforces is_active; the Google path was missing this.
+      if (customer.is_active !== 1 && customer.is_active !== true) {
+        return c.json({ error: 'Account is disabled' }, 403)
+      }
       // Update existing customer with Google info
       await c.env.DB.prepare(`
         UPDATE customers SET
@@ -663,16 +686,31 @@ customerAuthRoutes.post('/register', async (c) => {
       verification_token,
       referred_by_code,
       gclid, // Google Ads click ID — for offline conversion uploads on later upgrade-to-paid
+      utm_source, utm_medium, utm_campaign, utm_content, utm_term,
     } = body as {
       email?: string; password?: string; name?: string; phone?: string;
       company_name?: string; company_size?: string; primary_use?: string;
       website?: string; verification_token?: string; referred_by_code?: string;
       gclid?: string;
+      utm_source?: string; utm_medium?: string; utm_campaign?: string;
+      utm_content?: string; utm_term?: string;
     }
     // Sanitize gclid — keep only the URL-safe character set Google emits.
     const cleanGclid = (gclid && /^[A-Za-z0-9_-]{10,200}$/.test(String(gclid).trim()))
       ? String(gclid).trim()
       : null
+    // UTM sanitization: cap at 200 chars, strip control chars. customers.lead_utm_source
+    // gets the source; full set is upserted to analytics_attribution further down.
+    const cleanUtm = (s: string | undefined): string | null => {
+      if (!s) return null
+      const trimmed = String(s).trim().slice(0, 200).replace(/[\x00-\x1f]/g, '')
+      return trimmed || null
+    }
+    const utmSource = cleanUtm(utm_source)
+    const utmMedium = cleanUtm(utm_medium)
+    const utmCampaign = cleanUtm(utm_campaign)
+    const utmContent = cleanUtm(utm_content)
+    const utmTerm = cleanUtm(utm_term)
 
     if (!email || !password || !name) {
       return c.json({ error: 'Email, password, and name are required' }, 400)
@@ -751,13 +789,33 @@ customerAuthRoutes.post('/register', async (c) => {
 
     // Insert with the standard free-trial grant (NOT paid credits) — email_verified = 1 since we verified
     // conv-v5: persist phone, company_size, primary_use for sales-qualification
+    // gclid stays on customers (legacy column); full UTM set goes to analytics_attribution below.
+    const effectiveLeadSource = utmSource || (cleanGclid ? 'google' : null)
     const result = await c.env.DB.prepare(`
-      INSERT INTO customers (email, name, phone, company_name, company_size, primary_use, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by, auto_invoice_enabled, company_type, last_login, gclid)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 0, 0, ?, 0, ?, ?, 0, 'roofing', datetime('now'), ?)
-    `).bind(cleanEmail, name, cleanPhone, cleanCompanyName, cleanCompanySize, cleanPrimaryUse, storedHash, FREE_TRIAL_REPORTS, refCode, referredBy, cleanGclid).run()
+      INSERT INTO customers (email, name, phone, company_name, company_size, primary_use, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by, auto_invoice_enabled, company_type, last_login, gclid, lead_utm_source, lead_source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 0, 0, ?, 0, ?, ?, 0, 'roofing', datetime('now'), ?, ?, ?)
+    `).bind(cleanEmail, name, cleanPhone, cleanCompanyName, cleanCompanySize, cleanPrimaryUse, storedHash, FREE_TRIAL_REPORTS, refCode, referredBy, cleanGclid, utmSource, effectiveLeadSource).run()
 
     if (!result.meta.last_row_id) {
       return c.json({ error: 'Failed to create account. Please try again.' }, 500)
+    }
+
+    // Persist full UTM dimensions to analytics_attribution (best-effort).
+    // The pageview rollup also writes here async; we write at signup so the data
+    // is available immediately even if the visitor blocked the tracker.
+    if (utmSource || utmMedium || utmCampaign || utmContent || utmTerm) {
+      try {
+        await c.env.DB.prepare(`
+          INSERT INTO analytics_attribution (customer_id, first_touch_utm_source, first_touch_utm_medium, first_touch_utm_campaign, first_touch_at, last_touch_utm_source, last_touch_at, touch_count)
+          VALUES (?, ?, ?, ?, datetime('now'), ?, datetime('now'), 1)
+          ON CONFLICT(customer_id) DO UPDATE SET
+            last_touch_utm_source = COALESCE(excluded.last_touch_utm_source, analytics_attribution.last_touch_utm_source),
+            last_touch_at = excluded.last_touch_at,
+            touch_count = analytics_attribution.touch_count + 1
+        `).bind(result.meta.last_row_id, utmSource, utmMedium, utmCampaign, utmSource).run()
+      } catch (e: any) {
+        console.warn('[register] analytics_attribution upsert failed:', e?.message || e)
+      }
     }
 
     const token = generateSessionToken()
@@ -1280,13 +1338,34 @@ customerAuthRoutes.put('/profile', async (c) => {
 
   const { name, phone, company_name, address, city, province, postal_code } = await c.req.json()
 
+  // Defensive length caps — without these a logged-in customer can persist
+  // multi-MB strings that then get rendered into every PDF/email/proposal.
+  const cap = (v: any, n: number) => {
+    if (v == null || v === '') return null
+    const s = String(v).trim()
+    return s.length > n ? s.slice(0, n) : s
+  }
+  const sName = cap(name, 120)
+  const sPhone = cap(phone, 32)
+  const sCompany = cap(company_name, 200)
+  const sAddress = cap(address, 300)
+  const sCity = cap(city, 100)
+  const sProvince = cap(province, 60)
+  const sPostal = cap(postal_code, 20)
+
+  // Phone format check matches /complete-profile (≥7 digits) so the same
+  // validation rule applies wherever phone is set.
+  if (sPhone && sPhone.replace(/\D/g, '').length < 7) {
+    return c.json({ error: 'Invalid phone number' }, 400)
+  }
+
   await c.env.DB.prepare(`
     UPDATE customers SET
       name = COALESCE(?, name), phone = ?, company_name = ?,
       address = ?, city = ?, province = ?, postal_code = ?,
       updated_at = datetime('now')
     WHERE id = ?
-  `).bind(name, phone || null, company_name || null, address || null, city || null, province || null, postal_code || null, session.customer_id).run()
+  `).bind(sName, sPhone, sCompany, sAddress, sCity, sProvince, sPostal, session.customer_id).run()
 
   return c.json({ success: true })
 })
@@ -1312,6 +1391,22 @@ customerAuthRoutes.put('/branding', async (c) => {
     brand_primary_color, brand_secondary_color,
   } = body
 
+  // Defensive length caps — these fields render into PDFs, emails, and shared
+  // proposals to homeowners. Without caps a customer could stuff multi-MB
+  // strings that break all subsequent renders.
+  const cap = (v: any, n: number) => {
+    if (v == null || v === '') return null
+    const s = String(v).trim()
+    return s.length > n ? s.slice(0, n) : s
+  }
+  const sLogo = cap(brand_logo_url, 1024 * 256) // up to 256KB for data: URLs
+  const fields = [
+    cap(brand_business_name, 200), sLogo, cap(brand_tagline, 300),
+    cap(brand_phone, 32), cap(brand_email, 200), cap(brand_website, 300), cap(brand_address, 400),
+    cap(brand_license_number, 100), cap(brand_insurance_info, 500),
+    cap(brand_primary_color, 32), cap(brand_secondary_color, 32),
+  ]
+
   await c.env.DB.prepare(`
     UPDATE customers SET
       brand_business_name = ?, brand_logo_url = ?, brand_tagline = ?,
@@ -1321,10 +1416,10 @@ customerAuthRoutes.put('/branding', async (c) => {
       updated_at = datetime('now')
     WHERE id = ?
   `).bind(
-    brand_business_name || null, brand_logo_url || null, brand_tagline || null,
-    brand_phone || null, brand_email || null, brand_website || null, brand_address || null,
-    brand_license_number || null, brand_insurance_info || null,
-    brand_primary_color || null, brand_secondary_color || null,
+    fields[0], fields[1], fields[2],
+    fields[3], fields[4], fields[5], fields[6],
+    fields[7], fields[8],
+    fields[9], fields[10],
     session.customer_id
   ).run()
 
@@ -1450,7 +1545,10 @@ customerAuthRoutes.post('/change-password', async (c) => {
   // P1-04: invalidate all customer sessions on password change.
   await c.env.DB.prepare('DELETE FROM customer_sessions WHERE customer_id = ?').bind(session.customer_id).run().catch((err: any) => console.error('[customer-auth] session cleanup failed:', err?.message || err))
 
-  return c.json({ success: true })
+  // Tell the client what happened so it can show the user instead of silently
+  // 401-ing on the next request — clients should redirect to /customer/login
+  // with a friendly message after a successful response.
+  return c.json({ success: true, signed_out: true, message: 'Password updated. For security, all sessions have been signed out — please sign back in.' })
 })
 
 // ============================================================
@@ -1575,11 +1673,17 @@ customerAuthRoutes.get('/orders/:orderId/progress', async (c) => {
 
   if (!session) return c.json({ error: 'Session expired' }, 401)
 
+  // Resolve team-owner so team members can poll progress on the owner's orders
+  // (matches the /orders listing pattern). Without this, team members get a
+  // populated /orders list but every progress poll 404s.
+  const teamInfo = await resolveTeamOwner(c.env.DB, session.customer_id)
+  const ownerId = teamInfo.ownerId
+
   const orderId = c.req.param('orderId')
 
   // Get order + report status
   const order = await c.env.DB.prepare(`
-    SELECT o.*, r.status as report_status, r.generation_attempts, 
+    SELECT o.*, r.status as report_status, r.generation_attempts,
            r.generation_started_at, r.generation_completed_at,
            r.error_message as report_error, r.confidence_score,
            r.imagery_quality, r.report_version,
@@ -1587,7 +1691,7 @@ customerAuthRoutes.get('/orders/:orderId/progress', async (c) => {
     FROM orders o
     LEFT JOIN reports r ON r.order_id = o.id
     WHERE o.id = ? AND o.customer_id = ?
-  `).bind(orderId, session.customer_id).first<any>()
+  `).bind(orderId, ownerId).first<any>()
 
   if (!order) return c.json({ error: 'Order not found' }, 404)
 
@@ -1682,13 +1786,17 @@ customerAuthRoutes.get('/invoices', async (c) => {
 
   if (!session) return c.json({ error: 'Session expired' }, 401)
 
+  // Team owner resolution: team members see the owner's invoices.
+  const teamInfo = await resolveTeamOwner(c.env.DB, session.customer_id)
+  const ownerId = teamInfo.ownerId
+
   const invoices = await c.env.DB.prepare(`
     SELECT i.*, o.property_address, o.order_number
     FROM invoices i
     LEFT JOIN orders o ON o.id = i.order_id
     WHERE i.customer_id = ?
     ORDER BY i.created_at DESC
-  `).bind(session.customer_id).all()
+  `).bind(ownerId).all()
 
   return c.json({ invoices: invoices.results })
 })
@@ -1705,6 +1813,10 @@ customerAuthRoutes.get('/invoices/:id', async (c) => {
 
   if (!session) return c.json({ error: 'Session expired' }, 401)
 
+  // Team owner resolution: team members can view the owner's invoices.
+  const teamInfo = await resolveTeamOwner(c.env.DB, session.customer_id)
+  const ownerId = teamInfo.ownerId
+
   const id = c.req.param('id')
   const invoice = await c.env.DB.prepare(`
     SELECT i.*, o.property_address, o.order_number, c.name as customer_name, c.email as customer_email,
@@ -1714,13 +1826,14 @@ customerAuthRoutes.get('/invoices/:id', async (c) => {
     LEFT JOIN orders o ON o.id = i.order_id
     LEFT JOIN customers c ON c.id = i.customer_id
     WHERE i.id = ? AND i.customer_id = ?
-  `).bind(id, session.customer_id).first<any>()
+  `).bind(id, ownerId).first<any>()
 
   if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
 
-  // Mark as viewed if it was just sent
+  // Mark as viewed if it was just sent — scope the write to the same owner
+  // so a defense-in-depth slip can't flip another customer's invoice.
   if (invoice.status === 'sent') {
-    await c.env.DB.prepare("UPDATE invoices SET status = 'viewed', updated_at = datetime('now') WHERE id = ?").bind(id).run()
+    await c.env.DB.prepare("UPDATE invoices SET status = 'viewed', updated_at = datetime('now') WHERE id = ? AND customer_id = ?").bind(id, ownerId).run()
     invoice.status = 'viewed'
   }
 
@@ -1750,7 +1863,7 @@ async function sendPasswordResetEmail(env: any, toEmail: string, name: string, r
       <p style="color: #374151; font-size: 16px; margin: 0 0 8px;">Hi ${name},</p>
       <p style="color: #6b7280; font-size: 14px; margin: 0 0 28px;">We received a request to reset your password. Click the button below to create a new one.</p>
       <a href="${resetUrl}" style="display: inline-block; background: #0ea5e9; color: white; font-weight: 700; font-size: 15px; padding: 14px 32px; border-radius: 10px; text-decoration: none;">Reset My Password</a>
-      <p style="color: #9ca3af; font-size: 12px; margin: 24px 0 8px;">This link expires in 1 hour.</p>
+      <p style="color: #9ca3af; font-size: 12px; margin: 24px 0 8px;">This link expires in 30 minutes.</p>
       <p style="color: #9ca3af; font-size: 12px; margin: 0;">If you didn't request a password reset, you can safely ignore this email — your password won't change.</p>
     </div>
     <p style="color: #d1d5db; font-size: 11px; text-align: center; margin-top: 24px;">&copy; 2026 Roof Manager &middot; Alberta, Canada</p>

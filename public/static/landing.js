@@ -69,11 +69,13 @@ function rrTrack(event, data = {}) {
     if (typeof gtag === 'function') {
       gtag('event', event, { ...data, event_category: 'landing' });
     }
-    // Internal tracking
-    fetch('/api/agents/track', {
+    // Internal tracking — POST to the real analytics beacon endpoint that tracker.js uses.
+    // Wrapped in a single-event batch so the server's /track handler accepts it.
+    fetch('/api/analytics/track', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event, ...data, ts: Date.now(), url: location.href })
+      body: JSON.stringify({ events: [{ event_type: 'click', click_element: 'landing:' + event, click_text: JSON.stringify(data).slice(0, 200), page_url: location.pathname, page_title: document.title, session_id: (sessionStorage.getItem('_rc_sid') || ''), visitor_id: (localStorage.getItem('_rc_vid') || '') }] }),
+      keepalive: true
     }).catch(() => {});
   } catch(e) {}
 }

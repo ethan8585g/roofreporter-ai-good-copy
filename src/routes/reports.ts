@@ -137,12 +137,42 @@ async function validateAdminOrCustomer(c: any) {
   return { id: teamInfo.ownerId, email: session.email, name: session.name, role: 'customer', isTeamMember: teamInfo.isTeamMember, realCustomerId: session.customer_id }
 }
 
+// Genuine webhooks + pure-compute endpoints that don't expose stored report data
+// stay public. Everything that returns a saved report (html/pdf/proposal/exports)
+// REQUIRES auth + ownership check — closes the IDOR where any anonymous request
+// to /api/reports/<numeric-id>/{html,pdf,...} previously returned full report data.
+const PUBLIC_WEBHOOK_SUFFIXES = ['/webhook-update', '/webhooks/resend']
+const PUBLIC_COMPUTE_SUFFIXES = ['/calculate-from-trace', '/pitch-multipliers', '/calculate-roof-specs']
+const OWNERSHIP_GATED_SUFFIXES = ['/html', '/simple', '/proposal', '/pdf', '/customer-html', '/customer-pdf', '/export.json', '/export.csv', '/solar-panel-layout', '/bom', '/bom.csv', '/bom.xml', '/enhancement-status']
+
 reportsRoutes.use('/*', async (c, next) => {
   const path = c.req.path
-  if (path.endsWith('/html') || path.endsWith('/simple') || path.endsWith('/proposal') || path.endsWith('/pdf') || path.endsWith('/customer-html') || path.endsWith('/customer-pdf') || path.endsWith('/webhook-update') || path.endsWith('/webhooks/resend') || path.endsWith('/enhancement-status') || path.endsWith('/calculate-from-trace') || path.endsWith('/pitch-multipliers') || path.endsWith('/calculate-roof-specs') || path.endsWith('/export.json') || path.endsWith('/export.csv') || path.endsWith('/solar-panel-layout') || path.endsWith('/bom') || path.endsWith('/bom.csv') || path.endsWith('/bom.xml')) return next()
+  if (PUBLIC_WEBHOOK_SUFFIXES.some(s => path.endsWith(s))) return next()
+  if (PUBLIC_COMPUTE_SUFFIXES.some(s => path.endsWith(s))) return next()
+
   const user = await validateAdminOrCustomer(c)
   if (!user) return c.json({ error: 'Authentication required' }, 401)
   c.set('user' as any, user)
+
+  // For report-viewer endpoints, verify ownership before letting the handler
+  // run. Admins bypass; customers must own the order. Path shape is
+  // /api/reports/:id/<suffix> — extract :id from the path.
+  if (user.role !== 'admin' && OWNERSHIP_GATED_SUFFIXES.some(s => path.endsWith(s))) {
+    const m = path.match(/\/reports\/(\d+)\//)
+    if (m) {
+      const reportId = Number(m[1])
+      if (Number.isFinite(reportId)) {
+        const owner = await c.env.DB.prepare(
+          `SELECT o.customer_id FROM reports r JOIN orders o ON o.id = r.order_id WHERE r.id = ?`
+        ).bind(reportId).first<{ customer_id: number }>()
+        if (!owner) return c.json({ error: 'Report not found' }, 404)
+        if (owner.customer_id !== (user as any).id) {
+          return c.json({ error: 'Forbidden' }, 403)
+        }
+      }
+    }
+  }
+
   return next()
 })
 

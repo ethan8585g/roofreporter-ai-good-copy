@@ -581,7 +581,7 @@
         state.subscriptionActive = false;
         render();
       } else {
-        window.rmToast('Generation failed: ' + (data ? data.error : 'Unknown error', 'error'));
+        window.rmToast('Generation failed: ' + (data ? data.error : 'Unknown error'), 'error');
         if (btn) { btn.textContent = '🚀 Generate My Website'; btn.disabled = false; btn.style.opacity = '1'; }
       }
     } catch (err) {
@@ -615,7 +615,7 @@
       state.view = 'list';
       await loadSites();
     } else {
-      window.rmToast('Publish failed: ' + (data ? data.error : 'Unknown error', 'error'));
+      window.rmToast('Publish failed: ' + (data ? data.error : 'Unknown error'), 'error');
       if (btn) { btn.textContent = '🚀 Publish Live'; btn.disabled = false; btn.style.opacity = '1'; }
     }
   };
@@ -630,7 +630,7 @@
       state.previewSlug = 'home';
       render();
     } else {
-      window.rmToast('Regeneration failed: ' + (data ? data.error : 'Unknown error', 'error'));
+      window.rmToast('Regeneration failed: ' + (data ? data.error : 'Unknown error'), 'error');
       wbBack();
     }
   };
@@ -676,7 +676,7 @@
       state.editingPageId = null;
       render();
     } else {
-      window.rmToast('Save failed: ' + (data ? data.error : 'Unknown error', 'error'));
+      window.rmToast('Save failed: ' + (data ? data.error : 'Unknown error'), 'error');
       if (btn) { btn.textContent = 'Save Changes'; btn.disabled = false; }
     }
   };

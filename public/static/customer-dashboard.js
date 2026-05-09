@@ -691,7 +691,7 @@ window.retryReport = function(orderId, btn) {
     .then(function(data) {
       if (data.success) {
         if (btn) { btn.innerHTML = '<i class="fas fa-check mr-1"></i>Regenerating!'; btn.className = 'px-2.5 py-1 bg-emerald-500/15 text-emerald-400 rounded-lg text-xs font-medium'; }
-        setTimeout(function() { loadDashData().then(function() { renderDashboard(); startEnhancementPolling(); }); }, 2000);
+        setTimeout(function() { loadDashData().then(function() { renderDashboard(); startEnhancementPolling(); }).catch(function() { if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo mr-1"></i>Retry'; } }); }, 2000);
       } else {
         console.warn('Retry failed:', data.error || data.message || 'Unknown error');
         if (window.rmToast) window.rmToast('Retry failed: ' + (data.error || data.message || 'Unknown error'), 'error');
@@ -997,7 +997,7 @@ function _calLoadEvents() {
   orders.forEach(function(o) {
     if (o.created_at) {
       var d = o.created_at.substring(0, 10);
-      _calEvents.push({ date: d, title: 'Report: ' + (o.address || 'Order').substring(0, 25), color: 'blue' });
+      _calEvents.push({ date: d, title: 'Report: ' + (o.property_address || o.address || 'Order').substring(0, 25), color: 'blue' });
     }
   });
   // Load CRM jobs into calendar
@@ -1140,11 +1140,15 @@ window._toggleGcalSync = async function(enabled) {
       fetch('/api/customer/gcal/disconnect', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + token }
-      }).then(function() {
+      }).then(function(r) {
+        if (!r.ok) throw new Error('disconnect failed');
         localStorage.setItem('rc_gcal_sync', '0');
         setToggle('gcal-sync-toggle', false);
         _calLoadEvents();
         _calRender();
+      }).catch(function() {
+        if (window.rmToast) window.rmToast('Disconnect failed — please try again', 'error');
+        setToggle('gcal-sync-toggle', true);
       });
     } else {
       // User cancelled — re-check the toggle
@@ -1270,7 +1274,7 @@ async function checkMaterialSetup() {
   }
 
   try {
-    var res = await fetch('/api/admin/material-preferences', { headers: authHeaders() });
+    var res = await fetch('/api/customer/material-preferences', { headers: authHeaders() });
     if (!res.ok) return;
     var data = await res.json();
     // If preferences exist and have been saved (non-default), don't show
@@ -1326,6 +1330,7 @@ function fetchLeadsUnreadBadge() {
     .catch(function() {});
 }
 
-// Fetch badge on load and every 60 seconds
+// Fetch badge on load and every 60 seconds — pause when tab is hidden to avoid wasted requests
 setTimeout(fetchLeadsUnreadBadge, 1000);
-setInterval(fetchLeadsUnreadBadge, 60000);
+var _leadsBadgeInterval = setInterval(function() { if (!document.hidden) fetchLeadsUnreadBadge(); }, 60000);
+document.addEventListener('visibilitychange', function() { if (!document.hidden) fetchLeadsUnreadBadge(); });

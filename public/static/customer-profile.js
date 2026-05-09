@@ -233,21 +233,31 @@
     var token = tok();
     var url = '/api/square/oauth/start?token=' + encodeURIComponent(token);
     var popup = window.open(url, 'square_oauth', 'width=600,height=800');
+    if (!popup) { showToast('Popup blocked — please allow popups and try again', 'error'); return; }
+    var poll = null;
+    var giveUpTimer = null;
+    function cleanup() {
+      window.removeEventListener('message', onMsg);
+      if (poll) { clearInterval(poll); poll = null; }
+      if (giveUpTimer) { clearTimeout(giveUpTimer); giveUpTimer = null; }
+    }
     function onMsg(ev) {
       if (!ev.data || typeof ev.data !== 'object') return;
       if (ev.data.type === 'square_oauth_success') {
-        window.removeEventListener('message', onMsg);
+        cleanup();
         showToast('Square connected successfully!', 'success');
         refreshSquareStatus();
       } else if (ev.data.type === 'square_oauth_error') {
-        window.removeEventListener('message', onMsg);
+        cleanup();
         showToast('Square connection failed: ' + (ev.data.error || 'unknown'), 'error');
       }
     }
     window.addEventListener('message', onMsg);
-    var poll = setInterval(function () {
-      if (popup && popup.closed) { clearInterval(poll); refreshSquareStatus(); }
+    poll = setInterval(function () {
+      if (popup.closed) { cleanup(); refreshSquareStatus(); }
     }, 1000);
+    // Give up after 5 minutes so abandoned popups don't leak forever
+    giveUpTimer = setTimeout(cleanup, 5 * 60 * 1000);
   };
 
   window.disconnectSquare = async function () {
@@ -663,7 +673,7 @@
         await savePassword();
       }
       dirty[sectionId] = false;
-      if (btn) { btn.classList.add('hidden'); }
+      if (btn) { btn.classList.add('hidden'); btn.disabled = false; btn.innerHTML = 'Save Changes'; }
       showToast('Saved!', 'success');
     } catch (e) {
       showToast(e.message || 'Save failed', 'error');
@@ -747,7 +757,14 @@
       window.rmToast('Email did not match. Account deletion cancelled.', 'info');
       return;
     }
-    showToast('Deletion request submitted. Support will contact you within 24 hours.', 'info');
+    try {
+      var res = await fetch('/api/customer/account/request-deletion', { method: 'POST', headers: hdrs(), body: JSON.stringify({ email_confirmation: email }) });
+      var data = await res.json().catch(function(){ return {}; });
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      showToast('Deletion request submitted. Support will contact you within 24 hours.', 'info');
+    } catch (e) {
+      showToast('Could not submit deletion request: ' + (e.message || 'unknown error') + '. Please email support directly.', 'error');
+    }
   };
 
   // ── Toast ─────────────────────────────────────────────────

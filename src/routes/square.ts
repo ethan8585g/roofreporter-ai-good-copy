@@ -9,6 +9,7 @@ import { validateAdminSession } from './auth'
 import { recordAndNotify } from '../services/admin-notifications'
 import { addCredits } from '../services/api-billing'
 import { logAutoInvoiceStep } from '../services/auto-invoice-audit'
+import { sendMetaConversion } from './meta-connect'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 function isValidEmail(email: string): boolean {
@@ -430,7 +431,13 @@ squareRoutes.post('/checkout', async (c) => {
     const customer = await getCustomerFromToken(c.env.DB, token)
     if (!customer) return c.json({ error: 'Not authenticated' }, 401)
 
-    const { package_id, order_id, success_url, cancel_url, promo_code } = await c.req.json()
+    const { package_id, order_id, success_url, cancel_url, promo_code, idempotency_key: clientIdemKey } = await c.req.json()
+
+    // Use client-supplied idempotency_key (from customer-order.js buyPackage) as
+    // Square's idempotency_key when present — Square dedupes on this key for 24h,
+    // so a retry with the same UUID returns the same payment link instead of
+    // creating a duplicate. Falls back to server-generated key if absent.
+    const safeClientKey = (clientIdemKey && typeof clientIdemKey === 'string' && clientIdemKey.length >= 8 && clientIdemKey.length <= 45) ? clientIdemKey : null
 
     // Look up package
     const pkg = await c.env.DB.prepare(
@@ -476,7 +483,7 @@ squareRoutes.post('/checkout', async (c) => {
       : autoPromoApplied
         ? ` | Promo: ${autoPromoApplied.code} (-$${(autoPromoApplied.discountCents/100).toFixed(2)})`
         : ''
-    const idempotencyKey = `checkout-${customer.customer_id}-${pkg.id}-${Date.now()}`
+    const idempotencyKey = safeClientKey || `checkout-${customer.customer_id}-${pkg.id}-${Date.now()}`
     const paymentLink = await squareRequest(accessToken, 'POST', '/online-checkout/payment-links', {
       idempotency_key: idempotencyKey,
       quick_pay: {
@@ -1247,6 +1254,33 @@ squareRoutes.post('/webhook', async (c) => {
           ).catch((e) => console.warn('[ga4-server] webhook fire failed:', (e && e.message) || e))
           if ((c as any).executionCtx?.waitUntil) {
             ;(c as any).executionCtx.waitUntil(ga4Promise)
+          }
+
+          // Server-side Meta CAPI Purchase fire — without this, Meta has no
+          // revenue signal at all (client-side fbq Purchase added separately on
+          // the success page, but Meta dedupes via event_id, so both is fine).
+          // No-ops cleanly when META_CAPI_ACCESS_TOKEN is unset.
+          try {
+            const buyer = await c.env.DB.prepare(
+              'SELECT email, phone FROM customers WHERE id = ?'
+            ).bind(customerId).first<any>().catch(() => null)
+            const capiPromise = sendMetaConversion(c.env as any, {
+              eventName: 'Purchase',
+              email: buyer?.email || undefined,
+              phone: buyer?.phone || undefined,
+              sourcePage: 'square_webhook',
+              customData: {
+                value: Number(pendingPayment.amount || 0),
+                currency: 'CAD',
+                content_ids: [pendingPayment.square_order_id || `square_${payment.id}`],
+                payment_type: pendingPayment.payment_type || 'unknown',
+              },
+            }).catch((e: any) => console.warn('[meta-capi] purchase fire failed:', (e && e.message) || e))
+            if ((c as any).executionCtx?.waitUntil) {
+              ;(c as any).executionCtx.waitUntil(capiPromise)
+            }
+          } catch (e: any) {
+            console.warn('[meta-capi] purchase setup failed:', e?.message || e)
           }
         }
 

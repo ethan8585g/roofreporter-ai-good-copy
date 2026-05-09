@@ -68,7 +68,7 @@ Write a short, warm, VALUE-FIRST follow-up email. Do NOT be salesy or pushy. The
 Tone: professional but friendly, like a knowledgeable colleague — not a sales pitch.
 Length: 4-6 short paragraphs.
 Sign off as: "The Roof Manager Team"
-Include a CTA button link to https://roofmanager.ca/quote
+Include a CTA button link to https://roofmanager.ca/free-roof-estimate
 
 Return STRICT JSON only — no markdown fences:
 {
@@ -81,7 +81,7 @@ Return STRICT JSON only — no markdown fences:
 
 const DEFAULT_RESPONSE: LeadEmail = {
   subject: 'Your Roof Manager request',
-  html: '<p>Thank you for your interest in Roof Manager. We\'ll be in touch shortly.</p><p><a href="https://roofmanager.ca/quote">Get a free quote</a></p>',
+  html: '<p>Thank you for your interest in Roof Manager. We\'ll be in touch shortly.</p><p><a href="https://roofmanager.ca/free-roof-estimate">Get a free roof estimate</a></p>',
 }
 
 export function parseLeadEmail(text: string): LeadEmail {

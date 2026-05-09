@@ -136,14 +136,38 @@
   // ── Event queue + batch sender (internal D1 analytics) ──
   var queue = [];
   var sendTimer = null;
-  
+
+  // Strip PII / credentials / one-time tokens from URL params before they
+  // land in D1 analytics. Keeps utm_* and other public attribution params.
+  var SENSITIVE_PARAMS = /^(token|code|verify|reset|magic|key|secret|password|email|otp|access_token|refresh_token|id_token|auth|session|signature|hash)$/i;
+  function sanitizeQuery(search) {
+    if (!search || search.length < 2) return '';
+    try {
+      var p = new URLSearchParams(search);
+      var clean = new URLSearchParams();
+      p.forEach(function(v, k) {
+        if (SENSITIVE_PARAMS.test(k)) clean.set(k, '[redacted]');
+        else clean.set(k, v);
+      });
+      var s = clean.toString();
+      return s ? ('?' + s) : '';
+    } catch (_) { return ''; }
+  }
+  function sanitizeRef(ref) {
+    if (!ref) return null;
+    try {
+      var u = new URL(ref);
+      return u.origin + u.pathname + sanitizeQuery(u.search);
+    } catch (_) { return null; }
+  }
+
   function enqueue(event) {
     event.session_id = sessionId;
     event.visitor_id = visitorId;
     event.user_id = getUserId();
-    event.page_url = location.pathname + location.search;
+    event.page_url = location.pathname + sanitizeQuery(location.search);
     event.page_title = document.title;
-    event.referrer = document.referrer || null;
+    event.referrer = sanitizeRef(document.referrer);
     event.screen_width = screen.width;
     event.screen_height = screen.height;
     event.language = navigator.language;

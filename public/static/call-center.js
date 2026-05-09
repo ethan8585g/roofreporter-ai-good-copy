@@ -1900,7 +1900,7 @@
       document.getElementById('cc-add-line-modal').classList.add('hidden');
       ccLoadTab('phone-setup');
     } else {
-      window.rmToast((data && data.error, 'info') || 'Failed to add phone line');
+      window.rmToast(((data && data.error) || 'Failed to add phone line'), 'error');
     }
   };
 
@@ -1909,7 +1909,7 @@
     if (data && data.success) {
       ccLoadTab('phone-setup');
     } else {
-      window.rmToast((data && data.error, 'info') || 'Failed to toggle');
+      window.rmToast(((data && data.error) || 'Failed to toggle'), 'error');
     }
   };
 
@@ -1918,7 +1918,7 @@
     if (data && data.success) {
       ccLoadTab('phone-setup');
     } else {
-      window.rmToast((data && data.error, 'info') || 'Failed to toggle forwarding');
+      window.rmToast(((data && data.error) || 'Failed to toggle forwarding'), 'error');
     }
   };
 
@@ -1927,14 +1927,14 @@
     if (label === null) return;
     var data = await ccFetch('/api/call-center/phone-lines/' + lineId, { method: 'PUT', body: JSON.stringify({ label: label }) });
     if (data && data.success) ccLoadTab('phone-setup');
-    else window.rmToast((data && data.error, 'info') || 'Failed to update');
+    else window.rmToast(((data && data.error) || 'Failed to update'), 'error');
   };
 
   window.ccDeletePhoneLine = async function(lineId) {
     if (!(await window.rmConfirm('Remove this phone line? This cannot be undone.'))) return
     var data = await ccFetch('/api/call-center/phone-lines/' + lineId, { method: 'DELETE' });
     if (data && data.success) ccLoadTab('phone-setup');
-    else window.rmToast((data && data.error, 'info') || 'Failed to delete');
+    else window.rmToast(((data && data.error) || 'Failed to delete'), 'error');
   };
 
   window.ccShowQuickConnect = function() {
@@ -2108,7 +2108,7 @@
       else if (res.dev_code) ccPhoneState.devCode = res.dev_code;
       renderTab('phone-setup');
     } else {
-      window.rmToast((res && res.error, 'info') || 'Failed to send code. Please try again.');
+      window.rmToast(((res && res.error) || 'Failed to send code. Please try again.'), 'error');
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-key mr-1"></i> Get Verification Code'; }
     }
   };
@@ -2165,7 +2165,7 @@
       }
       window.rmToast(res.message || 'New verification code generated!', 'info');
     } else {
-      window.rmToast((res && res.error, 'info') || 'Failed to resend.');
+      window.rmToast(((res && res.error) || 'Failed to resend.'), 'error');
     }
   };
 
@@ -2207,7 +2207,7 @@
     if (res && res.success) {
       window.rmToast(res.message || 'Setup details sent to your phone!', 'info');
     } else {
-      window.rmToast((res && res.error, 'info') || 'Failed to send SMS.');
+      window.rmToast(((res && res.error) || 'Failed to send SMS.'), 'error');
     }
   };
 

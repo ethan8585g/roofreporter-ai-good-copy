@@ -712,8 +712,11 @@
 
   window.submitBlogContact = function(e) {
     e.preventDefault();
-    var name = document.getElementById('bc-name').value.trim();
-    var email = document.getElementById('bc-email').value.trim();
+    var nameEl = document.getElementById('bc-name');
+    var emailEl = document.getElementById('bc-email');
+    if (!nameEl || !emailEl) return;
+    var name = (nameEl.value || '').trim();
+    var email = (emailEl.value || '').trim();
     if (!name || !email) return;
     var data = {
       name: name,
@@ -728,7 +731,10 @@
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...'; }
     if (msg) msg.className = 'hidden';
     fetch('/api/agents/leads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
-      .then(function(r) { return r.json(); })
+      .then(function(r) {
+        if (!r.ok) throw new Error('lead-submit failed');
+        return r.json();
+      })
       .then(function(res) {
         if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('lead', { value: 1.0, currency: 'USD' });
         if (msg) {
