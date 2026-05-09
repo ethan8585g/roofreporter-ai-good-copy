@@ -905,6 +905,18 @@ roverRoutes.post('/lead', async (c) => {
   }
 })
 
+// HTML-escape helper for embedding user-supplied lead fields in email bodies
+function htmlEsc(v: any): string {
+  return String(v ?? '').replace(/[&<>"']/g, (m) => (
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' } as Record<string,string>)[m]
+  ))
+}
+
+// Strip CR/LF to prevent header injection in email subjects
+function stripNewlines(v: any): string {
+  return String(v ?? '').replace(/[\r\n]+/g, ' ')
+}
+
 // Helper to send lead notification email
 async function sendLeadNotification(env: any, lead: { name?: string; email?: string; phone?: string; company?: string; message?: string }) {
   const clientId = env.GMAIL_CLIENT_ID
@@ -928,18 +940,18 @@ async function sendLeadNotification(env: any, lead: { name?: string; email?: str
   </div>
   <div style="background:white;padding:24px;border:1px solid #e2e8f0;border-top:none">
     <table style="width:100%;border-collapse:collapse">
-      ${lead.name ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:100px"><strong>Name</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${lead.name}</td></tr>` : ''}
-      ${lead.email ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Email</strong></td><td style="padding:8px 0;font-size:14px"><a href="mailto:${lead.email}" style="color:#0ea5e9">${lead.email}</a></td></tr>` : ''}
-      ${lead.phone ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Phone</strong></td><td style="padding:8px 0;font-size:14px"><a href="tel:${lead.phone}" style="color:#0ea5e9">${lead.phone}</a></td></tr>` : ''}
-      ${lead.company ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Company</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${lead.company}</td></tr>` : ''}
-      ${lead.message ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px;vertical-align:top"><strong>Message</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${lead.message}</td></tr>` : ''}
+      ${lead.name ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:100px"><strong>Name</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${htmlEsc(lead.name)}</td></tr>` : ''}
+      ${lead.email ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Email</strong></td><td style="padding:8px 0;font-size:14px"><a href="mailto:${htmlEsc(lead.email)}" style="color:#0ea5e9">${htmlEsc(lead.email)}</a></td></tr>` : ''}
+      ${lead.phone ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Phone</strong></td><td style="padding:8px 0;font-size:14px"><a href="tel:${htmlEsc(lead.phone)}" style="color:#0ea5e9">${htmlEsc(lead.phone)}</a></td></tr>` : ''}
+      ${lead.company ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Company</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${htmlEsc(lead.company)}</td></tr>` : ''}
+      ${lead.message ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px;vertical-align:top"><strong>Message</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${htmlEsc(lead.message)}</td></tr>` : ''}
     </table>
   </div>
   <div style="background:#f8fafc;padding:16px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;border-top:none;text-align:center">
     <a href="https://www.roofmanager.ca/super-admin" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Super Admin Dashboard</a>
   </div>
 </div>`
-    await sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofmanager.ca', `🐕 Rover Chat Lead: ${lead.name || lead.email || 'Unknown'}`, html, 'sales@roofmanager.ca').catch((e: any) => console.warn('[Rover Lead Email] Failed:', e.message))
+    await sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofmanager.ca', `🐕 Rover Chat Lead: ${stripNewlines(lead.name || lead.email || 'Unknown')}`, html, 'sales@roofmanager.ca').catch((e: any) => console.warn('[Rover Lead Email] Failed:', e.message))
   } else {
     console.log('[Rover Lead] Gmail not configured, lead:', JSON.stringify(lead))
   }

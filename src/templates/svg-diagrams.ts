@@ -74,8 +74,8 @@ export function generateArchitecturalDiagramSVG(
   if (hasFacets) aiGeometry!.facets.forEach(f => f.points?.forEach(expandBbox))
   if (aiGeometry!.lines) aiGeometry!.lines.forEach(l => { expandBbox(l.start); expandBbox(l.end) })
 
-  const geoW = maxX - minX || 1
-  const geoH = maxY - minY || 1
+  const geoW = Number.isFinite(maxX - minX) && (maxX - minX) > 0 ? (maxX - minX) : 1
+  const geoH = Number.isFinite(maxY - minY) && (maxY - minY) > 0 ? (maxY - minY) : 1
   const drawW = W - PAD * 2
   const drawH = H - PAD - 30 - FOOTER_H
   const sc = Math.min(drawW / geoW, drawH / geoH) * 0.82
@@ -1190,8 +1190,8 @@ export function generateProfessionalDiagramSVG(
   if (hasFacets) aiGeometry.facets.forEach(f => f.points?.forEach(expandBbox))
   if (aiGeometry.lines) aiGeometry.lines.forEach(l => { expandBbox(l.start); expandBbox(l.end) })
 
-  const geoW = maxX - minX || 1
-  const geoH = maxY - minY || 1
+  const geoW = Number.isFinite(maxX - minX) && (maxX - minX) > 0 ? (maxX - minX) : 1
+  const geoH = Number.isFinite(maxY - minY) && (maxY - minY) > 0 ? (maxY - minY) : 1
   const drawW = W - PAD * 2
   const drawH = H - PAD * 2
   const scale = Math.min(drawW / geoW, drawH / geoH) * 0.88
@@ -1553,8 +1553,8 @@ export function generateBlueprintSVG(
   if (hasFacets) aiGeometry.facets.forEach(f => f.points?.forEach(expandBbox))
   if (aiGeometry.lines) aiGeometry.lines.forEach(l => { expandBbox(l.start); expandBbox(l.end) })
 
-  const geoW = maxX - minX || 1
-  const geoH = maxY - minY || 1
+  const geoW = Number.isFinite(maxX - minX) && (maxX - minX) > 0 ? (maxX - minX) : 1
+  const geoH = Number.isFinite(maxY - minY) && (maxY - minY) > 0 ? (maxY - minY) : 1
   const drawSize = SVG_SIZE - PAD * 2
   const scale = Math.min(drawSize / geoW, drawSize / geoH) * 0.95
   const offsetX = PAD + (drawSize - geoW * scale) / 2
@@ -2094,8 +2094,8 @@ export function generatePitchDiagramFromAI(
   const svgW = 500, svgH = 350
   const drawW = svgW - pad * 2
   const drawH = svgH - pad * 2 - 30 // leave room for bottom label
-  const geoW = maxX - minX || 1
-  const geoH = maxY - minY || 1
+  const geoW = Number.isFinite(maxX - minX) && (maxX - minX) > 0 ? (maxX - minX) : 1
+  const geoH = Number.isFinite(maxY - minY) && (maxY - minY) > 0 ? (maxY - minY) : 1
   const scale = Math.min(drawW / geoW, drawH / geoH)
   const offsetX = pad + (drawW - geoW * scale) / 2
   const offsetY = pad + (drawH - geoH * scale) / 2
@@ -2520,8 +2520,8 @@ export function generateTraceBasedDiagramSVG(
     minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y)
   })
 
-  const geoW = maxX - minX || 1
-  const geoH = maxY - minY || 1
+  const geoW = Number.isFinite(maxX - minX) && (maxX - minX) > 0 ? (maxX - minX) : 1
+  const geoH = Number.isFinite(maxY - minY) && (maxY - minY) > 0 ? (maxY - minY) : 1
   const totalSidePad = PAD + LABEL_MARGIN
   const TOP_RESERVE = totalSidePad
   const BOTTOM_RESERVE = totalSidePad + FOOTER_H
@@ -3498,8 +3498,8 @@ export function generateSquaresGridDiagramSVG(
     minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y)
   })
 
-  const geoW = maxX - minX || 1
-  const geoH = maxY - minY || 1
+  const geoW = Number.isFinite(maxX - minX) && (maxX - minX) > 0 ? (maxX - minX) : 1
+  const geoH = Number.isFinite(maxY - minY) && (maxY - minY) > 0 ? (maxY - minY) : 1
   const drawW = W - PAD * 2
   const drawH = H - PAD - FOOTER_H - 36
   const sc = Math.min(drawW / geoW, drawH / geoH) * 0.80

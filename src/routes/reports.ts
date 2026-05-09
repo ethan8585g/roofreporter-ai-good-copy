@@ -2758,6 +2758,13 @@ reportsRoutes.post('/:orderId/share', async (c) => {
   let emailError: string | null = null
   let emailVia: 'gmail' | 'resend' | null = null
 
+  // Reject malformed email addresses outright — body.email is user-supplied
+  // and was previously passed straight to the SMTP layer.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+  if (body.email && !EMAIL_RE.test(String(body.email).trim())) {
+    return c.json({ error: 'Invalid email address' }, 400)
+  }
+
   if (body.email) {
     const address = report.property_address || 'your property'
     const contractor = report.contractor_name || 'Your roofing contractor'

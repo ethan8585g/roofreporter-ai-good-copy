@@ -1713,13 +1713,23 @@ crmRoutes.put('/jobs/:id', async (c) => {
             const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ownerForCert.gmail_refresh_token || ''
             if (clientId && clientSecret && refreshToken) {
               const { sendGmailOAuth2 } = await import('../services/email')
-              sendGmailOAuth2(
-                clientId, clientSecret, refreshToken,
-                job.customer_email,
-                `Certificate of New Roof Installation — ${job.property_address || job.title}`,
-                certHtml,
-                ownerForCert.email
-              ).catch((e) => console.warn("[silent-catch] cert-on-job-complete", (e && e.message) || e))
+              try {
+                await sendGmailOAuth2(
+                  clientId, clientSecret, refreshToken,
+                  job.customer_email,
+                  `Certificate of New Roof Installation — ${job.property_address || job.title}`,
+                  certHtml,
+                  ownerForCert.email,
+                  c.env
+                )
+              } catch (e: any) {
+                console.warn("[cert-on-job-complete] send failed:", (e && e.message) || e)
+                try {
+                  await c.env.DB.prepare(
+                    "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'email_send_failed', ?)"
+                  ).bind(`Certificate to ${job.customer_email} for job ${job.id} failed: ${(e && e.message) || e}`.slice(0, 500)).run()
+                } catch {}
+              }
               // Log the certificate send
               await c.env.DB.prepare(
                 `INSERT INTO certificate_send_log (owner_id, entity_type, entity_id, recipient_email, sent_at) VALUES (?, 'job', ?, ?, datetime('now'))`
@@ -2893,16 +2903,26 @@ crmRoutes.post('/proposals/respond/:token', async (c) => {
         const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ownerForCert.gmail_refresh_token || ''
         if (clientId && clientSecret && refreshToken) {
           const { sendGmailOAuth2 } = await import('../services/email')
-          sendGmailOAuth2(
-            clientId, clientSecret, refreshToken,
-            proposal.customer_email,
-            `Certificate of New Roof Installation — ${proposal.property_address}`,
-            certHtml,
-            ownerForCert.email
-          ).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
-          await c.env.DB.prepare(
-            `UPDATE crm_proposals SET certificate_sent_at = datetime('now') WHERE id = ?`
-          ).bind(proposal.id).run()
+          try {
+            await sendGmailOAuth2(
+              clientId, clientSecret, refreshToken,
+              proposal.customer_email,
+              `Certificate of New Roof Installation — ${proposal.property_address}`,
+              certHtml,
+              ownerForCert.email,
+              c.env
+            )
+            await c.env.DB.prepare(
+              `UPDATE crm_proposals SET certificate_sent_at = datetime('now') WHERE id = ?`
+            ).bind(proposal.id).run()
+          } catch (e: any) {
+            console.warn("[proposal-cert] send failed:", (e && e.message) || e)
+            try {
+              await c.env.DB.prepare(
+                "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'email_send_failed', ?)"
+              ).bind(`Certificate to ${proposal.customer_email} for proposal ${proposal.id} failed: ${(e && e.message) || e}`.slice(0, 500)).run()
+            } catch {}
+          }
         }
       }
     } catch {}

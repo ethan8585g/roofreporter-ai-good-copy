@@ -17598,7 +17598,7 @@ function getTeamManagementPageHTML() {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/team-management.js"></script>
+  <script src="/static/team-management.js?v=${Date.now()}"></script>
   ${getRoverAssistant()}
 </body>
 </html>`

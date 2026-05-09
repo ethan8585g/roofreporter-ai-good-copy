@@ -1591,7 +1591,7 @@ async function markPaid(id) {
     });
     const d = await r.json();
     if (r.ok) { await loadAll(); render(); }
-    else window.rmToast('Failed: ' + (d.error||'Unknown error', 'error'));
+    else window.rmToast('Failed: ' + (d.error||'Unknown error'), 'error');
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
@@ -1600,7 +1600,7 @@ async function delInvoice(id) {
   try {
     const r = await fetch('/api/invoices/' + id, { method:'DELETE', headers: adminHeaders() });
     if (r.ok) { await loadAll(); render(); }
-    else { const d = await r.json(); window.rmToast('Failed: ' + (d.error||'', 'error')); }
+    else { const d = await r.json(); window.rmToast('Failed: ' + (d.error||''), 'error'); }
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 

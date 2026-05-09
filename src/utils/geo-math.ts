@@ -336,22 +336,26 @@ export function computeMaterialEstimate(
   const iceShieldLinearFt = totalEaveFt + totalValleyFt
   const iceShieldSqft = iceShieldLinearFt * 3
   const iceShieldRolls = Math.ceil(iceShieldSqft / 75)
-  lineItems.push({
-    category: 'ice_shield', description: 'Ice & Water Shield Membrane', unit: 'rolls',
-    net_quantity: Math.ceil(iceShieldSqft / 75), waste_pct: 5, gross_quantity: iceShieldRolls,
-    order_quantity: iceShieldRolls, order_unit: 'rolls', unit_price_cad: 125.00,
-    line_total_cad: Math.round(iceShieldRolls * 125.00 * 100) / 100
-  })
+  if (iceShieldRolls > 0) {
+    lineItems.push({
+      category: 'ice_shield', description: 'Ice & Water Shield Membrane', unit: 'rolls',
+      net_quantity: Math.ceil(iceShieldSqft / 75), waste_pct: 5, gross_quantity: iceShieldRolls,
+      order_quantity: iceShieldRolls, order_unit: 'rolls', unit_price_cad: 125.00,
+      line_total_cad: Math.round(iceShieldRolls * 125.00 * 100) / 100
+    })
+  }
 
   const starterLinearFt = totalEaveFt + totalRakeFt
   const starterBundles = Math.ceil(starterLinearFt / 105)
-  lineItems.push({
-    category: 'starter_strip', description: 'Starter Strip Shingles', unit: 'linear_ft',
-    net_quantity: Math.round(starterLinearFt), waste_pct: 5,
-    gross_quantity: Math.round(starterLinearFt * 1.05), order_quantity: starterBundles,
-    order_unit: 'bundles', unit_price_cad: 35.00,
-    line_total_cad: Math.round(starterBundles * 35.00 * 100) / 100
-  })
+  if (starterBundles > 0) {
+    lineItems.push({
+      category: 'starter_strip', description: 'Starter Strip Shingles', unit: 'linear_ft',
+      net_quantity: Math.round(starterLinearFt), waste_pct: 5,
+      gross_quantity: Math.round(starterLinearFt * 1.05), order_quantity: starterBundles,
+      order_unit: 'bundles', unit_price_cad: 35.00,
+      line_total_cad: Math.round(starterBundles * 35.00 * 100) / 100
+    })
+  }
 
   const ridgeHipLinearFt = totalRidgeFt + totalHipFt
   const ridgeCapBundles = Math.ceil(ridgeHipLinearFt / 33)

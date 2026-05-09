@@ -268,8 +268,8 @@ export default {
            updated_at=datetime('now') WHERE agent_type=?`
         ).bind(status, summary.slice(0, 500), status, agentType).run()
         // Mirror into the Loop Tracker so the unified dashboard shows it too.
-        await writeLoopHeartbeat(env, agentType, status === 'success' ? 'pass' : status, durationMs, null, summary, 'cf_cron').catch(() => {})
-        await touchLoopDefinition(env, agentType, status === 'success' ? 'pass' : status, null).catch(() => {})
+        await writeLoopHeartbeat(env, agentType, status === 'success' ? 'pass' : status, durationMs, null, summary, 'cf_cron').catch((e: any) => console.warn(`[heartbeat-write:${agentType}] failed:`, e?.message || e))
+        await touchLoopDefinition(env, agentType, status === 'success' ? 'pass' : status, null).catch((e: any) => console.warn(`[touch-def:${agentType}] failed:`, e?.message || e))
       } catch {}
     }
 
@@ -279,7 +279,7 @@ export default {
     ctx.waitUntil(
       writeLoopHeartbeat(env, 'cron_worker_tick', 'pass', 0, null, `tick at ${now.toISOString()}`, 'cf_cron')
         .then(() => touchLoopDefinition(env, 'cron_worker_tick', 'pass', null))
-        .catch(() => {})
+        .catch((e: any) => console.warn('[cron_worker_tick] heartbeat write failed:', e?.message || e))
     )
 
     // ── Backlinks health sweep — Mondays at 13:00 UTC (one cron tick) ──
@@ -415,11 +415,15 @@ export default {
     // ── Abandoned Signup Recovery (every hour on :00 tick) ──
     if (minute === 0) {
       ctx.waitUntil((async () => {
+        const t0 = Date.now()
         try {
           const result = await runAbandonedSignupRecovery(env)
-          console.log(`[CRON:signup-recovery] Sent ${result.sent}, skipped ${result.skipped}`)
+          const summary = `Sent ${result.sent}, skipped ${result.skipped}`
+          console.log(`[CRON:signup-recovery] ${summary}`)
+          await logRun('signup_recovery', 'success', summary, result, Date.now() - t0).catch((e: any) => console.warn('[logRun:signup_recovery:success] failed:', e?.message || e))
         } catch (err: any) {
           console.error('[CRON:signup-recovery] Error:', err.message)
+          await logRun('signup_recovery', 'error', err.message, {}, Date.now() - t0).catch((e: any) => console.warn('[logRun:signup_recovery:error] failed:', e?.message || e))
         }
       })())
     }
@@ -460,10 +464,10 @@ export default {
           const r = await runNightlyAttributionRollup(env.DB)
           const summary = `Attribution rollup — ${r.recomputed||0} customers, ${r.templates||0} templates for ${r.date}`
           console.log(`[CRON:attribution] ${summary}`)
-          await logRun('attribution', 'success', summary, r, Date.now() - t0).catch(() => {})
+          await logRun('attribution', 'success', summary, r, Date.now() - t0).catch((e: any) => console.warn('[logRun:attribution:success] failed:', e?.message || e))
         } catch (err: any) {
           console.error('[CRON:attribution] Error:', err.message)
-          await logRun('attribution', 'error', err.message, {}, Date.now() - t0).catch(() => {})
+          await logRun('attribution', 'error', err.message, {}, Date.now() - t0).catch((e: any) => console.warn('[logRun:attribution:error] failed:', e?.message || e))
         }
       })())
     }
@@ -529,7 +533,7 @@ export default {
           } catch (err: any) {
             console.error(`[CRON:scan_${type}] Error:`, err?.message)
           } finally {
-            await pruneExpiredScanSessions(env).catch(() => {})
+            await pruneExpiredScanSessions(env).catch((e: any) => console.warn('[pruneExpiredScanSessions] failed:', e?.message || e))
           }
         })())
       }

@@ -134,6 +134,18 @@ export async function runScan(
       return await closeRun(env, runId, t0, findings.pagesChecked, findings.list, metrics, loopId, source)
     }
 
+    // Skip-with-warning if the synthetic-auth secret for this surface isn't
+    // set, instead of throwing on the first cron firing (which crashes the
+    // whole loop tick before downstream sweeps run).
+    if (type === 'admin' && !(env as any).SCAN_ADMIN_EMAIL) {
+      console.warn('[runScan:admin] SCAN_ADMIN_EMAIL not set — skipping admin scan')
+      return await closeRun(env, runId, t0, 0, [], metrics, loopId, source)
+    }
+    if (type === 'customer' && !(env as any).SCAN_CUSTOMER_EMAIL) {
+      console.warn('[runScan:customer] SCAN_CUSTOMER_EMAIL not set — skipping customer scan')
+      return await closeRun(env, runId, t0, 0, [], metrics, loopId, source)
+    }
+
     const cfg =
       type === 'public' ? PUBLIC_SURFACE :
       type === 'customer' ? { ...CUSTOMER_SURFACE, authHeader: () => sessionCookie('rm_customer_session', issueScanCustomerJWT(env)) } :

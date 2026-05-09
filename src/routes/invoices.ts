@@ -1396,7 +1396,7 @@ invoiceRoutes.post('/respond/:token', async (c) => {
   </div>
   <div style="background:white;padding:24px;border:1px solid #e2e8f0;border-top:none">
     <table style="width:100%;border-collapse:collapse">
-      <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:120px"><strong>Customer</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${proposal.customer_name || 'Unknown'}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:120px"><strong>Customer</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${escapeHtml(proposal.customer_name || 'Unknown')}</td></tr>
       <tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Total Amount</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b;font-weight:700">$${Number(proposal.total || 0).toFixed(2)}</td></tr>
       ${printed_name ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Signed By</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${escapeHtml(printed_name)}</td></tr>` : ''}
       ${signed_date ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Date</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${escapeHtml(signed_date)}</td></tr>` : ''}
@@ -1404,7 +1404,16 @@ invoiceRoutes.post('/respond/:token', async (c) => {
     ${signature && signature.startsWith('data:image/') ? `<div style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;text-align:center"><p style="font-size:11px;color:#94a3b8;margin:0 0 8px">Customer Signature</p><img src="${signature}" alt="Signature" style="max-height:60px"></div>` : ''}
   </div>
 </div>`
-        sendGmailOAuth2(clientId, clientSecret, refreshToken, owner.email, `${emoji} ${docLabel} ${statusText}: ${proposal.invoice_number} — $${Number(proposal.total || 0).toFixed(2)}`, notifHtml, owner.email).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+        try {
+          await sendGmailOAuth2(clientId, clientSecret, refreshToken, owner.email, `${emoji} ${docLabel} ${statusText}: ${proposal.invoice_number} — $${Number(proposal.total || 0).toFixed(2)}`, notifHtml, owner.email, c.env)
+        } catch (e: any) {
+          console.warn("[proposal-notify] send failed:", (e && e.message) || e)
+          try {
+            await c.env.DB.prepare(
+              "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'email_send_failed', ?)"
+            ).bind(`Proposal ${proposal.invoice_number} notification to ${owner.email} failed: ${(e && e.message) || e}`.slice(0, 500)).run()
+          } catch {}
+        }
       }
     }
   } catch {}

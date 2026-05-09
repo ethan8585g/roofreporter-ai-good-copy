@@ -633,7 +633,8 @@ export async function notifyNewReportRequest(
 export async function sendGmailOAuth2(
   clientId: string, clientSecret: string, refreshToken: string,
   to: string, subject: string, htmlBody: string,
-  senderEmail?: string | null
+  senderEmail?: string | null,
+  env?: any
 ): Promise<{ id: string }> {
   // Exchange refresh token for access token
   const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
@@ -655,6 +656,23 @@ export async function sendGmailOAuth2(
 
   const tokenData: any = await tokenResp.json()
   const accessToken = tokenData.access_token
+
+  // If Google rotated the refresh token (rare but supported by the OAuth2
+  // spec — happens when an account hits the 50-token-per-client cap or
+  // re-consents), persist the new one. Without this the next refresh after
+  // rotation throws "invalid_grant" and email transport silently dies.
+  if (tokenData.refresh_token && tokenData.refresh_token !== refreshToken) {
+    console.warn('[Gmail OAuth2] Refresh token rotated — persisting new token')
+    if (env?.DB) {
+      try {
+        await env.DB.prepare(
+          "UPDATE settings SET setting_value = ?, updated_at = datetime('now') WHERE setting_key = 'gmail_refresh_token' AND master_company_id = 1"
+        ).bind(tokenData.refresh_token).run()
+      } catch (e: any) {
+        console.error('[Gmail OAuth2] Failed to persist rotated refresh_token:', e?.message || e)
+      }
+    }
+  }
 
   // Build RFC 2822 email
   const boundary = 'boundary_' + Date.now()

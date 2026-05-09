@@ -152,7 +152,8 @@ marketingBlastRoutes.post('/reengagement-blast', async (c) => {
   const sent: string[] = []
   const failed: { email: string, error: string }[] = []
 
-  for (const r of targets) {
+  for (let i = 0; i < targets.length; i++) {
+    const r = targets[i]
     const html = buildReengagementHtml(r.first_name, r.cohort, r.email)
     if (dryRun) {
       sent.push(r.email)
@@ -163,6 +164,11 @@ marketingBlastRoutes.post('/reengagement-blast', async (c) => {
       sent.push(r.email)
     } catch (e: any) {
       failed.push({ email: r.email, error: e?.message || String(e) })
+    }
+    // Per-recipient throttle so we don't trip Gmail's send quotas on large
+    // blasts. Skip the wait after the last send.
+    if (i < targets.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 100))
     }
   }
 

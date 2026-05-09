@@ -22,6 +22,12 @@ import {
   type StructurePartition,
 } from './svg-3d-diagram'
 import { estimateShingleAgeYears, regionalReplacementBandCad } from '../services/report-pro'
+
+function htmlEsc(v: any): string {
+  return String(v ?? '').replace(/[&<>"']/g, (m) => (
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' } as Record<string,string>)[m]
+  ))
+}
 import {
   RoofMeasurementEngine, traceUiToEnginePayload, type TraceReport,
 } from '../services/roof-measurement-engine'
@@ -458,7 +464,7 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   // ── Computed values ──
   const reportNum = `${String(report.order_id).padStart(8, '0')}`
   const reportDate = new Date(report.generated_at).toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' })
-  const fullAddress = [prop.address, prop.city, prop.province, prop.postal_code].filter(Boolean).join(', ')
+  const fullAddress = htmlEsc([prop.address, prop.city, prop.province, prop.postal_code].filter(Boolean).join(', '))
   // All areas in square feet (no roofing squares)
   const netAreaSF = Math.round(report.total_true_area_sqft || report.total_footprint_sqft)
   const grossAreaSF = Math.round(netAreaSF * (1 + (mat.waste_pct || 5) / 100))
@@ -639,8 +645,8 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
     </div>
     <!-- Address -->
     <div style="flex:1;text-align:right">
-      <div style="font-size:15px;font-weight:700;color:#222">${fullAddress}</div>
-      <div style="font-size:9px;color:#888;margin-top:2px">${[prop.homeowner_name ? 'Homeowner: ' + prop.homeowner_name : '', prop.requester_name ? 'For: ' + prop.requester_name : '', prop.requester_company || ''].filter(Boolean).join(' · ') || 'Residential Property'}</div>
+      <div style="font-size:15px;font-weight:700;color:#222">${htmlEsc(fullAddress)}</div>
+      <div style="font-size:9px;color:#888;margin-top:2px">${[prop.homeowner_name ? 'Homeowner: ' + htmlEsc(prop.homeowner_name) : '', prop.requester_name ? 'For: ' + htmlEsc(prop.requester_name) : '', htmlEsc(prop.requester_company || '')].filter(Boolean).join(' · ') || 'Residential Property'}</div>
     </div>
   </div>
 
@@ -1208,7 +1214,7 @@ export function generateSimpleTwoPageReport(report: RoofReport): string {
   // Structure count derived from the same partitioner page 2 uses.
   const structureCountSimple = Math.max(1, splitStructures(report).length)
 
-  const fullAddress = [prop.address, prop.city, prop.province, prop.postal_code].filter(Boolean).join(', ')
+  const fullAddress = htmlEsc([prop.address, prop.city, prop.province, prop.postal_code].filter(Boolean).join(', '))
   const reportDate = new Date(report.generated_at).toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' })
   const netAreaSF = Math.round(report.total_true_area_sqft || report.total_footprint_sqft)
   const grossAreaSF = Math.round(netAreaSF * (1 + (mat.waste_pct || 5) / 100))
@@ -1476,7 +1482,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
     </div>
     <div style="text-align:right">
       <div style="font-size:14px;font-weight:700;color:#1a1a1a">${fullAddress}</div>
-      <div style="font-size:9px;color:#777;margin-top:2px">${prop.homeowner_name ? 'Homeowner: ' + prop.homeowner_name + ' &bull; ' : ''}Report Date: ${reportDate}</div>
+      <div style="font-size:9px;color:#777;margin-top:2px">${prop.homeowner_name ? 'Homeowner: ' + htmlEsc(prop.homeowner_name) + ' &bull; ' : ''}Report Date: ${reportDate}</div>
     </div>
   </div>
 
