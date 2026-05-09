@@ -46,6 +46,13 @@ export interface UiTrace {
     pitch_rise: number
     label?: string
   }>
+  /** Non-roof voids inside the outline (decks between levels, atriums,
+   *  courtyards). Each polygon area is subtracted from total projected
+   *  and sloped area. Reported as "Excluded non-roof" in the breakdown. */
+  cutouts?: Array<{
+    polygon: LatLng[]
+    label?: string
+  }>
   ridges?: UiTraceLine[]
   hips?: UiTraceLine[]
   valleys?: UiTraceLine[]

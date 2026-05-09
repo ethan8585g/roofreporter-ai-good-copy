@@ -2384,6 +2384,13 @@ export function generateTraceBasedDiagramSVG(
       pitch_rise: number
       label?: string
     }>
+    /** Non-roof cutout polygons — grey shaded + dashed border, drawn over the
+     *  facet fills to visually subtract the area. Engine subtracts each
+     *  polygon's projected/sloped area from the totals. */
+    cutouts?: Array<{
+      polygon: { lat: number; lng: number }[]
+      label?: string
+    }>
   },
   edgeSummary: {
     total_ridge_ft: number
@@ -2512,6 +2519,16 @@ export function generateTraceBasedDiagramSVG(
       label: d.label || '',
     }))
   dormersXY.forEach(d => allPts.push(...d.pts))
+
+  // Cutouts — non-roof voids inside the outline (decks, atriums, courtyards).
+  // Rendered over facet fills so the grey + dashed shading reads as "excluded".
+  const cutoutsXY = (roofTrace.cutouts || [])
+    .filter(c => c && Array.isArray(c.polygon) && c.polygon.length >= 3)
+    .map(c => ({
+      pts: c.polygon.map(toXY),
+      label: c.label || '',
+    }))
+  cutoutsXY.forEach(c => allPts.push(...c.pts))
 
   // Bounding box
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
@@ -2860,6 +2877,22 @@ export function generateTraceBasedDiagramSVG(
     // Light fill + directional hatch
     svg += `<polygon points="${pts}" fill="${FACET_FILLS[fi % FACET_FILLS.length]}" stroke="none"/>`
     svg += `<polygon points="${pts}" fill="url(#${hatchIds[fi % hatchIds.length]})" stroke="none"/>`
+  })
+
+  // ── CUTOUTS (non-roof voids — grey shaded + dashed) ──
+  // Rendered after facet fills so they visually mask the excluded region;
+  // perimeter outline still draws on top so the building edge stays crisp.
+  cutoutsXY.forEach((c, ci) => {
+    const pts = c.pts.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
+    // Solid grey fill + dashed darker border so the area reads as "removed"
+    svg += `<polygon points="${pts}" fill="#d1d5db" fill-opacity="0.65" stroke="#6b7280" stroke-width="1.6" stroke-dasharray="5,3" stroke-linejoin="round"/>`
+    // Centroid label so the customer can see exactly what was excluded
+    const cx = c.pts.reduce((s, p) => s + tx(p.x), 0) / c.pts.length
+    const cy = c.pts.reduce((s, p) => s + ty(p.y), 0) / c.pts.length
+    if (!HIDE) {
+      const labelText = c.label || `Non-roof ${ci + 1}`
+      svg += `<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="#4b5563" font-size="9" font-weight="600" ${FONT}>${labelText}</text>`
+    }
   })
 
   // Label collision tracker — must be initialised before the extra-sections

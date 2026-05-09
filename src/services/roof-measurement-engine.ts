@@ -90,6 +90,15 @@ export interface Obstruction {
   label?: string
 }
 
+// Non-roof voids inside the lower-eave outline (decks between levels,
+// atriums, courtyards). Mechanically subtracted from totalProj/totalSloped
+// like obstructions, but semantically distinct: a hole in the footprint,
+// not a roof penetration. Surfaced as its own breakdown row in the report.
+export interface Cutout {
+  poly: TracePt[]            // closed polygon (3+ pts)
+  label?: string             // e.g. "Deck between levels"
+}
+
 export interface TracePayload {
   address?: string
   homeowner?: string
@@ -128,6 +137,11 @@ export interface TracePayload {
   // Obstructions to exclude: chimneys, skylights, vents, etc.
   // Each obstruction polygon area is subtracted from total roof area.
   obstructions?: Obstruction[]
+  // Non-roof voids inside the outline (decks between levels, atriums,
+  // courtyards). Each cutout polygon area is subtracted from totalProj
+  // and totalSloped after obstructions. Reported separately so the
+  // breakdown shows "Excluded non-roof" distinct from roof penetrations.
+  cutouts?: Cutout[]
   ridges?: TraceLine[]
   hips?: TraceLine[]
   valleys?: TraceLine[]
@@ -277,6 +291,12 @@ export interface ObstructionDetail {
   sloped_area_ft2: number
 }
 
+export interface CutoutDetail {
+  label: string
+  projected_area_ft2: number
+  sloped_area_ft2: number
+}
+
 export interface EaveCornerDetail {
   edge_num: number
   length_ft: number
@@ -356,6 +376,9 @@ export interface TraceReport {
     dominant_pitch_angle_deg: number
     obstruction_deduction_ft2: number
     num_obstructions: number
+    cutout_deduction_ft2: number
+    cutout_deduction_projected_ft2: number
+    num_cutouts: number
   }
   cross_check?: CrossCheck
   needs_review?: boolean
@@ -378,6 +401,7 @@ export interface TraceReport {
   eave_corner_analysis: EaveCornerDetail[]
   eave_depth_layers: EaveDepthLayer[]
   obstruction_details: ObstructionDetail[]
+  cutout_details: CutoutDetail[]
   ridge_details: LineDetail[]
   hip_details: LineDetail[]
   valley_details: LineDetail[]
@@ -1028,6 +1052,8 @@ export class RoofMeasurementEngine {
   private eaveDepths: EaveDepthLayer[]
   // Obstructions (chimneys, skylights, etc.)
   private obstructions: Obstruction[]
+  // Cutouts — non-roof voids inside the outline (decks between levels, etc.)
+  private cutouts: Cutout[]
   // Small corner threshold (ft)
   private smallCornerThresholdFt: number
   // Optional external-source footprint for cross-check
@@ -1094,6 +1120,8 @@ export class RoofMeasurementEngine {
     this.eaveDepths = payload.eave_depths || []
     // Obstructions (chimneys, skylights, vents)
     this.obstructions = payload.obstructions || []
+    // Cutouts (decks between levels, atriums, courtyards) — interior voids
+    this.cutouts = payload.cutouts || []
     // Small eave corner threshold (default 2 ft — edges shorter than this get flagged)
     this.smallCornerThresholdFt = payload.small_corner_threshold_ft ?? 2.0
     this.crossCheckSource = payload.cross_check && payload.cross_check.footprint_ft2 > 0
@@ -1798,6 +1826,30 @@ export class RoofMeasurementEngine {
     return results
   }
 
+  // ── CUTOUT AREA CALCULATION ──────────────────────────
+  // Computes projected and sloped area for each non-roof void polygon
+  // (decks between levels, atriums, courtyards). Mirrors computeObstructions
+  // but emitted under cutout_details, not obstruction_details.
+
+  computeCutouts(domPitch: number): CutoutDetail[] {
+    if (this.cutouts.length === 0) return []
+    const results: CutoutDetail[] = []
+    for (const cut of this.cutouts) {
+      if (!cut.poly || cut.poly.length < 3) continue
+      const { projected: cutCart } = projectToCartesian(cut.poly)
+      const projFt2 = shoelaceAreaM2(cutCart) * M2_TO_FT2
+      if (projFt2 > 0) {
+        const slopedFt2 = slopedFromProjected(projFt2, domPitch)
+        results.push({
+          label: cut.label || 'Excluded non-roof area',
+          projected_area_ft2: round(projFt2, 1),
+          sloped_area_ft2: round(slopedFt2, 1),
+        })
+      }
+    }
+    return results
+  }
+
   // ── EAVE CORNER ANALYSIS ─────────────────────────────
   // Identifies small corners (short edges at sharp angles) that may
   // need special flashing treatment or indicate dormers/returns
@@ -2060,6 +2112,17 @@ export class RoofMeasurementEngine {
     // Subtract obstruction areas from totals
     totalProj   = Math.max(0, totalProj - obstructionDeductProjFt2)
     totalSloped = Math.max(0, totalSloped - obstructionDeductSlopedFt2)
+
+    // ── CUTOUT DEDUCTION (decks between levels, atriums, courtyards) ──
+    const cutoutDetails = this.computeCutouts(domPitch)
+    let cutoutDeductProjFt2 = 0
+    let cutoutDeductSlopedFt2 = 0
+    for (const c of cutoutDetails) {
+      cutoutDeductProjFt2   += c.projected_area_ft2
+      cutoutDeductSlopedFt2 += c.sloped_area_ft2
+    }
+    totalProj   = Math.max(0, totalProj   - cutoutDeductProjFt2)
+    totalSloped = Math.max(0, totalSloped - cutoutDeductSlopedFt2)
 
     const netSquares  = totalSloped / SQFT_PER_SQUARE
 
@@ -2329,6 +2392,9 @@ export class RoofMeasurementEngine {
         dominant_pitch_angle_deg:      round(pitchAngleDeg(domPitch), 1),
         obstruction_deduction_ft2:     round(obstructionDeductSlopedFt2, 1),
         num_obstructions:              obstructionDetails.length,
+        cutout_deduction_ft2:          round(cutoutDeductSlopedFt2, 1),
+        cutout_deduction_projected_ft2: round(cutoutDeductProjFt2, 1),
+        num_cutouts:                   cutoutDetails.length,
       },
       linear_measurements: {
         eaves_total_ft:             round(totalEaveFt, 1),
@@ -2350,6 +2416,7 @@ export class RoofMeasurementEngine {
       eave_corner_analysis: cornerAnalysis,
       eave_depth_layers: this.eaveDepths,
       obstruction_details: obstructionDetails,
+      cutout_details:      cutoutDetails,
       ridge_details:       ridgeSegs,
       hip_details:         hipSegs,
       valley_details:      valleySegs,
@@ -2469,6 +2536,12 @@ export function traceUiToEnginePayload(
     dormers?: Array<{
       polygon: { lat: number; lng: number }[]
       pitch_rise: number
+      label?: string
+    }>
+    // Non-roof voids inside the outline (decks between levels, atriums,
+    // courtyards). Each polygon area is subtracted from totalProj/totalSloped.
+    cutouts?: Array<{
+      polygon: { lat: number; lng: number }[]
       label?: string
     }>
     // User-verified per-face polygons + pitches. When present, the engine
@@ -2678,6 +2751,14 @@ export function traceUiToEnginePayload(
       ? extraSectionKinds
       : undefined,
     obstructions:   obstructions.length > 0 ? obstructions : undefined,
+    cutouts:        Array.isArray(traceJson.cutouts) && traceJson.cutouts.length > 0
+      ? traceJson.cutouts
+          .filter(c => c && Array.isArray(c.polygon) && c.polygon.length >= 3)
+          .map(c => ({
+            poly: c.polygon.map(p => ({ lat: p.lat, lng: p.lng, elevation: null })),
+            label: c.label,
+          }))
+      : undefined,
     ridges,
     hips,
     valleys,

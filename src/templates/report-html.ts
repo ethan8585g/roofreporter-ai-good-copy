@@ -821,6 +821,19 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
             </tr>`
           }).join('')}
           ${report.segments.length > 10 ? `<tr><td colspan="4" style="padding:3px 5px;font-size:7px;color:#888;text-align:center">+ ${report.segments.length - 10} more planes</td></tr>` : ''}
+          ${(() => {
+            // Excluded non-roof areas (decks between levels, atriums, courtyards).
+            // Sloped sqft already removed from report.total_true_area_sqft by the
+            // engine; show as its own row so the customer can see the deduction.
+            const cutSF = Math.round(((report as any).trace_measurement?.key_measurements?.cutout_deduction_ft2) || 0)
+            const cutCount = ((report as any).trace_measurement?.key_measurements?.num_cutouts) || 0
+            if (cutSF <= 0 || cutCount <= 0) return ''
+            return `<tr style="background:#f3f4f6;font-style:italic;color:#6b7280">
+              <td style="padding:3px 5px">Excluded non-roof</td>
+              <td style="padding:3px 5px;text-align:right">−${cutSF.toLocaleString()} SF</td>
+              <td colspan="2" style="padding:3px 5px;font-size:6.5px">${cutCount} area${cutCount === 1 ? '' : 's'} subtracted (deck/void inside outline)</td>
+            </tr>`
+          })()}
           <tr style="background:${TEAL_LIGHT};font-weight:800">
             <td style="padding:4px 5px;border-top:2px solid ${TEAL_DARK};font-size:8px">Total</td>
             <td style="padding:4px 5px;border-top:2px solid ${TEAL_DARK};text-align:right;font-size:8px">${report.total_true_area_sqft.toLocaleString()} SF</td>
@@ -939,6 +952,7 @@ ${aerialTiles.length === 4 ? `
           hips: partition.hips,
           valleys: partition.valleys,
           dormers: dormersForPartition((report as any).roof_trace?.dormers, partition.eaves),
+          cutouts: (report as any).roof_trace?.cutouts,
           annotations: (report as any).roof_trace?.annotations,
         },
         {
@@ -1007,6 +1021,7 @@ ${aerialTiles.length === 4 ? `
           hips: p.hips,
           valleys: p.valleys,
           dormers: dormersForPartition((report as any).roof_trace?.dormers, p.eaves),
+          cutouts: (report as any).roof_trace?.cutouts,
           annotations: (report as any).roof_trace?.annotations,
         },
         { total_ridge_ft: p.ridge_lf, total_hip_ft: p.hip_lf, total_valley_ft: p.valley_lf, total_eave_ft: p.eave_lf, total_rake_ft: p.rake_lf },

@@ -72,6 +72,13 @@ const orderState = {
   traceDormerCurrent: [],          // in-progress dormer points
   traceDormerCurrentPolyline: null,
   traceDormerCurrentMarkers: [],
+  // Cutouts — non-roof voids (decks between levels, atriums, courtyards).
+  // Each closed polygon is subtracted from the projected/sloped area by the
+  // engine. Mirrors the dormer state pattern; no pitch (it's a hole).
+  traceCutouts: [],                // [{points:[{lat,lng}], label?:string}]
+  traceCutoutPolygons: [],         // google.maps.Polygon overlay per closed cutout
+  traceCutoutCurrent: [],          // in-progress cutout points
+  traceCutoutCurrentPolyline: null,
   // Verified planes — per-face polygons + pitches the user has confirmed via
   // the Verify Planes overlay. When non-empty, confirmTrace sends them as
   // `verified_faces` so the engine uses them directly (shoelace × slope
@@ -658,6 +665,7 @@ function renderTraceStep(root, progressBar) {
     hip:     { color: '#f59e0b', icon: 'fa-slash',         label: 'Hips',       desc: 'Click start and end of each hip line.' },
     valley:  { color: '#ef4444', icon: 'fa-angle-down',    label: 'Valleys',    desc: 'Click start and end of each valley.' },
     dormer:  { color: '#a855f7', icon: 'fa-mountain',      label: 'Dormers',    desc: 'Trace a polygon AROUND each dormer on top of the main roof — click corners, click first point to close, then enter the dormer’s pitch (e.g. 12 for 12:12). Adds the steeper-slope area without double-counting footprint.' },
+    cutout:  { color: '#6b7280', icon: 'fa-ban',           label: 'Non-Roof Area', desc: 'Mark a deck, atrium, or other non-roof void inside the outline — click corners, click first point to close. The area is subtracted from your roof square footage.' },
     step_flashing:    { color: '#F59E0B', icon: 'fa-bars-staggered', label: 'Step Flashing',    desc: 'Click start & end where the roof slope meets a vertical wall (along the slope).' },
     headwall_flashing:{ color: '#F97316', icon: 'fa-grip-lines-vertical', label: 'Headwall Flashing', desc: 'Click start & end where the top of a slope meets a wall (across the slope).' },
     vent:    { color: '#a855f7', icon: 'fa-wind',           label: 'Vents',      desc: 'Click to mark each roof vent.' },
@@ -705,14 +713,18 @@ function renderTraceStep(root, progressBar) {
                 { key: 'hip',    info: modeInfo.hip },
                 { key: 'valley', info: modeInfo.valley },
                 { key: 'dormer', info: modeInfo.dormer },
+                { key: 'cutout', info: modeInfo.cutout },
               ].map(({ key, info }) => {
                 const dormerCount = (orderState.traceDormers || []).length;
                 const draftCount  = (orderState.traceDormerCurrent || []).length;
+                const cutoutCount = (orderState.traceCutouts || []).length;
+                const cutoutDraftCount = (orderState.traceCutoutCurrent || []).length;
                 const countLabel = key === 'eaves' ? (eavesSections > 0 ? eavesSections + (eavesSections === 1 ? ' sect' : ' sects') + (eavesCount > 0 ? '+' : '') : eavesCount + ' pts')
                   : key === 'ridge' ? ridgeCount
                   : key === 'hip'   ? hipCount
                   : key === 'valley' ? valleyCount
                   : key === 'dormer' ? (dormerCount > 0 ? dormerCount + (dormerCount === 1 ? ' dormer' : ' dormers') + (draftCount > 0 ? '+' : '') : (draftCount > 0 ? draftCount + ' pts' : '0'))
+                  : key === 'cutout' ? (cutoutCount > 0 ? cutoutCount + (cutoutCount === 1 ? ' area' : ' areas') + (cutoutDraftCount > 0 ? '+' : '') : (cutoutDraftCount > 0 ? cutoutDraftCount + ' pts' : '0'))
                   : 0;
                 return `
                 <button onclick="setTraceMode('${key}')" data-trace-mode="${key}"
@@ -737,6 +749,12 @@ function renderTraceStep(root, progressBar) {
                 class="w-full items-center justify-center gap-2 px-3 py-2 mt-1 rounded-lg text-sm font-bold transition-all bg-purple-500 text-white hover:bg-purple-400 shadow-md">
                 <i class="fas fa-check text-xs"></i>
                 <span>Complete Dormer Trace</span>
+              </button>
+              <button id="complete-cutout-btn" onclick="completeCutoutTraceFromUI()"
+                style="display:${orderState.traceMode === 'cutout' && (orderState.traceCutoutCurrent || []).length >= 3 ? 'flex' : 'none'}"
+                class="w-full items-center justify-center gap-2 px-3 py-2 mt-1 rounded-lg text-sm font-bold transition-all bg-gray-500 text-white hover:bg-gray-400 shadow-md">
+                <i class="fas fa-check text-xs"></i>
+                <span>Complete Non-Roof Area</span>
               </button>
             </div>
           </div>
@@ -1768,6 +1786,30 @@ function handleTraceClick(pt) {
         path: cur, strokeColor: '#a855f7', strokeWeight: 2.5, map: orderState.traceMap, zIndex: 4,
       });
     }
+  } else if (mode === 'cutout') {
+    // Non-roof cutout polygon — closes onto first point like eaves. Each
+    // closed cutout is sent in the trace payload as a `cutouts` entry the
+    // engine subtracts from total projected and sloped area.
+    const cur = orderState.traceCutoutCurrent || (orderState.traceCutoutCurrent = []);
+    if (cur.length >= 3) {
+      const first = cur[0];
+      if (getDistanceM(pt, first) < 1.5) {
+        closeCutoutPolygon();
+        return;
+      }
+    }
+    cur.push(pt);
+    addTraceMarker(pt, '#6b7280', null);
+    if (cur.length > 1) {
+      if (orderState.traceCutoutCurrentPolyline) {
+        orderState.traceCutoutCurrentPolyline.setMap(null);
+      }
+      orderState.traceCutoutCurrentPolyline = new google.maps.Polyline({
+        path: cur, strokeColor: '#6b7280', strokeWeight: 2.5, strokeOpacity: 0.95,
+        icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '10px' }],
+        map: orderState.traceMap, zIndex: 4,
+      });
+    }
   } else if (mode === 'vent' || mode === 'skylight' || mode === 'chimney' || mode === 'pipe_boot') {
     const arrays = {
       vent: orderState.traceVents,
@@ -2593,6 +2635,58 @@ function closeDormerPolygon() {
   updateTraceUI();
 }
 
+// Toolbar handler — finalizes the in-progress cutout polygon (≥ 3 points).
+// Wraps closeCutoutPolygon() so the sidebar button matches the dormer
+// "Complete Trace" pattern.
+window.completeCutoutTraceFromUI = function() {
+  const cur = orderState.traceCutoutCurrent || [];
+  if (cur.length < 3) {
+    showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Place at least 3 points around the non-roof area before completing the trace.');
+    return;
+  }
+  closeCutoutPolygon();
+};
+
+// Close the in-progress cutout polygon and persist it. Each cutout becomes
+// one entry in orderState.traceCutouts, sent at submit as a `cutouts` field.
+// Engine subtracts the polygon's projected and sloped area from the totals.
+function closeCutoutPolygon() {
+  const cur = orderState.traceCutoutCurrent || [];
+  if (cur.length < 3) return;
+  if (orderState.traceCutoutCurrentPolyline) {
+    orderState.traceCutoutCurrentPolyline.setMap(null);
+    orderState.traceCutoutCurrentPolyline = null;
+  }
+  // Closed polygon — grey fill + dashed stroke so it reads as "excluded"
+  // distinct from the green eaves outline and purple dormers. Editable so
+  // the user can fine-tune corners post-close.
+  const polygon = new google.maps.Polygon({
+    paths: cur.map(p => new google.maps.LatLng(p.lat, p.lng)),
+    map: orderState.traceMap,
+    strokeColor: '#6b7280', strokeWeight: 2.5, strokeOpacity: 0.95,
+    fillColor: '#9ca3af',  fillOpacity: 0.40,
+    editable: true, draggable: false, clickable: false,
+    zIndex: 3,
+  });
+  if (!Array.isArray(orderState.traceCutouts)) orderState.traceCutouts = [];
+  if (!Array.isArray(orderState.traceCutoutPolygons)) orderState.traceCutoutPolygons = [];
+  const cutoutIdx = orderState.traceCutouts.length;
+  orderState.traceCutouts.push({
+    points: cur.slice(),
+    label: `Non-roof ${cutoutIdx + 1}`,
+  });
+  orderState.traceCutoutPolygons.push(polygon);
+  const cx = cur.reduce((s, p) => s + p.lat, 0) / cur.length;
+  const cy = cur.reduce((s, p) => s + p.lng, 0) / cur.length;
+  addTraceMarker({ lat: cx, lng: cy }, '#6b7280', `X${cutoutIdx + 1}`);
+  orderState.traceCutoutCurrent = [];
+  showMsg(
+    'success',
+    `<i class="fas fa-check-circle mr-1"></i>Non-roof area ${cutoutIdx + 1} added — its square footage will be subtracted from your roof total.`
+  );
+  updateTraceUI();
+}
+
 function closeEavesPolygon() {
   if (orderState.traceEavesPoints.length < 3) return;
 
@@ -3262,6 +3356,15 @@ async function clearAllTraces() {
   orderState.traceChimneys = [];
   orderState.tracePipeBoots = [];
   orderState.traceWallLines = [];
+  // Cutouts — clear overlay polygons + state so a fresh trace starts clean.
+  (orderState.traceCutoutPolygons || []).forEach(p => { if (p) p.setMap(null); });
+  orderState.traceCutoutPolygons = [];
+  orderState.traceCutouts = [];
+  orderState.traceCutoutCurrent = [];
+  if (orderState.traceCutoutCurrentPolyline) {
+    orderState.traceCutoutCurrentPolyline.setMap(null);
+    orderState.traceCutoutCurrentPolyline = null;
+  }
   orderState.traceAnnotationMarkers.forEach(a => a.marker.setMap(null));
   orderState.traceAnnotationMarkers = [];
   clearTraceOverlays();
@@ -3309,11 +3412,17 @@ function updateTraceUI() {
   updatePhoneFabLabels();
 
   // Update mode button counts
+  const dormerCount = (orderState.traceDormers || []).length;
+  const dormerDraft = (orderState.traceDormerCurrent || []).length;
+  const cutoutCount = (orderState.traceCutouts || []).length;
+  const cutoutDraft = (orderState.traceCutoutCurrent || []).length;
   const modeCountMap = {
     eaves: eavesSections > 0 ? eavesSections + (eavesSections === 1 ? ' sect' : ' sects') + (eavesCount > 0 ? '+' : '') : eavesCount + ' pts',
     ridge: ridgeCount, hip: hipCount, valley: valleyCount,
     vent: ventCount, skylight: skylightCount, chimney: chimneyCount,
     pipe_boot: pipeBootCount,
+    dormer: dormerCount > 0 ? dormerCount + (dormerCount === 1 ? ' dormer' : ' dormers') + (dormerDraft > 0 ? '+' : '') : (dormerDraft > 0 ? dormerDraft + ' pts' : '0'),
+    cutout: cutoutCount > 0 ? cutoutCount + (cutoutCount === 1 ? ' area' : ' areas') + (cutoutDraft > 0 ? '+' : '') : (cutoutDraft > 0 ? cutoutDraft + ' pts' : '0'),
     step_flashing:     stepFlashingCount + ' lines',
     headwall_flashing: headwallCount     + ' lines',
   };
@@ -3351,6 +3460,12 @@ function updateTraceUI() {
     const draftDormerPts = (orderState.traceDormerCurrent || []).length;
     const showBtn = orderState.traceMode === 'dormer' && draftDormerPts >= 3;
     dormerCompleteBtn.style.display = showBtn ? 'flex' : 'none';
+  }
+  const cutoutCompleteBtn = document.getElementById('complete-cutout-btn');
+  if (cutoutCompleteBtn) {
+    const draftCutoutPts = (orderState.traceCutoutCurrent || []).length;
+    const showBtn = orderState.traceMode === 'cutout' && draftCutoutPts >= 3;
+    cutoutCompleteBtn.style.display = showBtn ? 'flex' : 'none';
   }
 
   // ── Update live metrics panel ──
@@ -3706,6 +3821,15 @@ async function confirmTrace() {
     }))
     .filter(d => d.pitch_rise != null);
 
+  // Cutouts — non-roof voids inside the outline. Each polygon is sent as a
+  // `cutouts` entry the engine subtracts from total projected/sloped area.
+  const _cutouts = (orderState.traceCutouts || [])
+    .filter(c => c && Array.isArray(c.points) && c.points.length >= 3)
+    .map(c => ({
+      polygon: c.points.map(p => ({ lat: p.lat, lng: p.lng })),
+      label: c.label,
+    }));
+
   // Verified faces — when the user walked Verify Planes, each entry is a
   // confirmed polygon + pitch. Engine uses these directly (shoelace ×
   // slopeFactor) so per-plane area is exact. Validated client-side here
@@ -3726,6 +3850,7 @@ async function confirmTrace() {
     eaves_section_pitches: _sectionPitches,
     eaves_section_kinds: _sectionKinds,
     dormers: _dormers.length > 0 ? _dormers : undefined,
+    cutouts: _cutouts.length > 0 ? _cutouts : undefined,
     verified_faces: _verifiedFaces.length > 0 ? _verifiedFaces : undefined,
     ridges: orderState.traceRidgeLines,
     hips: orderState.traceHipLines,
