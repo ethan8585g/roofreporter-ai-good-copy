@@ -110,7 +110,17 @@ export async function runSignupJourney(env: Bindings): Promise<JourneyResult> {
 
   // 1. Mint synthetic customer session
   const probe = await issueJourneyProbeSession(env)
-  const cookie = `rm_customer_session=${probe.token}`
+  // Generate a matching CSRF token for the synthetic session so the cookie-only
+  // PUT toggle calls below can satisfy the customer-auth CSRF middleware
+  // (double-submit cookie). Real customer JS uses Bearer auth and bypasses
+  // CSRF entirely; the synthetic test has to mint its own pair because it
+  // injects the session token directly into D1 instead of going through /login.
+  const csrfToken = (() => {
+    const b = crypto.getRandomValues(new Uint8Array(24))
+    let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i])
+    return btoa(s).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_')
+  })()
+  const cookie = `rm_customer_session=${probe.token}; rm_csrf=${csrfToken}`
 
   // 2. Page walk
   const pageResults = await Promise.all(
@@ -145,7 +155,7 @@ export async function runSignupJourney(env: Bindings): Promise<JourneyResult> {
   const apisFailed = apiResults.filter(r => !r.ok).length
 
   // 4. Toggle round-trips (read → write same value back → read again)
-  const toggleResults = await runToggleRoundtrips(cookie)
+  const toggleResults = await runToggleRoundtrips(cookie, csrfToken)
   for (const r of toggleResults) {
     if (!r.ok) dead.push({
       category: 'toggle',
@@ -323,7 +333,7 @@ const TOGGLES: Toggle[] = [
   },
 ]
 
-async function runToggleRoundtrips(cookie: string): Promise<Array<{
+async function runToggleRoundtrips(cookie: string, csrfToken: string): Promise<Array<{
   ok: boolean; endpoint: string; status: number | null; severity: DeadEndSeverity; message: string; details?: any
 }>> {
   const out: Array<{ ok: boolean; endpoint: string; status: number | null; severity: DeadEndSeverity; message: string; details?: any }> = []
@@ -350,7 +360,12 @@ async function runToggleRoundtrips(cookie: string): Promise<Array<{
       // 2. PUT same body back
       const put = await fetch(`${PROD_BASE}${t.putEndpoint}`, {
         method: 'PUT',
-        headers: { 'Cookie': cookie, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        headers: {
+          'Cookie': cookie,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-RM-CSRF': csrfToken, // satisfy double-submit cookie middleware
+        },
         body: JSON.stringify(sent),
         redirect: 'manual',
         signal: AbortSignal.timeout(10000),
