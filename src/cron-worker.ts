@@ -13,9 +13,11 @@ import { runEmailAgent } from './services/email-agent'
 import { runMonitorAgent } from './services/monitor-agent'
 import { runTrafficAgent } from './services/traffic-agent'
 import { runNightlyAttributionRollup } from './services/attribution'
-import { runScan as runLoopScan, writeHeartbeat as writeLoopHeartbeat, touchDefinition as touchLoopDefinition, type ScanType } from './services/loop-scanner'
+import { runScan as runLoopScan, writeHeartbeat as writeLoopHeartbeat, touchDefinition as touchLoopDefinition, recordExternalRun, type ScanType } from './services/loop-scanner'
 import { pruneExpiredScanSessions } from './services/synthetic-auth'
 import { runBacklinkHealthSweep } from './routes/backlinks'
+import { runAdsHealthCheck } from './services/ads-health'
+import { sendAdsHealthEmail } from './services/ads-health-email'
 
 // ── Abandoned signup recovery ─────────────────────────────────────────────────
 async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number; skipped: number }> {
@@ -563,6 +565,43 @@ export default {
           await runLoopScan(env, 'health', 'cron', { source: 'cf_cron', expectedAt })
         } catch (err: any) {
           console.error('[CRON:scan_health] Error:', err?.message)
+        }
+      })())
+    }
+
+    // Ads-health sweep — every 4 hours at :00 (00, 04, 08, 12, 16, 20 UTC).
+    // Probes Meta + Google Ads + GA4 attribution stack: pixel-in-HTML presence,
+    // GA4 MP debug probe, Meta CAPI test event, gclid/UTM capture rates,
+    // CAPI status mix, conversion drift vs 7d. Email goes out only on warn/fail.
+    // Safe to run from cron because runAdsHealthCheck is the same code path the
+    // /api/ads-health/tick endpoint uses.
+    if (hour % 4 === 0 && minute === 0 && await isAgentEnabled('scan_ads_health')) {
+      const expectedAt = new Date(now)
+      expectedAt.setUTCHours(hour, 0, 0, 0)
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const result = await runAdsHealthCheck(env)
+          const email = await sendAdsHealthEmail(env, result)
+          const status: 'pass' | 'fail' = result.verdict === 'fail' ? 'fail' : 'pass'
+          const findings = result.issues.map(i => ({
+            severity: (i.severity === 'error' ? 'error' : 'warn') as 'error' | 'warn',
+            category: 'ads_health',
+            message: i.message,
+            details: { section: i.section },
+          }))
+          await recordExternalRun(env, {
+            loopId: 'ads_health',
+            source: 'cf_cron',
+            status,
+            summary: `${result.verdict} · ${result.issues.length} issue(s) · email ${email.skipped ? 'skipped (verdict pass)' : email.ok ? 'sent' : `failed: ${email.error}`}`.slice(0, 500),
+            durationMs: Date.now() - t0,
+            outputs: { verdict: result.verdict, sections: result.sections.map(s => ({ key: s.key, status: s.status, summary: s.summary })), email },
+            findings,
+            expectedAt,
+          })
+        } catch (err: any) {
+          console.error('[CRON:scan_ads_health] Error:', err?.message)
         }
       })())
     }

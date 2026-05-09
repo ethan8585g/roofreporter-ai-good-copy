@@ -288,6 +288,58 @@ superAdminLoopTracker.post('/api/run-now/:type', async (c) => {
   return c.json({ accepted: true, scan_type: type }, 202)
 })
 
+// ── Manually trigger the ads-health sweep ─────────────────────
+// The generic /api/run-now/:type only accepts loop-scanner ScanTypes; ads_health
+// runs through its own dedicated path (runAdsHealthCheck), so it gets its own
+// trigger endpoint. Auth is the same superadmin guard as the rest of this module.
+superAdminLoopTracker.post('/api/run-now-ads-health', async (c) => {
+  const ctx = (c as any).executionCtx as ExecutionContext | undefined
+  const promise = (async () => {
+    const t0 = Date.now()
+    try {
+      const { runAdsHealthCheck } = await import('../services/ads-health')
+      const { sendAdsHealthEmail } = await import('../services/ads-health-email')
+      const { recordExternalRun } = await import('../services/loop-scanner')
+      const result = await runAdsHealthCheck(c.env)
+      const email = await sendAdsHealthEmail(c.env, result)
+      const status: 'pass' | 'fail' = result.verdict === 'fail' ? 'fail' : 'pass'
+      const findings = result.issues.map(i => ({
+        severity: (i.severity === 'error' ? 'error' : 'warn') as 'error' | 'warn',
+        category: 'ads_health',
+        message: i.message,
+        details: { section: i.section },
+      }))
+      await recordExternalRun(c.env, {
+        loopId: 'ads_health',
+        source: 'manual',
+        status,
+        summary: `${result.verdict} · ${result.issues.length} issue(s) · email ${email.skipped ? 'skipped (verdict pass)' : email.ok ? 'sent' : `failed: ${email.error}`}`.slice(0, 500),
+        durationMs: Date.now() - t0,
+        outputs: { verdict: result.verdict, sections: result.sections.map(s => ({ key: s.key, status: s.status, summary: s.summary })), email },
+        findings,
+      })
+    } catch (e: any) {
+      console.error('[loop-tracker] ads-health manual run failed', e?.message || e)
+    }
+  })()
+  if (ctx?.waitUntil) ctx.waitUntil(promise)
+  return c.json({ accepted: true, loop: 'ads_health' }, 202)
+})
+
+// ── Latest run for a single loop_id (used by Ads Health panel) ───
+superAdminLoopTracker.get('/api/loops/:loop_id/latest', async (c) => {
+  const loopId = c.req.param('loop_id')
+  const run = await c.env.DB.prepare(
+    `SELECT id, scan_type, status, summary, started_at, finished_at, duration_ms, outputs_json, source
+     FROM loop_scan_runs WHERE loop_id = ? AND finished_at IS NOT NULL
+     ORDER BY id DESC LIMIT 1`
+  ).bind(loopId).first<any>()
+  if (!run) return c.json({ run: null })
+  let outputs: any = null
+  try { outputs = run.outputs_json ? JSON.parse(run.outputs_json) : null } catch {}
+  return c.json({ run: { ...run, outputs } })
+})
+
 // ── Toggle a loop enabled/disabled ───────────────────────────
 superAdminLoopTracker.post('/api/loops/:loop_id/toggle', async (c) => {
   const loopId = c.req.param('loop_id')
@@ -871,6 +923,28 @@ function renderLoopTrackerPage(): string {
     </div>
   </section>
 
+  <!-- Ads + analytics health -->
+  <section>
+    <h2><i class="fas fa-bullhorn" style="color:var(--info);margin-right:6px"></i>Ads + Analytics Health <span class="count" id="adsHealthCount">—</span>
+      <span style="float:right">
+        <button class="btn-secondary" id="adsHealthRunBtn" onclick="runAdsHealthNow()" style="margin-left:8px">Run now</button>
+      </span>
+    </h2>
+    <p style="color:var(--text-dim);font-size:12px;margin:4px 0 12px">
+      Probes the Meta Pixel + CAPI, Google Ads + GA4, attribution chain, and conversion event volume every 4 hours. Email goes out only on warn/fail. Source: <code>scan_ads_health</code> (cron) or <code>/loop 4h /ads-health</code> (slash).
+    </p>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div id="adsHealthHeader" style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border)">
+        <div id="adsHealthVerdictDot" style="width:14px;height:14px;border-radius:50%;background:var(--text-dim);flex-shrink:0"></div>
+        <div style="flex:1">
+          <div style="font-weight:700" id="adsHealthVerdictText">Loading latest run…</div>
+          <div style="color:var(--text-dim);font-size:12px;margin-top:2px" id="adsHealthMeta">—</div>
+        </div>
+      </div>
+      <div id="adsHealthSections" style="padding:6px 0">—</div>
+    </div>
+  </section>
+
   <!-- Findings inbox -->
   <section>
     <h2>Findings inbox <span class="count" id="findCount">—</span></h2>
@@ -1382,6 +1456,73 @@ async function toggleTrafficPage(safeUrl) {
 document.getElementById('trafficWindow').addEventListener('change', () => { loadTrafficSummary(); loadTrafficPages(); });
 document.getElementById('trafficInsightStatus').addEventListener('change', loadTrafficInsights);
 
+// ── Ads + Analytics Health panel ───────────────────────────────
+function adsStatusColor(s) {
+  if (s === 'pass') return '#16a34a';
+  if (s === 'warn') return '#d97706';
+  if (s === 'fail') return '#dc2626';
+  return 'var(--text-dim)';
+}
+function adsStatusLabel(s) {
+  if (s === 'pass') return '🟢 All green';
+  if (s === 'warn') return '🟡 Warning';
+  if (s === 'fail') return '🔴 Fail';
+  return '— Never run';
+}
+async function loadAdsHealth() {
+  const data = await getJson('/api/super-admin/loop-tracker/api/loops/ads_health/latest');
+  const run = data && data.run;
+  const dot = document.getElementById('adsHealthVerdictDot');
+  const text = document.getElementById('adsHealthVerdictText');
+  const meta = document.getElementById('adsHealthMeta');
+  const sectionsEl = document.getElementById('adsHealthSections');
+  const countEl = document.getElementById('adsHealthCount');
+  if (!run) {
+    dot.style.background = adsStatusColor(null);
+    text.textContent = 'Never run yet';
+    meta.textContent = 'Click "Run now" or wait for the 4-hour cron tick.';
+    sectionsEl.innerHTML = '<div style="padding:14px 18px;color:var(--text-dim);font-size:13px">No data yet.</div>';
+    countEl.textContent = '—';
+    return;
+  }
+  const outputs = run.outputs || {};
+  const verdict = outputs.verdict || run.status || 'pass';
+  dot.style.background = adsStatusColor(verdict);
+  text.textContent = adsStatusLabel(verdict) + ' — ' + (run.summary || '');
+  const finishedAgo = run.finished_at ? new Date(run.finished_at + 'Z').toUTCString() : 'unknown';
+  meta.textContent = 'Last run ' + finishedAgo + ' · ' + (run.duration_ms || '?') + 'ms · source ' + (run.source || '—');
+  const sections = Array.isArray(outputs.sections) ? outputs.sections : [];
+  countEl.textContent = sections.length ? (sections.filter(s => s.status !== 'pass').length + '/' + sections.length) : '—';
+  if (!sections.length) {
+    sectionsEl.innerHTML = '<div style="padding:14px 18px;color:var(--text-dim);font-size:13px">Run completed but no section data captured.</div>';
+    return;
+  }
+  sectionsEl.innerHTML = sections.map(s => {
+    const c = adsStatusColor(s.status);
+    const icon = s.status === 'pass' ? '✓' : s.status === 'warn' ? '⚠' : '✗';
+    return '<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 18px;border-bottom:1px solid var(--border)">'
+      + '<div style="width:22px;height:22px;border-radius:50%;background:' + c + ';color:#fff;font-weight:700;text-align:center;line-height:22px;flex-shrink:0;font-size:13px">' + icon + '</div>'
+      + '<div style="flex:1">'
+      +   '<div style="font-weight:600;font-size:13px">' + (s.key || '?') + '</div>'
+      +   '<div style="color:var(--text-dim);font-size:12px;margin-top:2px">' + (s.summary || '') + '</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+async function runAdsHealthNow() {
+  const btn = document.getElementById('adsHealthRunBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
+  try {
+    await getJson('/api/super-admin/loop-tracker/api/run-now-ads-health', { method:'POST' });
+    // Wait a bit for the run to complete (it's async via waitUntil), then refresh.
+    setTimeout(() => { loadAdsHealth(); loadStatus(); }, 6000);
+  } catch (e) {
+    alert('Failed to start ads-health: ' + (e && e.message || e));
+  } finally {
+    if (btn) { setTimeout(() => { btn.disabled = false; btn.textContent = 'Run now'; }, 6000); }
+  }
+}
+
 function loadAll() {
   loadStatus();
   loadHeatmap();
@@ -1391,10 +1532,12 @@ function loadAll() {
   loadTrafficSummary();
   loadTrafficInsights();
   loadTrafficPages();
+  loadAdsHealth();
 }
 loadAll();
 setInterval(loadStatus, 30000);
 setInterval(loadHeatmap, 60000);
+setInterval(loadAdsHealth, 60000);
 </script>
 </body>
 </html>`
