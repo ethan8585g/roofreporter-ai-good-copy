@@ -15612,6 +15612,7 @@ function getHelpArticleHTML(slug: string, article: HelpArticle): string {
   <meta property="og:url" content="${base}/help/${slug}">
   <meta property="og:image" content="${base}/static/og-image.png?v=20260504">
   <script type="application/ld+json">${schema}</script>
+  ${howToSchema}
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Help","item":"${base}/help"},{"@type":"ListItem","position":3,"name":"${article.category}","item":"${base}/help"},{"@type":"ListItem","position":4,"name":"${article.title.replace(/"/g, '\\"')}","item":"${base}/help/${slug}"}]}</script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tailwindcss/typography@0.5.0/dist/typography.min.css">
 </head>
