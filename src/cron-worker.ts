@@ -385,8 +385,9 @@ export default {
       })())
     }
 
-    // ── Monitor Agent (every hour — fires on the :00 tick) ───
-    if (minute === 0 && await isAgentEnabled('monitor')) {
+    // ── Monitor Agent (every 6h — fires at 00/06/12/18 UTC) ──
+    // Slowed from hourly to 6h on 2026-05-10 for Anthropic cost reduction.
+    if (hour % 6 === 0 && minute === 0 && await isAgentEnabled('monitor')) {
       ctx.waitUntil((async () => {
         const t0 = Date.now()
         try {
@@ -421,8 +422,9 @@ export default {
       })())
     }
 
-    // ── Abandoned Signup Recovery (every hour on :00 tick) ──
-    if (minute === 0) {
+    // ── Abandoned Signup Recovery (every 6h on :00 tick) ──
+    // Slowed from hourly to 6h on 2026-05-10 for cost reduction.
+    if (hour % 6 === 0 && minute === 0) {
       ctx.waitUntil((async () => {
         const t0 = Date.now()
         try {
@@ -519,7 +521,7 @@ export default {
     // This hourly cron is a safety net for low-traffic periods.
     // It also respects the same 10-min cooldown so it never double-fires
     // right after an event-driven run.
-    if (minute === 0 && await isAgentEnabled('traffic')) {
+    if (hour % 6 === 0 && minute === 0 && await isAgentEnabled('traffic')) {
       ctx.waitUntil((async () => {
         try {
           // Cooldown check: skip if the live trigger already ran within the last 10 minutes
@@ -553,13 +555,15 @@ export default {
     // edge node. Each is gated on agent_configs.enabled = 1; runScan
     // writes its own loop_scan_runs/heartbeat row, so we don't double-log
     // through logRun() — it would just duplicate the entry.
+    // Slowed from every 30 min to every 6h on 2026-05-10 for cost reduction.
+    // Staggered minutes preserve the no-pile-up pattern. Fires at 00/06/12/18 UTC.
     const SCAN_AT: Array<[number, ScanType]> = [
-      [0, 'public'],   [30, 'public'],
-      [10, 'customer'], [40, 'customer'],
-      [20, 'admin'],   [50, 'admin'],
+      [0, 'public'],
+      [10, 'customer'],
+      [20, 'admin'],
     ]
     for (const [m, type] of SCAN_AT) {
-      if (minute === m && await isAgentEnabled(`scan_${type}`)) {
+      if (hour % 6 === 0 && minute === m && await isAgentEnabled(`scan_${type}`)) {
         const expectedAt = new Date(now)
         expectedAt.setUTCSeconds(0, 0)
         ctx.waitUntil((async () => {
@@ -574,10 +578,10 @@ export default {
       }
     }
 
-    // Reports error sweep — fires every cron tick (every 10 min). DB-only
-    // (no Browser Rendering or auth), report errors block customer
-    // delivery so we want minimum-latency detection. Cheap.
-    if (await isAgentEnabled('scan_reports')) {
+    // Reports error sweep — slowed from every 10 min to every 6h on
+    // 2026-05-10 for cost reduction. Fires at 00/06/12/18 UTC.
+    // Tradeoff: broken reports may be detected up to 6h late.
+    if (hour % 6 === 0 && minute === 0 && await isAgentEnabled('scan_reports')) {
       const expectedAt = new Date(now)
       expectedAt.setUTCSeconds(0, 0)
       ctx.waitUntil((async () => {
@@ -608,7 +612,7 @@ export default {
     // CAPI status mix, conversion drift vs 7d. Email goes out only on warn/fail.
     // Safe to run from cron because runAdsHealthCheck is the same code path the
     // /api/ads-health/tick endpoint uses.
-    if (hour % 4 === 0 && minute === 0 && await isAgentEnabled('scan_ads_health')) {
+    if (hour % 6 === 0 && minute === 0 && await isAgentEnabled('scan_ads_health')) {
       const expectedAt = new Date(now)
       expectedAt.setUTCHours(hour, 0, 0, 0)
       ctx.waitUntil((async () => {
@@ -643,7 +647,7 @@ export default {
     // /customer/* page + the major auth'd APIs + a few toggle round-trips
     // against PROD, emails dead ends to support if any. Cheap (~3-4s) and
     // catches CSRF/auth/route regressions within the hour.
-    if (minute === 0 && await isAgentEnabled('signup_journey')) {
+    if (hour % 6 === 0 && minute === 0 && await isAgentEnabled('signup_journey')) {
       const expectedAt = new Date(now)
       expectedAt.setUTCMinutes(0, 0, 0)
       ctx.waitUntil((async () => {
