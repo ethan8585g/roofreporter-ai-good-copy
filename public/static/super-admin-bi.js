@@ -284,9 +284,94 @@
               </div>`}
         </div>
 
+        <div id="drip-panel" class="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-800 bg-slate-900/80 flex items-center gap-2">
+            <i class="fas fa-paper-plane text-blue-300"></i>
+            <span class="text-sm font-semibold text-white">Drip campaigns</span>
+            <span id="drip-mode-pill" class="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-gray-400 ml-2">loading…</span>
+            <div class="ml-auto flex items-center gap-2">
+              <button onclick="dripPreview()" class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded">Preview today</button>
+              <button onclick="dripToggle()" id="drip-toggle-btn" class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded">…</button>
+              <button onclick="dripRun()" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded">Run now</button>
+            </div>
+          </div>
+          <div class="p-4 text-sm text-gray-400" id="drip-body">
+            <div class="text-xs text-gray-500">Three campaigns ship: <strong>stuck_signup_60d</strong>, <strong>at_risk_churn_30d</strong>, <strong>trial_ends_3d</strong>. Daily cron at 10am ET. Per-customer cooldown: 90 days. Default mode is <strong class="text-amber-300">DRY-RUN</strong> until you flip it live.</div>
+            <div id="drip-result" class="mt-3"></div>
+          </div>
+        </div>
+
         <div class="text-xs text-gray-500 text-right">Generated at ${new Date(j.generated_at).toLocaleString()}</div>
       </div>`
+
+    // Load drip status
+    loadDripStatus()
   }
+
+  // ── Drip helpers (exposed globally) ──────────────────────────
+  async function loadDripStatus() {
+    const r = await biFetch('/api/admin/bi/drip-status'); if (!r) return
+    const j = await r.json(); if (!j) return
+    const pill = document.getElementById('drip-mode-pill')
+    const btn = document.getElementById('drip-toggle-btn')
+    if (!pill || !btn) return
+    const isDry = !!(j.config && j.config.dry_run)
+    pill.className = 'text-xs px-2 py-0.5 rounded-full ml-2 ' + (isDry ? 'bg-amber-500/20 text-amber-300 border border-amber-700/40' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-700/40')
+    pill.textContent = isDry ? 'DRY-RUN' : 'LIVE'
+    btn.textContent = isDry ? 'Go live →' : '← Back to dry-run'
+    btn.dataset.next = isDry ? 'live' : 'dry'
+  }
+  async function dripPreview() {
+    const target = document.getElementById('drip-result')
+    target.innerHTML = '<div class="text-gray-400"><i class="fas fa-spinner fa-spin mr-1"></i>Generating preview…</div>'
+    const r = await fetch('/api/admin/bi/drip-preview', { method: 'POST', headers: biHeaders() })
+    const j = await r.json()
+    if (j.error) { target.innerHTML = '<div class="text-red-400">' + j.error + '</div>'; return }
+    const rows = j.preview || []
+    if (rows.length === 0) {
+      target.innerHTML = '<div class="text-sm text-gray-500 italic">No eligible customers right now (none match the criteria, or all are within the 90-day cooldown).</div>'
+      return
+    }
+    target.innerHTML = '<div class="text-xs text-gray-400 mb-2">' + rows.length + ' email' + (rows.length === 1 ? '' : 's') + ' WOULD be sent next time:</div>' +
+      '<div class="border border-slate-800 rounded max-h-64 overflow-y-auto">' +
+      rows.map(function (row) {
+        var modeColor = row.mode === 'DRY_RUN' ? 'text-amber-300' : 'text-emerald-300'
+        return '<div class="px-3 py-2 border-b border-slate-800 text-sm flex items-center gap-3">' +
+          '<span class="text-xs px-2 py-0.5 rounded bg-slate-700 text-gray-300">' + row.template + '</span>' +
+          '<div class="flex-1 min-w-0"><div class="text-white truncate">' + (row.name || row.email) + '</div><div class="text-xs text-gray-500 truncate">' + row.email + ' · subject: "' + row.subject + '"</div></div>' +
+          '<span class="text-xs ' + modeColor + '">' + row.mode + '</span>' +
+          '</div>'
+      }).join('') + '</div>'
+  }
+  async function dripToggle() {
+    const btn = document.getElementById('drip-toggle-btn')
+    if (!btn) return
+    const next = btn.dataset.next === 'live' ? false : true // next = newDryRun
+    if (!next) {
+      if (!confirm('Switch drips to LIVE? Real emails will be sent on the next cron tick (10am ET) or whenever you press Run now.')) return
+    }
+    const r = await fetch('/api/admin/bi/drip-toggle', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, biHeaders()),
+      body: JSON.stringify({ dry_run: next })
+    })
+    await r.json()
+    loadDripStatus()
+  }
+  async function dripRun() {
+    const target = document.getElementById('drip-result')
+    target.innerHTML = '<div class="text-gray-400"><i class="fas fa-spinner fa-spin mr-1"></i>Running drip evaluator…</div>'
+    const r = await fetch('/api/admin/bi/drip-run', { method: 'POST', headers: biHeaders() })
+    const j = await r.json()
+    if (j.error) { target.innerHTML = '<div class="text-red-400">' + j.error + '</div>'; return }
+    const totals = (j.campaigns || []).reduce(function (acc, c) { return { sent: acc.sent + c.sent, dry: acc.dry + c.dry_run, errors: acc.errors + c.errors } }, { sent: 0, dry: 0, errors: 0 })
+    target.innerHTML = '<div class="text-sm">' + (j.dry_run ? '<span class="text-amber-300">DRY-RUN</span>' : '<span class="text-emerald-300">LIVE</span>') +
+      ' — sent <strong>' + totals.sent + '</strong>, dry-run <strong>' + totals.dry + '</strong>, errors <strong>' + totals.errors + '</strong></div>' +
+      '<div class="text-xs text-gray-500 mt-2">' + (j.campaigns || []).map(function (c) { return c.template + ': ' + (c.sent + c.dry_run) }).join(' · ') + '</div>'
+  }
+  window.dripPreview = dripPreview
+  window.dripToggle = dripToggle
+  window.dripRun = dripRun
 
   // ── OVERVIEW ─────────────────────────────────────────────────
   async function loadOverview() {

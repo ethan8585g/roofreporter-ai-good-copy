@@ -24,6 +24,7 @@ import { runSignupHealthCheck } from './services/signup-health'
 import { sendSignupHealthEmail } from './services/health-email'
 import { runMobileMonitor } from './services/mobile-monitor'
 import { sendMobileMonitorEmail } from './services/mobile-monitor-email'
+import { runDripCampaigns } from './services/drip-campaigns'
 
 // ── Abandoned signup recovery ─────────────────────────────────────────────────
 async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number; skipped: number }> {
@@ -458,6 +459,32 @@ export default {
           console.log(`[CRON:secretary] Reminders: ${result.remindersSent}, past-due cancelled: ${result.pastDueCancelled}`)
         } catch (err: any) {
           console.error('[CRON:secretary] Error:', err.message)
+        }
+      })())
+    }
+
+    // ── Drip campaigns (daily at 14:00 UTC = 10am ET, 7am PT) ─
+    // Evaluates stuck_signup_60d / at_risk_churn_30d / trial_ends_3d
+    // and either dry-runs or sends real emails depending on
+    // agent_configs.drips.config_json.dry_run. Per-customer cooldown
+    // (90 days) enforced via drip_campaign_state.
+    if (hour === 14 && minute < 10) {
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const r = await runDripCampaigns(env, {})
+          const totals = r.campaigns.reduce(
+            (acc, c) => ({ sent: acc.sent + c.sent, dry_run: acc.dry_run + c.dry_run, errors: acc.errors + c.errors }),
+            { sent: 0, dry_run: 0, errors: 0 }
+          )
+          const summary = `Drips ${r.dry_run ? '(DRY-RUN)' : '(LIVE)'} — sent ${totals.sent}, dry ${totals.dry_run}, errors ${totals.errors}`
+          console.log(`[CRON:drips] ${summary}`)
+          await logRun('drips', totals.errors > 0 ? 'partial' : 'success', summary, r, Date.now() - t0)
+            .catch((e: any) => console.warn('[logRun:drips] failed:', e?.message || e))
+        } catch (err: any) {
+          console.error('[CRON:drips] Error:', err?.message)
+          await logRun('drips', 'error', err?.message || 'drip cron crashed', {}, Date.now() - t0)
+            .catch(() => {})
         }
       })())
     }

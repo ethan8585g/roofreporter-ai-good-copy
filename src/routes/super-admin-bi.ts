@@ -15,6 +15,7 @@
  */
 import { Hono } from 'hono'
 import { validateAdminSession, requireSuperadmin } from './auth'
+import { runDripCampaigns, setDripDryRun } from '../services/drip-campaigns'
 
 type Bindings = { DB: D1Database; [key: string]: any }
 const superAdminBi = new Hono<{ Bindings: Bindings }>()
@@ -959,6 +960,61 @@ superAdminBi.delete('/manual-payments/:id', async (c) => {
       `INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'manual_payment_deleted', ?)`
     ).bind(`Superadmin ${admin.email || admin.id} deleted manual_payment #${id}`).run()
     return c.json({ success: true })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// ── DRIP CAMPAIGNS ────────────────────────────────────────────
+// Three endpoints power the Sales Snapshot drip panel:
+//   GET  /drip-status   — current config + last-run summary
+//   POST /drip-preview  — show who WOULD get what email today (no sends, no state changes)
+//   POST /drip-toggle   — flip dry_run on/off
+//   POST /drip-run      — manually trigger the cron evaluator (respects current dry_run setting)
+superAdminBi.get('/drip-status', async (c) => {
+  try {
+    const row = await c.env.DB.prepare(`SELECT enabled, config_json, last_run_at, last_run_status, last_run_details, run_count FROM agent_configs WHERE agent_type='drips'`).first<any>()
+    if (!row) return c.json({ enabled: false, config: null, last_run: null })
+    const config = row.config_json ? JSON.parse(row.config_json) : {}
+    let lastRun: any = null
+    try { lastRun = row.last_run_details ? JSON.parse(row.last_run_details) : null } catch {}
+    return c.json({
+      enabled: !!row.enabled,
+      config,
+      last_run_at: row.last_run_at,
+      last_run_status: row.last_run_status,
+      last_run: lastRun,
+      run_count: row.run_count || 0
+    })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+superAdminBi.post('/drip-preview', async (c) => {
+  try {
+    const r = await runDripCampaigns(c.env as any, { previewOnly: true })
+    return c.json(r)
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+superAdminBi.post('/drip-toggle', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}))
+    const dryRun = body?.dry_run === true || body?.dry_run === 'true'
+    await setDripDryRun(c.env.DB, !!dryRun)
+    return c.json({ success: true, dry_run: !!dryRun })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+superAdminBi.post('/drip-run', async (c) => {
+  try {
+    const r = await runDripCampaigns(c.env as any, {})
+    return c.json(r)
   } catch (e: any) {
     return c.json({ error: e.message }, 500)
   }
