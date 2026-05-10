@@ -2597,6 +2597,35 @@ export function generateTraceBasedDiagramSVG(
     const i = totalIn % 12
     return i === 0 ? `${f}'` : `${f}'${i}"`
   }
+
+  // ── 3D-LOOK SHADING HELPERS ──
+  // Architectural convention: light comes from the upper-left (NW). A facet
+  // is brightest when its up-slope direction points toward the sun; darkest
+  // when it points away. Operates on Solar API's `azimuth_deg` (down-slope
+  // direction). Returns a signed brightness in [-1, +1].
+  const SUN_AZ = 315
+  const sunShadeStrength = (azDeg: number | null | undefined): number => {
+    if (azDeg == null || !Number.isFinite(azDeg)) return 0
+    const upSlopeAz = ((azDeg + 180) % 360 + 360) % 360
+    const diff = (((upSlopeAz - SUN_AZ + 540) % 360) + 360) % 360 - 180
+    return Math.cos(diff * Math.PI / 180)
+  }
+  // Returns a translucent overlay rgba: lighten on sunward faces, darken on
+  // shaded ones. Caller stacks this ON TOP of the existing facet fill so
+  // pitch-class / pastel colors still show through.
+  const sunOverlay = (shade: number): string => {
+    if (shade > 0.08) return `rgba(255,255,255,${(0.22 * shade).toFixed(3)})`
+    if (shade < -0.08) return `rgba(15,23,42,${(0.18 * -shade).toFixed(3)})`
+    return ''
+  }
+  // Screen-space direction → geographic azimuth (north = up on diagram).
+  const screenToAzimuth = (sdx: number, sdy: number): number =>
+    ((Math.atan2(sdx, -sdy) * 180 / Math.PI) + 360) % 360
+  // Polygon centroid (average of vertices — good enough for the dormer split).
+  const polyCentroid = (pts: { x: number; y: number }[]): { x: number; y: number } => {
+    const s = pts.reduce((a, p) => ({ x: a.x + p.x, y: a.y + p.y }), { x: 0, y: 0 })
+    return { x: s.x / pts.length, y: s.y / pts.length }
+  }
   const fmtFtUnit = (ft: number): string => ft < 0.5 ? '' : `${Math.round(ft)} ft`
 
   // ── Convert lat/lng to local X/Y (metres from centroid) ──
@@ -3013,6 +3042,11 @@ export function generateTraceBasedDiagramSVG(
     // Light fill + directional hatch
     svg += `<polygon points="${pts}" fill="${fillColor}" stroke="none"/>`
     svg += `<polygon points="${pts}" fill="url(#${hatchIds[fi % hatchIds.length]})" stroke="none"/>`
+    // 3D-look directional shading: lighten facets whose up-slope points to
+    // the NW sun, darken those facing SE. No-ops when azimuth is unknown.
+    const shade = sunShadeStrength(opts.faceMeta?.[fi]?.azimuth_deg)
+    const overlay = sunOverlay(shade)
+    if (overlay) svg += `<polygon points="${pts}" fill="${overlay}" stroke="none"/>`
   })
 
   // ── SQUARES GRID OVERLAY (10ft × 10ft, clipped to perimeter) ──
@@ -3076,7 +3110,11 @@ export function generateTraceBasedDiagramSVG(
 
   // ── EAVE PERIMETER (clean black outline — primary section) ──
   const eavePts = eavesXY.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
-  if (L.perimeter) svg += `<polygon points="${eavePts}" fill="none" stroke="#1a1a1a" stroke-width="2.2" stroke-linejoin="round"/>`
+  if (L.perimeter) {
+    // Offset shadow underneath the perimeter to lift the roof off the page.
+    svg += `<g transform="translate(1.6,2.2)"><polygon points="${eavePts}" fill="none" stroke="rgba(15,23,42,0.22)" stroke-width="2.6" stroke-linejoin="round"/></g>`
+    svg += `<polygon points="${eavePts}" fill="none" stroke="#1a1a1a" stroke-width="2.2" stroke-linejoin="round"/>`
+  }
 
   // ── EXTRA EAVE SECTIONS (detached structures, lower-eave lips, etc.) ──
   // Each extra section gets its own per-edge dimension labels and an area label
@@ -3201,12 +3239,17 @@ export function generateTraceBasedDiagramSVG(
   // diagram reads as a structural hierarchy at a glance instead of a flat
   // web of lines.
   if (L.ridges) internalLines.filter(l => l.type === 'RIDGE').forEach(l => {
-    svg += `<line x1="${tx(l.start.x).toFixed(1)}" y1="${ty(l.start.y).toFixed(1)}" x2="${tx(l.end.x).toFixed(1)}" y2="${ty(l.end.y).toFixed(1)}" stroke="${EDGE_COLOR['RIDGE']}" stroke-width="3.0" stroke-linecap="round"/>`
+    const x1 = tx(l.start.x), y1 = ty(l.start.y), x2 = tx(l.end.x), y2 = ty(l.end.y)
+    // Offset shadow underneath the ridge → reads as a raised crest.
+    svg += `<line x1="${(x1 + 1.1).toFixed(1)}" y1="${(y1 + 1.6).toFixed(1)}" x2="${(x2 + 1.1).toFixed(1)}" y2="${(y2 + 1.6).toFixed(1)}" stroke="rgba(15,23,42,0.28)" stroke-width="3.4" stroke-linecap="round"/>`
+    svg += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${EDGE_COLOR['RIDGE']}" stroke-width="3.0" stroke-linecap="round"/>`
   })
 
   // ── HIP LINES (orange, mid-weight) ──
   if (L.hips) internalLines.filter(l => l.type === 'HIP').forEach(l => {
-    svg += `<line x1="${tx(l.start.x).toFixed(1)}" y1="${ty(l.start.y).toFixed(1)}" x2="${tx(l.end.x).toFixed(1)}" y2="${ty(l.end.y).toFixed(1)}" stroke="${EDGE_COLOR['HIP']}" stroke-width="2.2" stroke-linecap="round"/>`
+    const x1 = tx(l.start.x), y1 = ty(l.start.y), x2 = tx(l.end.x), y2 = ty(l.end.y)
+    svg += `<line x1="${(x1 + 0.9).toFixed(1)}" y1="${(y1 + 1.3).toFixed(1)}" x2="${(x2 + 0.9).toFixed(1)}" y2="${(y2 + 1.3).toFixed(1)}" stroke="rgba(15,23,42,0.22)" stroke-width="2.6" stroke-linecap="round"/>`
+    svg += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${EDGE_COLOR['HIP']}" stroke-width="2.2" stroke-linecap="round"/>`
   })
 
   // ── VALLEY LINES (blue, dashed, slightly heavier than before) ──
@@ -3486,28 +3529,106 @@ export function generateTraceBasedDiagramSVG(
     })
   }
 
-  // ── DORMER OVERLAYS ──
-  // Drawn last (on top of facets, edges, vertex dots) so the purple outline
-  // and pitch pill remain visible. Translucent fill keeps anything underneath
-  // legible. Centroid label like "D-A · 12:12".
+  // ── DORMER OVERLAYS (3D-look gabled rendering) ──
+  // Drawn last so they sit on top of facets, edges, and vertex dots. The
+  // polygon's principal axis (PCA) becomes the ridge; the polygon is split
+  // into two half-faces along that axis, each shaded by its slope direction
+  // under the conventional NW sun. A soft cast shadow sits underneath so the
+  // dormer reads as a raised structure on the parent roof. Falls back to a
+  // clean flat lavender wash on non-convex shapes so weird traces stay safe.
   if (L.dormers) dormersXY.forEach((d, di) => {
     if (d.pts.length < 3) return
-    const path = d.pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${tx(p.x).toFixed(1)} ${ty(p.y).toFixed(1)}`).join(' ') + ' Z'
-    // Layered fill: tinted base + diagonal cross-hatch makes dormers pop even
-    // when sitting on top of a facet hatch / pastel fill.
-    svg += `<path d="${path}" fill="rgba(168,85,247,0.32)" stroke="none"/>`
-    svg += `<path d="${path}" fill="url(#tr-hatch-dormer)" stroke="#7c3aed" stroke-width="2.5" stroke-linejoin="round"/>`
-    // Centroid for the label pill
-    const cx = d.pts.reduce((s, p) => s + p.x, 0) / d.pts.length
-    const cy = d.pts.reduce((s, p) => s + p.y, 0) / d.pts.length
-    const lx = tx(cx), ly = ty(cy)
+    const pts = d.pts.map(p => ({ x: tx(p.x), y: ty(p.y) }))
+    const c = polyCentroid(pts)
+
+    // PCA principal axis (ridge direction in screen space).
+    let cxx = 0, cyy = 0, cxy = 0
+    for (const p of pts) {
+      const dx = p.x - c.x, dy = p.y - c.y
+      cxx += dx * dx; cyy += dy * dy; cxy += dx * dy
+    }
+    const theta = 0.5 * Math.atan2(2 * cxy, cxx - cyy)
+    const axisDx = Math.cos(theta), axisDy = Math.sin(theta)
+    const perpDx = -axisDy, perpDy = axisDx
+
+    // Ridge endpoints = extrema of vertex projections onto axis, pulled
+    // slightly inward so the ridge doesn't bleed into the gable edges.
+    let tMin = Infinity, tMax = -Infinity
+    for (const p of pts) {
+      const tProj = (p.x - c.x) * axisDx + (p.y - c.y) * axisDy
+      if (tProj < tMin) tMin = tProj
+      if (tProj > tMax) tMax = tProj
+    }
+    const ridgeInset = Math.max(0, (tMax - tMin) * 0.05)
+    const r1 = { x: c.x + (tMin + ridgeInset) * axisDx, y: c.y + (tMin + ridgeInset) * axisDy }
+    const r2 = { x: c.x + (tMax - ridgeInset) * axisDx, y: c.y + (tMax - ridgeInset) * axisDy }
+
+    // Sutherland-Hodgman-style split of polygon by the ridge line.
+    const perpDot = (p: { x: number; y: number }) => (p.x - c.x) * perpDx + (p.y - c.y) * perpDy
+    const leftHalf: { x: number; y: number }[] = []
+    const rightHalf: { x: number; y: number }[] = []
+    let crossCount = 0
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length]
+      const pa = perpDot(a), pb = perpDot(b)
+      if (pa >= 0) leftHalf.push(a)
+      else rightHalf.push(a)
+      if ((pa >= 0 && pb < 0) || (pa < 0 && pb >= 0)) {
+        const tt = pa / (pa - pb)
+        const ix = a.x + tt * (b.x - a.x)
+        const iy = a.y + tt * (b.y - a.y)
+        leftHalf.push({ x: ix, y: iy })
+        rightHalf.push({ x: ix, y: iy })
+        crossCount++
+      }
+    }
+    const canSplit = crossCount === 2 && leftHalf.length >= 3 && rightHalf.length >= 3
+
+    const bodyPath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') + ' Z'
+    // Cast shadow on the parent roof — translucent slate, offset SE.
+    const shadowPath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${(p.x + 2.6).toFixed(1)} ${(p.y + 3.2).toFixed(1)}`).join(' ') + ' Z'
+    svg += `<path d="${shadowPath}" fill="rgba(15,23,42,0.20)" stroke="none"/>`
+
+    if (canSplit) {
+      // Each half slopes away from the ridge along ±perp. Map screen direction
+      // to geographic azimuth so the same NW-sun shader applies as for facets.
+      const leftAz = screenToAzimuth(perpDx, perpDy)
+      const rightAz = screenToAzimuth(-perpDx, -perpDy)
+      // Lavender ramp: brighter on the sunward face, deeper violet on the shaded one.
+      const halfFill = (sh: number): string => {
+        const t = (sh + 1) / 2
+        const r = Math.round(150 + (236 - 150) * t)
+        const g = Math.round(130 + (213 - 130) * t)
+        const b = Math.round(212 + (250 - 212) * t)
+        return `rgb(${r},${g},${b})`
+      }
+      const leftPoly = leftHalf.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+      const rightPoly = rightHalf.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+      svg += `<polygon points="${leftPoly}" fill="${halfFill(sunShadeStrength(leftAz))}" stroke="none"/>`
+      svg += `<polygon points="${rightPoly}" fill="${halfFill(sunShadeStrength(rightAz))}" stroke="none"/>`
+
+      // Ridge line with its own offset shadow underneath.
+      svg += `<line x1="${(r1.x + 0.9).toFixed(1)}" y1="${(r1.y + 1.2).toFixed(1)}" x2="${(r2.x + 0.9).toFixed(1)}" y2="${(r2.y + 1.2).toFixed(1)}" stroke="rgba(15,23,42,0.32)" stroke-width="2.8" stroke-linecap="round"/>`
+      svg += `<line x1="${r1.x.toFixed(1)}" y1="${r1.y.toFixed(1)}" x2="${r2.x.toFixed(1)}" y2="${r2.y.toFixed(1)}" stroke="#C62828" stroke-width="2.2" stroke-linecap="round"/>`
+    } else {
+      // Fallback: clean flat wash for non-convex / degenerate dormer polygons.
+      svg += `<path d="${bodyPath}" fill="rgba(196,181,253,0.88)" stroke="none"/>`
+    }
+
+    // Crisp dormer perimeter — the cheek eaves + gable rakes.
+    svg += `<path d="${bodyPath}" fill="none" stroke="#4c1d95" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>`
+
+    // Pitch pill — sits at the ridge midpoint when we have a real ridge,
+    // otherwise at the polygon centroid (fallback path).
+    const lmx = canSplit ? (r1.x + r2.x) / 2 : c.x
+    const lmy = canSplit ? (r1.y + r2.y) / 2 : c.y
     const lblText = (d.label || `Dormer ${String.fromCharCode(65 + di)}`).replace(/^Dormer\s+/, 'D-')
     const pitchLbl = `${(d.pitch_rise || 0).toFixed(d.pitch_rise % 1 === 0 ? 0 : 1)}:12`
-    const pillW = Math.max(46, lblText.length * 5.5 + 18)
-    svg += `<g transform="translate(${lx.toFixed(1)},${ly.toFixed(1)})">`
-    svg += `<rect x="${(-pillW / 2).toFixed(1)}" y="-11" width="${pillW.toFixed(1)}" height="22" rx="4" fill="#a855f7" stroke="#fff" stroke-width="0.8"/>`
-    svg += `<text x="0" y="-1.5" text-anchor="middle" font-size="8" font-weight="800" fill="#fff" ${FONT}>${lblText}</text>`
-    svg += `<text x="0" y="8.5" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff" fill-opacity="0.95" ${FONT}>${pitchLbl}</text>`
+    const pillW = Math.max(42, lblText.length * 5.2 + 16)
+    svg += `<g transform="translate(${lmx.toFixed(1)},${lmy.toFixed(1)})">`
+    svg += `<rect x="${(-pillW / 2).toFixed(1)}" y="-10" width="${pillW.toFixed(1)}" height="20" rx="10" fill="#6d28d9" stroke="#fff" stroke-width="0.8"/>`
+    svg += `<text x="0" y="-1.5" text-anchor="middle" font-size="7.5" font-weight="800" fill="#fff" ${FONT}>${lblText}</text>`
+    svg += `<text x="0" y="7.5" text-anchor="middle" font-size="7" font-weight="700" fill="#fff" fill-opacity="0.95" ${FONT}>${pitchLbl}</text>`
     svg += `</g>`
   })
 
