@@ -2634,6 +2634,19 @@ app.get('/status', (c) => c.html(getStatusPageHTML()))
 app.get('/case-studies', (c) => c.redirect('/case-studies/jpg-roofing', 302))
 app.get('/case-studies/jpg-roofing', (c) => c.html(getJpgRoofingCaseStudyHTML()))
 app.get('/compare', (c) => c.redirect('/roofing-software-comparison', 302))
+// Trust & Resources hub — aggregates trust pages + recent blog posts
+app.get('/resources', async (c) => {
+  let posts: any[] = []
+  try {
+    const r = await c.env.DB.prepare(
+      "SELECT slug, title, excerpt, category, published_at, read_time_minutes FROM blog_posts WHERE status = 'published' ORDER BY published_at DESC LIMIT 6"
+    ).all()
+    posts = (r.results || []) as any[]
+  } catch {}
+  return c.html(getResourcesHubHTML(posts))
+})
+app.get('/trust', (c) => c.redirect('/resources', 302))
+app.get('/trust-and-resources', (c) => c.redirect('/resources', 302))
 // Free tools hub + embeddable calculators (backlink magnets)
 app.get('/tools', (c) => c.html(getToolsHubHTML()))
 app.get('/tools/pitch-calculator', (c) => c.html(getPitchCalculatorHTML()))
@@ -9309,19 +9322,22 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   <!-- Footer — Dark premium style -->
   <footer class="text-gray-400" style="background:#0A0A0A">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-16">
-      <div class="grid md:grid-cols-4 gap-8">
+      <div class="grid md:grid-cols-2 lg:grid-cols-5 gap-8">
         <div>
           <div class="flex items-center gap-3 mb-4">
             <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
             <span class="text-white font-bold text-lg tracking-tight">Roof Manager</span>
           </div>
           <p class="text-sm leading-relaxed text-gray-500">Professional AI-powered roof measurement reports, CRM, and business management for roofing companies across the US &amp; Canada.</p>
+          <p class="text-xs text-gray-600 mt-3 leading-relaxed"><i class="fas fa-map-marker-alt text-[#00FF88] mr-1"></i>Headquartered in Alberta, Canada<br/><i class="fas fa-globe-americas text-[#00FF88] mr-1"></i>North America&ndash;wide coverage</p>
           <div class="flex items-center gap-4 mt-6">
-            <a href="https://www.facebook.com/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-facebook text-lg"></i></a>
-            <a href="https://www.instagram.com/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-instagram text-lg"></i></a>
-            <a href="https://www.linkedin.com/company/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-linkedin text-lg"></i></a>
+            <a href="https://www.facebook.com/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors" aria-label="Facebook"><i class="fab fa-facebook text-lg"></i></a>
+            <a href="https://www.instagram.com/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors" aria-label="Instagram"><i class="fab fa-instagram text-lg"></i></a>
+            <a href="https://www.linkedin.com/company/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors" aria-label="LinkedIn"><i class="fab fa-linkedin text-lg"></i></a>
+            <a href="https://www.trustpilot.com/review/roofmanager.ca" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00B67A] transition-colors" aria-label="Trustpilot"><i class="fas fa-star text-lg"></i></a>
           </div>
         </div>
+
         <div>
           <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Product</h4>
           <ul class="space-y-2.5 text-sm">
@@ -9329,33 +9345,80 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             <li><a href="/features/ai-secretary" class="hover:text-[#00FF88] transition-colors">AI Roofer Secretary</a></li>
             <li><a href="/features/crm" class="hover:text-[#00FF88] transition-colors">CRM &amp; Invoicing</a></li>
             <li><a href="/features/virtual-try-on" class="hover:text-[#00FF88] transition-colors">Virtual Roof Try-On</a></li>
+            <li><a href="/services" class="hover:text-[#00FF88] transition-colors">All 12 Features</a></li>
             <li><a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a></li>
+            <li><a href="/developer" class="hover:text-[#00FF88] transition-colors">Developer API</a></li>
           </ul>
         </div>
+
         <div>
-          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Trust &amp; Resources</h4>
+          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">
+            <a href="/resources" class="hover:text-[#00FF88] transition-colors"><i class="fas fa-shield-alt text-[#00FF88] mr-1.5 text-xs"></i>Trust &amp; Verification</a>
+          </h4>
           <ul class="space-y-2.5 text-sm">
-            <li><a href="/about" class="hover:text-[#00FF88] transition-colors">About</a></li>
+            <li><a href="/about" class="hover:text-[#00FF88] transition-colors">About Us</a></li>
             <li><a href="/accuracy" class="hover:text-[#00FF88] transition-colors">How Accurate Is It?</a></li>
             <li><a href="/case-studies/jpg-roofing" class="hover:text-[#00FF88] transition-colors">Case Studies</a></li>
-            <li><a href="/compare" class="hover:text-[#00FF88] transition-colors">Compare Tools</a></li>
-            <li><a href="/status" class="hover:text-[#00FF88] transition-colors"><span class="inline-block w-1.5 h-1.5 rounded-full bg-[#00FF88] mr-1.5 align-middle"></span>System Status</a></li>
-            <li><a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="hover:text-[#00FF88] transition-colors">View Sample Report</a></li>
-            <li><a href="/blog" class="hover:text-[#00FF88] transition-colors">Blog</a></li>
-            <li><a href="/guides" class="hover:text-[#00FF88] transition-colors">How-To Guides</a></li>
-            <li><a href="/how-it-works" class="hover:text-[#00FF88] transition-colors">How It Works</a></li>
-            <li><a href="/faq" class="hover:text-[#00FF88] transition-colors">FAQ</a></li>
-            <li><a href="/contact" class="hover:text-[#00FF88] transition-colors">Contact Us</a></li>
+            <li><a href="/compare" class="hover:text-[#00FF88] transition-colors">Compare to EagleView, Roofr, RoofSnap</a></li>
+            <li><a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="hover:text-[#00FF88] transition-colors"><i class="fas fa-eye text-gray-500 mr-1 text-xs"></i>View Sample Report</a></li>
+            <li><a href="/pricing#money-back" class="hover:text-[#00FF88] transition-colors"><i class="fas fa-undo text-gray-500 mr-1 text-xs"></i>30-Day Money-Back Guarantee</a></li>
+            <li><a href="/status" class="hover:text-[#00FF88] transition-colors"><span class="inline-block w-1.5 h-1.5 rounded-full bg-[#00FF88] mr-1.5 align-middle"></span>System Status &middot; Live</a></li>
+            <li><a href="https://www.trustpilot.com/review/roofmanager.ca" target="_blank" rel="noopener" class="hover:text-[#00B67A] transition-colors"><i class="fas fa-star text-[#00B67A] mr-1 text-xs"></i>Trustpilot Reviews</a></li>
+            <li><a href="/faq#data" class="hover:text-[#00FF88] transition-colors">Data &amp; Security FAQ</a></li>
             <li><a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy Policy</a></li>
             <li><a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms of Service</a></li>
           </ul>
         </div>
+
+        <div>
+          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">
+            <a href="/resources" class="hover:text-[#00FF88] transition-colors"><i class="fas fa-book-open text-[#22d3ee] mr-1.5 text-xs"></i>Resources &amp; Help</a>
+          </h4>
+          <ul class="space-y-2.5 text-sm">
+            <li><a href="/how-it-works" class="hover:text-[#00FF88] transition-colors">How It Works</a></li>
+            <li><a href="/blog" class="hover:text-[#00FF88] transition-colors">Blog &amp; Industry News</a></li>
+            <li><a href="/guides" class="hover:text-[#00FF88] transition-colors">How-To Guides</a></li>
+            <li><a href="/guides" class="hover:text-[#00FF88] transition-colors">Video Tutorials</a></li>
+            <li><a href="/tools" class="hover:text-[#00FF88] transition-colors">Free Roofing Tools</a></li>
+            <li><a href="/tools/pitch-calculator" class="hover:text-[#00FF88] transition-colors">Pitch Calculator</a></li>
+            <li><a href="/coverage" class="hover:text-[#00FF88] transition-colors">Coverage Map</a></li>
+            <li><a href="/condo-reserve-fund-cheat-sheet" class="hover:text-[#00FF88] transition-colors">For Condo / HOA Boards</a></li>
+            <li><a href="/free-roof-estimate" class="hover:text-[#00FF88] transition-colors">For Homeowners</a></li>
+            <li><a href="/faq" class="hover:text-[#00FF88] transition-colors">FAQ</a></li>
+            <li><a href="/demo" class="hover:text-[#00FF88] transition-colors">Book a 20-min Demo</a></li>
+            <li><a href="/contact" class="hover:text-[#00FF88] transition-colors">Contact Sales</a></li>
+            <li><a href="mailto:support@roofmanager.ca" class="hover:text-[#00FF88] transition-colors">Email Support</a></li>
+          </ul>
+        </div>
+
         <div>
           <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Get Started</h4>
           <p class="text-sm text-gray-500 mb-4">Start with 4 free reports. No credit card required.</p>
-          <a href="/register" class="inline-block bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-6 rounded-xl text-sm transition-all shadow-lg shadow-[#00FF88]/10">
+          <a href="/register" class="inline-block bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-6 rounded-xl text-sm transition-all shadow-lg shadow-[#00FF88]/10 mb-4">
             Sign Up Free
           </a>
+          <div class="bg-white/5 border border-white/10 rounded-xl p-4 mt-2">
+            <div class="text-[10px] uppercase tracking-widest text-[#00FF88] font-bold mb-1.5"><i class="fas fa-headset mr-1"></i>Real human support</div>
+            <p class="text-xs text-gray-400 leading-relaxed mb-2">Sales, support, and onboarding &mdash; we reply within one business day, often the same day.</p>
+            <a href="mailto:sales@roofmanager.ca" class="block text-xs text-gray-300 hover:text-[#00FF88] transition-colors"><i class="fas fa-envelope text-gray-500 mr-1"></i>sales@roofmanager.ca</a>
+            <a href="mailto:support@roofmanager.ca" class="block text-xs text-gray-300 hover:text-[#00FF88] transition-colors mt-1"><i class="fas fa-life-ring text-gray-500 mr-1"></i>support@roofmanager.ca</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Trust certifications strip -->
+      <div class="border-t border-gray-800 mt-12 pt-8">
+        <div class="text-center mb-5">
+          <p class="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">Bank-grade security &middot; Verified compliance &middot; North-American data residency</p>
+        </div>
+        <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-xs text-gray-400">
+          <span class="inline-flex items-center gap-2"><i class="fas fa-shield-alt text-[#22d3ee]"></i>SOC 2 controls</span>
+          <span class="inline-flex items-center gap-2"><i class="fas fa-credit-card text-[#00FF88]"></i>PCI DSS payments</span>
+          <span class="inline-flex items-center gap-2"><i class="fas fa-lock text-[#22d3ee]"></i>256-bit SSL</span>
+          <span class="inline-flex items-center gap-2"><i class="fab fa-google text-[#00FF88]"></i>Google Cloud Partner</span>
+          <span class="inline-flex items-center gap-2"><i class="fas fa-cloud text-[#00FF88]"></i>Cloudflare Protected</span>
+          <span class="inline-flex items-center gap-2"><i class="fas fa-leaf text-[#00FF88]"></i>PIPEDA compliant</span>
+          <span class="inline-flex items-center gap-2"><i class="fas fa-flag text-red-400"></i>Made in Canada &middot; Used continent-wide</span>
         </div>
       </div>
       <div class="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -23025,6 +23088,252 @@ function getJpgRoofingCaseStudyHTML(): string {
   </main>
   <footer class="text-gray-500 py-8 text-center text-sm border-t border-white/5" style="background:#0A0A0A">
     <div class="max-w-5xl mx-auto px-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2"><a href="/" class="hover:text-[#00FF88]">Home</a><a href="/pricing" class="hover:text-[#00FF88]">Pricing</a><a href="/about" class="hover:text-[#00FF88]">About</a><a href="/accuracy" class="hover:text-[#00FF88]">Accuracy</a><a href="/status" class="hover:text-[#00FF88]">Status</a><a href="/case-studies" class="hover:text-[#00FF88]">Case studies</a></div>
+    <p class="mt-3 text-xs text-gray-600">&copy; ${new Date().getFullYear()} Roof Manager &middot; Alberta, Canada</p>
+  </footer>
+</body></html>`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RESOURCES HUB — /resources (also /trust, /trust-and-resources)
+// Single aggregated landing page that pulls together every trust + resource
+// surface plus the most recent blog posts. Footer "Trust & Resources" header
+// links here.
+// ─────────────────────────────────────────────────────────────────────────────
+function getResourcesHubHTML(posts: any[] = []): string {
+  const base = 'https://www.roofmanager.ca'
+  const escHtml = (s: string) => String(s || '').replace(/[&<>"']/g, (c: string) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' } as Record<string,string>)[c])
+  const fmtDate = (s: string) => {
+    try { return new Date(s).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' }) } catch { return s }
+  }
+  const postCards = posts.length === 0
+    ? `<div class="col-span-full bg-[#111] border border-white/10 rounded-2xl p-8 text-center"><p class="text-gray-400 text-sm">Latest articles will appear here. <a href="/blog" class="text-[#00FF88] hover:underline">Browse the full blog &rarr;</a></p></div>`
+    : posts.map((p, i) => `
+        <a href="/blog/${escHtml(p.slug)}" class="group bg-[#111] border border-white/10 hover:border-[#00FF88]/40 rounded-2xl p-6 transition-all flex flex-col" style="transition-delay:${i*40}ms">
+          <div class="flex items-center gap-2 mb-3 text-[10px] uppercase tracking-widest font-bold">
+            <span class="text-[#00FF88]">${escHtml(p.category || 'Article')}</span>
+            <span class="text-gray-600">&bull;</span>
+            <span class="text-gray-500">${escHtml(fmtDate(p.published_at))}</span>
+            ${p.read_time_minutes ? `<span class="text-gray-600">&bull;</span><span class="text-gray-500">${escHtml(String(p.read_time_minutes))} min read</span>` : ''}
+          </div>
+          <h3 class="text-white font-bold text-base leading-snug mb-2 group-hover:text-[#00FF88] transition-colors">${escHtml(p.title)}</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1 mb-3">${escHtml(p.excerpt || '')}</p>
+          <span class="text-[#00FF88] text-xs font-semibold inline-flex items-center gap-1">Read article <i class="fas fa-arrow-right text-[10px] group-hover:translate-x-1 transition-transform"></i></span>
+        </a>`).join('')
+  const breadcrumbSchema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: `${base}/` },
+      { '@type': 'ListItem', position: 2, name: 'Trust & Resources', item: `${base}/resources` },
+    ],
+  })
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags('/resources')}
+  <title>Trust &amp; Resources — Roof Manager | Methodology, case studies, status, blog, free tools</title>
+  <meta name="description" content="Everything a careful buyer wants to verify before they sign up: our accuracy methodology, case studies, side-by-side comparisons against EagleView/Roofr/RoofSnap, live status, free tools, and the latest from our blog.">
+  <link rel="canonical" href="${base}/resources">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Trust &amp; Resources — Roof Manager">
+  <meta property="og:description" content="Methodology, case studies, status, blog, and free tools — everything a careful buyer wants before signing up.">
+  <meta property="og:url" content="${base}/resources">
+  <meta property="og:image" content="${base}/static/og-image.png?v=20260504">
+  <script type="application/ld+json">${breadcrumbSchema}</script>
+</head>
+<body class="min-h-screen" style="background:#0A0A0A;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+  <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.05)" class="sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
+      <div class="hidden md:flex items-center gap-5">
+        <a href="/pricing" class="text-gray-400 hover:text-white text-sm">Pricing</a>
+        <a href="/about" class="text-gray-400 hover:text-white text-sm">About</a>
+        <a href="/resources" class="text-[#00FF88] font-semibold text-sm border-b-2 border-[#00FF88] pb-0.5">Trust &amp; Resources</a>
+        <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-lg text-sm">Get 4 Free Reports</a>
+      </div>
+      <a href="/register" class="md:hidden bg-[#00FF88] text-[#0A0A0A] font-bold py-2 px-3 rounded-lg text-xs">Get 4 Free</a>
+    </div>
+  </nav>
+
+  <div class="max-w-6xl mx-auto px-4 py-4">
+    <nav class="text-sm text-gray-500"><a href="/" class="hover:text-[#00FF88]">Home</a> <span class="mx-2">/</span> <span class="text-gray-300 font-medium">Trust &amp; Resources</span></nav>
+  </div>
+
+  <main class="max-w-6xl mx-auto px-4 pb-20">
+    <!-- Hero -->
+    <section class="text-center mb-16">
+      <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-6">Trust &amp; Resources</span>
+      <h1 class="text-4xl md:text-6xl font-black text-white mb-5 leading-tight">Verifiable. Transparent.<br/><span class="neon-text">Built for the careful buyer.</span></h1>
+      <p class="text-lg md:text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">Everything a skeptical first-time visitor wants to check before signing up. Methodology, case studies, head-to-head comparisons against EagleView, Roofr, and RoofSnap, live system status, free tools, and the latest from our blog &mdash; all in one place.</p>
+    </section>
+
+    <!-- Quick stats -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-16">
+      <div class="bg-[#111] border border-white/10 rounded-xl p-5 text-center"><div class="text-3xl font-black text-[#00FF88] mb-1">2&ndash;5%</div><div class="text-[10px] text-gray-400 uppercase tracking-wider">Variance vs. tape-measure</div></div>
+      <div class="bg-[#111] border border-white/10 rounded-xl p-5 text-center"><div class="text-3xl font-black text-[#00FF88] mb-1">~60s</div><div class="text-[10px] text-gray-400 uppercase tracking-wider">Continent-wide turnaround</div></div>
+      <div class="bg-[#111] border border-white/10 rounded-xl p-5 text-center"><div class="text-3xl font-black text-[#00FF88] mb-1">30-day</div><div class="text-[10px] text-gray-400 uppercase tracking-wider">Money-back guarantee</div></div>
+      <div class="bg-[#111] border border-white/10 rounded-xl p-5 text-center"><div class="text-3xl font-black text-[#00FF88] mb-1">5,000+</div><div class="text-[10px] text-gray-400 uppercase tracking-wider">Roofers on the platform</div></div>
+    </section>
+
+    <!-- TRUST GRID -->
+    <section class="mb-20">
+      <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
+        <div>
+          <div class="text-[#00FF88] text-xs font-bold uppercase tracking-[0.2em] mb-1"><i class="fas fa-shield-alt mr-1.5"></i>Trust &amp; Verification</div>
+          <h2 class="text-2xl md:text-3xl font-black text-white">What a careful buyer should check first</h2>
+        </div>
+      </div>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <a href="/about" class="group bg-[#111] border border-white/10 hover:border-[#00FF88]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#00FF88]/10 border border-[#00FF88]/20 flex items-center justify-center mb-3"><i class="fas fa-building text-[#00FF88]"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#00FF88] transition-colors">About Us</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">Who built Roof Manager, where we&apos;re headquartered, and why we exist. The team and the mission.</p>
+          <span class="text-[#00FF88] text-xs font-semibold mt-3 inline-flex items-center gap-1">Read the story <i class="fas fa-arrow-right text-[10px] group-hover:translate-x-1 transition-transform"></i></span>
+        </a>
+        <a href="/accuracy" class="group bg-[#111] border border-white/10 hover:border-[#00FF88]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#00FF88]/10 border border-[#00FF88]/20 flex items-center justify-center mb-3"><i class="fas fa-bullseye text-[#00FF88]"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#00FF88] transition-colors">How accurate is it?</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">Methodology, the three data sources we cross-check, and what we do when the engine isn&apos;t confident. We publish the math.</p>
+          <span class="text-[#00FF88] text-xs font-semibold mt-3 inline-flex items-center gap-1">See the methodology <i class="fas fa-arrow-right text-[10px] group-hover:translate-x-1 transition-transform"></i></span>
+        </a>
+        <a href="/case-studies/jpg-roofing" class="group bg-[#111] border border-white/10 hover:border-[#00FF88]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#00FF88]/10 border border-[#00FF88]/20 flex items-center justify-center mb-3"><i class="fas fa-file-alt text-[#00FF88]"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#00FF88] transition-colors">Case Studies</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">Long-form contractor stories with the before/after numbers. Start with JPG Roofing&apos;s Calgary pilot.</p>
+          <span class="text-[#00FF88] text-xs font-semibold mt-3 inline-flex items-center gap-1">Read JPG&apos;s story <i class="fas fa-arrow-right text-[10px] group-hover:translate-x-1 transition-transform"></i></span>
+        </a>
+        <a href="/compare" class="group bg-[#111] border border-white/10 hover:border-[#a78bfa]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#a78bfa]/10 border border-[#a78bfa]/20 flex items-center justify-center mb-3"><i class="fas fa-scale-balanced text-[#a78bfa]"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#a78bfa] transition-colors">Compare to EagleView, Roofr, RoofSnap</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">Side-by-side feature matrix &mdash; price, turnaround, BOM, CRM, contracts &mdash; against the three most-asked-about competitors.</p>
+          <span class="text-[#a78bfa] text-xs font-semibold mt-3 inline-flex items-center gap-1">See the matrix <i class="fas fa-arrow-right text-[10px] group-hover:translate-x-1 transition-transform"></i></span>
+        </a>
+        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="group bg-[#111] border border-white/10 hover:border-[#00FF88]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#00FF88]/10 border border-[#00FF88]/20 flex items-center justify-center mb-3"><i class="fas fa-eye text-[#00FF88]"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#00FF88] transition-colors">View a sample report <span class="text-[10px] text-[#00FF88] font-bold ml-1 bg-[#00FF88]/10 border border-[#00FF88]/20 px-1.5 py-0.5 rounded-full align-middle">No email</span></h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">A real, fully-rendered roof measurement report &mdash; opens in your browser, no signup, no card, no gate.</p>
+          <span class="text-[#00FF88] text-xs font-semibold mt-3 inline-flex items-center gap-1">Open the sample <i class="fas fa-external-link-alt text-[10px]"></i></span>
+        </a>
+        <a href="/status" class="group bg-[#111] border border-white/10 hover:border-[#00FF88]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#00FF88]/10 border border-[#00FF88]/20 flex items-center justify-center mb-3 relative">
+            <i class="fas fa-heartbeat text-[#00FF88]"></i>
+            <span class="absolute -top-1 -right-1 flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-[#00FF88]"></span></span>
+          </div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#00FF88] transition-colors">System Status &middot; Live</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">Live status of the measurement engine, payments, AI receptionist, CRM, email, and public API. Browser-side health probe every 30s.</p>
+          <span class="text-[#00FF88] text-xs font-semibold mt-3 inline-flex items-center gap-1">See live status <i class="fas fa-arrow-right text-[10px] group-hover:translate-x-1 transition-transform"></i></span>
+        </a>
+        <a href="/pricing#money-back" class="group bg-[#111] border border-white/10 hover:border-[#00FF88]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#00FF88]/10 border border-[#00FF88]/20 flex items-center justify-center mb-3"><i class="fas fa-undo text-[#00FF88]"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#00FF88] transition-colors">30-Day Money-Back Guarantee</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">Not happy with your first paid report? Email us within 30 days &mdash; we refund the same business day. No forms, no fine print.</p>
+          <span class="text-[#00FF88] text-xs font-semibold mt-3 inline-flex items-center gap-1">Read the guarantee <i class="fas fa-arrow-right text-[10px] group-hover:translate-x-1 transition-transform"></i></span>
+        </a>
+        <a href="https://www.trustpilot.com/review/roofmanager.ca" target="_blank" rel="noopener" class="group bg-[#111] border border-white/10 hover:border-[#00B67A]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style="background:#00B67A20;border:1px solid #00B67A40"><i class="fas fa-star" style="color:#00B67A"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 transition-colors" style="--hover:#00B67A">Trustpilot reviews</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">Read verified contractor and homeowner reviews on Trustpilot &mdash; the public record, not our marketing copy.</p>
+          <span class="text-xs font-semibold mt-3 inline-flex items-center gap-1" style="color:#00B67A">Open Trustpilot <i class="fas fa-external-link-alt text-[10px]"></i></span>
+        </a>
+        <a href="/faq#data" class="group bg-[#111] border border-white/10 hover:border-[#22d3ee]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#22d3ee]/10 border border-[#22d3ee]/20 flex items-center justify-center mb-3"><i class="fas fa-lock text-[#22d3ee]"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#22d3ee] transition-colors">Data &amp; Security</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">SOC 2 controls, PCI DSS payments, 256-bit SSL, PIPEDA-compliant data handling, edge-hosted on Cloudflare. We don&apos;t sell your data.</p>
+          <span class="text-[#22d3ee] text-xs font-semibold mt-3 inline-flex items-center gap-1">Security FAQ <i class="fas fa-arrow-right text-[10px] group-hover:translate-x-1 transition-transform"></i></span>
+        </a>
+      </div>
+    </section>
+
+    <!-- BLOG / LATEST CONTENT -->
+    <section class="mb-20">
+      <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
+        <div>
+          <div class="text-[#a78bfa] text-xs font-bold uppercase tracking-[0.2em] mb-1"><i class="fas fa-newspaper mr-1.5"></i>From our blog</div>
+          <h2 class="text-2xl md:text-3xl font-black text-white">Latest articles &amp; industry analysis</h2>
+        </div>
+        <a href="/blog" class="text-[#00FF88] text-sm font-semibold hover:underline inline-flex items-center gap-1">View all posts <i class="fas fa-arrow-right text-xs"></i></a>
+      </div>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">${postCards}</div>
+    </section>
+
+    <!-- RESOURCES GRID -->
+    <section class="mb-20">
+      <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
+        <div>
+          <div class="text-[#22d3ee] text-xs font-bold uppercase tracking-[0.2em] mb-1"><i class="fas fa-book-open mr-1.5"></i>Resources &amp; Help</div>
+          <h2 class="text-2xl md:text-3xl font-black text-white">Tutorials, free tools, and guides</h2>
+        </div>
+      </div>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <a href="/how-it-works" class="group bg-[#111] border border-white/10 hover:border-[#22d3ee]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#22d3ee]/10 border border-[#22d3ee]/20 flex items-center justify-center mb-3"><i class="fas fa-route text-[#22d3ee]"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#22d3ee] transition-colors">How It Works</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">Address &rarr; Configure &rarr; Order &rarr; Report. Four-step walkthrough of the contractor workflow.</p>
+        </a>
+        <a href="/guides" class="group bg-[#111] border border-white/10 hover:border-[#22d3ee]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#22d3ee]/10 border border-[#22d3ee]/20 flex items-center justify-center mb-3"><i class="fas fa-graduation-cap text-[#22d3ee]"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#22d3ee] transition-colors">How-To Guides &amp; Tutorials</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">Step-by-step setup walkthroughs &mdash; CRM, invoicing, AI Secretary, solar design, and more.</p>
+        </a>
+        <a href="/tools" class="group bg-[#111] border border-white/10 hover:border-[#22d3ee]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#22d3ee]/10 border border-[#22d3ee]/20 flex items-center justify-center mb-3"><i class="fas fa-tools text-[#22d3ee]"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#22d3ee] transition-colors">Free Roofing Tools</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">Pitch calculator, slope-to-area converter, embeddable widgets &mdash; free, no signup, no email.</p>
+        </a>
+        <a href="/coverage" class="group bg-[#111] border border-white/10 hover:border-[#22d3ee]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#22d3ee]/10 border border-[#22d3ee]/20 flex items-center justify-center mb-3"><i class="fas fa-globe-americas text-[#22d3ee]"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#22d3ee] transition-colors">Coverage Map</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">All 50 US states, every Canadian province + territory. Sub-meter imagery for nearly every urban North-American address.</p>
+        </a>
+        <a href="/faq" class="group bg-[#111] border border-white/10 hover:border-[#22d3ee]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#22d3ee]/10 border border-[#22d3ee]/20 flex items-center justify-center mb-3"><i class="fas fa-question-circle text-[#22d3ee]"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#22d3ee] transition-colors">Frequently Asked Questions</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">Pricing, accuracy, data ownership, cancellation, security &mdash; the questions buyers actually ask.</p>
+        </a>
+        <a href="/condo-reserve-fund-cheat-sheet" class="group bg-[#111] border border-white/10 hover:border-[#22d3ee]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#22d3ee]/10 border border-[#22d3ee]/20 flex items-center justify-center mb-3"><i class="fas fa-building text-[#22d3ee]"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#22d3ee] transition-colors">For Condo / HOA Boards</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">Reserve-fund cheat sheet &mdash; what board members need before approving a roof capital project.</p>
+        </a>
+        <a href="/free-roof-estimate" class="group bg-[#111] border border-white/10 hover:border-[#22d3ee]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#22d3ee]/10 border border-[#22d3ee]/20 flex items-center justify-center mb-3"><i class="fas fa-home text-[#22d3ee]"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#22d3ee] transition-colors">For Homeowners</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">Get an unbiased roof estimate without three contractors knocking on your door. Independent, satellite-based.</p>
+        </a>
+        <a href="/developer" class="group bg-[#111] border border-white/10 hover:border-[#22d3ee]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#22d3ee]/10 border border-[#22d3ee]/20 flex items-center justify-center mb-3"><i class="fas fa-code text-[#22d3ee]"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#22d3ee] transition-colors">Developer API</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">REST endpoints, webhooks, white-label PDFs. Embed roof measurement into your platform.</p>
+        </a>
+        <a href="/demo" class="group bg-[#111] border border-white/10 hover:border-[#22d3ee]/40 rounded-2xl p-6 transition-all flex flex-col">
+          <div class="w-10 h-10 rounded-lg bg-[#22d3ee]/10 border border-[#22d3ee]/20 flex items-center justify-center mb-3"><i class="fas fa-calendar-check text-[#22d3ee]"></i></div>
+          <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#22d3ee] transition-colors">Book a 20-min Demo</h3>
+          <p class="text-gray-400 text-sm leading-relaxed flex-1">Live walkthrough with our team &mdash; great for volume buyers, franchises, or roofing-software switchers.</p>
+        </a>
+      </div>
+    </section>
+
+    <!-- Final CTA -->
+    <section class="bg-gradient-to-r from-[#00FF88]/10 via-[#00FF88]/5 to-transparent border border-[#00FF88]/20 rounded-2xl p-10 text-center">
+      <h2 class="text-3xl md:text-4xl font-black text-white mb-4">Done your homework? <span class="neon-text">Try it free.</span></h2>
+      <p class="text-gray-400 max-w-2xl mx-auto mb-7">4 measurement reports, full CRM, full dashboard &mdash; no credit card, no commitment. Cancel any time. 30-day money-back guarantee on anything you do pay for.</p>
+      <a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-base shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.02]"><i class="fas fa-gift"></i>Start free &mdash; 4 reports, no card</a>
+      <p class="text-xs text-gray-500 mt-4">Or <a href="/contact" class="text-[#00FF88] hover:underline">talk to sales</a> &middot; <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="text-[#00FF88] hover:underline">view a sample report</a></p>
+    </section>
+  </main>
+
+  <footer class="text-gray-500 py-8 text-center text-sm border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-5xl mx-auto px-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+      <a href="/" class="hover:text-[#00FF88]">Home</a>
+      <a href="/pricing" class="hover:text-[#00FF88]">Pricing</a>
+      <a href="/about" class="hover:text-[#00FF88]">About</a>
+      <a href="/accuracy" class="hover:text-[#00FF88]">Accuracy</a>
+      <a href="/case-studies" class="hover:text-[#00FF88]">Case studies</a>
+      <a href="/compare" class="hover:text-[#00FF88]">Compare</a>
+      <a href="/status" class="hover:text-[#00FF88]">Status</a>
+      <a href="/blog" class="hover:text-[#00FF88]">Blog</a>
+      <a href="/privacy" class="hover:text-[#00FF88]">Privacy</a>
+      <a href="/terms" class="hover:text-[#00FF88]">Terms</a>
+    </div>
     <p class="mt-3 text-xs text-gray-600">&copy; ${new Date().getFullYear()} Roof Manager &middot; Alberta, Canada</p>
   </footer>
 </body></html>`
