@@ -579,7 +579,7 @@ export async function getReportIdByOrder(
 
 // ── REPORT VIEW EVENTS (migration 0216) ──
 
-export type ReportViewType = 'share' | 'portal' | 'pdf' | 'admin'
+export type ReportViewType = 'share' | 'portal' | 'pdf' | 'admin' | '3d_tool'
 
 export async function logReportView(
   db: D1Database,
@@ -647,6 +647,7 @@ export type ReportViewSummary = {
   portal_views: number
   pdf_views: number
   admin_views: number
+  tool_3d_views: number
   bot_views: number
 }
 
@@ -659,20 +660,22 @@ export async function getReportViewSummary(
   const row = await db.prepare(`
     SELECT
       SUM(CASE WHEN view_type IN ('share','portal','pdf') AND is_bot = 0 THEN 1 ELSE 0 END) AS total_views,
-      SUM(CASE WHEN view_type = 'share'  AND is_bot = 0 THEN 1 ELSE 0 END) AS share_views,
-      SUM(CASE WHEN view_type = 'portal' AND is_bot = 0 THEN 1 ELSE 0 END) AS portal_views,
-      SUM(CASE WHEN view_type = 'pdf'    AND is_bot = 0 THEN 1 ELSE 0 END) AS pdf_views,
-      SUM(CASE WHEN view_type = 'admin'  AND is_bot = 0 THEN 1 ELSE 0 END) AS admin_views,
+      SUM(CASE WHEN view_type = 'share'   AND is_bot = 0 THEN 1 ELSE 0 END) AS share_views,
+      SUM(CASE WHEN view_type = 'portal'  AND is_bot = 0 THEN 1 ELSE 0 END) AS portal_views,
+      SUM(CASE WHEN view_type = 'pdf'     AND is_bot = 0 THEN 1 ELSE 0 END) AS pdf_views,
+      SUM(CASE WHEN view_type = 'admin'   AND is_bot = 0 THEN 1 ELSE 0 END) AS admin_views,
+      SUM(CASE WHEN view_type = '3d_tool' AND is_bot = 0 THEN 1 ELSE 0 END) AS tool_3d_views,
       SUM(CASE WHEN is_bot = 1 THEN 1 ELSE 0 END) AS bot_views
     FROM report_view_events
     WHERE order_id = ?
   `).bind(orderId).first<Record<keyof ReportViewSummary, number | null>>()
   return {
-    total_views:  row?.total_views  ?? 0,
-    share_views:  row?.share_views  ?? 0,
-    portal_views: row?.portal_views ?? 0,
-    pdf_views:    row?.pdf_views    ?? 0,
-    admin_views:  row?.admin_views  ?? 0,
-    bot_views:    row?.bot_views    ?? 0,
+    total_views:   row?.total_views   ?? 0,
+    share_views:   row?.share_views   ?? 0,
+    portal_views:  row?.portal_views  ?? 0,
+    pdf_views:     row?.pdf_views     ?? 0,
+    admin_views:   row?.admin_views   ?? 0,
+    tool_3d_views: row?.tool_3d_views ?? 0,
+    bot_views:     row?.bot_views     ?? 0,
   }
 }

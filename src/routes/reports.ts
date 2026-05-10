@@ -453,7 +453,17 @@ reportsRoutes.get('/:orderId/html', async (c) => {
     var overlay = document.getElementById('rm3dOverlay');
     var frame = document.getElementById('rm3dFrame');
     var close = document.getElementById('rm3dClose');
-    function open(){ frame.src = '/3d-verify?orderId=' + encodeURIComponent(orderId); overlay.classList.add('open'); document.body.style.overflow='hidden'; }
+    function logClick(){
+      try {
+        var url = '/api/reports/' + encodeURIComponent(orderId) + '/3d-tool-click';
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(url, new Blob([], { type: 'application/json' }));
+        } else {
+          fetch(url, { method: 'POST', keepalive: true, credentials: 'same-origin' });
+        }
+      } catch (e) { /* tracking must never break the click */ }
+    }
+    function open(){ logClick(); frame.src = '/3d-verify?orderId=' + encodeURIComponent(orderId); overlay.classList.add('open'); document.body.style.overflow='hidden'; }
     function dismiss(){ overlay.classList.remove('open'); frame.src = 'about:blank'; document.body.style.overflow=''; }
     fab.addEventListener('click', open);
     close.addEventListener('click', dismiss);
@@ -748,6 +758,23 @@ reportsRoutes.post('/:orderId/generate', async (c) => {
     report: result.report,
     enhancement_available: result.hasEnhanceKey,
   })
+})
+
+// ============================================================
+// POST /:orderId/3d-tool-click — Log a click on the "Update 3D Cover"
+// FAB on the report page. Fire-and-forget from the client via
+// navigator.sendBeacon. Uses the shared trackReportView helper, which
+// downgrades admin self-clicks to view_type='admin' (so they're
+// excluded from the headline 3D-tool count in super-admin reports).
+// ============================================================
+reportsRoutes.post('/:orderId/3d-tool-click', async (c) => {
+  const orderId = c.req.param('orderId')
+  const orderIdNum = Number(orderId)
+  if (!Number.isFinite(orderIdNum) || orderIdNum <= 0) {
+    return c.json({ error: 'Invalid order id' }, 400)
+  }
+  trackReportView(c, { orderId: orderIdNum, viewType: '3d_tool' })
+  return c.json({ ok: true })
 })
 
 // ============================================================

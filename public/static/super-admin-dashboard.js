@@ -1307,7 +1307,7 @@ function renderReportRequestsView() {
     html += '<div style="background:#1e293b;border:1px solid #334155;border-radius:14px;overflow:hidden">' +
       '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">' +
         '<thead><tr style="background:#0f172a;border-bottom:1px solid #334155">' +
-          ['Order #', 'Customer', 'Property Address', 'Date', 'Status', 'Report', 'Trace', 'Views', 'Actions'].map(function(h) {
+          ['Order #', 'Customer', 'Property Address', 'Date', 'Status', 'Report', 'Trace', 'Views', '3D Opens', 'Actions'].map(function(h) {
             return '<th style="padding:12px 14px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap">' + h + '</th>';
           }).join('') +
         '</tr></thead><tbody>';
@@ -1316,11 +1316,13 @@ function renderReportRequestsView() {
       var rs = o.report_status || 'pending';
       var os = o.status || 'pending';
       var views = (o.view_count != null) ? o.view_count : ((o.share_view_count != null) ? o.share_view_count : 0);
+      var tool3d = (o.tool_3d_count != null) ? o.tool_3d_count : 0;
       var hasShare = !!o.share_token;
       var shareCell = '<div style="display:flex;align-items:center;gap:6px;white-space:nowrap">' +
           '<button onclick="saShowReportViews(' + o.id + ')" title="View activity (last 20 opens)" style="padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;background:rgba(56,189,248,0.15);color:#38bdf8;border:0;cursor:pointer"><i class="fas fa-eye mr-1"></i>' + views + '</button>' +
           (hasShare ? '<button onclick="saCopyShareLink(\'' + o.share_token + '\')" title="Copy share link" style="padding:3px 8px;background:#1f2937;color:#94a3b8;font-size:11px;border:1px solid #374151;border-radius:6px;cursor:pointer"><i class="fas fa-link"></i></button>' : '') +
         '</div>';
+      var tool3dCell = '<button onclick="saShowReportViews(' + o.id + ')" title="Times the customer opened the 3D model tool on this report" style="padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;background:rgba(0,255,136,0.12);color:#00ff88;border:0;cursor:pointer"><i class="fas fa-cube mr-1"></i>' + tool3d + '</button>';
       html += '<tr style="border-bottom:1px solid #1e293b;background:' + (i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)') + '">' +
         '<td style="padding:11px 14px;font-family:monospace;font-size:12px;color:#94a3b8;white-space:nowrap">' + (o.order_number || '#' + o.id) + '</td>' +
         '<td style="padding:11px 14px;color:#cbd5e1;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
@@ -1340,6 +1342,7 @@ function renderReportRequestsView() {
           return '<span style="color:#4b5563;font-size:11px">—</span>';
         })() + '</td>' +
         '<td style="padding:11px 14px">' + shareCell + '</td>' +
+        '<td style="padding:11px 14px">' + tool3dCell + '</td>' +
         '<td style="padding:11px 14px;white-space:nowrap">' +
           (o.needs_admin_trace ?
             '<button onclick="saOpenTraceModal(' + o.id + ',' + (o.latitude || 0) + ',' + (o.longitude || 0) + ',\'' + (o.property_address || '').replace(/'/g, "\\'") + '\',\'' + (o.order_number || '') + '\')" style="padding:5px 12px;background:#f59e0b;color:#111;font-size:11px;font-weight:700;border:none;border-radius:6px;cursor:pointer"><i class="fas fa-drafting-compass mr-1"></i>Trace</button>' :
@@ -1446,12 +1449,14 @@ function saViewerLabel(ev) {
 }
 function saTypeBadge(t) {
   var styles = {
-    share:  'background:rgba(56,189,248,0.15);color:#38bdf8',
-    portal: 'background:rgba(34,197,94,0.15);color:#22c55e',
-    pdf:    'background:rgba(167,139,250,0.18);color:#a78bfa',
-    admin:  'background:rgba(251,191,36,0.15);color:#fbbf24'
+    share:    'background:rgba(56,189,248,0.15);color:#38bdf8',
+    portal:   'background:rgba(34,197,94,0.15);color:#22c55e',
+    pdf:      'background:rgba(167,139,250,0.18);color:#a78bfa',
+    admin:    'background:rgba(251,191,36,0.15);color:#fbbf24',
+    '3d_tool':'background:rgba(0,255,136,0.12);color:#00ff88'
   };
-  return '<span style="padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;' + (styles[t] || 'background:#1f2937;color:#94a3b8') + '">' + t + '</span>';
+  var label = (t === '3d_tool') ? '3D' : t;
+  return '<span style="padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;' + (styles[t] || 'background:#1f2937;color:#94a3b8') + '">' + label + '</span>';
 }
 
 window.saShowReportViews = async function(orderId) {
@@ -1493,14 +1498,15 @@ window.saShowReportViews = async function(orderId) {
 
     var summaryRow =
       '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">' +
-        statBox('Total',  s.total_views,  '#38bdf8') +
-        statBox('Share',  s.share_views,  '#38bdf8') +
-        statBox('Portal', s.portal_views, '#22c55e') +
-        statBox('PDF',    s.pdf_views,    '#a78bfa') +
-        statBox('Admin',  s.admin_views,  '#fbbf24') +
-        statBox('Bots',   s.bot_views,    '#475569') +
+        statBox('Total',    s.total_views,   '#38bdf8') +
+        statBox('Share',    s.share_views,   '#38bdf8') +
+        statBox('Portal',   s.portal_views,  '#22c55e') +
+        statBox('PDF',      s.pdf_views,     '#a78bfa') +
+        statBox('3D Tool',  s.tool_3d_views, '#00ff88') +
+        statBox('Admin',    s.admin_views,   '#fbbf24') +
+        statBox('Bots',     s.bot_views,     '#475569') +
       '</div>' +
-      '<div style="font-size:11px;color:#64748b;margin-bottom:10px">Total = customer + share + PDF opens (admin self-views and bot/preview hits excluded).</div>';
+      '<div style="font-size:11px;color:#64748b;margin-bottom:10px">Total = customer + share + PDF opens (admin self-views, 3D-tool clicks, and bot/preview hits excluded). 3D Tool counts opens of the on-report 3D viewer.</div>';
 
     if (events.length === 0) {
       body.innerHTML = summaryRow + '<div style="color:#64748b;font-size:13px;padding:24px;text-align:center;background:#0f172a;border-radius:10px">No views logged yet.</div>';

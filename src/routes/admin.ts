@@ -1478,6 +1478,10 @@ adminRoutes.get('/superadmin/orders', async (c) => {
            WHERE order_id = o.id
              AND view_type IN ('share','portal','pdf')
              AND is_bot = 0) as view_count,
+        (SELECT COUNT(*) FROM report_view_events
+           WHERE order_id = o.id
+             AND view_type = '3d_tool'
+             AND is_bot = 0) as tool_3d_count,
         CASE
           WHEN r.updated_at IS NOT NULL AND r.created_at IS NOT NULL
           THEN CAST((julianday(r.updated_at) - julianday(r.created_at)) * 86400 AS INTEGER)
