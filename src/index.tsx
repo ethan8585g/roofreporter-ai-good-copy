@@ -12775,6 +12775,295 @@ function getHowItWorksPageHTML(): string {
         </div>
       `).join('')}
     </div>
+
+    <!-- =============== SECTION A: Inside a Roof Measurement Report =============== -->
+    <div class="mt-20 mb-16">
+      <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold mb-5" style="background:#00FF8818;color:#00FF88"><i class="fas fa-satellite"></i> Roof Measurements</div>
+      <h2 class="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight mb-4">Surveyor-grade detail, in under a minute</h2>
+      <p class="text-base md:text-lg text-gray-400 max-w-2xl mb-10">Every report is built on Google's Solar API — LiDAR-calibrated 3D models of the roof, the same data Google uses to recommend solar panels. We layer our own pitch, edge, and material logic on top, then ship a branded PDF.</p>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-7">
+          <h3 class="text-lg font-bold text-white mb-5 flex items-center gap-3"><i class="fas fa-list-check" style="color:#00FF88"></i> What's inside every report</h3>
+          <ul class="space-y-3 text-sm text-gray-400">
+            <li class="flex items-start gap-3"><i class="fas fa-check mt-1 text-xs" style="color:#00FF88"></i><span><strong class="text-white">Total roof area</strong> — footprint and pitch-corrected sloped area, per segment.</span></li>
+            <li class="flex items-start gap-3"><i class="fas fa-check mt-1 text-xs" style="color:#00FF88"></i><span><strong class="text-white">Edge breakdown</strong> — ridge, hip, valley, eave, and rake lengths in feet and metres.</span></li>
+            <li class="flex items-start gap-3"><i class="fas fa-check mt-1 text-xs" style="color:#00FF88"></i><span><strong class="text-white">Bill of materials</strong> — shingle bundles, underlayment rolls, ice &amp; water shield, flashing, nails, ridge cap, with waste factor.</span></li>
+            <li class="flex items-start gap-3"><i class="fas fa-check mt-1 text-xs" style="color:#00FF88"></i><span><strong class="text-white">Solar potential</strong> — panel count, yearly kWh, sunshine hours, roof azimuth.</span></li>
+            <li class="flex items-start gap-3"><i class="fas fa-check mt-1 text-xs" style="color:#00FF88"></i><span><strong class="text-white">Confidence score</strong> — every report shows imagery quality so you know what you're quoting from.</span></li>
+            <li class="flex items-start gap-3"><i class="fas fa-check mt-1 text-xs" style="color:#00FF88"></i><span><strong class="text-white">Branded PDF</strong> — your logo, your colours, your phone number on the cover.</span></li>
+          </ul>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-7 flex flex-col justify-between" style="box-shadow:0 0 40px #00FF8810">
+          <div>
+            <div class="text-6xl font-black mb-2" style="color:#00FF88">99%</div>
+            <div class="text-sm font-semibold text-white mb-1">Accuracy vs manual measurement</div>
+            <div class="text-xs text-gray-500 mb-6">Typically within 2&ndash;5% on residential properties with high-quality satellite imagery — the urban-Canada and US baseline.</div>
+            <div class="space-y-3 text-sm text-gray-400 border-t border-white/10 pt-5">
+              <div class="flex items-start gap-3"><i class="fas fa-satellite-dish mt-1" style="color:#00FF88"></i><span><strong class="text-white">Google Solar API</strong> — the most accurate publicly available roof geometry data.</span></div>
+              <div class="flex items-start gap-3"><i class="fas fa-cube mt-1" style="color:#00FF88"></i><span><strong class="text-white">LiDAR-calibrated 3D models</strong> — not flat imagery, real elevation data.</span></div>
+              <div class="flex items-start gap-3"><i class="fas fa-bolt mt-1" style="color:#00FF88"></i><span><strong class="text-white">Delivered to your dashboard and email</strong> — no waiting on a human draughtsman.</span></div>
+            </div>
+          </div>
+          <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="mt-6 inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-6 rounded-xl text-sm border border-white/10 hover:border-[#00FF88]/40 transition-all">
+            <i class="fas fa-eye" style="color:#00FF88"></i> View a real sample report
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- =============== SECTION B: Free CRM, Invoicing & Proposals =============== -->
+    <div class="mt-24 mb-16">
+      <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold mb-5" style="background:#22d3ee18;color:#22d3ee"><i class="fas fa-users"></i> CRM + Invoicing</div>
+      <h2 class="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight mb-4">Run the office without the office software</h2>
+      <p class="text-base md:text-lg text-gray-400 max-w-2xl mb-10">Pipeline, jobs, customers, proposals, invoicing, payments — included free on every plan, including the free trial. No per-seat fees. No upgrade tier to unlock invoicing. The whole thing.</p>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-7 hover:border-[#22d3ee]/40 transition-all">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-5" style="background:#22d3ee15;box-shadow:0 0 20px #22d3ee30"><i class="fas fa-stream text-lg" style="color:#22d3ee"></i></div>
+          <h3 class="text-lg font-bold text-white mb-3">Sales Pipeline</h3>
+          <ul class="space-y-2 text-sm text-gray-400">
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-[10px]" style="color:#22d3ee"></i>Lead stages from new to closed</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-[10px]" style="color:#22d3ee"></i>Customer + job history in one view</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-[10px]" style="color:#22d3ee"></i>Activity log on every contact</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-[10px]" style="color:#22d3ee"></i>Notes, tags, and follow-up reminders</li>
+          </ul>
+        </div>
+        <div class="bg-[#111111] border-2 rounded-2xl p-7 transition-all" style="border-color:#22d3ee66;box-shadow:0 0 40px #22d3ee15">
+          <div class="flex items-center justify-between mb-5">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background:#22d3ee15;box-shadow:0 0 20px #22d3ee30"><i class="fas fa-file-invoice-dollar text-lg" style="color:#22d3ee"></i></div>
+            <span class="text-[10px] font-extrabold uppercase tracking-widest px-2 py-1 rounded-full" style="background:#22d3ee20;color:#22d3ee">Built for Roofers</span>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-3">Invoicing &amp; Payments</h3>
+          <ul class="space-y-2 text-sm text-gray-400">
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-[10px]" style="color:#22d3ee"></i><strong class="text-white">Deposit / progress / final</strong> billing splits</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-[10px]" style="color:#22d3ee"></i><strong class="text-white">Square integration</strong> — credit, debit, Apple Pay, Google Pay</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-[10px]" style="color:#22d3ee"></i>E-transfer instructions auto-attached</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-[10px]" style="color:#22d3ee"></i>Auto-reminder sequence on overdue</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-[10px]" style="color:#22d3ee"></i>Tax calculations + PDF receipt to homeowner</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-[10px]" style="color:#22d3ee"></i>Payment status synced to the job and CRM</li>
+          </ul>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-7 hover:border-[#22d3ee]/40 transition-all">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-5" style="background:#22d3ee15;box-shadow:0 0 20px #22d3ee30"><i class="fas fa-file-signature text-lg" style="color:#22d3ee"></i></div>
+          <h3 class="text-lg font-bold text-white mb-3">Proposals &amp; Jobs</h3>
+          <ul class="space-y-2 text-sm text-gray-400">
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-[10px]" style="color:#22d3ee"></i>Branded proposals with line items</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-[10px]" style="color:#22d3ee"></i>Pulls measurements + BOM straight in</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-[10px]" style="color:#22d3ee"></i>Job tracker with crew + timeline</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-1 text-[10px]" style="color:#22d3ee"></i>Customer portal for sign-off</li>
+          </ul>
+        </div>
+      </div>
+      <div class="mt-6 text-center">
+        <span class="inline-flex items-center gap-2 text-xs text-gray-500"><i class="fas fa-gift" style="color:#22d3ee"></i> Included free on every plan — no per-seat fees, ever.</span>
+      </div>
+    </div>
+
+    <!-- =============== SECTION C: Door-Knocking Team Manager =============== -->
+    <div class="mt-24 mb-16">
+      <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold mb-5" style="background:#a78bfa18;color:#a78bfa"><i class="fas fa-map-marked-alt"></i> Door-to-Door</div>
+      <h2 class="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight mb-4">Map territories. Track reps. Close more doors.</h2>
+      <p class="text-base md:text-lg text-gray-400 max-w-2xl mb-10">The Door-to-Door Manager turns canvassing from a clipboard exercise into a live operation. Draw territories, assign reps, watch GPS pins move in real time, and let your team measure roofs straight from the porch.</p>
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-6 hover:border-[#a78bfa]/40 transition-all">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style="background:#a78bfa15;box-shadow:0 0 20px #a78bfa30"><i class="fas fa-draw-polygon text-lg" style="color:#a78bfa"></i></div>
+          <h3 class="text-base font-bold text-white mb-2">Territory mapping</h3>
+          <p class="text-xs text-gray-400 leading-relaxed">Draw polygons on the map, assign them to reps or teams, and lock overlap so no two reps knock the same street.</p>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-6 hover:border-[#a78bfa]/40 transition-all">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style="background:#a78bfa15;box-shadow:0 0 20px #a78bfa30"><i class="fas fa-location-crosshairs text-lg" style="color:#a78bfa"></i></div>
+          <h3 class="text-base font-bold text-white mb-2">GPS tracking</h3>
+          <p class="text-xs text-gray-400 leading-relaxed">Live pins for every rep on shift. Replay routes at end-of-day to see who knocked where, when, and for how long.</p>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-6 hover:border-[#a78bfa]/40 transition-all">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style="background:#a78bfa15;box-shadow:0 0 20px #a78bfa30"><i class="fas fa-hand-pointer text-lg" style="color:#a78bfa"></i></div>
+          <h3 class="text-base font-bold text-white mb-2">One-tap dispositions</h3>
+          <p class="text-xs text-gray-400 leading-relaxed">Not Home · Follow-Up · Appointment · Sold · Not Interested. Logged with timestamp + GPS coordinate, in one tap.</p>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-6 hover:border-[#a78bfa]/40 transition-all">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style="background:#a78bfa15;box-shadow:0 0 20px #a78bfa30"><i class="fas fa-trophy text-lg" style="color:#a78bfa"></i></div>
+          <h3 class="text-base font-bold text-white mb-2">Rep leaderboard</h3>
+          <p class="text-xs text-gray-400 leading-relaxed">Doors knocked, contacts made, appointments booked, conversion rate — broken out per rep, per shift, per territory.</p>
+        </div>
+      </div>
+      <div class="rounded-2xl p-7 md:p-9 flex flex-col md:flex-row items-start md:items-center gap-6" style="background:linear-gradient(135deg,#a78bfa15 0%,#a78bfa05 100%);border:1px solid #a78bfa40">
+        <div class="text-5xl md:text-6xl font-black flex-shrink-0" style="color:#a78bfa">2.4&times;</div>
+        <div>
+          <div class="text-lg font-bold text-white mb-1">More inspections when reps measure on the porch</div>
+          <p class="text-sm text-gray-400 leading-relaxed">When a rep can pull up a satellite measurement on the homeowner's doorstep — area, pitch, BOM, even a price ballpark — conversion to inspection more than doubles vs. "we'll send someone out next week". The Door-to-Door Manager and the measurement engine are wired together for exactly this moment.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =============== SECTION D: AI Secretary =============== -->
+    <div class="mt-24 mb-16">
+      <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold mb-5" style="background:#f59e0b18;color:#f59e0b"><i class="fas fa-headset"></i> AI Secretary</div>
+      <h2 class="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight mb-4">A 24/7 receptionist for $249/month</h2>
+      <p class="text-base md:text-lg text-gray-400 max-w-2xl mb-10">Roofing companies miss 35–60% of inbound calls — and 80%+ during a storm surge. The AI Secretary answers every one, in a natural human voice, and books straight into your calendar.</p>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-7">
+          <h3 class="text-lg font-bold text-white mb-5 flex items-center gap-3"><i class="fas fa-phone-volume" style="color:#f59e0b"></i> What it does on every call</h3>
+          <ul class="space-y-3 text-sm text-gray-400">
+            <li class="flex items-start gap-3"><i class="fas fa-check mt-1 text-xs" style="color:#f59e0b"></i><span><strong class="text-white">Answers in a natural voice</strong> — homeowners can't tell it's AI.</span></li>
+            <li class="flex items-start gap-3"><i class="fas fa-check mt-1 text-xs" style="color:#f59e0b"></i><span><strong class="text-white">Qualifies the lead</strong> — asks your custom intake questions (insurance? storm damage? leak? re-roof?).</span></li>
+            <li class="flex items-start gap-3"><i class="fas fa-check mt-1 text-xs" style="color:#f59e0b"></i><span><strong class="text-white">Books appointments</strong> straight into your Google or in-app calendar.</span></li>
+            <li class="flex items-start gap-3"><i class="fas fa-check mt-1 text-xs" style="color:#f59e0b"></i><span><strong class="text-white">Emails a call summary</strong> with full transcript, lead details, and next-step recommendation.</span></li>
+            <li class="flex items-start gap-3"><i class="fas fa-check mt-1 text-xs" style="color:#f59e0b"></i><span><strong class="text-white">Escalates emergencies</strong> — active leak, fallen tree, insurance adjuster on site — direct to your mobile.</span></li>
+            <li class="flex items-start gap-3"><i class="fas fa-check mt-1 text-xs" style="color:#f59e0b"></i><span><strong class="text-white">Holds storm-season call surges</strong> — one rep can't answer 50 calls in an hour. The AI can.</span></li>
+          </ul>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-7 flex flex-col justify-between">
+          <div>
+            <div class="text-xs font-bold uppercase tracking-widest text-gray-500 mb-3">Before vs. after</div>
+            <div class="space-y-4">
+              <div>
+                <div class="flex items-center justify-between text-xs mb-2">
+                  <span class="text-gray-400">Industry average · missed calls</span>
+                  <span class="font-bold" style="color:#ef4444">35&ndash;60%</span>
+                </div>
+                <div class="h-2 bg-white/5 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:60%;background:#ef4444"></div></div>
+              </div>
+              <div>
+                <div class="flex items-center justify-between text-xs mb-2">
+                  <span class="text-gray-400">With AI Secretary · missed calls</span>
+                  <span class="font-bold" style="color:#f59e0b">0%</span>
+                </div>
+                <div class="h-2 bg-white/5 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:2%;background:#f59e0b"></div></div>
+              </div>
+            </div>
+            <div class="mt-6 pt-5 border-t border-white/10 grid grid-cols-2 gap-4">
+              <div>
+                <div class="text-2xl font-black" style="color:#f59e0b">$249</div>
+                <div class="text-[11px] uppercase tracking-wider text-gray-500 font-semibold">Per month, flat</div>
+              </div>
+              <div>
+                <div class="text-2xl font-black" style="color:#f59e0b">24/7</div>
+                <div class="text-[11px] uppercase tracking-wider text-gray-500 font-semibold">Including weekends &amp; storms</div>
+              </div>
+            </div>
+          </div>
+          <a href="/features/ai-secretary" class="mt-6 inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-6 rounded-xl text-sm border border-white/10 hover:opacity-80 transition-all" style="border-color:#f59e0b30">
+            <i class="fas fa-arrow-right" style="color:#f59e0b"></i> Read the full overview
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- =============== SECTION E: Mid-page contact form (Contact Form #1) =============== -->
+    <div class="mt-20 mb-16">
+      <div class="rounded-2xl p-8 md:p-10" style="background:linear-gradient(135deg,#00FF8810 0%,#22d3ee08 100%);border:1px solid #00FF8830">
+        <div class="grid md:grid-cols-2 gap-8 items-center">
+          <div>
+            <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold mb-4" style="background:#00FF8818;color:#00FF88"><i class="fas fa-bolt"></i> 5-min walkthrough</div>
+            <h2 class="text-2xl md:text-3xl font-black text-white leading-tight tracking-tight mb-3">Want a personal walkthrough?</h2>
+            <p class="text-sm text-gray-400 leading-relaxed">Drop your email and we'll send a short Loom-style video tour of the platform — measurements, CRM, door-to-door, AI secretary — tailored to what you do. No sales call.</p>
+          </div>
+          <form id="hiw-inline-lead" onsubmit="return submitHiwInlineLead(event)" class="space-y-3">
+            <input type="email" id="hiw-inline-email" required placeholder="you@yourcompany.com" class="w-full bg-[#0A0A0A] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88] focus:border-transparent outline-none">
+            <button type="submit" id="hiw-inline-btn" class="w-full bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-6 rounded-xl shadow-lg shadow-[#00FF88]/20 transition-all hover:scale-[1.01]">
+              <i class="fas fa-paper-plane mr-2"></i>Send me the walkthrough
+            </button>
+            <div id="hiw-inline-msg" class="hidden text-xs font-medium px-3 py-2 rounded-lg"></div>
+            <p class="text-[11px] text-gray-500 text-center">We'll never share your email. One-tap unsubscribe on every message.</p>
+          </form>
+        </div>
+      </div>
+    </div>
+    <script>
+    async function submitHiwInlineLead(e) {
+      e.preventDefault();
+      var emailEl = document.getElementById('hiw-inline-email');
+      var btn = document.getElementById('hiw-inline-btn');
+      var msg = document.getElementById('hiw-inline-msg');
+      var email = (emailEl && emailEl.value || '').trim();
+      if (!email) return false;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sending...';
+      try {
+        var res = await fetch('/api/agents/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: email.split('@')[0],
+            email: email,
+            source_page: 'how_it_works_inline'
+          })
+        });
+        if (res.ok) {
+          try { if (typeof gtag === 'function') gtag('event', 'generate_lead', { source: 'how_it_works_inline' }); } catch (err) {}
+          try { if (typeof fbq === 'function') fbq('track', 'Lead', { source: 'how_it_works_inline' }); } catch (err) {}
+          window.location.href = '/register?email=' + encodeURIComponent(email);
+        } else {
+          msg.className = 'text-xs font-medium px-3 py-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20';
+          msg.textContent = 'Something went wrong. Please try again or use the contact form below.';
+          msg.classList.remove('hidden');
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Send me the walkthrough';
+        }
+      } catch (err) {
+        msg.className = 'text-xs font-medium px-3 py-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20';
+        msg.textContent = 'Network error. Please try again.';
+        msg.classList.remove('hidden');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Send me the walkthrough';
+      }
+      return false;
+    }
+    </script>
+
+    <!-- =============== SECTION F: Pricing summary =============== -->
+    <div class="mt-24 mb-16">
+      <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold mb-5" style="background:#00FF8818;color:#00FF88"><i class="fas fa-tag"></i> Pricing</div>
+      <h2 class="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight mb-4">Simple, transparent pricing</h2>
+      <p class="text-base md:text-lg text-gray-400 max-w-2xl mb-10">Free trial. Then pay only for the reports you order — or save with volume packs. The CRM is always free.</p>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-6">
+          <div class="text-[11px] font-bold uppercase tracking-widest mb-3" style="color:#00FF88">Free Trial</div>
+          <div class="flex items-baseline gap-1 mb-3"><span class="text-4xl font-black text-white">$0</span></div>
+          <p class="text-xs text-gray-400 mb-4 leading-relaxed">4 reports + the full CRM. No credit card needed.</p>
+          <ul class="space-y-1.5 text-[11px] text-gray-500 mb-4">
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-0.5" style="color:#00FF88"></i>4 PDF reports</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-0.5" style="color:#00FF88"></i>Full CRM &amp; invoicing</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-0.5" style="color:#00FF88"></i>Customer portal</li>
+          </ul>
+        </div>
+        <div class="bg-[#111111] border-2 rounded-2xl p-6 relative" style="border-color:#00FF8866;box-shadow:0 0 30px #00FF8815">
+          <div class="absolute -top-3 left-6 text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full" style="background:#00FF88;color:#0A0A0A">Most popular</div>
+          <div class="text-[11px] font-bold uppercase tracking-widest mb-3" style="color:#00FF88">Per Report</div>
+          <div class="flex items-baseline gap-1 mb-3"><span class="text-4xl font-black text-white">$8</span><span class="text-sm text-gray-500">CAD</span></div>
+          <p class="text-xs text-gray-400 mb-4 leading-relaxed">Pay-as-you-go after your free reports.</p>
+          <ul class="space-y-1.5 text-[11px] text-gray-500 mb-4">
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-0.5" style="color:#00FF88"></i>Full 3D area + pitch</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-0.5" style="color:#00FF88"></i>Edge breakdown + BOM</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-0.5" style="color:#00FF88"></i>Solar potential analysis</li>
+          </ul>
+        </div>
+        <div class="bg-[#111111] border-2 rounded-2xl p-6" style="border-color:#a78bfa66">
+          <div class="text-[11px] font-bold uppercase tracking-widest mb-3" style="color:#a78bfa">100-Pack</div>
+          <div class="flex items-baseline gap-1 mb-3"><span class="text-4xl font-black text-white">$5.95</span><span class="text-sm text-gray-500">CAD / report</span></div>
+          <p class="text-xs text-gray-400 mb-4 leading-relaxed">$595 once. Credits never expire.</p>
+          <ul class="space-y-1.5 text-[11px] text-gray-500 mb-4">
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-0.5" style="color:#a78bfa"></i>10-Pack &mdash; $7.50/report</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-0.5" style="color:#a78bfa"></i>25-Pack &mdash; $7.00/report</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-0.5" style="color:#a78bfa"></i>Best rate on 100-Pack</li>
+          </ul>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-6">
+          <div class="text-[11px] font-bold uppercase tracking-widest mb-3" style="color:#f59e0b">AI Secretary</div>
+          <div class="flex items-baseline gap-1 mb-3"><span class="text-4xl font-black text-white">$249</span><span class="text-sm text-gray-500">/ month</span></div>
+          <p class="text-xs text-gray-400 mb-4 leading-relaxed">24/7 phone receptionist + lead qualifier.</p>
+          <ul class="space-y-1.5 text-[11px] text-gray-500 mb-4">
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-0.5" style="color:#f59e0b"></i>Books to your calendar</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-0.5" style="color:#f59e0b"></i>Custom intake script</li>
+            <li class="flex items-start gap-2"><i class="fas fa-check mt-0.5" style="color:#f59e0b"></i>Storm-surge ready</li>
+          </ul>
+        </div>
+      </div>
+      <div class="mt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-500">
+        <div><i class="fas fa-users mr-1.5" style="color:#22d3ee"></i> Team seats $50/user/mo &middot; <i class="fas fa-gift mx-1" style="color:#00FF88"></i> CRM always free</div>
+        <a href="/pricing" class="inline-flex items-center gap-1.5 text-white hover:opacity-80 font-semibold"><i class="fas fa-arrow-right text-xs" style="color:#00FF88"></i> View full pricing</a>
+      </div>
+    </div>
+
     <div class="bg-gradient-to-br from-[#00FF88]/10 to-transparent border border-[#00FF88]/30 rounded-2xl p-8 md:p-10 text-center">
       <h2 class="text-2xl md:text-3xl font-black text-white mb-3">Ready to try it?</h2>
       <p class="text-gray-400 mb-6 max-w-xl mx-auto">First 4 reports are free — no credit card required. Set up in under 2 minutes.</p>
