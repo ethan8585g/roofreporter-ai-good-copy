@@ -74,24 +74,20 @@ type ProbeMetric = { kind: 'link' | 'api' | 'form' | 'console' | 'health'; path?
 // Public list is the explicit set of marketing surfaces — the broken-link
 // crawler does NOT recurse into discovered hrefs (would blow the 50-subrequest
 // Worker cap once /blog and /coverage fan out to dozens of pages).
+// Real subrequest budget: each fetch = 1 subrequest, each D1 insert per
+// finding = 1 subrequest, plus openRun + closeRun + form + console + run
+// metrics ≈ 7 fixed overhead. With the 50-subrequest Worker cap, the
+// hard math is: seedPaths * 2 (fetch + potential finding insert) + 7
+// overhead < 50, so seedPaths ≤ ~21. We trim further to ~12 to leave
+// headroom for the broken-link crawler to actually report failures
+// instead of becoming the failure (45 "Too many subrequests" findings
+// observed before this trim). City SEO pages and specific blog posts
+// rot-check is fine to push to a slower cadence (or a separate sweep).
 const PUBLIC_SURFACE: SurfaceConfig = {
   seedPaths: [
     '/', '/pricing', '/contact', '/login', '/signup',
-    '/coverage', '/lander', '/faq', '/tools',
-    '/tools/pitch-calculator', '/tools/material-estimator',
-    '/blog',
-    '/blog/roof-manager-vs-eagleview',
-    '/blog/roof-manager-vs-roofsnap',
-    '/blog/roof-measurement-report-api-developer-access-2026',
-    '/blog/fort-lauderdale-luxury-real-estate-roof-audit',
-    '/blog/living-on-a-canal-cape-coral-roofing',
-    '/blog/student-activities-tallahassee-landlord-roofing',
-    '/blog/port-st-lucie-vs-fort-lauderdale-family-roofing',
-    '/roof-measurement/new-york', '/roof-measurement/los-angeles',
-    '/roof-measurement/chicago', '/roof-measurement/houston',
-    '/roof-measurement/dallas', '/roof-measurement/miami',
-    '/roof-measurement/atlanta', '/roof-measurement/denver',
-    '/roof-measurement/phoenix',
+    '/coverage', '/lander', '/faq', '/blog',
+    '/tools', '/tools/pitch-calculator', '/tools/material-estimator',
   ],
   apiHealthRoutes: [],
   formTests: [
