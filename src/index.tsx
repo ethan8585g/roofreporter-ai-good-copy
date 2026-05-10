@@ -11026,6 +11026,10 @@ ${previewId ? `
       rrTrack('signup_submit_attempt', { company_size: companySize, primary_use: primaryUse });
       var refCode = localStorage.getItem('rr_ref_code') || new URLSearchParams(window.location.search).get('ref') || '';
       // Pull persisted Google Ads click ID + UTMs (captured on landing).
+      // URL params are the fallback for visitors with localStorage blocked
+      // (Brave private mode, hardened Safari) — /lander forwards gclid/utm
+      // on its CTAs so the QS is present even when localStorage is dead.
+      var _qp = new URLSearchParams(window.location.search);
       var gclidRecord = null;
       try { var gr = localStorage.getItem('rm_ads_gclid'); if (gr) gclidRecord = JSON.parse(gr); } catch(_) {}
       var utmRecord = null;
@@ -11044,12 +11048,12 @@ ${previewId ? `
           website: honeypot,
           verification_token: verificationToken,
           referred_by_code: refCode,
-          gclid: (gclidRecord && gclidRecord.gclid) || null,
-          utm_source: (utmRecord && utmRecord.utm_source) || null,
-          utm_medium: (utmRecord && utmRecord.utm_medium) || null,
-          utm_campaign: (utmRecord && utmRecord.utm_campaign) || null,
-          utm_content: (utmRecord && utmRecord.utm_content) || null,
-          utm_term: (utmRecord && utmRecord.utm_term) || null
+          gclid: (gclidRecord && gclidRecord.gclid) || _qp.get('gclid') || null,
+          utm_source: (utmRecord && utmRecord.utm_source) || _qp.get('utm_source') || null,
+          utm_medium: (utmRecord && utmRecord.utm_medium) || _qp.get('utm_medium') || null,
+          utm_campaign: (utmRecord && utmRecord.utm_campaign) || _qp.get('utm_campaign') || null,
+          utm_content: (utmRecord && utmRecord.utm_content) || _qp.get('utm_content') || null,
+          utm_term: (utmRecord && utmRecord.utm_term) || _qp.get('utm_term') || null
         })
       });
       var data = await res.json();
@@ -11542,15 +11546,18 @@ function getCustomerLoginHTML(googleClientId = '') {
       // can't spam duplicate registrations.
       if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
       // Pull persisted Google Ads click ID + UTMs so attribution survives signup via this legacy form.
+      // URL params are the fallback for visitors with localStorage blocked.
+      var _qp2 = new URLSearchParams(window.location.search);
       var _gclid = null;
       try { var _gr = localStorage.getItem('rm_ads_gclid'); if (_gr) { var _gp = JSON.parse(_gr); _gclid = _gp && _gp.gclid || null; } } catch(_) {}
+      if (!_gclid) _gclid = _qp2.get('gclid') || null;
       var _utm = {};
       try { var _ur = localStorage.getItem('rm_ads_utm'); if (_ur) { _utm = JSON.parse(_ur) || {}; } } catch(_) {}
       try {
         const res = await fetch('/api/customer/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, name, phone, company_name: company, verification_token: _regVerificationToken, referred_by_code: new URLSearchParams(window.location.search).get('ref') || localStorage.getItem('_ref_code') || '', gclid: _gclid, utm_source: _utm.utm_source || null, utm_medium: _utm.utm_medium || null, utm_campaign: _utm.utm_campaign || null, utm_content: _utm.utm_content || null, utm_term: _utm.utm_term || null })
+          body: JSON.stringify({ email, password, name, phone, company_name: company, verification_token: _regVerificationToken, referred_by_code: new URLSearchParams(window.location.search).get('ref') || localStorage.getItem('_ref_code') || '', gclid: _gclid, utm_source: _utm.utm_source || _qp2.get('utm_source') || null, utm_medium: _utm.utm_medium || _qp2.get('utm_medium') || null, utm_campaign: _utm.utm_campaign || _qp2.get('utm_campaign') || null, utm_content: _utm.utm_content || _qp2.get('utm_content') || null, utm_term: _utm.utm_term || _qp2.get('utm_term') || null })
         });
         const data = await res.json();
         if (res.ok && data.success) {
@@ -18041,6 +18048,25 @@ function getLanderFunnelHTML() {
       });
     }, { threshold: 0.1 });
     document.querySelectorAll('.scroll-animate').forEach(el => obs.observe(el));
+
+    // Belt-and-suspenders attribution: localStorage is the primary mechanism
+    // (rm_ads_gclid / rm_ads_utm) but visitors with localStorage blocked —
+    // Brave private mode, hardened Safari, some incognito flows — would lose
+    // the gclid between /lander and /register. Forwarding the params on the
+    // CTA hrefs gives the /register form's URL-param fallback a second source.
+    (function forwardAttributionToCtas(){
+      try {
+        var p = new URLSearchParams(location.search);
+        var keep = ['gclid','utm_source','utm_medium','utm_campaign','utm_content','utm_term'];
+        var out = new URLSearchParams();
+        keep.forEach(function(k){ var v = p.get(k); if (v) out.set(k, v); });
+        var qs = out.toString();
+        if (!qs) return;
+        document.querySelectorAll('a[href="/register"]').forEach(function(a){
+          a.setAttribute('href', '/register?' + qs);
+        });
+      } catch (e) { /* noop */ }
+    })();
   </script>
   ${getRoverWidget()}
 </body>
