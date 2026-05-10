@@ -11620,8 +11620,179 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
 <head>
   ${getHeadTags()}
   <title>My Dashboard - Roof Manager</title>
-</head>
-<body style="background:var(--bg-page)" class="min-h-screen">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <style>
+    /* Mobile-only polish for /customer/dashboard. Desktop (>=1024px) untouched. */
+    @media (max-width: 1023px) {
+      html, body { -webkit-tap-highlight-color: transparent; }
+      body { padding-bottom: env(safe-area-inset-bottom); }
+      a, button { touch-action: manipulation; }
+
+      /* Header — hide subtitle, redundant Home link, header username */
+      header { padding-top: max(env(safe-area-inset-top), 0px) !important; }
+      header > div { padding: 10px 12px !important; gap: 8px; }
+      header h1 { font-size: 16px !important; line-height: 1.15; letter-spacing: -0.01em; }
+      header img { width: 36px !important; height: 36px !important; }
+      header p.text-gray-400.text-xs { display: none !important; }
+      header #custGreeting { display: none !important; }
+      header nav a[href="/"] { display: none !important; }
+      header nav { gap: 6px !important; }
+      header nav > * { margin: 0 !important; }
+      header nav a, header nav button {
+        min-height: 40px;
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 10px !important;
+        border-radius: 10px;
+        font-size: 13px !important;
+      }
+      header nav a[href="/customer/leads"] {
+        background: rgba(16,185,129,0.12);
+      }
+
+      /* Main padding */
+      main.max-w-7xl { padding: 12px 12px 24px !important; }
+
+      /* Activation cards: stack button below text on small phones */
+      #rm-activation-cards > div {
+        padding: 14px !important;
+        border-radius: 14px !important;
+        gap: 10px !important;
+      }
+      #rm-activation-cards > div > div { min-width: 0 !important; flex: 1 1 100% !important; }
+      #rm-activation-cards > div > a {
+        flex: 1 1 100% !important;
+        text-align: center !important;
+        padding: 12px 18px !important;
+        font-size: 14px !important;
+      }
+
+      /* Mobile horizontal nav strip — pill redesign */
+      .lg\\:hidden.overflow-x-auto {
+        background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-page) 100%) !important;
+        padding: 4px 0 8px !important;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x proximity;
+      }
+      .lg\\:hidden.overflow-x-auto::-webkit-scrollbar { display: none; }
+      .lg\\:hidden.overflow-x-auto > div {
+        gap: 8px !important;
+        padding: 10px 12px !important;
+      }
+      .lg\\:hidden.overflow-x-auto a {
+        scroll-snap-align: start;
+        padding: 10px 14px !important;
+        font-size: 13px !important;
+        border-radius: 999px !important;
+        border: 1px solid var(--border-color);
+        box-shadow: 0 1px 0 rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.15);
+        gap: 8px !important;
+      }
+      .lg\\:hidden.overflow-x-auto a i { font-size: 12px; opacity: 0.85; }
+      /* Active page = first pill (Home on /customer/dashboard) */
+      .lg\\:hidden.overflow-x-auto a:first-child {
+        background: var(--accent) !important;
+        color: #0A0A0A !important;
+        border-color: transparent !important;
+        font-weight: 700 !important;
+        box-shadow: 0 4px 12px -2px rgba(0,255,136,0.45);
+      }
+      .lg\\:hidden.overflow-x-auto a:first-child i { opacity: 1; }
+
+      /* Welcome greeting block — bigger, more breathing room */
+      main h2.text-xl {
+        font-size: 26px !important;
+        line-height: 1.2 !important;
+        letter-spacing: -0.02em;
+        font-weight: 800 !important;
+      }
+      main h2.text-xl + p {
+        font-size: 13.5px !important;
+        margin-top: 4px !important;
+        line-height: 1.45;
+      }
+      /* The welcome row — give it extra bottom margin */
+      main > div.flex.flex-col.sm\\:flex-row.items-start { margin-bottom: 18px !important; }
+      /* Order badges row */
+      #dash-order-badges { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+      #dash-order-badges > * { font-size: 12px !important; padding: 5px 10px !important; }
+      /* Theme toggle button */
+      #theme-toggle-btn {
+        min-width: 40px; min-height: 40px;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+      }
+
+      /* Cards — tighter padding, slightly larger radius for modern feel */
+      main .rounded-2xl { border-radius: 18px !important; }
+      main .rounded-2xl.shadow-sm,
+      main [class*="rounded-2xl"][style*="background:var(--bg-card)"] {
+        box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 8px 24px -16px rgba(0,0,0,0.5) !important;
+      }
+      main .px-5.py-3 { padding: 12px 14px !important; }
+      main .px-5.py-4 { padding: 14px !important; }
+      main .p-5 { padding: 14px !important; }
+      main .p-4 { padding: 12px !important; }
+
+      /* Calendar header — stack title row above controls row */
+      main .rounded-2xl > .px-5.py-3.flex.items-center.justify-between {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+        padding: 12px 14px !important;
+      }
+      main .rounded-2xl > div > .flex.items-center.gap-3 {
+        justify-content: space-between !important;
+        flex-wrap: wrap;
+        gap: 10px !important;
+      }
+      /* Calendar grid — slightly tighter day cells */
+      #dashboard-calendar { padding: 10px !important; }
+      #dashboard-calendar .grid.grid-cols-7 > div {
+        font-size: 11px !important;
+        min-height: 36px;
+      }
+
+      /* Quick Actions — bigger touch targets */
+      main .p-4.space-y-2\\.5 > a {
+        padding: 14px !important;
+        border-radius: 14px !important;
+        gap: 12px !important;
+      }
+      main .p-4.space-y-2\\.5 > a > div.w-9.h-9 {
+        width: 42px !important;
+        height: 42px !important;
+        border-radius: 12px !important;
+      }
+      main .p-4.space-y-2\\.5 > a p.font-semibold { font-size: 14.5px !important; }
+      main .p-4.space-y-2\\.5 > a p.text-xs { font-size: 12px !important; margin-top: 2px; }
+
+      /* Charts cards — give canvas more room */
+      #analytics-section .p-4 { padding: 10px !important; }
+      #analytics-section canvas { max-width: 100% !important; height: auto !important; }
+      #analytics-section .text-\\[10px\\] { font-size: 11px !important; }
+      #analytics-section h3 { font-size: 14px !important; }
+
+      /* Auto-email card */
+      main .rounded-2xl .px-5.py-4.flex.items-center.justify-between {
+        gap: 12px !important;
+        padding: 14px !important;
+      }
+      main .rounded-2xl .px-5.py-4 p.font-medium { font-size: 14px !important; }
+      main .rounded-2xl .px-5.py-4 p.text-xs { font-size: 12px !important; line-height: 1.4; }
+
+      /* Material setup banner inner padding */
+      #material-setup-banner > * { padding: 14px !important; border-radius: 14px !important; }
+
+      /* Profile completion modal — larger touch targets */
+      #rm-profile-gate input { padding: 14px !important; font-size: 16px !important; }
+      #rm-profile-gate button { padding: 15px !important; font-size: 16px !important; }
+
+      /* Misc tiny-text bumps */
+      main .text-\\[10px\\] { font-size: 11px !important; }
+    }
+  </style>
   <header style="background:var(--bg-card);border-bottom:1px solid var(--border-color)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
