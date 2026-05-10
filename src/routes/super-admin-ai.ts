@@ -1,0 +1,205 @@
+// ============================================================
+// Super Admin — AI Assistant
+//
+// /super-admin/ai-assistant     → chat UI page
+// POST /api/super-admin/ai/chat → SSE stream proxy to Anthropic
+// ============================================================
+import { Hono } from 'hono'
+import Anthropic from '@anthropic-ai/sdk'
+import { ASSISTANT_TOOLS, runTool } from '../services/ai-assistant-tools'
+import { validateAdminSession, requireSuperadmin } from './auth'
+
+type Env = { DB: any; ANTHROPIC_API_KEY: string }
+
+export const superAdminAi = new Hono<{ Bindings: Env }>()
+
+const SYSTEM_PROMPT = `You are the in-app AI assistant for the Roof Manager super admin (https://www.roofmanager.ca).
+
+Scope of what you can do:
+- Read, list, create, update, archive **blog posts** (table: blog_posts)
+- Read and update **agent configurations** (table: agent_configs) — toggle agents on/off, tweak their JSON config
+
+Scope of what you CANNOT do:
+- You cannot edit code, files, or anything outside the database
+- You cannot send emails, make API calls to third parties, or trigger jobs
+- You cannot read or modify customer data, orders, payments, or PII
+
+Operating principles:
+1. Be concise. The operator is busy and skims your replies.
+2. When the user asks for "the blog post about X", call list_blog_posts with a search term first, then read_blog_post on the right id.
+3. Before writing changes, briefly state what you're about to do (one sentence) and then do it.
+4. After every successful write, confirm with the new state ("Done — post #42 is now published") rather than restating the whole record.
+5. If a tool returns an error, surface the error message verbatim and suggest a fix. Do not retry blindly.
+6. Slugs must be lowercase-hyphenated. If the user gives a slug with spaces or capitals, normalize it.
+7. Never invent ids — always look them up via list_blog_posts first.
+8. For blog content, default category is 'roofing'. Write in plain HTML or markdown when the user asks for prose.
+9. The operator is the owner of this business. Trust their judgment on what gets published.
+
+If asked to do something outside scope (edit code, change pricing in the UI, send emails, etc.), explain that this assistant only has D1 database tools and suggest they make the change another way.`
+
+// ─── Page ─────────────────────────────────────────────────
+superAdminAi.get('/', (c) => {
+  return c.html(getAiAssistantPageHTML())
+})
+
+// ─── Chat endpoint ────────────────────────────────────────
+superAdminAi.post('/chat', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!requireSuperadmin(admin)) {
+    return c.json({ error: 'Super admin only' }, 403)
+  }
+  const apiKey = c.env.ANTHROPIC_API_KEY
+  if (!apiKey) return c.json({ error: 'ANTHROPIC_API_KEY not configured on Pages' }, 500)
+
+  let body: any
+  try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON body' }, 400) }
+  const messages: any[] = Array.isArray(body?.messages) ? body.messages : []
+  const model = body?.model === 'opus' ? 'claude-opus-4-7' : 'claude-sonnet-4-6'
+  if (!messages.length) return c.json({ error: 'messages array required' }, 400)
+
+  const client = new Anthropic({ apiKey })
+
+  // We run a manual tool-use loop so we can stream text deltas to the browser
+  // AND execute D1 tool calls server-side. The tool runner helper doesn't
+  // give us SSE-level control, so we drive the loop by hand.
+  const stream = new ReadableStream({
+    async start(controller) {
+      const enc = new TextEncoder()
+      const send = (event: string, data: any) => {
+        controller.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
+      }
+      const conversation = [...messages]
+      try {
+        for (let iter = 0; iter < 10; iter++) {
+          const response = await client.messages.create({
+            model,
+            max_tokens: 16000,
+            system: [
+              { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+            ],
+            tools: ASSISTANT_TOOLS as any,
+            messages: conversation,
+          })
+
+          // Forward any text blocks
+          for (const block of response.content) {
+            if (block.type === 'text' && block.text) {
+              send('text', { text: block.text })
+            }
+          }
+
+          // If the model used tools, run them, append results, loop
+          const toolUses = response.content.filter((b: any) => b.type === 'tool_use') as any[]
+          if (toolUses.length === 0 || response.stop_reason === 'end_turn') {
+            send('usage', response.usage)
+            send('done', { stop_reason: response.stop_reason })
+            controller.close()
+            return
+          }
+
+          conversation.push({ role: 'assistant', content: response.content })
+
+          const toolResults: any[] = []
+          for (const tu of toolUses) {
+            send('tool_use', { name: tu.name, input: tu.input })
+            const result = await runTool(c.env.DB, tu.name, tu.input)
+            send('tool_result', { name: tu.name, result })
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: tu.id,
+              content: JSON.stringify(result),
+            })
+          }
+          conversation.push({ role: 'user', content: toolResults })
+        }
+        send('error', { message: 'Hit 10-iteration tool-loop ceiling' })
+        controller.close()
+      } catch (e: any) {
+        send('error', { message: e?.message || 'Unknown error', status: e?.status })
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  })
+})
+
+// ─── HTML ─────────────────────────────────────────────────
+function getAiAssistantPageHTML(): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>AI Assistant · Super Admin · Roof Manager</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+<link rel="stylesheet" href="/static/tailwind.css" />
+<style>
+  body { background:#0a0a0a; color:#e5e7eb; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif; margin:0; }
+  .ai-header { background:#1e293b; border-bottom:1px solid #334155; padding:12px 24px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:10 }
+  .ai-header h1 { margin:0; font-size:16px; font-weight:700; color:#fff }
+  .ai-header h1 i { color:#a78bfa; margin-right:8px }
+  .ai-toggle { display:flex; align-items:center; gap:8px; font-size:12px; color:#9ca3af }
+  .ai-toggle select { background:#0f172a; border:1px solid #334155; color:#fff; padding:4px 8px; border-radius:6px; font-size:12px }
+  .ai-back { color:#9ca3af; text-decoration:none; font-size:12px }
+  .ai-back:hover { color:#fff }
+  .ai-wrap { max-width:1000px; margin:0 auto; padding:24px; min-height:calc(100vh - 56px); display:flex; flex-direction:column }
+  .ai-msgs { flex:1; overflow-y:auto; margin-bottom:16px; padding-bottom:24px }
+  .ai-msg { padding:14px 18px; border-radius:12px; margin-bottom:12px; line-height:1.55; font-size:14px; max-width:85% }
+  .ai-msg.user { background:#1d4ed8; color:#fff; margin-left:auto; border-bottom-right-radius:4px }
+  .ai-msg.assistant { background:#1e293b; color:#e5e7eb; border:1px solid #334155; border-bottom-left-radius:4px }
+  .ai-msg.assistant pre { background:#0f172a; padding:10px; border-radius:6px; overflow-x:auto; font-size:12px }
+  .ai-msg.assistant code { background:#0f172a; padding:2px 5px; border-radius:4px; font-size:12.5px }
+  .ai-msg.tool { background:#0f172a; border:1px solid #334155; color:#94a3b8; font-family:'SF Mono',Menlo,Consolas,monospace; font-size:11.5px; padding:10px 14px; border-radius:8px; margin:6px 0; max-width:85% }
+  .ai-msg.tool .tool-name { color:#a78bfa; font-weight:600 }
+  .ai-msg.tool .tool-status { color:#10b981 }
+  .ai-msg.tool .tool-status.err { color:#f87171 }
+  .ai-msg.tool details { margin-top:4px }
+  .ai-msg.tool summary { cursor:pointer; color:#64748b; font-size:11px }
+  .ai-msg.tool pre { margin:4px 0 0; white-space:pre-wrap; word-break:break-word; color:#94a3b8; font-size:11px }
+  .ai-input-row { display:flex; gap:8px; padding:12px; background:#1e293b; border:1px solid #334155; border-radius:12px; align-items:flex-end; position:sticky; bottom:16px }
+  .ai-input { flex:1; background:transparent; border:0; color:#fff; font-size:14px; resize:none; outline:none; font-family:inherit; min-height:24px; max-height:200px; line-height:1.5 }
+  .ai-send { background:#7c3aed; color:#fff; border:0; padding:10px 18px; border-radius:8px; cursor:pointer; font-weight:600; font-size:13px; transition:background .15s }
+  .ai-send:hover:not(:disabled) { background:#6d28d9 }
+  .ai-send:disabled { opacity:.5; cursor:not-allowed }
+  .ai-meta { color:#64748b; font-size:11px; padding:4px 0; text-align:center }
+  .ai-empty { text-align:center; color:#64748b; padding:80px 20px }
+  .ai-empty i { font-size:48px; color:#7c3aed; opacity:.4 }
+  .ai-empty h2 { color:#cbd5e1; margin:16px 0 8px; font-weight:600 }
+  .ai-empty p { font-size:13px; line-height:1.6; max-width:480px; margin:0 auto }
+  .ai-suggest { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:24px }
+  .ai-chip { background:#1e293b; border:1px solid #334155; color:#cbd5e1; padding:8px 14px; border-radius:999px; cursor:pointer; font-size:12px; transition:all .15s }
+  .ai-chip:hover { background:#334155; color:#fff }
+  .ai-cursor::after { content:'▋'; color:#a78bfa; animation:blink 1s steps(2) infinite }
+  @keyframes blink { 50% { opacity:0 } }
+</style>
+</head>
+<body>
+<header class="ai-header">
+  <h1><i class="fas fa-sparkles"></i>AI Assistant</h1>
+  <div class="ai-toggle">
+    <span>Model:</span>
+    <select id="aiModel">
+      <option value="sonnet">Sonnet 4.6 — fast &amp; cheap</option>
+      <option value="opus">Opus 4.7 — max accuracy</option>
+    </select>
+    <a href="/super-admin" class="ai-back" style="margin-left:16px"><i class="fas fa-arrow-left"></i> Super Admin</a>
+  </div>
+</header>
+<main class="ai-wrap">
+  <div id="aiMsgs" class="ai-msgs"></div>
+  <form id="aiForm" class="ai-input-row">
+    <textarea id="aiInput" class="ai-input" placeholder="Ask me to edit a blog post, toggle an agent, or update a config…  (Shift+Enter for newline)" rows="1"></textarea>
+    <button type="submit" class="ai-send" id="aiSend">Send</button>
+  </form>
+</main>
+<script src="/static/super-admin-ai.js?v=${Date.now()}"></script>
+</body>
+</html>`
+}

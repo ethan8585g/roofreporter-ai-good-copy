@@ -1,0 +1,228 @@
+// ============================================================
+// Super Admin — AI Assistant chat UI
+// Streams SSE events from /super-admin/ai-assistant/chat and renders
+// text deltas, tool calls, and tool results inline.
+// ============================================================
+(function () {
+  'use strict';
+
+  var msgs = document.getElementById('aiMsgs');
+  var form = document.getElementById('aiForm');
+  var input = document.getElementById('aiInput');
+  var sendBtn = document.getElementById('aiSend');
+  var modelSel = document.getElementById('aiModel');
+
+  // Conversation history sent to the backend each turn
+  var history = [];
+  var inFlight = false;
+
+  function showEmptyState() {
+    if (history.length) return;
+    msgs.innerHTML =
+      '<div class="ai-empty">' +
+        '<i class="fas fa-sparkles"></i>' +
+        '<h2>How can I help?</h2>' +
+        '<p>I can edit blog posts, toggle agent configs, and tweak D1 settings. I cannot edit code or send emails.</p>' +
+        '<div class="ai-suggest">' +
+          '<div class="ai-chip" data-q="List my 10 most recent blog posts">List my 10 most recent blog posts</div>' +
+          '<div class="ai-chip" data-q="What agents are currently enabled?">What agents are currently enabled?</div>' +
+          '<div class="ai-chip" data-q="Find blog posts about pricing and show me the titles">Find blog posts about pricing</div>' +
+          '<div class="ai-chip" data-q="Draft a short blog post (status=draft) about why insurance carriers accept Roof Manager reports. Slug: insurance-accepted-reports.">Draft a blog post</div>' +
+        '</div>' +
+      '</div>';
+    var chips = msgs.querySelectorAll('.ai-chip');
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].addEventListener('click', function (e) {
+        input.value = e.currentTarget.getAttribute('data-q');
+        input.focus();
+        autosize();
+      });
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // Light markdown: code fences, inline code, **bold**, line breaks
+  function renderMd(text) {
+    var s = escapeHtml(text);
+    s = s.replace(/```([\s\S]*?)```/g, function (_, code) { return '<pre>' + code + '</pre>'; });
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/\n/g, '<br>');
+    return s;
+  }
+
+  function appendUser(text) {
+    if (!history.length) msgs.innerHTML = '';
+    var div = document.createElement('div');
+    div.className = 'ai-msg user';
+    div.textContent = text;
+    msgs.appendChild(div);
+    scrollToBottom();
+  }
+
+  function newAssistantBubble() {
+    var div = document.createElement('div');
+    div.className = 'ai-msg assistant ai-cursor';
+    div.dataset.raw = '';
+    msgs.appendChild(div);
+    scrollToBottom();
+    return div;
+  }
+
+  function appendAssistantText(bubble, deltaText) {
+    bubble.dataset.raw = (bubble.dataset.raw || '') + deltaText;
+    bubble.innerHTML = renderMd(bubble.dataset.raw);
+    bubble.classList.add('ai-cursor');
+    scrollToBottom();
+  }
+
+  function appendToolEvent(name, payload, kind) {
+    var div = document.createElement('div');
+    div.className = 'ai-msg tool';
+    var label = kind === 'use'
+      ? '<span class="tool-name">→ ' + escapeHtml(name) + '</span>'
+      : '<span class="tool-status' + (payload && payload.error ? ' err' : '') + '">' +
+          (payload && payload.error ? '✗ ' : '✓ ') + escapeHtml(name) +
+        '</span>';
+    var summary = kind === 'use' ? 'input' : 'result';
+    var body = JSON.stringify(payload, null, 2);
+    div.innerHTML = label +
+      '<details><summary>' + summary + '</summary><pre>' + escapeHtml(body) + '</pre></details>';
+    msgs.appendChild(div);
+    scrollToBottom();
+  }
+
+  function appendError(msg) {
+    var div = document.createElement('div');
+    div.className = 'ai-msg assistant';
+    div.style.borderColor = '#dc2626';
+    div.innerHTML = '<strong style="color:#fca5a5">Error:</strong> ' + escapeHtml(msg);
+    msgs.appendChild(div);
+    scrollToBottom();
+  }
+
+  function scrollToBottom() {
+    requestAnimationFrame(function () {
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+  }
+
+  function autosize() {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+  }
+
+  input.addEventListener('input', autosize);
+
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var text = input.value.trim();
+    if (!text || inFlight) return;
+    inFlight = true;
+    sendBtn.disabled = true;
+
+    appendUser(text);
+    history.push({ role: 'user', content: text });
+    input.value = '';
+    autosize();
+
+    var bubble = newAssistantBubble();
+    var assistantText = '';
+
+    try {
+      var res = await fetch('/super-admin/ai-assistant/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ messages: history, model: modelSel.value }),
+      });
+      if (!res.ok) {
+        var errText = await res.text();
+        appendError('HTTP ' + res.status + ': ' + errText.slice(0, 300));
+        bubble.remove();
+        return;
+      }
+
+      var reader = res.body.getReader();
+      var dec = new TextDecoder();
+      var buf = '';
+
+      while (true) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+        buf += dec.decode(chunk.value, { stream: true });
+
+        // Parse SSE frames separated by blank lines
+        var frames = buf.split('\n\n');
+        buf = frames.pop() || '';
+        for (var i = 0; i < frames.length; i++) {
+          var frame = frames[i];
+          var ev = '';
+          var data = '';
+          var lines = frame.split('\n');
+          for (var j = 0; j < lines.length; j++) {
+            var line = lines[j];
+            if (line.indexOf('event: ') === 0) ev = line.slice(7);
+            else if (line.indexOf('data: ') === 0) data = line.slice(6);
+          }
+          if (!ev) continue;
+          var parsed;
+          try { parsed = JSON.parse(data); } catch (_) { continue; }
+
+          if (ev === 'text') {
+            assistantText += parsed.text;
+            appendAssistantText(bubble, parsed.text);
+          } else if (ev === 'tool_use') {
+            bubble.classList.remove('ai-cursor');
+            appendToolEvent(parsed.name, parsed.input, 'use');
+            // After tool calls, the model may produce more text — make a fresh bubble next time
+            bubble = newAssistantBubble();
+          } else if (ev === 'tool_result') {
+            appendToolEvent(parsed.name, parsed.result, 'result');
+          } else if (ev === 'usage') {
+            // Optional: render token usage as a tiny meta line
+            var meta = document.createElement('div');
+            meta.className = 'ai-meta';
+            var u = parsed;
+            meta.textContent =
+              'in: ' + (u.input_tokens || 0) +
+              (u.cache_read_input_tokens ? ' (cached: ' + u.cache_read_input_tokens + ')' : '') +
+              ' · out: ' + (u.output_tokens || 0);
+            msgs.appendChild(meta);
+          } else if (ev === 'done') {
+            bubble.classList.remove('ai-cursor');
+          } else if (ev === 'error') {
+            bubble.classList.remove('ai-cursor');
+            appendError(parsed.message || 'Stream error');
+          }
+        }
+      }
+
+      // Add the final assistant turn to history so multi-turn works
+      if (assistantText) history.push({ role: 'assistant', content: assistantText });
+      bubble.classList.remove('ai-cursor');
+      if (!bubble.textContent.trim()) bubble.remove();
+    } catch (err) {
+      appendError(err && err.message ? err.message : String(err));
+    } finally {
+      inFlight = false;
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  });
+
+  showEmptyState();
+  input.focus();
+})();
