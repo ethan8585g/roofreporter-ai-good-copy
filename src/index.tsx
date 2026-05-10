@@ -2213,8 +2213,7 @@ Allow: /
 
 // SEO: llms.txt (spec-compliant Markdown format)
 app.get('/llms.txt', (c) => {
-  c.header('Content-Type', 'text/markdown; charset=utf-8')
-  return c.body(`# Roof Manager
+  return c.text(`# Roof Manager
 
 > Roof Manager is an AI-powered SaaS platform for roofing contractors, solar installers, insurance adjusters, and property managers. Satellite-powered roof measurement reports using Google Solar API with LiDAR-calibrated 3D building models — 99% accuracy. Covers all 50 US states and all 10 Canadian provinces. $8 CAD/report; 4 free reports, no credit card. Headquartered in Alberta, Canada.
 
@@ -2378,14 +2377,13 @@ Yes — all 50 US states and all 10 Canadian provinces. 95%+ of North American b
 - [Terms of Service](https://www.roofmanager.ca/terms)
 - [RSS Feed](https://www.roofmanager.ca/feed.xml)
 - [Sitemap Index](https://www.roofmanager.ca/sitemap-index.xml)
-`, 200, { 'Content-Type': 'text/plain; charset=utf-8' })
+`, 200, { 'Content-Type': 'text/markdown; charset=utf-8' })
 })
 
 // SEO: llms-full.txt (comprehensive documentation for LLMs)
 app.get('/llms-full.txt', (c) => {
   const today = new Date().toISOString().substring(0, 10)
-  c.header('Content-Type', 'text/markdown; charset=utf-8')
-  return c.body(`# Roof Manager — Complete Platform Documentation
+  return c.text(`# Roof Manager — Complete Platform Documentation
 > Last updated: ${today}
 > This document contains the complete knowledge base for Roof Manager, an AI-powered roof measurement and CRM platform. Designed for ingestion by large language models.
 
@@ -13467,15 +13465,34 @@ function getFeatureHubPageHTML(featureSlug: string): string {
         <!-- Product UI Mockup -->
         <div class="hidden lg:block">
           ${f.slug === 'measurements' ? `
-          <div class="space-y-3">
-            <div class="bg-[#111] border border-white/10 rounded-xl p-4 shadow-2xl"><div class="text-xs text-gray-500 mb-1 font-medium">Total Sloped Area — Calgary, AB</div><div class="text-3xl font-black text-white">2,847 <span class="text-lg text-gray-400">ft²</span></div><div class="text-xs mt-1 font-semibold" style="color:${f.accentColor}"><i class="fas fa-check-circle mr-1"></i>High confidence &middot; 4/12 pitch &middot; Delivered in 47s</div></div>
-            <div class="grid grid-cols-2 gap-3">
-              <div class="bg-[#111] border border-white/10 rounded-xl p-3"><div class="text-xs text-gray-500 mb-1">Ridge</div><div class="text-xl font-black text-white">48.2 ft</div></div>
-              <div class="bg-[#111] border border-white/10 rounded-xl p-3"><div class="text-xs text-gray-500 mb-1">Hip</div><div class="text-xl font-black text-white">32.6 ft</div></div>
-              <div class="bg-[#111] border border-white/10 rounded-xl p-3"><div class="text-xs text-gray-500 mb-1">Eave</div><div class="text-xl font-black text-white">96.4 ft</div></div>
-              <div class="bg-[#111] border border-white/10 rounded-xl p-3"><div class="text-xs text-gray-500 mb-1">Valley</div><div class="text-xl font-black text-white">18.1 ft</div></div>
+          <div style="position:relative;border-radius:24px;overflow:hidden;box-shadow:0 30px 60px -15px rgba(0,0,0,0.7),0 0 0 1px rgba(255,255,255,0.08);aspect-ratio:4/5;background:#0A0A0A">
+            <img src="https://images.unsplash.com/photo-1572120360610-d971b9d7767c?w=900&q=85&auto=format&fit=crop" alt="AI roof measurement aerial view" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" loading="lazy" width="900" height="1125">
+            <div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 30%,transparent 0%,rgba(10,10,10,0.45) 70%,rgba(10,10,10,0.92) 100%)"></div>
+            <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">
+              <defs>
+                <filter id="rmGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                <linearGradient id="rmEdge" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="${f.accentColor}" stop-opacity="0.4"/><stop offset="50%" stop-color="${f.accentColor}" stop-opacity="1"/><stop offset="100%" stop-color="${f.accentColor}" stop-opacity="0.4"/></linearGradient>
+              </defs>
+              <path d="M70,250 L200,165 L330,250 L330,335 L200,260 L70,335 Z" fill="${f.accentColor}" fill-opacity="0.06" stroke="${f.accentColor}" stroke-width="1.5" stroke-opacity="0.55" stroke-dasharray="3 3"/>
+              <line x1="70" y1="250" x2="200" y2="165" stroke="url(#rmEdge)" stroke-width="2.5" filter="url(#rmGlow)"/>
+              <line x1="200" y1="165" x2="330" y2="250" stroke="url(#rmEdge)" stroke-width="2.5" filter="url(#rmGlow)"/>
+              <line x1="70" y1="250" x2="330" y2="250" stroke="${f.accentColor}" stroke-width="2" stroke-opacity="0.85" filter="url(#rmGlow)"/>
+              <line x1="200" y1="165" x2="200" y2="260" stroke="${f.accentColor}" stroke-width="1.5" stroke-opacity="0.6" stroke-dasharray="4 3"/>
+              <circle cx="70" cy="250" r="5" fill="#0A0A0A" stroke="${f.accentColor}" stroke-width="2"/>
+              <circle cx="200" cy="165" r="5" fill="#0A0A0A" stroke="${f.accentColor}" stroke-width="2"/>
+              <circle cx="330" cy="250" r="5" fill="#0A0A0A" stroke="${f.accentColor}" stroke-width="2"/>
+              <circle cx="200" cy="260" r="4" fill="${f.accentColor}"/>
+            </svg>
+            <div style="position:absolute;top:16px;left:16px;display:flex;align-items:center;gap:8px;background:rgba(10,10,10,0.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${f.accentColor}55;border-radius:999px;padding:7px 14px"><span style="width:7px;height:7px;border-radius:999px;background:${f.accentColor};box-shadow:0 0 10px ${f.accentColor}"></span><span style="color:${f.accentColor};font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase">AI Measured</span></div>
+            <div style="position:absolute;top:16px;right:16px;background:rgba(10,10,10,0.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.12);border-radius:999px;padding:7px 12px;color:#fff;font-size:11px;font-weight:700"><i class="fas fa-check-circle" style="color:${f.accentColor};margin-right:5px"></i>99% accurate</div>
+            <div style="position:absolute;left:32%;top:31%;transform:translate(-50%,-100%)"><div style="background:${f.accentColor};color:#0A0A0A;font-size:10.5px;font-weight:900;padding:5px 9px;border-radius:7px;letter-spacing:0.08em;box-shadow:0 6px 20px rgba(0,0,0,0.5),0 0 0 2px rgba(10,10,10,0.6)">RIDGE 48.2 ft</div></div>
+            <div style="position:absolute;right:6%;top:42%"><div style="background:rgba(10,10,10,0.88);color:#fff;font-size:10.5px;font-weight:800;padding:5px 9px;border-radius:7px;letter-spacing:0.08em;border:1px solid ${f.accentColor}66">HIP 32.6 ft</div></div>
+            <div style="position:absolute;left:5%;top:55%"><div style="background:rgba(10,10,10,0.88);color:#fff;font-size:10.5px;font-weight:800;padding:5px 9px;border-radius:7px;letter-spacing:0.08em;border:1px solid rgba(255,255,255,0.18)">EAVE 96.4 ft</div></div>
+            <div style="position:absolute;left:50%;top:54%;transform:translate(-50%,0)"><div style="background:rgba(10,10,10,0.88);color:#fff;font-size:10px;font-weight:800;padding:4px 8px;border-radius:6px;letter-spacing:0.08em;border:1px solid rgba(255,255,255,0.18)">VALLEY 18.1 ft</div></div>
+            <div style="position:absolute;left:0;right:0;bottom:0;padding:20px 22px 22px;background:linear-gradient(0deg,rgba(10,10,10,0.96) 0%,rgba(10,10,10,0.7) 60%,transparent 100%)">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="color:#9ca3af;font-size:11px;font-weight:600;letter-spacing:0.04em"><i class="fas fa-map-marker-alt" style="color:${f.accentColor};margin-right:5px"></i>Calgary, AB &middot; 4/12 pitch</span><span style="color:${f.accentColor};font-size:10px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase"><i class="fas fa-bolt" style="margin-right:4px"></i>47s</span></div>
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:48px;font-weight:900;color:#fff;line-height:1;letter-spacing:-0.02em">2,847</span><span style="font-size:18px;color:#9ca3af;font-weight:800">ft²</span><span style="margin-left:auto;color:#9ca3af;font-size:10px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase">Total sloped area</span></div>
             </div>
-            <div class="bg-[#111] rounded-xl p-4 shadow-xl" style="border:1px solid ${f.accentColor}30"><div class="text-xs font-bold mb-2" style="color:${f.accentColor}"><i class="fas fa-boxes mr-1"></i>Material BOM</div><div class="space-y-1.5 text-xs text-gray-400"><div class="flex justify-between"><span>Shingles (3-tab)</span><span class="text-white font-semibold">32 sq</span></div><div class="flex justify-between"><span>Underlayment</span><span class="text-white font-semibold">4 rolls</span></div><div class="flex justify-between"><span>Ridge cap</span><span class="text-white font-semibold">48 lin ft</span></div><div class="flex justify-between"><span>I&amp;W Shield</span><span class="text-white font-semibold">192 sq ft</span></div></div></div>
           </div>` : f.slug === 'crm' ? `
           <div class="space-y-2 shadow-2xl">
             <div class="bg-[#111] border border-white/10 rounded-xl px-4 py-2 text-xs text-gray-400 font-semibold uppercase tracking-wider">Pipeline — Active Jobs</div>
