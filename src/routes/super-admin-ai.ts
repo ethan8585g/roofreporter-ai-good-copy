@@ -29,10 +29,17 @@ What you can do:
 - blog_posts: list, read, create, update, archive
 - agent_configs: list, read, update (toggle agents on/off, tweak JSON config)
 
-**Code (GitHub Contents API on main branch):**
-- list_files / read_file / write_file / delete_file — full repo access
+**Code (GitHub APIs on main branch):**
+- list_files / read_file / write_file / delete_file — full repo access (one commit per write)
+- **write_files** — atomic multi-file commit via Git Tree API. STRONGLY PREFERRED over multiple write_file calls when making any coherent multi-file change. One commit, one deploy, atomic rollback.
+- search_code — GitHub code search, scoped to this repo. Use this to find every reference to a function/route/env var before editing.
 - list_recent_commits / list_assistant_commits — see recent activity
 - revert_commit — one-click rollback if something breaks production
+
+**Web (Anthropic-hosted server-side tools):**
+- web_search — search the live web
+- web_fetch — fetch any URL's contents
+Use these to look up current docs (e.g. Cloudflare API params, Stripe API changes), verify NPM packages, check competitor pricing, etc. They run on Anthropic's servers — no setup needed.
 
 Codebase orientation (key files when the operator asks for changes):
 - src/index.tsx — main Hono router, all HTML pages, public site copy
@@ -126,6 +133,80 @@ superAdminAi.get('/', (c) => {
   return c.html(getAiAssistantPageHTML())
 })
 
+// ─── Conversation persistence ─────────────────────────────
+// List the admin's saved conversations
+superAdminAi.get('/conversations', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!requireSuperadmin(admin)) return c.json({ error: 'Super admin only' }, 403)
+  const result = await c.env.DB.prepare(
+    `SELECT id, title, model, turn_count, created_at, updated_at
+     FROM assistant_conversations
+     WHERE admin_id = ? AND archived = 0
+     ORDER BY updated_at DESC LIMIT 50`
+  ).bind(admin.id).all()
+  return c.json({ conversations: result.results })
+})
+
+// Load one conversation
+superAdminAi.get('/conversations/:id', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!requireSuperadmin(admin)) return c.json({ error: 'Super admin only' }, 403)
+  const row = await c.env.DB.prepare(
+    `SELECT id, title, messages_json, model, turn_count, created_at, updated_at
+     FROM assistant_conversations
+     WHERE id = ? AND admin_id = ?`
+  ).bind(c.req.param('id'), admin.id).first<any>()
+  if (!row) return c.json({ error: 'Not found' }, 404)
+  let messages: any[] = []
+  try { messages = JSON.parse(row.messages_json) } catch { /* corrupt — return empty */ }
+  return c.json({ ...row, messages })
+})
+
+// Save (upsert) a conversation. Browser calls this after every turn.
+superAdminAi.post('/conversations', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!requireSuperadmin(admin)) return c.json({ error: 'Super admin only' }, 403)
+  let body: any
+  try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON' }, 400) }
+  const id: number | null = body?.id ? Number(body.id) : null
+  const messages = Array.isArray(body?.messages) ? body.messages : []
+  const model: string = body?.model || 'sonnet'
+  if (!messages.length) return c.json({ error: 'messages required' }, 400)
+  // Auto-title from the first user message
+  const firstUser = messages.find((m: any) => m.role === 'user')
+  const title = (
+    typeof firstUser?.content === 'string'
+      ? firstUser.content
+      : (Array.isArray(firstUser?.content) ? (firstUser.content.find((b: any) => b.type === 'text')?.text || '') : '')
+  ).slice(0, 100).replace(/\s+/g, ' ').trim() || 'Untitled'
+  const messagesJson = JSON.stringify(messages)
+  const turnCount = messages.length
+  if (id) {
+    // Update existing
+    await c.env.DB.prepare(
+      `UPDATE assistant_conversations
+       SET messages_json = ?, model = ?, turn_count = ?, title = ?, updated_at = datetime('now')
+       WHERE id = ? AND admin_id = ?`
+    ).bind(messagesJson, model, turnCount, title, id, admin.id).run()
+    return c.json({ ok: true, id })
+  }
+  const result = await c.env.DB.prepare(
+    `INSERT INTO assistant_conversations (admin_id, title, messages_json, model, turn_count)
+     VALUES (?, ?, ?, ?, ?)`
+  ).bind(admin.id, title, messagesJson, model, turnCount).run()
+  return c.json({ ok: true, id: result.meta?.last_row_id })
+})
+
+// Archive a conversation (soft delete)
+superAdminAi.delete('/conversations/:id', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!requireSuperadmin(admin)) return c.json({ error: 'Super admin only' }, 403)
+  await c.env.DB.prepare(
+    `UPDATE assistant_conversations SET archived = 1, updated_at = datetime('now') WHERE id = ? AND admin_id = ?`
+  ).bind(c.req.param('id'), admin.id).run()
+  return c.json({ ok: true })
+})
+
 // ─── Chat endpoint ────────────────────────────────────────
 superAdminAi.post('/chat', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
@@ -169,11 +250,19 @@ superAdminAi.post('/chat', async (c) => {
           // cache_control on the last block caches both blocks + tools as one prefix
           systemBlocks[systemBlocks.length - 1].cache_control = { type: 'ephemeral' }
 
+          // Anthropic-hosted server-side tools — the model uses them
+          // transparently, results come back as content blocks. No tool
+          // dispatcher work on our end. Massive capability boost (web
+          // research, current docs, fetch any URL) for almost free.
+          const SERVER_TOOLS = [
+            { type: 'web_search_20260209', name: 'web_search' },
+            { type: 'web_fetch_20260209', name: 'web_fetch' },
+          ]
           const response = await client.messages.create({
             model,
             max_tokens: 16000,
             system: systemBlocks,
-            tools: ALL_TOOLS as any,
+            tools: [...ALL_TOOLS, ...SERVER_TOOLS] as any,
             messages: conversation,
           })
 
@@ -252,7 +341,20 @@ function getAiAssistantPageHTML(): string {
   .ai-toggle select { background:#0f172a; border:1px solid #334155; color:#fff; padding:4px 8px; border-radius:6px; font-size:12px }
   .ai-back { color:#9ca3af; text-decoration:none; font-size:12px }
   .ai-back:hover { color:#fff }
-  .ai-wrap { max-width:1000px; margin:0 auto; padding:24px; min-height:calc(100vh - 56px); display:flex; flex-direction:column }
+  .ai-shell { display:flex; gap:0; min-height:calc(100vh - 56px) }
+  .ai-sidebar { width:260px; flex-shrink:0; background:#0f172a; border-right:1px solid #1e293b; overflow-y:auto; padding:12px 0 }
+  .ai-sidebar-head { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#64748b; padding:0 16px 8px; font-weight:700 }
+  .ai-convo-list { display:flex; flex-direction:column }
+  .ai-convo-item { padding:10px 16px; cursor:pointer; border-left:3px solid transparent; font-size:12.5px; color:#cbd5e1; transition:background .12s }
+  .ai-convo-item:hover { background:#1e293b }
+  .ai-convo-item.active { background:#1e293b; border-left-color:#a78bfa; color:#fff }
+  .ai-convo-item .title { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .ai-convo-item .meta { color:#64748b; font-size:10px; margin-top:2px }
+  .ai-convo-empty { padding:14px 16px; color:#64748b; font-size:12px; text-align:center }
+  .ai-newchat { background:#1e293b; color:#cbd5e1; border:1px solid #334155; padding:5px 12px; border-radius:6px; font-size:12px; cursor:pointer; transition:all .12s; margin-right:8px }
+  .ai-newchat:hover { background:#334155; color:#fff }
+  .ai-wrap { flex:1; max-width:1000px; margin:0 auto; padding:24px; display:flex; flex-direction:column }
+  @media (max-width:768px) { .ai-sidebar { display:none } .ai-shell { display:block } }
   .ai-msgs { flex:1; overflow-y:auto; margin-bottom:16px; padding-bottom:24px }
   .ai-msg { padding:14px 18px; border-radius:12px; margin-bottom:12px; line-height:1.55; font-size:14px; max-width:85% }
   .ai-msg.user { background:#1d4ed8; color:#fff; margin-left:auto; border-bottom-right-radius:4px }
@@ -287,6 +389,7 @@ function getAiAssistantPageHTML(): string {
 <header class="ai-header">
   <h1><i class="fas fa-sparkles"></i>AI Assistant</h1>
   <div class="ai-toggle">
+    <button id="aiNewChat" class="ai-newchat" title="Start a new conversation"><i class="fas fa-plus"></i> New</button>
     <span>Model:</span>
     <select id="aiModel">
       <option value="sonnet">Sonnet 4.6 — fast &amp; cheap</option>
@@ -295,13 +398,19 @@ function getAiAssistantPageHTML(): string {
     <a href="/super-admin" class="ai-back" style="margin-left:16px"><i class="fas fa-arrow-left"></i> Super Admin</a>
   </div>
 </header>
-<main class="ai-wrap">
-  <div id="aiMsgs" class="ai-msgs"></div>
-  <form id="aiForm" class="ai-input-row">
-    <textarea id="aiInput" class="ai-input" placeholder="Ask me to edit a blog post, toggle an agent, or update a config…  (Shift+Enter for newline)" rows="1"></textarea>
-    <button type="submit" class="ai-send" id="aiSend">Send</button>
-  </form>
-</main>
+<div class="ai-shell">
+  <aside class="ai-sidebar" id="aiSidebar">
+    <div class="ai-sidebar-head">Recent conversations</div>
+    <div id="aiConvoList" class="ai-convo-list"><div class="ai-convo-empty">Loading…</div></div>
+  </aside>
+  <main class="ai-wrap">
+    <div id="aiMsgs" class="ai-msgs"></div>
+    <form id="aiForm" class="ai-input-row">
+      <textarea id="aiInput" class="ai-input" placeholder="Ask me anything — code, content, configs, web research, loop health…  (Shift+Enter for newline)" rows="1"></textarea>
+      <button type="submit" class="ai-send" id="aiSend">Send</button>
+    </form>
+  </main>
+</div>
 <script src="/static/super-admin-ai.js?v=${Date.now()}"></script>
 </body>
 </html>`

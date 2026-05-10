@@ -11,10 +11,103 @@
   var input = document.getElementById('aiInput');
   var sendBtn = document.getElementById('aiSend');
   var modelSel = document.getElementById('aiModel');
+  var newChatBtn = document.getElementById('aiNewChat');
+  var convoList = document.getElementById('aiConvoList');
 
   // Conversation history sent to the backend each turn
   var history = [];
   var inFlight = false;
+  var currentConvoId = null;
+
+  function getAuthHeaders() {
+    var t = localStorage.getItem('admin_session_token');
+    return t ? { 'Authorization': 'Bearer ' + t } : {};
+  }
+
+  async function loadConversationList() {
+    try {
+      var res = await fetch('/super-admin/ai-assistant/conversations', { credentials: 'include', headers: getAuthHeaders() });
+      if (!res.ok) { convoList.innerHTML = '<div class="ai-convo-empty">Not loaded</div>'; return; }
+      var data = await res.json();
+      if (!data.conversations || !data.conversations.length) {
+        convoList.innerHTML = '<div class="ai-convo-empty">No saved chats yet</div>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < data.conversations.length; i++) {
+        var c = data.conversations[i];
+        var when = new Date(c.updated_at.replace(' ', 'T') + 'Z').toLocaleString();
+        var active = (c.id === currentConvoId) ? ' active' : '';
+        html += '<div class="ai-convo-item' + active + '" data-id="' + c.id + '">' +
+          '<div class="title">' + escapeHtml(c.title || 'Untitled') + '</div>' +
+          '<div class="meta">' + escapeHtml(c.model || '') + ' · ' + c.turn_count + ' turn' + (c.turn_count === 1 ? '' : 's') + ' · ' + when + '</div>' +
+          '</div>';
+      }
+      convoList.innerHTML = html;
+      var items = convoList.querySelectorAll('.ai-convo-item');
+      for (var k = 0; k < items.length; k++) {
+        items[k].addEventListener('click', function (e) { loadConversation(Number(e.currentTarget.getAttribute('data-id'))); });
+      }
+    } catch (_) {
+      convoList.innerHTML = '<div class="ai-convo-empty">Error loading</div>';
+    }
+  }
+
+  async function loadConversation(id) {
+    try {
+      var res = await fetch('/super-admin/ai-assistant/conversations/' + id, { credentials: 'include', headers: getAuthHeaders() });
+      if (!res.ok) return;
+      var data = await res.json();
+      currentConvoId = data.id;
+      history = data.messages || [];
+      if (data.model) modelSel.value = data.model;
+      rerenderHistory();
+      loadConversationList();
+    } catch (_) { /* ignore */ }
+  }
+
+  function rerenderHistory() {
+    msgs.innerHTML = '';
+    if (!history.length) { showEmptyState(); return; }
+    for (var i = 0; i < history.length; i++) {
+      var m = history[i];
+      var text = typeof m.content === 'string' ? m.content :
+        (Array.isArray(m.content) ? (m.content.find(function (b) { return b.type === 'text'; }) || {}).text || '' : '');
+      if (!text) continue;
+      var div = document.createElement('div');
+      div.className = 'ai-msg ' + (m.role === 'user' ? 'user' : 'assistant');
+      if (m.role === 'user') div.textContent = text;
+      else div.innerHTML = renderMd(text);
+      msgs.appendChild(div);
+    }
+    scrollToBottom();
+  }
+
+  async function persistConversation() {
+    if (!history.length) return;
+    try {
+      var res = await fetch('/super-admin/ai-assistant/conversations', {
+        method: 'POST',
+        credentials: 'include',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, getAuthHeaders()),
+        body: JSON.stringify({ id: currentConvoId, messages: history, model: modelSel.value }),
+      });
+      if (res.ok) {
+        var data = await res.json();
+        if (data.id) currentConvoId = data.id;
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  function newChat() {
+    history = [];
+    currentConvoId = null;
+    msgs.innerHTML = '';
+    showEmptyState();
+    loadConversationList();
+    input.focus();
+  }
+  if (newChatBtn) newChatBtn.addEventListener('click', newChat);
 
   function showEmptyState() {
     if (history.length) return;
@@ -214,6 +307,8 @@
       if (assistantText) history.push({ role: 'assistant', content: assistantText });
       bubble.classList.remove('ai-cursor');
       if (!bubble.textContent.trim()) bubble.remove();
+      // Auto-save to D1 so refresh / tab close doesn't lose this conversation
+      persistConversation().then(loadConversationList);
     } catch (err) {
       appendError(err && err.message ? err.message : String(err));
     } finally {
@@ -224,5 +319,6 @@
   });
 
   showEmptyState();
+  loadConversationList();
   input.focus();
 })();

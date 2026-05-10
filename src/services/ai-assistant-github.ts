@@ -103,6 +103,43 @@ export const GITHUB_TOOLS: ToolDef[] = [
       },
     },
   },
+  {
+    name: 'write_files',
+    description:
+      'Write multiple files in ONE atomic commit using the Git Trees API. Strongly preferred over multiple write_file calls when you are making a coherent multi-file change (refactor, multi-file feature, etc.) — produces a single commit, single deploy cycle, atomic rollback. Each file in the array gets created or overwritten. Pass full UTF-8 content. Cloudflare Pages auto-deploys the resulting commit. Pre-push validation runs on every file in the batch before any commit happens — if any file fails, NOTHING is committed.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          description: 'Array of file changes. Each entry: {path, content}. New files and overwrites both work — no sha needed at the batch level.',
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: 'Repo-relative path.' },
+              content: { type: 'string', description: 'Full UTF-8 file contents.' },
+            },
+            required: ['path', 'content'],
+          },
+        },
+        message: { type: 'string', description: 'Single commit message for the whole batch.' },
+      },
+      required: ['files', 'message'],
+    },
+  },
+  {
+    name: 'search_code',
+    description:
+      'Search the repo for a substring or code pattern via the GitHub code search API. Returns matching files with surrounding line context. Use this when you need to find every reference to a function name, env var, route, etc. across the codebase.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search query. Plain text or GitHub code-search syntax. Examples: "openHouse3D", "function calculateArea", "ANTHROPIC_API_KEY".' },
+        limit: { type: 'integer', description: 'Max results. Default 20, max 50.' },
+      },
+      required: ['query'],
+    },
+  },
 ]
 
 export async function runGithubTool(
@@ -127,6 +164,8 @@ export async function runGithubTool(
     case 'list_recent_commits': return listRecentCommits(token, input?.limit)
     case 'revert_commit': return revertCommit(token, db, context, input?.sha)
     case 'list_assistant_commits': return listAssistantCommits(db, input?.limit)
+    case 'write_files': return writeFiles(token, db, context, input)
+    case 'search_code': return searchCode(token, input)
     default: return { error: `Unknown tool: ${name}` }
   }
 }
@@ -340,6 +379,160 @@ async function markCommitDeployment(db: D1Database, sha: string, status: string,
 }
 
 function sleep(ms: number) { return new Promise<void>((res) => setTimeout(res, ms)) }
+
+// ─── write_files: atomic multi-file commit via Git Tree API ───────────────
+// Single commit per call, regardless of how many files are touched. Pre-push
+// validation runs on every file before any GitHub mutation — if any file
+// fails, NOTHING is committed.
+async function writeFiles(
+  token: string,
+  db: D1Database,
+  context: {
+    userPrompt: string
+    model: string
+    cloudflareApiToken?: string
+    cloudflareAccountId?: string
+    waitUntil?: (p: Promise<any>) => void
+  },
+  input: any,
+): Promise<any> {
+  const files: Array<{ path: string; content: string }> = Array.isArray(input?.files) ? input.files : []
+  const message: string = input?.message || ''
+  if (!files.length) return { error: 'files array is required' }
+  if (!message) return { error: 'message is required' }
+  if (files.length > 25) return { error: `Refused: batch of ${files.length} files exceeds 25-file cap.` }
+
+  // 1. Validate every file BEFORE making any changes
+  for (const f of files) {
+    if (!f?.path || f?.content === undefined) {
+      return { error: `Each file needs path + content. Bad entry: ${JSON.stringify(f).slice(0, 200)}` }
+    }
+    const v = await validateWrite(token, f.path, f.content, context.userPrompt)
+    if (!v.ok) {
+      return { error: `Pre-push validation failed for "${f.path}": ${v.error}`, validation_failed: true, failed_path: f.path }
+    }
+  }
+
+  // 2. Get the current head commit's sha + tree
+  const headers = ghHeaders(token)
+  const refRes = await fetch(`${API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}/git/refs/heads/${BRANCH}`, { headers })
+  if (!refRes.ok) return { error: `Could not read branch ref: ${refRes.status} ${await refRes.text()}` }
+  const refData = await refRes.json() as any
+  const parentCommitSha: string = refData?.object?.sha
+  if (!parentCommitSha) return { error: 'Branch ref returned no commit sha' }
+
+  const commitRes = await fetch(`${API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}/git/commits/${parentCommitSha}`, { headers })
+  if (!commitRes.ok) return { error: `Could not read parent commit: ${commitRes.status}` }
+  const commitData = await commitRes.json() as any
+  const parentTreeSha: string = commitData?.tree?.sha
+
+  // 3. Create a blob for each file (GitHub will dedupe identical content automatically)
+  const treeEntries: any[] = []
+  for (const f of files) {
+    const blobRes = await fetch(`${API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}/git/blobs`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ content: f.content, encoding: 'utf-8' }),
+    })
+    if (!blobRes.ok) return { error: `Blob creation failed for ${f.path}: ${blobRes.status} ${await blobRes.text()}` }
+    const blobData = await blobRes.json() as any
+    treeEntries.push({ path: f.path, mode: '100644', type: 'blob', sha: blobData.sha })
+  }
+
+  // 4. Create a new tree based on the parent's tree
+  const treeRes = await fetch(`${API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}/git/trees`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ base_tree: parentTreeSha, tree: treeEntries }),
+  })
+  if (!treeRes.ok) return { error: `Tree creation failed: ${treeRes.status} ${await treeRes.text()}` }
+  const treeData = await treeRes.json() as any
+
+  // 5. Create the commit
+  const newCommitRes = await fetch(`${API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}/git/commits`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ message, tree: treeData.sha, parents: [parentCommitSha] }),
+  })
+  if (!newCommitRes.ok) return { error: `Commit creation failed: ${newCommitRes.status} ${await newCommitRes.text()}` }
+  const newCommit = await newCommitRes.json() as any
+
+  // 6. Update the branch ref to point at the new commit
+  const updateRes = await fetch(`${API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}/git/refs/heads/${BRANCH}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ sha: newCommit.sha, force: false }),
+  })
+  if (!updateRes.ok) return { error: `Branch ref update failed: ${updateRes.status} ${await updateRes.text()}` }
+
+  // 7. Audit log
+  try {
+    await db.prepare(
+      `INSERT INTO assistant_commits (sha, branch, file_paths, message, user_prompt, model)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).bind(
+      newCommit.sha, BRANCH, JSON.stringify(files.map(f => f.path)),
+      message, context.userPrompt.slice(0, 4000), context.model,
+    ).run()
+  } catch (e: any) {
+    console.warn('[ai-assistant] audit log insert failed:', e?.message)
+  }
+
+  // 8. Background deployment monitor
+  let monitorNote = `Pushed ${newCommit.sha.slice(0, 7)} (${files.length} files). Cloudflare Pages will auto-deploy in ~30 seconds.`
+  if (context.cloudflareApiToken && context.cloudflareAccountId) {
+    const monitorPromise = monitorDeployment(token, db, context, newCommit.sha, files[0].path)
+    if (context.waitUntil) {
+      context.waitUntil(monitorPromise)
+      monitorNote = `Pushed ${newCommit.sha.slice(0, 7)} (${files.length} files). Monitoring build for ~90s — will auto-revert if it fails. Query list_assistant_commits to see outcome.`
+    } else {
+      monitorPromise.catch((e) => console.warn('[ai-assistant] deployment monitor crashed:', e?.message))
+    }
+  }
+  return {
+    ok: true,
+    commit_sha: newCommit.sha,
+    short_sha: newCommit.sha.slice(0, 7),
+    commit_url: `https://github.com/${REPO_OWNER}/${REPO_NAME}/commit/${newCommit.sha}`,
+    files_changed: files.map(f => f.path),
+    note: monitorNote,
+  }
+}
+
+// ─── search_code: GitHub code-search API ──────────────────────────────────
+async function searchCode(token: string, input: any): Promise<any> {
+  const query: string = input?.query || ''
+  const limit = Math.min(Math.max(1, Number(input?.limit) || 20), 50)
+  if (!query) return { error: 'query is required' }
+  // GitHub code search: scope to this repo
+  const q = `${query} repo:${REPO_OWNER}/${REPO_NAME}`
+  const res = await fetch(
+    `${API_BASE}/search/code?q=${encodeURIComponent(q)}&per_page=${limit}`,
+    {
+      headers: {
+        ...ghHeaders(token),
+        // Text-match media type returns surrounding line context
+        Accept: 'application/vnd.github.text-match+json',
+      },
+    },
+  )
+  if (!res.ok) {
+    if (res.status === 422) return { error: 'GitHub code search rejected the query. Try simpler text.', github_response: await res.text() }
+    return { error: `GitHub ${res.status}: ${await res.text()}` }
+  }
+  const data = await res.json() as any
+  return {
+    total: data.total_count,
+    matches: (data.items || []).map((m: any) => ({
+      path: m.path,
+      url: m.html_url,
+      snippets: (m.text_matches || []).map((tm: any) => ({
+        property: tm.property,
+        fragment: tm.fragment,
+      })),
+    })),
+  }
+}
 
 async function deleteFile(token: string, input: any) {
   if (!input?.path || !input?.sha || !input?.message) {
