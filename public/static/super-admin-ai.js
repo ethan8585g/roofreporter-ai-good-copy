@@ -22,12 +22,12 @@
       '<div class="ai-empty">' +
         '<i class="fas fa-sparkles"></i>' +
         '<h2>How can I help?</h2>' +
-        '<p>I can edit blog posts, toggle agent configs, and tweak D1 settings. I cannot edit code or send emails.</p>' +
+        '<p>I can edit blog posts, tweak agent configs, read &amp; write any file in the repo (commits trigger auto-deploy in ~30s), and pull loop-monitor data. I cannot send emails or run jobs.</p>' +
         '<div class="ai-suggest">' +
-          '<div class="ai-chip" data-q="List my 10 most recent blog posts">List my 10 most recent blog posts</div>' +
-          '<div class="ai-chip" data-q="What agents are currently enabled?">What agents are currently enabled?</div>' +
-          '<div class="ai-chip" data-q="Find blog posts about pricing and show me the titles">Find blog posts about pricing</div>' +
-          '<div class="ai-chip" data-q="Draft a short blog post (status=draft) about why insurance carriers accept Roof Manager reports. Slug: insurance-accepted-reports.">Draft a blog post</div>' +
+          '<div class="ai-chip" data-q="What’s in CLAUDE.md? Just confirm you can see the project context.">Confirm CLAUDE.md context</div>' +
+          '<div class="ai-chip" data-q="Is everything healthy? Give me a loop health summary.">Loop health check</div>' +
+          '<div class="ai-chip" data-q="List my 10 most recent blog posts">10 most recent blog posts</div>' +
+          '<div class="ai-chip" data-q="What commits have you pushed in the last 24 hours?">Show your recent commits</div>' +
         '</div>' +
       '</div>';
     var chips = msgs.querySelectorAll('.ai-chip');

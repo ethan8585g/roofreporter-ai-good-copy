@@ -156,8 +156,21 @@ async function readFile(token: string, path: string) {
   if (!res.ok) return { error: `GitHub ${res.status}: ${await res.text()}` }
   const data = await res.json() as any
   if (Array.isArray(data) || data.type !== 'file') return { error: 'Path is not a file' }
-  // GitHub returns content as base64 with newlines
-  const content = atob((data.content || '').replace(/\n/g, ''))
+  // GitHub returns content as base64 with newlines. We decode as UTF-8 — naive
+  // atob() returns a binary string where multibyte chars (em-dash, smart quotes,
+  // anything non-ASCII) become mojibake. If we then wrote that back, we'd silently
+  // corrupt every non-ASCII glyph in the file.
+  const content = b64ToUtf8((data.content || '').replace(/\n/g, ''))
+  if (looksBinary(content)) {
+    return {
+      path: data.path,
+      sha: data.sha,
+      size: data.size,
+      content: null,
+      binary: true,
+      note: 'Binary file — content not returned. Use the sha to delete or rename, but do not attempt to read or rewrite as text.',
+    }
+  }
   return { path: data.path, sha: data.sha, size: data.size, content }
 }
 
@@ -174,7 +187,7 @@ async function writeFile(
   const body: any = {
     message: input.message,
     branch: BRANCH,
-    content: btoa(unescape(encodeURIComponent(input.content))),
+    content: utf8ToB64(input.content),
   }
   if (input.sha) body.sha = input.sha
   const res = await fetch(url, {
@@ -361,4 +374,43 @@ async function listAssistantCommits(db: D1Database, limit?: number) {
 // Encode a path for URL while preserving slashes
 function encodeURIPath(p: string): string {
   return p.split('/').map(encodeURIComponent).join('/')
+}
+
+// Decode a base64 string (as returned by the GitHub Contents API) into a real
+// UTF-8 string. atob() alone returns binary where each char is a byte; we have
+// to interpret those bytes as UTF-8 or non-ASCII glyphs come back as mojibake
+// (em-dash â, smart quotes â, etc.).
+function b64ToUtf8(b64: string): string {
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return new TextDecoder('utf-8').decode(bytes)
+}
+
+// Encode a UTF-8 string as base64 for the GitHub Contents PUT body. The
+// classic `btoa(unescape(encodeURIComponent(s)))` works but `unescape` is
+// deprecated and chokes on certain code points; this version goes through
+// TextEncoder explicitly.
+function utf8ToB64(s: string): string {
+  const bytes = new TextEncoder().encode(s)
+  // String.fromCharCode(...bytes) blows the stack on large inputs; chunk it.
+  let bin = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + chunk))
+  }
+  return btoa(bin)
+}
+
+// Detect binary content so read_file doesn't return mangled text for images,
+// PDFs, etc. Heuristic: a null byte or >5% non-printable in a sample.
+function looksBinary(s: string): boolean {
+  const sample = s.slice(0, 8192)
+  if (sample.includes('\0')) return true
+  let nonPrintable = 0
+  for (let i = 0; i < sample.length; i++) {
+    const c = sample.charCodeAt(i)
+    if (c < 9 || (c > 13 && c < 32)) nonPrintable++
+  }
+  return nonPrintable / Math.max(sample.length, 1) > 0.05
 }
