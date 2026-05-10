@@ -5674,14 +5674,39 @@ html.light-theme{background:#f5f7fa !important}
         .catch(function(){});
     }
 
-    // Desktop: mouseleave toward the top of the viewport.
+    // Engagement gate — only show the exit-intent modal once the visitor has
+    // either dwelled 60s+ OR scrolled ≥70%. Bare mouseleave triggers caught
+    // visitors in dismissal mode (paid-ad bounces) and produced reflexive
+    // closes with zero engagement. The gate ensures the offer fires only
+    // after the visitor has consumed enough content to consider it.
+    var pageLoadedAt = Date.now();
+    var maxScrollPct = 0;
+    window.addEventListener('scroll', function(){
+      try {
+        var doc = document.documentElement;
+        var winH = window.innerHeight || doc.clientHeight || 0;
+        var docH = Math.max(doc.scrollHeight || 0, document.body.scrollHeight || 0);
+        if (docH <= winH) { maxScrollPct = 1; return; }
+        var pct = ((window.scrollY || window.pageYOffset || 0) + winH) / docH;
+        if (pct > maxScrollPct) maxScrollPct = pct;
+      } catch(_){}
+    }, { passive: true });
+    function isQualified(){
+      return (Date.now() - pageLoadedAt) >= 60000 || maxScrollPct >= 0.7;
+    }
+    function tryOpenModal(){
+      if (!isQualified()) return;
+      openModal();
+    }
+    // Desktop: mouseleave toward the top of the viewport — gated.
     document.addEventListener('mouseout', function(e) {
-      if (!e.relatedTarget && !e.toElement && e.clientY < 10) openModal();
+      if (!e.relatedTarget && !e.toElement && e.clientY < 10) tryOpenModal();
     });
-    // Mobile: 25-second dwell + pagehide as secondary triggers.
+    // Mobile: 60s dwell + pagehide (also gated — pagehide before 60s with
+    // <70% scroll means the visitor dismissed without engaging).
     if (/Mobi|Android/i.test(navigator.userAgent)) {
-      setTimeout(openModal, 25000);
-      window.addEventListener('pagehide', openModal);
+      setTimeout(openModal, 60000);
+      window.addEventListener('pagehide', tryOpenModal);
     }
   })();</script>
   <!-- ── Cookie consent banner (GDPR/CCPA) — injects on first visit ── -->
@@ -10794,9 +10819,13 @@ function getCustomerLoginHTML(googleClientId = '') {
 
     <!-- Links -->
     <div class="text-center mt-6 space-y-2">
-      <a href="/login" class="text-brand-300 hover:text-white text-sm transition-colors"><i class="fas fa-shield-alt mr-1"></i>Admin Login</a>
-      <span class="text-brand-700 mx-2">|</span>
       <a href="/" class="text-brand-300 hover:text-white text-sm transition-colors"><i class="fas fa-arrow-left mr-1"></i>Back to homepage</a>
+    </div>
+    <!-- Staff entrance — kept tiny + grey on purpose: customers should never
+         confuse this with the primary CTA (advisor flagged it as a conversion
+         leak), but admins still need a discoverable path to /login. -->
+    <div class="text-center mt-4">
+      <a href="/login" class="text-gray-500 hover:text-gray-400 text-[10px] transition-colors tracking-wide uppercase">Staff sign-in</a>
     </div>
   </div>
 
@@ -16766,6 +16795,33 @@ function getBlogPostHTML(post?: any, slug?: string) {
 <body class="min-h-screen" style="background:var(--bg-page)">
   <!-- Reading progress bar -->
   <div id="rm-read-progress" style="position:fixed;top:0;left:0;height:3px;background:#00FF88;width:0%;z-index:9999;transition:width 0.15s linear;pointer-events:none;"></div>
+  <!-- Conversion CTA strip — sticky, dismissable. Catches paid-traffic readers
+       who land on a blog post (Google Ads campaigns sometimes target blog
+       URLs); gives them a one-click path to the offer without forcing them
+       through nav. Dismissal is sticky per device via localStorage. -->
+  <div id="rm-blog-cta" style="position:sticky;top:0;left:0;right:0;z-index:60;background:linear-gradient(90deg,#00FF88,#00CC70);color:#0A0A0A;display:none">
+    <div class="max-w-5xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3" style="font-size:13px">
+      <div style="font-weight:700;flex:1 1 auto;line-height:1.35">
+        <i class="fas fa-bolt" style="margin-right:6px"></i>
+        Roofer? <span style="font-weight:800">Get your first 4 measurement reports free</span> — no credit card required.
+      </div>
+      <a href="/customer/login?mode=signup&utm_source=blog_cta" onclick="try{localStorage.setItem('rm_blog_cta_clicked','1')}catch(_){}" style="background:#0A0A0A;color:#00FF88;font-weight:800;padding:7px 14px;border-radius:8px;text-decoration:none;white-space:nowrap;font-size:12.5px">Start free →</a>
+      <button id="rm-blog-cta-close" aria-label="Dismiss" style="background:transparent;border:none;color:#0A0A0A;font-size:18px;line-height:1;cursor:pointer;padding:4px 6px;font-weight:700">&times;</button>
+    </div>
+  </div>
+  <script>(function(){
+    try {
+      var bar = document.getElementById('rm-blog-cta');
+      if (!bar) return;
+      if (localStorage.getItem('rm_blog_cta_dismissed') === '1') return;
+      bar.style.display = 'block';
+      var btn = document.getElementById('rm-blog-cta-close');
+      if (btn) btn.addEventListener('click', function(){
+        bar.style.display = 'none';
+        try { localStorage.setItem('rm_blog_cta_dismissed', '1'); } catch(_){}
+      });
+    } catch(_){}
+  })();</script>
   <!-- Breadcrumb bar -->
   <div style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.06)">
     <div class="max-w-4xl mx-auto px-4 py-2 text-xs text-gray-500 flex items-center gap-2">
