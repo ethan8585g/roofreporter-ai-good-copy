@@ -309,6 +309,13 @@ leadCaptureRoutes.post('/condo-lead', async (c) => {
     `INSERT INTO asset_report_leads (email, name, company, source, tag) VALUES (?, ?, ?, 'condo_cheat_sheet', 'condo_board_interest')`
   ).bind(String(body.email).toLowerCase().trim(), name, company).run()
 
+  // Mirror into unified `leads` table so super-admin leads inbox surfaces it.
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO leads (name, email, company_name, source_page, message) VALUES (?, ?, ?, ?, ?)`
+    ).bind(name, String(body.email).toLowerCase().trim(), company, 'condo_cheat_sheet', null).run()
+  } catch (e: any) { console.warn('[condo-lead] leads mirror insert skipped:', e?.message) }
+
   try {
     if (c.env.GCP_SERVICE_ACCOUNT_JSON) {
       const subject = `Your 2026 Condo Reserve Fund Cheat Sheet`

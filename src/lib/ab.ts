@@ -74,7 +74,7 @@ export const AB_SCRIPT = `
   // ── Social proof toasts ───────────────────────────────────
   var toasts = [
     'Mike D. from Calgary just generated a report',
-    'Sarah K. from Toronto got a quote in 60 seconds',
+    'Sarah K. from Toronto just pulled a quote',
     'James R. from Edmonton ordered a 100-report pack',
     'A contractor in Vancouver just signed up',
     'Pedro M. from Winnipeg just closed a $14k job',

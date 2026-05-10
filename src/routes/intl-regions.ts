@@ -45,7 +45,7 @@ function footer(hubLabel: string) {
   return `<footer style="background:#0A0A0A;border-top:1px solid rgba(255,255,255,0.06)" class="text-gray-500 py-10 text-center text-sm">
   <div class="max-w-4xl mx-auto px-4">
     <p class="text-gray-300 font-semibold mb-2">Roof Manager &mdash; Serving the ${hubLabel}, US + Canada</p>
-    <p>&copy; ${new Date().getFullYear()} Roof Manager. Satellite roof measurement reports in under 60 seconds.</p>
+    <p>&copy; ${new Date().getFullYear()} Roof Manager. Satellite roof measurement reports for contractors worldwide.</p>
     <div class="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1">
       <a href="/" class="hover:text-white">Home</a>
       <a href="/pricing" class="hover:text-white">Pricing</a>
@@ -115,7 +115,7 @@ ukApp.get('/', (c) => {
       <div class="grid md:grid-cols-3 gap-6">
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-ruler-combined text-[#00FF88] mr-2"></i>BS 5534-aware outputs</h3><p class="text-gray-400 text-sm">Tile-gauge and lap-specific quantities. Pitched-tile take-off slots straight into a UK slater&rsquo;s schedule.</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-cloud-bolt text-[#00FF88] mr-2"></i>Storm-loss documentation</h3><p class="text-gray-400 text-sm">Reports include pre-storm imagery, projected vs. sloped area, and fixings schedules for insurer supplement claims.</p></div>
-        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-bolt text-[#00FF88] mr-2"></i>60-second turnaround</h3><p class="text-gray-400 text-sm">Measure from desk or van. No climbing, no cherry-picker. Google Solar API imagery covers England, Scotland, Wales, and NI.</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-bolt text-[#00FF88] mr-2"></i>Measure from anywhere</h3><p class="text-gray-400 text-sm">Measure from desk or van. No climbing, no cherry-picker. Google Solar API imagery covers England, Scotland, Wales, and NI.</p></div>
       </div>
     </div>
   </section>
@@ -284,7 +284,7 @@ auApp.get('/', (c) => {
       <div class="grid md:grid-cols-3 gap-6">
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-wind text-[#00FF88] mr-2"></i>Cyclone-region aware</h3><p class="text-gray-400 text-sm">Reports flag wind regions C and D (North QLD, Pilbara, Kimberley) so remote-site measurement stays anchored to AS/NZS 1170.2.</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-fire text-[#00FF88] mr-2"></i>BAL + bushfire ready</h3><p class="text-gray-400 text-sm">Ember-attack roof replacements in BAL-29/40/FZ zones need documented vent and gutter compliance. Our reports attach cleanly to the builder&rsquo;s DA/CDC.</p></div>
-        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-bolt text-[#00FF88] mr-2"></i>60-second turnaround</h3><p class="text-gray-400 text-sm">Measure from Sydney, Melbourne, or a Pilbara mine site. Google Solar API imagery coverage spans every populated zone in Australia.</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-bolt text-[#00FF88] mr-2"></i>Measure from anywhere</h3><p class="text-gray-400 text-sm">Measure from Sydney, Melbourne, or a Pilbara mine site. Google Solar API imagery coverage spans every populated zone in Australia.</p></div>
       </div>
     </div>
   </section>

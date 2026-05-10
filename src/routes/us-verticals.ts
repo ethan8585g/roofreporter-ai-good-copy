@@ -102,7 +102,7 @@ app.get('/insurance-claims', (c) => {
   <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
     <div class="max-w-4xl mx-auto px-4">
       <h1 class="text-4xl font-black mb-6">Roof Damage Insurance Claims — All 50 States</h1>
-      <p class="text-xl text-blue-200 mb-8">Roof Manager generates satellite measurement reports accepted by insurance adjusters across all 50 US states. As of 2026, the platform has supported documentation for storm, hail, hurricane, and wind damage claims. Reports include pitch-corrected area, edge breakdowns, and material BOMs — all in under 60 seconds.</p>
+      <p class="text-xl text-blue-200 mb-8">Roof Manager generates satellite measurement reports accepted by insurance adjusters across all 50 US states. As of 2026, the platform has supported documentation for storm, hail, hurricane, and wind damage claims. Reports include pitch-corrected area, edge breakdowns, and material BOMs.</p>
       <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg inline-block">Get 4 Free Reports (CAD)</a>
     </div>
   </section>
@@ -129,7 +129,7 @@ app.get('/insurance-claims/:state', (c) => {
   ${head(`Roof Insurance Claims in ${state.name} — Documentation Guide | Roof Manager`, `How to document roof damage insurance claims in ${state.name}. Satellite measurement reports accepted by ${state.topInsurers[0]} and other ${state.code} carriers. $8 CAD/report.`, state.code)}
   <link rel="canonical" href="https://www.roofmanager.ca/us/insurance-claims/${stateSlug}">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Insurance Claims","item":"https://www.roofmanager.ca/us/insurance-claims"},{"@type":"ListItem","position":3,"name":"${state.name}","item":"https://www.roofmanager.ca/us/insurance-claims/${stateSlug}"}]}</script>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"HowTo","name":"How to File a Roof Damage Insurance Claim in ${state.name}","description":"Step-by-step guide to documenting and filing a roof damage insurance claim in ${state.name}.","step":[{"@type":"HowToStep","name":"Generate Satellite Measurement Report","text":"Use Roof Manager to generate a satellite-powered roof measurement report for the damaged property in under 60 seconds."},{"@type":"HowToStep","name":"Document Damage with Photos","text":"Photograph all visible damage from ground level. Use the Roof Manager report as the technical measurement documentation."},{"@type":"HowToStep","name":"Submit to Adjuster","text":"Submit the Roof Manager PDF report with your claim. The report includes pitch-corrected area, edge breakdowns, and material BOM accepted by ${state.topInsurers[0]} and other ${state.name} carriers."},{"@type":"HowToStep","name":"Follow Up on Claim","text":"Reference the report\'s measurement data if the adjuster requests clarification on square footage or material quantities."}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"HowTo","name":"How to File a Roof Damage Insurance Claim in ${state.name}","description":"Step-by-step guide to documenting and filing a roof damage insurance claim in ${state.name}.","step":[{"@type":"HowToStep","name":"Generate Satellite Measurement Report","text":"Use Roof Manager to generate a satellite-powered roof measurement report for the damaged property."},{"@type":"HowToStep","name":"Document Damage with Photos","text":"Photograph all visible damage from ground level. Use the Roof Manager report as the technical measurement documentation."},{"@type":"HowToStep","name":"Submit to Adjuster","text":"Submit the Roof Manager PDF report with your claim. The report includes pitch-corrected area, edge breakdowns, and material BOM accepted by ${state.topInsurers[0]} and other ${state.name} carriers."},{"@type":"HowToStep","name":"Follow Up on Claim","text":"Reference the report\'s measurement data if the adjuster requests clarification on square footage or material quantities."}]}</script>
   </head>
   <body class="min-h-screen" style="background:#0A0A0A;color:#fff">${nav()}
   <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
@@ -161,7 +161,7 @@ app.get('/insurance-claims/:state', (c) => {
     <div class="max-w-5xl mx-auto px-4">
       <h2 class="text-2xl font-black mb-6">How to File a Roof Damage Claim in ${state.name}</h2>
       <div class="space-y-4">
-        <div class="bg-white/5 border border-white/10 rounded-xl p-5 flex gap-4"><div class="w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-sm">1</div><div><h3 class="font-bold text-white">Generate a Satellite Measurement Report</h3><p class="text-gray-400 text-sm mt-1">Use Roof Manager to measure the damaged ${state.name} property in under 60 seconds. The report includes pitch-corrected area, edge breakdown, and material BOM.</p></div></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-5 flex gap-4"><div class="w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-sm">1</div><div><h3 class="font-bold text-white">Generate a Satellite Measurement Report</h3><p class="text-gray-400 text-sm mt-1">Use Roof Manager to measure the damaged ${state.name} property. The report includes pitch-corrected area, edge breakdown, and material BOM.</p></div></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-5 flex gap-4"><div class="w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-sm">2</div><div><h3 class="font-bold text-white">Document Visible Damage</h3><p class="text-gray-400 text-sm mt-1">Photograph all damage from ground level. In ${state.name}, carriers typically require photos showing impact patterns, granule loss, and edge damage.</p></div></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-5 flex gap-4"><div class="w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-sm">3</div><div><h3 class="font-bold text-white">Submit to Adjuster</h3><p class="text-gray-400 text-sm mt-1">${xactimatePara}</p></div></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-5 flex gap-4"><div class="w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-sm">4</div><div><h3 class="font-bold text-white">Receive Settlement</h3><p class="text-gray-400 text-sm mt-1">${state.name} carriers typically settle ${isHailState ? 'hail' : 'storm'} damage claims within 30–90 days. Having accurate measurements reduces disputes and accelerates settlement.</p></div></div>
@@ -172,7 +172,7 @@ app.get('/insurance-claims/:state', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Document ${state.name} Claims Faster</h2>
-      <p class="text-blue-200 mb-8">Generate an insurance-ready satellite report for any ${state.name} property in under 60 seconds. $8 CAD/report after 4 free.</p>
+      <p class="text-blue-200 mb-8">Generate an insurance-ready satellite report for any ${state.name} property. $8 CAD/report after 4 free.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
@@ -189,7 +189,7 @@ app.get('/storm-damage', (c) => {
   <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
     <div class="max-w-4xl mx-auto px-4">
       <h1 class="text-4xl font-black mb-6">Storm Damage Roof Assessment — All 50 States</h1>
-      <p class="text-xl text-blue-200 mb-8">Roof Manager generates satellite-powered storm damage assessment reports for roofing contractors and insurance professionals in all 50 US states. Reports include pitch-corrected area, edge breakdowns, and material BOMs in under 60 seconds. As of 2026, US storm damage totals average $20–60B per year in roofing claims alone.</p>
+      <p class="text-xl text-blue-200 mb-8">Roof Manager generates satellite-powered storm damage assessment reports for roofing contractors and insurance professionals in all 50 US states. Reports include pitch-corrected area, edge breakdowns, and material BOMs. As of 2026, US storm damage totals average $20–60B per year in roofing claims alone.</p>
       <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg inline-block">Start Free Assessment (CAD)</a>
     </div>
   </section>
@@ -209,7 +209,7 @@ app.get('/storm-damage/:state', (c) => {
   if (!state) return c.redirect('/us/storm-damage')
 
   const html = `<!DOCTYPE html><html lang="en-US"><head>
-  ${head(`Storm Damage Roof Assessment in ${state.name} | Roof Manager`, `Storm damage roof assessment for ${state.name} roofing contractors. ${state.stormProfile.primaryPeril}. Satellite measurement reports in under 60 seconds. $8 CAD.`, state.code)}
+  ${head(`Storm Damage Roof Assessment in ${state.name} | Roof Manager`, `Storm damage roof assessment for ${state.name} roofing contractors. ${state.stormProfile.primaryPeril}. Satellite measurement reports for $8 CAD.`, state.code)}
   <link rel="canonical" href="https://www.roofmanager.ca/us/storm-damage/${stateSlug}">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Storm Damage","item":"https://www.roofmanager.ca/us/storm-damage"},{"@type":"ListItem","position":3,"name":"${state.name}","item":"https://www.roofmanager.ca/us/storm-damage/${stateSlug}"}]}</script>
   </head>
@@ -239,7 +239,7 @@ app.get('/storm-damage/:state', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Document ${state.name} Storm Damage Fast</h2>
-      <p class="text-blue-200 mb-8">Generate a satellite measurement report for any ${state.name} storm-damaged property in under 60 seconds. $8 CAD/report after 4 free.</p>
+      <p class="text-blue-200 mb-8">Generate a satellite measurement report for any ${state.name} storm-damaged property. $8 CAD/report after 4 free.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
@@ -272,7 +272,7 @@ app.get('/hail-damage', (c) => {
   <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
     <div class="max-w-4xl mx-auto px-4">
       <h1 class="text-4xl font-black mb-6">Hail Damage Roof Assessment — US Hail Belt & All 50 States</h1>
-      <p class="text-xl text-blue-200 mb-8">The US hail belt (Colorado, Texas, Oklahoma, Kansas, Nebraska, South Dakota, Minnesota) generates more roofing claims than any other weather peril in North America. Roof Manager generates satellite measurement reports for hail damage documentation in under 60 seconds — insurance-ready, priced in CAD.</p>
+      <p class="text-xl text-blue-200 mb-8">The US hail belt (Colorado, Texas, Oklahoma, Kansas, Nebraska, South Dakota, Minnesota) generates more roofing claims than any other weather peril in North America. Roof Manager generates satellite measurement reports for hail damage documentation — insurance-ready, priced in CAD.</p>
       <div class="grid grid-cols-3 md:grid-cols-6 gap-3 mb-8">
         ${['colorado','texas','oklahoma','kansas','nebraska','south-dakota'].map(s => `<a href="/us/hail-damage/${s}" class="bg-sky-500/20 border border-sky-400/30 rounded-xl p-3 text-center hover:bg-sky-500/30"><div class="text-sky-300 font-bold text-sm">${US_STATES[s].code}</div><div class="text-gray-400 text-xs mt-0.5">${US_STATES[s].stormProfile.hailDaysPerYear}d/yr</div></a>`).join('')}
       </div>
@@ -308,7 +308,7 @@ app.get('/hail-damage/:state', (c) => {
   <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
     <div class="max-w-4xl mx-auto px-4">
       <h1 class="text-4xl font-black mb-6">Hail Damage Roof Documentation<br>in <span class="text-sky-400">${state.name}</span></h1>
-      <p class="text-xl text-blue-200 mb-8">${hailDesc} Roof Manager satellite measurement reports give ${state.code} roofing contractors insurance-ready documentation in under 60 seconds. Top ${state.name} carriers — ${state.topInsurers.slice(0,3).join(', ')} — accept Roof Manager reports for hail damage claims.</p>
+      <p class="text-xl text-blue-200 mb-8">${hailDesc} Roof Manager satellite measurement reports give ${state.code} roofing contractors insurance-ready documentation. Top ${state.name} carriers — ${state.topInsurers.slice(0,3).join(', ')} — accept Roof Manager reports for hail damage claims.</p>
       <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg inline-block">Get Free Hail Reports (CAD)</a>
     </div>
   </section>
@@ -318,7 +318,7 @@ app.get('/hail-damage/:state', (c) => {
       <div class="grid md:grid-cols-3 gap-5">
         <div class="bg-white/5 border border-white/10 rounded-xl p-5"><div class="text-3xl font-black text-sky-400 mb-1">${state.stormProfile.hailDaysPerYear}</div><div class="text-white font-semibold">Hail Days/Year</div><div class="text-gray-500 text-xs mt-1">Average annual hail events</div></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-5"><div class="text-3xl font-black text-sky-400 mb-1">${state.stormProfile.avgClaimsPerYear}</div><div class="text-white font-semibold">Annual Claims</div><div class="text-gray-500 text-xs mt-1">Total roofing claims/year</div></div>
-        <div class="bg-white/5 border border-white/10 rounded-xl p-5"><div class="text-3xl font-black text-sky-400 mb-1">60s</div><div class="text-white font-semibold">Report Time</div><div class="text-gray-500 text-xs mt-1">Satellite report generation</div></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-5"><div class="text-3xl font-black text-sky-400 mb-1">$8</div><div class="text-white font-semibold">Per Report</div><div class="text-gray-500 text-xs mt-1">CAD pricing, no subscription</div></div>
       </div>
       <p class="text-gray-300 mt-6 leading-relaxed">${state.roofingNotes}</p>
     </div>
@@ -328,7 +328,7 @@ app.get('/hail-damage/:state', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Start Documenting ${state.name} Hail Claims</h2>
-      <p class="text-blue-200 mb-8">$8 CAD per report after 4 free. Insurance-ready satellite measurements in under 60 seconds.</p>
+      <p class="text-blue-200 mb-8">$8 CAD per report after 4 free. Insurance-ready satellite measurements.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
@@ -426,7 +426,7 @@ app.get('/hurricane-damage/:state', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Ready for ${state.name} Storm Season?</h2>
-      <p class="text-blue-200 mb-8">$8 CAD per report after 4 free. Generate satellite reports for any ${state.name} address in under 60 seconds.</p>
+      <p class="text-blue-200 mb-8">$8 CAD per report after 4 free. Generate satellite reports for any ${state.name} address.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
@@ -501,7 +501,7 @@ app.get('/roof-replacement-cost', (c) => {
     <div class="max-w-4xl mx-auto px-4">
       <h1 class="text-4xl font-black mb-6">Roof Replacement Cost by State — 2026</h1>
       <p class="text-xl text-blue-200 mb-8">The average cost to replace a roof on a 2,000 sq ft US home in 2026 ranges from $7,000 to $25,000 depending on state, materials, pitch, and local labor costs. Roof Manager helps contractors generate accurate material BOMs and take-offs that support transparent pricing for homeowners.</p>
-      <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg inline-block">Start Free — Accurate BOMs in 60s</a>
+      <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg inline-block">Start Free — Accurate BOMs Included</a>
     </div>
   </section>
   <section class="py-16" style="background:#111">
@@ -528,7 +528,7 @@ app.get('/roof-replacement-cost/:state', (c) => {
   <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
     <div class="max-w-4xl mx-auto px-4">
       <h1 class="text-4xl font-black mb-6">Roof Replacement Cost in <span class="text-sky-400">${state.name}</span> — 2026</h1>
-      <p class="text-xl text-blue-200 mb-8">The average cost to replace a roof on a 2,000 sq ft home in ${state.name} ranges from <strong>$${cost.low.toLocaleString()}</strong> to <strong>$${cost.high.toLocaleString()}</strong>, with a midpoint of approximately <strong>$${cost.avg.toLocaleString()}</strong> as of 2026. Costs vary by material, pitch, and metro area. Roof Manager generates accurate material take-offs in under 60 seconds, helping ${state.code} contractors price jobs competitively.</p>
+      <p class="text-xl text-blue-200 mb-8">The average cost to replace a roof on a 2,000 sq ft home in ${state.name} ranges from <strong>$${cost.low.toLocaleString()}</strong> to <strong>$${cost.high.toLocaleString()}</strong>, with a midpoint of approximately <strong>$${cost.avg.toLocaleString()}</strong> as of 2026. Costs vary by material, pitch, and metro area. Roof Manager generates accurate material take-offs, helping ${state.code} contractors price jobs competitively.</p>
       <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg inline-block">Generate Accurate BOM (Free)</a>
     </div>
   </section>
@@ -550,7 +550,7 @@ app.get('/roof-replacement-cost/:state', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Get Accurate ${state.name} Material Estimates</h2>
-      <p class="text-blue-200 mb-8">Roof Manager generates a complete material BOM for any ${state.name} property in under 60 seconds. Free to start.</p>
+      <p class="text-blue-200 mb-8">Roof Manager generates a complete material BOM for any ${state.name} property. Free to start.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
@@ -587,7 +587,7 @@ app.get('/roof-replacement-cost/:state/:city', (c) => {
     <div class="max-w-4xl mx-auto px-4">
       <p class="text-sky-400 text-sm font-semibold mb-2 uppercase tracking-wider">${state.name} · Roof Replacement Cost</p>
       <h1 class="text-4xl font-black mb-6">Roof Replacement Cost in <span class="text-sky-400">${city.name}</span>, ${state.code} — 2026</h1>
-      <p class="text-xl text-blue-200 mb-8">The average cost to replace a roof on a 2,000 sq ft home in ${city.name} ranges from <strong>$${cost.low.toLocaleString()}</strong> to <strong>$${cost.high.toLocaleString()}</strong>, with a midpoint of approximately <strong>$${cost.avg.toLocaleString()}</strong> as of 2026. Roof Manager generates accurate material take-offs in under 60 seconds, helping ${city.name} contractors price jobs competitively.</p>
+      <p class="text-xl text-blue-200 mb-8">The average cost to replace a roof on a 2,000 sq ft home in ${city.name} ranges from <strong>$${cost.low.toLocaleString()}</strong> to <strong>$${cost.high.toLocaleString()}</strong>, with a midpoint of approximately <strong>$${cost.avg.toLocaleString()}</strong> as of 2026. Roof Manager generates accurate material take-offs, helping ${city.name} contractors price jobs competitively.</p>
       <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg inline-block">Generate Accurate BOM — Free</a>
     </div>
   </section>
@@ -617,7 +617,7 @@ app.get('/roof-replacement-cost/:state/:city', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Get an Accurate ${city.name} Estimate</h2>
-      <p class="text-blue-200 mb-8">Roof Manager generates a complete material BOM for any ${city.name} property in under 60 seconds. Free to start.</p>
+      <p class="text-blue-200 mb-8">Roof Manager generates a complete material BOM for any ${city.name} property. Free to start.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>

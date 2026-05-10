@@ -60,7 +60,7 @@ function footerHTML(source: string = 'ca-page') {
 <footer style="background:#0A0A0A;border-top:1px solid rgba(255,255,255,0.06)" class="text-gray-500 py-10 text-center text-sm">
   <div class="max-w-4xl mx-auto px-4">
     <p class="text-gray-300 font-semibold mb-2">Roof Manager &mdash; Serving All 10 Provinces &amp; 3 Territories</p>
-    <p>&copy; ${new Date().getFullYear()} Roof Manager. Satellite roof measurement reports in under 60 seconds.</p>
+    <p>&copy; ${new Date().getFullYear()} Roof Manager. Satellite roof measurement reports for Canadian contractors.</p>
     <div class="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1">
       <a href="/" class="hover:text-white">Home</a>
       <a href="/pricing" class="hover:text-white">Pricing</a>
@@ -138,7 +138,7 @@ app.get('/', (c) => {
       <div class="grid md:grid-cols-3 gap-6">
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-maple-leaf text-[#00FF88] mr-2"></i>Built &amp; hosted in Canada</h3><p class="text-gray-400 text-sm">We&#39;re an Alberta company. Data stays on Canadian infrastructure. CAD pricing, bilingual support, and direct familiarity with provincial building codes.</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-shield-alt text-[#00FF88] mr-2"></i>Insurance-Ready Reports</h3><p class="text-gray-400 text-sm">Reports include pitch-corrected area, edge breakdowns, and material BOMs accepted by every major Canadian carrier for hail, wind, ice, and post-tropical storm claims.</p></div>
-        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-bolt text-[#00FF88] mr-2"></i>60-Second Turnaround</h3><p class="text-gray-400 text-sm">Google Solar API coverage is available for the vast majority of Canadian urban and suburban addresses. Edge-render means measurements happen in under a minute.</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-bolt text-[#00FF88] mr-2"></i>Nationwide Coverage</h3><p class="text-gray-400 text-sm">Google Solar API coverage is available for the vast majority of Canadian urban and suburban addresses. Measure from your phone, truck, or office.</p></div>
       </div>
     </div>
   </section>
@@ -308,7 +308,7 @@ app.get('/:province', (c) => {
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">What is the primary roofing peril in ${province.name}?</h3><p class="text-gray-400 text-sm">${province.stormProfile.primaryPeril}. ${province.roofingNotes}</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">What building code applies to roofing in ${province.name}?</h3><p class="text-gray-400 text-sm">${province.name} operates under the ${province.buildingCode.adopted}. ${province.buildingCode.notes}</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Which carriers do Roof Manager reports work with?</h3><p class="text-gray-400 text-sm">Every major Canadian carrier serving ${province.name}, including ${province.topInsurers.join(', ')}. Reports include pitch-corrected area, edge breakdowns, and material BOMs accepted as supporting documentation for storm, hail, wind, ice, and post-tropical claim types.</p></div>
-        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">How do I document a claim in ${province.name}?</h3><p class="text-gray-400 text-sm">Generate a Roof Manager satellite report, include the pitch-corrected area and edge breakdown, and submit the PDF to the adjuster. ${province.name} averages ${province.stormProfile.avgClaimsPerYear} roofing claims per year. Reports take under 60 seconds to generate.</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">How do I document a claim in ${province.name}?</h3><p class="text-gray-400 text-sm">Generate a Roof Manager satellite report, include the pitch-corrected area and edge breakdown, and submit the PDF to the adjuster. ${province.name} averages ${province.stormProfile.avgClaimsPerYear} roofing claims per year.</p></div>
       </div>
     </div>
   </section>

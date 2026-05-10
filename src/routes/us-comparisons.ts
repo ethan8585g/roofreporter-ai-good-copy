@@ -86,7 +86,7 @@ app.get('/eagleview-vs-roofmanager-us', (c) => {
     ['Volume Pack Price', '$5.95/report (100-pack)', 'No volume pricing'],
     ['Free Reports', '4 free on signup', 'None'],
     ['Credit card required to start', 'No', 'Yes'],
-    ['Turn-around time', '< 60 seconds', '2–4 hours'],
+    ['Report delivery', 'Email + dashboard', '2–4 hours'],
     ['Full CRM Included', '✓ Pipeline, jobs, contacts', '✗ Measurement only'],
     ['Invoicing & Proposals', '✓ Built-in', '✗ Not included'],
     ['AI Phone Secretary', '✓ 24/7 AI receptionist', '✗ Not included'],
@@ -193,7 +193,7 @@ app.get('/hover-alternative-us', (c) => {
     ['Invoicing & Proposals', '✓ Built-in', '✗ Add-on'],
     ['AI Phone Secretary', '✓ 24/7', '✗'],
     ['Mobile photo measurement', '✗ Satellite only', '✓ Photo-based + satellite'],
-    ['Turn-around time', '< 60 seconds', '1–3 hours'],
+    ['Report delivery', 'Email + dashboard', '1–3 hours'],
     ['US-based support', 'Email/chat', 'Phone + email'],
   ]
   const html = `<!DOCTYPE html><html lang="en-US"><head>
@@ -234,12 +234,12 @@ app.get('/pitchgauge-vs-roofmanager', (c) => {
     ['CRM / Pipeline', '✓ Full CRM', '✗ Not included'],
     ['Invoicing & Proposals', '✓ Built-in', '✗ Not included'],
     ['AI Phone Secretary', '✓ 24/7', '✗'],
-    ['Turn-around time', '< 60 seconds', 'Real-time (manual measurement)'],
+    ['Report delivery', 'Email + dashboard', 'Real-time (manual measurement)'],
     ['Accuracy', '~99% vs manual', 'Depends on user technique'],
     ['Works without physical access', '✓ Satellite — no roof access needed', '✗ Must be on or near roof'],
   ]
   const html = `<!DOCTYPE html><html lang="en-US"><head>
-  ${head('PitchGauge vs Roof Manager 2026 | US Contractor Comparison', 'PitchGauge vs Roof Manager — which roofing tool is right for US contractors? PitchGauge measures pitch manually; Roof Manager generates full satellite reports with material BOM in 60 seconds.')}
+  ${head('PitchGauge vs Roof Manager 2026 | US Contractor Comparison', 'PitchGauge vs Roof Manager — which roofing tool is right for US contractors? PitchGauge measures pitch manually; Roof Manager generates full satellite reports with material BOM.')}
   <link rel="canonical" href="https://www.roofmanager.ca/pitchgauge-vs-roofmanager">
   </head>
   <body class="min-h-screen" style="background:#0A0A0A;color:#fff">${nav()}
@@ -293,7 +293,7 @@ app.get('/pitchgauge-vs-roofmanager', (c) => {
       <h2 class="text-2xl font-black mb-8">FAQ — PitchGauge vs Roof Manager</h2>
       <div class="space-y-4">
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">What does PitchGauge do that Roof Manager doesn\'t?</h3><p class="text-gray-400 text-sm">PitchGauge is a real-time pitch measurement app designed for use on the roof or near the roofline. It\'s ideal for instant pitch verification during an on-site inspection. Roof Manager doesn\'t have a real-time inclinometer tool — it generates satellite reports without requiring physical roof access.</p></div>
-        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">What does Roof Manager do that PitchGauge doesn\'t?</h3><p class="text-gray-400 text-sm">Roof Manager generates complete satellite measurement reports — pitch-corrected area, edge breakdowns, material BOM, insurance-ready PDF — in under 60 seconds from anywhere. PitchGauge only measures pitch and requires physical proximity to the roof.</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">What does Roof Manager do that PitchGauge doesn\'t?</h3><p class="text-gray-400 text-sm">Roof Manager generates complete satellite measurement reports — pitch-corrected area, edge breakdowns, material BOM, insurance-ready PDF — from anywhere. PitchGauge only measures pitch and requires physical proximity to the roof.</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Can I use both PitchGauge and Roof Manager together?</h3><p class="text-gray-400 text-sm">Yes. Many contractors use Roof Manager for full satellite reports and use PitchGauge on-site for a quick sanity check or to confirm pitch on complex areas not fully captured by satellite data.</p></div>
       </div>
     </div>
@@ -304,7 +304,7 @@ app.get('/pitchgauge-vs-roofmanager', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Need Full Satellite Reports, Not Just Pitch?</h2>
-      <p class="text-blue-200 mb-8">Roof Manager generates complete satellite reports — area, pitch, edges, BOM — in under 60 seconds. $8 CAD per report. 4 free to start.</p>
+      <p class="text-blue-200 mb-8">Roof Manager generates complete satellite reports — area, pitch, edges, BOM. $8 CAD per report. 4 free to start.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
@@ -325,7 +325,7 @@ app.get('/roofr-vs-roofmanager-us', (c) => {
     ['Insurance workflow', '✓ Adjuster-ready PDF', '✓ Adjuster-ready PDF'],
     ['Homeowner portal', 'Limited', '✓ Strong homeowner UI'],
     ['Financing integration', '✗', '✓ Built-in financing'],
-    ['Turn-around time', '< 60 seconds', '1–2 hours'],
+    ['Report delivery', 'Email + dashboard', '1–2 hours'],
   ]
   const html = `<!DOCTYPE html><html lang="en-US"><head>
   ${head('Roofr vs Roof Manager 2026 — US Contractors | Comparison', 'Roofr vs Roof Manager for US roofing contractors. Roofr costs $15–$35/report + monthly subscription. Roof Manager costs $8/report, no subscription.')}
@@ -362,7 +362,7 @@ app.get('/roofsnap-vs-roofmanager-us', (c) => {
     ['Invoicing & Proposals', '✓ Full', '✓ Partial'],
     ['AI Phone Secretary', '✓ 24/7', '✗'],
     ['Insurance workflow', '✓ Adjuster-ready PDF', '✓ Adjuster-ready PDF'],
-    ['Turn-around time', '< 60 seconds', '2–4 hours'],
+    ['Report delivery', 'Email + dashboard', '2–4 hours'],
   ]
   const html = `<!DOCTYPE html><html lang="en-US"><head>
   ${head('RoofSnap vs Roof Manager 2026 — US Comparison | Roof Manager', 'RoofSnap vs Roof Manager for US contractors. RoofSnap: $10–$25/report + $89–$249/month subscription. Roof Manager: $8/report, no subscription.')}
@@ -400,7 +400,7 @@ app.get('/rooflink-vs-roofmanager', (c) => {
     ['Invoicing & Proposals', '✓ Full, built-in', '✓ Full'],
     ['AI Phone Secretary', '✓ 24/7', '✗'],
     ['Insurance workflow', '✓ Adjuster-ready PDF', 'Partial — via integrations'],
-    ['Turn-around time (measurement)', '< 60 seconds', 'N/A — external'],
+    ['Report delivery (measurement)', 'Email + dashboard', 'N/A — external'],
     ['Mobile app', '✓ PWA', '✓ iOS/Android native'],
   ]
   const html = `<!DOCTYPE html><html lang="en-US"><head>
@@ -463,7 +463,7 @@ app.get('/iroofing-vs-roofmanager', (c) => {
     ['Monthly subscription', 'No subscription', '$99–$199/month'],
     ['Satellite data source', 'Google Solar API + LiDAR', 'Nearmap + proprietary'],
     ['Accuracy', '~99% vs manual', '~99% vs manual'],
-    ['Turn-around time', '< 60 seconds', '1–2 hours'],
+    ['Report delivery', 'Email + dashboard', '1–2 hours'],
     ['Full CRM Included', '✓ Built-in', '✗ Measurement only'],
     ['Invoicing & Proposals', '✓ Built-in', '✗ Add-on'],
     ['AI Phone Secretary', '✓ 24/7', '✗'],

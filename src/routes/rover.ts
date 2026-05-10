@@ -42,7 +42,7 @@ ABOUT ROOF MANAGER — KNOW THIS INSIDE AND OUT
 ═══════════════════════════════════════════════════
 
 WHAT WE ARE:
-Roof Manager is an AI-powered roof measurement platform that generates detailed, professional roof reports from satellite imagery in under 60 seconds. We use Google's Solar API for real satellite data — these are NOT estimates or guesswork. We serve roofing professionals, estimators, home inspectors, insurance adjusters, solar installers, and property managers worldwide — anywhere Google satellite imagery is available, including Canada, the United States, and many other countries.
+Roof Manager is an AI-powered roof measurement platform that generates detailed, professional roof reports from satellite imagery. We use Google's Solar API for real satellite data — these are NOT estimates or guesswork. We serve roofing professionals, estimators, home inspectors, insurance adjusters, solar installers, and property managers worldwide — anywhere Google satellite imagery is available, including Canada, the United States, and many other countries.
 
 HEADQUARTERS: Alberta, Canada
 WEBSITE: roofmanager.ca (also at roofing-measurement-tool.pages.dev)
@@ -177,8 +177,8 @@ COVERAGE — 40+ COUNTRIES:
 - If imagery isn't available, we'll let you know — no charge
 
 DELIVERY:
-- Reports arrive in under 60 seconds, GUARANTEED
-- Instant download as PDF
+- Reports are emailed and posted to your dashboard as soon as they're ready
+- Download as PDF
 - Access reports anytime from your dashboard
 
 ═══════════════════════════════════════════════════
@@ -199,7 +199,7 @@ COMPETITIVE ADVANTAGES
 
 vs. Manual Measurement:
 - Save 1-2 hours per roof (no ladder, no tape measure, no safety risk)
-- Get measurements in < 60 seconds vs. 2-4 hours on-site
+- Get measurements from your desk vs. 2-4 hours on-site
 - Consistent accuracy without human error
 - Measure ANY property from your office or truck
 
@@ -227,7 +227,7 @@ Q: "What areas do you cover?"
 A: We're available in 40+ countries across 4 regions. North America & Caribbean: USA (95%+ building coverage), Canada, Mexico, Puerto Rico, The Bahamas, Antigua & Barbuda. Europe: UK, France, Germany, Spain, Italy, Portugal, Belgium, Austria, Switzerland, Denmark, Sweden, Norway, Finland, Ireland, Poland, Czechia, Greece. Asia-Pacific: Australia, Japan, New Zealand, Indonesia, Malaysia, Philippines, Taiwan, Thailand. South America: Brazil, Colombia, Peru. Best coverage is in urban/suburban areas. If imagery isn't available for a specific address, you won't be charged.
 
 Q: "How fast are reports?"
-A: Under 60 seconds, guaranteed. As soon as you enter the address and confirm, the report generates immediately. You can download the PDF right away.
+A: As soon as you enter the address and confirm, the report enters our queue. You'll receive an email with a download link as soon as it's ready, and the PDF will also be available in your dashboard.
 
 Q: "Can I try it for free?"
 A: Absolutely! Sign up at /customer/login — you get 4 completely free roof reports, no credit card required. Same full-featured reports that paid customers get.
@@ -268,7 +268,7 @@ RESPONSE GUIDELINES
 
 1. ALWAYS answer the visitor's question FIRST, then add your sales angle
 2. Keep responses 2-4 sentences unless the question needs more detail
-3. Use specific numbers and facts — $8 per report, < 60 seconds, 4 free reports
+3. Use specific numbers and facts — $8 per report, 4 free reports
 4. NEVER make up features, pricing, or capabilities not listed above
 5. If you genuinely don't know something, say: "That's a great question! I'd recommend reaching out to our team at sales@roofmanager.ca or filling out the contact form so we can get you the right answer."
 6. Always try to understand what brought them to the site and what their business does
@@ -714,7 +714,7 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('free') || msg.includes('trial') || msg.includes('try')) {
-    return "Absolutely! You get 4 completely FREE roof measurement reports when you sign up — no credit card required. They're the same full-featured reports our paying customers get. Sign up at /customer/login and you'll have your first report in under 60 seconds! 🎉"
+    return "Absolutely! You get 4 completely FREE roof measurement reports when you sign up — no credit card required. They're the same full-featured reports our paying customers get. Sign up at /customer/login to get started! 🎉"
   }
 
   if (msg.includes('report') && (msg.includes('what') || msg.includes('include') || msg.includes('in a'))) {
@@ -730,7 +730,7 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('fast') || msg.includes('quick') || msg.includes('how long') || msg.includes('delivery') || msg.includes('time')) {
-    return "Lightning fast! Reports arrive in under 60 seconds, guaranteed. Enter the address, confirm, and download your PDF — that's it. No waiting hours or days like some competitors. Try it now at /customer/login with 4 free reports! ⚡"
+    return "Enter the address, confirm, and we'll email you a download link as soon as your PDF is ready. No waiting hours or days like some competitors. Try it now at /customer/login with 4 free reports! ⚡"
   }
 
   if (msg.includes('brand') || msg.includes('logo') || msg.includes('custom')) {
@@ -758,11 +758,11 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('eagleview') || msg.includes('hover') || msg.includes('competitor') || msg.includes('compare') || msg.includes('vs') || msg.includes('versus')) {
-    return "Great comparison question! Roof Manager starts at $8/report (down to $5.95/report on the 100-Pack) vs. $15-$50+ with competitors, with instant delivery (< 60 seconds vs. 24-72 hours), and includes built-in CRM, invoicing, and D2D tools that others don't offer. Plus 4 free reports to test it out at /customer/login! 🏆"
+    return "Great comparison question! Roof Manager starts at $8/report (down to $5.95/report on the 100-Pack) vs. $15-$50+ with competitors, with much faster delivery than the 24-72 hour wait competitors charge for, and includes built-in CRM, invoicing, and D2D tools that others don't offer. Plus 4 free reports to test it out at /customer/login! 🏆"
   }
 
   if (msg.includes('drone')) {
-    return "Unlike drones, Roof Manager requires zero equipment ($0 startup vs. $1000+), no pilot license, works in any weather, and delivers results in under 60 seconds. It's the fastest, most affordable way to get accurate roof measurements. Try it free at /customer/login! 🚀"
+    return "Unlike drones, Roof Manager requires zero equipment ($0 startup vs. $1000+), no pilot license, and works in any weather. It's the most affordable way to get accurate roof measurements. Try it free at /customer/login! 🚀"
   }
 
   if (msg.includes('api') || msg.includes('integration') || msg.includes('developer')) {

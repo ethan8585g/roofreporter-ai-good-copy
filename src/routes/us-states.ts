@@ -98,7 +98,7 @@ function footerHTML(source: string = 'us-page') {
 <footer style="background:#0A0A0A;border-top:1px solid rgba(255,255,255,0.06)" class="text-gray-500 py-10 text-center text-sm">
   <div class="max-w-4xl mx-auto px-4">
     <p class="text-gray-300 font-semibold mb-2">Roof Manager — Serving All 50 US States &amp; Canada</p>
-    <p>&copy; ${new Date().getFullYear()} Roof Manager. Satellite roof measurement reports in under 60 seconds.</p>
+    <p>&copy; ${new Date().getFullYear()} Roof Manager. Satellite roof measurement reports for US &amp; Canadian contractors.</p>
     <div class="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1">
       <a href="/" class="hover:text-white">Home</a>
       <a href="/pricing" class="hover:text-white">Pricing</a>
@@ -174,7 +174,7 @@ app.get('/', (c) => {
       <div class="grid md:grid-cols-3 gap-6">
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-dollar-sign text-sky-400 mr-2"></i>CAD Pricing</h3><p class="text-gray-400 text-sm">Reports priced and billed in CAD. $8/report after 4 free — the lowest per-report price in the US market as of 2026.</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-file-invoice text-sky-400 mr-2"></i>Insurance-Ready Reports</h3><p class="text-gray-400 text-sm">Reports include pitch-corrected area, edge breakdowns, and material BOMs accepted by US insurance adjusters for hail, storm, and hurricane claims.</p></div>
-        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-bolt text-sky-400 mr-2"></i>60-Second Turnaround</h3><p class="text-gray-400 text-sm">Measure any US property from your phone or truck. Google Solar API data is available for 99% of US addresses in all 50 states.</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-bolt text-sky-400 mr-2"></i>Measure From Anywhere</h3><p class="text-gray-400 text-sm">Measure any US property from your phone or truck. Google Solar API data is available for 99% of US addresses in all 50 states.</p></div>
       </div>
     </div>
   </section>
@@ -356,7 +356,7 @@ app.get('/:state', (c) => {
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">What is the primary roofing peril in ${state.name}?</h3><p class="text-gray-400 text-sm">${state.stormProfile.primaryPeril}. ${state.roofingNotes}</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">What building code applies to roofing in ${state.name}?</h3><p class="text-gray-400 text-sm">${state.name} has adopted ${state.buildingCode.adoptedIRC}. ${state.buildingCode.notes}</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Which insurance companies cover roof damage in ${state.name}?</h3><p class="text-gray-400 text-sm">The top roofing insurance carriers in ${state.name} include ${state.topInsurers.join(', ')}. Roof Manager reports are accepted as supporting documentation for claims with these carriers.</p></div>
-        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">How do I document a storm damage claim in ${state.name}?</h3><p class="text-gray-400 text-sm">Generate a Roof Manager satellite report, include the pitch-corrected area and edge breakdown, and submit the PDF to the adjuster. ${state.name} averages ${state.stormProfile.avgClaimsPerYear} roofing claims per year. Reports take under 60 seconds to generate.</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">How do I document a storm damage claim in ${state.name}?</h3><p class="text-gray-400 text-sm">Generate a Roof Manager satellite report, include the pitch-corrected area and edge breakdown, and submit the PDF to the adjuster. ${state.name} averages ${state.stormProfile.avgClaimsPerYear} roofing claims per year.</p></div>
       </div>
     </div>
   </section>
@@ -465,7 +465,7 @@ app.get('/:state/:city', (c) => {
       <span class="inline-block px-4 py-1.5 bg-sky-500/20 border border-sky-400/30 rounded-full text-sm text-sky-300 mb-6"><i class="fas fa-map-marker-alt mr-2"></i>${cityData.name}, ${state.name}</span>
       <h1 class="text-4xl md:text-5xl font-black mb-6">Roof Measurement Software for<br><span class="text-sky-400">${cityData.name}, ${state.code}</span> Contractors</h1>
       <p class="text-xl text-blue-200 mb-4">${cityData.stormNarrative}</p>
-      <p class="text-blue-300 mb-8">Reports cost <strong>$8 CAD</strong> after 4 free reports. Insurance-ready documentation in under 60 seconds.</p>
+      <p class="text-blue-300 mb-8">Reports cost <strong>$8 CAD</strong> after 4 free reports. Insurance-ready documentation delivered to your inbox.</p>
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
         <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg">Get 4 Free Reports <i class="fas fa-arrow-right ml-2"></i></a>
         <a href="/pricing" class="px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-lg border border-white/20">View Pricing (CAD)</a>
@@ -493,7 +493,7 @@ app.get('/:state/:city', (c) => {
       <h2 class="text-2xl font-black text-center mb-6">Insurance Claims in ${cityData.name}, ${state.code}</h2>
       <div class="bg-white/5 border border-white/10 rounded-xl p-6">
         <p class="text-gray-300 leading-relaxed">${cityData.insuranceNote}</p>
-        <p class="text-gray-400 text-sm mt-3">Roof Manager reports include all measurements required for ${state.name} insurance claim documentation. Generate a report in under 60 seconds and submit the PDF directly to the adjuster.</p>
+        <p class="text-gray-400 text-sm mt-3">Roof Manager reports include all measurements required for ${state.name} insurance claim documentation. Generate a report and submit the PDF directly to the adjuster.</p>
       </div>
     </div>
   </section>
@@ -503,7 +503,7 @@ app.get('/:state/:city', (c) => {
     <div class="max-w-4xl mx-auto px-4">
       <h2 class="text-2xl font-black text-center mb-8">FAQ — ${cityData.name} Roofing</h2>
       <div class="space-y-4">
-        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Does Roof Manager work in ${cityData.name}?</h3><p class="text-gray-400 text-sm">Yes. Reports cost $8 CAD after 4 free. Google Solar API coverage is excellent for ${cityData.name} addresses. Insurance-ready PDF in under 60 seconds.</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Does Roof Manager work in ${cityData.name}?</h3><p class="text-gray-400 text-sm">Yes. Reports cost $8 CAD after 4 free. Google Solar API coverage is excellent for ${cityData.name} addresses. Insurance-ready PDF delivered to your inbox.</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">What roofing insurance carriers operate in ${cityData.name}?</h3><p class="text-gray-400 text-sm">${cityData.insuranceNote}</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">How much does a roof measurement report cost in ${cityData.name}?</h3><p class="text-gray-400 text-sm">$8 CAD per report after your 4 free trial reports. Volume packs: 25 for $175 ($7/report) and 100 for $595 ($5.95/report). All prices in CAD.</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Does Roof Manager work for insurance claims in ${cityData.name}?</h3><p class="text-gray-400 text-sm">Yes. Roof Manager reports include pitch-corrected area, edge breakdowns, and material BOMs accepted by ${state.name} insurance adjusters for storm and weather damage documentation.</p></div>

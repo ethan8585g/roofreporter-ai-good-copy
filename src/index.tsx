@@ -8252,7 +8252,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <div class="bg-[#111111] rounded-2xl border border-white/10 grid grid-cols-2 lg:grid-cols-4 divide-x divide-white/5">
           <div class="p-6 lg:p-8 text-center group transition-colors duration-300 rounded-l-2xl"><div class="w-10 h-10 mx-auto mb-3 rounded-xl bg-[#00FF88]/10 flex items-center justify-center group-hover:bg-[#00FF88]/20 transition-colors"><i class="fas fa-file-alt text-[#00FF88] text-sm"></i></div><div class="text-3xl lg:text-4xl font-black mb-1 stat-value" data-count="10000" data-suffix="+" data-prefix="">0+</div><div class="text-[11px] text-gray-500 font-semibold uppercase tracking-widest">Reports Generated</div></div>
           <div class="p-6 lg:p-8 text-center group transition-colors duration-300"><div class="w-10 h-10 mx-auto mb-3 rounded-xl bg-[#00FF88]/10 flex items-center justify-center group-hover:bg-[#00FF88]/20 transition-colors"><i class="fas fa-bullseye text-[#00FF88] text-sm"></i></div><div class="text-3xl lg:text-4xl font-black mb-1 stat-value" data-count="98" data-suffix="%" data-prefix="">0%</div><div class="text-[11px] text-gray-500 font-semibold uppercase tracking-widest">Measurement Accuracy</div></div>
-          <div class="p-6 lg:p-8 text-center group transition-colors duration-300"><div class="w-10 h-10 mx-auto mb-3 rounded-xl bg-[#00FF88]/10 flex items-center justify-center group-hover:bg-[#00FF88]/20 transition-colors"><i class="fas fa-bolt text-[#00FF88] text-sm"></i></div><div class="text-3xl lg:text-4xl font-black mb-1 stat-value" data-count="60" data-suffix="s" data-prefix="<">&lt;0s</div><div class="text-[11px] text-gray-500 font-semibold uppercase tracking-widest">Average Delivery</div></div>
+          <div class="p-6 lg:p-8 text-center group transition-colors duration-300"><div class="w-10 h-10 mx-auto mb-3 rounded-xl bg-[#00FF88]/10 flex items-center justify-center group-hover:bg-[#00FF88]/20 transition-colors"><i class="fas fa-bolt text-[#00FF88] text-sm"></i></div><div class="text-3xl lg:text-4xl font-black mb-1 stat-value" data-count="200" data-suffix="+" data-prefix="">0+</div><div class="text-[11px] text-gray-500 font-semibold uppercase tracking-widest">Active Contractors</div></div>
           <div class="p-6 lg:p-8 text-center group transition-colors duration-300 rounded-r-2xl"><div class="w-10 h-10 mx-auto mb-3 rounded-xl bg-[#00FF88]/10 flex items-center justify-center group-hover:bg-[#00FF88]/20 transition-colors"><i class="fas fa-dollar-sign text-[#00FF88] text-sm"></i></div><div class="text-3xl lg:text-4xl font-black mb-1 stat-value" data-count="8" data-suffix="" data-prefix="$">$0</div><div class="text-[11px] text-gray-500 font-semibold uppercase tracking-widest">Per Report (CAD)</div></div>
         </div>
       </div>
@@ -11833,7 +11833,7 @@ const comparisonConfig: Record<string, {
     ],
     faqs: [
       { q: 'How much does EagleView cost per report in 2026?', a: 'EagleView PremiumResidential reports cost $65–85 USD in 2026. Their ProScale (3D) tier costs $95–120 USD per report. For Canadian contractors, USD pricing adds a 30–35% currency conversion premium, bringing effective CAD costs to $88–162 per report.' },
-      { q: 'What is a cheaper alternative to EagleView for Canadian contractors?', a: 'RoofManager charges $8 CAD per AI-powered satellite measurement report — approximately 90% less than EagleView. Reports are delivered in under 60 seconds (vs 24–48 hours for EagleView), include a full material BOM and solar analysis at no extra charge, and the full CRM is included free.' },
+      { q: 'What is a cheaper alternative to EagleView for Canadian contractors?', a: 'RoofManager charges $8 CAD per AI-powered satellite measurement report — approximately 90% less than EagleView. Reports are delivered fast (vs 24–48 hours for EagleView), include a full material BOM and solar analysis at no extra charge, and the full CRM is included free.' },
       { q: 'Is RoofManager as accurate as EagleView?', a: 'For typical residential properties with good satellite imagery, both platforms achieve 2–5% accuracy versus manual measurements. RoofManager uses Google\'s LiDAR-calibrated Solar API data and displays a per-report confidence score. EagleView uses their proprietary aerial imagery. For standard residential estimating, the accuracy difference is not material.' },
       { q: 'How much does a Canadian contractor save by switching from EagleView to RoofManager?', a: 'At 20 reports per month, switching from EagleView (at $80 USD average × 1.35 = $108 CAD) to RoofManager ($8 CAD) saves $100 CAD per report, or $2,000 CAD per month — over $24,000 CAD per year.' },
       { q: 'Does RoofManager work for insurance claims like EagleView?', a: 'RoofManager reports are accepted by many insurance adjusters as supporting documentation for roofing claims. The reports include pitch-corrected sloped area, full edge breakdowns, and material estimates in a professional PDF format. For adjusters who specifically require EagleView, a hybrid approach (RoofManager for retail estimates, EagleView selectively for insurance claims) is the most cost-effective strategy.' },
@@ -12056,7 +12056,7 @@ function getComparisonPageHTML(slug: string): string {
         </div>
         <div class="bg-[#111111] border border-white/10 rounded-2xl p-6">
           <div class="flex items-center gap-1 mb-3">${'<i class="fas fa-star text-[#00FF88] text-sm"></i>'.repeat(5)}</div>
-          <p class="text-gray-400 text-sm leading-relaxed mb-4">"The 60-second reports changed how I operate. I quote jobs from my truck the same day instead of waiting. And not having to convert USD every month is one less headache."</p>
+          <p class="text-gray-400 text-sm leading-relaxed mb-4">"The reports changed how I operate. I quote jobs from my truck the same day instead of waiting. And not having to convert USD every month is one less headache."</p>
           <div class="flex items-center gap-3"><div class="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center text-white font-bold text-xs">SK</div><div><p class="font-semibold text-white text-xs">Sandra K.</p><p class="text-[10px] text-gray-500">Summit Exteriors, Alberta</p></div></div>
         </div>
       </div>
@@ -12140,9 +12140,9 @@ const featureHubConfig: Record<string, {
     slug: 'measurements', title: 'Roof Measurement Report Software', icon: 'fas fa-satellite', accentColor: '#00FF88',
     heroImage: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1920&q=80&auto=format&fit=crop',
     ogImage: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1200&q=80&auto=format&fit=crop',
-    headline: 'Roof Measurement Report Software — Contractor-Grade Reports in Under 60 Seconds',
+    headline: 'Roof Measurement Report Software — Contractor-Grade Reports',
     subhead: 'Satellite-powered 3D analysis with 99% accuracy. Stop climbing roofs — measure from your truck.',
-    metaDesc: 'Roof measurement report software for roofing contractors. Satellite 3D area, pitch, edges, and material BOM in under 60 seconds. 99% accuracy. Try free.',
+    metaDesc: 'Roof measurement report software for roofing contractors. Satellite 3D area, pitch, edges, and material BOM. 99% accuracy. Try free.',
     capabilities: [
       'Full 3D roof area with per-segment pitch adjustment',
       'Complete edge breakdown: ridge, hip, valley, eave, and rake lengths',
@@ -12299,7 +12299,7 @@ const guidesConfig: Record<string, GuideConfig> = {
   'order-measurement-report': {
     slug: 'order-measurement-report',
     title: 'How to Order a Measurement Report',
-    subtitle: 'Get a surveyor-grade PDF for any roof in under 60 seconds.',
+    subtitle: 'Get a surveyor-grade PDF for any roof.',
     readTime: 4,
     icon: 'fa-ruler-combined',
     tldr: 'To order a roof measurement report on Roof Manager: sign in, click "Order Report", type the address, confirm the satellite trace, and place the order. A branded PDF with total area, eave/ridge/hip/valley lengths, pitch, and material takeoff arrives in about 45 seconds. First 4 reports are free; after that, pricing starts at $7 per report.',
@@ -12331,10 +12331,10 @@ const guidesConfig: Record<string, GuideConfig> = {
     subtitle: 'Turn door-knocking into a closed-loop sales machine with live territory maps, instant measurements, and CRM hand-off.',
     readTime: 6,
     icon: 'fa-map-marked-alt',
-    tldr: 'To run door-to-door roofing sales with Roof Manager: draw a territory on the map, assign reps, knock and log each door with one tap (Not Home, Follow-Up, Appointment, Sold), measure any roof on the porch in under 60 seconds, and book inspections directly onto your calendar. Reps who measure on the porch book 2.4× more inspections than reps who say "I\'ll email you later".',
+    tldr: 'To run door-to-door roofing sales with Roof Manager: draw a territory on the map, assign reps, knock and log each door with one tap (Not Home, Follow-Up, Appointment, Sold), measure any roof on the porch, and book inspections directly onto your calendar. Reps who measure on the porch book 2.4× more inspections than reps who say "I\'ll email you later".',
     faqs: [
       { q: 'What is the best app for door-to-door roofing sales?', a: 'Roof Manager\'s D2D module combines territory mapping, instant satellite measurements, disposition logging, and calendar booking in one mobile app — purpose-built for roofers rather than a generic CRM.' },
-      { q: 'Can I measure a roof from a homeowner\'s porch?', a: 'Yes. Tap "Measure this roof" on your phone and you get total area, pitch, and a rough material list in under 60 seconds, straight from satellite imagery. No drone, no ladder.' },
+      { q: 'Can I measure a roof from a homeowner\'s porch?', a: 'Yes. Tap "Measure this roof" on your phone and you get total area, pitch, and a rough material list, straight from satellite imagery. No drone, no ladder.' },
       { q: 'How do I stop reps from double-knocking the same house?', a: 'Every door pin changes colour based on its disposition. Reps see in real time which houses have already been knocked by teammates, so no street gets hit twice.' },
       { q: 'Can Roof Manager overlay hail storm data on the map?', a: 'Yes. Import hail swaths from your weather feed or the Storm Scout module and only knock confirmed impact zones — the highest-converting leads in roofing.' },
       { q: 'How does the hand-off from canvasser to closer work?', a: 'When a rep books an appointment, a Pipeline card is created automatically with the address, roof measurements, photos, disposition history, and notes. The closer walks up already fully briefed.' },
@@ -12344,7 +12344,7 @@ const guidesConfig: Record<string, GuideConfig> = {
       { title: 'Define your territory', body: 'Open the D2D dashboard and draw a polygon around the neighbourhood you\'re canvassing, or select by postal code. Assign reps to specific territories so no one overlaps and every street gets covered.' },
       { title: 'Load storm or age data (optional)', body: 'For storm-chase campaigns, overlay the hail swath from your weather feed. For retail, import tax-roll or parcel age data and filter for roofs 18+ years old — these convert 3× better than cold blocks.' },
       { title: 'Knock and log in one tap', body: 'Every rep has the mobile app open on their phone. Each pin turns into a disposition in one tap: Not Home, Follow-Up, Appointment, Sold, Not Interested. Pins change colour so the rep never re-knocks the same house.' },
-      { title: 'Measure on the porch', body: 'Homeowner opens the door? While you\'re introducing yourself, tap "Measure this roof" — you\'ll have total area, pitch, and a rough material list in under 60 seconds. Show them the satellite trace on your phone. This alone closes appointments.', tip: 'Reps who measure on the porch book 2.4× more inspections than reps who say "I\'ll email you later."' },
+      { title: 'Measure on the porch', body: 'Homeowner opens the door? While you\'re introducing yourself, tap "Measure this roof" — you\'ll have total area, pitch, and a rough material list right there. Show them the satellite trace on your phone. This alone closes appointments.', tip: 'Reps who measure on the porch book 2.4× more inspections than reps who say "I\'ll email you later."' },
       { title: 'Book the inspection on the spot', body: 'Tap "Book Appointment" — the homeowner sees your live calendar and picks a slot. It syncs to your Google/Outlook calendar automatically and creates a Pipeline card in the CRM.' },
       { title: 'Hand off cleanly to the closer', body: 'When the inspection happens, the closer walks up already knowing the roof area, age, damage notes, and the rep\'s conversation history. No lost sticky notes. No "who talked to this guy last Tuesday?"' },
       { title: 'Coach from the data', body: 'Manager dashboard shows per-rep knocks, contacts, appointments, and close rate in real time. Use it in your morning huddle — the reps who measure on the porch, book on the porch, and log every door win. The data proves it so you don\'t have to.' },
@@ -12658,7 +12658,7 @@ function getHowItWorksPageHTML(): string {
     { n: 1, color: '#00FF88', icon: 'fa-search-location', title: 'Enter the Address', desc: 'Search any address worldwide. Google Maps pinpoints the exact roof instantly — no ladders, no drones, no tape measures.' },
     { n: 2, color: '#22d3ee', icon: 'fa-sliders-h', title: 'Configure Details', desc: 'Add homeowner info, company details, pitch overrides, and delivery options. Takes about 30 seconds.' },
     { n: 3, color: '#a78bfa', icon: 'fa-credit-card', title: 'Order Instantly', desc: 'First 4 reports are FREE. After that just $8 CAD per report, or save with volume packs as low as $5.95/report.' },
-    { n: 4, color: '#00FF88', icon: 'fa-file-pdf', title: 'Get Your PDF', desc: 'Professional branded report with 3D area, pitch, edges, BOM, and solar data. Delivered in under 60 seconds.' },
+    { n: 4, color: '#00FF88', icon: 'fa-file-pdf', title: 'Get Your PDF', desc: 'Professional branded report with 3D area, pitch, edges, BOM, and solar data. Delivered by email and to your dashboard.' },
   ]
   const howToSchema = JSON.stringify({
     '@context': 'https://schema.org', '@type': 'HowTo',
@@ -12672,7 +12672,7 @@ function getHowItWorksPageHTML(): string {
 <head>
   ${getHeadTags()}
   <title>How It Works — Address to Roof Report in 4 Steps | Roof Manager</title>
-  <meta name="description" content="See how Roof Manager turns any address into a surveyor-grade roof measurement report in under 60 seconds. Four simple steps, zero ladders.">
+  <meta name="description" content="See how Roof Manager turns any address into a surveyor-grade roof measurement report. Four simple steps, zero ladders.">
   <link rel="canonical" href="${base}/how-it-works">
   <meta property="og:title" content="How Roof Manager Works">
   <meta property="og:description" content="Address to report in 4 steps. No ladders, no drones.">
@@ -12977,7 +12977,7 @@ function getFeatureHubPageHTML(featureSlug: string): string {
       { step: 'Enter the property address', text: 'Type any US or Canadian address into the Order Report form. Autocomplete confirms the roof outline on satellite.' },
       { step: 'Configure pitch and waste factor', text: 'Defaults work for 95% of residential roofs; override pitch per segment or waste factor if the job calls for it.' },
       { step: 'Generate the report', text: 'The engine pulls Google Solar API LiDAR + imagery, computes 3D sloped area, pitch per plane, and edge lengths, and cross-checks against segment totals.' },
-      { step: 'Deliver the branded PDF', text: 'Receive a branded PDF with material BOM in under 60 seconds. First 4 reports are free — no credit card.' },
+      { step: 'Deliver the branded PDF', text: 'Receive a branded PDF with material BOM by email and in your dashboard. First 4 reports are free — no credit card.' },
     ],
     'crm': [
       { step: 'Create the lead', text: 'Add leads manually, from a measurement report, via the AI receptionist, or via a website contact form.' },
@@ -13269,7 +13269,7 @@ function getFeatureCityPageHTML(slug: string, city: { name: string; province: st
   const base = 'https://www.roofmanager.ca'
   const today = new Date().toISOString().substring(0, 10)
   const title = `AI Roof Measurement Software in ${city.name}, ${city.province}`
-  const desc = `Roof Manager provides AI-powered satellite roof measurement reports for roofing contractors in ${city.name}, ${city.province}. Accurate 3D area, pitch, edges, and material BOM in under 60 seconds. Start free.`
+  const desc = `Roof Manager provides AI-powered satellite roof measurement reports for roofing contractors in ${city.name}, ${city.province}. Accurate 3D area, pitch, edges, and material BOM. Start free.`
   const breadcrumbSchema = JSON.stringify({
     '@context': 'https://schema.org', '@type': 'BreadcrumbList',
     itemListElement: [
@@ -13300,7 +13300,7 @@ function getFeatureCityPageHTML(slug: string, city: { name: string; province: st
     '@context': 'https://schema.org', '@type': 'FAQPage',
     mainEntity: [
       { '@type': 'Question', name: `How accurate are roof measurement reports in ${city.name}?`, acceptedAnswer: { '@type': 'Answer', text: `For properties in ${city.name}, ${city.province} with high-quality satellite imagery, accuracy is typically within 2–5% of manual measurements. Most urban ${city.name} addresses qualify as high-quality. Every report includes a confidence score.` } },
-      { '@type': 'Question', name: `How fast can I get a roof measurement report in ${city.name}?`, acceptedAnswer: { '@type': 'Answer', text: `Reports for ${city.name} addresses are delivered in under 60 seconds. Enter the property address, and the AI calculates 3D area, pitch, and material estimates automatically.` } },
+      { '@type': 'Question', name: `How fast can I get a roof measurement report in ${city.name}?`, acceptedAnswer: { '@type': 'Answer', text: `Once your order is submitted, we email a download link as soon as your report is ready. Enter the property address, and the AI calculates 3D area, pitch, and material estimates automatically.` } },
       { '@type': 'Question', name: `What does a roof measurement report for ${city.name} include?`, acceptedAnswer: { '@type': 'Answer', text: `Every ${city.name} report includes: total 3D roof area with pitch adjustment, ridge/hip/valley/eave/rake edge lengths, material bill of materials (shingles, underlayment, nails), solar potential data, and a branded PDF report.` } },
       { '@type': 'Question', name: `Is Roof Manager available for all areas in ${city.name}?`, acceptedAnswer: { '@type': 'Answer', text: `Yes. Roof Manager uses Google's Solar API which covers the vast majority of ${city.name} and surrounding areas including ${city.province} suburbs. If satellite imagery is unavailable for a specific address, no charge is applied.` } },
       { '@type': 'Question', name: `How much does a roof measurement report in ${city.name} cost?`, acceptedAnswer: { '@type': 'Answer', text: `Reports start at $8 CAD each. New ${city.name} contractors receive 4 free reports with no credit card required. Volume packs offer significant savings for high-frequency users.` } },
@@ -13371,7 +13371,7 @@ function getFeatureCityPageHTML(slug: string, city: { name: string; province: st
         <div>
           <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold mb-6"><i class="fas fa-map-marker-alt"></i> ${city.name}, ${city.province}</div>
           <h1 class="text-4xl lg:text-5xl font-black text-white mb-6 leading-tight tracking-tight">${title}</h1>
-          <p class="text-lg text-gray-400 mb-8 leading-relaxed">Roof Manager gives ${city.name} roofing contractors satellite-powered roof measurement reports with 99% accuracy in under 60 seconds. Includes full CRM, invoicing, and AI phone secretary.</p>
+          <p class="text-lg text-gray-400 mb-8 leading-relaxed">Roof Manager gives ${city.name} roofing contractors satellite-powered roof measurement reports with 99% accuracy. Includes full CRM, invoicing, and AI phone secretary.</p>
           <div class="flex flex-col sm:flex-row gap-3 mb-6">
             <a href="/register" onclick="rrTrack('cta_click',{location:'feature_city_${slug}_hero'})" class="inline-flex items-center justify-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-8 rounded-xl text-base shadow-xl shadow-[#00FF88]/20 transition-all hover:scale-[1.02]"><i class="fas fa-rocket"></i> Start Free in ${city.name}</a>
             <a href="/roof-measurement/${slug}" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-3.5 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-satellite-dish text-[#00FF88]"></i> View ${city.name} Coverage</a>
@@ -13397,7 +13397,7 @@ function getFeatureCityPageHTML(slug: string, city: { name: string; province: st
     <div class="max-w-5xl mx-auto px-4">
       <h2 class="text-2xl lg:text-3xl font-black text-white mb-8 text-center">Why ${city.name} Contractors Choose Roof Manager</h2>
       <div class="grid md:grid-cols-3 gap-6">
-        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><div class="w-9 h-9 bg-[#00FF88]/10 rounded-lg flex items-center justify-center mb-3"><i class="fas fa-bolt text-[#00FF88] text-sm"></i></div><h3 class="font-bold text-white text-sm mb-2">60-Second Reports</h3><p class="text-gray-500 text-xs leading-relaxed">No more climbing every ${city.name} roof with a tape measure. Get accurate measurements from your truck in under a minute.</p></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><div class="w-9 h-9 bg-[#00FF88]/10 rounded-lg flex items-center justify-center mb-3"><i class="fas fa-bolt text-[#00FF88] text-sm"></i></div><h3 class="font-bold text-white text-sm mb-2">Measure From Anywhere</h3><p class="text-gray-500 text-xs leading-relaxed">No more climbing every ${city.name} roof with a tape measure. Get accurate measurements from your truck or office.</p></div>
         <div class="bg-[#111] border border-white/10 rounded-xl p-5"><div class="w-9 h-9 bg-[#22d3ee]/10 rounded-lg flex items-center justify-center mb-3"><i class="fas fa-dollar-sign text-[#22d3ee] text-sm"></i></div><h3 class="font-bold text-white text-sm mb-2">Save vs. EagleView</h3><p class="text-gray-500 text-xs leading-relaxed">At $8 CAD per report vs. $50–100 from EagleView, ${city.name} contractors save thousands per month on measurement costs.</p></div>
         <div class="bg-[#111] border border-white/10 rounded-xl p-5"><div class="w-9 h-9 bg-[#a78bfa]/10 rounded-lg flex items-center justify-center mb-3"><i class="fas fa-users text-[#a78bfa] text-sm"></i></div><h3 class="font-bold text-white text-sm mb-2">Full CRM Included</h3><p class="text-gray-500 text-xs leading-relaxed">Manage your entire ${city.name} roofing pipeline — leads, estimates, jobs, invoices — all in one platform. Free forever.</p></div>
       </div>
@@ -13410,7 +13410,7 @@ function getFeatureCityPageHTML(slug: string, city: { name: string; province: st
       <h2 class="text-2xl font-black text-white mb-8 text-center">Frequently Asked Questions — ${city.name}</h2>
       <div class="space-y-3">
         <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="font-bold text-white text-sm mb-2">How accurate are roof measurement reports in ${city.name}?</h3><p class="text-gray-400 text-sm leading-relaxed">For properties in ${city.name}, ${city.province} with high-quality satellite imagery, accuracy is typically within 2–5% of manual measurements. Most urban ${city.name} addresses qualify as high-quality. Every report includes a confidence score.</p></div>
-        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="font-bold text-white text-sm mb-2">How fast can I get a report for a ${city.name} property?</h3><p class="text-gray-400 text-sm leading-relaxed">Reports for ${city.name} addresses are delivered in under 60 seconds. Enter the address and the AI calculates 3D area, pitch, and material estimates automatically.</p></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="font-bold text-white text-sm mb-2">How fast can I get a report for a ${city.name} property?</h3><p class="text-gray-400 text-sm leading-relaxed">Once your order is submitted, we email a download link as soon as your report is ready. Enter the address and the AI calculates 3D area, pitch, and material estimates automatically.</p></div>
         <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="font-bold text-white text-sm mb-2">Is Roof Manager available across all of ${city.name}?</h3><p class="text-gray-400 text-sm leading-relaxed">Yes. Roof Manager covers the vast majority of ${city.name} and the surrounding ${city.province} area. If satellite imagery is unavailable for a specific address, no charge is applied.</p></div>
       </div>
     </div>
@@ -13430,7 +13430,7 @@ function getFeatureCityPageHTML(slug: string, city: { name: string; province: st
   <!-- CTA -->
   <section class="py-16 border-t border-white/5" style="background:#0A0A0A">
     <div class="max-w-3xl mx-auto px-4 text-center">
-      <h2 class="text-2xl font-black text-white mb-4">Start Measuring ${city.name} Roofs in 60 Seconds</h2>
+      <h2 class="text-2xl font-black text-white mb-4">Start Measuring ${city.name} Roofs Today</h2>
       <p class="text-gray-400 mb-8 text-sm">No credit card. No commitment. 4 free reports included.</p>
       <a href="/register" onclick="rrTrack('cta_click',{location:'feature_city_${slug}_footer'})" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.03]"><i class="fas fa-rocket"></i> Start Free — ${city.name}</a>
     </div>
@@ -14763,7 +14763,7 @@ function getXactimateAlternativeHTML(): string {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: 'Roof Manager — Xactimate Alternative for Roofing Contractors',
-    description: 'Roof Manager produces pitch-corrected roof measurement reports that align with Xactimate F9 line items — $8 per report versus Xactimate subscriptions, delivered in 60 seconds.',
+    description: 'Roof Manager produces pitch-corrected roof measurement reports that align with Xactimate F9 line items — $8 per report versus Xactimate subscriptions.',
     brand: { '@type': 'Brand', name: 'Roof Manager' },
     image: `${base}/static/logo.png?v=20260504`,
     url: `${base}/xactimate-alternative`,
@@ -14815,7 +14815,7 @@ function getXactimateAlternativeHTML(): string {
         <a href="#compare" class="bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl border border-white/10">Compare side-by-side</a>
         <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl border border-white/10"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Report</a>
       </div>
-      <p class="text-xs text-gray-500 mt-4">No credit card &middot; 60-second signup &middot; Accepted by every major US carrier</p>
+      <p class="text-xs text-gray-500 mt-4">No credit card &middot; Accepted by every major US carrier</p>
     </div>
   </section>
 
@@ -14831,7 +14831,7 @@ function getXactimateAlternativeHTML(): string {
         <tbody>
           <tr><td class="p-4 text-gray-400 font-semibold border-b border-white/5">Pricing model</td><td class="p-4 border-b border-white/5">$8 per report (no subscription)</td><td class="p-4 border-b border-white/5">$155&ndash;$350+/month subscription</td></tr>
           <tr><td class="p-4 text-gray-400 font-semibold border-b border-white/5">Typical annual cost (1 user)</td><td class="p-4 border-b border-white/5">~$960 (120 reports/yr)</td><td class="p-4 border-b border-white/5">~$1,860+</td></tr>
-          <tr><td class="p-4 text-gray-400 font-semibold border-b border-white/5">Time to first report</td><td class="p-4 border-b border-white/5">60 seconds</td><td class="p-4 border-b border-white/5">Depends on inputs</td></tr>
+          <tr><td class="p-4 text-gray-400 font-semibold border-b border-white/5">Report delivery</td><td class="p-4 border-b border-white/5">Email + dashboard</td><td class="p-4 border-b border-white/5">Depends on inputs</td></tr>
           <tr><td class="p-4 text-gray-400 font-semibold border-b border-white/5">Measurement source</td><td class="p-4 border-b border-white/5">Google Solar API LiDAR</td><td class="p-4 border-b border-white/5">Manual input + sketch</td></tr>
           <tr><td class="p-4 text-gray-400 font-semibold border-b border-white/5">Satellite image included</td><td class="p-4 border-b border-white/5">Yes, high-res</td><td class="p-4 border-b border-white/5">Not native</td></tr>
           <tr><td class="p-4 text-gray-400 font-semibold border-b border-white/5">Edge categories</td><td class="p-4 border-b border-white/5">Ridge, hip, valley, eave, rake (linear ft)</td><td class="p-4 border-b border-white/5">Manual entry</td></tr>
@@ -14847,7 +14847,7 @@ function getXactimateAlternativeHTML(): string {
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black text-white text-center mb-8">How Roof Manager plugs into the Xactimate workflow</h2>
       <div class="space-y-4 text-gray-300">
-        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="text-white font-bold mb-2">1. Measure the roof from satellite (60 seconds)</h3><p class="text-sm">Enter the property address. Roof Manager generates a pitch-corrected sloped area, projected footprint, and every edge length (ridge, hip, valley, eave, rake) using Google's LiDAR-calibrated Solar API.</p></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="text-white font-bold mb-2">1. Measure the roof from satellite</h3><p class="text-sm">Enter the property address. Roof Manager generates a pitch-corrected sloped area, projected footprint, and every edge length (ridge, hip, valley, eave, rake) using Google's LiDAR-calibrated Solar API.</p></div>
         <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="text-white font-bold mb-2">2. Pull material quantities into Xactimate F9 lines</h3><p class="text-sm">The BOM section gives you shingle squares, starter strip, ridge cap linear feet, ice-and-water shield, underlayment rolls, drip edge, and flashing — in the exact units Xactimate's F9 line items expect.</p></div>
         <div class="bg-[#111] border border-white/10 rounded-xl p-5"><h3 class="text-white font-bold mb-2">3. Submit the PDF with your supplement</h3><p class="text-sm">Every report exports as a branded PDF with satellite imagery, pitch diagram, and confidence score. Adjusters accept it as supporting documentation for the Xactimate estimate.</p></div>
       </div>
@@ -14895,11 +14895,11 @@ function getXactimateAlternativeHTML(): string {
 function getRoofingSoftwareComparisonHubHTML(): string {
   const base = 'https://www.roofmanager.ca'
   const comparisons: Array<{ name: string; slug: string; href: string; blurb: string }> = [
-    { name: 'EagleView', slug: 'eagleview', href: '/cheaper-alternative-to-eagleview', blurb: '$8/report vs $60–$90/report. 60 seconds vs hours/days. Same accuracy for most residential.' },
+    { name: 'EagleView', slug: 'eagleview', href: '/cheaper-alternative-to-eagleview', blurb: '$8/report vs $60–$90/report. Faster than the hours-to-days wait. Same accuracy for most residential.' },
     { name: 'Xactimate', slug: 'xactimate', href: '/xactimate-alternative', blurb: '$8/report vs $155+/month subscription. Pitch-corrected measurement output compatible with F9 line items.' },
     { name: 'Roofr', slug: 'roofr', href: '/roofr-alternative', blurb: 'Transparent $8/report pricing vs tiered subscription. Includes CRM and AI secretary at no extra cost.' },
     { name: 'Roofr (pricing complaints)', slug: 'roofr-pricing', href: '/roofr-pricing-complaints', blurb: 'Why roofers switch away from Roofr — subscription creep, report caps, and hidden fees.' },
-    { name: 'RoofSnap', slug: 'roofsnap', href: '/roofsnap-vs-roofmanager', blurb: '60-second satellite reports vs manual sketching workflow. No drawing required.' },
+    { name: 'RoofSnap', slug: 'roofsnap', href: '/roofsnap-vs-roofmanager', blurb: 'Automated satellite reports vs manual sketching workflow. No drawing required.' },
     { name: 'Hover', slug: 'hover', href: '/hover-alternative-us', blurb: '$8/report vs $33–$55/report plus monthly subscription. No photo-walk required — pure satellite.' },
     { name: 'PitchGauge', slug: 'pitchgauge', href: '/pitchgauge-vs-roofmanager', blurb: 'Full satellite reports instead of just pitch readings. No physical roof access needed.' },
     { name: 'RoofLink', slug: 'rooflink', href: '/rooflink-vs-roofmanager', blurb: 'Bundled measurement + CRM + AI secretary vs per-user CRM subscription.' },
@@ -14958,7 +14958,7 @@ function getRoofingSoftwareComparisonHubHTML(): string {
   </section>
   <section class="py-16 text-center" style="background:#0A0A0A">
     <h2 class="text-3xl font-black text-white mb-4">Try Roof Manager before you commit.</h2>
-    <p class="text-gray-400 mb-8">4 free reports, no credit card, 60-second signup.</p>
+    <p class="text-gray-400 mb-8">4 free reports, no credit card.</p>
     <a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg"><i class="fas fa-rocket"></i>Start Free</a>
   </section>
   <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
@@ -14983,7 +14983,7 @@ function getRoofingSoftwareComparisonHubHTML(): string {
 // ============================================================
 interface HelpArticle { title: string; category: string; body: string }
 const HELP_ARTICLES: Record<string, HelpArticle> = {
-  'how-to-order-a-roof-measurement-report': { category: 'Measurements', title: 'How to Order a Roof Measurement Report', body: `<p>Ordering a roof measurement report takes 60 seconds. Sign in to your account, click <strong>Order Report</strong>, type a property address, review the satellite preview, and click <strong>Generate</strong>. The PDF is delivered by email in under a minute.</p><h3>Step by step</h3><ol><li>Sign in to your contractor account at <a href="/customer/login">roofmanager.ca/customer/login</a>.</li><li>From the dashboard, click <strong>Order a Report</strong>.</li><li>Enter the full street address (the autocomplete helps).</li><li>Review the satellite preview &mdash; if imagery quality is poor, you'll see a warning banner.</li><li>Configure waste factor (default 12%) and shingle type if needed.</li><li>Click <strong>Generate Report</strong>. The cost is $8 per report, or 1 credit from your pack.</li><li>You'll receive the branded PDF by email within 60 seconds.</li></ol>` },
+  'how-to-order-a-roof-measurement-report': { category: 'Measurements', title: 'How to Order a Roof Measurement Report', body: `<p>Ordering a roof measurement report is straightforward. Sign in to your account, click <strong>Order Report</strong>, type a property address, review the satellite preview, and click <strong>Generate</strong>. The PDF is delivered by email when it's ready.</p><h3>Step by step</h3><ol><li>Sign in to your contractor account at <a href="/customer/login">roofmanager.ca/customer/login</a>.</li><li>From the dashboard, click <strong>Order a Report</strong>.</li><li>Enter the full street address (the autocomplete helps).</li><li>Review the satellite preview &mdash; if imagery quality is poor, you'll see a warning banner.</li><li>Configure waste factor (default 12%) and shingle type if needed.</li><li>Click <strong>Generate Report</strong>. The cost is $8 per report, or 1 credit from your pack.</li><li>You'll receive the branded PDF by email when it's ready.</li></ol>` },
   'what-does-a-report-include': { category: 'Measurements', title: 'What Does a Roof Measurement Report Include?', body: `<p>Every Roof Manager report includes: pitch-corrected sloped area, projected footprint area, ridge, hip, valley, eave, and rake lengths in linear feet, material bill of materials (shingles, underlayment, starter strip, ridge cap, ice-and-water shield, drip edge, flashing), solar potential estimate, high-resolution satellite imagery, pitch diagram, and a confidence score.</p><p>The PDF is branded with your company logo, address, phone, and licence number. All quantities are in the units adjusters and suppliers expect.</p>` },
   'how-accurate-are-reports': { category: 'Measurements', title: 'How Accurate Are Roof Manager Reports?', body: `<p>For properties with high-quality satellite imagery (the vast majority of urban and suburban US and Canadian addresses), accuracy is within <strong>2–5% of manual measurement</strong>. Every report includes a confidence score and imagery quality indicator.</p><p>Low-confidence reports (typically rural or heavily-obscured roofs) are flagged with a warning banner. In those cases, the engine cross-checks against the Solar API segment totals and refuses to produce a report if the delta exceeds tolerance — we'd rather delay a report than ship a wrong number.</p>` },
   'report-credits-and-pricing': { category: 'Billing', title: 'Report Credits and Pricing', body: `<p>Reports cost <strong>$8 CAD</strong> each. New accounts receive <strong>4 free reports</strong> with no credit card required.</p><p>Volume packs:</p><ul><li>10-pack: $75 ($7.50/report)</li><li>25-pack: $175 ($7.00/report)</li><li>100-pack: $595 ($5.95/report)</li></ul><p>Credits never expire. Unused credits carry forward indefinitely.</p>` },
@@ -15246,7 +15246,7 @@ function getServicesPageHTML() {
   </script>
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"ItemList","name":"Roof Manager Services","itemListElement":[
-    {"@type":"ListItem","position":1,"item":{"@type":"Service","name":"Satellite Roof Measurement Reports","description":"AI-powered 3D roof measurements from satellite imagery delivered in under 60 seconds","provider":{"@type":"Organization","name":"Roof Manager"},"areaServed":"Worldwide","offers":{"@type":"Offer","price":"8.00","priceCurrency":"CAD"}}},
+    {"@type":"ListItem","position":1,"item":{"@type":"Service","name":"Satellite Roof Measurement Reports","description":"AI-powered 3D roof measurements from satellite imagery","provider":{"@type":"Organization","name":"Roof Manager"},"areaServed":"Worldwide","offers":{"@type":"Offer","price":"8.00","priceCurrency":"CAD"}}},
     {"@type":"ListItem","position":2,"item":{"@type":"Service","name":"Solar Analysis & Reports","description":"Solar potential analysis including panel count, energy estimates, and azimuth data on every report","provider":{"@type":"Organization","name":"Roof Manager"}}},
     {"@type":"ListItem","position":3,"item":{"@type":"Service","name":"Roofing CRM Platform","description":"Complete customer relationship management with pipeline tracking, lead scoring, and lifetime value analytics","provider":{"@type":"Organization","name":"Roof Manager"},"offers":{"@type":"Offer","price":"0","priceCurrency":"CAD","description":"Free with any plan"}}},
     {"@type":"ListItem","position":4,"item":{"@type":"Service","name":"AI Roofer Secretary","description":"24/7 AI phone answering service with appointment booking, lead qualification, and call transcripts","provider":{"@type":"Organization","name":"Roof Manager"},"offers":{"@type":"Offer","price":"149.00","priceCurrency":"CAD","description":"Per month"}}},
@@ -15338,7 +15338,7 @@ function getServicesPageHTML() {
         <div>
           <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-xs font-bold mb-4"><i class="fas fa-satellite-dish mr-1"></i>Core Product</div>
           <h2 class="text-3xl font-black text-white mb-4">Satellite Roof Measurement Reports</h2>
-          <p class="text-gray-400 leading-relaxed mb-6">Professional PDF reports generated from Google's Solar API with LiDAR-calibrated 3D building models. Get total roof area (pitch-adjusted), edge breakdowns, material BOM, segment analysis, and solar potential — all delivered in under 60 seconds. No climbing, no drones, no tape measures.</p>
+          <p class="text-gray-400 leading-relaxed mb-6">Professional PDF reports generated from Google's Solar API with LiDAR-calibrated 3D building models. Get total roof area (pitch-adjusted), edge breakdowns, material BOM, segment analysis, and solar potential — all delivered to your inbox and dashboard. No climbing, no drones, no tape measures.</p>
           <ul class="space-y-2 mb-6">
             <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>True 3D pitch-adjusted surface area</li>
             <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Edge breakdown: ridge, hip, valley, eave, rake</li>
@@ -15357,8 +15357,8 @@ function getServicesPageHTML() {
           <i class="fas fa-satellite-dish text-[#00FF88] text-6xl mb-4"></i>
           <div class="text-white font-black text-4xl mb-1">99%</div>
           <div class="text-gray-500 text-sm">Measurement Accuracy</div>
-          <div class="text-white font-black text-4xl mt-4 mb-1">&lt;60s</div>
-          <div class="text-gray-500 text-sm">Report Delivery</div>
+          <div class="text-white font-black text-4xl mt-4 mb-1">PDF</div>
+          <div class="text-gray-500 text-sm">Email + Dashboard Delivery</div>
           <div class="text-white font-black text-4xl mt-4 mb-1">40+</div>
           <div class="text-gray-500 text-sm">Countries Covered</div>
         </div>
@@ -15655,7 +15655,7 @@ Authorization: Bearer rm_live_xxxx
   "include_solar": true
 }</code></pre>
           <div class="grid grid-cols-2 gap-3">
-            <div class="bg-white/5 rounded-xl p-3 text-center"><div class="text-[#00FF88] font-bold text-sm">&lt;60s</div><div class="text-gray-500 text-xs mt-0.5">Response time</div></div>
+            <div class="bg-white/5 rounded-xl p-3 text-center"><div class="text-[#00FF88] font-bold text-sm">Async</div><div class="text-gray-500 text-xs mt-0.5">Webhook callback</div></div>
             <div class="bg-white/5 rounded-xl p-3 text-center"><div class="text-[#00FF88] font-bold text-sm">JSON</div><div class="text-gray-500 text-xs mt-0.5">Structured output</div></div>
             <div class="bg-white/5 rounded-xl p-3 text-center"><div class="text-[#00FF88] font-bold text-sm">REST</div><div class="text-gray-500 text-xs mt-0.5">Standard HTTP</div></div>
             <div class="bg-white/5 rounded-xl p-3 text-center"><div class="text-[#00FF88] font-bold text-sm">Webhooks</div><div class="text-gray-500 text-xs mt-0.5">Async delivery</div></div>
@@ -15883,7 +15883,7 @@ function getCoveragePageHTML() {
       </div>
       <div class="flex flex-wrap justify-center gap-4 text-sm text-gray-500">
         <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-satellite text-[#00FF88] mr-2"></i>Satellite imagery</span>
-        <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-bolt text-[#22d3ee] mr-2"></i>Under 60 seconds</span>
+        <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-bolt text-[#22d3ee] mr-2"></i>Email + dashboard delivery</span>
         <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-bullseye text-[#a78bfa] mr-2"></i>99% accuracy</span>
       </div>
     </div>
@@ -15931,7 +15931,7 @@ function getCoveragePageHTML() {
         <div class="text-gray-400 text-sm leading-relaxed space-y-4">
           <p>Roof Manager uses <strong class="text-white">Google's Solar API</strong> to access high-resolution satellite imagery and LiDAR-calibrated 3D building models. Our coverage extends to any location where Google has processed satellite data through their Solar API infrastructure.</p>
           <p>Coverage is strongest in urban and suburban areas across our supported countries. The <strong class="text-white">United States</strong> has the highest coverage density, with over 95% of all buildings available for instant roof measurement reports. <strong class="text-white">Canada</strong>, <strong class="text-white">Australia</strong>, the <strong class="text-white">United Kingdom</strong>, <strong class="text-white">Germany</strong>, and <strong class="text-white">France</strong> also have excellent coverage.</p>
-          <p>Reports include total roof area (pitch-adjusted), edge breakdowns (ridge, hip, valley, eave, rake), material BOM with quantities, segment-by-segment analysis, solar potential data, and a professional PDF — all delivered in under 60 seconds.</p>
+          <p>Reports include total roof area (pitch-adjusted), edge breakdowns (ridge, hip, valley, eave, rake), material BOM with quantities, segment-by-segment analysis, solar potential data, and a professional PDF — all delivered to your inbox and dashboard.</p>
           <p>If satellite imagery is not available for a specific address, you will not be charged. Your first 4 reports are always free with no credit card required.</p>
         </div>
         <div class="mt-8 flex flex-col sm:flex-row gap-4">
@@ -16358,10 +16358,10 @@ function getSocialLandingHTML() {
 <head>
   ${getHeadTags()}
   <title>Get Your Free Roof Measurement Report | Roof Manager</title>
-  <meta name="description" content="Enter your property address and get a free professional satellite roof measurement report in 60 seconds. No credit card required.">
+  <meta name="description" content="Enter your property address and get a free professional satellite roof measurement report. No credit card required.">
   <meta name="robots" content="noindex">
   <meta property="og:title" content="Free Roof Measurement Report — Roof Manager">
-  <meta property="og:description" content="Get a professional satellite roof report in 60 seconds. Free for Instagram & Facebook followers.">
+  <meta property="og:description" content="Get a professional satellite roof report. Free for Instagram & Facebook followers.">
   <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
   <link rel="canonical" href="https://www.roofmanager.ca/get-started">
 </head>
@@ -16369,7 +16369,7 @@ function getSocialLandingHTML() {
   <div style="max-width:440px;width:100%;text-align:center">
     <img src="/static/logo.png?v=20260504" alt="Roof Manager" style="width:56px;height:56px;border-radius:12px;margin:0 auto 16px;display:block">
     <h1 style="font-size:28px;font-weight:900;margin:0 0 8px;line-height:1.2">Get Your Free<br>Roof Measurement Report</h1>
-    <p style="color:#9ca3af;font-size:14px;margin:0 0 24px">Get a professional satellite roof report in 60 seconds.</p>
+    <p style="color:#9ca3af;font-size:14px;margin:0 0 24px">Get a professional satellite roof report.</p>
 
     <form id="social-landing-form" onsubmit="return (async function(e){e.preventDefault();if(e.target.querySelector('[name=website]').value)return false;var b=e.target.querySelector('button[type=submit]');b.disabled=true;b.innerHTML='<i class=\\'fas fa-spinner fa-spin\\'></i> Generating...';var p=new URLSearchParams(location.search);try{var r=await fetch('/api/agents/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:(e.target.n&&e.target.n.value)||'',email:e.target.e.value,phone:(e.target.p&&e.target.p.value)||'',address:e.target.a.value||'',source_page:'social-landing',utm_source:p.get('utm_source')||sessionStorage.getItem('_rm_utm_source')||''})});if(r.ok){e.target.innerHTML='<div style=\\'padding:32px 0\\'><div style=\\'width:56px;height:56px;background:#00FF88;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:14px\\'><i class=\\'fas fa-check\\' style=\\'color:#0A0A0A;font-size:24px\\'></i></div><p style=\\'color:#00FF88;font-weight:700;font-size:18px;margin:0 0 6px\\'>Thank You!</p><p style=\\'color:#9ca3af;font-size:14px;margin:0\\'>We\\'ll be in touch shortly with your report.</p></div>';if(typeof window.fireMetaLeadEvent==='function')window.fireMetaLeadEvent({content_name:'social-landing'});return}b.disabled=false;b.textContent='Get Free Report'}catch(x){b.disabled=false;b.textContent='Get Free Report'}return false})(event)" style="text-align:left;position:relative">
       <input name="website" style="position:absolute;left:-9999px;opacity:0" tabindex="-1" autocomplete="off">
@@ -16382,7 +16382,7 @@ function getSocialLandingHTML() {
 
     <div style="display:flex;justify-content:center;gap:24px;margin-top:24px">
       <div style="text-align:center"><i class="fas fa-credit-card" style="color:#00FF88;font-size:14px;display:block;margin-bottom:4px"></i><span style="color:#6b7280;font-size:11px">No credit card</span></div>
-      <div style="text-align:center"><i class="fas fa-bolt" style="color:#00FF88;font-size:14px;display:block;margin-bottom:4px"></i><span style="color:#6b7280;font-size:11px">60-second reports</span></div>
+      <div style="text-align:center"><i class="fas fa-bolt" style="color:#00FF88;font-size:14px;display:block;margin-bottom:4px"></i><span style="color:#6b7280;font-size:11px">Satellite reports</span></div>
       <div style="text-align:center"><i class="fas fa-users" style="color:#00FF88;font-size:14px;display:block;margin-bottom:4px"></i><span style="color:#6b7280;font-size:11px">5,000+ contractors</span></div>
     </div>
 
@@ -16826,16 +16826,16 @@ function getBlogPostHTML(post?: any, slug?: string) {
           { q: 'How do I file a roof insurance claim after hail damage?', a: 'Document all damage with photos, contact your insurer within 24-48 hours, request a claims adjuster inspection, and get a professional roof measurement report to support your estimate. Most insurance policies require a licensed contractor estimate before approval.' },
           { q: 'How long does a hail damage insurance claim take?', a: 'Most residential hail damage claims take 2–6 weeks from filing to payout. Turnaround depends on insurer workload, adjuster availability, and whether a supplemental claim is needed. Having a detailed roof measurement report speeds up the process significantly.' },
           { q: 'What does hail damage look like on a roof?', a: 'Hail damage appears as circular bruises or dents on asphalt shingles (often with granule loss), dents on metal flashing, cracked or broken ridge caps, and pock marks on soft metals like gutters and fascia. Damage is most visible from above at low sun angles.' },
-          { q: 'Can I measure a damaged roof without climbing on it?', a: 'Yes — satellite roof measurement tools like Roof Manager generate full measurements (area, pitch, edges, material BOM) from satellite imagery in under 60 seconds, no ladder or site visit required. Results are within 2–5% of manual measurement for most properties.' },
+          { q: 'Can I measure a damaged roof without climbing on it?', a: 'Yes — satellite roof measurement tools like Roof Manager generate full measurements (area, pitch, edges, material BOM) from satellite imagery, with no ladder or site visit required. Results are within 2–5% of manual measurement for most properties.' },
           { q: 'How much does storm damage roof repair cost in Canada vs the US?', a: 'In Canada, storm damage roof repairs cost $3,000–$12,000 CAD for partial repairs and $8,000–$22,000 CAD for full replacement. In the US, costs range from $3,400–$13,500 CAD for repairs and $9,500–$27,000 CAD for full replacement, varying by state and damage severity.' }
         )
       } else if (cat.includes('tech') || cat.includes('software') || cat.includes('ai') || cat.includes('satellite')) {
         pairs.push(
           { q: 'How accurate are satellite roof measurements?', a: 'Satellite roof measurements using Google\'s Solar API and LiDAR-calibrated 3D models are within 2–5% of manual ground-truth measurements for most urban North American properties. Every Roof Manager report includes an imagery quality score and confidence rating.' },
-          { q: 'How does AI roof measurement software work?', a: 'AI roof measurement software pulls satellite imagery and LiDAR elevation data for the property address, runs computer vision to identify roof segments and edges, then applies geospatial math to calculate 3D sloped area, pitch, and edge lengths. The entire process takes under 60 seconds.' },
+          { q: 'How does AI roof measurement software work?', a: 'AI roof measurement software pulls satellite imagery and LiDAR elevation data for the property address, runs computer vision to identify roof segments and edges, then applies geospatial math to calculate 3D sloped area, pitch, and edge lengths. The PDF is delivered to your inbox.' },
           { q: 'What is the Google Solar API and how does it help roofers?', a: 'The Google Solar API provides LiDAR-calibrated 3D building models and high-resolution satellite imagery for most North American properties. Roofing software uses it to generate accurate roof measurements (area, pitch, edges) without site visits, enabling contractors to quote faster.' },
           { q: 'Is satellite roof measurement accurate enough for insurance claims?', a: 'Yes — satellite measurements within 2–5% of manual measurements are generally accepted by insurance adjusters for initial claim documentation. Most insurers require a licensed contractor to verify on-site before final approval, but satellite reports dramatically speed up the claims process.' },
-          { q: 'How does Roof Manager compare to EagleView for roof measurements?', a: 'Roof Manager is 85–95% cheaper than EagleView ($8 vs $60–90 per report), delivers reports in 60 seconds vs hours/days, and includes a full CRM, invoicing, and AI phone secretary. Accuracy is comparable for most residential properties in North America.' }
+          { q: 'How does Roof Manager compare to EagleView for roof measurements?', a: 'Roof Manager is 85–95% cheaper than EagleView ($8 vs $60–90 per report), delivers reports much faster than EagleView\'s hours-to-days wait, and includes a full CRM, invoicing, and AI phone secretary. Accuracy is comparable for most residential properties in North America.' }
         )
       } else if (cat.includes('solar')) {
         pairs.push(
@@ -16843,12 +16843,12 @@ function getBlogPostHTML(post?: any, slug?: string) {
           { q: 'What roof pitch is best for solar panels in Canada?', a: 'In Canada, the optimal roof pitch for solar panels is 30–45 degrees — matching the latitude for maximum annual energy production. Flatter pitches (15–20 degrees) still work and improve self-cleaning. The National Building Code requires verification of structural load capacity before installation.' },
           { q: 'How long should my roof last before adding solar?', a: 'Roofing experts recommend a roof have at least 10–15 years of remaining life before solar installation. Replacing panels to do roof work later costs $3,000–$5,000 in additional labour. A roof measurement report identifies remaining life indicators including shingle condition and flashing integrity.' },
           { q: 'What is a solar suitability report?', a: 'A solar suitability report grades each roof segment by solar irradiance, shade factor, pitch, and orientation, and estimates annual kWh production per panel placement. Roof Manager generates these alongside the standard measurement report using Google Solar API data.' },
-          { q: 'How much does a solar-ready roof measurement report cost?', a: 'Roof Manager\'s solar-inclusive measurement reports are $8 CAD each (Canada) with 4 free reports for new users. The report includes full roof area, pitch analysis, edge breakdowns, material BOM, and solar suitability grading — all from satellite in under 60 seconds.' }
+          { q: 'How much does a solar-ready roof measurement report cost?', a: 'Roof Manager\'s solar-inclusive measurement reports are $8 CAD each (Canada) with 4 free reports for new users. The report includes full roof area, pitch analysis, edge breakdowns, material BOM, and solar suitability grading — all from satellite imagery.' }
         )
       } else if (cat.includes('business') || cat.includes('crm') || cat.includes('sales')) {
         pairs.push(
           { q: 'What is the best CRM software for roofing contractors?', a: 'The best roofing CRMs combine lead management, job tracking, invoicing, proposals, and measurement report integration. Roof Manager is a free roofing CRM that includes all of these plus an AI phone secretary, door-to-door sales tracker, and satellite roof measurement reports from the same platform.' },
-          { q: 'How can roofing contractors win more insurance jobs?', a: 'The fastest way to win insurance jobs is to be first with a professional roof measurement report. Contractors who deliver accurate estimates within hours of a storm event win up to 78% of insurance jobs. Satellite measurement tools like Roof Manager generate reports in 60 seconds with no site visit.' },
+          { q: 'How can roofing contractors win more insurance jobs?', a: 'The fastest way to win insurance jobs is to be first with a professional roof measurement report. Contractors who deliver accurate estimates within hours of a storm event win up to 78% of insurance jobs. Satellite measurement tools like Roof Manager generate reports with no site visit.' },
           { q: 'How much should a roofing contractor charge for an estimate?', a: 'Most residential roofing estimates are free in North America. The cost of generating the estimate (measurement report, material BOM, proposal) is typically $8–$120 CAD depending on the tool used. Roof Manager reduces per-estimate costs to $8 CAD while delivering professional branded proposals.' },
           { q: 'What should a roofing proposal include?', a: 'A professional roofing proposal should include the scope of work (materials, labour), measured quantities (total area, edges, pitch per section), line-item material BOM, warranty terms, payment schedule, timeline, and contractor licence number. Roof Manager generates proposals directly from measurement reports.' },
           { q: 'How do roofing contractors manage multiple jobs?', a: 'Roofing contractors with multiple active jobs benefit from CRM software with pipeline views, crew assignment, job scheduling synced to Google Calendar, and automated customer follow-ups. Roof Manager\'s CRM is purpose-built for roofing workflows and is always free.' }
@@ -16860,7 +16860,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
           { q: 'How much does a new roof cost in the US in 2026?', a: 'A new asphalt shingle roof in the US costs $9,500–$27,000 CAD in 2026 for a 1,500–2,500 sq ft home. Texas and Oklahoma average $10,000–$24,000 CAD. Florida homes require FBC-compliant materials adding 10–20% to costs. Class 4 impact-resistant shingles are recommended in hail-prone states.' },
           { q: 'How long does a roof replacement take?', a: 'Most residential roof replacements take 1–3 days for standard asphalt shingle roofs. Complex roofs with multiple pitches, skylights, or chimneys may take 3–5 days. Weather delays are the most common cause of extended timelines. Most contractors provide a firm schedule after the measurement report is complete.' },
           { q: 'What is the best roofing material for Canadian winters?', a: 'For Canadian winters, architectural asphalt shingles (50-year grade) with a Class 4 impact resistance rating are the top choice. Ice & water shield membrane is required under the National Building Code for the first 2 metres from the eave. Metal roofing excels in snowload areas like Barrie and Kingston.' },
-          { q: 'How do I get an accurate roof measurement?', a: 'The fastest and most accurate method is satellite measurement using tools like Roof Manager — enter the address, receive a full PDF report (3D area, pitch, edges, material BOM) in 60 seconds for $8 CAD. Results are within 2–5% of manual measurement for most North American properties.' }
+          { q: 'How do I get an accurate roof measurement?', a: 'The most accurate method is satellite measurement using tools like Roof Manager — enter the address, receive a full PDF report (3D area, pitch, edges, material BOM) for $8 CAD. Results are within 2–5% of manual measurement for most North American properties.' }
         )
       }
     }
@@ -17077,9 +17077,9 @@ function getLanderFunnelHTML() {
 <head>
   ${getHeadTags()}
   <title>Get Your Free Roof Measurement Report - Roof Manager</title>
-  <meta name="description" content="Professional satellite-powered roof measurement reports in under 60 seconds. Start with 4 FREE reports. No credit card required. Used by roofing contractors across the US &amp; Canada.">
+  <meta name="description" content="Professional satellite-powered roof measurement reports. Start with 4 FREE reports. No credit card required. Used by roofing contractors across the US &amp; Canada.">
   <meta property="og:title" content="Free Roof Measurement Reports - Roof Manager">
-  <meta property="og:description" content="Get accurate roof area, pitch, material BOM, and more in 60 seconds. 4 free reports. No credit card.">
+  <meta property="og:description" content="Get accurate roof area, pitch, material BOM, and more. 4 free reports. No credit card.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/lander">
   <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
@@ -17087,7 +17087,7 @@ function getLanderFunnelHTML() {
   <link rel="canonical" href="https://www.roofmanager.ca/lander">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Free Roof Measurement Reports — Roof Manager">
-  <meta name="twitter:description" content="Get accurate roof area, pitch, material BOM in 60 seconds. 4 free reports, no credit card.">
+  <meta name="twitter:description" content="Get accurate roof area, pitch, material BOM. 4 free reports, no credit card.">
   <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
   <style>
     html { scroll-behavior: smooth; }
@@ -17130,7 +17130,7 @@ function getLanderFunnelHTML() {
           </h1>
 
           <p class="text-lg text-gray-300 mb-8 leading-relaxed max-w-xl">
-            Get a <strong class="text-white">professional roof measurement report</strong> from satellite imagery in under 60 seconds. Accurate area, pitch, edge breakdowns, and a full material BOM — everything you need to quote a job.
+            Get a <strong class="text-white">professional roof measurement report</strong> from satellite imagery. Accurate area, pitch, edge breakdowns, and a full material BOM — everything you need to quote a job.
           </p>
 
           <div class="flex flex-col sm:flex-row sm:flex-wrap gap-3 mb-6">
@@ -17151,7 +17151,7 @@ function getLanderFunnelHTML() {
 
           <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm text-gray-400">
             <span class="flex items-center gap-1.5"><i class="fas fa-check text-green-400"></i> No credit card</span>
-            <span class="flex items-center gap-1.5"><i class="fas fa-check text-green-400"></i> 60-second delivery</span>
+            <span class="flex items-center gap-1.5"><i class="fas fa-check text-green-400"></i> Email + dashboard delivery</span>
             <span class="flex items-center gap-1.5"><i class="fas fa-check text-green-400"></i> Full CRM free</span>
           </div>
         </div>
@@ -20060,7 +20060,7 @@ function getWidgetViewHTML(mapsApiKey: string) {
     <!-- Step 1: Address -->
     <div id="step-address" class="step active fade-in">
       <h2 id="w-headline" class="text-xl font-bold text-gray-900 mb-1">Get Your Instant Roof Estimate</h2>
-      <p id="w-subheadline" class="text-sm text-gray-500 mb-4">Enter your address to see pricing in under 60 seconds</p>
+      <p id="w-subheadline" class="text-sm text-gray-500 mb-4">Enter your address to see pricing</p>
       <div class="mb-4">
         <label class="block text-sm font-medium text-gray-700 mb-1">Property Address</label>
         <input id="address-input" type="text" placeholder="Start typing your address..."
@@ -21075,7 +21075,7 @@ function getHomeownerEstimatePageHTML(): string {
       { '@type': 'Question', name: 'How much does a roof replacement cost in Canada?', acceptedAnswer: { '@type': 'Answer', text: 'Roof replacement in Canada typically costs between $8,000 and $25,000+ depending on size, pitch, material, and region. Asphalt shingles average $4–$8 per sq ft installed. Metal roofing runs $10–$20 per sq ft. Getting an accurate measurement report first ensures every quote you receive is based on the same numbers.' } },
       { '@type': 'Question', name: 'How do I get a free roof estimate?', acceptedAnswer: { '@type': 'Answer', text: "Enter your address to get a free satellite roof measurement report. The report includes your roof's total area, pitch, edge lengths, and a full materials take-off. Share it with any roofer to get consistent, apples-to-apples quotes." } },
       { '@type': 'Question', name: 'How accurate is a satellite roof measurement?', acceptedAnswer: { '@type': 'Answer', text: "Our satellite measurements use Google's Solar API with LiDAR-calibrated 3D building models and are typically accurate within 2–5% of a manual measurement. We display a confidence score on every report." } },
-      { '@type': 'Question', name: 'Do I need to be home for a roof estimate?', acceptedAnswer: { '@type': 'Answer', text: 'No. Satellite roof measurement reports are generated from aerial imagery — no one needs to visit your home. You receive a PDF within 60 seconds of entering your address.' } },
+      { '@type': 'Question', name: 'Do I need to be home for a roof estimate?', acceptedAnswer: { '@type': 'Answer', text: 'No. Satellite roof measurement reports are generated from aerial imagery — no one needs to visit your home. You receive a PDF by email when it\'s ready.' } },
     ]
   })
   const costs = [
@@ -21089,10 +21089,10 @@ function getHomeownerEstimatePageHTML(): string {
 <head>
   ${getHeadTags()}
   <title>Free Roof Estimate — Get an Accurate Satellite Roof Report | Roof Manager</title>
-  <meta name="description" content="Get a free satellite roof measurement report in 60 seconds. See your roof's exact size, pitch, and materials needed — then share it with roofers to get fair, accurate quotes.">
+  <meta name="description" content="Get a free satellite roof measurement report. See your roof's exact size, pitch, and materials needed — then share it with roofers to get fair, accurate quotes.">
   <link rel="canonical" href="${base}/free-roof-estimate">
   <meta property="og:title" content="Free Roof Estimate — Satellite Measurement Report">
-  <meta property="og:description" content="Know exactly what your roof costs before any roofer sets foot on your property. Free report in 60 seconds.">
+  <meta property="og:description" content="Know exactly what your roof costs before any roofer sets foot on your property. Free report.">
   <meta property="og:url" content="${base}/free-roof-estimate">
   <meta name="keywords" content="free roof estimate, roof replacement cost, how much does a new roof cost, roof estimate near me, satellite roof measurement, free roof inspection, roofing quote canada">
   <script type="application/ld+json">${faqSchema}</script>
@@ -21126,7 +21126,7 @@ function getHomeownerEstimatePageHTML(): string {
           Know Your Roof's<br><span style="color:#00FF88">Exact Size &amp; Cost</span><br>Before You Call Anyone.
         </h1>
         <p class="text-lg text-gray-400 mb-8 max-w-xl leading-relaxed">
-          Get a free satellite roof measurement report in 60 seconds — no ladder, no appointment, no pressure. See your roof's total area, pitch, edge lengths, and estimated materials. Then share it with any roofer to get <strong class="text-white">fair, accurate quotes based on real numbers.</strong>
+          Get a free satellite roof measurement report — no ladder, no appointment, no pressure. See your roof's total area, pitch, edge lengths, and estimated materials. Then share it with any roofer to get <strong class="text-white">fair, accurate quotes based on real numbers.</strong>
         </p>
         <div class="flex flex-col sm:flex-row gap-3 mb-6">
           <a href="/register" class="flex items-center justify-center gap-2.5 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px] transition-all hover:scale-[1.02]">
@@ -21136,7 +21136,7 @@ function getHomeownerEstimatePageHTML(): string {
             <i class="fas fa-eye text-[#00FF88]"></i> See a Sample Report
           </a>
         </div>
-        <p class="text-xs text-gray-500">Free to start &middot; No credit card &middot; Report delivered in under 60 seconds</p>
+        <p class="text-xs text-gray-500">Free to start &middot; No credit card &middot; Report delivered by email</p>
         <div class="flex flex-wrap items-center gap-3 mt-6">
           <div class="flex items-center gap-1.5 text-xs text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i> 4.9/5 rating</div>
           <div class="flex items-center gap-1.5 text-xs text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-check text-[#00FF88] text-[10px]"></i> Used by 5,000+ roofers</div>
@@ -21169,7 +21169,7 @@ function getHomeownerEstimatePageHTML(): string {
           </div>
           <div class="text-[10px] font-bold uppercase tracking-widest mb-1" style="color:#22d3ee">Step 2</div>
           <h3 class="text-lg font-bold text-white mb-2">Get Your Report</h3>
-          <p class="text-gray-400 text-sm leading-relaxed">In under 60 seconds you receive a professional PDF with your roof's total area, pitch, edge lengths, and materials breakdown.</p>
+          <p class="text-gray-400 text-sm leading-relaxed">You'll receive a professional PDF with your roof's total area, pitch, edge lengths, and materials breakdown.</p>
         </div>
         <div class="bg-[#111] border border-white/10 rounded-2xl p-6 hover:border-[#a78bfa]/30 transition-all">
           <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style="background:#a78bfa18;border:1px solid #a78bfa30">
@@ -21284,7 +21284,7 @@ function getHomeownerEstimatePageHTML(): string {
       <div class="space-y-3">
         ${[
           ['How much does a roof replacement cost in Canada?', "Roof replacement in Canada typically costs between $8,000 and $25,000+ depending on size, pitch, material, and region. Asphalt shingles average $4–$8 per sq ft installed. Metal roofing runs $10–$20 per sq ft. Getting an accurate measurement report first ensures every quote you receive is based on the same numbers."],
-          ['Do I need to be home for a roof estimate?', 'No. Satellite roof measurement reports are generated entirely from aerial imagery — no one needs to visit your property. You receive your PDF report within 60 seconds of entering your address.'],
+          ['Do I need to be home for a roof estimate?', 'No. Satellite roof measurement reports are generated entirely from aerial imagery — no one needs to visit your property. You receive your PDF report by email when it\'s ready.'],
           ['How accurate is a satellite roof measurement?', "Our reports use Google's Solar API with LiDAR-calibrated 3D building models, typically accurate within 2–5% of a manual measurement. Every report includes a confidence score and imagery quality rating."],
           ['Can I use this report to get multiple roofer quotes?', "Yes — that's exactly the point. Share the PDF with 2–3 local roofers and ask them to quote based on the measurements. This eliminates the guesswork and makes quotes genuinely comparable."],
           ['Is the first report really free?', 'Yes. Your first report is completely free, no credit card required. If you need more reports in the future (for a rental property, for example), additional reports are $8 CAD each.'],
@@ -21305,7 +21305,7 @@ function getHomeownerEstimatePageHTML(): string {
     <div class="max-w-3xl mx-auto px-4 sm:px-6 py-14 md:py-20 text-center">
       <div class="bg-gradient-to-br from-[#00FF88]/10 to-transparent border border-[#00FF88]/20 rounded-2xl p-10 md:p-14">
         <h2 class="text-3xl md:text-4xl font-black text-white mb-4">Know before you negotiate.</h2>
-        <p class="text-gray-400 mb-8 max-w-lg mx-auto leading-relaxed">Homeowners with accurate measurements save an average of $1,200–$3,500 on their roof replacement by getting comparable quotes. Your free report takes 60 seconds.</p>
+        <p class="text-gray-400 mb-8 max-w-lg mx-auto leading-relaxed">Homeowners with accurate measurements save an average of $1,200–$3,500 on their roof replacement by getting comparable quotes. Your free report is delivered to your inbox.</p>
         <a href="/register" class="inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px] transition-all hover:scale-[1.03]">
           <i class="fas fa-satellite-dish"></i> Get My Free Roof Report <i class="fas fa-arrow-right text-sm"></i>
         </a>
@@ -21831,7 +21831,7 @@ function getPitchCalculatorHTML(): string {
 
     <div style="background:linear-gradient(135deg,#1e3a5f,#0f2440);border-radius:16px;padding:36px;text-align:center;">
       <h2 style="font-size:24px;font-weight:800;color:#f59e0b;margin-bottom:10px;">Need the Actual Roof Measured?</h2>
-      <p style="color:#cbd5e1;margin-bottom:24px;max-width:500px;margin-left:auto;margin-right:auto;">Our satellite AI reports give you exact pitch per facet, true sloped area, and a full material take-off for any address — in under 60 seconds, from $10.</p>
+      <p style="color:#cbd5e1;margin-bottom:24px;max-width:500px;margin-left:auto;margin-right:auto;">Our satellite AI reports give you exact pitch per facet, true sloped area, and a full material take-off for any address — from $10.</p>
       <a href="/lander" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:12px;font-weight:800;text-decoration:none;font-size:16px;margin-right:10px;">Try 4 Free Reports</a>
       <a href="/order/new" style="display:inline-block;background:transparent;color:#f59e0b;border:2px solid #f59e0b;padding:12px 24px;border-radius:12px;font-weight:700;text-decoration:none;font-size:15px;">Order Now — $10</a>
     </div>
@@ -22185,7 +22185,7 @@ function getAboutPageHTML(): string {
         'roofing CRM',
         'AI voice receptionist',
       ],
-      slogan: 'Property-grade roof measurements in under 60 seconds.',
+      slogan: 'Property-grade roof measurements for contractors.',
       sameAs: [
         'https://www.facebook.com/roofmanager',
         'https://www.instagram.com/roofmanager',
@@ -22275,7 +22275,7 @@ function getAboutPageHTML(): string {
         <div class="bg-[#111] border border-[#00FF88]/20 rounded-2xl p-6">
           <h3 class="text-[#00FF88] font-bold text-sm uppercase tracking-wider mb-3"><i class="fas fa-check-circle mr-1"></i>The Roof Manager way</h3>
           <ul class="space-y-3 text-gray-300 text-sm leading-relaxed">
-            <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>Enter an address, receive a measured report in 60 seconds</li>
+            <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>Enter an address and receive a measured report</li>
             <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>$8 per report (flat), or $5.95 each on a 100-pack</li>
             <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>CRM, proposals, invoicing, and AI secretary in one platform</li>
             <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>A 24/7 AI phone receptionist qualifies every inbound call</li>
@@ -22351,7 +22351,7 @@ function getAboutPageHTML(): string {
       <h2 class="text-2xl md:text-3xl font-black text-white mb-4">Try the platform &mdash; no card, no call.</h2>
       <p class="text-gray-400 text-lg mb-8 max-w-2xl mx-auto">Four free property-grade reports with every new account. See the full platform: measurements, CRM, proposals, invoicing, AI secretary.</p>
       <a href="/register" class="inline-block bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-xl shadow-[#00FF88]/20 transition-all hover:scale-[1.03]"><i class="fas fa-gift mr-2"></i>Get 4 Free Reports <i class="fas fa-arrow-right ml-1"></i></a>
-      <p class="text-xs text-gray-500 mt-4">60-second signup &middot; No credit card required</p>
+      <p class="text-xs text-gray-500 mt-4">No credit card required</p>
     </section>
   </main>
 
@@ -22431,7 +22431,7 @@ function getPressPageHTML(): string {
       <h2 style="font-size:22px;font-weight:700;margin-bottom:20px;border-bottom:1px solid #1e293b;padding-bottom:12px;">Company Overview</h2>
       <div style="background:#111827;border:1px solid #1e293b;border-radius:16px;padding:32px;line-height:1.8;color:#cbd5e1;">
         <p style="margin-bottom:16px;"><strong style="color:#f1f5f9;">Roof Manager</strong> is a Canadian roofing technology company providing AI-powered roof measurement reports, CRM pipeline management, AI phone receptionist services, and solar proposal tools to residential and commercial roofing contractors across Canada and the United States.</p>
-        <p style="margin-bottom:16px;">Our core product is a professional roof measurement report delivered in under 60 seconds from any North American address. Reports use satellite imagery processed through the <strong style="color:#f1f5f9;">Google Solar API</strong> and proprietary AI models (Gemini 2.0/2.5) to calculate exact pitch per facet, true sloped area, material take-offs with waste factor, and AccuLynx/Xactimate-compatible exports — all for a flat $10 per report with no subscription.</p>
+        <p style="margin-bottom:16px;">Our core product is a professional roof measurement report for any North American address. Reports use satellite imagery processed through the <strong style="color:#f1f5f9;">Google Solar API</strong> and proprietary AI models (Gemini 2.0/2.5) to calculate exact pitch per facet, true sloped area, material take-offs with waste factor, and AccuLynx/Xactimate-compatible exports — all for a flat $10 per report with no subscription.</p>
         <p style="margin-bottom:16px;">The platform includes a full roofing CRM with lead pipeline, job tracking, proposal builder, invoice manager, and a voice AI receptionist that answers calls 24/7, qualifies leads, and books appointments. Contractors access the platform through a web dashboard; homeowners receive a read-only portal for their report and documentation.</p>
         <p>Roof Manager was purpose-built for the Canadian roofing market, where roofing contractors face unique challenges including high-pitch roofs from heavy snowfall climates, complex insurance claim documentation workflows, and the need for accurate measurements without dangerous site visits in adverse weather conditions.</p>
       </div>

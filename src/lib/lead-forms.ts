@@ -48,7 +48,7 @@ export function inlineQuoteFormHTML(source: string): string {
   <div style="text-align:center;margin-bottom:20px">
     <span style="display:inline-block;background:rgba(0,255,136,0.1);color:#00FF88;font-size:11px;font-weight:700;padding:5px 14px;border-radius:999px;letter-spacing:0.5px"><i class="fas fa-satellite" style="margin-right:6px"></i>FREE ROOF QUOTE</span>
     <h3 style="color:#fff;font-size:22px;font-weight:800;margin:10px 0 4px">Get Your Free Roof Measurement</h3>
-    <p style="color:#9ca3af;font-size:13px;margin:0">Satellite-powered report in under 60 seconds. No site visit needed.</p>
+    <p style="color:#9ca3af;font-size:13px;margin:0">Satellite-powered report. No site visit needed.</p>
   </div>
   <form id="${fid}" novalidate onsubmit="${attrEscape(formSubmitJS(fid))}" style="position:relative">
     <input type="hidden" name="src" value="${source}">
@@ -75,7 +75,7 @@ export function inlineQuoteFormHTML(source: string): string {
     </div>
     <button type="submit" style="width:100%;min-height:52px;background:#00FF88;color:#0A0A0A;font-weight:800;padding:14px;border:none;border-radius:10px;font-size:16px;cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='#00e67a'" onmouseout="this.style.background='#00FF88'"><i class="fas fa-bolt" style="margin-right:6px"></i>Get Free Quote</button>
   </form>
-  <p style="text-align:center;color:#6b7280;font-size:11px;margin-top:8px"><i class="fas fa-lock" style="color:#00FF88;margin-right:4px"></i>No credit card required &middot; Results in 60 seconds</p>
+  <p style="text-align:center;color:#6b7280;font-size:11px;margin-top:8px"><i class="fas fa-lock" style="color:#00FF88;margin-right:4px"></i>No credit card required</p>
   ${formViewScript(fid)}
 </section>`
 }
@@ -113,7 +113,7 @@ export function comparisonLeadFormHTML(source: string): string {
     </div>
     <button type="submit" style="width:100%;min-height:52px;background:#38bdf8;color:#0A0A0A;font-weight:800;padding:14px;border:none;border-radius:10px;font-size:16px;cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='#7dd3fc'" onmouseout="this.style.background='#38bdf8'"><i class="fas fa-satellite-dish" style="margin-right:6px"></i>Get Free Report</button>
   </form>
-  <p style="text-align:center;color:#6b7280;font-size:11px;margin-top:8px"><i class="fas fa-clock" style="color:#38bdf8;margin-right:4px"></i>Results delivered in under 60 seconds</p>
+  <p style="text-align:center;color:#6b7280;font-size:11px;margin-top:8px"><i class="fas fa-clock" style="color:#38bdf8;margin-right:4px"></i>Results delivered to your inbox</p>
   ${formViewScript(fid)}
 </section>`
 }
