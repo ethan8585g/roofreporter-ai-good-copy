@@ -9,7 +9,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { ALL_TOOLS, runTool } from '../services/ai-assistant-tools'
 import { validateAdminSession, requireSuperadmin } from './auth'
 
-type Env = { DB: any; ANTHROPIC_API_KEY: string; GITHUB_TOKEN: string }
+type Env = { DB: any; ANTHROPIC_API_KEY: string; GITHUB_TOKEN?: string; git_token?: string }
 
 export const superAdminAi = new Hono<{ Bindings: Env }>()
 
@@ -123,7 +123,7 @@ superAdminAi.post('/chat', async (c) => {
           for (const tu of toolUses) {
             send('tool_use', { name: tu.name, input: tu.input })
             const result = await runTool(c.env.DB, {
-              githubToken: c.env.GITHUB_TOKEN || '',
+              githubToken: c.env.GITHUB_TOKEN || c.env.git_token || '',
               userPrompt,
               model,
             }, tu.name, tu.input)
