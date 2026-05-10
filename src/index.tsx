@@ -9937,12 +9937,24 @@ function getContactThanksPageHTML(prefillEmail = '', prefillName = '', prefillCo
         return;
       }
 
+      // Pull persisted Google Ads click ID + UTMs (captured on landing) so
+      // attribution survives this post-code-verify signup path.
+      var _gclidRec = null;
+      try { var _gr = localStorage.getItem('rm_ads_gclid'); if (_gr) _gclidRec = JSON.parse(_gr); } catch(_) {}
+      var _utmRec = null;
+      try { var _ur = localStorage.getItem('rm_ads_utm'); if (_ur) _utmRec = JSON.parse(_ur); } catch(_) {}
       try {
         var res = await fetch('/api/customer-auth/register', {
           method: 'POST', headers: {'Content-Type':'application/json'},
           body: JSON.stringify({
             email: email, password: password, name: name,
-            company_name: company, verification_token: verificationToken
+            company_name: company, verification_token: verificationToken,
+            gclid: (_gclidRec && _gclidRec.gclid) || null,
+            utm_source: (_utmRec && _utmRec.utm_source) || null,
+            utm_medium: (_utmRec && _utmRec.utm_medium) || null,
+            utm_campaign: (_utmRec && _utmRec.utm_campaign) || null,
+            utm_content: (_utmRec && _utmRec.utm_content) || null,
+            utm_term: (_utmRec && _utmRec.utm_term) || null
           })
         });
         var data = await res.json();
@@ -10994,14 +11006,16 @@ function getCustomerLoginHTML(googleClientId = '') {
       // P2: disable the button while the network call is in flight so users
       // can't spam duplicate registrations.
       if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
-      // Pull persisted Google Ads click ID so attribution survives signup via this legacy form.
+      // Pull persisted Google Ads click ID + UTMs so attribution survives signup via this legacy form.
       var _gclid = null;
       try { var _gr = localStorage.getItem('rm_ads_gclid'); if (_gr) { var _gp = JSON.parse(_gr); _gclid = _gp && _gp.gclid || null; } } catch(_) {}
+      var _utm = {};
+      try { var _ur = localStorage.getItem('rm_ads_utm'); if (_ur) { _utm = JSON.parse(_ur) || {}; } } catch(_) {}
       try {
         const res = await fetch('/api/customer/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, name, phone, company_name: company, verification_token: _regVerificationToken, referred_by_code: new URLSearchParams(window.location.search).get('ref') || localStorage.getItem('_ref_code') || '', gclid: _gclid })
+          body: JSON.stringify({ email, password, name, phone, company_name: company, verification_token: _regVerificationToken, referred_by_code: new URLSearchParams(window.location.search).get('ref') || localStorage.getItem('_ref_code') || '', gclid: _gclid, utm_source: _utm.utm_source || null, utm_medium: _utm.utm_medium || null, utm_campaign: _utm.utm_campaign || null, utm_content: _utm.utm_content || null, utm_term: _utm.utm_term || null })
         });
         const data = await res.json();
         if (res.ok && data.success) {
