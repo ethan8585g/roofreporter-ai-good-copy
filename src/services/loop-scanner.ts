@@ -706,12 +706,32 @@ export async function recordExternalRun(
   const runId = row!.id
 
   if (args.findings && args.findings.length > 0) {
-    const stmts = args.findings.map(f =>
-      env.DB.prepare(
-        `INSERT INTO loop_scan_findings (run_id, severity, category, url, message, details_json) VALUES (?, ?, ?, ?, ?, ?)`
-      ).bind(runId, f.severity, f.category, f.url || null, f.message.slice(0, 500), f.details ? JSON.stringify(f.details).slice(0, 4000) : null)
-    )
-    await env.DB.batch(stmts)
+    // Dedupe: skip-if-already-open. A persistent regression should appear
+    // once with an aging timestamp, not once per cron tick. Match keys are
+    // (loopId, category, message). Existing-and-still-open rows tied to
+    // this loop suppress the new insert. Resolved rows do NOT suppress —
+    // the user explicitly cleared them, so a re-occurrence is a new event.
+    const truncatedMsgs = args.findings.map(f => f.message.slice(0, 500))
+    const placeholders = truncatedMsgs.map(() => '?').join(',')
+    const openMsgs = truncatedMsgs.length > 0
+      ? await env.DB.prepare(
+          `SELECT DISTINCT f.message
+           FROM loop_scan_findings f
+           JOIN loop_scan_runs r ON r.id = f.run_id
+           WHERE f.resolved_at IS NULL
+             AND r.loop_id = ?
+             AND f.message IN (${placeholders})`
+        ).bind(args.loopId, ...truncatedMsgs).all<{ message: string }>().then(r => new Set((r.results || []).map(x => x.message))).catch(() => new Set<string>())
+      : new Set<string>()
+    const fresh = args.findings.filter((f, i) => !openMsgs.has(truncatedMsgs[i]))
+    if (fresh.length > 0) {
+      const stmts = fresh.map(f =>
+        env.DB.prepare(
+          `INSERT INTO loop_scan_findings (run_id, severity, category, url, message, details_json) VALUES (?, ?, ?, ?, ?, ?)`
+        ).bind(runId, f.severity, f.category, f.url || null, f.message.slice(0, 500), f.details ? JSON.stringify(f.details).slice(0, 4000) : null)
+      )
+      await env.DB.batch(stmts)
+    }
   }
 
   await writeHeartbeat(env, args.loopId, args.status, args.durationMs, runId, args.summary, args.source).catch(() => {})

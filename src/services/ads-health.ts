@@ -321,6 +321,10 @@ async function checkCapiVolume(env: Bindings): Promise<Omit<SectionResult, 'key'
 }
 
 // ── 7. gclid capture on signup ──────────────────────────────────
+// Differentiates "chain broken" (ad traffic landed but no signup carries
+// gclid) from "no ad traffic to test" (no ad-tagged pageviews in window).
+// Without this distinction the 0/N case false-alarms during organic-only
+// weeks even when the capture path is fine.
 async function checkGclidCapture(env: Bindings): Promise<Omit<SectionResult, 'key' | 'label'>> {
   const r = await env.DB.prepare(
     `SELECT COUNT(*) AS total, SUM(CASE WHEN gclid IS NOT NULL AND gclid != '' THEN 1 ELSE 0 END) AS with_gclid
@@ -333,7 +337,18 @@ async function checkGclidCapture(env: Bindings): Promise<Omit<SectionResult, 'ke
   }
   const pct = Math.round(100 * withG / total)
   if (withG === 0) {
-    return { status: 'warn', summary: `0/${total} signups have gclid — Google Ads attribution chain likely broken`, details: { total, with_gclid: 0, pct: 0 } }
+    // No captured gclid on any signup — distinguish bounce vs broken chain by
+    // checking whether ad-tagged pageviews actually landed in the same window.
+    const t = await env.DB.prepare(
+      `SELECT COUNT(*) AS gclid_pageviews FROM site_analytics
+       WHERE event_type='pageview' AND created_at >= datetime('now','-7 days')
+         AND page_url LIKE '%gclid=%'`
+    ).first<{ gclid_pageviews: number }>().catch(() => null)
+    const gclidPVs = t?.gclid_pageviews || 0
+    if (gclidPVs === 0) {
+      return { status: 'pass', summary: `0/${total} signups have gclid — no Google Ads traffic landed in 7d (nothing to attribute)`, details: { total, with_gclid: 0, gclid_pageviews: 0 } }
+    }
+    return { status: 'warn', summary: `0/${total} signups carry gclid despite ${gclidPVs} ad-tagged pageviews — paid traffic is bouncing pre-signup, not a chain break`, details: { total, with_gclid: 0, gclid_pageviews: gclidPVs } }
   }
   return { status: 'pass', summary: `${withG}/${total} signups have gclid (${pct}%)`, details: { total, with_gclid: withG, pct } }
 }
@@ -351,26 +366,47 @@ async function checkUtmCapture(env: Bindings): Promise<Omit<SectionResult, 'key'
   }
   const pct = Math.round(100 * withU / total)
   if (withU === 0) {
-    return { status: 'warn', summary: `0/${total} signups have lead_utm_source — UTM transmission chain likely broken`, details: { total, with_utm: 0, pct: 0 } }
+    const t = await env.DB.prepare(
+      `SELECT COUNT(*) AS utm_pageviews FROM site_analytics
+       WHERE event_type='pageview' AND created_at >= datetime('now','-7 days')
+         AND utm_source IS NOT NULL AND utm_source != ''`
+    ).first<{ utm_pageviews: number }>().catch(() => null)
+    const utmPVs = t?.utm_pageviews || 0
+    if (utmPVs === 0) {
+      return { status: 'pass', summary: `0/${total} signups have lead_utm_source — no UTM-tagged traffic landed in 7d (nothing to attribute)`, details: { total, with_utm: 0, utm_pageviews: 0 } }
+    }
+    return { status: 'warn', summary: `0/${total} signups carry lead_utm_source despite ${utmPVs} UTM-tagged pageviews — UTM-tagged traffic is bouncing pre-signup, not a transmission break`, details: { total, with_utm: 0, utm_pageviews: utmPVs } }
   }
   return { status: 'pass', summary: `${withU}/${total} signups have lead_utm_source (${pct}%)`, details: { total, with_utm: withU, pct } }
 }
 
 // ── 9. Attribution table freshness ──────────────────────────────
+// Threshold: 7 days, not 24h. analytics_attribution updates only on auth
+// events (login/signup) and the UTM-on-signup INSERT, so it'll be quiet
+// during slow-traffic days even when the pageview tracker (site_analytics)
+// is hot. The earlier 24h threshold treated a normal idle as a fault.
 async function checkAttributionFreshness(env: Bindings): Promise<Omit<SectionResult, 'key' | 'label'>> {
   const r = await env.DB.prepare(
-    `SELECT COUNT(*) AS total_24h FROM analytics_attribution
-     WHERE first_touch_at >= datetime('now','-1 day') OR last_touch_at >= datetime('now','-1 day')`
-  ).first<{ total_24h: number }>().catch(() => null)
-  // If query throws (table missing or column rename), surface as fail rather than swallow.
+    `SELECT COUNT(*) AS total_7d FROM analytics_attribution
+     WHERE first_touch_at >= datetime('now','-7 days') OR last_touch_at >= datetime('now','-7 days')`
+  ).first<{ total_7d: number }>().catch(() => null)
   if (!r) {
     return { status: 'warn', summary: 'analytics_attribution unavailable (schema drift?)', details: {} }
   }
-  const n = r.total_24h || 0
+  const n = r.total_7d || 0
   if (n === 0) {
-    return { status: 'warn', summary: 'no attribution rows touched in last 24h — pageview tracker may be dead', details: { total_24h: 0 } }
+    // Cross-check whether the pageview tracker itself is alive — separates
+    // "tracker dead" from "tracker fine, just no auth events to attribute".
+    const pv = await env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM site_analytics WHERE event_type='pageview' AND created_at >= datetime('now','-7 days')`
+    ).first<{ n: number }>().catch(() => null)
+    const pvCount = pv?.n || 0
+    if (pvCount === 0) {
+      return { status: 'warn', summary: 'no attribution rows AND no pageviews in 7d — pageview tracker may be dead', details: { total_7d: 0, pageviews_7d: 0 } }
+    }
+    return { status: 'pass', summary: `0 attribution rows in 7d but ${pvCount} pageviews recorded — no auth events to attribute (expected idle)`, details: { total_7d: 0, pageviews_7d: pvCount } }
   }
-  return { status: 'pass', summary: `${n} attribution rows updated in last 24h`, details: { total_24h: n } }
+  return { status: 'pass', summary: `${n} attribution rows updated in last 7d`, details: { total_7d: n } }
 }
 
 // ── 10. Conversion event drift ──────────────────────────────────
