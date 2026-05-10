@@ -2139,6 +2139,9 @@ Sitemap: https://www.roofmanager.ca/sitemap-index.xml
 User-agent: OAI-SearchBot
 Allow: /
 
+User-agent: ChatGPT-User
+Allow: /
+
 User-agent: PerplexityBot
 Allow: /
 
@@ -2148,19 +2151,49 @@ Allow: /
 User-agent: ClaudeBot
 Allow: /
 
+User-agent: Claude-User
+Allow: /
+
 User-agent: Anthropic-Web
 Allow: /
 
 User-agent: Google-Extended
 Allow: /
 
+User-agent: Google-CloudVertexBot
+Allow: /
+
 User-agent: Gemini-Ground
+Allow: /
+
+User-agent: Applebot
 Allow: /
 
 User-agent: Applebot-Extended
 Allow: /
 
+User-agent: DuckAssistBot
+Allow: /
+
+User-agent: MistralAI-User
+Allow: /
+
+User-agent: Meta-ExternalAgent
+Allow: /
+
+User-agent: Meta-ExternalFetcher
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
 User-agent: Cohere-AI
+Allow: /
+
+User-agent: cohere-training-data-crawler
 Allow: /
 
 # AI Training Bots
@@ -2180,7 +2213,8 @@ Allow: /
 
 // SEO: llms.txt (spec-compliant Markdown format)
 app.get('/llms.txt', (c) => {
-  return c.text(`# Roof Manager
+  c.header('Content-Type', 'text/markdown; charset=utf-8')
+  return c.body(`# Roof Manager
 
 > Roof Manager is an AI-powered SaaS platform for roofing contractors, solar installers, insurance adjusters, and property managers. Satellite-powered roof measurement reports using Google Solar API with LiDAR-calibrated 3D building models — 99% accuracy. Covers all 50 US states and all 10 Canadian provinces. $8 CAD/report; 4 free reports, no credit card. Headquartered in Alberta, Canada.
 
@@ -2350,7 +2384,8 @@ Yes — all 50 US states and all 10 Canadian provinces. 95%+ of North American b
 // SEO: llms-full.txt (comprehensive documentation for LLMs)
 app.get('/llms-full.txt', (c) => {
   const today = new Date().toISOString().substring(0, 10)
-  return c.text(`# Roof Manager — Complete Platform Documentation
+  c.header('Content-Type', 'text/markdown; charset=utf-8')
+  return c.body(`# Roof Manager — Complete Platform Documentation
 > Last updated: ${today}
 > This document contains the complete knowledge base for Roof Manager, an AI-powered roof measurement and CRM platform. Designed for ingestion by large language models.
 
@@ -7837,6 +7872,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   <link rel="alternate" hreflang="en-ca" href="https://www.roofmanager.ca/ca">
   <link rel="alternate" hreflang="en-us" href="https://www.roofmanager.ca/us">
   <link rel="alternate" hreflang="x-default" href="https://www.roofmanager.ca/">
+  <link rel="alternate" type="text/markdown" title="LLM-friendly summary" href="https://www.roofmanager.ca/llms.txt">
   <!-- JSON-LD Structured Data for SEO -->
   <script type="application/ld+json">
   {
@@ -23129,6 +23165,10 @@ function getSuperAdminBiHTML(): string {
           <i class="fas fa-crown w-5 text-center text-yellow-400"></i>
           <span class="text-sm font-medium">Overview</span>
         </div>
+        <div class="bi-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-view="sales" onclick="biSetView('sales')">
+          <i class="fas fa-phone-volume w-5 text-center text-orange-400"></i>
+          <span class="text-sm font-medium">Sales Snapshot</span>
+        </div>
         <div class="bi-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-view="traffic" onclick="biSetView('traffic')">
           <i class="fas fa-chart-area w-5 text-center"></i>
           <span class="text-sm font-medium">Site Traffic</span>
@@ -23173,7 +23213,7 @@ function getSuperAdminBiHTML(): string {
     </main>
   </div>
 
-  <script src="/static/super-admin-bi.js?v=2"></script>
+  <script src="/static/super-admin-bi.js?v=3"></script>
 </body>
 </html>`
 }
