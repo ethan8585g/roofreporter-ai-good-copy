@@ -62,7 +62,7 @@ function contactCTA(source: string) {
         <textarea name="m" rows="2" placeholder="How can we help?" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;color:#fff;font-size:14px;outline:none;resize:none;margin-bottom:12px;box-sizing:border-box"></textarea>
         <button type="submit" style="width:100%;background:#00FF88;color:#0A0A0A;font-weight:800;padding:14px;border:none;border-radius:10px;font-size:15px;cursor:pointer">Send Message</button>
       </form>
-      <p style="text-align:center;color:#6b7280;font-size:11px;margin-top:8px"><i class="fas fa-phone" style="color:#00FF88;margin-right:4px"></i>Or call: <a href="tel:+17809833335" style="color:#00FF88">(780) 983-3335</a> · <a href="mailto:sales@roofmanager.ca" style="color:#00FF88">sales@roofmanager.ca</a></p>
+      <p style="text-align:center;color:#6b7280;font-size:11px;margin-top:8px"><i class="fas fa-envelope" style="color:#00FF88;margin-right:4px"></i>Email: <a href="mailto:sales@roofmanager.ca" style="color:#00FF88">sales@roofmanager.ca</a></p>
     </div>
   </div>
 </section>`

@@ -1,7 +1,7 @@
 # Roof Manager — LiveKit Voice Agent
 
 ## AI Secretary for Rick's Roofing
-**Phone:** +1-484-964-9758 (AI) ← forwarded from +1-780-983-3335 (business)
+**Phone:** +1-484-964-9758 (AI) ← forwarded from the business number
 
 This Python agent answers inbound phone calls routed through LiveKit SIP. It uses:
 - **Deepgram Nova 3** for speech-to-text
@@ -13,7 +13,7 @@ This Python agent answers inbound phone calls routed through LiveKit SIP. It use
 
 ## Call Flow
 ```
-Homeowner dials 780-983-3335
+Homeowner dials the business number
   → Rogers call-forwarding to +14849649758
     → LiveKit SIP Trunk (ST_acLimvCPo5ES)
       → Dispatch Rule (SDR_cZDM2nFXpW7o) creates room "secretary-2-{caller}-{uuid}"
@@ -98,7 +98,7 @@ lk agent logs
 lk agent tail
 ```
 
-#### 7. Test It — Call 780-983-3335
+#### 7. Test It — Call the business number
 Dial the business number and Sarah should answer within 2-3 rings.
 
 ---

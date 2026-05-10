@@ -189,7 +189,6 @@ function buildReengagementHtml(firstName: string, cohort: 'never_ordered' | 'dor
     : "Wanted to check in personally — I noticed it's been a while since your last report, and I'd love to bring you back."
 
   const calendarUrl = 'https://calendar.app.google/D7geGYEwiGPaaWvH6'
-  const phone = '780-983-3335'
 
   const priceRow = (label: string, regular: string, sale: string, perReport: string) => `
     <tr>
@@ -230,9 +229,6 @@ function buildReengagementHtml(firstName: string, cohort: 'never_ordered' | 'dor
     <div style="text-align:center;margin:20px 0 12px">
       <a href="${calendarUrl}" style="display:inline-block;background:#1E3A5F;color:#fff;font-weight:700;font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none">Book a Demo / Tutorial</a>
     </div>
-    <p style="font-size:14px;color:#374151;line-height:1.6;margin:16px 0 0;text-align:center">
-      Or text / call me direct: <a href="tel:+17809833335" style="color:#1E3A5F;font-weight:700;text-decoration:none">${phone}</a>
-    </p>
     <p style="font-size:14px;color:#1a1a2e;margin:24px 0 0">— Ethan, Roof Manager</p>
   </div>
 

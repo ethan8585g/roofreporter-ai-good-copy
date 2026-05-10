@@ -688,7 +688,7 @@
         '<div class="space-y-4 ml-9">' +
           '<div>' +
             '<label class="block text-sm font-semibold text-black mb-1"><i class="fas fa-phone mr-1 text-sky-500"></i>Your Business Phone Number</label>' +
-            '<input type="tel" id="secPhone" value="' + esc(c.business_phone || '') + '" placeholder="(780) 983-3335" class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
+            '<input type="tel" id="secPhone" value="' + esc(c.business_phone || '') + '" placeholder="(555) 555-5555" class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
             '<p class="text-xs text-black mt-1">Your existing business line — the AI only answers when you don\'t pick up. SMS summaries sent to this number after each call.</p></div>' +
           '<div>' +
             '<label class="block text-sm font-semibold text-black mb-1"><i class="fas fa-hand-sparkles mr-1 text-sky-500"></i>Opening Greeting — How Should ' + esc(c.agent_name || 'Sarah') + ' Address Callers?</label>' +
@@ -1086,7 +1086,7 @@
             '<div class="relative">' +
               '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">' +
                 '<span class="text-black font-mono text-lg">+1</span></div>' +
-              '<input type="tel" id="qcBizPhoneInput" value="' + esc(existingBizPhone.replace(/^\+1/, '')) + '" placeholder="(780) 983-3335" ' +
+              '<input type="tel" id="qcBizPhoneInput" value="' + esc(existingBizPhone.replace(/^\+1/, '')) + '" placeholder="(555) 555-5555" ' +
                 'class="w-full pl-14 pr-4 py-4 text-lg font-mono border-2 border-white/15 rounded-2xl focus:ring-4 focus:ring-sky-200 focus:border-sky-500 transition-all text-center" ' +
                 'maxlength="14" autocomplete="tel">' +
             '</div>' +
@@ -1548,7 +1548,7 @@
             '<p class="text-xs text-black mb-2">Your regular cell number that customers call</p>' +
             '<div class="relative">' +
               '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none"><span class="text-black font-mono">+1</span></div>' +
-              '<input type="tel" id="pcBizPhone" value="' + esc(bizPhone.replace(/^\+1/, '')) + '" placeholder="(780) 983-3335" ' +
+              '<input type="tel" id="pcBizPhone" value="' + esc(bizPhone.replace(/^\+1/, '')) + '" placeholder="(555) 555-5555" ' +
                 'class="w-full pl-12 pr-4 py-3 font-mono border-2 border-white/15 rounded-xl focus:ring-4 focus:ring-sky-200 focus:border-sky-500 text-center" maxlength="14">' +
             '</div>' +
           '</div>' +
