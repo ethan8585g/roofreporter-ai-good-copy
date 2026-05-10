@@ -20,6 +20,7 @@ import { reportsMonitorRoutes } from './routes/reports-monitor'
 import { signupHealthRoutes } from './routes/signup-health'
 import { signupJourneyRoutes } from './routes/signup-journey'
 import { adsHealthRoutes } from './routes/ads-health'
+import { adsSecretsRoutes } from './routes/ads-secrets'
 import { marketingBlastRoutes } from './routes/marketing-blast'
 import { aiAnalysisRoutes } from './routes/ai-analysis'
 import { authRoutes } from './routes/auth'
@@ -615,6 +616,7 @@ app.route('/api/reports-monitor', reportsMonitorRoutes)
 app.route('/api/signup-health', signupHealthRoutes)
 app.route('/api/signup-journey', signupJourneyRoutes)
 app.route('/api/ads-health', adsHealthRoutes)
+app.route('/', adsSecretsRoutes)
 app.route('/api/marketing', marketingBlastRoutes)
 app.route('/api/ai', aiAnalysisRoutes)
 app.route('/api/auth', authRoutes)

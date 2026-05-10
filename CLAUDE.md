@@ -89,8 +89,14 @@ Loop Tracker (super admin Loops module — `/super-admin/loop-tracker`):
 - `SCAN_ADMIN_EMAIL` — admin email used by `scan_admin` to mint synthetic 5-min sessions (no password). Required on **both** the Pages project AND the `roofmanager-agent-cron` Worker for cron-fired scans to authenticate.
 - `SCAN_CUSTOMER_EMAIL` — customer email used by `scan_customer`. Optional; without it, leave `agent_configs.scan_customer.enabled = 0`.
 - `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` — optional, enables Browser Rendering REST API for console-error capture during scans. Without these, the console_error check logs a single "skipped" warning and the rest of the scan still runs.
-- `FUNNEL_MONITOR_TOKEN` — bearer token for the Claude `/funnel-monitor` and `/gmail-health` slash commands.
+- `FUNNEL_MONITOR_TOKEN` — bearer token for the Claude `/funnel-monitor`, `/gmail-health`, `/signup-health`, `/signup-journey`, AND `/ads-health` slash commands. Single shared secret across all five.
 - `REPORTS_MONITOR_TOKEN` — bearer token for the Claude `/reports-monitor` slash command.
 - `CLOUD_ROUTINE_TOKEN` — optional bearer token for Anthropic `/schedule` cloud routines POSTing `/api/super-admin/loop-tracker/api/routines/heartbeat`. Falls back to `FUNNEL_MONITOR_TOKEN` when unset.
+
+Ads-health loop (`/ads-health`, fires every 4h via cron + on-demand via slash):
+- Checks 10 sections: secret_inventory, gads_label_completeness, pixel_presence_html, ga4_mp_health, meta_capi_health, capi_event_volume, gclid_capture_rate, utm_capture_rate, attribution_table_freshness, conversion_event_drift.
+- Emails christinegourley04@gmail.com on warn/fail only (silent on pass).
+- Surfaces in `/super-admin/loop-tracker` as a dedicated "Ads + Analytics Health" panel with verdict dot, per-section status, and Run-now button.
+- Optional Pages secrets the loop checks for: `META_CAPI_ACCESS_TOKEN` (server CAPI), `META_APP_ID`/`META_APP_SECRET`/`META_AD_ACCOUNT_ID` (Meta connect), `GADS_LEAD_LABEL`/`GADS_CONTACT_LABEL`/`GADS_DEMO_LABEL`/`GADS_PURCHASE_LABEL` (Google Ads conversion labels — the part after `AW-XXX/`). When unset, the loop warns instead of breaking.
 
 Two separate deployments to remember: the Pages project (`roofing-measurement-tool`, all HTTP routes) and the `roofmanager-agent-cron` Worker (`wrangler-cron.jsonc`, fires every 10 min, drives all loops + agents). Cloudflare Pages does NOT honor `scheduled()` handlers — anything cron-driven must live in `src/cron-worker.ts`. Each deployment maintains its own secret store.

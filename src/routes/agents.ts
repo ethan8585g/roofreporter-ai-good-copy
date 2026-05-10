@@ -149,7 +149,10 @@ agentsRoutes.post('/leads', async (c) => {
       lead_email_domain: emailClean.split('@')[1] || 'unknown'
     }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
-    // Fire server-side Meta Conversions API Lead event (non-blocking)
+    // Pre-generate the CAPI event_id so we can return it to the client and
+    // dedupe with the corresponding fbq('track','Lead',{eventID:...}) fire.
+    // Without dedup, Meta double-counts: once from the pixel, once from CAPI.
+    const metaEventId = `rm_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
     sendMetaConversion(c.env, {
       eventName: 'Lead',
       email: emailClean,
@@ -157,6 +160,7 @@ agentsRoutes.post('/leads', async (c) => {
       sourcePage: source_page || 'unknown',
       sourceUrl: `https://www.roofmanager.ca/${source_page || ''}`,
       customData: { content_name: leadTypeClean, lead_type: leadTypeClean },
+      eventId: metaEventId,
     }).catch((e) => console.warn('[Meta CAPI lead]', (e && e.message) || e))
 
     // ── Auto-acknowledgment email to the lead (non-blocking, 3-tier fallback) ──
@@ -307,7 +311,7 @@ agentsRoutes.post('/leads', async (c) => {
       console.error('[Lead Email] ALL methods failed — lead notification for', emailClean, 'was NOT delivered')
     }
 
-    return c.json({ success: true, message: 'Thank you! We will be in touch shortly.', lead_id: leadId })
+    return c.json({ success: true, message: 'Thank you! We will be in touch shortly.', lead_id: leadId, meta_event_id: metaEventId })
   } catch (e: any) {
     return c.json({ error: 'Failed to submit', details: e.message }, 500)
   }

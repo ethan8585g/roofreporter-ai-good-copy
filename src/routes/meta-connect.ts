@@ -25,7 +25,8 @@ async function sendMetaConversion(env: any, opts: {
   sourceUrl?: string
   customData?: Record<string, any>
   testEventCode?: string
-}): Promise<{ success: boolean; error?: string; fbtrace_id?: string; http_status_code?: number }> {
+  eventId?: string  // pass to dedupe with client-side fbq('track', '...', {eventID: ...})
+}): Promise<{ success: boolean; error?: string; fbtrace_id?: string; http_status_code?: number; event_id?: string }> {
   const pixelId = env.META_PIXEL_ID || ''
   const accessToken = env.META_CAPI_ACCESS_TOKEN || ''
   if (!pixelId || !accessToken) {
@@ -57,7 +58,7 @@ async function sendMetaConversion(env: any, opts: {
     return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('')
   }
 
-  const eventId = `rm_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+  const eventId = opts.eventId || `rm_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
   const userData: Record<string, any> = {}
   if (opts.email) userData.em = [await sha256(opts.email)]
   if (opts.phone) userData.ph = [await sha256(opts.phone.replace(/\D/g, ''))]
@@ -105,7 +106,7 @@ async function sendMetaConversion(env: any, opts: {
       ).run()
     } catch {}
 
-    return { success: !!result.events_received, fbtrace_id: fbtraceId, http_status_code: httpStatus }
+    return { success: !!result.events_received, fbtrace_id: fbtraceId, http_status_code: httpStatus, event_id: eventId }
   } catch (e: any) {
     console.error('[Meta CAPI]', e?.message || e)
     return { success: false, error: e?.message || 'Network error', http_status_code: httpStatus || undefined }
