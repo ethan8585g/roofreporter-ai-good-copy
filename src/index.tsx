@@ -8238,7 +8238,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <span class="text-sm font-semibold text-[#00FF88] tracking-wide">North America&ndash;Wide Roof Measurements <span class="text-[10px] mx-1">&#127464;&#127462;</span><span class="text-[10px]">&#127482;&#127480;</span> &middot; 200+ Contractors</span>
             </div>
             <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] text-white mb-6 tracking-tight">Affordable Satellite Roof Measurement Reports <span class="neon-text">Roofers Actually Trust</span></h1>
-            <h2 class="text-lg lg:text-xl text-gray-300 mb-8 max-w-xl leading-relaxed font-normal">Contractor-grade roof measurement reports — satellite-precise area, pitch, edges, and material BOM, with full CRM and instant PDF delivery. Built for US &amp; Canadian roofing contractors. Contact us today to get started.</h2>
+            <h2 class="text-lg lg:text-xl text-gray-300 mb-8 max-w-xl leading-relaxed font-normal">Contractor-grade roof measurement reports — satellite-precise area, pitch, edges, and material BOM, with full CRM and 1&ndash;2 hour PDF delivery. Built for US &amp; Canadian roofing contractors. Contact us today to get started.</h2>
 
             <!-- Primary CTA (ONE) -->
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 mb-4">
@@ -8528,7 +8528,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
                 <!-- Before/After bar -->
                 <div class="space-y-2 mb-4">
                   <div><div class="flex justify-between text-[10px] mb-1"><span class="text-gray-500 uppercase tracking-wider">Manual</span><span class="text-gray-400">2h+</span></div><div class="h-1.5 bg-white/5 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:95%;background:rgba(239,68,68,0.5);"></div></div></div>
-                  <div><div class="flex justify-between text-[10px] mb-1"><span class="text-gray-500 uppercase tracking-wider">Roof Manager</span><span style="color:#22d3ee">60s</span></div><div class="h-1.5 bg-white/5 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:6%;background:#22d3ee;"></div></div></div>
+                  <div><div class="flex justify-between text-[10px] mb-1"><span class="text-gray-500 uppercase tracking-wider">Roof Manager</span><span style="color:#22d3ee">1&ndash;2 hrs</span></div><div class="h-1.5 bg-white/5 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:15%;background:#22d3ee;"></div></div></div>
                 </div>
                 <div class="pillar-detail mb-2">
                   <ul class="space-y-1.5 text-xs text-gray-400 border-t border-white/5 pt-3">
@@ -8882,7 +8882,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             <tbody class="text-gray-300">
               <tr class="border-b border-white/5"><td class="px-5 py-4 font-semibold">Price per report</td><td class="text-center px-5 py-4 bg-[#00FF88]/5 border-x border-[#00FF88]/20"><span class="text-[#00FF88] font-black">$8 CAD</span><div class="text-[10px] text-gray-500">$5.95 on 100-pack</div></td><td class="text-center px-5 py-4 text-gray-400">$50&ndash;100 USD</td><td class="text-center px-5 py-4 text-gray-400">$25&ndash;55 USD</td><td class="text-center px-5 py-4 text-gray-400">$25&ndash;40 USD</td></tr>
               <tr class="border-b border-white/5"><td class="px-5 py-4 font-semibold">Free trial</td><td class="text-center px-5 py-4 bg-[#00FF88]/5 border-x border-[#00FF88]/20"><i class="fas fa-check text-[#00FF88]"></i><div class="text-[10px] text-gray-500 mt-1">4 reports free</div></td><td class="text-center px-5 py-4"><i class="fas fa-times text-red-400"></i></td><td class="text-center px-5 py-4"><i class="fas fa-check text-gray-400"></i><div class="text-[10px] text-gray-500 mt-1">Limited demo</div></td><td class="text-center px-5 py-4"><i class="fas fa-check text-gray-400"></i><div class="text-[10px] text-gray-500 mt-1">3 reports</div></td></tr>
-              <tr class="border-b border-white/5"><td class="px-5 py-4 font-semibold">Turnaround time</td><td class="text-center px-5 py-4 bg-[#00FF88]/5 border-x border-[#00FF88]/20"><span class="text-[#00FF88] font-black">~60 sec</span></td><td class="text-center px-5 py-4 text-gray-400">2&ndash;48 hours</td><td class="text-center px-5 py-4 text-gray-400">1&ndash;24 hours</td><td class="text-center px-5 py-4 text-gray-400">15 min &ndash; 24 hours</td></tr>
+              <tr class="border-b border-white/5"><td class="px-5 py-4 font-semibold">Turnaround time</td><td class="text-center px-5 py-4 bg-[#00FF88]/5 border-x border-[#00FF88]/20"><span class="text-[#00FF88] font-black">1&ndash;2 hours</span></td><td class="text-center px-5 py-4 text-gray-400">2&ndash;48 hours</td><td class="text-center px-5 py-4 text-gray-400">1&ndash;24 hours</td><td class="text-center px-5 py-4 text-gray-400">15 min &ndash; 24 hours</td></tr>
               <tr class="border-b border-white/5"><td class="px-5 py-4 font-semibold">Material BOM included</td><td class="text-center px-5 py-4 bg-[#00FF88]/5 border-x border-[#00FF88]/20"><i class="fas fa-check text-[#00FF88]"></i></td><td class="text-center px-5 py-4 text-gray-400">Add-on</td><td class="text-center px-5 py-4"><i class="fas fa-check text-gray-400"></i></td><td class="text-center px-5 py-4"><i class="fas fa-check text-gray-400"></i></td></tr>
               <tr class="border-b border-white/5"><td class="px-5 py-4 font-semibold">Full CRM included</td><td class="text-center px-5 py-4 bg-[#00FF88]/5 border-x border-[#00FF88]/20"><i class="fas fa-check text-[#00FF88]"></i><div class="text-[10px] text-gray-500 mt-1">Free, unlimited users</div></td><td class="text-center px-5 py-4"><i class="fas fa-times text-red-400"></i></td><td class="text-center px-5 py-4"><i class="fas fa-times text-red-400"></i></td><td class="text-center px-5 py-4 text-gray-400">Separate tier</td></tr>
               <tr class="border-b border-white/5"><td class="px-5 py-4 font-semibold">Invoicing &amp; proposals</td><td class="text-center px-5 py-4 bg-[#00FF88]/5 border-x border-[#00FF88]/20"><i class="fas fa-check text-[#00FF88]"></i></td><td class="text-center px-5 py-4"><i class="fas fa-times text-red-400"></i></td><td class="text-center px-5 py-4 text-gray-400">Basic</td><td class="text-center px-5 py-4"><i class="fas fa-check text-gray-400"></i></td></tr>
@@ -8951,7 +8951,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         </div>
         <div class="grid md:grid-cols-4 gap-3 scroll-animate">
           <div class="bg-[#111] border border-white/10 rounded-xl p-4 text-center"><div class="text-2xl font-black text-white">50 + 13</div><div class="text-[11px] text-gray-500 uppercase tracking-wider mt-1">US states + CA provinces &amp; territories</div></div>
-          <div class="bg-[#111] border border-white/10 rounded-xl p-4 text-center"><div class="text-2xl font-black text-white">~60s</div><div class="text-[11px] text-gray-500 uppercase tracking-wider mt-1">Continent-wide turnaround</div></div>
+          <div class="bg-[#111] border border-white/10 rounded-xl p-4 text-center"><div class="text-2xl font-black text-white">1&ndash;2 hrs</div><div class="text-[11px] text-gray-500 uppercase tracking-wider mt-1">Continent-wide turnaround</div></div>
           <div class="bg-[#111] border border-white/10 rounded-xl p-4 text-center"><div class="text-2xl font-black text-white">CAD &amp; USD</div><div class="text-[11px] text-gray-500 uppercase tracking-wider mt-1">Native dual-currency billing</div></div>
           <div class="bg-[#111] border border-white/10 rounded-xl p-4 text-center"><div class="text-2xl font-black text-white">PIPEDA</div><div class="text-[11px] text-gray-500 uppercase tracking-wider mt-1">Compliant data handling</div></div>
         </div>
@@ -8975,7 +8975,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           <div class="flex items-center gap-6">
             <div class="text-center"><div id="rm-live-reports-count" class="text-2xl font-black text-white">&mdash;</div><div class="text-[10px] text-gray-500 uppercase tracking-wider mt-0.5">Reports generated</div></div>
             <div class="w-px h-8 bg-white/10"></div>
-            <div class="text-center"><div class="text-2xl font-black text-white">~60s</div><div class="text-[10px] text-gray-500 uppercase tracking-wider mt-0.5">Avg turnaround</div></div>
+            <div class="text-center"><div class="text-2xl font-black text-white">1&ndash;2 hrs</div><div class="text-[10px] text-gray-500 uppercase tracking-wider mt-0.5">Typical turnaround</div></div>
           </div>
         </div>
       </div>
@@ -16654,7 +16654,7 @@ function getCoveragePageHTML() {
         <h2 class="text-2xl font-bold text-white mb-4">How Roof Manager Coverage Works</h2>
         <div class="text-gray-400 text-sm leading-relaxed space-y-4">
           <p>Roof Manager uses <strong class="text-white">Google's Solar API</strong> to access high-resolution satellite imagery and LiDAR-calibrated 3D building models. Our coverage extends to any location where Google has processed satellite data through their Solar API infrastructure.</p>
-          <p>Coverage is strongest in urban and suburban areas across our supported countries. The <strong class="text-white">United States</strong> has the highest coverage density, with over 95% of all buildings available for instant roof measurement reports. <strong class="text-white">Canada</strong>, <strong class="text-white">Australia</strong>, the <strong class="text-white">United Kingdom</strong>, <strong class="text-white">Germany</strong>, and <strong class="text-white">France</strong> also have excellent coverage.</p>
+          <p>Coverage is strongest in urban and suburban areas across our supported countries. The <strong class="text-white">United States</strong> has the highest coverage density, with over 95% of all buildings available for satellite roof measurement reports. <strong class="text-white">Canada</strong>, <strong class="text-white">Australia</strong>, the <strong class="text-white">United Kingdom</strong>, <strong class="text-white">Germany</strong>, and <strong class="text-white">France</strong> also have excellent coverage.</p>
           <p>Reports include total roof area (pitch-adjusted), edge breakdowns (ridge, hip, valley, eave, rake), material BOM with quantities, segment-by-segment analysis, solar potential data, and a professional PDF — all delivered to your inbox and dashboard.</p>
           <p>If satellite imagery is not available for a specific address, you will not be charged. Your first 4 reports are always free with no credit card required.</p>
         </div>
@@ -22912,7 +22912,7 @@ function getAccuracyPageHTML(): string {
     <section class="grid md:grid-cols-3 gap-4 mb-14">
       <div class="bg-[#111] border border-white/10 rounded-2xl p-6 text-center"><div class="text-4xl font-black text-[#00FF88] mb-1">2&ndash;5%</div><div class="text-xs text-gray-400 uppercase tracking-wider">Variance vs. on-roof tape-measure (HIGH imagery)</div></div>
       <div class="bg-[#111] border border-white/10 rounded-2xl p-6 text-center"><div class="text-4xl font-black text-[#00FF88] mb-1">3</div><div class="text-xs text-gray-400 uppercase tracking-wider">Independent data sources cross-checked per report</div></div>
-      <div class="bg-[#111] border border-white/10 rounded-2xl p-6 text-center"><div class="text-4xl font-black text-[#00FF88] mb-1">~60s</div><div class="text-xs text-gray-400 uppercase tracking-wider">Typical time-to-deliver</div></div>
+      <div class="bg-[#111] border border-white/10 rounded-2xl p-6 text-center"><div class="text-4xl font-black text-[#00FF88] mb-1">1&ndash;2 hrs</div><div class="text-xs text-gray-400 uppercase tracking-wider">Typical time-to-deliver</div></div>
     </section>
     <section class="mb-14">
       <h2 class="text-2xl md:text-3xl font-black text-white mb-6">The three data sources behind every report</h2>
@@ -23060,7 +23060,7 @@ function getJpgRoofingCaseStudyHTML(): string {
       <h2 class="text-2xl font-black text-white mb-3"><i class="fas fa-circle text-[#00FF88] text-sm mr-2"></i>The change</h2>
       <p class="text-gray-300 text-base leading-relaxed mb-4">JPG Roofing onboarded onto Roof Manager mid-2025. The first month they ran their existing pipeline through it: every new lead got an instant satellite report, the BOM was attached to the proposal, and Mike stopped climbing roofs for residential estimates.</p>
       <ul class="space-y-3 text-gray-300 text-base leading-relaxed">
-        <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>Reports delivered to dashboard + email in ~60 seconds for every Calgary address.</li>
+        <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>Reports delivered to dashboard + email within 1&ndash;2 hours for every Calgary address.</li>
         <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>Per-estimate cost went from $50&ndash;$90 (EagleView) to $5.95&ndash;$8 (Roof Manager 100-pack).</li>
         <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>Material BOM piped directly to the supplier order &mdash; shingle count, underlayment rolls, ridge cap, nail boxes &mdash; with the configurable waste factor JPG already used internally.</li>
         <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>Quote-from-truck became standard. The estimator opens the report on phone, walks the homeowner through the diagram, signs the proposal in the CRM, sends the invoice &mdash; one app, one workflow.</li>
@@ -23169,7 +23169,7 @@ function getResourcesHubHTML(posts: any[] = []): string {
     <!-- Quick stats -->
     <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-16">
       <div class="bg-[#111] border border-white/10 rounded-xl p-5 text-center"><div class="text-3xl font-black text-[#00FF88] mb-1">2&ndash;5%</div><div class="text-[10px] text-gray-400 uppercase tracking-wider">Variance vs. tape-measure</div></div>
-      <div class="bg-[#111] border border-white/10 rounded-xl p-5 text-center"><div class="text-3xl font-black text-[#00FF88] mb-1">~60s</div><div class="text-[10px] text-gray-400 uppercase tracking-wider">Continent-wide turnaround</div></div>
+      <div class="bg-[#111] border border-white/10 rounded-xl p-5 text-center"><div class="text-3xl font-black text-[#00FF88] mb-1">1&ndash;2 hrs</div><div class="text-[10px] text-gray-400 uppercase tracking-wider">Continent-wide turnaround</div></div>
       <div class="bg-[#111] border border-white/10 rounded-xl p-5 text-center"><div class="text-3xl font-black text-[#00FF88] mb-1">30-day</div><div class="text-[10px] text-gray-400 uppercase tracking-wider">Money-back guarantee</div></div>
       <div class="bg-[#111] border border-white/10 rounded-xl p-5 text-center"><div class="text-3xl font-black text-[#00FF88] mb-1">5,000+</div><div class="text-[10px] text-gray-400 uppercase tracking-wider">Roofers on the platform</div></div>
     </section>
@@ -23506,7 +23506,7 @@ function getAboutPageHTML(): string {
           <div class="text-xs text-gray-400 uppercase tracking-wider">Accuracy vs. manual measurement</div>
         </div>
         <div class="bg-[#111] border border-white/10 rounded-xl p-6 text-center">
-          <div class="text-3xl md:text-4xl font-black text-[#00FF88] mb-1">60s</div>
+          <div class="text-3xl md:text-4xl font-black text-[#00FF88] mb-1">1&ndash;2 hrs</div>
           <div class="text-xs text-gray-400 uppercase tracking-wider">Typical report turnaround</div>
         </div>
         <div class="bg-[#111] border border-white/10 rounded-xl p-6 text-center">
@@ -23605,7 +23605,7 @@ function getPressPageHTML(): string {
       <h2 style="font-size:22px;font-weight:700;margin-bottom:24px;border-bottom:1px solid #1e293b;padding-bottom:12px;">Key Numbers</h2>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;">
         <div class="stat-card"><div style="font-size:32px;font-weight:800;color:#f59e0b;">$10</div><div style="color:#94a3b8;font-size:13px;margin-top:6px;">Per professional report (flat rate)</div></div>
-        <div class="stat-card"><div style="font-size:32px;font-weight:800;color:#38bdf8;">60s</div><div style="color:#94a3b8;font-size:13px;margin-top:6px;">Typical report turnaround time</div></div>
+        <div class="stat-card"><div style="font-size:32px;font-weight:800;color:#38bdf8;">1&ndash;2h</div><div style="color:#94a3b8;font-size:13px;margin-top:6px;">Typical report turnaround time</div></div>
         <div class="stat-card"><div style="font-size:32px;font-weight:800;color:#4ade80;">3</div><div style="color:#94a3b8;font-size:13px;margin-top:6px;">Free reports on signup — no card</div></div>
         <div class="stat-card"><div style="font-size:32px;font-weight:800;color:#a78bfa;">AI</div><div style="color:#94a3b8;font-size:13px;margin-top:6px;">Gemini 2.0/2.5 + Google Solar API</div></div>
         <div class="stat-card"><div style="font-size:32px;font-weight:800;color:#f59e0b;">CA+US</div><div style="color:#94a3b8;font-size:13px;margin-top:6px;">Coverage across North America</div></div>
