@@ -88,7 +88,7 @@ websiteBuilderRoutes.post('/subscribe', async (c) => {
         name: 'AI Website Builder — Monthly Subscription',
         price_money: {
           amount: 9900,
-          currency: 'USD',
+          currency: 'CAD',
         },
         location_id: locationId,
       },

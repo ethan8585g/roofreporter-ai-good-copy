@@ -26,6 +26,6 @@ export function pctOfCents(cents: number, pct: number): number {
   return Math.round((Math.round(cents) * pct) / 100)
 }
 
-export function formatCents(cents: number, currency = 'USD'): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(fromCents(cents))
+export function formatCents(cents: number, currency = 'CAD'): string {
+  return new Intl.NumberFormat('en-CA', { style: 'currency', currency }).format(fromCents(cents))
 }

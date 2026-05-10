@@ -128,7 +128,7 @@ app.get('/', (c) => {
 <head>
   ${getHeadTagsMinimal()}
   <title>Roof Measurement Software for US Roofing Contractors | Roof Manager</title>
-  <meta name="description" content="Satellite roof measurement reports for roofing contractors in all 50 US states. $8/report after 4 free. Works in Texas, Florida, Colorado, Arizona, and every US state. Priced in USD.">
+  <meta name="description" content="Satellite roof measurement reports for roofing contractors in all 50 US states. $8/report after 4 free. Works in Texas, Florida, Colorado, Arizona, and every US state. Priced in CAD.">
   <meta property="og:locale" content="en_US">
   <meta name="geo.region" content="US">
   <link rel="canonical" href="https://www.roofmanager.ca/us">
@@ -148,10 +148,10 @@ app.get('/', (c) => {
     <div class="max-w-4xl mx-auto px-4">
       <span class="inline-block px-4 py-1.5 bg-sky-500/20 border border-sky-400/30 rounded-full text-sm text-sky-300 mb-6">🇺🇸 All 50 States Covered</span>
       <h1 class="text-4xl md:text-5xl font-black mb-6">Roof Measurement Software<br>for US Roofing Contractors</h1>
-      <p class="text-xl text-blue-200 mb-4">As of 2026, Roof Manager generates satellite-powered roof reports for contractors in every US state. Reports cost $8 USD per report after 4 free reports — the lowest per-report price in the US market. Accepted by insurance adjusters for storm, hail, and hurricane damage documentation.</p>
+      <p class="text-xl text-blue-200 mb-4">As of 2026, Roof Manager generates satellite-powered roof reports for contractors in every US state. Reports cost $8 CAD per report after 4 free reports — the lowest per-report price in the US market. Accepted by insurance adjusters for storm, hail, and hurricane damage documentation.</p>
       <div class="flex flex-col sm:flex-row gap-4 justify-center mt-8">
         <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg">Get 4 Free Reports <i class="fas fa-arrow-right ml-2"></i></a>
-        <a href="/pricing" class="px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-lg border border-white/20">View US Pricing (USD)</a>
+        <a href="/pricing" class="px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-lg border border-white/20">View US Pricing (CAD)</a>
       </div>
     </div>
   </section>
@@ -172,7 +172,7 @@ app.get('/', (c) => {
     <div class="max-w-5xl mx-auto px-4">
       <h2 class="text-2xl font-black text-center mb-10">Why US Contractors Choose Roof Manager</h2>
       <div class="grid md:grid-cols-3 gap-6">
-        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-dollar-sign text-sky-400 mr-2"></i>USD Pricing</h3><p class="text-gray-400 text-sm">Reports priced and billed in USD. $8/report after 4 free — the lowest per-report price in the US market as of 2026.</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-dollar-sign text-sky-400 mr-2"></i>CAD Pricing</h3><p class="text-gray-400 text-sm">Reports priced and billed in CAD. $8/report after 4 free — the lowest per-report price in the US market as of 2026.</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-file-invoice text-sky-400 mr-2"></i>Insurance-Ready Reports</h3><p class="text-gray-400 text-sm">Reports include pitch-corrected area, edge breakdowns, and material BOMs accepted by US insurance adjusters for hail, storm, and hurricane claims.</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2"><i class="fas fa-bolt text-sky-400 mr-2"></i>60-Second Turnaround</h3><p class="text-gray-400 text-sm">Measure any US property from your phone or truck. Google Solar API data is available for 99% of US addresses in all 50 states.</p></div>
       </div>
@@ -246,7 +246,7 @@ app.get('/:state', (c) => {
     "@context": "https://schema.org",
     "@type": "FAQPage",
     "mainEntity": [
-      { "@type": "Question", "name": `Does Roof Manager work in ${state.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `Yes. Roof Manager generates satellite-powered roof measurement reports for roofing contractors in ${state.name}. Google Solar API coverage is available for the vast majority of ${state.name} addresses. Reports cost $8 USD per report after 4 free reports.` } },
+      { "@type": "Question", "name": `Does Roof Manager work in ${state.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `Yes. Roof Manager generates satellite-powered roof measurement reports for roofing contractors in ${state.name}. Google Solar API coverage is available for the vast majority of ${state.name} addresses. Reports cost $8 CAD per report after 4 free reports.` } },
       { "@type": "Question", "name": `What is the primary roofing peril in ${state.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `The primary roofing peril in ${state.name} is ${state.stormProfile.primaryPeril}. ${state.roofingNotes}` } },
       { "@type": "Question", "name": `What building code applies to roofing in ${state.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `${state.name} has adopted ${state.buildingCode.adoptedIRC}. ${state.buildingCode.notes}` } },
       { "@type": "Question", "name": `Which insurance companies are major carriers in ${state.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `The top roofing insurance carriers in ${state.name} include ${state.topInsurers.join(', ')}. Roof Manager reports are accepted as supporting documentation for claims with these carriers.` } },
@@ -259,7 +259,7 @@ app.get('/:state', (c) => {
 <head>
   ${getHeadTagsMinimal()}
   <title>Satellite Roof Measurement Software for ${state.name} Roofing Contractors | Roof Manager</title>
-  <meta name="description" content="AI-powered roof measurement reports for ${state.name} roofing contractors. ${state.stormProfile.primaryPeril}. USD pricing. 4 free reports — no credit card.">
+  <meta name="description" content="AI-powered roof measurement reports for ${state.name} roofing contractors. ${state.stormProfile.primaryPeril}. CAD pricing. 4 free reports — no credit card.">
   <meta property="og:locale" content="en_US">
   <meta property="og:title" content="Roof Measurement Software for ${state.name} Contractors — Roof Manager">
   <meta property="og:type" content="website">
@@ -270,7 +270,7 @@ app.get('/:state', (c) => {
   <link rel="alternate" hreflang="en" href="https://www.roofmanager.ca/">
   <link rel="alternate" hreflang="x-default" href="https://www.roofmanager.ca/">
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"LocalBusiness","name":"Roof Manager — ${state.name}","description":"Satellite roof measurement software for ${state.name} roofing contractors. USD pricing. Insurance-ready reports.","url":"https://www.roofmanager.ca/us/${stateSlug}","image":"https://www.roofmanager.ca/static/logo.png","address":{"@type":"PostalAddress","addressRegion":"${state.code}","addressCountry":"US"},"areaServed":{"@type":"State","name":"${state.name}"},"priceRange":"$5-$500"}
+  {"@context":"https://schema.org","@type":"LocalBusiness","name":"Roof Manager — ${state.name}","description":"Satellite roof measurement software for ${state.name} roofing contractors. CAD pricing. Insurance-ready reports.","url":"https://www.roofmanager.ca/us/${stateSlug}","image":"https://www.roofmanager.ca/static/logo.png","address":{"@type":"PostalAddress","addressRegion":"${state.code}","addressCountry":"US"},"areaServed":{"@type":"State","name":"${state.name}"},"priceRange":"$5-$500"}
   </script>
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"United States","item":"https://www.roofmanager.ca/us"},{"@type":"ListItem","position":3,"name":"${state.name}","item":"https://www.roofmanager.ca/us/${stateSlug}"}]}
@@ -285,10 +285,10 @@ app.get('/:state', (c) => {
       <span class="inline-block px-4 py-1.5 bg-sky-500/20 border border-sky-400/30 rounded-full text-sm text-sky-300 mb-6"><i class="fas fa-map-marker-alt mr-2"></i>${state.name}, ${state.code}</span>
       <h1 class="text-4xl md:text-5xl font-black mb-6">Satellite Roof Measurement Software<br>for <span class="text-sky-400">${state.name}</span> Roofing Contractors</h1>
       <p class="text-xl text-blue-200 mb-4">${state.roofingNotes}</p>
-      <p class="text-blue-300 mb-8">Reports cost <strong>$8 USD</strong> after 4 free reports. Available across all ${state.name} metros. Insurance-ready documentation for ${state.stormProfile.primaryPeril.toLowerCase()} claims.</p>
+      <p class="text-blue-300 mb-8">Reports cost <strong>$8 CAD</strong> after 4 free reports. Available across all ${state.name} metros. Insurance-ready documentation for ${state.stormProfile.primaryPeril.toLowerCase()} claims.</p>
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
         <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg">Get 4 Free Reports <i class="fas fa-arrow-right ml-2"></i></a>
-        <a href="/pricing" class="px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-lg border border-white/20">View Pricing (USD)</a>
+        <a href="/pricing" class="px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-lg border border-white/20">View Pricing (CAD)</a>
       </div>
     </div>
   </section>
@@ -352,7 +352,7 @@ app.get('/:state', (c) => {
     <div class="max-w-4xl mx-auto px-4">
       <h2 class="text-2xl font-black text-center mb-8">Frequently Asked Questions — ${state.name} Roofing</h2>
       <div class="space-y-4">
-        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Does Roof Manager work in ${state.name}?</h3><p class="text-gray-400 text-sm">Yes. Roof Manager generates satellite-powered roof measurement reports for roofing contractors in ${state.name}. Google Solar API coverage is available for the vast majority of ${state.name} addresses. Reports cost $8 USD after 4 free.</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Does Roof Manager work in ${state.name}?</h3><p class="text-gray-400 text-sm">Yes. Roof Manager generates satellite-powered roof measurement reports for roofing contractors in ${state.name}. Google Solar API coverage is available for the vast majority of ${state.name} addresses. Reports cost $8 CAD after 4 free.</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">What is the primary roofing peril in ${state.name}?</h3><p class="text-gray-400 text-sm">${state.stormProfile.primaryPeril}. ${state.roofingNotes}</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">What building code applies to roofing in ${state.name}?</h3><p class="text-gray-400 text-sm">${state.name} has adopted ${state.buildingCode.adoptedIRC}. ${state.buildingCode.notes}</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Which insurance companies cover roof damage in ${state.name}?</h3><p class="text-gray-400 text-sm">The top roofing insurance carriers in ${state.name} include ${state.topInsurers.join(', ')}. Roof Manager reports are accepted as supporting documentation for claims with these carriers.</p></div>
@@ -425,10 +425,10 @@ app.get('/:state/:city', (c) => {
     "@context": "https://schema.org",
     "@type": "FAQPage",
     "mainEntity": [
-      { "@type": "Question", "name": `Does Roof Manager work in ${cityData.name}, ${state.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `Yes. Roof Manager generates satellite roof measurement reports for roofing contractors in ${cityData.name}, ${state.name}. Reports cost $8 USD after 4 free reports. Google Solar API coverage is excellent for ${cityData.name} addresses.` } },
+      { "@type": "Question", "name": `Does Roof Manager work in ${cityData.name}, ${state.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `Yes. Roof Manager generates satellite roof measurement reports for roofing contractors in ${cityData.name}, ${state.name}. Reports cost $8 CAD after 4 free reports. Google Solar API coverage is excellent for ${cityData.name} addresses.` } },
       { "@type": "Question", "name": `What roofing insurance carriers operate in ${cityData.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `${cityData.insuranceNote} Roof Manager reports are accepted as supporting documentation by all major ${state.name} carriers.` } },
       { "@type": "Question", "name": `What is the storm risk for roofing contractors in ${cityData.name}?`, "acceptedAnswer": { "@type": "Answer", "text": cityData.stormNarrative } },
-      { "@type": "Question", "name": `How much does a roof measurement report cost in ${cityData.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `Roof measurement reports for ${cityData.name}, ${state.name} properties cost $8 USD per report after your 4 free trial reports. Volume discounts are available — 25-packs at $7/report and 100-packs at $5.95/report. All prices in USD.` } },
+      { "@type": "Question", "name": `How much does a roof measurement report cost in ${cityData.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `Roof measurement reports for ${cityData.name}, ${state.name} properties cost $8 CAD per report after your 4 free trial reports. Volume discounts are available — 25-packs at $7/report and 100-packs at $5.95/report. All prices in CAD.` } },
       { "@type": "Question", "name": `Does Roof Manager work for insurance claims in ${cityData.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `Yes. Roof Manager reports include pitch-corrected area calculations, edge breakdowns, and material estimates that are accepted by insurance adjusters in ${cityData.name} for storm, hail, and weather damage documentation. ${cityData.insuranceNote}` } },
     ]
   })
@@ -438,7 +438,7 @@ app.get('/:state/:city', (c) => {
 <head>
   ${getHeadTagsMinimal()}
   <title>Roof Measurement Software for ${cityData.name}, ${state.name} Contractors | Roof Manager</title>
-  <meta name="description" content="AI-powered satellite roof measurement reports for roofing contractors in ${cityData.name}, ${state.name}. $8 USD/report after 4 free. ${state.stormProfile.primaryPeril}. Insurance-ready documentation.">
+  <meta name="description" content="AI-powered satellite roof measurement reports for roofing contractors in ${cityData.name}, ${state.name}. $8 CAD/report after 4 free. ${state.stormProfile.primaryPeril}. Insurance-ready documentation.">
   <meta property="og:locale" content="en_US">
   <meta property="og:title" content="Roof Measurement Software for ${cityData.name}, ${state.code} | Roof Manager">
   <meta property="og:type" content="website">
@@ -465,10 +465,10 @@ app.get('/:state/:city', (c) => {
       <span class="inline-block px-4 py-1.5 bg-sky-500/20 border border-sky-400/30 rounded-full text-sm text-sky-300 mb-6"><i class="fas fa-map-marker-alt mr-2"></i>${cityData.name}, ${state.name}</span>
       <h1 class="text-4xl md:text-5xl font-black mb-6">Roof Measurement Software for<br><span class="text-sky-400">${cityData.name}, ${state.code}</span> Contractors</h1>
       <p class="text-xl text-blue-200 mb-4">${cityData.stormNarrative}</p>
-      <p class="text-blue-300 mb-8">Reports cost <strong>$8 USD</strong> after 4 free reports. Insurance-ready documentation in under 60 seconds.</p>
+      <p class="text-blue-300 mb-8">Reports cost <strong>$8 CAD</strong> after 4 free reports. Insurance-ready documentation in under 60 seconds.</p>
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
         <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg">Get 4 Free Reports <i class="fas fa-arrow-right ml-2"></i></a>
-        <a href="/pricing" class="px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-lg border border-white/20">View Pricing (USD)</a>
+        <a href="/pricing" class="px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-lg border border-white/20">View Pricing (CAD)</a>
       </div>
     </div>
   </section>
@@ -503,9 +503,9 @@ app.get('/:state/:city', (c) => {
     <div class="max-w-4xl mx-auto px-4">
       <h2 class="text-2xl font-black text-center mb-8">FAQ — ${cityData.name} Roofing</h2>
       <div class="space-y-4">
-        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Does Roof Manager work in ${cityData.name}?</h3><p class="text-gray-400 text-sm">Yes. Reports cost $8 USD after 4 free. Google Solar API coverage is excellent for ${cityData.name} addresses. Insurance-ready PDF in under 60 seconds.</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Does Roof Manager work in ${cityData.name}?</h3><p class="text-gray-400 text-sm">Yes. Reports cost $8 CAD after 4 free. Google Solar API coverage is excellent for ${cityData.name} addresses. Insurance-ready PDF in under 60 seconds.</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">What roofing insurance carriers operate in ${cityData.name}?</h3><p class="text-gray-400 text-sm">${cityData.insuranceNote}</p></div>
-        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">How much does a roof measurement report cost in ${cityData.name}?</h3><p class="text-gray-400 text-sm">$8 USD per report after your 4 free trial reports. Volume packs: 25 for $175 ($7/report) and 100 for $595 ($5.95/report). All prices in USD.</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">How much does a roof measurement report cost in ${cityData.name}?</h3><p class="text-gray-400 text-sm">$8 CAD per report after your 4 free trial reports. Volume packs: 25 for $175 ($7/report) and 100 for $595 ($5.95/report). All prices in CAD.</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Does Roof Manager work for insurance claims in ${cityData.name}?</h3><p class="text-gray-400 text-sm">Yes. Roof Manager reports include pitch-corrected area, edge breakdowns, and material BOMs accepted by ${state.name} insurance adjusters for storm and weather damage documentation.</p></div>
       </div>
     </div>

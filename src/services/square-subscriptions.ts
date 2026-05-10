@@ -178,7 +178,7 @@ export async function ensurePlan(env: SquareSubsBindings): Promise<string> {
               periods: null,
               pricing: {
                 type: 'STATIC',
-                price: { amount: SECRETARY_MONTHLY_CENTS, currency: 'USD' },
+                price: { amount: SECRETARY_MONTHLY_CENTS, currency: 'CAD' },
               },
             }],
             subscription_plan_id: planId,
@@ -273,7 +273,7 @@ export async function chargeOneTime(
     source_id: opts.cardId,
     customer_id: opts.customerId,
     location_id: env.SQUARE_LOCATION_ID,
-    amount_money: { amount: opts.amountCents, currency: 'USD' },
+    amount_money: { amount: opts.amountCents, currency: 'CAD' },
     autocomplete: true,
     note: opts.note,
   })
@@ -295,7 +295,7 @@ export async function refundPayment(
   const created = await squareFetch(env, 'POST', '/refunds', {
     idempotency_key: await shortIdempotencyKey('sec-rfd', `${paymentId}-${Date.now()}`),
     payment_id: paymentId,
-    amount_money: { amount: amountCents, currency: 'USD' },
+    amount_money: { amount: amountCents, currency: 'CAD' },
     reason: reason || 'Provisioning rolled back',
   })
   const refund = created?.refund

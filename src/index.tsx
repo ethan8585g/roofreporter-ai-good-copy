@@ -2213,21 +2213,21 @@ app.get('/llms.txt', (c) => {
 - [Barrie](https://www.roofmanager.ca/roof-replacement-cost/barrie): $8,500–$19,500 CAD; snowbelt; heavy snow loads
 - [Kitchener](https://www.roofmanager.ca/roof-replacement-cost/kitchener): $8,000–$18,500 CAD; Ontario Waterloo Region
 
-## Roof Replacement Cost — United States 2026 (USD)
-- [Dallas](https://www.roofmanager.ca/roof-replacement-cost/dallas): $7,500–$18,000 USD; TX; high hail frequency; insurance claims common
-- [Houston](https://www.roofmanager.ca/roof-replacement-cost/houston): $8,000–$20,000 USD; TX; hurricane and wind damage; IRC 2021
-- [Denver](https://www.roofmanager.ca/roof-replacement-cost/denver): $8,000–$19,000 USD; CO; hail belt; Class 4 impact-resistant shingles
-- [Atlanta](https://www.roofmanager.ca/roof-replacement-cost/atlanta): $7,000–$17,000 USD; GA; severe thunderstorm hail; high humidity
-- [Chicago](https://www.roofmanager.ca/roof-replacement-cost/chicago): $8,500–$21,000 USD; IL; freeze-thaw cycles; ice dam risk
-- [Phoenix](https://www.roofmanager.ca/roof-replacement-cost/phoenix): $7,000–$16,000 USD; AZ; monsoon hail; UV degradation; flat roofs common
-- [Miami](https://www.roofmanager.ca/roof-replacement-cost/miami): $9,000–$22,000 USD; FL; Florida Building Code (FBC) wind requirements
-- [Tampa](https://www.roofmanager.ca/roof-replacement-cost/tampa): $8,000–$20,000 USD; FL; hurricane prep; FBC compliance
-- [Charlotte](https://www.roofmanager.ca/roof-replacement-cost/charlotte): $7,500–$18,000 USD; NC; frequent hail and wind events
-- [Minneapolis](https://www.roofmanager.ca/roof-replacement-cost/minneapolis): $8,500–$20,000 USD; MN; extreme cold; ice dams; snow load
-- [Nashville](https://www.roofmanager.ca/roof-replacement-cost/nashville): $7,500–$18,000 USD; TN; severe storm corridor
-- [Oklahoma City](https://www.roofmanager.ca/roof-replacement-cost/oklahoma-city): $7,000–$16,500 USD; OK; tornado alley; high hail frequency
-- [Kansas City](https://www.roofmanager.ca/roof-replacement-cost/kansas-city): $7,500–$17,500 USD; MO/KS; hail belt
-- [Denver](https://www.roofmanager.ca/roof-replacement-cost/colorado-springs): $7,500–$18,000 USD; CO Springs; Front Range hail
+## Roof Replacement Cost — United States 2026 (CAD)
+- [Dallas](https://www.roofmanager.ca/roof-replacement-cost/dallas): $7,500–$18,000 CAD; TX; high hail frequency; insurance claims common
+- [Houston](https://www.roofmanager.ca/roof-replacement-cost/houston): $8,000–$20,000 CAD; TX; hurricane and wind damage; IRC 2021
+- [Denver](https://www.roofmanager.ca/roof-replacement-cost/denver): $8,000–$19,000 CAD; CO; hail belt; Class 4 impact-resistant shingles
+- [Atlanta](https://www.roofmanager.ca/roof-replacement-cost/atlanta): $7,000–$17,000 CAD; GA; severe thunderstorm hail; high humidity
+- [Chicago](https://www.roofmanager.ca/roof-replacement-cost/chicago): $8,500–$21,000 CAD; IL; freeze-thaw cycles; ice dam risk
+- [Phoenix](https://www.roofmanager.ca/roof-replacement-cost/phoenix): $7,000–$16,000 CAD; AZ; monsoon hail; UV degradation; flat roofs common
+- [Miami](https://www.roofmanager.ca/roof-replacement-cost/miami): $9,000–$22,000 CAD; FL; Florida Building Code (FBC) wind requirements
+- [Tampa](https://www.roofmanager.ca/roof-replacement-cost/tampa): $8,000–$20,000 CAD; FL; hurricane prep; FBC compliance
+- [Charlotte](https://www.roofmanager.ca/roof-replacement-cost/charlotte): $7,500–$18,000 CAD; NC; frequent hail and wind events
+- [Minneapolis](https://www.roofmanager.ca/roof-replacement-cost/minneapolis): $8,500–$20,000 CAD; MN; extreme cold; ice dams; snow load
+- [Nashville](https://www.roofmanager.ca/roof-replacement-cost/nashville): $7,500–$18,000 CAD; TN; severe storm corridor
+- [Oklahoma City](https://www.roofmanager.ca/roof-replacement-cost/oklahoma-city): $7,000–$16,500 CAD; OK; tornado alley; high hail frequency
+- [Kansas City](https://www.roofmanager.ca/roof-replacement-cost/kansas-city): $7,500–$17,500 CAD; MO/KS; hail belt
+- [Denver](https://www.roofmanager.ca/roof-replacement-cost/colorado-springs): $7,500–$18,000 CAD; CO Springs; Front Range hail
 
 ## US State Hubs
 - [Texas](https://www.roofmanager.ca/us/texas): Dallas, Houston, San Antonio, Austin, Fort Worth — hail, wind, hurricane
@@ -2320,7 +2320,7 @@ app.get('/llms.txt', (c) => {
 Asphalt shingle roof replacement in Canada costs $8,000–$22,000 CAD in 2026 for a 1,500–2,500 sq ft home. Calgary/Edmonton: $8,000–$18,000 CAD. Toronto/Vancouver: $9,000–$24,000 CAD. Metal roofs cost 2–3x more. All Canadian homes require ice & water shield under the National Building Code (NBC).
 
 ### How much does roof replacement cost in the US in 2026?
-US roof replacement costs $7,000–$22,000 USD in 2026 for a 1,500–2,500 sq ft home. Texas (Dallas, Houston) averages $7,500–$18,000 USD. Florida requires FBC compliance, adding 10–20% to material costs. Colorado contractors recommend Class 4 impact-resistant shingles.
+US roof replacement costs $7,000–$22,000 CAD in 2026 for a 1,500–2,500 sq ft home. Texas (Dallas, Houston) averages $7,500–$18,000 CAD. Florida requires FBC compliance, adding 10–20% to material costs. Colorado contractors recommend Class 4 impact-resistant shingles.
 
 ### How accurate is Roof Manager?
 Within 2–5% of ground-truth for properties with high-quality satellite imagery (most urban North American addresses). Powered by Google's LiDAR-calibrated Solar API. Every report includes imagery quality score.
@@ -2358,7 +2358,7 @@ Roof Manager is a Software-as-a-Service (SaaS) platform that generates professio
 
 **Key facts (as of 2026):**
 - Reports delivered in under 60 seconds (vs 2–4 hours from EagleView/Hover)
-- $8 USD per report for US users (vs $49–$95 from EagleView, $33–$55 from Hover)
+- $8 CAD per report (vs $49–$95 from EagleView, $33–$55 from Hover)
 - $8 CAD per report for Canadian users
 - 4 free reports on signup — no credit card required
 - 99% measurement accuracy verified against manual measurements
@@ -2406,10 +2406,10 @@ Every roof measurement report includes:
 | Plan | Price | Includes |
 |---|---|---|
 | Free Trial | $0 | 4 professional reports, full CRM access, no credit card required | <!-- conv-v5: trial count matches free_trial_total=4 in DB insert -->
-| Per Report | $8 USD | Pay-per-report after trial |
-| 10-Pack | $75 USD ($7.50/report) | Starter volume discount |
-| 25-Pack | $175 USD ($7.00/report) | Popular volume discount |
-| 100-Pack | $595 USD ($5.95/report) | Best value |
+| Per Report | $8 CAD | Pay-per-report after trial |
+| 10-Pack | $75 CAD ($7.50/report) | Starter volume discount |
+| 25-Pack | $175 CAD ($7.00/report) | Popular volume discount |
+| 100-Pack | $595 CAD ($5.95/report) | Best value |
 | AI Secretary | $249/month | 24/7 AI phone answering, lead qualification |
 | Team Members | $50/user/month | Multi-user access |
 | CRM | Free | Always included — invoicing, proposals, jobs, customers |
@@ -2483,7 +2483,7 @@ Coverage is strongest in urban and suburban areas. If satellite imagery is not a
 | Feature | Roof Manager | EagleView |
 |---|---|---|
 | Report Delivery | Under 60 seconds | 24-48 hours |
-| Price Per Report | From $5 USD | $50-100+ USD |
+| Price Per Report | From $5.95 CAD | $50-100+ USD |
 | Free CRM Included | Yes | No |
 | AI Phone Secretary | Yes ($249/mo) | No |
 | Virtual Roof Try-On | Yes | No |
@@ -2509,7 +2509,7 @@ Coverage is strongest in urban and suburban areas. If satellite imagery is not a
 A: Roof Manager measurements use Google's Solar API with LiDAR-calibrated 3D building models. Accuracy is typically within 2-5% of manual measurements for buildings with high-quality satellite imagery, which includes most urban and suburban addresses.
 
 **Q: How much does a roof measurement report cost?**
-A: Reports are $8 USD each after the free trial. New users get 4 free reports with no credit card required. Volume packs offer discounts: 10 reports for $75 ($7.50/each), 25 reports for $175 ($7.00/each), or 100 reports for $595 ($5.95/each).
+A: Reports are $8 CAD each after the free trial. New users get 4 free reports with no credit card required. Volume packs offer discounts: 10 reports for $75 ($7.50/each), 25 reports for $175 ($7.00/each), or 100 reports for $595 ($5.95/each).
 
 **Q: What is included in a roof report?**
 A: Each report includes total roof area (footprint and sloped), pitch analysis per segment, edge breakdowns (ridge, hip, valley, eave, rake), material BOM with quantities, solar potential analysis, complexity rating, and a professional PDF.
@@ -2912,7 +2912,7 @@ app.get('/roof-measurement/:city', (c) => {
     "url": "https://www.roofmanager.ca/roof-measurement/${slug}",
     "image": "https://www.roofmanager.ca/static/logo.png?v=20260504",
     "areaServed": "${country.name}",
-    "priceRange": "$5-$500 USD"
+    "priceRange": "$5-$500 CAD"
   }
   </script>
 </head>
@@ -3010,15 +3010,13 @@ app.get('/roof-measurement/:city', (c) => {
   const htmlLang = isUS ? 'en-US' : isCa ? 'en-CA' : 'en'
   const addrCountry = isUS ? 'US' : isCa ? 'CA' : city.province
   const countryLabel = isUS ? 'United States' : isCa ? 'Canada' : ''
-  const priceText = isUS
-    ? 'Reports cost $8 per report after 4 free trial reports (billed in USD for US customers).'
-    : 'Reports cost $8 CAD per report after 4 free trial reports.'
-  const priceVisible = isUS ? '$8 per report (USD)' : '$8 CAD per report'
+  const priceText = 'Reports cost $8 CAD per report after 4 free trial reports.'
+  const priceVisible = '$8 CAD per report'
   const breadcrumbItems = isUS
     ? `[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Locations","item":"https://www.roofmanager.ca/coverage"},{"@type":"ListItem","position":3,"name":"United States","item":"https://www.roofmanager.ca/roof-measurement/united-states"},{"@type":"ListItem","position":4,"name":"${city.province}","item":"https://www.roofmanager.ca/us/${city.province.toLowerCase().replace(/ /g,'-')}"},{"@type":"ListItem","position":5,"name":"${city.name}","item":"https://www.roofmanager.ca/roof-measurement/${citySlug}"}]`
     : `[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Locations","item":"https://www.roofmanager.ca/coverage"},{"@type":"ListItem","position":3,"name":"${city.name}, ${city.province}","item":"https://www.roofmanager.ca/roof-measurement/${citySlug}"}]`
   const usFaqExtra = isUS ? `
-  {"@type":"Question","name":"Does Roof Manager work for US roofing contractors?","acceptedAnswer":{"@type":"Answer","text":"Yes. Roof Manager is fully operational for US roofing contractors across all 50 states. Reports are priced in USD and the platform integrates with US insurance workflows including Xactimate-compatible line items. Contractors in Texas, Florida, California, Arizona, and Colorado are among our most active US users."}},` : ''
+  {"@type":"Question","name":"Does Roof Manager work for US roofing contractors?","acceptedAnswer":{"@type":"Answer","text":"Yes. Roof Manager is fully operational for US roofing contractors across all 50 states. Reports are priced in CAD ($8 CAD/report) and the platform integrates with US insurance workflows including Xactimate-compatible line items. Contractors in Texas, Florida, California, Arizona, and Colorado are among our most active US users."}},` : ''
   return c.html(`<!DOCTYPE html>
 <html lang="${htmlLang}">
 <head>
@@ -3208,7 +3206,7 @@ app.get('/roof-replacement-cost/:city', (c) => {
   if (!city) return c.redirect('/')
   const country = getCityCountry(city)
   const isCanada = country === 'CA'
-  const currency = isCanada ? 'CAD' : 'USD'
+  const currency = 'CAD'
   const stateOrProvince = isCanada ? 'province' : 'state'
   const buildingCode = isCanada ? 'National Building Code of Canada (NBC 2020)' : 'International Residential Code (IRC 2021)'
   // City-specific cost data
@@ -3431,9 +3429,9 @@ app.get('/roof-replacement-cost/:city', (c) => {
       <div class="grid md:grid-cols-2 gap-4">
         ${[
           ['Roof Size & Pitch', 'A steeper pitch requires more material and safer scaffolding — adding 10–30% to labour costs. A 2,500 sq ft roof at 8/12 pitch costs significantly more than the same footprint at 4/12.'],
-          ['Materials', `Architectural asphalt shingles (30–50 year): ${isCanada ? '$80–$130' : '$90–$150'}/square. Metal standing seam: ${isCanada ? '$200–$400' : '$250–$500'}/square. Cedar shake: ${isCanada ? '$250–$500' : '$300–$600'}/square. Prices in ${currency}.`],
+          ['Materials', `Architectural asphalt shingles (30–50 year): $80–$130/square. Metal standing seam: $200–$400/square. Cedar shake: $250–$500/square. Prices in CAD.`],
           ['Tear-Off vs Overlay', 'Full tear-off (required by most building codes) adds $1,000–$3,000 vs overlaying a second layer, but is required when existing layers exceed 2 or when decking needs inspection.'],
-          ['Local Permits', `${buildingCode} compliance is mandatory. Permit fees in ${city.name} typically run ${isCanada ? '$150–$500 CAD' : '$100–$500 USD'} depending on municipality.`],
+          ['Local Permits', `${buildingCode} compliance is mandatory. Permit fees in ${city.name} typically run $150–$500 CAD depending on municipality.`],
           ['Decking Condition', 'Rotted or damaged plywood decking adds $2–$5/sq ft to replace. A satellite measurement report can help identify areas of concern before the contractor arrives.'],
           ['Seasonality', `Roofing in ${city.name} is most expensive in spring (peak demand). Late summer and fall often offer 10–15% savings as contractors fill their schedules.`]
         ].map(([title, body]) => `
@@ -5850,7 +5848,7 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
       });
       var data = await res.json();
       if (data.success) {
-        if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('lead', { value: 1.0, currency: 'USD' });
+        if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('lead', { value: 1.0, currency: 'CAD' });
         var leadEmail = document.getElementById('lead-email').value.trim();
         var leadName = document.getElementById('lead-name').value.trim();
         var leadCompany = document.getElementById('lead-company').value.trim();
@@ -7853,7 +7851,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     "offers": {
       "@type": "Offer",
       "price": "7.00",
-      "priceCurrency": "USD",
+      "priceCurrency": "CAD",
       "description": "Per report after 4 free reports"
     },
     "aggregateRating": {
@@ -7899,11 +7897,11 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     "@context": "https://schema.org",
     "@type": "FAQPage",
     "mainEntity": [
-      {"@type": "Question", "name": "Does Roof Manager work for US roofing contractors?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Roof Manager is fully operational for roofing contractors across all 50 US states including Texas, Florida, California, Arizona, and Colorado. Reports are priced in USD for US users. The platform generates Xactimate-compatible line items and integrates with US insurance claim workflows, making it ideal for storm, hail, and hurricane damage documentation. As of 2026, US contractors represent the fastest-growing segment of the Roof Manager user base."}},
+      {"@type": "Question", "name": "Does Roof Manager work for US roofing contractors?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Roof Manager is fully operational for roofing contractors across all 50 US states including Texas, Florida, California, Arizona, and Colorado. Reports are priced in CAD ($8 CAD/report). The platform generates Xactimate-compatible line items and integrates with US insurance claim workflows, making it ideal for storm, hail, and hurricane damage documentation. As of 2026, US contractors represent the fastest-growing segment of the Roof Manager user base."}},
       {"@type": "Question", "name": "What is Roof Manager?", "acceptedAnswer": {"@type": "Answer", "text": "Roof Manager is an AI-powered roof measurement platform that generates professional satellite roof reports in under 60 seconds. It includes a full roofing CRM, invoicing, proposals, material take-off, AI phone secretary, and team management tools for roofing contractors across the US and Canada."}},
       {"@type": "Question", "name": "How accurate are Roof Manager measurements?", "acceptedAnswer": {"@type": "Answer", "text": "Our measurements use satellite imagery combined with GPS coordinate tracing and Google Solar API data. Accuracy is typically within 2-5% of manual measurements, verified against pitch-corrected sloped area calculations."}},
       {"@type": "Question", "name": "Does Roof Manager work in Canada?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Roof Manager was built for Canadian roofing contractors and works in every province and territory where Google satellite imagery is available — including Alberta, British Columbia, Ontario, Quebec, and all Atlantic provinces."}},
-      {"@type": "Question", "name": "How much does a roof measurement report cost?", "acceptedAnswer": {"@type": "Answer", "text": "Reports are $8 USD each after the 4 free trial reports. Credit packs offer volume savings — 10 for $75 ($7.50/each), 25 for $175 ($7.00/each), or 100 for $595 ($5.95/each)."}},
+      {"@type": "Question", "name": "How much does a roof measurement report cost?", "acceptedAnswer": {"@type": "Answer", "text": "Reports are $8 CAD each after the 4 free trial reports. Credit packs offer volume savings — 10 for $75 ($7.50/each), 25 for $175 ($7.00/each), or 100 for $595 ($5.95/each)."}},
       {"@type": "Question", "name": "How fast are roof reports delivered?", "acceptedAnswer": {"@type": "Answer", "text": "Reports are generated in under 60 seconds. Simply enter a property address, trace the roof edges on the satellite image, and the AI calculates area, pitch, edges, and material BOM automatically."}},
       {"@type": "Question", "name": "What is included in a roof measurement report?", "acceptedAnswer": {"@type": "Answer", "text": "Each report includes: total roof area (footprint and sloped/pitched), pitch analysis per segment, edge length breakdowns (ridge, hip, valley, eave, rake), material bill of materials with waste factor, solar potential data, and a professional branded PDF."}},
       {"@type": "Question", "name": "Do I need to be on the roof to use Roof Manager?", "acceptedAnswer": {"@type": "Answer", "text": "No. Roof Manager uses satellite imagery so you never need to physically access the roof to generate a measurement report. You can measure any property from your phone, truck, or office."}},
@@ -8205,14 +8203,14 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             <!-- Subtle pricing poster — bulk-price reassurance, links to /pricing -->
             <a href="/pricing" onclick="try{rrTrack('cta_click',{location:'hero_pricing_poster'})}catch(e){}"
                class="group flex items-center gap-4 max-w-xl mt-6 mb-2 bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-[#00FF88]/30 rounded-2xl px-4 py-3 sm:px-5 sm:py-4 transition-all"
-               aria-label="See volume pricing — roof measurement reports from $5.95 each">
+               aria-label="See volume pricing — roof measurement reports from $5.95 CAD each">
               <div class="flex-shrink-0 inline-flex flex-col items-center justify-center w-14 h-14 rounded-xl bg-[#00FF88]/10 border border-[#00FF88]/25">
                 <span class="text-[9px] font-bold text-[#00FF88] tracking-widest uppercase leading-none">From</span>
                 <span class="text-[#00FF88] font-black text-base leading-tight mt-0.5">$5.95</span>
               </div>
               <div class="flex-1 min-w-0">
                 <div class="text-white font-bold text-sm leading-snug">Roof measurement reports start at just $5.95 per report</div>
-                <div class="text-gray-500 text-[11px] mt-1">100-credit pack &middot; USD &middot; volume pricing</div>
+                <div class="text-gray-500 text-[11px] mt-1">100-credit pack &middot; CAD &middot; volume pricing</div>
               </div>
               <i class="fas fa-arrow-right text-gray-500 group-hover:text-[#00FF88] group-hover:translate-x-0.5 transition-all text-xs flex-shrink-0" aria-hidden="true"></i>
             </a>
@@ -8592,7 +8590,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     </section>
 
     <!-- PRICING -->
-    <section id="pricing" class="py-24" style="background:#0A0A0A"><div class="max-w-6xl mx-auto px-4"><div class="text-center mb-16 scroll-animate"><div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold mb-4"><i class="fas fa-tag"></i> Simple Pricing</div><h2 class="text-3xl lg:text-5xl font-black text-white mb-4 tracking-tight">Plans That Scale With You</h2><p class="text-lg text-gray-400 max-w-2xl mx-auto">Start free, pay per report, or save big with volume packs. CRM always included.</p></div><div class="grid lg:grid-cols-3 gap-6 items-start mb-16"><div class="scroll-animate bg-[#111111] rounded-2xl border border-white/10 p-8 hover:shadow-xl transition-shadow"><div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Free Trial</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$0</span></div><p class="text-sm text-gray-400 mb-6">4 free reports + full platform access</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>4 professional PDF reports</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Full CRM &amp; invoicing</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Customer management</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Proposals &amp; job tracking</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Door-to-door manager</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Virtual roof try-on</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Team collaboration</li></ul><a href="/register" onclick="rrTrack('cta_click',{location:'pricing',plan:'free'})" class="block text-center py-3.5 rounded-xl font-bold border-2 border-white/20 text-white hover:bg-white hover:text-[#0A0A0A] transition-all min-h-[48px]">Start Free Trial</a></div><div class="scroll-animate relative" style="transition-delay:100ms"><div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#00FF88] text-[#0A0A0A] text-xs font-extrabold px-5 py-1.5 rounded-full shadow-lg z-10">MOST POPULAR</div><div class="bg-[#111111] rounded-2xl border-2 border-[#00FF88]/50 shadow-xl shadow-[#00FF88]/10 p-8"><div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Per Report</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$8</span><span class="text-xl text-gray-500">CAD</span><span class="text-sm text-gray-500 ml-1">/ report</span></div><div class="flex items-center gap-2 mb-1"><span class="text-sm text-gray-500 line-through">$50&ndash;100 EagleView</span><span class="text-xs font-bold text-[#00FF88] bg-[#00FF88]/10 px-2 py-0.5 rounded-full">Save 90%+</span></div><p class="text-xs text-[#00FF88] font-semibold mb-6"><i class="fas fa-gift mr-1"></i>First 4 reports FREE</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Full 3D area with pitch adjustment</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Complete edge breakdown</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Material BOM with pricing</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Solar potential analysis</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Professional PDF download</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Instant delivery (&lt;60s)</li></ul><a href="/register" onclick="rrTrack('cta_click',{location:'pricing',plan:'per_report'})" class="block text-center py-3.5 rounded-xl font-extrabold bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">Get Started Free</a></div></div><div class="scroll-animate relative" style="transition-delay:200ms"><div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white text-xs font-bold px-5 py-1.5 rounded-full shadow-lg z-10">BEST VALUE</div><div class="bg-[#111111] rounded-2xl border-2 border-[#a78bfa]/50 p-8"><div class="text-sm font-bold text-[#a78bfa] uppercase tracking-wider mb-2">Volume Packs</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$5.95</span><span class="text-xl text-gray-500">USD</span><span class="text-sm text-gray-500 ml-1">/ report</span></div><p class="text-sm text-gray-400 mb-1">Best rate on the 100-Pack — credits never expire</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>10-Pack — $75 ($7.50/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>25-Pack — $175 ($7.00/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>100-Pack — $595 ($5.95/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>Credits never expire</li></ul><a href="/demo" onclick="rrTrack('cta_click',{location:'pricing',plan:'b2b'})" class="block text-center py-3.5 rounded-xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">Book a Volume Demo</a></div></div></div></div></section>
+    <section id="pricing" class="py-24" style="background:#0A0A0A"><div class="max-w-6xl mx-auto px-4"><div class="text-center mb-16 scroll-animate"><div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold mb-4"><i class="fas fa-tag"></i> Simple Pricing</div><h2 class="text-3xl lg:text-5xl font-black text-white mb-4 tracking-tight">Plans That Scale With You</h2><p class="text-lg text-gray-400 max-w-2xl mx-auto">Start free, pay per report, or save big with volume packs. CRM always included.</p></div><div class="grid lg:grid-cols-3 gap-6 items-start mb-16"><div class="scroll-animate bg-[#111111] rounded-2xl border border-white/10 p-8 hover:shadow-xl transition-shadow"><div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Free Trial</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$0</span></div><p class="text-sm text-gray-400 mb-6">4 free reports + full platform access</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>4 professional PDF reports</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Full CRM &amp; invoicing</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Customer management</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Proposals &amp; job tracking</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Door-to-door manager</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Virtual roof try-on</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Team collaboration</li></ul><a href="/register" onclick="rrTrack('cta_click',{location:'pricing',plan:'free'})" class="block text-center py-3.5 rounded-xl font-bold border-2 border-white/20 text-white hover:bg-white hover:text-[#0A0A0A] transition-all min-h-[48px]">Start Free Trial</a></div><div class="scroll-animate relative" style="transition-delay:100ms"><div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#00FF88] text-[#0A0A0A] text-xs font-extrabold px-5 py-1.5 rounded-full shadow-lg z-10">MOST POPULAR</div><div class="bg-[#111111] rounded-2xl border-2 border-[#00FF88]/50 shadow-xl shadow-[#00FF88]/10 p-8"><div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Per Report</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$8</span><span class="text-xl text-gray-500">CAD</span><span class="text-sm text-gray-500 ml-1">/ report</span></div><div class="flex items-center gap-2 mb-1"><span class="text-sm text-gray-500 line-through">$50&ndash;100 EagleView</span><span class="text-xs font-bold text-[#00FF88] bg-[#00FF88]/10 px-2 py-0.5 rounded-full">Save 90%+</span></div><p class="text-xs text-[#00FF88] font-semibold mb-6"><i class="fas fa-gift mr-1"></i>First 4 reports FREE</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Full 3D area with pitch adjustment</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Complete edge breakdown</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Material BOM with pricing</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Solar potential analysis</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Professional PDF download</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Instant delivery (&lt;60s)</li></ul><a href="/register" onclick="rrTrack('cta_click',{location:'pricing',plan:'per_report'})" class="block text-center py-3.5 rounded-xl font-extrabold bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">Get Started Free</a></div></div><div class="scroll-animate relative" style="transition-delay:200ms"><div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white text-xs font-bold px-5 py-1.5 rounded-full shadow-lg z-10">BEST VALUE</div><div class="bg-[#111111] rounded-2xl border-2 border-[#a78bfa]/50 p-8"><div class="text-sm font-bold text-[#a78bfa] uppercase tracking-wider mb-2">Volume Packs</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$5.95</span><span class="text-xl text-gray-500">CAD</span><span class="text-sm text-gray-500 ml-1">/ report</span></div><p class="text-sm text-gray-400 mb-1">Best rate on the 100-Pack — credits never expire</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>10-Pack — $75 ($7.50/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>25-Pack — $175 ($7.00/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>100-Pack — $595 ($5.95/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>Credits never expire</li></ul><a href="/demo" onclick="rrTrack('cta_click',{location:'pricing',plan:'b2b'})" class="block text-center py-3.5 rounded-xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">Book a Volume Demo</a></div></div></div></div></section>
 
     <!-- TESTIMONIALS -->
     <section class="py-24" style="background:#0d0d0d"><div class="max-w-7xl mx-auto px-4"><div class="text-center mb-16 scroll-animate"><div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold mb-4"><i class="fas fa-quote-left"></i> What Roofers Say</div><h2 class="text-3xl lg:text-4xl font-black text-white mb-4 tracking-tight">Trusted by Roofing Professionals</h2><p class="text-lg text-gray-400">Real results from contractors worldwide.</p><div class="flex items-center justify-center gap-2 mt-4"><div class="flex items-center gap-0.5"><i class="fas fa-star text-[#00FF88] text-lg"></i><i class="fas fa-star text-[#00FF88] text-lg"></i><i class="fas fa-star text-[#00FF88] text-lg"></i><i class="fas fa-star text-[#00FF88] text-lg"></i><i class="fas fa-star text-[#00FF88] text-lg"></i></div><span class="text-white font-bold">4.9/5</span><span class="text-gray-500">&mdash; 200+ reviews</span></div></div><div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6"><div class="scroll-animate" style="transition-delay:0ms"><div class="h-full bg-[#111111] border border-white/10 rounded-2xl p-6 hover:shadow-xl hover:border-[#00FF88]/30 transition-all duration-300 flex flex-col"><div class="bg-[#00FF88]/10 rounded-lg px-3 py-2 mb-4 flex items-center gap-2"><i class="fas fa-piggy-bank text-[#00FF88] text-sm"></i><span class="text-sm font-bold text-[#00FF88]">Saves $1,500+/month</span></div><div class="flex items-center justify-between mb-3"><div class="flex items-center gap-0.5"><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i></div><span class="inline-flex items-center gap-1 text-[10px] font-semibold text-[#00FF88] bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-full px-2 py-0.5"><i class="fas fa-check-circle text-[#00FF88]"></i>Verified</span></div><p class="text-gray-400 text-sm leading-relaxed mb-6 flex-1">"Saves me 2 hours per estimate. I used to climb every roof with a tape measure. Now I order a report, get the BOM, and quote the job from my truck."</p><div class="flex items-center gap-3 pt-4 border-t border-white/10"><div class="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">MD</div><div class="flex-1 min-w-0"><p class="font-semibold text-white text-sm">Mike D.</p><p class="text-xs text-gray-500">Roofing Contractor, JPG Roofing LTD</p><p class="text-[10px] text-gray-500">Calgary, AB</p></div></div></div></div><div class="scroll-animate" style="transition-delay:100ms"><div class="h-full bg-[#111111] border border-white/10 rounded-2xl p-6 hover:shadow-xl hover:border-[#00FF88]/30 transition-all duration-300 flex flex-col"><div class="bg-[#00FF88]/10 rounded-lg px-3 py-2 mb-4 flex items-center gap-2"><i class="fas fa-bullseye text-[#00FF88] text-sm"></i><span class="text-sm font-bold text-[#00FF88]">99% material accuracy</span></div><div class="flex items-center justify-between mb-3"><div class="flex items-center gap-0.5"><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i></div><span class="inline-flex items-center gap-1 text-[10px] font-semibold text-[#00FF88] bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-full px-2 py-0.5"><i class="fas fa-check-circle text-[#00FF88]"></i>Verified</span></div><p class="text-gray-400 text-sm leading-relaxed mb-6 flex-1">"The material BOM alone is worth it. Shingle counts, underlayment rolls, nail quantities &mdash; my supplier orders are dead accurate every time."</p><div class="flex items-center gap-3 pt-4 border-t border-white/10"><div class="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">SK</div><div class="flex-1 min-w-0"><p class="font-semibold text-white text-sm">Sarah K.</p><p class="text-xs text-gray-500">Project Manager, Summit Exteriors</p><p class="text-[10px] text-gray-500">Edmonton, AB</p></div></div></div></div><div class="scroll-animate" style="transition-delay:200ms"><div class="h-full bg-[#111111] border border-white/10 rounded-2xl p-6 hover:shadow-xl hover:border-[#00FF88]/30 transition-all duration-300 flex flex-col"><div class="bg-[#00FF88]/10 rounded-lg px-3 py-2 mb-4 flex items-center gap-2"><i class="fas fa-chart-line text-[#00FF88] text-sm"></i><span class="text-sm font-bold text-[#00FF88]">+23% close rate</span></div><div class="flex items-center justify-between mb-3"><div class="flex items-center gap-0.5"><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i></div><span class="inline-flex items-center gap-1 text-[10px] font-semibold text-[#00FF88] bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-full px-2 py-0.5"><i class="fas fa-check-circle text-[#00FF88]"></i>Verified</span></div><p class="text-gray-400 text-sm leading-relaxed mb-6 flex-1">"We run 15-20 estimates a week. At $7 per report we save thousands vs drone surveys. Our close rate jumped 23% because professional reports build instant trust."</p><div class="flex items-center gap-3 pt-4 border-t border-white/10"><div class="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">JR</div><div class="flex-1 min-w-0"><p class="font-semibold text-white text-sm">James R.</p><p class="text-xs text-gray-500">Owner, Apex Roofing Co.</p><p class="text-[10px] text-gray-500">Vancouver, BC</p></div></div></div></div></div></div></section>
@@ -8640,9 +8638,9 @@ function getLandingPageHTML(latestPosts: any[] = []) {
                 <i class="fas fa-cubes text-xl" style="color:#00FF88"></i>
               </div>
               <h3 class="text-xl font-bold text-white mb-3">Bulk &amp; White-Label</h3>
-              <p class="text-gray-400 text-sm leading-relaxed mb-4">Volume pricing from $5.95 USD/report. White-label PDF output with your logo, colors, and domain &mdash; invisible to your end customers.</p>
+              <p class="text-gray-400 text-sm leading-relaxed mb-4">Volume pricing from $5.95 CAD/report. White-label PDF output with your logo, colors, and domain &mdash; invisible to your end customers.</p>
               <ul class="space-y-2 text-sm text-gray-500">
-                <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>From $5.95 USD/report</li>
+                <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>From $5.95 CAD/report</li>
                 <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>Custom branding on PDF</li>
                 <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>Credits never expire</li>
                 <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>No monthly subscription</li>
@@ -13607,7 +13605,7 @@ function getFeatureUSCityPageHTML(
   const title = `${featureLabel} for ${city.name}, ${city.stateCode} Roofing Contractors — 2026`
   const descRaw =
     featureSlug === 'measurements'
-      ? `Satellite roof measurement reports for ${city.name}, ${city.state} contractors. $8 USD per report after 4 free. Insurance-ready documentation accepted by ${city.state} adjusters.`
+      ? `Satellite roof measurement reports for ${city.name}, ${city.state} contractors. $8 CAD per report after 4 free. Insurance-ready documentation accepted by ${city.state} adjusters.`
       : featureSlug === 'crm'
       ? `Roofing CRM software for ${city.name}, ${city.state} contractors. Pipeline, proposals, invoicing, job scheduling. Free with every Roof Manager account. Built for ${city.state} storm-response workflows.`
       : `24/7 AI phone receptionist for ${city.name}, ${city.state} roofing contractors. Local ${city.stateCode} area code numbers, automated storm-surge call handling, $199/month flat.`
@@ -13635,10 +13633,10 @@ function getFeatureUSCityPageHTML(
     areaServed: { '@type': 'City', name: city.name },
     address: { '@type': 'PostalAddress', addressLocality: city.name, addressRegion: city.stateCode, addressCountry: 'US' },
     offers: featureSlug === 'measurements'
-      ? { '@type': 'Offer', price: '8.00', priceCurrency: 'USD', description: 'Per report after 4 free' }
+      ? { '@type': 'Offer', price: '8.00', priceCurrency: 'CAD', description: 'Per report after 4 free' }
       : featureSlug === 'crm'
-      ? { '@type': 'Offer', price: '0.00', priceCurrency: 'USD' }
-      : { '@type': 'Offer', price: '149.00', priceCurrency: 'USD', description: 'Flat monthly rate, unlimited minutes' },
+      ? { '@type': 'Offer', price: '0.00', priceCurrency: 'CAD' }
+      : { '@type': 'Offer', price: '149.00', priceCurrency: 'CAD', description: 'Flat monthly rate, unlimited minutes' },
     aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.9', ratingCount: '200', bestRating: '5' },
     provider: { '@type': 'Organization', name: 'Roof Manager', url: base },
     dateModified: today,
@@ -13818,7 +13816,7 @@ function getFeatureStateHubPageHTML(
   const title = `${featureLabel} for ${state.name} Roofing Contractors — 2026`
   const desc =
     featureSlug === 'measurements'
-      ? `Satellite roof measurement reports for ${state.name} roofing contractors. $8 USD per report after 4 free. Insurance-ready documentation for ${state.stormProfile.primaryPeril.toLowerCase()} claims in all ${state.name} metros.`
+      ? `Satellite roof measurement reports for ${state.name} roofing contractors. $8 CAD per report after 4 free. Insurance-ready documentation for ${state.stormProfile.primaryPeril.toLowerCase()} claims in all ${state.name} metros.`
       : featureSlug === 'crm'
       ? `Roofing CRM software for ${state.name} contractors. Pipeline, proposals, invoicing, job scheduling. Free with every Roof Manager account. Built for ${state.name} storm-response and insurance claim workflows.`
       : `24/7 AI phone receptionist for ${state.name} roofing contractors. Never miss a storm-surge call. Local ${state.code} area code numbers, automated lead capture, and Google Calendar booking. $199/month flat.`
@@ -13844,10 +13842,10 @@ function getFeatureStateHubPageHTML(
     areaServed: { '@type': 'State', name: state.name },
     address: { '@type': 'PostalAddress', addressRegion: state.code, addressCountry: 'US' },
     offers: featureSlug === 'measurements'
-      ? { '@type': 'Offer', price: '8.00', priceCurrency: 'USD', description: 'Per report after 4 free' }
+      ? { '@type': 'Offer', price: '8.00', priceCurrency: 'CAD', description: 'Per report after 4 free' }
       : featureSlug === 'crm'
-      ? { '@type': 'Offer', price: '0.00', priceCurrency: 'USD', description: 'Free with any Roof Manager account' }
-      : { '@type': 'Offer', price: '149.00', priceCurrency: 'USD', description: 'Flat monthly rate, unlimited minutes' },
+      ? { '@type': 'Offer', price: '0.00', priceCurrency: 'CAD', description: 'Free with any Roof Manager account' }
+      : { '@type': 'Offer', price: '149.00', priceCurrency: 'CAD', description: 'Flat monthly rate, unlimited minutes' },
     aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.9', ratingCount: '200', bestRating: '5' },
     provider: { '@type': 'Organization', name: 'Roof Manager', url: base },
     dateModified: today,
@@ -13856,7 +13854,7 @@ function getFeatureStateHubPageHTML(
   const stateFaqs =
     featureSlug === 'measurements'
       ? [
-          { q: `How accurate are satellite roof measurements in ${state.name}?`, a: `For ${state.name} properties with high-quality imagery (most urban and suburban addresses), accuracy is within 2–5% of manual measurement. Reports cost $8 USD after 4 free. ${state.roofingNotes}` },
+          { q: `How accurate are satellite roof measurements in ${state.name}?`, a: `For ${state.name} properties with high-quality imagery (most urban and suburban addresses), accuracy is within 2–5% of manual measurement. Reports cost $8 CAD after 4 free. ${state.roofingNotes}` },
           { q: `Are Roof Manager reports accepted by ${state.name} insurance adjusters?`, a: `Yes. Reports include pitch-corrected area, edge breakdowns, and material BOMs accepted by ${state.topInsurers.slice(0, 3).join(', ')}, and other major ${state.name} carriers for ${state.stormProfile.primaryPeril.toLowerCase()} claims.` },
         ]
       : featureSlug === 'crm'
@@ -14010,7 +14008,7 @@ function getFeatureStateHubPageHTML(
         <a href="/features/ai-secretary" class="hover:text-[#00FF88] transition-colors">AI Secretary</a>
         <a href="/us/${stateSlug}" class="hover:text-[#00FF88] transition-colors">${state.name} Hub</a>
         <a href="/us" class="hover:text-[#00FF88] transition-colors">All 50 States</a>
-        <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing (USD)</a>
+        <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing (CAD)</a>
         <a href="/about" class="hover:text-[#00FF88] transition-colors">About</a>
       </div>
       <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
@@ -14686,7 +14684,7 @@ function getXactimateAlternativeHTML(): string {
     brand: { '@type': 'Brand', name: 'Roof Manager' },
     image: `${base}/static/logo.png?v=20260504`,
     url: `${base}/xactimate-alternative`,
-    offers: { '@type': 'Offer', price: '8.00', priceCurrency: 'USD', availability: 'https://schema.org/InStock' },
+    offers: { '@type': 'Offer', price: '8.00', priceCurrency: 'CAD', availability: 'https://schema.org/InStock' },
     aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.9', ratingCount: '200', bestRating: '5' },
   })
   const faqSchema = JSON.stringify({
@@ -14905,7 +14903,7 @@ const HELP_ARTICLES: Record<string, HelpArticle> = {
   'how-to-order-a-roof-measurement-report': { category: 'Measurements', title: 'How to Order a Roof Measurement Report', body: `<p>Ordering a roof measurement report takes 60 seconds. Sign in to your account, click <strong>Order Report</strong>, type a property address, review the satellite preview, and click <strong>Generate</strong>. The PDF is delivered by email in under a minute.</p><h3>Step by step</h3><ol><li>Sign in to your contractor account at <a href="/customer/login">roofmanager.ca/customer/login</a>.</li><li>From the dashboard, click <strong>Order a Report</strong>.</li><li>Enter the full street address (the autocomplete helps).</li><li>Review the satellite preview &mdash; if imagery quality is poor, you'll see a warning banner.</li><li>Configure waste factor (default 12%) and shingle type if needed.</li><li>Click <strong>Generate Report</strong>. The cost is $8 per report, or 1 credit from your pack.</li><li>You'll receive the branded PDF by email within 60 seconds.</li></ol>` },
   'what-does-a-report-include': { category: 'Measurements', title: 'What Does a Roof Measurement Report Include?', body: `<p>Every Roof Manager report includes: pitch-corrected sloped area, projected footprint area, ridge, hip, valley, eave, and rake lengths in linear feet, material bill of materials (shingles, underlayment, starter strip, ridge cap, ice-and-water shield, drip edge, flashing), solar potential estimate, high-resolution satellite imagery, pitch diagram, and a confidence score.</p><p>The PDF is branded with your company logo, address, phone, and licence number. All quantities are in the units adjusters and suppliers expect.</p>` },
   'how-accurate-are-reports': { category: 'Measurements', title: 'How Accurate Are Roof Manager Reports?', body: `<p>For properties with high-quality satellite imagery (the vast majority of urban and suburban US and Canadian addresses), accuracy is within <strong>2–5% of manual measurement</strong>. Every report includes a confidence score and imagery quality indicator.</p><p>Low-confidence reports (typically rural or heavily-obscured roofs) are flagged with a warning banner. In those cases, the engine cross-checks against the Solar API segment totals and refuses to produce a report if the delta exceeds tolerance — we'd rather delay a report than ship a wrong number.</p>` },
-  'report-credits-and-pricing': { category: 'Billing', title: 'Report Credits and Pricing', body: `<p>Reports cost <strong>$8 CAD/USD</strong> each. New accounts receive <strong>4 free reports</strong> with no credit card required.</p><p>Volume packs:</p><ul><li>10-pack: $75 ($7.50/report)</li><li>25-pack: $175 ($7.00/report)</li><li>100-pack: $595 ($5.95/report)</li></ul><p>Credits never expire. Unused credits carry forward indefinitely.</p>` },
+  'report-credits-and-pricing': { category: 'Billing', title: 'Report Credits and Pricing', body: `<p>Reports cost <strong>$8 CAD</strong> each. New accounts receive <strong>4 free reports</strong> with no credit card required.</p><p>Volume packs:</p><ul><li>10-pack: $75 ($7.50/report)</li><li>25-pack: $175 ($7.00/report)</li><li>100-pack: $595 ($5.95/report)</li></ul><p>Credits never expire. Unused credits carry forward indefinitely.</p>` },
   'refund-policy': { category: 'Billing', title: 'Refund Policy', body: `<p>If satellite imagery is unavailable for a property, <strong>no charge is applied</strong> — the report attempt is free. If you believe a report was generated incorrectly, contact <a href="mailto:support@roofmanager.ca">support@roofmanager.ca</a> within 30 days with the report ID and we'll issue a credit refund or re-run the report at no cost.</p>` },
   'change-billing-info': { category: 'Billing', title: 'How to Change Billing Information', body: `<p>Go to <strong>Settings &rarr; Billing</strong> in the customer dashboard. You can update payment method, billing address, and company information. Changes take effect immediately for future charges.</p>` },
   'invite-team-members': { category: 'CRM', title: 'Invite Team Members to Your Account', body: `<p>Go to <strong>Settings &rarr; Team</strong>. Click <strong>Invite Member</strong>, enter their email and role (Owner, Manager, Field Rep), and they'll receive a setup email. Team access is <strong>unlimited</strong> on all paid plans — there's no per-seat fee.</p>` },
@@ -15167,9 +15165,9 @@ function getServicesPageHTML() {
   {"@context":"https://schema.org","@type":"ItemList","name":"Roof Manager Services","itemListElement":[
     {"@type":"ListItem","position":1,"item":{"@type":"Service","name":"Satellite Roof Measurement Reports","description":"AI-powered 3D roof measurements from satellite imagery delivered in under 60 seconds","provider":{"@type":"Organization","name":"Roof Manager"},"areaServed":"Worldwide","offers":{"@type":"Offer","price":"8.00","priceCurrency":"CAD"}}},
     {"@type":"ListItem","position":2,"item":{"@type":"Service","name":"Solar Analysis & Reports","description":"Solar potential analysis including panel count, energy estimates, and azimuth data on every report","provider":{"@type":"Organization","name":"Roof Manager"}}},
-    {"@type":"ListItem","position":3,"item":{"@type":"Service","name":"Roofing CRM Platform","description":"Complete customer relationship management with pipeline tracking, lead scoring, and lifetime value analytics","provider":{"@type":"Organization","name":"Roof Manager"},"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","description":"Free with any plan"}}},
-    {"@type":"ListItem","position":4,"item":{"@type":"Service","name":"AI Roofer Secretary","description":"24/7 AI phone answering service with appointment booking, lead qualification, and call transcripts","provider":{"@type":"Organization","name":"Roof Manager"},"offers":{"@type":"Offer","price":"149.00","priceCurrency":"USD","description":"Per month"}}},
-    {"@type":"ListItem","position":5,"item":{"@type":"Service","name":"AI Website Builder","description":"AI generates a complete 5-page professional contractor website in under 5 minutes","provider":{"@type":"Organization","name":"Roof Manager"},"offers":{"@type":"Offer","price":"99.00","priceCurrency":"USD","description":"Per month"}}},
+    {"@type":"ListItem","position":3,"item":{"@type":"Service","name":"Roofing CRM Platform","description":"Complete customer relationship management with pipeline tracking, lead scoring, and lifetime value analytics","provider":{"@type":"Organization","name":"Roof Manager"},"offers":{"@type":"Offer","price":"0","priceCurrency":"CAD","description":"Free with any plan"}}},
+    {"@type":"ListItem","position":4,"item":{"@type":"Service","name":"AI Roofer Secretary","description":"24/7 AI phone answering service with appointment booking, lead qualification, and call transcripts","provider":{"@type":"Organization","name":"Roof Manager"},"offers":{"@type":"Offer","price":"149.00","priceCurrency":"CAD","description":"Per month"}}},
+    {"@type":"ListItem","position":5,"item":{"@type":"Service","name":"AI Website Builder","description":"AI generates a complete 5-page professional contractor website in under 5 minutes","provider":{"@type":"Organization","name":"Roof Manager"},"offers":{"@type":"Offer","price":"99.00","priceCurrency":"CAD","description":"Per month"}}},
     {"@type":"ListItem","position":6,"item":{"@type":"Service","name":"Door-to-Door Sales Manager","description":"Territory mapping, rep tracking, canvassing analytics, and D2D pipeline management","provider":{"@type":"Organization","name":"Roof Manager"}}}
   ]}
   </script>
@@ -16746,7 +16744,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
           { q: 'How long does a hail damage insurance claim take?', a: 'Most residential hail damage claims take 2–6 weeks from filing to payout. Turnaround depends on insurer workload, adjuster availability, and whether a supplemental claim is needed. Having a detailed roof measurement report speeds up the process significantly.' },
           { q: 'What does hail damage look like on a roof?', a: 'Hail damage appears as circular bruises or dents on asphalt shingles (often with granule loss), dents on metal flashing, cracked or broken ridge caps, and pock marks on soft metals like gutters and fascia. Damage is most visible from above at low sun angles.' },
           { q: 'Can I measure a damaged roof without climbing on it?', a: 'Yes — satellite roof measurement tools like Roof Manager generate full measurements (area, pitch, edges, material BOM) from satellite imagery in under 60 seconds, no ladder or site visit required. Results are within 2–5% of manual measurement for most properties.' },
-          { q: 'How much does storm damage roof repair cost in Canada vs the US?', a: 'In Canada, storm damage roof repairs cost $3,000–$12,000 CAD for partial repairs and $8,000–$22,000 CAD for full replacement. In the US, costs range from $2,500–$10,000 USD for repairs and $7,000–$20,000 USD for full replacement, varying by state and damage severity.' }
+          { q: 'How much does storm damage roof repair cost in Canada vs the US?', a: 'In Canada, storm damage roof repairs cost $3,000–$12,000 CAD for partial repairs and $8,000–$22,000 CAD for full replacement. In the US, costs range from $3,400–$13,500 CAD for repairs and $9,500–$27,000 CAD for full replacement, varying by state and damage severity.' }
         )
       } else if (cat.includes('tech') || cat.includes('software') || cat.includes('ai') || cat.includes('satellite')) {
         pairs.push(
@@ -16768,7 +16766,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
         pairs.push(
           { q: 'What is the best CRM software for roofing contractors?', a: 'The best roofing CRMs combine lead management, job tracking, invoicing, proposals, and measurement report integration. Roof Manager is a free roofing CRM that includes all of these plus an AI phone secretary, door-to-door sales tracker, and satellite roof measurement reports from the same platform.' },
           { q: 'How can roofing contractors win more insurance jobs?', a: 'The fastest way to win insurance jobs is to be first with a professional roof measurement report. Contractors who deliver accurate estimates within hours of a storm event win up to 78% of insurance jobs. Satellite measurement tools like Roof Manager generate reports in 60 seconds with no site visit.' },
-          { q: 'How much should a roofing contractor charge for an estimate?', a: 'Most residential roofing estimates are free in North America. The cost of generating the estimate (measurement report, material BOM, proposal) is typically $8–$90 CAD/USD depending on the tool used. Roof Manager reduces per-estimate costs to $8 CAD while delivering professional branded proposals.' },
+          { q: 'How much should a roofing contractor charge for an estimate?', a: 'Most residential roofing estimates are free in North America. The cost of generating the estimate (measurement report, material BOM, proposal) is typically $8–$120 CAD depending on the tool used. Roof Manager reduces per-estimate costs to $8 CAD while delivering professional branded proposals.' },
           { q: 'What should a roofing proposal include?', a: 'A professional roofing proposal should include the scope of work (materials, labour), measured quantities (total area, edges, pitch per section), line-item material BOM, warranty terms, payment schedule, timeline, and contractor licence number. Roof Manager generates proposals directly from measurement reports.' },
           { q: 'How do roofing contractors manage multiple jobs?', a: 'Roofing contractors with multiple active jobs benefit from CRM software with pipeline views, crew assignment, job scheduling synced to Google Calendar, and automated customer follow-ups. Roof Manager\'s CRM is purpose-built for roofing workflows and is always free.' }
         )
@@ -16776,7 +16774,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
         // Generic roofing fallback
         pairs.push(
           { q: 'How much does a new roof cost in Canada in 2026?', a: 'A new asphalt shingle roof in Canada costs $8,000–$22,000 CAD in 2026 for a 1,500–2,500 sq ft home. Calgary and Edmonton average $8,000–$18,000 CAD. Toronto and Vancouver run $9,000–$24,000 CAD. Metal roofs cost 2–3x more. Prices vary by city, pitch complexity, and materials.' },
-          { q: 'How much does a new roof cost in the US in 2026?', a: 'A new asphalt shingle roof in the US costs $7,000–$20,000 USD in 2026 for a 1,500–2,500 sq ft home. Texas and Oklahoma average $7,500–$18,000 USD. Florida homes require FBC-compliant materials adding 10–20% to costs. Class 4 impact-resistant shingles are recommended in hail-prone states.' },
+          { q: 'How much does a new roof cost in the US in 2026?', a: 'A new asphalt shingle roof in the US costs $9,500–$27,000 CAD in 2026 for a 1,500–2,500 sq ft home. Texas and Oklahoma average $10,000–$24,000 CAD. Florida homes require FBC-compliant materials adding 10–20% to costs. Class 4 impact-resistant shingles are recommended in hail-prone states.' },
           { q: 'How long does a roof replacement take?', a: 'Most residential roof replacements take 1–3 days for standard asphalt shingle roofs. Complex roofs with multiple pitches, skylights, or chimneys may take 3–5 days. Weather delays are the most common cause of extended timelines. Most contractors provide a firm schedule after the measurement report is complete.' },
           { q: 'What is the best roofing material for Canadian winters?', a: 'For Canadian winters, architectural asphalt shingles (50-year grade) with a Class 4 impact resistance rating are the top choice. Ice & water shield membrane is required under the National Building Code for the first 2 metres from the eave. Metal roofing excels in snowload areas like Barrie and Kingston.' },
           { q: 'How do I get an accurate roof measurement?', a: 'The fastest and most accurate method is satellite measurement using tools like Roof Manager — enter the address, receive a full PDF report (3D area, pitch, edges, material BOM) in 60 seconds for $8 CAD. Results are within 2–5% of manual measurement for most North American properties.' }
@@ -17199,7 +17197,7 @@ function getLanderFunnelHTML() {
           View Sample Report
         </a>
       </div>
-      <p class="text-sm text-gray-400 mt-6">Then $8 USD per report, or save with packs ($7.50/ea for 10, $7.00/ea for 25, $5.95/ea for 100). No subscriptions. Cancel anytime. <a href="/privacy" class="underline hover:text-gray-200">Privacy Policy</a> · <a href="/terms" class="underline hover:text-gray-200">Terms</a></p>
+      <p class="text-sm text-gray-400 mt-6">Then $8 CAD per report, or save with packs ($7.50/ea for 10, $7.00/ea for 25, $5.95/ea for 100). No subscriptions. Cancel anytime. <a href="/privacy" class="underline hover:text-gray-200">Privacy Policy</a> · <a href="/terms" class="underline hover:text-gray-200">Terms</a></p>
     </div>
   </section>
 
@@ -21295,7 +21293,7 @@ function getShingleCalculatorHTML(isEmbed = false): string {
     name: 'Shingle Quantity Calculator', url: canonical,
     description: 'Free online calculator for roofing shingle quantity — enter roof area and waste factor to compute bundles, squares, and underlayment rolls. Works for asphalt, architectural, and 3-tab shingles.',
     applicationCategory: 'BusinessApplication', operatingSystem: 'Web',
-    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'CAD' },
   })
   const calc = `
     <div class="bg-[#111] border border-white/10 rounded-2xl p-6 md:p-8 max-w-2xl mx-auto">
@@ -21353,7 +21351,7 @@ function getDeductibleEstimatorHTML(isEmbed = false): string {
     name: 'Insurance Claim Deductible Estimator', url: canonical,
     description: 'Free estimator for roofing insurance deductibles. Enter dwelling coverage amount and deductible type (flat dollar or percentage) to see your out-of-pocket cost on a roof claim.',
     applicationCategory: 'FinanceApplication', operatingSystem: 'Web',
-    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'CAD' },
   })
   const calc = `
     <div class="bg-[#111] border border-white/10 rounded-2xl p-6 md:p-8 max-w-2xl mx-auto">
@@ -21410,7 +21408,7 @@ function getSolarProductionEstimatorHTML(isEmbed = false): string {
     name: 'Solar Production Estimator', url: canonical,
     description: 'Free solar production estimator. Compute annual kWh from system size, peak sun hours, and a derate factor. Useful for pre-quote feasibility discussions.',
     applicationCategory: 'BusinessApplication', operatingSystem: 'Web',
-    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'CAD' },
   })
   const calc = `
     <div class="bg-[#111] border border-white/10 rounded-2xl p-6 md:p-8 max-w-2xl mx-auto">
@@ -21631,7 +21629,7 @@ function getPitchCalculatorHTML(): string {
   <meta property="og:url" content="https://www.roofmanager.ca/tools/pitch-calculator">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://www.roofmanager.ca/tools/pitch-calculator">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Roof Pitch Calculator","description":"Free roof pitch calculator — convert rise:12 pitch to degrees and calculate pitch multiplier for sloped area","url":"https://www.roofmanager.ca/tools/pitch-calculator","applicationCategory":"UtilitiesApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"publisher":{"@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca"}}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Roof Pitch Calculator","description":"Free roof pitch calculator — convert rise:12 pitch to degrees and calculate pitch multiplier for sloped area","url":"https://www.roofmanager.ca/tools/pitch-calculator","applicationCategory":"UtilitiesApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"CAD"},"publisher":{"@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca"}}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How do I convert roof pitch to degrees?","acceptedAnswer":{"@type":"Answer","text":"Use the formula degrees = arctan(rise ÷ 12). For a 6:12 pitch: arctan(0.5) = 26.57°. This calculator does it instantly for any pitch from 1:12 to 24:12."}},{"@type":"Question","name":"What is a pitch multiplier?","acceptedAnswer":{"@type":"Answer","text":"The pitch multiplier is √(rise² + 144) ÷ 12. Multiply your roof footprint area by this number to get the true sloped surface area — what you actually need to order material for."}},{"@type":"Question","name":"What is the most common roof pitch?","acceptedAnswer":{"@type":"Answer","text":"The most common residential roof pitch is 6:12 (26.57°), followed by 4:12 and 5:12. Pitches between 4:12 and 8:12 are considered conventional slope."}}]}</script>
   <link rel="stylesheet" href="/static/tailwind.css">
   <style>
@@ -22006,7 +22004,7 @@ function getI18nPricingHTML(locale: I18NLocale): string {
 <head>
   ${i18nHead(locale, `${m.pricing_title} | Roof Manager`, m.pricing_subtitle, `/${locale}/pricing`)}
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"Product","name":"Roof Manager","description":"${m.pricing_subtitle.replace(/"/g, '\\"')}","brand":{"@type":"Brand","name":"Roof Manager"},"offers":[{"@type":"Offer","name":"${m.pricing_free_label}","price":"0","priceCurrency":"USD","description":"${m.pricing_free_desc.replace(/"/g, '\\"')}"},{"@type":"Offer","name":"${m.pricing_per_report_label}","price":"8.00","priceCurrency":"USD","description":"${m.pricing_per_report_desc.replace(/"/g, '\\"')}"}]}
+  {"@context":"https://schema.org","@type":"Product","name":"Roof Manager","description":"${m.pricing_subtitle.replace(/"/g, '\\"')}","brand":{"@type":"Brand","name":"Roof Manager"},"offers":[{"@type":"Offer","name":"${m.pricing_free_label}","price":"0","priceCurrency":"CAD","description":"${m.pricing_free_desc.replace(/"/g, '\\"')}"},{"@type":"Offer","name":"${m.pricing_per_report_label}","price":"8.00","priceCurrency":"CAD","description":"${m.pricing_per_report_desc.replace(/"/g, '\\"')}"}]}
   </script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/${locale}"},{"@type":"ListItem","position":2,"name":"${m.nav_pricing}","item":"${base}/${locale}/pricing"}]}</script>
 </head>
@@ -22469,7 +22467,7 @@ function getMaterialEstimatorHTML(): string {
   <meta property="og:url" content="https://www.roofmanager.ca/tools/material-estimator">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://www.roofmanager.ca/tools/material-estimator">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Roofing Material Estimator","description":"Free roofing material estimator","url":"https://www.roofmanager.ca/tools/material-estimator","applicationCategory":"UtilitiesApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"publisher":{"@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca"}}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Roofing Material Estimator","description":"Free roofing material estimator","url":"https://www.roofmanager.ca/tools/material-estimator","applicationCategory":"UtilitiesApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"CAD"},"publisher":{"@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca"}}</script>
   <link rel="stylesheet" href="/static/tailwind.css">
   <style>
     body{background:#0a0f1a;color:#e2e8f0;font-family:system-ui,sans-serif;}

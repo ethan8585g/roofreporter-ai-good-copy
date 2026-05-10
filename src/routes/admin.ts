@@ -2726,7 +2726,7 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
 
           const invRes = await c.env.DB.prepare(`
             INSERT INTO invoices (invoice_number, master_company_id, customer_id, subtotal, tax_rate, tax_amount, total, currency, status, document_type, notes, share_token, issue_date, due_date, created_at, updated_at)
-            VALUES (?, 1, ?, ?, 0, 0, ?, 'USD', 'sent', 'invoice', ?, ?, datetime('now'), datetime('now', '+30 days'), datetime('now'), datetime('now'))
+            VALUES (?, 1, ?, ?, 0, 0, ?, 'CAD', 'sent', 'invoice', ?, ?, datetime('now'), datetime('now', '+30 days'), datetime('now'), datetime('now'))
           `).bind(invoiceNumber, customerId, pack.price, pack.price, `Onboarding — ${pack.desc}`, shareToken).run()
           const invoiceId = (invRes as any).meta?.last_row_id
 
@@ -2876,7 +2876,7 @@ async function createSquarePaymentLink(env: any, invoiceId: number, invoiceNumbe
       headers: { 'Authorization': `Bearer ${sqToken}`, 'Content-Type': 'application/json', 'Square-Version': '2025-01-23' },
       body: JSON.stringify({
         idempotency_key: `inv-${invoiceId}-${Date.now()}`,
-        quick_pay: { name: `Invoice ${invoiceNumber}`, price_money: { amount: Math.round(totalDollars * 100), currency: 'USD' }, location_id: sqLocation }
+        quick_pay: { name: `Invoice ${invoiceNumber}`, price_money: { amount: Math.round(totalDollars * 100), currency: 'CAD' }, location_id: sqLocation }
       })
     })
     const sqData: any = await sqResp.json()
@@ -4478,7 +4478,7 @@ adminRoutes.post('/superadmin/service-invoices/create', async (c) => {
     // the auto-generated id, then atomically batch all child rows.
     const invResult = await c.env.DB.prepare(
       `INSERT INTO invoices (invoice_number, customer_id, subtotal, tax_rate, tax_amount, total, currency, status, document_type, notes, share_token, due_date, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 0, ?, 'USD', 'draft', 'invoice', ?, ?, ?, datetime('now'), datetime('now'))`
+       VALUES (?, ?, ?, ?, 0, ?, 'CAD', 'draft', 'invoice', ?, ?, ?, datetime('now'), datetime('now'))`
     ).bind(invoiceNumber, customer.id, subtotal, taxRate, total, notes || '', shareToken, due_date || null).run()
     const invoiceId = invResult.meta.last_row_id as number
 

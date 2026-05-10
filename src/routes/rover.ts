@@ -71,7 +71,7 @@ REPORT CREDIT PACKS (CAD — buy once, credits never expire):
 ALWAYS present the full list above when asked about pricing. Format it as a tidy bulleted list. Mention that the 4 free reports come first and the credit packs are only used after.
 
 AI ROOFER / SOLAR SALES SECRETARY (AI Phone Answering Service):
-- $199/month CAD (Canadians) or USD (Americans)
+- $199/month CAD
 - 1 month FREE TRIAL — cancel anytime
 - AI answers your business calls 24/7 in a natural human voice
 - Books appointments to your calendar
@@ -156,7 +156,7 @@ ROOFER SECRETARY (AI Phone Service):
 - Automated call transcripts and summaries
 - Scheduling assistance
 - Never miss a potential customer call
-- $199/month CAD/USD — 1 month free trial
+- $199/month CAD — 1 month free trial
 
 BLOG (/blog):
 - Roofing industry insights and best practices

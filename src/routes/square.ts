@@ -597,7 +597,7 @@ squareRoutes.post('/checkout/report', async (c) => {
     }
 
     const tier = service_tier || 'standard'
-    // Single report = $7 USD flat (700 cents)
+    // Single report = $7 CAD flat (700 cents)
     const originalCents = 700
     let priceCents = originalCents
     let promoApplied: { id: number; code: string; discountCents: number } | null = null

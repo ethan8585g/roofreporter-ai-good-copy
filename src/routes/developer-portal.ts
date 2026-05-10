@@ -791,7 +791,7 @@ developerPortalRoutes.post('/checkout', async (c) => {
         idempotency_key: idempotencyKey,
         quick_pay: {
           name: `${pkg.name} — Roof Manager API Credits`,
-          price_money: { amount: pkg.price_cents, currency: 'USD' },
+          price_money: { amount: pkg.price_cents, currency: 'CAD' },
           location_id: locationId,
         },
         checkout_options: { redirect_url: successUrl, ask_for_shipping_address: false },
