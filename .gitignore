@@ -43,3 +43,14 @@ core
 # Local dev databases
 roofreporter.db
 src/db.sqlite3
+
+# Data exports — NEVER commit production data dumps to a public repo
+# (we scrubbed a 2.9MB traced-reports-export.json from history on 2026-05-10)
+*-export.json
+*-export.csv
+*.dump
+*.sql.gz
+traced-reports-export.json
+
+# Claude scheduled-task lock
+.claude/scheduled_tasks.lock
