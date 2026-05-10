@@ -6659,8 +6659,24 @@ function getDispatchBoardHTML(mapsApiKey: string = '') {
 }
 
 function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
+  // Force preserveDrawingBuffer:true on every WebGL context the page creates
+  // BEFORE Maps 3D loads. Without this, gmp-map-3d's internal canvas clears
+  // its drawing buffer between paints, so canvas.toDataURL() returns an
+  // empty/black frame for the "Capture View" button. The patch is a no-op
+  // for any non-webgl context (2D, etc.) and runs once per pageload.
   const mapsScript = mapsApiKey
-    ? `<script>function onSaGoogleMapsReady(){window._saGoogleMapsLoaded=true;}</script>
+    ? `<script>
+      (function(){
+        var origGetContext = HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext = function(type, attrs) {
+          if (typeof type === 'string' && (type === 'webgl' || type === 'webgl2' || type === 'experimental-webgl')) {
+            attrs = Object.assign({}, attrs || {}, { preserveDrawingBuffer: true });
+          }
+          return origGetContext.call(this, type, attrs);
+        };
+      })();
+      function onSaGoogleMapsReady(){window._saGoogleMapsLoaded=true;}
+    </script>
     <script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&v=beta&libraries=places,maps3d&callback=onSaGoogleMapsReady" async defer></script>`
     : ''
   return `<!DOCTYPE html>
