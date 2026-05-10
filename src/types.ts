@@ -704,6 +704,15 @@ export interface RoofReport {
     flux_data_url?: string | null
     /** Base64 data URL: Solar API roof mask overlay (adds to report as 3rd image) */
     mask_overlay_data_url?: string | null
+
+    /** Admin-captured 3D map screenshots taken from the trace UI's right-side
+     *  3D Reference panel. 1–4 entries; report renders 1–2 below the page-2
+     *  diagram and 3–4 on a dedicated page after page 2. */
+    extra_captures?: Array<{
+      data_url: string
+      captured_at: string
+    }>
+    extra_captures_captured_at?: string | null
   }
 
   // ---- DATA QUALITY ----

@@ -537,6 +537,19 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
     NE: 'Northeast View', NW: 'Northwest View', SW: 'Southwest View', SE: 'Southeast View'
   }
 
+  // Admin-captured 3D map screenshots from the trace UI's "Capture View"
+  // button. 1–2 captures render inline below the page-2 diagram; 3–4
+  // captures render on a dedicated page after page 2. Empty array (the
+  // default) means the report renders exactly as it did before this
+  // feature shipped — zero behavior change for any historical report.
+  const extraCapturesRaw = (report as any).imagery?.extra_captures
+  const extraCaptures: Array<{ data_url: string; captured_at: string }> =
+    Array.isArray(extraCapturesRaw)
+      ? extraCapturesRaw.filter((c: any) => c && typeof c.data_url === 'string' && c.data_url.startsWith('data:image/')).slice(0, 4)
+      : []
+  const extraCapturesInline = extraCaptures.length >= 1 && extraCaptures.length <= 2 ? extraCaptures : []
+  const extraCapturesPage = extraCaptures.length >= 3 && extraCaptures.length <= 4 ? extraCaptures : []
+
   // ── Per-structure breakdown (house + detached garage/shed/etc.) ──
   // Computed from roof_trace GPS coordinates so each traced building gets its own measurement row.
   const structuresBreakdown = computeStructuresBreakdown(report)
@@ -1056,6 +1069,18 @@ ${aerialTiles.length === 4 ? `
     </div>
   </div>
 
+  ${extraCapturesInline.length > 0 ? `
+  <!-- Admin-captured 3D map screenshots (1–2 → inline below diagram) -->
+  <div style="padding:6px 28px 0">
+    <div style="font-size:10px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;border-bottom:1.5px solid ${TEAL};padding-bottom:3px">Additional Roof Imagery</div>
+    <div style="display:grid;grid-template-columns:repeat(${extraCapturesInline.length}, 1fr);gap:8px">
+      ${extraCapturesInline.map((cap, i) => `
+      <div style="border:1px solid #cbd5e1;border-radius:5px;overflow:hidden;background:#0f172a;aspect-ratio:4/3">
+        <img src="${cap.data_url}" alt="Captured 3D view ${i + 1}" style="width:100%;height:100%;object-fit:cover;display:block">
+      </div>`).join('')}
+    </div>
+  </div>` : ''}
+
   <!-- Per-Structure Measurement Breakdown (house + detached garage, etc.) -->
   ${structuresBreakdown.length >= 2 && structureDiagrams.length < 2 ? `
   <div style="padding:6px 28px 0">
@@ -1136,7 +1161,27 @@ ${aerialTiles.length === 4 ? `
   </div>
 </div>
 
-
+${extraCapturesPage.length > 0 ? `
+<!-- ==================== PAGE 2.5: ADMIN-CAPTURED 3D VIEWS (3–4) ==================== -->
+<div class="page">
+  <div style="height:4px;background:linear-gradient(90deg,${TEAL},${TEAL_DARK})"></div>
+  <div style="padding:14px 28px 8px">
+    <div style="font-size:14px;font-weight:800;color:#222">Additional Roof Imagery</div>
+    <div style="font-size:9.5px;color:#666;margin-top:2px">Supplementary 3D map views captured during the measurement review.</div>
+  </div>
+  <div style="padding:8px 28px 0;display:grid;grid-template-columns:1fr 1fr;${extraCapturesPage.length === 4 ? 'grid-template-rows:1fr 1fr;' : 'grid-template-rows:1fr;'}gap:10px;height:8.5in">
+    ${extraCapturesPage.map((cap, i) => `
+    <div style="border:1px solid #ccc;border-radius:6px;overflow:hidden;background:#1a2332;display:flex;flex-direction:column;position:relative">
+      <div style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.65);color:#fff;font-size:9px;font-weight:700;padding:4px 8px;border-radius:4px;letter-spacing:0.5px;z-index:2">View ${i + 1}</div>
+      <img src="${cap.data_url}" alt="Captured 3D view ${i + 1}" style="width:100%;height:100%;object-fit:cover;display:block">
+    </div>`).join('')}
+  </div>
+  <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,${TEAL},${TEAL_DARK});display:flex;align-items:center;justify-content:space-between;padding:0 28px">
+    <span style="color:#fff;font-size:9px;font-weight:700">Roof Manager</span>
+    <span style="color:#E0F2F1;font-size:7.5px">roofmanager.ca &bull; Additional Imagery</span>
+  </div>
+</div>
+` : ''}
 
 <!-- Pitch Analysis data consolidated into Page 2 Area by Pitch table -->
 

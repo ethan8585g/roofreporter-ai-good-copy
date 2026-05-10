@@ -1710,8 +1710,14 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
             '</div>' +
           '</div>' +
           '<div style="flex:1;min-height:0;display:flex;flex-direction:column">' +
-            '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">3D Reference</div>' +
+            '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+              '<span>3D Reference</span>' +
+              '<button onclick="saCaptureView()" id="sa-capture-view-btn" title="Take a screenshot of whatever the 3D map is currently showing. Up to 4 captures get embedded in the customer report; if you skip this, the report renders as-is." style="padding:4px 9px;background:rgba(245,158,11,0.18);color:#fbbf24;border:1px solid rgba(245,158,11,0.45);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none;letter-spacing:0">' +
+                '<i class="fas fa-camera mr-1"></i><span id="sa-capture-view-label">Capture View</span>' +
+              '</button>' +
+            '</div>' +
             '<gmp-map-3d id="sa-trace-map-3d" mode="HYBRID" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;width:100%;height:100%"></gmp-map-3d>' +
+            '<div id="sa-extra-captures-strip" style="display:none;padding:6px 0 0;gap:6px;flex-wrap:wrap"></div>' +
           '</div>' +
         '</div>' +
         '<div style="flex:1;min-height:0;display:flex;flex-direction:column">' +
@@ -1831,6 +1837,10 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
     // (exact shoelace × slopeFactor) instead of inferring face boundaries.
     verifiedFaces: [],           // [{face_id, label, polygon:google.maps.Polygon, points:[{lat,lng}], pitch_rise, projected_area_ft2, sloped_area_ft2, _focused:bool}]
     _verifyPlanesActive: false,
+    // Admin-captured screenshots of the right-side 3D Reference panel.
+    // 1–4 entries. Bundled into the submit-trace POST so the report can
+    // embed them. If empty at submit time, the report renders unchanged.
+    extra_captures: [],          // [{data_url:string, captured_at:string}]
     _isPhone: _isPhoneUA
   };
   setTimeout(function() {
@@ -1874,6 +1884,123 @@ function saInitTraceStreetView(lat, lng) {
       showRoadLabels: false
     });
   });
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Capture View — Admin-driven screenshots of the right-side 3D Reference
+// panel. Each click grabs the gmp-map-3d's internal WebGL canvas, encodes
+// it as a JPEG data URL (quality 0.8 to keep payload small), and pushes it
+// onto _saTraceState.extra_captures. Up to 4 captures get bundled into
+// the submit-trace POST and embedded in the customer report. Empty array
+// means the report renders unchanged from today (zero behavior change).
+// WebGL canvases are non-preserving by default, so we capture inside a
+// requestAnimationFrame to grab a fresh-painted frame before the buffer
+// clears. If the cross-origin tile data taints the canvas, toDataURL
+// throws SecurityError and we surface the error inline instead of
+// silently substituting a different image.
+// ──────────────────────────────────────────────────────────────────────────
+window.saCaptureView = function() {
+  var s = window._saTraceState; if (!s) return;
+  if (!Array.isArray(s.extra_captures)) s.extra_captures = [];
+  if (s.extra_captures.length >= 4) {
+    saShowCaptureToast('Max 4 captures reached. Remove one to add another.');
+    return;
+  }
+  var host = document.getElementById('sa-trace-map-3d');
+  if (!host) {
+    saShowCaptureToast('3D map is not ready yet.');
+    return;
+  }
+  // The gmp-map-3d web component renders into a shadow-root canvas in
+  // current Maps 3D beta builds, but older builds attach a plain canvas
+  // child. Try both — first the shadow root, then a plain descendant.
+  var findCanvas = function(node) {
+    if (!node) return null;
+    if (node.shadowRoot) {
+      var shc = node.shadowRoot.querySelector('canvas');
+      if (shc) return shc;
+    }
+    return node.querySelector ? node.querySelector('canvas') : null;
+  };
+  var doCapture = function() {
+    var canvas = findCanvas(host);
+    if (!canvas) {
+      saShowCaptureToast('Could not access the 3D map canvas. Try interacting with the map first.');
+      return;
+    }
+    var dataUrl;
+    try {
+      dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+    } catch (e) {
+      saShowCaptureToast('Browser blocked the screenshot (canvas tainted by cross-origin tiles). Try refreshing the page.');
+      return;
+    }
+    // toDataURL on a non-preserving WebGL canvas can yield a blank black
+    // frame — detect by checking dataUrl length is plausibly large.
+    if (!dataUrl || !dataUrl.startsWith('data:image/') || dataUrl.length < 5000) {
+      saShowCaptureToast('Captured an empty frame. Move/zoom the 3D map and try again.');
+      return;
+    }
+    if (dataUrl.length > 4400000) {
+      saShowCaptureToast('Capture is too large (>3MB). Try zooming out a bit.');
+      return;
+    }
+    s.extra_captures.push({ data_url: dataUrl, captured_at: new Date().toISOString() });
+    saRenderExtraCapturesStrip();
+  };
+  // Wait for two animation frames so the WebGL renderer has flushed a
+  // current paint. Single-rAF sometimes still grabs a cleared buffer.
+  requestAnimationFrame(function() { requestAnimationFrame(doCapture); });
+};
+
+window.saRemoveCapture = function(idx) {
+  var s = window._saTraceState; if (!s) return;
+  if (!Array.isArray(s.extra_captures)) return;
+  if (idx < 0 || idx >= s.extra_captures.length) return;
+  s.extra_captures.splice(idx, 1);
+  saRenderExtraCapturesStrip();
+};
+
+function saRenderExtraCapturesStrip() {
+  var s = window._saTraceState;
+  var strip = document.getElementById('sa-extra-captures-strip');
+  var btn = document.getElementById('sa-capture-view-btn');
+  var lbl = document.getElementById('sa-capture-view-label');
+  var caps = (s && Array.isArray(s.extra_captures)) ? s.extra_captures : [];
+  if (!strip) return;
+  if (!caps.length) {
+    strip.style.display = 'none';
+    strip.innerHTML = '';
+    if (lbl) lbl.textContent = 'Capture View';
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; }
+    return;
+  }
+  strip.style.display = 'flex';
+  strip.innerHTML = caps.map(function(c, i) {
+    return '<div style="position:relative;width:88px;height:66px;border-radius:6px;overflow:hidden;border:1px solid #374151;background:#0b1220;flex-shrink:0">' +
+      '<img src="' + c.data_url + '" style="width:100%;height:100%;object-fit:cover;display:block" />' +
+      '<div style="position:absolute;top:2px;left:4px;background:rgba(0,0,0,0.7);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px">#' + (i + 1) + '</div>' +
+      '<button onclick="saRemoveCapture(' + i + ')" title="Remove this capture" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(220,38,38,0.92);color:#fff;border:none;font-size:10px;font-weight:800;cursor:pointer;line-height:1;padding:0">&times;</button>' +
+    '</div>';
+  }).join('');
+  if (lbl) lbl.textContent = 'Capture View (' + caps.length + '/4)';
+  if (btn) {
+    var atCap = caps.length >= 4;
+    btn.disabled = atCap;
+    btn.style.opacity = atCap ? '0.5' : '1';
+    btn.style.cursor = atCap ? 'not-allowed' : 'pointer';
+  }
+}
+
+function saShowCaptureToast(msg) {
+  var prev = document.getElementById('sa-capture-toast');
+  if (prev) prev.remove();
+  var el = document.createElement('div');
+  el.id = 'sa-capture-toast';
+  el.textContent = msg;
+  el.setAttribute('style', 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#7f1d1d;color:#fee2e2;padding:10px 16px;border-radius:8px;font-size:12px;font-weight:600;z-index:10050;box-shadow:0 8px 24px rgba(0,0,0,0.5);max-width:420px;text-align:center');
+  document.body.appendChild(el);
+  setTimeout(function() { try { el.remove(); } catch(_) {} }, 4500);
 }
 
 window.saTraceSetTool = function(tool) {
@@ -3770,10 +3897,13 @@ window.saSubmitTrace = async function(orderId, force) {
 
   try {
     var token = localStorage.getItem('rc_token') || '';
+    // Bundle any admin-captured 3D map screenshots into the submit payload.
+    // Empty/missing → server skips the imagery merge, report renders as-is.
+    var extraCaps = (s && Array.isArray(s.extra_captures)) ? s.extra_captures.slice(0, 4) : [];
     var res = await fetch('/api/admin/superadmin/orders/' + orderId + '/submit-trace', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roof_trace_json: traceJson, force: !!force })
+      body: JSON.stringify({ roof_trace_json: traceJson, force: !!force, extra_captures: extraCaps })
     });
     var data = await res.json();
     if (data.success) {

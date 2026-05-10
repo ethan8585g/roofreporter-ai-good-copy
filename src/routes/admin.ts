@@ -4809,7 +4809,7 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
   const orderId = parseInt(c.req.param('id'))
   if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
   try {
-    const { roof_trace_json, force } = await c.req.json()
+    const { roof_trace_json, force, extra_captures } = await c.req.json()
     if (!roof_trace_json) return c.json({ error: 'roof_trace_json is required' }, 400)
 
     // Parse if string, then validate structure + geometry before anything hits the DB
@@ -4819,6 +4819,33 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
     } catch (e: any) {
       return c.json({ error: 'roof_trace_json is not valid JSON', details: e.message }, 400)
     }
+
+    // Validate optional admin-captured 3D map screenshots. Cap at 4 entries,
+    // each ≤ ~3MB after base64 decoding (matches the existing /3d-cover and
+    // /3d-aerials caps). Reject if shape is wrong; tolerate empty/missing
+    // by treating it as "no captures" so the report renders as today.
+    const cleanedCaptures: Array<{ data_url: string; captured_at: string }> = []
+    if (extra_captures != null) {
+      if (!Array.isArray(extra_captures)) {
+        return c.json({ error: 'extra_captures must be an array' }, 400)
+      }
+      if (extra_captures.length > 4) {
+        return c.json({ error: 'extra_captures: max 4 captures' }, 400)
+      }
+      const nowIso = new Date().toISOString()
+      for (const cap of extra_captures) {
+        const dataUrl = String(cap?.data_url || '')
+        if (!dataUrl.startsWith('data:image/')) {
+          return c.json({ error: 'each extra_captures entry needs a data:image/* data_url' }, 400)
+        }
+        if (dataUrl.length > 4_400_000) {
+          return c.json({ error: 'extra_captures: each image max ~3MB' }, 413)
+        }
+        const capturedAt = typeof cap?.captured_at === 'string' && cap.captured_at ? cap.captured_at : nowIso
+        cleanedCaptures.push({ data_url: dataUrl, captured_at: capturedAt })
+      }
+    }
+
     const validation = validateTraceUi(traceObj)
     if (!validation.valid && !force) {
       return c.json({
@@ -4854,6 +4881,31 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
 
     // Generate the report (this is admin submitting so we call synchronously within worker timeout)
     const result = await generateReportForOrder(orderId, c.env, (c as any).executionCtx)
+
+    // Merge any admin-captured 3D map screenshots into the report's imagery
+    // payload. Mirrors the /3d-aerials handler pattern at reports.ts:801-848.
+    // Done after report generation so the reports row is guaranteed to exist
+    // (generateReportForOrder upserts it). No-op if cleanedCaptures is empty,
+    // so reports render unchanged when the admin doesn't capture anything.
+    if (cleanedCaptures.length > 0 && result?.success) {
+      try {
+        const row = await c.env.DB.prepare(
+          'SELECT api_response_raw FROM reports WHERE order_id = ?'
+        ).bind(orderId).first<{ api_response_raw: string | null }>()
+        if (row) {
+          let parsed: any = {}
+          try { parsed = row.api_response_raw ? JSON.parse(row.api_response_raw) : {} } catch { parsed = {} }
+          parsed.imagery = parsed.imagery || {}
+          parsed.imagery.extra_captures = cleanedCaptures
+          parsed.imagery.extra_captures_captured_at = new Date().toISOString()
+          await c.env.DB.prepare(
+            'UPDATE reports SET api_response_raw = ? WHERE order_id = ?'
+          ).bind(JSON.stringify(parsed), orderId).run()
+        }
+      } catch (e: any) {
+        console.warn('[submit-trace] extra_captures merge failed:', e?.message || e)
+      }
+    }
 
     // Auto-invoice: admin-traced orders previously only got a draft proposal
     // when the 10-minute cron sweep ran. Hook it inline so the roofer sees
