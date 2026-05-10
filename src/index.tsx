@@ -7901,7 +7901,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   <meta name="ICBM" content="53.5461,-113.4938">
   <meta name="description" content="Generate a roof measurement report — satellite-grade accuracy for roofing, solar, and insurance pros. Free sample report, no credit card.">
   <meta property="og:title" content="Roof Measurement Report Software — Roof Manager">
-  <meta property="og:description" content="Contractor-grade roof measurement reports from satellite imagery. Full CRM, AI condition analysis, PDF delivery.">
+  <meta property="og:description" content="Enterprise / Xactimate / insurance-grade roof measurement reports from satellite imagery. Full CRM, AI condition analysis, PDF delivery.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca">
   <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
@@ -8011,7 +8011,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 {"@context":"https://schema.org","@type":"WebPage","name":"Roof Manager","speakable":{"@type":"SpeakableSpecification","xPath":["/html/head/meta[@name='description']/@content"]},"url":"https://www.roofmanager.ca"}
   </script>
   <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"VideoObject","name":"Roof Manager — Product Tutorial","description":"Walkthrough of how Roof Manager generates a contractor-grade roof measurement report using satellite imagery and AI.","thumbnailUrl":["https://img.youtube.com/vi/NQW3EgEhldA/maxresdefault.jpg","https://www.roofmanager.ca/static/logo.png?v=20260504"],"uploadDate":"2026-01-15T08:00:00-07:00","contentUrl":"https://www.youtube.com/watch?v=NQW3EgEhldA","embedUrl":"https://www.youtube.com/embed/NQW3EgEhldA","publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://www.roofmanager.ca/static/logo.png?v=20260504"}},"potentialAction":{"@type":"SeekToAction","target":"https://www.youtube.com/watch?v=NQW3EgEhldA&t={seek_to_second_number}","startOffset-input":"required name=seek_to_second_number"}}
+{"@context":"https://schema.org","@type":"VideoObject","name":"Roof Manager — Product Tutorial","description":"Walkthrough of how Roof Manager generates an enterprise / Xactimate / insurance-grade roof measurement report using satellite imagery and AI.","thumbnailUrl":["https://img.youtube.com/vi/NQW3EgEhldA/maxresdefault.jpg","https://www.roofmanager.ca/static/logo.png?v=20260504"],"uploadDate":"2026-01-15T08:00:00-07:00","contentUrl":"https://www.youtube.com/watch?v=NQW3EgEhldA","embedUrl":"https://www.youtube.com/embed/NQW3EgEhldA","publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://www.roofmanager.ca/static/logo.png?v=20260504"}},"potentialAction":{"@type":"SeekToAction","target":"https://www.youtube.com/watch?v=NQW3EgEhldA&t={seek_to_second_number}","startOffset-input":"required name=seek_to_second_number"}}
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -8238,7 +8238,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <span class="text-sm font-semibold text-[#00FF88] tracking-wide">North America&ndash;Wide Roof Measurements <span class="text-[10px] mx-1">&#127464;&#127462;</span><span class="text-[10px]">&#127482;&#127480;</span> &middot; 200+ Contractors</span>
             </div>
             <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] text-white mb-6 tracking-tight">Affordable Satellite Roof Measurement Reports <span class="neon-text">Roofers Actually Trust</span></h1>
-            <h2 class="text-lg lg:text-xl text-gray-300 mb-8 max-w-xl leading-relaxed font-normal">Contractor-grade roof measurement reports — satellite-precise area, pitch, edges, and material BOM, with full CRM and 1&ndash;2 hour PDF delivery. Built for US &amp; Canadian roofing contractors. Contact us today to get started.</h2>
+            <h2 class="text-lg lg:text-xl text-gray-300 mb-8 max-w-xl leading-relaxed font-normal">Enterprise / Xactimate / insurance-grade roof measurement reports — satellite-precise area, pitch, edges, and material BOM, with full CRM and 1&ndash;2 hour PDF delivery. Built for US &amp; Canadian roofing contractors. Contact us today to get started.</h2>
 
             <!-- Primary CTA (ONE) -->
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 mb-4">
@@ -8409,7 +8409,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <div class="text-center mb-12 scroll-animate">
           <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-[11px] font-bold mb-5 uppercase tracking-widest"><i class="fas fa-image"></i> See it in action</div>
           <h2 class="text-3xl md:text-4xl lg:text-5xl font-black text-white mb-4 tracking-tight leading-tight">From <span class="neon-text">Satellite</span> to <span class="neon-text">Signed Estimate</span></h2>
-          <p class="text-gray-400 text-base md:text-lg max-w-2xl mx-auto leading-relaxed">High-resolution imagery, geometric precision, and a contractor-grade PDF — every report, every roof.</p>
+          <p class="text-gray-400 text-base md:text-lg max-w-2xl mx-auto leading-relaxed">High-resolution imagery, geometric precision, and an enterprise / Xactimate / insurance-grade PDF — every report, every roof.</p>
         </div>
         <div class="grid md:grid-cols-3 gap-5 lg:gap-6">
           <!-- Card 1: Aerial satellite imagery -->
@@ -8440,13 +8440,13 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             </div>
           </div>
 
-          <!-- Card 3: Contractor-grade PDF -->
+          <!-- Card 3: Enterprise / Xactimate / insurance-grade PDF -->
           <div class="group relative overflow-hidden rounded-2xl border border-white/10 hover:border-[#00FF88]/40 bg-[#111111] transition-all duration-300 hover:-translate-y-1 scroll-animate" style="aspect-ratio:4/5;transition-delay:160ms">
             <img src="https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=900&q=80&auto=format&fit=crop" alt="Roofing contractor reviewing a measurement report on a tablet" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" loading="lazy" decoding="async" width="900" height="1125" onerror="this.style.display='none'"/>
             <div class="absolute inset-0" style="background:linear-gradient(180deg, rgba(10,10,10,0.15) 0%, rgba(10,10,10,0.55) 55%, rgba(10,10,10,0.92) 100%);"></div>
             <div class="absolute top-4 left-4 inline-flex items-center gap-1.5 bg-black/60 backdrop-blur-md border border-[#00FF88]/30 rounded-full px-3 py-1.5"><i class="fas fa-file-pdf text-[#00FF88] text-[10px]"></i><span class="text-[10px] font-bold text-white uppercase tracking-widest">Step 3</span></div>
             <div class="absolute bottom-0 left-0 right-0 p-5 lg:p-6">
-              <div class="text-white font-extrabold text-lg lg:text-xl leading-tight mb-1.5">Contractor-grade PDF</div>
+              <div class="text-white font-extrabold text-lg lg:text-xl leading-tight mb-1.5">Enterprise / Xactimate / insurance-grade PDF</div>
               <div class="text-gray-300 text-sm leading-snug">Branded report with full BOM, edge lengths, and roof diagram — delivered to your inbox, ready to quote.</div>
             </div>
           </div>
@@ -8851,7 +8851,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <div class="bg-[#111] border border-white/10 rounded-xl overflow-hidden"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-200 text-sm pr-4">What if I don't use my credits?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Volume-pack credits never expire. Buy a 100-pack today, use them in three years &mdash; the credits stay on your account forever.</p></div></div>
         <div class="bg-[#111] border border-white/10 rounded-xl overflow-hidden"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-200 text-sm pr-4">Can I share credits across my team?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Yes. Credits are tied to your company account, not a single user. Add unlimited team members &mdash; estimators, project managers, owners &mdash; and they all draw from the same credit pool.</p></div></div>
         <div class="bg-[#111] border border-white/10 rounded-xl overflow-hidden"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-200 text-sm pr-4">Is there a setup fee or onboarding cost?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Zero setup fees. No onboarding charges. The CRM, invoicing, proposals, dashboard, and team accounts are all included free with every plan &mdash; you only pay for measurement reports.</p></div></div>
-        <div class="bg-[#111] border border-white/10 rounded-xl overflow-hidden"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-200 text-sm pr-4">What if a report fails or the imagery is too low quality?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">No charge. If the satellite imagery is below our quality threshold or the engine flags a measurement for review, we don't bill the credit. You only pay for delivered, contractor-grade reports.</p></div></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl overflow-hidden"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-200 text-sm pr-4">What if a report fails or the imagery is too low quality?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">No charge. If the satellite imagery is below our quality threshold or the engine flags a measurement for review, we don't bill the credit. You only pay for delivered, enterprise / Xactimate / insurance-grade reports.</p></div></div>
         <div class="bg-[#111] border border-white/10 rounded-xl overflow-hidden"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-200 text-sm pr-4">Are prices in USD or CAD?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Listed prices are CAD. US contractors pay roughly 25-30% less in USD &mdash; the conversion happens at checkout. We accept Visa, Mastercard, Amex, and Square in both currencies.</p></div></div>
       </div>
     </div>
@@ -12538,7 +12538,7 @@ const featureHubConfig: Record<string, {
     slug: 'measurements', title: 'Roof Measurement Report Software', icon: 'fas fa-satellite', accentColor: '#00FF88',
     heroImage: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1920&q=80&auto=format&fit=crop',
     ogImage: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1200&q=80&auto=format&fit=crop',
-    headline: 'Roof Measurement Report Software — Contractor-Grade Reports',
+    headline: 'Roof Measurement Report Software — Enterprise / Xactimate / Insurance-Grade Reports',
     subhead: 'Satellite-powered 3D analysis with 99% accuracy. Stop climbing roofs — measure from your truck.',
     metaDesc: 'Roof measurement report software for roofing contractors. Satellite 3D area, pitch, edges, and material BOM. 99% accuracy. Try free.',
     capabilities: [
@@ -13775,30 +13775,46 @@ function getFeatureHubPageHTML(featureSlug: string): string {
         <!-- Product UI Mockup -->
         <div class="hidden lg:block">
           ${f.slug === 'measurements' ? `
-          <div style="position:relative;border-radius:24px;overflow:hidden;box-shadow:0 30px 60px -15px rgba(0,0,0,0.7),0 0 0 1px rgba(255,255,255,0.08);aspect-ratio:4/5;background:#0A0A0A">
-            <img src="https://images.unsplash.com/photo-1572120360610-d971b9d7767c?w=900&q=85&auto=format&fit=crop" alt="AI roof measurement aerial view" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" loading="lazy" width="900" height="1125">
-            <div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 30%,transparent 0%,rgba(10,10,10,0.45) 70%,rgba(10,10,10,0.92) 100%)"></div>
+          <div style="position:relative;border-radius:24px;overflow:hidden;box-shadow:0 30px 60px -15px rgba(0,0,0,0.7),0 0 0 1px rgba(255,255,255,0.08);aspect-ratio:4/5;background:radial-gradient(ellipse at 50% 45%,#1a2332 0%,#0a0f17 65%,#050709 100%)">
+            <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(0,255,136,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,136,0.05) 1px,transparent 1px);background-size:24px 24px;opacity:0.55"></div>
+            <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0.18">
+              <path d="M-20,60 L80,60 L80,110 L-20,110 Z" fill="none" stroke="#fff" stroke-width="0.8"/>
+              <path d="M340,80 L420,80 L420,160 L340,160 Z" fill="none" stroke="#fff" stroke-width="0.8"/>
+              <path d="M-10,420 L100,420 L100,500 L-10,500 Z" fill="none" stroke="#fff" stroke-width="0.8"/>
+              <path d="M300,440 L420,440 L420,520 L300,520 Z" fill="none" stroke="#fff" stroke-width="0.8"/>
+              <line x1="0" y1="455" x2="400" y2="455" stroke="#fff" stroke-width="0.5" stroke-dasharray="6 6"/>
+            </svg>
             <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">
               <defs>
-                <filter id="rmGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-                <linearGradient id="rmEdge" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="${f.accentColor}" stop-opacity="0.4"/><stop offset="50%" stop-color="${f.accentColor}" stop-opacity="1"/><stop offset="100%" stop-color="${f.accentColor}" stop-opacity="0.4"/></linearGradient>
+                <filter id="rmGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                <linearGradient id="rmEdge" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="${f.accentColor}" stop-opacity="0.45"/><stop offset="50%" stop-color="${f.accentColor}" stop-opacity="1"/><stop offset="100%" stop-color="${f.accentColor}" stop-opacity="0.45"/></linearGradient>
+                <linearGradient id="rmFill" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="${f.accentColor}" stop-opacity="0.18"/><stop offset="100%" stop-color="${f.accentColor}" stop-opacity="0.06"/></linearGradient>
               </defs>
-              <path d="M70,250 L200,165 L330,250 L330,335 L200,260 L70,335 Z" fill="${f.accentColor}" fill-opacity="0.06" stroke="${f.accentColor}" stroke-width="1.5" stroke-opacity="0.55" stroke-dasharray="3 3"/>
-              <line x1="70" y1="250" x2="200" y2="165" stroke="url(#rmEdge)" stroke-width="2.5" filter="url(#rmGlow)"/>
-              <line x1="200" y1="165" x2="330" y2="250" stroke="url(#rmEdge)" stroke-width="2.5" filter="url(#rmGlow)"/>
-              <line x1="70" y1="250" x2="330" y2="250" stroke="${f.accentColor}" stroke-width="2" stroke-opacity="0.85" filter="url(#rmGlow)"/>
-              <line x1="200" y1="165" x2="200" y2="260" stroke="${f.accentColor}" stroke-width="1.5" stroke-opacity="0.6" stroke-dasharray="4 3"/>
-              <circle cx="70" cy="250" r="5" fill="#0A0A0A" stroke="${f.accentColor}" stroke-width="2"/>
-              <circle cx="200" cy="165" r="5" fill="#0A0A0A" stroke="${f.accentColor}" stroke-width="2"/>
-              <circle cx="330" cy="250" r="5" fill="#0A0A0A" stroke="${f.accentColor}" stroke-width="2"/>
-              <circle cx="200" cy="260" r="4" fill="${f.accentColor}"/>
+              <path d="M160,120 L240,120 L240,240 L340,240 L340,380 L60,380 L60,240 L160,240 Z" fill="url(#rmFill)" stroke="${f.accentColor}" stroke-width="2.5" stroke-opacity="0.95" stroke-linejoin="round" filter="url(#rmGlow)"/>
+              <line x1="60" y1="240" x2="130" y2="310" stroke="${f.accentColor}" stroke-width="1.8" stroke-opacity="0.85"/>
+              <line x1="340" y1="240" x2="270" y2="310" stroke="${f.accentColor}" stroke-width="1.8" stroke-opacity="0.85"/>
+              <line x1="60" y1="380" x2="130" y2="310" stroke="${f.accentColor}" stroke-width="1.8" stroke-opacity="0.85"/>
+              <line x1="340" y1="380" x2="270" y2="310" stroke="${f.accentColor}" stroke-width="1.8" stroke-opacity="0.85"/>
+              <line x1="160" y1="120" x2="200" y2="160" stroke="${f.accentColor}" stroke-width="1.8" stroke-opacity="0.85"/>
+              <line x1="240" y1="120" x2="200" y2="160" stroke="${f.accentColor}" stroke-width="1.8" stroke-opacity="0.85"/>
+              <line x1="160" y1="240" x2="200" y2="310" stroke="${f.accentColor}" stroke-width="1.6" stroke-opacity="0.7" stroke-dasharray="5 3"/>
+              <line x1="240" y1="240" x2="200" y2="310" stroke="${f.accentColor}" stroke-width="1.6" stroke-opacity="0.7" stroke-dasharray="5 3"/>
+              <line x1="200" y1="160" x2="200" y2="310" stroke="url(#rmEdge)" stroke-width="3" filter="url(#rmGlow)"/>
+              <line x1="130" y1="310" x2="270" y2="310" stroke="url(#rmEdge)" stroke-width="3" filter="url(#rmGlow)"/>
+              <circle cx="60" cy="240" r="4" fill="#0A0A0A" stroke="${f.accentColor}" stroke-width="2"/>
+              <circle cx="340" cy="240" r="4" fill="#0A0A0A" stroke="${f.accentColor}" stroke-width="2"/>
+              <circle cx="60" cy="380" r="4" fill="#0A0A0A" stroke="${f.accentColor}" stroke-width="2"/>
+              <circle cx="340" cy="380" r="4" fill="#0A0A0A" stroke="${f.accentColor}" stroke-width="2"/>
+              <circle cx="160" cy="120" r="4" fill="#0A0A0A" stroke="${f.accentColor}" stroke-width="2"/>
+              <circle cx="240" cy="120" r="4" fill="#0A0A0A" stroke="${f.accentColor}" stroke-width="2"/>
+              <circle cx="200" cy="310" r="4.5" fill="${f.accentColor}"/>
             </svg>
             <div style="position:absolute;top:16px;left:16px;display:flex;align-items:center;gap:8px;background:rgba(10,10,10,0.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${f.accentColor}55;border-radius:999px;padding:7px 14px"><span style="width:7px;height:7px;border-radius:999px;background:${f.accentColor};box-shadow:0 0 10px ${f.accentColor}"></span><span style="color:${f.accentColor};font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase">AI Measured</span></div>
             <div style="position:absolute;top:16px;right:16px;background:rgba(10,10,10,0.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.12);border-radius:999px;padding:7px 12px;color:#fff;font-size:11px;font-weight:700"><i class="fas fa-check-circle" style="color:${f.accentColor};margin-right:5px"></i>99% accurate</div>
-            <div style="position:absolute;left:32%;top:31%;transform:translate(-50%,-100%)"><div style="background:${f.accentColor};color:#0A0A0A;font-size:10.5px;font-weight:900;padding:5px 9px;border-radius:7px;letter-spacing:0.08em;box-shadow:0 6px 20px rgba(0,0,0,0.5),0 0 0 2px rgba(10,10,10,0.6)">RIDGE 48.2 ft</div></div>
-            <div style="position:absolute;right:6%;top:42%"><div style="background:rgba(10,10,10,0.88);color:#fff;font-size:10.5px;font-weight:800;padding:5px 9px;border-radius:7px;letter-spacing:0.08em;border:1px solid ${f.accentColor}66">HIP 32.6 ft</div></div>
-            <div style="position:absolute;left:5%;top:55%"><div style="background:rgba(10,10,10,0.88);color:#fff;font-size:10.5px;font-weight:800;padding:5px 9px;border-radius:7px;letter-spacing:0.08em;border:1px solid rgba(255,255,255,0.18)">EAVE 96.4 ft</div></div>
-            <div style="position:absolute;left:50%;top:54%;transform:translate(-50%,0)"><div style="background:rgba(10,10,10,0.88);color:#fff;font-size:10px;font-weight:800;padding:4px 8px;border-radius:6px;letter-spacing:0.08em;border:1px solid rgba(255,255,255,0.18)">VALLEY 18.1 ft</div></div>
+            <div style="position:absolute;left:50%;top:66%;transform:translate(-50%,-50%)"><div style="background:${f.accentColor};color:#0A0A0A;font-size:10.5px;font-weight:900;padding:5px 9px;border-radius:7px;letter-spacing:0.08em;box-shadow:0 6px 20px rgba(0,0,0,0.5),0 0 0 2px rgba(10,10,10,0.6)">RIDGE 48.2 ft</div></div>
+            <div style="position:absolute;left:78%;top:55%;transform:translate(-50%,-50%)"><div style="background:rgba(10,10,10,0.88);color:#fff;font-size:10.5px;font-weight:800;padding:5px 9px;border-radius:7px;letter-spacing:0.08em;border:1px solid ${f.accentColor}66">HIP 32.6 ft</div></div>
+            <div style="position:absolute;left:13%;top:62%;transform:translate(-50%,-50%)"><div style="background:rgba(10,10,10,0.88);color:#fff;font-size:10.5px;font-weight:800;padding:5px 9px;border-radius:7px;letter-spacing:0.08em;border:1px solid rgba(255,255,255,0.18)">EAVE 96.4 ft</div></div>
+            <div style="position:absolute;left:43%;top:55%;transform:translate(-50%,-50%)"><div style="background:rgba(10,10,10,0.88);color:#fff;font-size:10px;font-weight:800;padding:4px 8px;border-radius:6px;letter-spacing:0.08em;border:1px solid rgba(255,255,255,0.18)">VALLEY 18.1 ft</div></div>
             <div style="position:absolute;left:0;right:0;bottom:0;padding:20px 22px 22px;background:linear-gradient(0deg,rgba(10,10,10,0.96) 0%,rgba(10,10,10,0.7) 60%,transparent 100%)">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="color:#9ca3af;font-size:11px;font-weight:600;letter-spacing:0.04em"><i class="fas fa-map-marker-alt" style="color:${f.accentColor};margin-right:5px"></i>Calgary, AB &middot; 4/12 pitch</span><span style="color:${f.accentColor};font-size:10px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase"><i class="fas fa-bolt" style="margin-right:4px"></i>47s</span></div>
               <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:48px;font-weight:900;color:#fff;line-height:1;letter-spacing:-0.02em">2,847</span><span style="font-size:18px;color:#9ca3af;font-weight:800">ft²</span><span style="margin-left:auto;color:#9ca3af;font-size:10px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase">Total sloped area</span></div>
