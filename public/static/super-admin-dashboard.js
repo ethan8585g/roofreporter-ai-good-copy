@@ -1917,34 +1917,122 @@ window.saCaptureView = function() {
     saShowCaptureToast('3D map is not ready yet.');
     return;
   }
-  // The gmp-map-3d web component renders into a shadow-root canvas in
-  // current Maps 3D beta builds, but older builds attach a plain canvas
-  // child. Try both — first the shadow root, then a plain descendant.
-  var findCanvas = function(node) {
-    if (!node) return null;
-    if (node.shadowRoot) {
-      var shc = node.shadowRoot.querySelector('canvas');
-      if (shc) return shc;
+
+  // Walk every open shadow boundary under the host and collect canvases.
+  // Maps3DElement nests its WebGL <canvas> several shadow layers deep in
+  // current builds; a single-level shadowRoot query misses it entirely.
+  function findAllCanvases(root, out) {
+    out = out || [];
+    if (!root) return out;
+    if (root.tagName === 'CANVAS') out.push(root);
+    var kids = root.querySelectorAll ? root.querySelectorAll('*') : [];
+    for (var i = 0; i < kids.length; i++) {
+      var el = kids[i];
+      if (el.tagName === 'CANVAS') out.push(el);
+      if (el.shadowRoot) findAllCanvases(el.shadowRoot, out);
     }
-    return node.querySelector ? node.querySelector('canvas') : null;
-  };
-  var doCapture = function() {
-    var canvas = findCanvas(host);
-    if (!canvas) {
-      saShowCaptureToast('Could not access the 3D map canvas. Try interacting with the map first.');
-      return;
-    }
-    var dataUrl;
+    if (root.shadowRoot) findAllCanvases(root.shadowRoot, out);
+    return out;
+  }
+
+  function pickRenderCanvas() {
+    var all = findAllCanvases(host, []);
+    // The render target is the largest canvas. Filter out tiny/hidden ones.
+    all = all.filter(function(c) { return c.width > 100 && c.height > 100; });
+    all.sort(function(a, b) { return (b.width * b.height) - (a.width * a.height); });
+    return all[0] || null;
+  }
+
+  // Pixel-level blank check — toDataURL can produce a valid-looking JPEG
+  // header on a fully-black frame, so length alone isn't sufficient.
+  function looksBlank(canvas) {
     try {
-      dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-    } catch (e) {
-      saShowCaptureToast('Browser blocked the screenshot (canvas tainted by cross-origin tiles). Try refreshing the page.');
+      var test = document.createElement('canvas');
+      test.width = 32; test.height = 32;
+      var ctx = test.getContext('2d');
+      ctx.drawImage(canvas, 0, 0, 32, 32);
+      var data = ctx.getImageData(0, 0, 32, 32).data;
+      for (var i = 0; i < data.length; i += 4) {
+        if (data[i] > 12 || data[i+1] > 12 || data[i+2] > 12) return false;
+      }
+      return true;
+    } catch (_) { return false; }
+  }
+
+  // Fallback for non-preserving WebGL: readPixels straight from the back
+  // buffer. Works even when toDataURL on the same canvas returns black,
+  // as long as we run inside the same frame as the engine's draw call.
+  function captureViaReadPixels(canvas) {
+    try {
+      var gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (!gl) return null;
+      var w = canvas.width, h = canvas.height;
+      var pixels = new Uint8Array(w * h * 4);
+      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      var nonBlack = 0;
+      for (var i = 0; i < pixels.length; i += 4 * 256) {
+        if (pixels[i] > 12 || pixels[i+1] > 12 || pixels[i+2] > 12) { nonBlack++; if (nonBlack > 5) break; }
+      }
+      if (nonBlack === 0) return null;
+      var c2 = document.createElement('canvas');
+      c2.width = w; c2.height = h;
+      var ctx = c2.getContext('2d');
+      var img = ctx.createImageData(w, h);
+      // WebGL has y-axis flipped relative to 2D canvas — flip while copying.
+      var rowBytes = w * 4;
+      for (var y = 0; y < h; y++) {
+        var src = (h - 1 - y) * rowBytes;
+        var dst = y * rowBytes;
+        img.data.set(pixels.subarray(src, src + rowBytes), dst);
+      }
+      ctx.putImageData(img, 0, 0);
+      return c2.toDataURL('image/jpeg', 0.82);
+    } catch (_) { return null; }
+  }
+
+  // Nudge the camera by a sub-pixel amount so the engine schedules a fresh
+  // draw — guarantees the back buffer holds a current frame when we capture.
+  try {
+    if (typeof host.flyCameraTo === 'function' && host.center) {
+      host.flyCameraTo({
+        endCamera: {
+          center: host.center,
+          range: (typeof host.range === 'number' ? host.range : 250) + 0.01,
+          tilt: host.tilt,
+          heading: host.heading,
+          roll: host.roll
+        },
+        durationMillis: 0
+      });
+    }
+  } catch (_) { /* best-effort nudge */ }
+
+  function doCapture() {
+    var canvas = pickRenderCanvas();
+    if (!canvas) {
+      saShowCaptureToast('Could not find the 3D map canvas. Pan/zoom the map and try again.');
       return;
     }
-    // toDataURL on a non-preserving WebGL canvas can yield a blank black
-    // frame — detect by checking dataUrl length is plausibly large.
-    if (!dataUrl || !dataUrl.startsWith('data:image/') || dataUrl.length < 5000) {
-      saShowCaptureToast('Captured an empty frame. Move/zoom the 3D map and try again.');
+    var dataUrl = null;
+    var taintErr = null;
+    try {
+      var u = canvas.toDataURL('image/jpeg', 0.82);
+      if (u && u.startsWith('data:image/') && u.length >= 5000 && !looksBlank(canvas)) {
+        dataUrl = u;
+      }
+    } catch (e) {
+      taintErr = e;
+    }
+    if (!dataUrl) {
+      var fb = captureViaReadPixels(canvas);
+      if (fb && fb.length >= 5000) dataUrl = fb;
+    }
+    if (!dataUrl) {
+      if (taintErr) {
+        saShowCaptureToast('Browser blocked screenshot (cross-origin canvas). Refresh the page and try again.');
+      } else {
+        saShowCaptureToast('Captured an empty frame. Pan or zoom the 3D map, then try again.');
+      }
       return;
     }
     if (dataUrl.length > 4400000) {
@@ -1953,9 +2041,10 @@ window.saCaptureView = function() {
     }
     s.extra_captures.push({ data_url: dataUrl, captured_at: new Date().toISOString() });
     saRenderExtraCapturesStrip();
-  };
-  // Wait for two animation frames so the WebGL renderer has flushed a
-  // current paint. Single-rAF sometimes still grabs a cleared buffer.
+  }
+
+  // Two rAFs: first one lets the engine paint the nudged camera, second
+  // runs in the same frame as that draw so the buffer is still populated.
   requestAnimationFrame(function() { requestAnimationFrame(doCapture); });
 };
 
