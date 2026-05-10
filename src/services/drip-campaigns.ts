@@ -38,7 +38,7 @@ interface DripResult {
 const DEFAULT_CONFIG: DripConfig = {
   dry_run: true,
   sender_email: 'sales@roofmanager.ca',
-  sender_name: 'Christine at Roof Manager',
+  sender_name: 'Roof Manager Sales',
   cooldown_days: 90,
   max_per_run: 50,
   campaigns_enabled: ['stuck_signup_60d', 'at_risk_churn_30d', 'trial_ends_3d'],
@@ -91,12 +91,12 @@ function renderStuckSignup(c: { name: string | null; first_name: string; credits
     html: emailWrapper(`
       <p style="margin:0 0 16px">${greeting}</p>
       <p style="margin:0 0 16px">
-        I noticed you signed up for Roof Manager a while back but haven't tried it out yet — and you've still got
-        <strong>${c.credits_remaining} free roof report${c.credits_remaining === 1 ? '' : 's'}</strong> on your account.
+        Quick note from the Roof Manager team — you signed up a while back but haven't run your first report yet,
+        and your account still has <strong>${c.credits_remaining} free roof report${c.credits_remaining === 1 ? '' : 's'}</strong> waiting.
       </p>
       <p style="margin:0 0 16px">
-        If you haven't had a chance to check it out yet, no worries — most of our customers run their first measurement
-        in about 5 minutes. Punch in any address and we pull the satellite imagery and roof geometry for you.
+        If you haven't had a chance to check it out yet, no worries — most customers run their first measurement
+        in about 5 minutes. Punch in any address and Roof Manager pulls the satellite imagery and roof geometry for you.
       </p>
       <p style="margin:0 0 24px">
         Happy to walk you through it on a quick call if that's easier — or just dive in:
@@ -105,8 +105,8 @@ function renderStuckSignup(c: { name: string | null; first_name: string; credits
         <a href="https://www.roofmanager.ca/customer" style="display:inline-block;background:#00CC6A;color:#0A0A0A;font-weight:700;font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none">Run my first report</a>
       </div>
       <p style="margin:24px 0 0;color:#6B7280;font-size:14px">
-        — Christine<br>
-        <span style="font-size:12px">Roof Manager · roofmanager.ca</span>
+        — The Roof Manager team<br>
+        <span style="font-size:12px">sales@roofmanager.ca · roofmanager.ca</span>
       </p>
     `)
   }
@@ -115,17 +115,17 @@ function renderStuckSignup(c: { name: string | null; first_name: string; credits
 function renderAtRiskChurn(c: { name: string | null; first_name: string; days_since_order: number }): RenderedEmail {
   const greeting = c.first_name ? `Hi ${escHtml(c.first_name)},` : 'Hi there,'
   return {
-    subject: `Quick check-in${c.first_name ? ', ' + c.first_name : ''}`,
+    subject: `Quick check-in from Roof Manager${c.first_name ? ', ' + c.first_name : ''}`,
     html: emailWrapper(`
       <p style="margin:0 0 16px">${greeting}</p>
       <p style="margin:0 0 16px">
-        I was looking through our customer list and realized it's been a while since your last roof report
-        (${c.days_since_order} days, give or take). I just wanted to check in — is there anything not working for
-        you, or anything we could be doing better?
+        We noticed it's been a while since your last roof report on Roof Manager — about ${c.days_since_order} days,
+        give or take. We just wanted to check in: is there anything not working for you, or anything we could
+        be doing better?
       </p>
       <p style="margin:0 0 16px">
-        If something broke or got in the way, I'd genuinely like to know — it helps me fix the same thing for
-        everyone else. And if you've just been busy, no worries at all, your account is still right where you left it.
+        If something broke or got in the way, we'd genuinely like to know — it helps us fix the same thing for
+        every other customer. And if you've just been busy, no worries at all, your account is right where you left it.
       </p>
       <p style="margin:0 0 24px">
         Reply to this email, or grab a 15-minute slot if you'd rather chat:
@@ -134,8 +134,8 @@ function renderAtRiskChurn(c: { name: string | null; first_name: string; days_si
         <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" style="display:inline-block;background:#00CC6A;color:#0A0A0A;font-weight:700;font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none">Book a 15-min chat</a>
       </div>
       <p style="margin:24px 0 0;color:#6B7280;font-size:14px">
-        — Christine<br>
-        <span style="font-size:12px">Roof Manager · roofmanager.ca</span>
+        — The Roof Manager team<br>
+        <span style="font-size:12px">sales@roofmanager.ca · roofmanager.ca</span>
       </p>
     `)
   }
@@ -145,24 +145,24 @@ function renderTrialEnds(c: { name: string | null; first_name: string; days_unti
   const greeting = c.first_name ? `Hi ${escHtml(c.first_name)},` : 'Hi there,'
   const daysWord = c.days_until_end <= 1 ? 'tomorrow' : `in ${c.days_until_end} days`
   return {
-    subject: `Your trial ends ${daysWord} — want a hand?`,
+    subject: `Your Roof Manager trial ends ${daysWord} — want a hand?`,
     html: emailWrapper(`
       <p style="margin:0 0 16px">${greeting}</p>
       <p style="margin:0 0 16px">
-        Heads up — your free trial wraps up <strong>${daysWord}</strong>. I noticed you haven't run a roof report yet,
-        and I don't want you to miss the chance to test-drive it before the trial ends.
+        Heads up — your Roof Manager free trial wraps up <strong>${daysWord}</strong>. We noticed you haven't run a
+        roof report yet, and we don't want you to miss the chance to test-drive it before the trial ends.
       </p>
       <p style="margin:0 0 16px">
-        If you've got 15 minutes, I can hop on a call and walk you through your first measurement — that way you
-        know if it's a fit before deciding anything. Or if you want to just try it solo, the dashboard is right here:
+        If you've got 15 minutes, we can hop on a call and walk you through your first measurement — that way you
+        know if it's a fit before deciding anything. Or if you want to try it solo, the dashboard is right here:
       </p>
       <div style="text-align:center;margin:24px 0">
         <a href="https://www.roofmanager.ca/customer" style="display:inline-block;background:#00CC6A;color:#0A0A0A;font-weight:700;font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none;margin-right:8px">Try a roof report</a>
         <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" style="display:inline-block;background:#fff;color:#0A0A0A;font-weight:700;font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none;border:1px solid #0A0A0A">Book a 15-min walkthrough</a>
       </div>
       <p style="margin:24px 0 0;color:#6B7280;font-size:14px">
-        — Christine<br>
-        <span style="font-size:12px">Roof Manager · roofmanager.ca</span>
+        — The Roof Manager team<br>
+        <span style="font-size:12px">sales@roofmanager.ca · roofmanager.ca</span>
       </p>
     `)
   }
