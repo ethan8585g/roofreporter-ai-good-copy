@@ -8592,6 +8592,80 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       </div>
     </section>
 
+    <!-- THREE PROMISES — free CRM, lowest price, highest accuracy -->
+    <section class="py-24" style="background:#0A0A0A">
+      <div class="max-w-7xl mx-auto px-4">
+        <div class="text-center mb-16 scroll-animate">
+          <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-5 py-2 text-sm font-semibold mb-6"><i class="fas fa-trophy"></i> Why Roof Manager</div>
+          <h2 class="text-4xl lg:text-6xl font-black text-white mb-6 tracking-tight leading-tight">The Only Platform That Gives You<br/><span class="neon-text">All Three.</span></h2>
+          <p class="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">A free CRM. The cheapest reports on the market. The highest accuracy in the industry. No catch — that's the deal.</p>
+        </div>
+        <div class="grid lg:grid-cols-3 gap-6">
+          <!-- Promise 1: Free CRM -->
+          <div class="scroll-animate" style="transition-delay:0ms">
+            <div class="card-hover relative overflow-hidden rounded-2xl bg-[#111111] border border-white/10 hover:border-[#00FF88]/40 h-full flex flex-col p-8 group">
+              <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" style="background: radial-gradient(circle at 50% 0%, #00FF8810 0%, transparent 70%);"></div>
+              <div class="relative z-10 flex-1 flex flex-col">
+                <div class="flex items-start justify-between mb-6">
+                  <div class="w-14 h-14 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300" style="background:#00FF8815;"><i class="fas fa-gift text-xl" style="color:#00FF88"></i></div>
+                  <div class="text-right"><div class="text-2xl font-black" style="color:#00FF88">$0</div><div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Forever</div></div>
+                </div>
+                <h3 class="text-xl font-bold text-white mb-3">Full CRM — Free Forever</h3>
+                <p class="text-gray-400 text-sm leading-relaxed mb-4 flex-1">Pipeline, invoicing, proposals, customer portal, jobs, calendar, door-to-door manager — included on every plan, including the free trial. Not a stripped-down "lite" version. The full thing.</p>
+                <ul class="space-y-1.5 text-xs text-gray-400 border-t border-white/5 pt-3">
+                  <li class="flex items-center gap-2"><i class="fas fa-check text-[#00FF88] text-[10px]"></i>Sales pipeline &amp; lead management</li>
+                  <li class="flex items-center gap-2"><i class="fas fa-check text-[#00FF88] text-[10px]"></i>Invoicing, proposals &amp; job tracking</li>
+                  <li class="flex items-center gap-2"><i class="fas fa-check text-[#00FF88] text-[10px]"></i>No per-seat fees, no upgrades to unlock</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <!-- Promise 2: Lowest Price -->
+          <div class="scroll-animate" style="transition-delay:150ms">
+            <div class="card-hover relative overflow-hidden rounded-2xl bg-[#111111] border border-white/10 hover:border-[#22d3ee]/40 h-full flex flex-col p-8 group">
+              <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" style="background: radial-gradient(circle at 50% 0%, #22d3ee10 0%, transparent 70%);"></div>
+              <div class="relative z-10 flex-1 flex flex-col">
+                <div class="flex items-start justify-between mb-6">
+                  <div class="w-14 h-14 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300" style="background:#22d3ee15;"><i class="fas fa-tag text-xl" style="color:#22d3ee"></i></div>
+                  <div class="text-right"><div class="text-2xl font-black" style="color:#22d3ee">$8</div><div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">CAD / Report</div></div>
+                </div>
+                <h3 class="text-xl font-bold text-white mb-3">Cheapest Reports on the Market</h3>
+                <p class="text-gray-400 text-sm leading-relaxed mb-4 flex-1">Competitors charge $50&ndash;100 per measurement report. We deliver the same data &mdash; 3D area, pitch-adjusted edges, full BOM, solar potential &mdash; for $8. Or as low as $5.95/report in the 100-pack.</p>
+                <ul class="space-y-1.5 text-xs text-gray-400 border-t border-white/5 pt-3">
+                  <li class="flex items-center gap-2"><i class="fas fa-check text-[#22d3ee] text-[10px]"></i>Save 90%+ vs EagleView, Roofr, etc.</li>
+                  <li class="flex items-center gap-2"><i class="fas fa-check text-[#22d3ee] text-[10px]"></i>Volume packs from $5.95/report</li>
+                  <li class="flex items-center gap-2"><i class="fas fa-check text-[#22d3ee] text-[10px]"></i>First 4 reports free, no card required</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <!-- Promise 3: Highest Accuracy -->
+          <div class="scroll-animate" style="transition-delay:300ms">
+            <div class="card-hover relative overflow-hidden rounded-2xl bg-[#111111] border border-white/10 hover:border-[#a78bfa]/40 h-full flex flex-col p-8 group">
+              <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" style="background: radial-gradient(circle at 50% 0%, #a78bfa10 0%, transparent 70%);"></div>
+              <div class="relative z-10 flex-1 flex flex-col">
+                <div class="flex items-start justify-between mb-6">
+                  <div class="w-14 h-14 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300" style="background:#a78bfa15;"><i class="fas fa-bullseye text-xl" style="color:#a78bfa"></i></div>
+                  <div class="text-right"><div class="text-2xl font-black" style="color:#a78bfa">99%</div><div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Accuracy</div></div>
+                </div>
+                <h3 class="text-xl font-bold text-white mb-3">Highest Accuracy in the Industry</h3>
+                <p class="text-gray-400 text-sm leading-relaxed mb-4 flex-1">LiDAR-calibrated 3D models cross-checked against manual measurements. Every report ships with a confidence score so you know exactly what you're quoting from. Within 2&ndash;5% of tape-measure reality.</p>
+                <ul class="space-y-1.5 text-xs text-gray-400 border-t border-white/5 pt-3">
+                  <li class="flex items-center gap-2"><i class="fas fa-check text-[#a78bfa] text-[10px]"></i>LiDAR-calibrated 3D models</li>
+                  <li class="flex items-center gap-2"><i class="fas fa-check text-[#a78bfa] text-[10px]"></i>Confidence score on every report</li>
+                  <li class="flex items-center gap-2"><i class="fas fa-check text-[#a78bfa] text-[10px]"></i>Cross-checked vs manual measurement</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="text-center mt-14 scroll-animate">
+          <a href="#pricing" onclick="rrTrack('cta_click',{location:'three_promises'})" class="group inline-flex items-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.02] min-h-[56px]"><i class="fas fa-arrow-down"></i> See the Plans <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i></a>
+          <p class="text-xs text-gray-500 mt-4">Free trial, free CRM, $0 to start. No credit card.</p>
+        </div>
+      </div>
+    </section>
+
     <!-- PRICING -->
     <section id="pricing" class="py-24" style="background:#0A0A0A"><div class="max-w-6xl mx-auto px-4"><div class="text-center mb-16 scroll-animate"><div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold mb-4"><i class="fas fa-tag"></i> Simple Pricing</div><h2 class="text-3xl lg:text-5xl font-black text-white mb-4 tracking-tight">Plans That Scale With You</h2><p class="text-lg text-gray-400 max-w-2xl mx-auto">Start free, pay per report, or save big with volume packs. CRM always included.</p></div><div class="grid lg:grid-cols-3 gap-6 items-start mb-16"><div class="scroll-animate bg-[#111111] rounded-2xl border border-white/10 p-8 hover:shadow-xl transition-shadow"><div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Free Trial</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$0</span></div><p class="text-sm text-gray-400 mb-6">4 free reports + full platform access</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>4 professional PDF reports</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Full CRM &amp; invoicing</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Customer management</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Proposals &amp; job tracking</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Door-to-door manager</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Virtual roof try-on</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Team collaboration</li></ul><a href="/register" onclick="rrTrack('cta_click',{location:'pricing',plan:'free'})" class="block text-center py-3.5 rounded-xl font-bold border-2 border-white/20 text-white hover:bg-white hover:text-[#0A0A0A] transition-all min-h-[48px]">Start Free Trial</a></div><div class="scroll-animate relative" style="transition-delay:100ms"><div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#00FF88] text-[#0A0A0A] text-xs font-extrabold px-5 py-1.5 rounded-full shadow-lg z-10">MOST POPULAR</div><div class="bg-[#111111] rounded-2xl border-2 border-[#00FF88]/50 shadow-xl shadow-[#00FF88]/10 p-8"><div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Per Report</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$8</span><span class="text-xl text-gray-500">CAD</span><span class="text-sm text-gray-500 ml-1">/ report</span></div><div class="flex items-center gap-2 mb-1"><span class="text-sm text-gray-500 line-through">$50&ndash;100 EagleView</span><span class="text-xs font-bold text-[#00FF88] bg-[#00FF88]/10 px-2 py-0.5 rounded-full">Save 90%+</span></div><p class="text-xs text-[#00FF88] font-semibold mb-6"><i class="fas fa-gift mr-1"></i>First 4 reports FREE</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Full 3D area with pitch adjustment</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Complete edge breakdown</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Material BOM with pricing</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Solar potential analysis</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Professional PDF download</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Email + dashboard delivery</li></ul><a href="/register" onclick="rrTrack('cta_click',{location:'pricing',plan:'per_report'})" class="block text-center py-3.5 rounded-xl font-extrabold bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">Get Started Free</a></div></div><div class="scroll-animate relative" style="transition-delay:200ms"><div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white text-xs font-bold px-5 py-1.5 rounded-full shadow-lg z-10">BEST VALUE</div><div class="bg-[#111111] rounded-2xl border-2 border-[#a78bfa]/50 p-8"><div class="text-sm font-bold text-[#a78bfa] uppercase tracking-wider mb-2">Volume Packs</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$5.95</span><span class="text-xl text-gray-500">CAD</span><span class="text-sm text-gray-500 ml-1">/ report</span></div><p class="text-sm text-gray-400 mb-1">Best rate on the 100-Pack — credits never expire</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>10-Pack — $75 ($7.50/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>25-Pack — $175 ($7.00/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>100-Pack — $595 ($5.95/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>Credits never expire</li></ul><a href="/demo" onclick="rrTrack('cta_click',{location:'pricing',plan:'b2b'})" class="block text-center py-3.5 rounded-xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">Book a Volume Demo</a></div></div></div></div></section>
 
