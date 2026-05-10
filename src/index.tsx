@@ -5817,11 +5817,13 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
         <div class="mt-5 pt-5 border-t border-white/10 grid sm:grid-cols-2 gap-4 text-center">
           <a href="mailto:sales@roofmanager.ca" class="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
             <i class="fas fa-envelope text-[#00FF88] text-lg"></i>
+            <span class="text-[11px] uppercase tracking-wider text-gray-500">Sales</span>
             <span class="text-xs font-semibold">sales@roofmanager.ca</span>
           </a>
-          <a href="/contact" class="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
-            <i class="fas fa-comments text-[#00FF88] text-lg"></i>
-            <span class="text-xs font-semibold">Contact Page</span>
+          <a href="mailto:support@roofmanager.ca" class="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
+            <i class="fas fa-life-ring text-[#00FF88] text-lg"></i>
+            <span class="text-[11px] uppercase tracking-wider text-gray-500">Support</span>
+            <span class="text-xs font-semibold">support@roofmanager.ca</span>
           </a>
         </div>
       </form>
@@ -9090,6 +9092,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           <span class="flex items-center gap-1.5"><i class="fas fa-map-marker-alt text-[#00FF88]"></i> Alberta, Canada</span>
           <a href="/condo-reserve-fund-cheat-sheet" class="flex items-center gap-1.5 hover:text-[#00FF88] transition-colors"><i class="fas fa-shield-alt text-[#00FF88]"></i> Trusted by Canadian Property Managers</a>
           <a href="mailto:sales@roofmanager.ca" class="flex items-center gap-1.5 hover:text-[#00FF88] transition-colors"><i class="fas fa-envelope text-[#00FF88]"></i> sales@roofmanager.ca</a>
+          <a href="mailto:support@roofmanager.ca" class="flex items-center gap-1.5 hover:text-[#00FF88] transition-colors"><i class="fas fa-life-ring text-[#00FF88]"></i> support@roofmanager.ca</a>
         </div>
       </div>
     </div>
