@@ -97,6 +97,48 @@ export const ASSISTANT_TOOLS: ToolDef[] = [
     },
   },
 
+  // ─── Loop Tracker ────────────────────────────────────────
+  {
+    name: 'list_loop_definitions',
+    description: 'List all registered loops (cron scans, claude /loop commands, cloud routines) with last_run_at, last_status, consecutive_failures. Useful for "what loops are configured?" and "what is currently failing?".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        only_failing: { type: 'boolean', description: 'If true, only return loops with consecutive_failures > 0 or last_status != "pass".' },
+      },
+    },
+  },
+  {
+    name: 'list_recent_loop_runs',
+    description: 'List the most recent runs across loops, newest first. Filter by loop_id to narrow to one specific loop.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        loop_id: { type: 'string', description: 'Optional. e.g. scan_public, funnel_monitor, ads_health.' },
+        limit: { type: 'integer', description: 'Max rows. Default 25, max 200.' },
+      },
+    },
+  },
+  {
+    name: 'list_loop_findings',
+    description: 'List recent findings from loop scans (errors + warnings detected by the monitoring loops). Filter by severity and/or category. Defaults to unresolved-only.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        severity: { type: 'string', enum: ['error', 'warn', 'all'], description: 'Default: all.' },
+        category: { type: 'string', description: 'e.g. broken_link, form_smoke, console_error, api_health, health_check.' },
+        include_resolved: { type: 'boolean', description: 'Default false — only unresolved.' },
+        hours: { type: 'integer', description: 'Look back this many hours. Default 24, max 720 (30 days).' },
+        limit: { type: 'integer', description: 'Max rows. Default 50, max 500.' },
+      },
+    },
+  },
+  {
+    name: 'get_loop_health_summary',
+    description: 'Quick read of overall loop health: counts of pass/fail loops, top failing loops, unresolved-findings totals by severity. Use this for "is everything healthy?" questions.',
+    input_schema: { type: 'object', properties: {} },
+  },
+
   // ─── Agent Configs ──────────────────────────────────────
   {
     name: 'list_agent_configs',
@@ -159,6 +201,14 @@ export async function runTool(
       return readAgentConfig(db, input)
     case 'update_agent_config':
       return updateAgentConfig(db, input)
+    case 'list_loop_definitions':
+      return listLoopDefinitions(db, input)
+    case 'list_recent_loop_runs':
+      return listRecentLoopRuns(db, input)
+    case 'list_loop_findings':
+      return listLoopFindings(db, input)
+    case 'get_loop_health_summary':
+      return getLoopHealthSummary(db)
     default:
       return { error: `Unknown tool: ${name}` }
   }
@@ -271,6 +321,77 @@ async function readAgentConfig(db: D1Database, input: any) {
   const row = await db.prepare('SELECT * FROM agent_configs WHERE agent_type = ?').bind(input.agent_type).first()
   if (!row) return { error: `No agent_config for agent_type=${input.agent_type}` }
   return { config: row }
+}
+
+// ─── Loop Tracker handlers ─────────────────────────────────
+
+async function listLoopDefinitions(db: D1Database, input: any) {
+  let sql = `SELECT loop_id, name, category, source, schedule_human, expected_period_seconds,
+                    enabled, last_run_at, last_status, consecutive_failures, total_runs, total_failures
+             FROM loop_definitions`
+  if (input?.only_failing) sql += ` WHERE consecutive_failures > 0 OR (last_status IS NOT NULL AND last_status != 'pass')`
+  sql += ` ORDER BY consecutive_failures DESC, last_run_at DESC`
+  const result = await db.prepare(sql).all()
+  return { loops: result.results, count: result.results?.length ?? 0 }
+}
+
+async function listRecentLoopRuns(db: D1Database, input: any) {
+  const limit = Math.min(Math.max(1, Number(input?.limit) || 25), 200)
+  let sql = `SELECT id, loop_id, scan_type, status, started_at, finished_at, duration_ms,
+                    pages_checked, ok_count, fail_count, summary, source
+             FROM loop_scan_runs`
+  const binds: any[] = []
+  if (input?.loop_id) { sql += ' WHERE loop_id = ?'; binds.push(input.loop_id) }
+  sql += ' ORDER BY started_at DESC LIMIT ?'
+  binds.push(limit)
+  const result = await db.prepare(sql).bind(...binds).all()
+  return { runs: result.results, count: result.results?.length ?? 0 }
+}
+
+async function listLoopFindings(db: D1Database, input: any) {
+  const hours = Math.min(Math.max(1, Number(input?.hours) || 24), 720)
+  const limit = Math.min(Math.max(1, Number(input?.limit) || 50), 500)
+  let sql = `SELECT id, run_id, severity, category, url, message, created_at, resolved_at
+             FROM loop_scan_findings
+             WHERE created_at >= datetime('now', ?)`
+  const binds: any[] = [`-${hours} hours`]
+  if (input?.severity && input.severity !== 'all') { sql += ' AND severity = ?'; binds.push(input.severity) }
+  if (input?.category) { sql += ' AND category = ?'; binds.push(input.category) }
+  if (!input?.include_resolved) sql += ' AND resolved_at IS NULL'
+  sql += ' ORDER BY created_at DESC LIMIT ?'
+  binds.push(limit)
+  const result = await db.prepare(sql).bind(...binds).all()
+  return { findings: result.results, count: result.results?.length ?? 0, lookback_hours: hours }
+}
+
+async function getLoopHealthSummary(db: D1Database) {
+  const loops = await db.prepare(`
+    SELECT COUNT(*) as total,
+           SUM(CASE WHEN last_status = 'pass' THEN 1 ELSE 0 END) as passing,
+           SUM(CASE WHEN last_status IN ('fail','error') THEN 1 ELSE 0 END) as failing,
+           SUM(CASE WHEN consecutive_failures > 0 THEN 1 ELSE 0 END) as stuck
+    FROM loop_definitions WHERE enabled = 1
+  `).first()
+
+  const findings24h = await db.prepare(`
+    SELECT severity, COUNT(*) as count
+    FROM loop_scan_findings
+    WHERE created_at >= datetime('now', '-24 hours') AND resolved_at IS NULL
+    GROUP BY severity
+  `).all()
+
+  const topFailing = await db.prepare(`
+    SELECT loop_id, name, consecutive_failures, last_status, last_run_at
+    FROM loop_definitions
+    WHERE enabled = 1 AND (consecutive_failures > 0 OR last_status IN ('fail','error'))
+    ORDER BY consecutive_failures DESC LIMIT 10
+  `).all()
+
+  return {
+    loops: loops,
+    unresolved_findings_24h: findings24h.results,
+    top_failing_loops: topFailing.results,
+  }
 }
 
 async function updateAgentConfig(db: D1Database, input: any) {

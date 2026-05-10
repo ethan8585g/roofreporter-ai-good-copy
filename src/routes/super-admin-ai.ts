@@ -52,6 +52,48 @@ Operating principles:
 
 The operator can rebuild anything you push by saying "revert that" — you have revert_commit. So bias toward action over excessive checking. They've explicitly opted into auto-push, full-repo mode.`
 
+// ─── Repo context loader ──────────────────────────────────
+// Fetches CLAUDE.md + any .md files under .ai-context/ at the start
+// of each chat request so the in-app assistant has the same project
+// context Claude Code does in the operator's terminal. Both blocks
+// carry cache_control so Anthropic's prompt cache keeps them warm
+// for ~5 minutes (cache reads cost ~10% of full input price).
+async function loadRepoContext(token: string): Promise<string> {
+  if (!token) return ''
+  const parts: string[] = []
+  try {
+    const claudeMd = await fetchRepoFile(token, 'CLAUDE.md')
+    if (claudeMd) parts.push('## Project context (CLAUDE.md)\n\n' + claudeMd)
+  } catch (_) { /* ignore */ }
+  try {
+    const listRes = await fetch(
+      'https://api.github.com/repos/ethan8585g/roofreporter-ai-good-copy/contents/.ai-context?ref=main',
+      { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'roofmanager-ai-assistant' } },
+    )
+    if (listRes.ok) {
+      const entries = await listRes.json() as any[]
+      for (const entry of entries) {
+        if (entry?.type === 'file' && entry?.name?.endsWith('.md')) {
+          const content = await fetchRepoFile(token, entry.path)
+          if (content) parts.push(`## ${entry.name}\n\n${content}`)
+        }
+      }
+    }
+  } catch (_) { /* directory doesn't exist — that's fine */ }
+  return parts.join('\n\n---\n\n')
+}
+
+async function fetchRepoFile(token: string, path: string): Promise<string | null> {
+  const res = await fetch(
+    `https://api.github.com/repos/ethan8585g/roofreporter-ai-good-copy/contents/${path.split('/').map(encodeURIComponent).join('/')}?ref=main`,
+    { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'roofmanager-ai-assistant' } },
+  )
+  if (!res.ok) return null
+  const data = await res.json() as any
+  if (data?.type !== 'file') return null
+  return atob((data.content || '').replace(/\n/g, ''))
+}
+
 // ─── Page ─────────────────────────────────────────────────
 superAdminAi.get('/', (c) => {
   return c.html(getAiAssistantPageHTML())
@@ -73,6 +115,10 @@ superAdminAi.post('/chat', async (c) => {
   if (!messages.length) return c.json({ error: 'messages array required' }, 400)
 
   const client = new Anthropic({ apiKey })
+  const githubToken = c.env.GITHUB_TOKEN || c.env.git_token || ''
+  // Pull CLAUDE.md + .ai-context/*.md so the assistant has the same project
+  // context Claude Code does. Cached for 5 min in Anthropic's prompt cache.
+  const repoContext = await loadRepoContext(githubToken)
 
   // We run a manual tool-use loop so we can stream text deltas to the browser
   // AND execute D1 tool calls server-side. The tool runner helper doesn't
@@ -91,12 +137,15 @@ superAdminAi.post('/chat', async (c) => {
         : (Array.isArray(lastUserMsg?.content) ? (lastUserMsg.content.find((b: any) => b.type === 'text')?.text || '') : '')
       try {
         for (let iter = 0; iter < 15; iter++) {
+          const systemBlocks: any[] = [{ type: 'text', text: SYSTEM_PROMPT }]
+          if (repoContext) systemBlocks.push({ type: 'text', text: repoContext })
+          // cache_control on the last block caches both blocks + tools as one prefix
+          systemBlocks[systemBlocks.length - 1].cache_control = { type: 'ephemeral' }
+
           const response = await client.messages.create({
             model,
             max_tokens: 16000,
-            system: [
-              { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
-            ],
+            system: systemBlocks,
             tools: ALL_TOOLS as any,
             messages: conversation,
           })
@@ -123,7 +172,7 @@ superAdminAi.post('/chat', async (c) => {
           for (const tu of toolUses) {
             send('tool_use', { name: tu.name, input: tu.input })
             const result = await runTool(c.env.DB, {
-              githubToken: c.env.GITHUB_TOKEN || c.env.git_token || '',
+              githubToken,
               userPrompt,
               model,
             }, tu.name, tu.input)
