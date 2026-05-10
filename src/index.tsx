@@ -10794,6 +10794,8 @@ function getCustomerLoginHTML(googleClientId = '') {
 
     <!-- Links -->
     <div class="text-center mt-6 space-y-2">
+      <a href="/login" class="text-brand-300 hover:text-white text-sm transition-colors"><i class="fas fa-shield-alt mr-1"></i>Admin Login</a>
+      <span class="text-brand-700 mx-2">|</span>
       <a href="/" class="text-brand-300 hover:text-white text-sm transition-colors"><i class="fas fa-arrow-left mr-1"></i>Back to homepage</a>
     </div>
   </div>
