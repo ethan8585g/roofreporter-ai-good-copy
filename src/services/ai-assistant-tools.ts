@@ -1,11 +1,18 @@
 // ============================================================
 // AI Assistant Tool Definitions + D1 Handlers
 //
-// Scope: D1-only writes. The assistant cannot mutate code, files,
-// or anything outside the database. Each tool has a hand-written
-// schema and a handler that runs against c.env.DB.
+// Two surfaces:
+// 1. D1 tools (this file) — read/write blog_posts and agent_configs
+// 2. GitHub tools (./ai-assistant-github.ts) — read/write any file in
+//    the repo via the GitHub Contents API. Commits trigger Cloudflare
+//    Pages auto-deploy within ~30 seconds.
+//
+// The assistant has full-repo write access by design (user's call,
+// 2026-05-10). Every code commit is logged to assistant_commits for
+// audit + one-click revert via the revert_commit tool.
 // ============================================================
 import type { D1Database } from '@cloudflare/workers-types'
+import { GITHUB_TOOLS, runGithubTool } from './ai-assistant-github'
 
 // Anthropic's tool schema shape (avoids importing the SDK type into a service file)
 export interface ToolDef {
@@ -120,9 +127,21 @@ export const ASSISTANT_TOOLS: ToolDef[] = [
   },
 ]
 
+// ─── Combined tool list (D1 + GitHub) ─────────────────────
+export const ALL_TOOLS: ToolDef[] = [...ASSISTANT_TOOLS, ...GITHUB_TOOLS]
+
 // ─── Handlers ──────────────────────────────────────────────
 
-export async function runTool(db: D1Database, name: string, input: any): Promise<any> {
+export async function runTool(
+  db: D1Database,
+  context: { githubToken: string; userPrompt: string; model: string },
+  name: string,
+  input: any,
+): Promise<any> {
+  // GitHub tools dispatch through their own runner (needs the token + audit context)
+  if (GITHUB_TOOLS.some(t => t.name === name)) {
+    return runGithubTool(context.githubToken, db, { userPrompt: context.userPrompt, model: context.model }, name, input)
+  }
   switch (name) {
     case 'list_blog_posts':
       return listBlogPosts(db, input)

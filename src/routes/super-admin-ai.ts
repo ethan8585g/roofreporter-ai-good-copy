@@ -6,36 +6,51 @@
 // ============================================================
 import { Hono } from 'hono'
 import Anthropic from '@anthropic-ai/sdk'
-import { ASSISTANT_TOOLS, runTool } from '../services/ai-assistant-tools'
+import { ALL_TOOLS, runTool } from '../services/ai-assistant-tools'
 import { validateAdminSession, requireSuperadmin } from './auth'
 
-type Env = { DB: any; ANTHROPIC_API_KEY: string }
+type Env = { DB: any; ANTHROPIC_API_KEY: string; GITHUB_TOKEN: string }
 
 export const superAdminAi = new Hono<{ Bindings: Env }>()
 
-const SYSTEM_PROMPT = `You are the in-app AI assistant for the Roof Manager super admin (https://www.roofmanager.ca).
+const SYSTEM_PROMPT = `You are the in-app AI assistant for the Roof Manager super admin (https://www.roofmanager.ca). The operator is the business owner — Christine/Ethan — and you have their full trust.
 
-Scope of what you can do:
-- Read, list, create, update, archive **blog posts** (table: blog_posts)
-- Read and update **agent configurations** (table: agent_configs) — toggle agents on/off, tweak their JSON config
+The codebase is a Cloudflare Pages + Hono app. Source lives at github.com/ethan8585g/roofreporter-ai-good-copy. Pushing to main auto-deploys to https://www.roofmanager.ca within ~30 seconds via Cloudflare Pages.
 
-Scope of what you CANNOT do:
-- You cannot edit code, files, or anything outside the database
-- You cannot send emails, make API calls to third parties, or trigger jobs
-- You cannot read or modify customer data, orders, payments, or PII
+What you can do:
+**Database (D1):**
+- blog_posts: list, read, create, update, archive
+- agent_configs: list, read, update (toggle agents on/off, tweak JSON config)
+
+**Code (GitHub Contents API on main branch):**
+- list_files / read_file / write_file / delete_file — full repo access
+- list_recent_commits / list_assistant_commits — see recent activity
+- revert_commit — one-click rollback if something breaks production
+
+Codebase orientation (key files when the operator asks for changes):
+- src/index.tsx — main Hono router, all HTML pages, public site copy
+- src/services/report-engine.ts — report assembly
+- src/templates/ — PDF/HTML report templates + SVG diagram generators
+- src/routes/ — API endpoints split by concern (admin, customer-auth, reports, etc.)
+- public/static/ — client-side JS, CSS (tailwind.css is auto-generated, don't edit it)
+- migrations/ — sequential SQL migrations (next number = read the directory; current head ~0232)
+- src/utils/geo-math.ts — pure geospatial math (well-tested)
 
 Operating principles:
 1. Be concise. The operator is busy and skims your replies.
-2. When the user asks for "the blog post about X", call list_blog_posts with a search term first, then read_blog_post on the right id.
-3. Before writing changes, briefly state what you're about to do (one sentence) and then do it.
-4. After every successful write, confirm with the new state ("Done — post #42 is now published") rather than restating the whole record.
-5. If a tool returns an error, surface the error message verbatim and suggest a fix. Do not retry blindly.
-6. Slugs must be lowercase-hyphenated. If the user gives a slug with spaces or capitals, normalize it.
-7. Never invent ids — always look them up via list_blog_posts first.
-8. For blog content, default category is 'roofing'. Write in plain HTML or markdown when the user asks for prose.
-9. The operator is the owner of this business. Trust their judgment on what gets published.
+2. **Always read before write.** For any file edit, call read_file first to get the current content + sha. Pass that sha to write_file (optimistic concurrency — write_file 409s without it).
+3. Keep diffs surgical. Edit only what was asked. Don't refactor surrounding code, don't reformat, don't add comments not requested.
+4. Use a clear commit message: imperative mood, what changed and why. Example: "fix(reports): correct dormer pitch calc when ridge length is zero". The operator's prior commits follow Conventional Commits style — match it.
+5. Before each write, state in one short sentence what you're about to do.
+6. After a successful write, confirm with the commit SHA ("Pushed abc1234 — Pages will auto-deploy in ~30s"). Don't restate the whole file.
+7. If a tool errors, surface the error verbatim and propose a fix. Don't retry blindly.
+8. **Big risky changes (auth, payments, migrations, anything in src/routes/auth.ts or src/routes/payments.ts):** confirm with the operator before pushing — describe what you're about to change and ask "go ahead?". For everything else (copy edits, blog content, diagram tweaks, agent configs), just do it.
+9. If something breaks: list_recent_commits → identify the bad SHA → revert_commit. Tell the operator what you reverted.
+10. Slugs must be lowercase-hyphenated. Normalize if the user gives spaces/capitals.
+11. Never invent IDs or SHAs — look them up via the list/read tools.
+12. tailwind.css under public/static/ is generated by build.mjs — do not hand-edit it. Add classes by editing the source files; the next deploy regenerates it.
 
-If asked to do something outside scope (edit code, change pricing in the UI, send emails, etc.), explain that this assistant only has D1 database tools and suggest they make the change another way.`
+The operator can rebuild anything you push by saying "revert that" — you have revert_commit. So bias toward action over excessive checking. They've explicitly opted into auto-push, full-repo mode.`
 
 // ─── Page ─────────────────────────────────────────────────
 superAdminAi.get('/', (c) => {
@@ -69,15 +84,20 @@ superAdminAi.post('/chat', async (c) => {
         controller.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
       }
       const conversation = [...messages]
+      // Capture the most-recent user message text as audit trail context for any commits
+      const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user')
+      const userPrompt = typeof lastUserMsg?.content === 'string'
+        ? lastUserMsg.content
+        : (Array.isArray(lastUserMsg?.content) ? (lastUserMsg.content.find((b: any) => b.type === 'text')?.text || '') : '')
       try {
-        for (let iter = 0; iter < 10; iter++) {
+        for (let iter = 0; iter < 15; iter++) {
           const response = await client.messages.create({
             model,
             max_tokens: 16000,
             system: [
               { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
             ],
-            tools: ASSISTANT_TOOLS as any,
+            tools: ALL_TOOLS as any,
             messages: conversation,
           })
 
@@ -102,7 +122,11 @@ superAdminAi.post('/chat', async (c) => {
           const toolResults: any[] = []
           for (const tu of toolUses) {
             send('tool_use', { name: tu.name, input: tu.input })
-            const result = await runTool(c.env.DB, tu.name, tu.input)
+            const result = await runTool(c.env.DB, {
+              githubToken: c.env.GITHUB_TOKEN || '',
+              userPrompt,
+              model,
+            }, tu.name, tu.input)
             send('tool_result', { name: tu.name, result })
             toolResults.push({
               type: 'tool_result',
@@ -112,7 +136,7 @@ superAdminAi.post('/chat', async (c) => {
           }
           conversation.push({ role: 'user', content: toolResults })
         }
-        send('error', { message: 'Hit 10-iteration tool-loop ceiling' })
+        send('error', { message: 'Hit 15-iteration tool-loop ceiling' })
         controller.close()
       } catch (e: any) {
         send('error', { message: e?.message || 'Unknown error', status: e?.status })
