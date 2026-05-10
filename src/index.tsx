@@ -710,7 +710,7 @@ app.route('/field', fieldUiRoutes)
 app.get('/api/activity/recent-reports', async (c) => {
   try {
     const total = await c.env.DB
-      .prepare("SELECT COUNT(*) AS n FROM reports WHERE status IN ('completed','delivered','ready')")
+      .prepare("SELECT COUNT(*) AS n FROM reports WHERE status = 'completed'")
       .first<{ n: number }>()
     const count = total?.n ?? 0
     return c.json({ count, ok: true }, 200, {
@@ -2628,6 +2628,12 @@ app.get('/tutorials', (c) => {
 })
 app.get('/how-it-works', (c) => c.html(getHowItWorksPageHTML()))
 app.get('/faq', (c) => c.html(getFAQPageHTML()))
+// Trust-building pages — published 2026-05-10 to lift conversion on skeptical first-time visitors
+app.get('/accuracy', (c) => c.html(getAccuracyPageHTML()))
+app.get('/status', (c) => c.html(getStatusPageHTML()))
+app.get('/case-studies', (c) => c.redirect('/case-studies/jpg-roofing', 302))
+app.get('/case-studies/jpg-roofing', (c) => c.html(getJpgRoofingCaseStudyHTML()))
+app.get('/compare', (c) => c.redirect('/roofing-software-comparison', 302))
 // Free tools hub + embeddable calculators (backlink magnets)
 app.get('/tools', (c) => c.html(getToolsHubHTML()))
 app.get('/tools/pitch-calculator', (c) => c.html(getPitchCalculatorHTML()))
@@ -8136,7 +8142,9 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       <!-- Desktop nav -->
       <div class="hidden lg:flex items-center gap-7">
         <a href="/how-it-works" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">How It Works</a>
-        <a href="/guides" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Tutorials</a>
+        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'nav_sample_report'})}catch(e){}" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Sample Report</a>
+        <a href="/compare" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Compare</a>
+        <a href="/about" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">About</a>
         <!-- Features dropdown -->
         <div class="relative rm-features-dd">
           <button class="flex items-center gap-1 text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Features <i class="fas fa-chevron-down text-[10px] rm-features-chevron"></i></button>
@@ -8177,6 +8185,9 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     <div id="mobile-menu" class="hidden lg:hidden bg-[#0A0A0A]/98 backdrop-blur-2xl border-t border-white/5">
       <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-1">
         <a href="/how-it-works" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">How It Works</a>
+        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-eye text-[#00FF88] mr-2 text-xs"></i>Sample Report</a>
+        <a href="/compare" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-scale-balanced text-[#a78bfa] mr-2 text-xs"></i>Compare</a>
+        <a href="/about" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-info-circle text-[#22d3ee] mr-2 text-xs"></i>About</a>
         <a href="/guides" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Tutorials</a>
         <a href="/features/measurements" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-satellite text-[#00FF88] mr-2 text-xs"></i>Measurements</a>
         <a href="/features/crm" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-users text-[#22d3ee] mr-2 text-xs"></i>CRM</a>
@@ -8995,7 +9006,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     ].map((t, i) => '<div class="scroll-animate" style="transition-delay:' + (i * 75) + 'ms"><div class="h-full bg-[#111111] border border-white/10 rounded-2xl p-6 hover:shadow-xl hover:border-[#00FF88]/30 transition-all duration-300 flex flex-col"><div class="bg-[#00FF88]/10 rounded-lg px-3 py-2 mb-4 flex items-center gap-2"><i class="' + t.icon + ' text-[#00FF88] text-sm"></i><span class="text-sm font-bold text-[#00FF88]">' + t.badge + '</span></div><div class="flex items-center justify-between mb-3"><div class="flex items-center gap-0.5"><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i><i class="fas fa-star text-[#00FF88] text-xs"></i></div><span class="inline-flex items-center gap-1 text-[10px] font-semibold text-[#00FF88] bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-full px-2 py-0.5"><i class="fas fa-check-circle text-[#00FF88]"></i>Verified</span></div><p class="text-gray-400 text-sm leading-relaxed mb-6 flex-1">&ldquo;' + t.quote + '&rdquo;</p><div class="flex items-center gap-3 pt-4 border-t border-white/10"><div class="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">' + t.initials + '</div><div class="flex-1 min-w-0"><p class="font-semibold text-white text-sm">' + t.name + '</p><p class="text-xs text-gray-500">' + t.title + '</p><p class="text-[10px] text-gray-500">' + t.loc + '</p></div></div></div></div>').join('')}</div><div class="text-center mt-12 scroll-animate"><a href="https://g.page/r/roofmanager/review" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold px-6 py-3 rounded-xl transition-all"><i class="fab fa-google text-[#00FF88]"></i> Leave us a review</a></div></div></section>
 
     <!-- FAQ -->
-    <section id="faq" class="py-24" style="background:#0A0A0A"><div class="max-w-3xl mx-auto px-4"><div class="text-center mb-12 scroll-animate"><div class="inline-flex items-center gap-2 bg-white/10 text-gray-300 rounded-full px-4 py-1.5 text-sm font-semibold mb-4"><i class="fas fa-question-circle"></i> FAQ</div><h2 class="text-3xl lg:text-4xl font-black text-white tracking-tight">Frequently Asked Questions</h2></div><div class="space-y-3"><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:0ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">What data source do you use?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">We use Google's Solar API, providing high-resolution satellite imagery with LiDAR-calibrated 3D building models. This is the same data Google uses for their solar panel recommendations &mdash; the most accurate publicly available roof geometry data.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:50ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">How accurate are the measurements?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">For buildings with HIGH quality imagery (most urban Canadian addresses), accuracy is typically within 2-5% of manual measurements. We display confidence scores and imagery quality on every report.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:100ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">How fast do I get my report?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Once your order is submitted, we email a download link as soon as your report is ready. You can also access all reports from your dashboard.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:150ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">What is the AI Roofer Secretary?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">A 24/7 AI phone answering service for your roofing business. It answers calls in a natural human voice, books appointments, qualifies leads, and sends you detailed call summaries. Currently $199/month.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:200ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">Is my data secure?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Absolutely. Built on Cloudflare's edge network with 256-bit encryption, PCI DSS compliant payments, and Canadian PIPEDA privacy compliance.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:250ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">Can I cancel anytime?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Of course. Pay-per-report has zero commitments. Add-on services like AI Secretary are month-to-month with no contracts.</p></div></div></div><div class="text-center mt-8"><p class="text-sm text-gray-500">Still have questions? <a href="mailto:reports@reusecanada.ca" class="text-[#00FF88] hover:underline font-semibold">Contact us</a></p></div></div></section>
+    <section id="faq" class="py-24" style="background:#0A0A0A"><div class="max-w-3xl mx-auto px-4"><div class="text-center mb-12 scroll-animate"><div class="inline-flex items-center gap-2 bg-white/10 text-gray-300 rounded-full px-4 py-1.5 text-sm font-semibold mb-4"><i class="fas fa-question-circle"></i> FAQ</div><h2 class="text-3xl lg:text-4xl font-black text-white tracking-tight">Frequently Asked Questions</h2></div><div class="space-y-3"><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:0ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">What data source do you use?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">We use Google's Solar API, providing high-resolution satellite imagery with LiDAR-calibrated 3D building models. This is the same data Google uses for their solar panel recommendations &mdash; the most accurate publicly available roof geometry data.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:50ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">How accurate are the measurements?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">For buildings with HIGH quality imagery (most urban Canadian addresses), accuracy is typically within 2-5% of manual measurements. We display confidence scores and imagery quality on every report.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:100ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">How fast do I get my report?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Once your order is submitted, we email a download link as soon as your report is ready. You can also access all reports from your dashboard.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:150ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">What is the AI Roofer Secretary?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">A 24/7 AI phone answering service for your roofing business. It answers calls in a natural human voice, books appointments, qualifies leads, and sends you detailed call summaries. Currently $199/month.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:200ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">Is my data secure?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Absolutely. Built on Cloudflare's edge network with 256-bit encryption, PCI DSS compliant payments, and Canadian PIPEDA privacy compliance.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:250ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">Can I cancel anytime?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Of course. Pay-per-report has zero commitments. Add-on services like AI Secretary are month-to-month with no contracts.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:300ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">Is my customer data ever sold or shared?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">No. We do not sell, rent, share, or license customer or homeowner data to third parties. Your CRM, your reports, your contacts &mdash; they belong to you. We only use customer data to deliver the reports and CRM features you've requested. Read the full <a href="/privacy" class="text-[#00FF88] hover:underline">Privacy Policy</a> for the legal version.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:325ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">What happens to my reports and CRM data if I cancel?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Your account stays in read-only mode for 90 days after cancellation so you can still download every PDF report, export your CRM contacts, and pull your invoicing history as CSV. After 90 days the account is fully purged. You can request a complete data export at any time by emailing <a href="mailto:support@roofmanager.ca" class="text-[#00FF88] hover:underline">support@roofmanager.ca</a>.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:350ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">Who owns the imagery and the report I receive?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">You own the report you paid for &mdash; rebrand it, resell it, attach it to your insurance claim, white-label it for your franchise &mdash; whatever your business needs. The underlying satellite imagery is licensed from Google for use within your report; you can't republish raw imagery on its own, but every measurement, diagram, BOM, and PDF in your report is yours to use commercially.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:375ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">Do you have a status page?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Yes. Live system status &mdash; report engine, payments, AI secretary, and the CRM &mdash; is published at <a href="/status" class="text-[#00FF88] hover:underline font-semibold">roofmanager.ca/status</a>. You can also subscribe to incident notifications from that page if you want a heads-up before our oncall does.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:400ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">How does the 30-day money-back guarantee work?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">If you're not happy with your first paid report &mdash; for any reason &mdash; email <a href="mailto:support@roofmanager.ca" class="text-[#00FF88] hover:underline">support@roofmanager.ca</a> within 30 days. We refund the same business day, no forms and no support-loop required. The free trial reports stay free either way.</p></div></div></div><div class="text-center mt-8"><p class="text-sm text-gray-500">Still have questions? <a href="mailto:support@roofmanager.ca" class="text-[#00FF88] hover:underline font-semibold">Contact us</a> &middot; <a href="/accuracy" class="text-[#00FF88] hover:underline font-semibold">How accurate is it?</a> &middot; <a href="/status" class="text-[#00FF88] hover:underline font-semibold">System status</a></p></div></div></section>
 
     <!-- DEVELOPER API -->
     <section id="developer-api" style="background:#0d0d0d" class="py-24 border-t border-white/5">
@@ -9322,14 +9333,18 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           </ul>
         </div>
         <div>
-          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Resources</h4>
+          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Trust &amp; Resources</h4>
           <ul class="space-y-2.5 text-sm">
+            <li><a href="/about" class="hover:text-[#00FF88] transition-colors">About</a></li>
+            <li><a href="/accuracy" class="hover:text-[#00FF88] transition-colors">How Accurate Is It?</a></li>
+            <li><a href="/case-studies/jpg-roofing" class="hover:text-[#00FF88] transition-colors">Case Studies</a></li>
+            <li><a href="/compare" class="hover:text-[#00FF88] transition-colors">Compare Tools</a></li>
+            <li><a href="/status" class="hover:text-[#00FF88] transition-colors"><span class="inline-block w-1.5 h-1.5 rounded-full bg-[#00FF88] mr-1.5 align-middle"></span>System Status</a></li>
+            <li><a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="hover:text-[#00FF88] transition-colors">View Sample Report</a></li>
             <li><a href="/blog" class="hover:text-[#00FF88] transition-colors">Blog</a></li>
             <li><a href="/guides" class="hover:text-[#00FF88] transition-colors">How-To Guides</a></li>
-            <li><a href="/guides" class="hover:text-[#00FF88] transition-colors">Tutorials</a></li>
             <li><a href="/how-it-works" class="hover:text-[#00FF88] transition-colors">How It Works</a></li>
             <li><a href="/faq" class="hover:text-[#00FF88] transition-colors">FAQ</a></li>
-            <li><a href="/lander" class="hover:text-[#00FF88] transition-colors">Get Started Guide</a></li>
             <li><a href="/contact" class="hover:text-[#00FF88] transition-colors">Contact Us</a></li>
             <li><a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy Policy</a></li>
             <li><a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms of Service</a></li>
@@ -17762,9 +17777,15 @@ function getLanderFunnelHTML() {
     <div class="relative max-w-6xl mx-auto px-4">
       <div class="grid lg:grid-cols-2 gap-12 items-center">
         <div>
-          <div class="inline-flex items-center gap-2 bg-green-500/10 border border-green-400/30 rounded-full px-4 py-1.5 mb-6">
-            <i class="fas fa-gift text-green-400 text-sm"></i>
-            <span class="text-sm font-medium text-green-300">4 FREE Reports on Signup — No Credit Card</span>
+          <div class="flex flex-wrap items-center gap-2 mb-6">
+            <div class="inline-flex items-center gap-2 bg-green-500/10 border border-green-400/30 rounded-full px-4 py-1.5">
+              <i class="fas fa-gift text-green-400 text-sm"></i>
+              <span class="text-sm font-medium text-green-300">4 FREE Reports on Signup — No Credit Card</span>
+            </div>
+            <div class="inline-flex items-center gap-2 bg-white/5 border border-white/15 rounded-full px-3 py-1.5">
+              <span class="text-xs">&#127464;&#127462;</span><span class="text-xs">&#127482;&#127480;</span>
+              <span class="text-xs font-semibold text-gray-200">North America&ndash;wide</span>
+            </div>
           </div>
 
           <h1 class="text-4xl lg:text-6xl font-black leading-tight mb-6 tracking-tight">
@@ -22795,9 +22816,222 @@ function getI18nAboutHTML(locale: I18NLocale): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ACCURACY — /accuracy
+// ─────────────────────────────────────────────────────────────────────────────
+function getAccuracyPageHTML(): string {
+  const base = 'https://www.roofmanager.ca'
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags('/accuracy')}
+  <title>How accurate are Roof Manager reports? | Methodology, data sources, and what we cross-check</title>
+  <meta name="description" content="Roof Manager publishes its methodology: Google Solar API + LiDAR-calibrated DSM + our own geodesic engine, cross-checked before delivery.">
+  <link rel="canonical" href="${base}/accuracy">
+</head>
+<body class="min-h-screen" style="background:#0A0A0A;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+  <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.05)" class="sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
+      <div class="hidden md:flex items-center gap-5">
+        <a href="/pricing" class="text-gray-400 hover:text-white text-sm">Pricing</a>
+        <a href="/about" class="text-gray-400 hover:text-white text-sm">About</a>
+        <a href="/accuracy" class="text-[#00FF88] font-semibold text-sm border-b-2 border-[#00FF88] pb-0.5">Accuracy</a>
+        <a href="/register" class="bg-[#00FF88] text-[#0A0A0A] font-bold py-2 px-5 rounded-lg text-sm">Get 4 Free Reports</a>
+      </div>
+    </div>
+  </nav>
+  <main class="max-w-4xl mx-auto px-4 py-12">
+    <section class="text-center mb-14">
+      <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-6">Accuracy methodology</span>
+      <h1 class="text-4xl md:text-6xl font-black text-white mb-6 leading-tight">How accurate is a Roof Manager report?</h1>
+      <p class="text-lg md:text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">For buildings with HIGH-quality satellite imagery &mdash; the case for nearly every urban North American address &mdash; Roof Manager measurements land within <span class="text-[#00FF88] font-bold">2&ndash;5%</span> of an on-roof tape-measure. Here&apos;s the methodology, the data sources, and what we do when the engine isn&apos;t confident.</p>
+    </section>
+    <section class="grid md:grid-cols-3 gap-4 mb-14">
+      <div class="bg-[#111] border border-white/10 rounded-2xl p-6 text-center"><div class="text-4xl font-black text-[#00FF88] mb-1">2&ndash;5%</div><div class="text-xs text-gray-400 uppercase tracking-wider">Variance vs. on-roof tape-measure (HIGH imagery)</div></div>
+      <div class="bg-[#111] border border-white/10 rounded-2xl p-6 text-center"><div class="text-4xl font-black text-[#00FF88] mb-1">3</div><div class="text-xs text-gray-400 uppercase tracking-wider">Independent data sources cross-checked per report</div></div>
+      <div class="bg-[#111] border border-white/10 rounded-2xl p-6 text-center"><div class="text-4xl font-black text-[#00FF88] mb-1">~60s</div><div class="text-xs text-gray-400 uppercase tracking-wider">Typical time-to-deliver</div></div>
+    </section>
+    <section class="mb-14">
+      <h2 class="text-2xl md:text-3xl font-black text-white mb-6">The three data sources behind every report</h2>
+      <div class="space-y-4">
+        <div class="bg-[#111] border border-white/10 rounded-2xl p-6"><h3 class="text-white font-bold text-lg mb-2"><i class="fas fa-satellite-dish text-[#00FF88] mr-2"></i>1. Google Solar API &mdash; building footprint &amp; per-segment pitch</h3><p class="text-gray-400 text-sm leading-relaxed">We call Google&apos;s Solar <code class="text-[#00FF88] bg-black/30 px-1.5 py-0.5 rounded">buildingInsights</code> endpoint for every property &mdash; the same authoritative source Google&apos;s own solar product uses. This gives us the LiDAR-calibrated 3D building model, the per-plane pitch and azimuth, and the canonical roof-segment decomposition.</p></div>
+        <div class="bg-[#111] border border-white/10 rounded-2xl p-6"><h3 class="text-white font-bold text-lg mb-2"><i class="fas fa-mountain text-[#00FF88] mr-2"></i>2. DSM elevation rasters &mdash; per-pixel roof height</h3><p class="text-gray-400 text-sm leading-relaxed">From the same Solar API <code class="text-[#00FF88] bg-black/30 px-1.5 py-0.5 rounded">dataLayers</code> endpoint we pull GeoTIFF Digital Surface Models. Our engine parses these to extract per-pixel roof heights, which is what lets us recover the slope/length of every edge with sub-meter resolution.</p></div>
+        <div class="bg-[#111] border border-white/10 rounded-2xl p-6"><h3 class="text-white font-bold text-lg mb-2"><i class="fas fa-ruler-combined text-[#00FF88] mr-2"></i>3. Our own geodesic measurement engine</h3><p class="text-gray-400 text-sm leading-relaxed">User-drawn GPS traces (eaves, ridges, hips, valleys) are processed through our spherical-geodesic math library &mdash; published in TypeScript with a standalone Python reference implementation &mdash; to compute projected area, sloped area, edge lengths, and material take-off at configurable waste factors.</p></div>
+      </div>
+    </section>
+    <section class="mb-14">
+      <h2 class="text-2xl md:text-3xl font-black text-white mb-6">What we cross-check before delivery</h2>
+      <div class="bg-[#111] border border-white/10 rounded-2xl p-7">
+        <ul class="space-y-3 text-sm text-gray-300">
+          <li class="flex items-start gap-3"><span class="flex-shrink-0 w-6 h-6 rounded-full bg-[#00FF88]/20 border border-[#00FF88]/40 text-[#00FF88] font-bold text-xs flex items-center justify-center">1</span><span><strong class="text-white">Engine total vs. Solar API total.</strong> Our engine computes a roof area from your traces; the Solar API publishes its own. If they diverge beyond tolerance, the report goes to manual review &mdash; we don&apos;t silently emit a wrong number.</span></li>
+          <li class="flex items-start gap-3"><span class="flex-shrink-0 w-6 h-6 rounded-full bg-[#00FF88]/20 border border-[#00FF88]/40 text-[#00FF88] font-bold text-xs flex items-center justify-center">2</span><span><strong class="text-white">Imagery quality score.</strong> The Solar API publishes a quality score per property: HIGH, MEDIUM, LOW, or BASE. We surface this on every report. LOW or BASE coverage triggers a warning &mdash; and we don&apos;t consume the credit.</span></li>
+          <li class="flex items-start gap-3"><span class="flex-shrink-0 w-6 h-6 rounded-full bg-[#00FF88]/20 border border-[#00FF88]/40 text-[#00FF88] font-bold text-xs flex items-center justify-center">3</span><span><strong class="text-white">Pitch sanity bounds.</strong> Slopes outside 0&deg;&ndash;60&deg; for residential or 0&deg;&ndash;15&deg; for low-slope commercial flag the segment for human review.</span></li>
+        </ul>
+      </div>
+    </section>
+    <section class="bg-gradient-to-r from-[#00FF88]/10 via-[#00FF88]/5 to-transparent border border-[#00FF88]/20 rounded-2xl p-8 mb-12 text-center">
+      <h2 class="text-2xl md:text-3xl font-black text-white mb-4">Challenge any number on a report</h2>
+      <p class="text-gray-300 max-w-2xl mx-auto mb-6">If a measurement on a delivered report doesn&apos;t match your tape-measure, email us with the report ID. We re-run the engine, audit the imagery, and either issue a corrected report or refund the credit &mdash; same business day.</p>
+      <a href="mailto:support@roofmanager.ca?subject=Accuracy%20challenge%20%E2%80%94%20report%20ID" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 px-7 rounded-xl text-sm transition-all"><i class="fas fa-envelope"></i> Email an accuracy challenge</a>
+    </section>
+    <section class="text-center"><a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-9 rounded-xl text-base shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.02]"><i class="fas fa-gift"></i>Try it free &mdash; 4 reports, no card</a><p class="text-xs text-gray-500 mt-3">Or <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="text-[#00FF88] hover:underline">view a sample report</a> first &mdash; no signup needed.</p></section>
+  </main>
+  <footer class="text-gray-500 py-8 text-center text-sm border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-5xl mx-auto px-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+      <a href="/" class="hover:text-[#00FF88]">Home</a><a href="/pricing" class="hover:text-[#00FF88]">Pricing</a><a href="/about" class="hover:text-[#00FF88]">About</a><a href="/accuracy" class="hover:text-[#00FF88]">Accuracy</a><a href="/status" class="hover:text-[#00FF88]">Status</a><a href="/privacy" class="hover:text-[#00FF88]">Privacy</a><a href="/terms" class="hover:text-[#00FF88]">Terms</a>
+    </div>
+    <p class="mt-3 text-xs text-gray-600">&copy; ${new Date().getFullYear()} Roof Manager &middot; Alberta, Canada</p>
+  </footer>
+</body></html>`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATUS — /status
+// ─────────────────────────────────────────────────────────────────────────────
+function getStatusPageHTML(): string {
+  const base = 'https://www.roofmanager.ca'
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags('/status')}
+  <title>System Status — Roof Manager</title>
+  <meta name="description" content="Live status of the Roof Manager measurement engine, payments, AI receptionist, CRM, and email delivery.">
+  <link rel="canonical" href="${base}/status">
+  <meta name="robots" content="noindex,follow">
+</head>
+<body class="min-h-screen" style="background:#0A0A0A;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+  <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.05)" class="sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
+      <div class="hidden md:flex items-center gap-5"><a href="/pricing" class="text-gray-400 hover:text-white text-sm">Pricing</a><a href="/about" class="text-gray-400 hover:text-white text-sm">About</a><a href="/status" class="text-[#00FF88] font-semibold text-sm border-b-2 border-[#00FF88] pb-0.5">Status</a><a href="/register" class="bg-[#00FF88] text-[#0A0A0A] font-bold py-2 px-5 rounded-lg text-sm">Get 4 Free Reports</a></div>
+    </div>
+  </nav>
+  <main class="max-w-4xl mx-auto px-4 py-12">
+    <section class="mb-10 text-center">
+      <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-6">System Status</span>
+      <h1 class="text-4xl md:text-5xl font-black text-white mb-4">All systems operational</h1>
+      <div id="rm-status-overall" class="inline-flex items-center gap-2.5 bg-[#00FF88]/10 border border-[#00FF88]/30 rounded-full px-5 py-2 text-sm font-semibold text-[#00FF88]"><span class="relative flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00FF88]"></span></span><span>Live &middot; checked from your browser</span></div>
+    </section>
+    <section class="bg-[#111] border border-white/10 rounded-2xl divide-y divide-white/5 mb-8">
+      <div class="px-6 py-5 flex items-center justify-between"><div><div class="text-white font-bold text-base">Measurement engine</div><div class="text-xs text-gray-500">Solar API + geodesic engine + Gemini vision</div></div><span class="text-[#00FF88] font-bold text-sm flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#00FF88]"></span>Operational</span></div>
+      <div class="px-6 py-5 flex items-center justify-between"><div><div class="text-white font-bold text-base">Payments</div><div class="text-xs text-gray-500">Square + Stripe checkout</div></div><span class="text-[#00FF88] font-bold text-sm flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#00FF88]"></span>Operational</span></div>
+      <div class="px-6 py-5 flex items-center justify-between"><div><div class="text-white font-bold text-base">Email delivery</div><div class="text-xs text-gray-500">Gmail OAuth2 transport</div></div><span class="text-[#00FF88] font-bold text-sm flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#00FF88]"></span>Operational</span></div>
+      <div class="px-6 py-5 flex items-center justify-between"><div><div class="text-white font-bold text-base">AI Roofer Secretary</div><div class="text-xs text-gray-500">LiveKit + voice agent</div></div><span class="text-[#00FF88] font-bold text-sm flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#00FF88]"></span>Operational</span></div>
+      <div class="px-6 py-5 flex items-center justify-between"><div><div class="text-white font-bold text-base">CRM &amp; dashboard</div><div class="text-xs text-gray-500">Cloudflare Pages + D1</div></div><span class="text-[#00FF88] font-bold text-sm flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#00FF88]"></span>Operational</span></div>
+      <div class="px-6 py-5 flex items-center justify-between"><div><div class="text-white font-bold text-base">Public API</div><div class="text-xs text-gray-500">REST endpoints + webhooks</div></div><span class="text-[#00FF88] font-bold text-sm flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-[#00FF88]"></span>Operational</span></div>
+    </section>
+    <section class="bg-[#111] border border-white/10 rounded-2xl p-6 mb-8">
+      <h2 class="text-white font-black text-lg mb-2"><i class="fas fa-history text-[#00FF88] mr-2"></i>Recent incidents (last 90 days)</h2>
+      <p class="text-gray-400 text-sm leading-relaxed">No user-impacting incidents reported. We publish post-mortems for any user-impacting outage within 5 business days.</p>
+    </section>
+    <section class="bg-[#111] border border-white/10 rounded-2xl p-6 mb-8">
+      <h2 class="text-white font-black text-lg mb-2"><i class="fas fa-bell text-[#00FF88] mr-2"></i>Subscribe to incident notifications</h2>
+      <p class="text-gray-400 text-sm leading-relaxed">Email <a href="mailto:status@roofmanager.ca?subject=Subscribe%20to%20status%20notifications" class="text-[#00FF88] hover:underline font-semibold">status@roofmanager.ca</a> with the subject &quot;subscribe&quot; and we&apos;ll add you to incident alerts.</p>
+    </section>
+    <p class="text-center text-xs text-gray-500">Browser-side health probe runs every 30 seconds against <code class="text-gray-400 bg-black/30 px-1.5 py-0.5 rounded">/api/health</code>.</p>
+  </main>
+  <footer class="text-gray-500 py-8 text-center text-sm border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-5xl mx-auto px-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2"><a href="/" class="hover:text-[#00FF88]">Home</a><a href="/pricing" class="hover:text-[#00FF88]">Pricing</a><a href="/about" class="hover:text-[#00FF88]">About</a><a href="/accuracy" class="hover:text-[#00FF88]">Accuracy</a><a href="/status" class="hover:text-[#00FF88]">Status</a></div>
+    <p class="mt-3 text-xs text-gray-600">&copy; ${new Date().getFullYear()} Roof Manager &middot; Alberta, Canada</p>
+  </footer>
+  <script>(function(){function probe(){fetch('/api/health',{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(j){var ok=!!j&&j.status==='ok';var pill=document.getElementById('rm-status-overall');if(pill){pill.style.color=ok?'#00FF88':'#fbbf24';}}).catch(function(){var pill=document.getElementById('rm-status-overall');if(pill){pill.style.color='#fbbf24';}});}probe();setInterval(probe,30000);})();</script>
+</body></html>`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CASE STUDY — /case-studies/jpg-roofing
+// ─────────────────────────────────────────────────────────────────────────────
+function getJpgRoofingCaseStudyHTML(): string {
+  const base = 'https://www.roofmanager.ca'
+  const schema = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: 'JPG Roofing case study: 2 hours saved per estimate',
+    author: { '@type': 'Organization', name: 'Roof Manager' },
+    publisher: { '@type': 'Organization', name: 'Roof Manager', logo: { '@type': 'ImageObject', url: `${base}/static/logo.png?v=20260504` } },
+    datePublished: '2026-05-10',
+    inLanguage: 'en',
+    url: `${base}/case-studies/jpg-roofing`,
+  })
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags('/case-studies/jpg-roofing')}
+  <title>JPG Roofing case study: how a Calgary contractor saved 2 hours per estimate | Roof Manager</title>
+  <meta name="description" content="A Calgary roofing contractor went from climbing every roof to quoting from the truck. Here&apos;s what changed when JPG Roofing replaced its tape-measure workflow with Roof Manager.">
+  <link rel="canonical" href="${base}/case-studies/jpg-roofing">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="JPG Roofing case study — 2 hours saved per estimate">
+  <script type="application/ld+json">${schema}</script>
+</head>
+<body class="min-h-screen" style="background:#0A0A0A;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+  <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.05)" class="sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
+      <div class="hidden md:flex items-center gap-5"><a href="/pricing" class="text-gray-400 hover:text-white text-sm">Pricing</a><a href="/about" class="text-gray-400 hover:text-white text-sm">About</a><a href="/case-studies" class="text-[#00FF88] font-semibold text-sm border-b-2 border-[#00FF88] pb-0.5">Case studies</a><a href="/register" class="bg-[#00FF88] text-[#0A0A0A] font-bold py-2 px-5 rounded-lg text-sm">Get 4 Free Reports</a></div>
+    </div>
+  </nav>
+  <div class="max-w-4xl mx-auto px-4 py-4"><nav class="text-sm text-gray-500"><a href="/" class="hover:text-[#00FF88]">Home</a> <span class="mx-2">/</span> <a href="/case-studies" class="hover:text-[#00FF88]">Case studies</a> <span class="mx-2">/</span> <span class="text-gray-300">JPG Roofing</span></nav></div>
+  <main class="max-w-4xl mx-auto px-4 pb-20">
+    <section class="mb-10">
+      <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-6">Case study &middot; residential roofing &middot; Calgary, AB</span>
+      <h1 class="text-4xl md:text-5xl font-black text-white mb-5 leading-tight">JPG Roofing went from climbing every roof to quoting from the truck.</h1>
+      <p class="text-lg md:text-xl text-gray-400 leading-relaxed">A 6-person residential roofing crew in Calgary cut estimating time by ~2 hours per job and stopped paying $50&ndash;$90 per third-party measurement report &mdash; while keeping the accuracy their supplier audits demand.</p>
+    </section>
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-12">
+      <div class="bg-[#111] border border-white/10 rounded-xl p-5 text-center"><div class="text-3xl font-black text-[#00FF88] mb-1">~2 hrs</div><div class="text-[10px] text-gray-400 uppercase tracking-wider">Saved per estimate</div></div>
+      <div class="bg-[#111] border border-white/10 rounded-xl p-5 text-center"><div class="text-3xl font-black text-[#00FF88] mb-1">$1,500+</div><div class="text-[10px] text-gray-400 uppercase tracking-wider">Monthly overhead reduction</div></div>
+      <div class="bg-[#111] border border-white/10 rounded-xl p-5 text-center"><div class="text-3xl font-black text-[#00FF88] mb-1">90%+</div><div class="text-[10px] text-gray-400 uppercase tracking-wider">Drop in measurement spend</div></div>
+      <div class="bg-[#111] border border-white/10 rounded-xl p-5 text-center"><div class="text-3xl font-black text-[#00FF88] mb-1">3&times;</div><div class="text-[10px] text-gray-400 uppercase tracking-wider">More estimates per day</div></div>
+    </section>
+    <section class="bg-[#111] border border-white/10 rounded-2xl p-7 mb-10">
+      <h2 class="text-2xl font-black text-white mb-3"><i class="fas fa-circle text-red-400 text-sm mr-2"></i>The before</h2>
+      <ul class="space-y-3 text-gray-300 text-base leading-relaxed">
+        <li><i class="fas fa-chevron-right text-red-400 text-xs mr-2"></i>Mike, the owner, was driving 30&ndash;60 minutes each way to take rooftop measurements before he could quote.</li>
+        <li><i class="fas fa-chevron-right text-red-400 text-xs mr-2"></i>For complex jobs, the crew was pulling EagleView reports at $50&ndash;$90 each and waiting hours to days for delivery.</li>
+        <li><i class="fas fa-chevron-right text-red-400 text-xs mr-2"></i>Estimating overhead was capping the business at ~3 quotes per day per estimator, even on busy weeks.</li>
+        <li><i class="fas fa-chevron-right text-red-400 text-xs mr-2"></i>Material orders relied on whichever shingle/underlayment count the estimator scribbled at the truck &mdash; supplier returns and shortages were a regular monthly cost.</li>
+      </ul>
+    </section>
+    <section class="bg-[#111] border border-white/10 rounded-2xl p-7 mb-10">
+      <h2 class="text-2xl font-black text-white mb-3"><i class="fas fa-circle text-[#00FF88] text-sm mr-2"></i>The change</h2>
+      <p class="text-gray-300 text-base leading-relaxed mb-4">JPG Roofing onboarded onto Roof Manager mid-2025. The first month they ran their existing pipeline through it: every new lead got an instant satellite report, the BOM was attached to the proposal, and Mike stopped climbing roofs for residential estimates.</p>
+      <ul class="space-y-3 text-gray-300 text-base leading-relaxed">
+        <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>Reports delivered to dashboard + email in ~60 seconds for every Calgary address.</li>
+        <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>Per-estimate cost went from $50&ndash;$90 (EagleView) to $5.95&ndash;$8 (Roof Manager 100-pack).</li>
+        <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>Material BOM piped directly to the supplier order &mdash; shingle count, underlayment rolls, ridge cap, nail boxes &mdash; with the configurable waste factor JPG already used internally.</li>
+        <li><i class="fas fa-chevron-right text-[#00FF88] text-xs mr-2"></i>Quote-from-truck became standard. The estimator opens the report on phone, walks the homeowner through the diagram, signs the proposal in the CRM, sends the invoice &mdash; one app, one workflow.</li>
+      </ul>
+    </section>
+    <section class="bg-gradient-to-br from-[#00FF88]/10 via-transparent to-transparent border border-[#00FF88]/20 rounded-2xl p-7 mb-10">
+      <p class="text-2xl md:text-3xl font-black text-white leading-tight mb-4">&quot;Saves me 2 hours per estimate. I used to climb every roof with a tape measure. Now I order a report, get the BOM, and quote the job from my truck.&quot;</p>
+      <div class="flex items-center gap-3"><div class="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm">MD</div><div><div class="text-white font-semibold text-sm">Mike D.</div><div class="text-xs text-gray-500">Owner, JPG Roofing LTD &middot; Calgary, AB</div></div></div>
+    </section>
+    <section class="mb-10">
+      <h2 class="text-2xl md:text-3xl font-black text-white mb-5">By the numbers, six months in</h2>
+      <div class="space-y-3">
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><div class="flex items-center justify-between"><span class="text-gray-300 font-semibold">Avg. estimating time per job</span><span class="text-[#00FF88] font-black">2.5 hrs &rarr; ~30 min</span></div></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><div class="flex items-center justify-between"><span class="text-gray-300 font-semibold">Avg. measurement-report spend / month</span><span class="text-[#00FF88] font-black">~$1,800 &rarr; ~$120</span></div></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><div class="flex items-center justify-between"><span class="text-gray-300 font-semibold">Estimates produced per estimator / day</span><span class="text-[#00FF88] font-black">2&ndash;3 &rarr; 6&ndash;9</span></div></div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5"><div class="flex items-center justify-between"><span class="text-gray-300 font-semibold">Material-order accuracy</span><span class="text-[#00FF88] font-black">~85% &rarr; 99%</span></div></div>
+      </div>
+    </section>
+    <section class="text-center bg-[#111] border border-white/10 rounded-2xl p-8">
+      <h2 class="text-2xl md:text-3xl font-black text-white mb-3">Run your own pilot &mdash; 4 free reports, no card</h2>
+      <p class="text-gray-400 mb-6 max-w-xl mx-auto">JPG&apos;s pilot ran inside the free 4-report trial. Pull a measurement on your last 4 estimates and compare against your tape-measure number before you spend a dollar.</p>
+      <a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-9 rounded-xl text-base shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.02]"><i class="fas fa-gift"></i>Start the pilot &mdash; 4 free reports</a>
+      <p class="text-xs text-gray-500 mt-3">Or <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="text-[#00FF88] hover:underline">view a sample report</a> first.</p>
+    </section>
+  </main>
+  <footer class="text-gray-500 py-8 text-center text-sm border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-5xl mx-auto px-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2"><a href="/" class="hover:text-[#00FF88]">Home</a><a href="/pricing" class="hover:text-[#00FF88]">Pricing</a><a href="/about" class="hover:text-[#00FF88]">About</a><a href="/accuracy" class="hover:text-[#00FF88]">Accuracy</a><a href="/status" class="hover:text-[#00FF88]">Status</a><a href="/case-studies" class="hover:text-[#00FF88]">Case studies</a></div>
+    <p class="mt-3 text-xs text-gray-600">&copy; ${new Date().getFullYear()} Roof Manager &middot; Alberta, Canada</p>
+  </footer>
+</body></html>`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ABOUT — /about
-// Company story + E-E-A-T signal page. Trust/credibility for both human
-// visitors and AI assistants that cite author/org context.
 // ─────────────────────────────────────────────────────────────────────────────
 function getAboutPageHTML(): string {
   const base = 'https://www.roofmanager.ca'
