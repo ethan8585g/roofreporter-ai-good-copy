@@ -22,6 +22,8 @@ import { runSignupJourney } from './services/signup-journey'
 import { sendJourneyEmail } from './services/journey-email'
 import { runSignupHealthCheck } from './services/signup-health'
 import { sendSignupHealthEmail } from './services/health-email'
+import { runMobileMonitor } from './services/mobile-monitor'
+import { sendMobileMonitorEmail } from './services/mobile-monitor-email'
 
 // ── Abandoned signup recovery ─────────────────────────────────────────────────
 async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number; skipped: number }> {
@@ -675,6 +677,50 @@ export default {
           })
         } catch (err: any) {
           console.error('[CRON:signup_health] Error:', err?.message)
+        }
+      })())
+    }
+
+    // Mobile webfront + customer module health — every 12h at 00:00 + 12:00 UTC.
+    // Loads each surface in a real Cloudflare browser at iPhone viewport
+    // (375x667 @ 2x DPR, iOS Safari UA) to catch mobile-only layout/JS
+    // regressions that the plain-fetch signup-journey loop misses.
+    if (hour % 12 === 0 && minute === 0 && await isAgentEnabled('scan_mobile_monitor')) {
+      const expectedAt = new Date(now)
+      expectedAt.setUTCHours(hour, 0, 0, 0)
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const result = await runMobileMonitor(env)
+          const email = await sendMobileMonitorEmail(env, result)
+          const status: 'pass' | 'fail' = result.verdict === 'fail' ? 'fail' : 'pass'
+          const findings = result.findings.map(f => ({
+            severity: f.severity,
+            category: 'mobile_monitor',
+            url: f.path,
+            message: `[${f.section}/${f.category}] ${f.path} → ${f.status ?? '—'}: ${f.message}`,
+            details: { section: f.section, status: f.status, ...f.details },
+          }))
+          await recordExternalRun(env, {
+            loopId: 'mobile_monitor',
+            source: 'cf_cron',
+            status,
+            summary: `${result.verdict} · public ${result.public.checked - result.public.failed}/${result.public.checked} · customer ${result.customer.checked - result.customer.failed}/${result.customer.checked} · ${result.findings.length} issue(s) · email ${email.skipped ? 'skipped (verdict pass)' : email.ok ? 'sent' : `failed: ${email.error}`}`.slice(0, 500),
+            durationMs: Date.now() - t0,
+            outputs: {
+              verdict: result.verdict,
+              public: result.public,
+              customer: result.customer,
+              browser_rendering_available: result.browser_rendering_available,
+              email,
+            },
+            findings,
+            expectedAt,
+          })
+        } catch (err: any) {
+          console.error('[CRON:mobile_monitor] Error:', err?.message)
+        } finally {
+          await pruneExpiredScanSessions(env).catch(() => {})
         }
       })())
     }

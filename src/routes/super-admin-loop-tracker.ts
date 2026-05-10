@@ -326,6 +326,50 @@ superAdminLoopTracker.post('/api/run-now-ads-health', async (c) => {
   return c.json({ accepted: true, loop: 'ads_health' }, 202)
 })
 
+// ── Manually trigger the mobile-monitor sweep ─────────────────
+// Same pattern as run-now-ads-health: dedicated trigger because mobile_monitor
+// runs through its own service, not through the generic loop-scanner.
+superAdminLoopTracker.post('/api/run-now-mobile-monitor', async (c) => {
+  const ctx = (c as any).executionCtx as ExecutionContext | undefined
+  const promise = (async () => {
+    const t0 = Date.now()
+    try {
+      const { runMobileMonitor } = await import('../services/mobile-monitor')
+      const { sendMobileMonitorEmail } = await import('../services/mobile-monitor-email')
+      const { recordExternalRun } = await import('../services/loop-scanner')
+      const result = await runMobileMonitor(c.env)
+      const email = await sendMobileMonitorEmail(c.env, result)
+      const status: 'pass' | 'fail' = result.verdict === 'fail' ? 'fail' : 'pass'
+      const findings = result.findings.map(f => ({
+        severity: f.severity,
+        category: 'mobile_monitor',
+        url: f.path,
+        message: `[${f.section}/${f.category}] ${f.path} → ${f.status ?? '—'}: ${f.message}`,
+        details: { section: f.section, status: f.status, ...f.details },
+      }))
+      await recordExternalRun(c.env, {
+        loopId: 'mobile_monitor',
+        source: 'manual',
+        status,
+        summary: `${result.verdict} · public ${result.public.checked - result.public.failed}/${result.public.checked} · customer ${result.customer.checked - result.customer.failed}/${result.customer.checked} · ${result.findings.length} issue(s) · email ${email.skipped ? 'skipped (verdict pass)' : email.ok ? 'sent' : `failed: ${email.error}`}`.slice(0, 500),
+        durationMs: Date.now() - t0,
+        outputs: {
+          verdict: result.verdict,
+          public: result.public,
+          customer: result.customer,
+          browser_rendering_available: result.browser_rendering_available,
+          email,
+        },
+        findings,
+      })
+    } catch (e: any) {
+      console.error('[loop-tracker] mobile-monitor manual run failed', e?.message || e)
+    }
+  })()
+  if (ctx?.waitUntil) ctx.waitUntil(promise)
+  return c.json({ accepted: true, loop: 'mobile_monitor' }, 202)
+})
+
 // ── Latest run for a single loop_id (used by Ads Health panel) ───
 superAdminLoopTracker.get('/api/loops/:loop_id/latest', async (c) => {
   const loopId = c.req.param('loop_id')
@@ -945,6 +989,28 @@ function renderLoopTrackerPage(): string {
     </div>
   </section>
 
+  <!-- Mobile + Customer Health -->
+  <section>
+    <h2><i class="fas fa-mobile-screen-button" style="color:var(--info);margin-right:6px"></i>Mobile + Customer Health <span class="count" id="mobileMonitorCount">—</span>
+      <span style="float:right">
+        <button class="btn-secondary" id="mobileMonitorRunBtn" onclick="runMobileMonitorNow()" style="margin-left:8px">Run now</button>
+      </span>
+    </h2>
+    <p style="color:var(--text-dim);font-size:12px;margin:4px 0 12px">
+      Loads the public webfront (/, /pricing, /features, /contact, /register, /login) and the customer module (/customer/dashboard, /order, /profile, /reports, /jobs, /buy-reports) in a real Cloudflare browser at iPhone viewport (375×667 @ 2x DPR, iOS Safari UA) every 12 hours. Email goes out only on warn/fail. Source: <code>scan_mobile_monitor</code> (cron) or <code>/loop 12h /mobile-monitor</code> (slash).
+    </p>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div id="mobileMonitorHeader" style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border)">
+        <div id="mobileMonitorVerdictDot" style="width:14px;height:14px;border-radius:50%;background:var(--text-dim);flex-shrink:0"></div>
+        <div style="flex:1">
+          <div style="font-weight:700" id="mobileMonitorVerdictText">Loading latest run…</div>
+          <div style="color:var(--text-dim);font-size:12px;margin-top:2px" id="mobileMonitorMeta">—</div>
+        </div>
+      </div>
+      <div id="mobileMonitorSections" style="padding:6px 0">—</div>
+    </div>
+  </section>
+
   <!-- Findings inbox -->
   <section>
     <h2>Findings inbox <span class="count" id="findCount">—</span></h2>
@@ -1523,6 +1589,66 @@ async function runAdsHealthNow() {
   }
 }
 
+// ── Mobile + Customer Health panel ─────────────────────────────
+async function loadMobileMonitor() {
+  const data = await getJson('/api/super-admin/loop-tracker/api/loops/mobile_monitor/latest');
+  const run = data && data.run;
+  const dot = document.getElementById('mobileMonitorVerdictDot');
+  const text = document.getElementById('mobileMonitorVerdictText');
+  const meta = document.getElementById('mobileMonitorMeta');
+  const sectionsEl = document.getElementById('mobileMonitorSections');
+  const countEl = document.getElementById('mobileMonitorCount');
+  if (!run) {
+    dot.style.background = adsStatusColor(null);
+    text.textContent = 'Never run yet';
+    meta.textContent = 'Click "Run now" or wait for the 12-hour cron tick.';
+    sectionsEl.innerHTML = '<div style="padding:14px 18px;color:var(--text-dim);font-size:13px">No data yet.</div>';
+    countEl.textContent = '—';
+    return;
+  }
+  const outputs = run.outputs || {};
+  const verdict = outputs.verdict || run.status || 'pass';
+  dot.style.background = adsStatusColor(verdict);
+  text.textContent = adsStatusLabel(verdict) + ' — ' + (run.summary || '');
+  const finishedAgo = run.finished_at ? new Date(run.finished_at + 'Z').toUTCString() : 'unknown';
+  const brAvail = outputs.browser_rendering_available === false ? ' · ⚠ Browser Rendering creds missing' : '';
+  meta.textContent = 'Last run ' + finishedAgo + ' · ' + (run.duration_ms || '?') + 'ms · source ' + (run.source || '—') + brAvail;
+  const pub = outputs.public || { checked: 0, failed: 0, console_errors: 0 };
+  const cust = outputs.customer || { checked: 0, failed: 0, console_errors: 0 };
+  const totalFailed = (pub.failed || 0) + (cust.failed || 0);
+  const totalChecked = (pub.checked || 0) + (cust.checked || 0);
+  countEl.textContent = totalChecked ? (totalFailed + '/' + totalChecked) : '—';
+  const sections = [
+    { key: 'Public webfront', status: pub.failed > 0 ? 'fail' : (pub.console_errors > 0 ? 'warn' : 'pass'),
+      summary: (pub.checked - pub.failed) + '/' + pub.checked + ' OK · ' + pub.console_errors + ' console err(s)' },
+    { key: 'Customer module', status: cust.failed > 0 ? 'fail' : (cust.console_errors > 0 ? 'warn' : 'pass'),
+      summary: (cust.checked - cust.failed) + '/' + cust.checked + ' OK · ' + cust.console_errors + ' console err(s)' },
+  ];
+  sectionsEl.innerHTML = sections.map(s => {
+    const c = adsStatusColor(s.status);
+    const icon = s.status === 'pass' ? '✓' : s.status === 'warn' ? '⚠' : '✗';
+    return '<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 18px;border-bottom:1px solid var(--border)">'
+      + '<div style="width:22px;height:22px;border-radius:50%;background:' + c + ';color:#fff;font-weight:700;text-align:center;line-height:22px;flex-shrink:0;font-size:13px">' + icon + '</div>'
+      + '<div style="flex:1">'
+      +   '<div style="font-weight:600;font-size:13px">' + s.key + '</div>'
+      +   '<div style="color:var(--text-dim);font-size:12px;margin-top:2px">' + s.summary + '</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+async function runMobileMonitorNow() {
+  const btn = document.getElementById('mobileMonitorRunBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
+  try {
+    await getJson('/api/super-admin/loop-tracker/api/run-now-mobile-monitor', { method:'POST' });
+    setTimeout(() => { loadMobileMonitor(); loadStatus(); }, 30000);
+  } catch (e) {
+    alert('Failed to start mobile-monitor: ' + (e && e.message || e));
+  } finally {
+    if (btn) { setTimeout(() => { btn.disabled = false; btn.textContent = 'Run now'; }, 30000); }
+  }
+}
+
 function loadAll() {
   loadStatus();
   loadHeatmap();
@@ -1533,11 +1659,13 @@ function loadAll() {
   loadTrafficInsights();
   loadTrafficPages();
   loadAdsHealth();
+  loadMobileMonitor();
 }
 loadAll();
 setInterval(loadStatus, 30000);
 setInterval(loadHeatmap, 60000);
 setInterval(loadAdsHealth, 60000);
+setInterval(loadMobileMonitor, 60000);
 </script>
 </body>
 </html>`
