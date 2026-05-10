@@ -8149,7 +8149,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <span class="relative flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00FF88]"></span></span>
               <span class="text-sm font-semibold text-[#00FF88] tracking-wide">Trusted by 200+ Contractors — US &amp; Canada</span>
             </div>
-            <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] text-white mb-6 tracking-tight">AI Satellite Roof Measurement Reports <span class="neon-text">Roofers Actually Trust</span></h1>
+            <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] text-white mb-6 tracking-tight">Satellite Roof Measurement Reports <span class="neon-text">Roofers Actually Trust</span></h1>
             <h2 class="text-lg lg:text-xl text-gray-300 mb-8 max-w-xl leading-relaxed font-normal">Contractor-grade roof measurement reports — satellite-precise area, pitch, edges, and material BOM, with full CRM and instant PDF delivery. Built for US &amp; Canadian roofing contractors. Contact us today to get started.</h2>
 
             <!-- Primary CTA (ONE) -->
