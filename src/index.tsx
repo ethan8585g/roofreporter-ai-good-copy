@@ -2126,6 +2126,7 @@ app.get('/sitemap-comparisons.xml', (c) => {
 
 // SEO: robots.txt (expanded with AI search & training bot directives)
 app.get('/robots.txt', (c) => {
+  c.header('Cache-Control', 'public, max-age=3600, s-maxage=3600')
   return c.text(`User-agent: *
 Allow: /
 Disallow: /api/
@@ -2213,6 +2214,7 @@ Allow: /
 
 // SEO: llms.txt (spec-compliant Markdown format)
 app.get('/llms.txt', (c) => {
+  c.header('Cache-Control', 'public, max-age=3600, s-maxage=3600')
   return c.text(`# Roof Manager
 
 > Roof Manager is an AI-powered SaaS platform for roofing contractors, solar installers, insurance adjusters, and property managers. Satellite-powered roof measurement reports using Google Solar API with LiDAR-calibrated 3D building models — 99% accuracy. Covers all 50 US states and all 10 Canadian provinces. $8 CAD/report; 4 free reports, no credit card. Headquartered in Alberta, Canada.
@@ -2383,6 +2385,7 @@ Yes — all 50 US states and all 10 Canadian provinces. 95%+ of North American b
 // SEO: llms-full.txt (comprehensive documentation for LLMs)
 app.get('/llms-full.txt', (c) => {
   const today = new Date().toISOString().substring(0, 10)
+  c.header('Cache-Control', 'public, max-age=3600, s-maxage=3600')
   return c.text(`# Roof Manager — Complete Platform Documentation
 > Last updated: ${today}
 > This document contains the complete knowledge base for Roof Manager, an AI-powered roof measurement and CRM platform. Designed for ingestion by large language models.
@@ -7861,7 +7864,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   <meta property="og:site_name" content="Roof Manager">
   <meta property="og:locale" content="en_US">
   <meta property="og:locale:alternate" content="en_CA">
-  <meta name="twitter:card" content="summary">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Roof Measurement Report Software — Roof Manager">
   <meta name="twitter:description" content="Satellite roof measurement reports. Full CRM & AI condition analysis. 4 free reports, no credit card.">
   <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
@@ -14817,9 +14820,9 @@ function getAuthorPageHTML(slug: string = 'roof-manager-editorial-team'): string
     worksFor: { '@type': 'Organization', '@id': `${base}/#organization`, name: 'Roof Manager', url: base, logo: `${base}/static/logo.png?v=20260504` },
     knowsAbout: a.knowsAbout,
     sameAs: [
+      'https://www.linkedin.com/company/roofmanager',
       'https://www.facebook.com/roofmanager',
       'https://www.instagram.com/roofmanager',
-      `${base}/about`,
     ],
   })
   const expertiseLabelMap: Record<string, string> = {
@@ -15567,6 +15570,30 @@ function getHelpArticleHTML(slug: string, article: HelpArticle): string {
     author: { '@type': 'Organization', name: 'Roof Manager', url: base },
     publisher: { '@type': 'Organization', name: 'Roof Manager', logo: { '@type': 'ImageObject', url: `${base}/static/logo.png?v=20260504` } },
   })
+  // HowTo schema — only emit when the article is genuinely a how-to AND has
+  // discoverable step structure. We never fabricate steps.
+  let howToSchema = ''
+  if (/^how to\b/i.test(article.title)) {
+    const stripTags = (s: string) => s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    let steps: Array<{ name: string; text: string }> = []
+    const olMatch = article.body.match(/<ol[^>]*>([\s\S]*?)<\/ol>/i)
+    if (olMatch) {
+      const items = [...olMatch[1].matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)]
+      steps = items.map((m, i) => ({ name: `Step ${i + 1}`, text: stripTags(m[1]) }))
+    } else {
+      const parens = [...article.body.matchAll(/\((\d+)\)\s*([^()<]+?)(?=\s*\(\d+\)|<\/p>|$)/g)]
+      if (parens.length >= 2) steps = parens.map((m, i) => ({ name: `Step ${i + 1}`, text: stripTags(m[2]) }))
+    }
+    if (steps.length >= 2) {
+      const howTo = {
+        '@context': 'https://schema.org', '@type': 'HowTo',
+        name: article.title,
+        description: stripTags(article.body).substring(0, 200),
+        step: steps.map((s, i) => ({ '@type': 'HowToStep', position: i + 1, name: s.name, text: s.text })),
+      }
+      howToSchema = `<script type="application/ld+json">${JSON.stringify(howTo)}</script>`
+    }
+  }
   // Related articles in the same category, excluding self
   const related = Object.entries(HELP_ARTICLES)
     .filter(([s, a]) => s !== slug && a.category === article.category)
@@ -17134,9 +17161,6 @@ function getBlogPostHTML(post?: any, slug?: string) {
   const keywords = post?.tags || ''
   const blogSchema = post ? `<script type="application/ld+json">
   {"@context":"https://schema.org","@type":"BlogPosting","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":${authorSchema},"publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://www.roofmanager.ca/static/logo.png?v=20260504"}},"mainEntityOfPage":{"@type":"WebPage","@id":"https://www.roofmanager.ca/blog/${slug || ''}"},"inLanguage":"en","articleSection":"${(post.category || '').replace(/"/g, '\\"')}","keywords":"${keywords.replace(/"/g, '\\"')}","wordCount":${wordCount}}
-  </script>
-  <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"Article","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":${authorSchema},"publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://www.roofmanager.ca/static/logo.png?v=20260504"}},"mainEntityOfPage":{"@type":"WebPage","@id":"https://www.roofmanager.ca/blog/${slug || ''}"},"inLanguage":"en","articleSection":"${(post.category || '').replace(/"/g, '\\"')}","keywords":"${keywords.replace(/"/g, '\\"')}","wordCount":${wordCount}}
   </script>` : ''
   const breadcrumbSchema = slug ? `<script type="application/ld+json">
 {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Blog","item":"https://www.roofmanager.ca/blog"},{"@type":"ListItem","position":3,"name":"${(post?.title || '').replace(/"/g, '\\"')}","item":"https://www.roofmanager.ca/blog/${slug}"}]}

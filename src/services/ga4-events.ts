@@ -300,6 +300,27 @@ export function trackOrderPlaced(
   }, userId)
 }
 
+/**
+ * Track repeat order — fires when an existing customer places a 2nd+ order.
+ * `daysSinceFirstOrder` lets the cohort dashboard plot "first → second" timing.
+ */
+export function trackRepeatOrder(
+  env: any,
+  orderId: string,
+  userId: string,
+  daysSinceFirstOrder: number,
+  amountCents: number = 0,
+  extra: GA4EventParams = {}
+): Promise<boolean> {
+  return trackGA4(env, 'repeat_order', {
+    transaction_id: orderId,
+    days_since_first_order: daysSinceFirstOrder,
+    amount_cents: amountCents,
+    category: 'retention',
+    ...extra
+  }, userId)
+}
+
 /** Track API usage (Solar API, Gemini, etc.) for cost monitoring */
 export function trackApiUsage(
   env: any,

@@ -229,13 +229,23 @@ leadCaptureRoutes.post('/asset-report/lead', async (c) => {
     extra: { address, building_count: buildings }
   }).catch((e: any) => console.error('[asset-report/lead] email notification failed:', e?.message || e))
 
-  // Fire server-side Meta CAPI Lead event (non-blocking)
+  // Fire server-side Meta CAPI Lead event (non-blocking).
+  // Pass the browser's _fbp/_fbc cookies + IP/UA so Meta can match this
+  // server event to the pixel-side fbq() call. This raises Event Match
+  // Quality, which is what makes ROAS reporting accurate.
+  const _cookieHeader = c.req.header('Cookie') || ''
+  const _fbpMatch = _cookieHeader.match(/(?:^|;\s*)_fbp=([^;]+)/)
+  const _fbcMatch = _cookieHeader.match(/(?:^|;\s*)_fbc=([^;]+)/)
   sendMetaConversion(c.env, {
     eventName: 'Lead',
     email: String(body.email).toLowerCase().trim(),
     sourcePage: `asset_report:${source}`,
-    sourceUrl: 'https://www.roofmanager.ca',
+    sourceUrl: c.req.header('Referer') || 'https://www.roofmanager.ca',
     customData: { content_name: 'asset_report', lead_type: 'sample_report' },
+    clientIp: c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim(),
+    clientUserAgent: c.req.header('User-Agent') || undefined,
+    fbp: _fbpMatch ? decodeURIComponent(_fbpMatch[1]) : undefined,
+    fbc: _fbcMatch ? decodeURIComponent(_fbcMatch[1]) : undefined,
   }).catch((e) => console.warn('[Meta CAPI asset-lead]', (e && e.message) || e))
 
   return c.json({ success: true })

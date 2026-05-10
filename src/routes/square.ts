@@ -3,7 +3,8 @@ import { getCustomerSessionToken } from '../lib/session-tokens'
 import type { Bindings } from '../types'
 import { generateReportForOrder, enhanceReportInline, generateAIImageryForReport } from './reports'
 import { isDevAccount } from './customer-auth'
-import { trackPaymentCompleted, trackCreditPurchase, trackFirstReportStarted } from '../services/ga4-events'
+import { trackPaymentCompleted, trackCreditPurchase, trackFirstReportStarted, trackRepeatOrder } from '../services/ga4-events'
+import { recordCustomerOrder } from '../services/customer-activity'
 import { resolveTeamOwner } from './team'
 import { validateAdminSession } from './auth'
 import { recordAndNotify } from '../services/admin-notifications'
@@ -985,6 +986,16 @@ squareRoutes.post('/use-credit', async (c) => {
 
     const newOrderId = result.meta.last_row_id as number
 
+    // Mark first-order flag + bump customer.last_order_at/last_active_at,
+    // and fire GA4 repeat_order with cohort timing if this isn't the first.
+    try {
+      const activity = await recordCustomerOrder(c.env.DB, newOrderId, customer.customer_id, customer.email)
+      if (!activity.is_first_order && activity.days_since_first_order !== null) {
+        trackRepeatOrder(c.env as any, String(newOrderId), String(customer.customer_id), activity.days_since_first_order, Math.round(price * 100))
+          .catch((e) => console.warn('[ga4] trackRepeatOrder failed:', e?.message || e))
+      }
+    } catch (e: any) { console.warn('[customer-activity] recordCustomerOrder failed:', e?.message) }
+
     // Persist the super-admin notification synchronously so a Worker
     // crash/timeout can't make this order invisible to admin. Email is
     // attempted inside recordAndNotify (best-effort) — DB row is the
@@ -1371,6 +1382,15 @@ squareRoutes.post('/webhook', async (c) => {
           ).run()
 
           const webhookOrderId = orderResult.meta.last_row_id as number
+
+          // Track activity + fire GA4 repeat_order if applicable.
+          try {
+            const activity = await recordCustomerOrder(c.env.DB, webhookOrderId, customerId, custData?.email || null)
+            if (!activity.is_first_order && activity.days_since_first_order !== null) {
+              trackRepeatOrder(c.env as any, String(webhookOrderId), String(customerId), activity.days_since_first_order, Math.round(price * 100))
+                .catch((e) => console.warn('[ga4] trackRepeatOrder failed:', e?.message || e))
+            }
+          } catch (e: any) { console.warn('[customer-activity] recordCustomerOrder (webhook) failed:', e?.message) }
 
           // Persist super-admin notification + email (best-effort).
           const notifyPromise = recordAndNotify(c.env, {
@@ -1960,6 +1980,15 @@ squareRoutes.get('/verify-payment', async (c) => {
           ).run()
 
           const newOrderId = orderResult.meta.last_row_id as number
+
+          // Track activity + fire GA4 repeat_order if applicable.
+          try {
+            const activity = await recordCustomerOrder(c.env.DB, newOrderId, customer.customer_id, custData?.email || null)
+            if (!activity.is_first_order && activity.days_since_first_order !== null) {
+              trackRepeatOrder(c.env as any, String(newOrderId), String(customer.customer_id), activity.days_since_first_order, Math.round(price * 100))
+                .catch((e) => console.warn('[ga4] trackRepeatOrder failed:', e?.message || e))
+            }
+          } catch (e: any) { console.warn('[customer-activity] recordCustomerOrder (verify) failed:', e?.message) }
 
           // Persist super-admin notification + email (best-effort).
           const notifyPromise = recordAndNotify(c.env, {

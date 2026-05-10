@@ -141,6 +141,7 @@
   async function loadBiView(view) {
     switch (view) {
       case 'overview': await loadOverview(); break
+      case 'sales': await loadSalesSnapshot(); break
       case 'traffic': await loadTraffic(); break
       case 'revenue': await loadRevenue(); break
       case 'funnel': await loadFunnel(); break
@@ -149,6 +150,142 @@
       case 'blog': await loadBlogAnalytics(); break
       default: document.getElementById('bi-main').innerHTML = '<p class="text-gray-500">Unknown view</p>'
     }
+  }
+
+  // ── SALES SNAPSHOT ───────────────────────────────────────────
+  // Three "who-to-call-today" tiles backed by /api/admin/bi/sales-snapshot.
+  async function loadSalesSnapshot() {
+    const main = document.getElementById('bi-main')
+    if (!main) return
+    const r = await biFetch('/api/admin/bi/sales-snapshot')
+    if (!r) return
+    const j = await r.json()
+    if (!j || j.error) {
+      main.innerHTML = `<p class="text-red-400">Error loading sales snapshot: ${j && j.error || 'unknown'}</p>`
+      return
+    }
+    const tile = (color, icon, title, desc, count) => `
+      <div class="bg-slate-800/60 border border-slate-700 rounded-2xl p-5 flex flex-col gap-2">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center text-${color}-300 bg-${color}-500/15 border border-${color}-700/40">
+            <i class="fas ${icon}"></i>
+          </div>
+          <div class="flex-1">
+            <div class="text-xs uppercase tracking-wide text-gray-400">${title}</div>
+            <div class="text-3xl font-bold text-white">${count}</div>
+          </div>
+        </div>
+        <div class="text-xs text-gray-500">${desc}</div>
+      </div>`
+
+    const list = (rows, render) => rows.length === 0
+      ? `<div class="text-sm text-gray-500 italic px-4 py-6 text-center">No matching rows right now — that's a good thing.</div>`
+      : rows.map(render).join('')
+
+    function escapeHtml(s) {
+      return String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+    }
+    function rowAtRisk(c) {
+      return `<div class="px-4 py-3 border-b border-slate-800 hover:bg-slate-800/40 flex items-center gap-3 cursor-pointer" onclick="openCustomer360(${c.id})">
+        <div class="flex-1 min-w-0">
+          <div class="text-sm text-white font-medium truncate">${escapeHtml(c.name || c.email)}</div>
+          <div class="text-xs text-gray-500 truncate">${escapeHtml(c.email)} · ${escapeHtml(c.company_name || '—')} · ${escapeHtml(c.subscription_plan || c.subscription_status || '—')}</div>
+        </div>
+        <div class="text-right shrink-0">
+          <div class="text-xs text-red-300">${c.days_silent}d silent · ${c.days_since_order}d since order</div>
+          ${c.phone ? `<div class="text-xs text-gray-500"><i class="fas fa-phone mr-1"></i>${escapeHtml(c.phone)}</div>` : ''}
+        </div>
+      </div>`
+    }
+    function rowStuck(c) {
+      const utm = c.lead_utm_source || c.lead_source || (c.gclid ? 'google_ads' : null)
+      return `<div class="px-4 py-3 border-b border-slate-800 hover:bg-slate-800/40 flex items-center gap-3 cursor-pointer" onclick="openCustomer360(${c.id})">
+        <div class="flex-1 min-w-0">
+          <div class="text-sm text-white font-medium truncate">${escapeHtml(c.name || c.email)}</div>
+          <div class="text-xs text-gray-500 truncate">${escapeHtml(c.email)} · ${escapeHtml(c.company_name || '—')}${utm ? ' · src: ' + escapeHtml(utm) : ''}</div>
+        </div>
+        <div class="text-right shrink-0">
+          <div class="text-xs text-amber-300">${c.days_since_signup}d ago · ${c.credits_remaining} credits left</div>
+          ${c.phone ? `<div class="text-xs text-gray-500"><i class="fas fa-phone mr-1"></i>${escapeHtml(c.phone)}</div>` : ''}
+        </div>
+      </div>`
+    }
+    function rowHot(c) {
+      const score = c.lead_score || 0
+      const scoreCls = score >= 70 ? 'text-emerald-300' : score >= 40 ? 'text-amber-300' : 'text-gray-400'
+      return `<div class="px-4 py-3 border-b border-slate-800 hover:bg-slate-800/40 flex items-center gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="text-sm text-white font-medium truncate">${escapeHtml(c.name)}${c.employees ? ` <span class="text-xs text-emerald-300 ml-1">${escapeHtml(c.employees)} ppl</span>` : ''}</div>
+          <div class="text-xs text-gray-500 truncate">${escapeHtml(c.email)} · ${escapeHtml(c.company || '—')}${c.interest ? ' · interest: ' + escapeHtml(c.interest) : ''}</div>
+        </div>
+        <div class="text-right shrink-0">
+          <div class="text-xs ${scoreCls} font-bold">score: ${score}</div>
+          <div class="text-xs text-emerald-300">${c.hours_ago}h ago</div>
+          ${c.phone ? `<div class="text-xs text-gray-500"><i class="fas fa-phone mr-1"></i>${escapeHtml(c.phone)}</div>` : ''}
+        </div>
+      </div>`
+    }
+
+    main.innerHTML = `
+      <div class="space-y-6">
+        <div>
+          <h2 class="text-2xl font-bold text-white mb-1">Who to call today</h2>
+          <p class="text-sm text-gray-500">Three high-leverage outreach lists, generated live from the database. Updated every page load.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          ${tile('red', 'fa-fire', 'At-Risk Churn', j.at_risk_churn.description, j.at_risk_churn.count)}
+          ${tile('amber', 'fa-bed', 'Stuck Signups', j.stuck_signups.description, j.stuck_signups.count)}
+          ${tile('emerald', 'fa-bolt', 'Hot Inbound (24h)', j.hot_inbound_leads.description, j.hot_inbound_leads.count)}
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-800 bg-slate-900/80 flex items-center gap-2">
+              <i class="fas fa-fire text-red-300"></i>
+              <span class="text-sm font-semibold text-white">At-Risk Churn (${j.at_risk_churn.count})</span>
+            </div>
+            <div class="max-h-[600px] overflow-y-auto">${list(j.at_risk_churn.list, rowAtRisk)}</div>
+          </div>
+          <div class="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-800 bg-slate-900/80 flex items-center gap-2">
+              <i class="fas fa-bed text-amber-300"></i>
+              <span class="text-sm font-semibold text-white">Stuck Signups (${j.stuck_signups.count})</span>
+            </div>
+            <div class="max-h-[600px] overflow-y-auto">${list(j.stuck_signups.list, rowStuck)}</div>
+          </div>
+          <div class="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-800 bg-slate-900/80 flex items-center gap-2">
+              <i class="fas fa-bolt text-emerald-300"></i>
+              <span class="text-sm font-semibold text-white">Hot Inbound — last 24h (${j.hot_inbound_leads.count})</span>
+            </div>
+            <div class="max-h-[600px] overflow-y-auto">${list(j.hot_inbound_leads.list, rowHot)}</div>
+          </div>
+        </div>
+
+        <div class="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-800 bg-slate-900/80 flex items-center gap-2">
+            <i class="fas fa-comments text-purple-300"></i>
+            <span class="text-sm font-semibold text-white">Top Objections — last 30d (${j.objections_30d.count} extracted)</span>
+            <span class="text-xs text-gray-500 ml-auto">${escapeHtml(j.objections_30d.description)}</span>
+          </div>
+          ${j.objections_30d.top.length === 0
+            ? `<div class="text-sm text-gray-500 italic px-4 py-6 text-center">No objections extracted yet — they'll show up here once cold calls come in.</div>`
+            : `<div class="divide-y divide-slate-800">
+                ${j.objections_30d.top.map((o) => `
+                  <div class="px-4 py-3">
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="text-xs font-bold uppercase tracking-wide text-purple-300">${escapeHtml(o.category)}</span>
+                      <span class="text-xs text-gray-500">${o.cnt} call${o.cnt === 1 ? '' : 's'}</span>
+                    </div>
+                    <div class="text-sm text-white">${escapeHtml(o.example_text || '')}</div>
+                    ${o.example_excerpt ? `<div class="text-xs text-gray-500 italic mt-1">"${escapeHtml(o.example_excerpt)}"</div>` : ''}
+                  </div>`).join('')}
+              </div>`}
+        </div>
+
+        <div class="text-xs text-gray-500 text-right">Generated at ${new Date(j.generated_at).toLocaleString()}</div>
+      </div>`
   }
 
   // ── OVERVIEW ─────────────────────────────────────────────────
@@ -941,8 +1078,152 @@
   }
   window.biLoadBlog = loadBlogAnalytics
 
+  // ── Customer 360 drawer ───────────────────────────────────────
+  // Slide-in panel that fetches /customer-360/:id and shows everything
+  // the founder needs in one place: profile, lead origin, orders,
+  // Secretary state, lifetime spend, calls, objections, health score.
+  async function openCustomer360(customerId) {
+    let drawer = document.getElementById('customer-360-drawer')
+    if (!drawer) {
+      drawer = document.createElement('div')
+      drawer.id = 'customer-360-drawer'
+      drawer.className = 'fixed inset-0 z-50 flex justify-end'
+      drawer.style.background = 'rgba(0,0,0,0.6)'
+      drawer.innerHTML = `
+        <div class="w-full max-w-3xl bg-slate-900 border-l border-slate-700 overflow-y-auto" id="c360-panel">
+          <div class="p-6 text-gray-400">Loading…</div>
+        </div>`
+      drawer.addEventListener('click', (ev) => { if (ev.target === drawer) drawer.remove() })
+      document.body.appendChild(drawer)
+    }
+    const panel = drawer.querySelector('#c360-panel')
+    panel.innerHTML = `<div class="p-6 text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Loading customer ${customerId}…</div>`
+    const r = await biFetch('/api/admin/bi/customer-360/' + customerId)
+    if (!r) return
+    const j = await r.json()
+    if (!j || j.error) { panel.innerHTML = `<div class="p-6 text-red-400">${j && j.error || 'load failed'}</div>`; return }
+
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) }
+    function fmtDate(s) { return s ? new Date(s).toLocaleDateString() : '—' }
+    function fmtMoney(cents) { return '$' + ((cents || 0) / 100).toFixed(2) }
+    const cust = j.customer
+    const h = j.health
+    const scoreColor = h.score >= 70 ? 'emerald' : h.score >= 40 ? 'amber' : h.score >= 20 ? 'orange' : 'red'
+
+    panel.innerHTML = `
+      <div class="sticky top-0 bg-slate-900/95 backdrop-blur border-b border-slate-700 p-5 flex items-center gap-3">
+        <button onclick="document.getElementById('customer-360-drawer').remove()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+        <div class="flex-1">
+          <div class="text-xl font-bold text-white">${esc(cust.name || cust.email)}</div>
+          <div class="text-xs text-gray-500">${esc(cust.email)} · ${esc(cust.company_name || '—')} · #${cust.id}</div>
+        </div>
+        <div class="text-right">
+          <div class="text-3xl font-bold text-${scoreColor}-300">${h.score}</div>
+          <div class="text-xs text-gray-500 uppercase tracking-wide">${h.band.replace('_', ' ')}</div>
+        </div>
+      </div>
+
+      <div class="p-5 space-y-5">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="bg-slate-800/60 border border-slate-700 rounded-lg p-3">
+            <div class="text-xs text-gray-500">Last login</div>
+            <div class="text-sm text-white font-medium">${h.days_since_login >= 9999 ? 'never' : h.days_since_login + 'd ago'}</div>
+          </div>
+          <div class="bg-slate-800/60 border border-slate-700 rounded-lg p-3">
+            <div class="text-xs text-gray-500">Last order</div>
+            <div class="text-sm text-white font-medium">${h.days_since_order == null ? 'none' : h.days_since_order + 'd ago'}</div>
+          </div>
+          <div class="bg-slate-800/60 border border-slate-700 rounded-lg p-3">
+            <div class="text-xs text-gray-500">Lifetime spend</div>
+            <div class="text-sm text-white font-medium">$${(j.spend.lifetime_revenue || 0).toFixed(0)}</div>
+          </div>
+          <div class="bg-slate-800/60 border border-slate-700 rounded-lg p-3">
+            <div class="text-xs text-gray-500">Subscription</div>
+            <div class="text-sm text-white font-medium">${esc(cust.subscription_plan || cust.subscription_tier || cust.subscription_status || 'none')}</div>
+          </div>
+        </div>
+
+        <div class="bg-slate-800/40 border border-slate-700 rounded-lg p-4">
+          <div class="text-xs uppercase text-gray-500 mb-2">Lead origin</div>
+          ${j.lead ? `
+            <div class="text-sm text-white">${esc(j.lead.lead_table)} · ${esc(j.lead.name || '—')} ${j.lead.utm_source ? '· utm: ' + esc(j.lead.utm_source) : ''}</div>
+            <div class="text-xs text-gray-500 mt-1">${j.lead.message ? esc(String(j.lead.message).slice(0, 250)) : 'No initial message'}</div>
+            <div class="text-xs text-gray-600 mt-1">First seen: ${fmtDate(j.lead.created_at)} · matched: ${fmtDate(cust.lead_matched_at)}</div>
+          ` : `<div class="text-sm text-gray-500 italic">Not linked to any lead row.</div>`}
+        </div>
+
+        ${j.attribution ? `
+          <div class="bg-slate-800/40 border border-slate-700 rounded-lg p-4">
+            <div class="text-xs uppercase text-gray-500 mb-2">Attribution</div>
+            <div class="text-sm text-white">First touch: ${esc(j.attribution.first_touch_utm_source || j.attribution.first_touch_referrer_domain || 'direct')} · ${fmtDate(j.attribution.first_touch_at)}</div>
+            <div class="text-xs text-gray-500 mt-1">Days to convert: ${j.attribution.days_to_convert ?? '—'} · Touches: ${j.attribution.touch_count ?? '—'}</div>
+          </div>
+        ` : ''}
+
+        ${j.secretary ? `
+          <div class="bg-slate-800/40 border border-slate-700 rounded-lg p-4">
+            <div class="text-xs uppercase text-gray-500 mb-2">Secretary subscription</div>
+            <div class="text-sm text-white">${esc(j.secretary.status)} · ${fmtMoney(j.secretary.monthly_price_cents)}/mo</div>
+            <div class="text-xs text-gray-500 mt-1">Trial ${fmtDate(j.secretary.trial_started_at)} → ${fmtDate(j.secretary.trial_ends_at)}</div>
+          </div>
+        ` : ''}
+
+        <div class="bg-slate-800/40 border border-slate-700 rounded-lg overflow-hidden">
+          <div class="px-4 py-2 border-b border-slate-700 text-xs uppercase text-gray-500">Orders (${j.orders.length})</div>
+          ${j.orders.length === 0 ? '<div class="p-4 text-sm text-gray-500 italic">No orders yet.</div>' : `
+            <div class="max-h-64 overflow-y-auto">
+              ${j.orders.map((o) => `
+                <div class="px-4 py-2 border-b border-slate-800 flex items-center gap-3 text-sm">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-white truncate">${esc(o.order_number)} ${o.is_first_order ? '<span class="text-xs text-yellow-300 ml-1">FIRST</span>' : ''}</div>
+                    <div class="text-xs text-gray-500 truncate">${esc(o.property_address)} · ${esc(o.service_tier)}</div>
+                  </div>
+                  <div class="text-right shrink-0">
+                    <div class="text-white">$${(o.price || 0).toFixed(0)}</div>
+                    <div class="text-xs ${o.payment_status === 'paid' ? 'text-emerald-300' : 'text-amber-300'}">${esc(o.payment_status)}</div>
+                  </div>
+                </div>`).join('')}
+            </div>`}
+        </div>
+
+        <div class="bg-slate-800/40 border border-slate-700 rounded-lg overflow-hidden">
+          <div class="px-4 py-2 border-b border-slate-700 text-xs uppercase text-gray-500">Cold calls (${j.calls.length})</div>
+          ${j.calls.length === 0 ? '<div class="p-4 text-sm text-gray-500 italic">No calls logged.</div>' : `
+            <div class="max-h-48 overflow-y-auto">
+              ${j.calls.map((cc) => `
+                <div class="px-4 py-2 border-b border-slate-800 text-sm">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs px-2 py-0.5 rounded ${cc.call_outcome === 'interested' || cc.call_outcome === 'demo_scheduled' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-700 text-gray-300'}">${esc(cc.call_outcome || cc.call_status || '—')}</span>
+                    <span class="text-xs text-gray-500">${fmtDate(cc.started_at)} · ${cc.call_duration_seconds || 0}s</span>
+                  </div>
+                  ${cc.call_summary ? `<div class="text-xs text-gray-400 mt-1">${esc(cc.call_summary)}</div>` : ''}
+                </div>`).join('')}
+            </div>`}
+        </div>
+
+        ${j.objections.length > 0 ? `
+          <div class="bg-slate-800/40 border border-slate-700 rounded-lg overflow-hidden">
+            <div class="px-4 py-2 border-b border-slate-700 text-xs uppercase text-gray-500">Objections raised (${j.objections.length})</div>
+            <div class="max-h-48 overflow-y-auto">
+              ${j.objections.map((ob) => `
+                <div class="px-4 py-2 border-b border-slate-800 text-sm">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300">${esc(ob.category)}</span>
+                    <span class="text-xs text-gray-500">${fmtDate(ob.extracted_at)}</span>
+                  </div>
+                  <div class="text-xs text-gray-300 mt-1">${esc(ob.objection_text)}</div>
+                  ${ob.raw_excerpt ? `<div class="text-xs text-gray-500 italic mt-1">"${esc(ob.raw_excerpt)}"</div>` : ''}
+                </div>`).join('')}
+            </div>
+          </div>` : ''}
+
+        <div class="text-xs text-gray-600 italic pb-4">Health factors → login: ${h.factors.login} · order: ${h.factors.order} · payment: ${h.factors.payment} · trial: ${h.factors.trial}</div>
+      </div>`
+  }
+
   // ── Expose globals ────────────────────────────────────────────
   window.biSetView = biSetView
+  window.openCustomer360 = openCustomer360
 
   // ── Init ─────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {

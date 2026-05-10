@@ -26,6 +26,14 @@ async function sendMetaConversion(env: any, opts: {
   customData?: Record<string, any>
   testEventCode?: string
   eventId?: string  // pass to dedupe with client-side fbq('track', '...', {eventID: ...})
+  // Server-side match-quality improvers — fill these in from request headers
+  // and the _fbp/_fbc cookies on the user's browser. Meta uses them for
+  // deterministic matching, which directly raises EMQ score and ROAS reporting.
+  clientIp?: string
+  clientUserAgent?: string
+  fbp?: string  // _fbp cookie value
+  fbc?: string  // _fbc cookie value (built from fbclid query param)
+  externalId?: string  // your customer/visitor id for cross-device dedup
 }): Promise<{ success: boolean; error?: string; fbtrace_id?: string; http_status_code?: number; event_id?: string }> {
   const pixelId = env.META_PIXEL_ID || ''
   const accessToken = env.META_CAPI_ACCESS_TOKEN || ''
@@ -62,6 +70,15 @@ async function sendMetaConversion(env: any, opts: {
   const userData: Record<string, any> = {}
   if (opts.email) userData.em = [await sha256(opts.email)]
   if (opts.phone) userData.ph = [await sha256(opts.phone.replace(/\D/g, ''))]
+  // Higher-fidelity match keys — Meta uses these unhashed for deterministic
+  // matching against pixel-side _fbp/_fbc and IP/UA pairs. Sending them
+  // raises the Event Match Quality score, which is the lever that improves
+  // ROAS reporting + ad delivery for advantage+ campaigns.
+  if (opts.clientIp) userData.client_ip_address = opts.clientIp
+  if (opts.clientUserAgent) userData.client_user_agent = opts.clientUserAgent
+  if (opts.fbp) userData.fbp = opts.fbp
+  if (opts.fbc) userData.fbc = opts.fbc
+  if (opts.externalId) userData.external_id = [await sha256(opts.externalId)]
 
   const payload: Record<string, any> = {
     data: [{

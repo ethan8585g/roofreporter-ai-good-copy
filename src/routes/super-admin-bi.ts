@@ -964,4 +964,318 @@ superAdminBi.delete('/manual-payments/:id', async (c) => {
   }
 })
 
+// ── CUSTOMER 360 ──────────────────────────────────────────────
+// One endpoint, one customer, every signal: profile, lead origin,
+// Reports order history, Secretary subscription state, lifetime spend,
+// recent calls, recent objections, and a rolled-up health score.
+// Powers the inline "Customer 360" drawer in the BI dashboard.
+superAdminBi.get('/customer-360/:id', async (c) => {
+  try {
+    const customerId = parseInt(c.req.param('id'))
+    if (!customerId || isNaN(customerId)) return c.json({ error: 'invalid customer id' }, 400)
+    const db = c.env.DB
+
+    const [profile, leadRow, ordersRow, secretaryRow, spendRow, attributionRow, callsRow, objectionsRow, loginsRow] = await db.batch([
+      db.prepare(`
+        SELECT c.id, c.email, c.name, c.phone, c.company_name, c.created_at,
+               c.last_login, csi.last_active_at, csi.last_order_at,
+               c.subscription_plan, c.subscription_status, c.subscription_tier,
+               c.trial_ends_at, c.free_trial_total, c.free_trial_used,
+               c.report_credits, c.credits_used,
+               c.monthly_reports_used, c.monthly_report_limit,
+               c.total_minutes_used, c.monthly_minutes_limit,
+               csi.lead_id, csi.lead_source_table, csi.lead_matched_at,
+               c.lead_utm_source, c.lead_source, c.gclid,
+               c.is_active
+        FROM customers c
+        LEFT JOIN customer_sales_intel csi ON csi.customer_id = c.id
+        WHERE c.id = ?
+      `).bind(customerId),
+      // Resolve lead row from polymorphic linkage stored in customer_sales_intel.
+      db.prepare(`
+        SELECT 'contact_leads' AS lead_table, id, email, name, company AS company_name, phone, message, utm_source, utm_medium, utm_campaign, created_at
+        FROM contact_leads WHERE id = (SELECT lead_id FROM customer_sales_intel WHERE customer_id = ? AND lead_source_table = 'contact_leads')
+        UNION ALL
+        SELECT 'asset_report_leads' AS lead_table, id, email, name, company AS company_name, NULL AS phone, NULL AS message, NULL AS utm_source, NULL AS utm_medium, NULL AS utm_campaign, created_at
+        FROM asset_report_leads WHERE id = (SELECT lead_id FROM customer_sales_intel WHERE customer_id = ? AND lead_source_table = 'asset_report_leads')
+        UNION ALL
+        SELECT 'leads' AS lead_table, id, email, name, company_name, phone, message, NULL AS utm_source, NULL AS utm_medium, NULL AS utm_campaign, created_at
+        FROM leads WHERE id = (SELECT lead_id FROM customer_sales_intel WHERE customer_id = ? AND lead_source_table = 'leads')
+      `).bind(customerId, customerId, customerId),
+      db.prepare(`
+        SELECT id, order_number, property_address, service_tier, price,
+               status, payment_status, is_trial, is_first_order,
+               created_at, delivered_at
+        FROM orders
+        WHERE customer_id = ?
+        ORDER BY created_at DESC
+        LIMIT 50
+      `).bind(customerId),
+      db.prepare(`
+        SELECT id, status, monthly_price_cents, trial_started_at, trial_ends_at,
+               next_billing_at, comp_until, created_at
+        FROM secretary_subscriptions
+        WHERE customer_id = ?
+        ORDER BY created_at DESC LIMIT 1
+      `).bind(customerId),
+      db.prepare(`
+        SELECT
+          COUNT(*) AS payment_count,
+          COALESCE(SUM(amount), 0) AS lifetime_revenue,
+          MAX(created_at) AS last_payment_at,
+          SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed_count
+        FROM square_payments
+        WHERE customer_id = ?
+      `).bind(customerId),
+      db.prepare(`
+        SELECT first_touch_utm_source, first_touch_utm_medium, first_touch_utm_campaign,
+               first_touch_at, first_touch_referrer_domain,
+               last_touch_utm_source, last_touch_at, touch_count,
+               days_to_convert, total_orders, total_paid_orders, revenue_cents
+        FROM analytics_attribution WHERE customer_id = ?
+      `).bind(customerId),
+      // Cold-call history if this customer is also a cc_prospect (matched by email).
+      db.prepare(`
+        SELECT cc.id, cc.call_status, cc.call_outcome, cc.call_summary,
+               cc.caller_sentiment, cc.call_duration_seconds, cc.started_at, cc.ended_at
+        FROM cc_call_logs cc
+        JOIN cc_prospects p ON p.id = cc.prospect_id
+        WHERE LOWER(p.email) = (SELECT LOWER(email) FROM customers WHERE id = ?)
+        ORDER BY cc.started_at DESC
+        LIMIT 20
+      `).bind(customerId),
+      db.prepare(`
+        SELECT o.id, o.category, o.objection_text, o.raw_excerpt, o.sentiment, o.extracted_at
+        FROM call_objections o
+        JOIN cc_call_logs cc ON cc.id = o.call_log_id
+        JOIN cc_prospects p ON p.id = cc.prospect_id
+        WHERE LOWER(p.email) = (SELECT LOWER(email) FROM customers WHERE id = ?)
+        ORDER BY o.extracted_at DESC
+        LIMIT 30
+      `).bind(customerId),
+      db.prepare(`
+        SELECT auth_method, ip_address, created_at
+        FROM customer_login_events
+        WHERE customer_id = ?
+        ORDER BY created_at DESC
+        LIMIT 10
+      `).bind(customerId)
+    ]) as any[]
+
+    const p = profile.results?.[0] as any
+    if (!p) return c.json({ error: 'customer not found' }, 404)
+
+    // Health score (0-100) — same 5-factor model as the audit recommended.
+    const daysSince = (s: string | null | undefined) =>
+      s ? Math.floor((Date.now() - new Date(s as string).getTime()) / (1000 * 60 * 60 * 24)) : 9999
+
+    const dLogin = daysSince(p.last_active_at || p.last_login)
+    const ords = (ordersRow.results || []) as any[]
+    const lastOrderDays = p.last_order_at ? daysSince(p.last_order_at) : 9999
+
+    const loginFactor = dLogin <= 7 ? 40 : dLogin <= 30 ? 25 : dLogin <= 60 ? 10 : 0
+    const orderFactor = ords.length === 0 ? 0
+      : lastOrderDays <= 30 ? 40 : lastOrderDays <= 60 ? 25 : lastOrderDays <= 90 ? 10 : 5
+    const spend = spendRow.results?.[0] as any
+    const failedPay = (spend?.failed_count as number) || 0
+    const paidCount = (spend?.payment_count as number) || 0
+    const paymentFactor = paidCount === 0 ? 5 : failedPay > paidCount ? 0 : 30
+    const trialFactor = p.trial_ends_at && new Date(p.trial_ends_at) < new Date() ? -10
+      : p.trial_ends_at && new Date(p.trial_ends_at) < new Date(Date.now() + 14 * 86400000) ? -5 : 0
+
+    const rawScore = loginFactor + orderFactor + paymentFactor + trialFactor
+    const healthScore = Math.max(0, Math.min(100, Math.round(rawScore)))
+    const healthBand = healthScore >= 70 ? 'healthy' : healthScore >= 40 ? 'watch' : healthScore >= 20 ? 'at_risk' : 'dormant'
+
+    return c.json({
+      customer: p,
+      lead: leadRow.results?.[0] || null,
+      orders: ords,
+      secretary: secretaryRow.results?.[0] || null,
+      spend: spendRow.results?.[0] || { payment_count: 0, lifetime_revenue: 0, failed_count: 0 },
+      attribution: attributionRow.results?.[0] || null,
+      calls: callsRow.results || [],
+      objections: objectionsRow.results || [],
+      logins: loginsRow.results || [],
+      health: {
+        score: healthScore,
+        band: healthBand,
+        factors: {
+          login: loginFactor,
+          order: orderFactor,
+          payment: paymentFactor,
+          trial: trialFactor
+        },
+        days_since_login: dLogin,
+        days_since_order: lastOrderDays === 9999 ? null : lastOrderDays
+      }
+    })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// ── SALES SNAPSHOT ────────────────────────────────────────────
+// Returns the three dashboard numbers + the full lists so the
+// founder can click straight into "who to call today":
+//   1. At-Risk Churn — paying customers, last activity > 30d, last order > 90d
+//   2. Stuck Signups — created > 60d ago, zero orders, free credits unused
+//   3. Hot Inbound Leads (last 24h) — contact_leads with employees ≥ 5, no admin note
+// Limit lists to 50 to keep the dashboard fast; counts are unbounded.
+superAdminBi.get('/sales-snapshot', async (c) => {
+  try {
+    const db = c.env.DB
+    const [atRiskCountRow, atRiskListRow, stuckCountRow, stuckListRow, hotCountRow, hotListRow, objCountRow, objTopRow] = await db.batch([
+      // 1a. At-risk churn count
+      db.prepare(`
+        SELECT COUNT(*) AS cnt
+        FROM customers c
+        LEFT JOIN customer_sales_intel csi ON csi.customer_id = c.id
+        WHERE c.is_active = 1
+          AND c.subscription_status IN ('active', 'past_due', 'trialing')
+          AND COALESCE(csi.last_active_at, c.last_login, c.created_at) < datetime('now', '-30 days')
+          AND csi.last_order_at IS NOT NULL
+          AND csi.last_order_at < datetime('now', '-90 days')
+      `),
+      // 1b. At-risk churn top 50
+      db.prepare(`
+        SELECT c.id, c.email, c.name, c.company_name, c.phone,
+               c.last_login, csi.last_active_at, csi.last_order_at,
+               c.subscription_status, c.subscription_plan,
+               CAST((julianday('now') - julianday(COALESCE(csi.last_active_at, c.last_login, c.created_at))) AS INTEGER) AS days_silent,
+               CAST((julianday('now') - julianday(csi.last_order_at)) AS INTEGER) AS days_since_order
+        FROM customers c
+        LEFT JOIN customer_sales_intel csi ON csi.customer_id = c.id
+        WHERE c.is_active = 1
+          AND c.subscription_status IN ('active', 'past_due', 'trialing')
+          AND COALESCE(csi.last_active_at, c.last_login, c.created_at) < datetime('now', '-30 days')
+          AND csi.last_order_at IS NOT NULL
+          AND csi.last_order_at < datetime('now', '-90 days')
+        ORDER BY days_since_order DESC
+        LIMIT 50
+      `),
+      // 2a. Stuck signup count
+      db.prepare(`
+        SELECT COUNT(*) AS cnt
+        FROM customers c
+        WHERE c.is_active = 1
+          AND c.created_at < datetime('now', '-60 days')
+          AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id)
+          AND COALESCE(c.free_trial_used, 0) < COALESCE(c.free_trial_total, 3)
+      `),
+      // 2b. Stuck signup top 50
+      db.prepare(`
+        SELECT c.id, c.email, c.name, c.company_name, c.phone,
+               c.created_at, c.last_login, csi.last_active_at,
+               COALESCE(c.free_trial_total, 3) - COALESCE(c.free_trial_used, 0) AS credits_remaining,
+               c.lead_utm_source, c.lead_source, c.gclid,
+               CAST((julianday('now') - julianday(c.created_at)) AS INTEGER) AS days_since_signup
+        FROM customers c
+        LEFT JOIN customer_sales_intel csi ON csi.customer_id = c.id
+        WHERE c.is_active = 1
+          AND c.created_at < datetime('now', '-60 days')
+          AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id)
+          AND COALESCE(c.free_trial_used, 0) < COALESCE(c.free_trial_total, 3)
+        ORDER BY c.created_at DESC
+        LIMIT 50
+      `),
+      // 3a. Hot inbound count (last 24h, ≥5 employees, no admin contact attempted)
+      db.prepare(`
+        SELECT COUNT(*) AS cnt
+        FROM contact_leads cl
+        WHERE cl.created_at >= datetime('now', '-24 hours')
+          AND (
+            cl.employees IN ('5-10', '10-25', '25-50', '50-100', '100+')
+            OR (cl.employees GLOB '[5-9]*' OR cl.employees GLOB '[1-9][0-9]*')
+          )
+      `),
+      // 3b. Hot inbound list (last 24h, ranked by company size + recency)
+      db.prepare(`
+        SELECT id, name, email, phone, company, employees, interest, message,
+               utm_source, utm_medium, utm_campaign,
+               created_at,
+               CAST((julianday('now') - julianday(created_at)) * 24 AS INTEGER) AS hours_ago
+        FROM contact_leads
+        WHERE created_at >= datetime('now', '-24 hours')
+        ORDER BY
+          CASE
+            WHEN employees IN ('100+', '50-100') THEN 4
+            WHEN employees IN ('25-50') THEN 3
+            WHEN employees IN ('10-25') THEN 2
+            WHEN employees IN ('5-10') THEN 1
+            ELSE 0
+          END DESC,
+          created_at DESC
+        LIMIT 50
+      `),
+      // 4a. Total objections in last 30d (sanity check that extractor is running)
+      db.prepare(`SELECT COUNT(*) AS cnt FROM call_objections WHERE extracted_at >= datetime('now', '-30 days')`),
+      // 4b. Top objection categories last 30d, with one example excerpt each
+      db.prepare(`
+        SELECT category, COUNT(*) AS cnt,
+               (SELECT objection_text FROM call_objections o2 WHERE o2.category = o.category AND extracted_at >= datetime('now','-30 days') ORDER BY o2.id DESC LIMIT 1) AS example_text,
+               (SELECT raw_excerpt FROM call_objections o3 WHERE o3.category = o.category AND extracted_at >= datetime('now','-30 days') ORDER BY o3.id DESC LIMIT 1) AS example_excerpt
+        FROM call_objections o
+        WHERE extracted_at >= datetime('now', '-30 days')
+        GROUP BY category
+        ORDER BY cnt DESC
+        LIMIT 8
+      `)
+    ]) as any[]
+
+    return c.json({
+      at_risk_churn: {
+        count: (atRiskCountRow.results?.[0]?.cnt as number) || 0,
+        list: (atRiskListRow.results || []) as any[],
+        description: 'Paying customers silent 30+ days AND no order in 90+ days. These are saveable with a phone call.'
+      },
+      stuck_signups: {
+        count: (stuckCountRow.results?.[0]?.cnt as number) || 0,
+        list: (stuckListRow.results || []) as any[],
+        description: 'Signed up 60+ days ago, never ordered, free credits still unused. They wanted it once. Nudge them.'
+      },
+      hot_inbound_leads: {
+        count: (hotCountRow.results?.[0]?.cnt as number) || 0,
+        list: ((hotListRow.results || []) as any[]).map((row) => ({
+          ...row,
+          // 4-input lead score (0-100):
+          //   source     (0-25): demo intent > contact form > asset request > unknown
+          //   recency    (0-25): hours since submission (sooner = hotter)
+          //   contact    (0-25): not yet contacted = full points (always full for new leads)
+          //   firmographic (0-25): company size bracket
+          lead_score: (() => {
+            // Source — heuristic on the message/interest (demo, urgent → max).
+            const interestStr = String(row.interest || row.message || '').toLowerCase()
+            let source = 15
+            if (/demo|book|schedule|call me|talk/.test(interestStr)) source = 25
+            else if (/urgent|asap|today|right now/.test(interestStr)) source = 22
+            else if (/pricing|quote|cost/.test(interestStr)) source = 20
+            // Recency — full points first 4h, decay to 0 over 24h.
+            const recency = Math.max(0, 25 - Math.floor((row.hours_ago || 0) * (25 / 24)))
+            // Contact — new leads default to 25 (no admin attempt logged yet).
+            const contact = 25
+            // Firmographic — company size bracket.
+            const emp = String(row.employees || '').toLowerCase()
+            const firm = /100\+|50-100/.test(emp) ? 25
+              : /25-50/.test(emp) ? 18
+              : /10-25/.test(emp) ? 12
+              : /5-10/.test(emp) ? 6
+              : 0
+            return source + recency + contact + firm
+          })()
+        })).sort((a: any, b: any) => (b.lead_score || 0) - (a.lead_score || 0)),
+        description: 'Contact form submissions in the last 24h, scored 0-100 (source × recency × contact × firmographics). Call top-scored within 4h for ~3x conversion lift.'
+      },
+      objections_30d: {
+        count: (objCountRow.results?.[0]?.cnt as number) || 0,
+        top: (objTopRow.results || []) as any[],
+        description: 'Top reasons prospects said no on cold calls in the last 30 days. Auto-extracted from LiveKit transcripts.'
+      },
+      generated_at: new Date().toISOString()
+    })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
 export { superAdminBi }

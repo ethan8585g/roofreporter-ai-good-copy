@@ -34,6 +34,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { validateAdminSession, requireSuperadmin } from './auth'
+import { extractAndStoreObjections } from '../services/objection-extractor'
 
 export const callCenterRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -1053,6 +1054,31 @@ callCenterRoutes.post('/call-complete', async (c) => {
       vals.push(prospect_id)
 
       await c.env.DB.prepare(`UPDATE cc_prospects SET ${updates.join(',')} WHERE id=?`).bind(...vals).run()
+    }
+
+    // Objection extraction — turn the transcript into structured rows
+    // in call_objections so super admin can see "top reasons people said
+    // no this month" and iterate the script. Best-effort, non-blocking.
+    if (room_name && (call_transcript || '').length > 60) {
+      try {
+        const callLogRow = await c.env.DB.prepare('SELECT id, started_at FROM cc_call_logs WHERE livekit_room_id=?')
+          .bind(room_name).first<any>()
+        const extractCtx = {
+          transcript: call_transcript || '',
+          call_outcome: call_outcome || null,
+          caller_sentiment: caller_sentiment || null,
+          room_name: room_name,
+          prospect_id: prospect_id || null,
+          agent_id: agent_id || null,
+          call_log_id: callLogRow?.id || null,
+          call_started_at: callLogRow?.started_at || null,
+        }
+        const p = extractAndStoreObjections(c.env as any, c.env.DB, extractCtx)
+          .catch((e: any) => console.warn('[objection-extractor] failed:', e?.message))
+        if ((c as any).executionCtx?.waitUntil) (c as any).executionCtx.waitUntil(p)
+      } catch (e: any) {
+        console.warn('[call-complete] objection extract skip:', e?.message)
+      }
     }
 
     // Cost tracking — estimate call costs

@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { trackUserSignup, trackUserLogin, trackEmailVerified, trackOnboardingStep, trackOnboardingCompleted } from '../services/ga4-events'
 import { identifySession } from '../services/attribution'
+import { linkCustomerToLead, markCustomerActive } from '../services/customer-activity'
 import { resolveTeamOwner } from './team'
 import { hashPassword, verifyPassword, isLegacyHash, dummyVerify } from '../lib/password'
 import { getCustomerSessionToken } from '../lib/session-tokens'
@@ -583,6 +584,7 @@ customerAuthRoutes.post('/google', async (c) => {
           email_verified = 1, last_login = datetime('now'), updated_at = datetime('now')
         WHERE id = ?
       `).bind(googleId, avatar, name, customer.id).run()
+      markCustomerActive(c.env.DB, customer.id).catch(() => {})
     } else {
       // Create new customer with the standard free-trial grant (NOT paid credits).
       // The Google sign-in IS the first login — login_count is derived from
@@ -599,6 +601,10 @@ customerAuthRoutes.post('/google', async (c) => {
         free_trial_total: FREE_TRIAL_REPORTS, free_trial_used: 0,
         is_new_signup: true
       }
+
+      // Sales intel: write activity + lead linkage to sidecar (non-blocking).
+      markCustomerActive(c.env.DB, customer.id as number).catch(() => {})
+      linkCustomerToLead(c.env.DB, customer.id as number, email).catch(() => {})
 
       // Log the free trial
       await c.env.DB.prepare(`
@@ -828,6 +834,10 @@ customerAuthRoutes.post('/register', async (c) => {
       return c.json({ error: 'Failed to create account. Please try again.' }, 500)
     }
 
+    // Sales intel: write activity + lead linkage to sidecar (non-blocking).
+    markCustomerActive(c.env.DB, result.meta.last_row_id as number).catch(() => {})
+    linkCustomerToLead(c.env.DB, result.meta.last_row_id as number, cleanEmail).catch(() => {})
+
     // Persist full UTM dimensions to analytics_attribution (best-effort).
     // The pageview rollup also writes here async; we write at signup so the data
     // is available immediately even if the visitor blocked the tracker.
@@ -994,6 +1004,7 @@ customerAuthRoutes.post('/login', async (c) => {
     await c.env.DB.prepare(
       "UPDATE customers SET last_login = datetime('now'), updated_at = datetime('now') WHERE id = ?"
     ).bind(customer.id).run()
+    markCustomerActive(c.env.DB, customer.id).catch(() => {})
 
     // Per-event log so super admin can compute lifetime + daily login counts.
     try {
