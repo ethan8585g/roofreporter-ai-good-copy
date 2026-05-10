@@ -64,15 +64,30 @@ export function csrfCookieAttrs(token: string, maxAgeSeconds: number): string {
 // Make a CSRF middleware gated on the presence of a specific session-cookie name.
 // Use case: customerAuthRoutes mounts pre-auth endpoints (login/register/etc) on
 // the same router as authenticated state-change endpoints. Pre-auth requests
-// have no session cookie → no CSRF attack surface → bypass. Authenticated
-// requests carrying the session cookie are enforced.
-export function makeCsrfMiddleware(sessionCookieName: string): MiddlewareHandler {
+// authenticate via body credentials (or a one-shot token), not the session
+// cookie, so they have no CSRF attack surface and must bypass even when a
+// stale session cookie is still in the browser. Authenticated requests
+// carrying the session cookie on non-exempt paths are enforced.
+//
+// `preAuthPathSuffixes` is matched against the *end* of c.req.path so callers
+// can list bare path tails like '/login' without caring about the mount prefix.
+export function makeCsrfMiddleware(
+  sessionCookieName: string,
+  preAuthPathSuffixes: readonly string[] = []
+): MiddlewareHandler {
   return async (c, next) => {
     if (SAFE_METHODS.has(c.req.method)) return next()
     // Bearer-token API clients bypass CSRF (no cookie → no CSRF attack surface).
     const auth = c.req.header('authorization') || ''
     if (auth.startsWith('Bearer ')) return next()
-    // No session cookie present = pre-auth request (login, register, etc.) — bypass.
+    // Pre-auth endpoints bypass regardless of cookie state — credentials live
+    // in the body, not the cookie, so a stale rm_customer_session cookie can't
+    // be weaponized as CSRF here.
+    const path = c.req.path
+    for (const suffix of preAuthPathSuffixes) {
+      if (path.endsWith(suffix)) return next()
+    }
+    // No session cookie present = pre-auth request — bypass.
     const cookieHeader = c.req.header('cookie') || ''
     if (!cookieHeader.includes(`${sessionCookieName}=`)) return next()
 

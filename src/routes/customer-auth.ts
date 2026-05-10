@@ -64,12 +64,25 @@ function ipFromRequest(c: any): string | null {
 
 export const customerAuthRoutes = new Hono<{ Bindings: Bindings }>()
 
-// CSRF: enforce double-submit cookie on all customer state-change endpoints.
-// The middleware bypasses GET/HEAD/OPTIONS, Bearer-token requests (programmatic
-// API), and any request without the customer session cookie (pre-auth POSTs
-// like /login, /register, /google, /forgot-password). Authenticated cookie-only
-// requests must echo the rm_csrf cookie value in the X-RM-CSRF header.
-customerAuthRoutes.use('*', makeCsrfMiddleware(CUSTOMER_SESSION_COOKIE))
+// CSRF: enforce double-submit cookie on customer state-change endpoints.
+// Bypasses GET/HEAD/OPTIONS, Bearer-token API clients, and pre-auth endpoints
+// (login/register/google/etc) which authenticate via body credentials, not the
+// session cookie — listing them here is essential because real users often
+// hit /login while still holding a stale rm_customer_session cookie (server
+// session deleted/expired, two-tab logout race, partial cookie clear, etc.),
+// and we must not gate those flows behind a CSRF token they can't have.
+const CUSTOMER_PREAUTH_PATHS = [
+  '/login',
+  '/register',
+  '/google',
+  '/forgot-password',
+  '/reset-password',
+  '/send-verification',
+  '/verify-code',
+  '/magic-link',
+  '/signup-started',
+] as const
+customerAuthRoutes.use('*', makeCsrfMiddleware(CUSTOMER_SESSION_COOKIE, CUSTOMER_PREAUTH_PATHS))
 
 // Seeds the 12 default material catalog items for a new account so users have
 // context on what the Material Catalog section is for when they first open it.
