@@ -8146,13 +8146,13 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <span class="text-sm font-semibold text-[#00FF88] tracking-wide">Trusted by 200+ Contractors — US &amp; Canada</span>
             </div>
             <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] text-white mb-6 tracking-tight">AI Satellite Roof Measurement Reports <span class="neon-text">Roofers Actually Trust</span></h1>
-            <h2 class="text-lg lg:text-xl text-gray-300 mb-8 max-w-xl leading-relaxed font-normal">Generate a contractor-grade roof measurement report in under 60 seconds — satellite-precise area, pitch, edges, and material BOM, with full CRM and instant PDF delivery. Built for US &amp; Canadian roofing contractors.</h2>
+            <h2 class="text-lg lg:text-xl text-gray-300 mb-8 max-w-xl leading-relaxed font-normal">Contractor-grade roof measurement reports — satellite-precise area, pitch, edges, and material BOM, with full CRM and instant PDF delivery. Built for US &amp; Canadian roofing contractors. Contact us today to get started.</h2>
 
             <!-- Primary CTA (ONE) -->
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 mb-4">
               <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_primary'});window.trackAdsConversion&amp;&amp;window.trackAdsConversion('lead',{value:5,currency:'CAD'})}catch(e){}" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px] whitespace-nowrap"><i class="fas fa-gift" aria-hidden="true"></i>Start free — 4 roof reports, no card<i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform" aria-hidden="true"></i></a>
               <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_sample_report'})}catch(e){}" class="inline-flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-7 rounded-xl text-base border border-white/10 hover:border-white/20 min-h-[56px] transition-all whitespace-nowrap"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Report</a>
-              <a href="#hero-preview-form" onclick="try{rrTrack('cta_click',{location:'hero_secondary_preview'});var i=document.getElementById('hero-address');if(i){i.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(function(){i.focus()},400)}}catch(e){}" class="text-sm text-gray-300 hover:text-white inline-flex items-center gap-1.5 whitespace-nowrap">Or try a free preview with any address <i class="fas fa-arrow-right text-[10px]" aria-hidden="true"></i></a>
+              <a href="#hero-contact-form" onclick="try{rrTrack('cta_click',{location:'hero_secondary_contact'});var i=document.getElementById('hc-name');if(i){i.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(function(){i.focus()},400)}}catch(e){}" class="text-sm text-gray-300 hover:text-white inline-flex items-center gap-1.5 whitespace-nowrap">Or contact us directly <i class="fas fa-arrow-right text-[10px]" aria-hidden="true"></i></a>
             </div>
             <a href="/contact" onclick="try{rrTrack('cta_click',{location:'hero_tertiary_contact'})}catch(e){}" class="text-xs text-gray-500 hover:text-gray-300 inline-block mb-5">Talk to sales</a>
 
@@ -8164,39 +8164,41 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <span class="inline-flex items-center gap-1 whitespace-nowrap"><i class="fas fa-check text-[#00FF88] text-[10px]" aria-hidden="true"></i>4.9/5 from 200+ contractors</span>
             </p>
 
-            <!-- Address-preview (email-gated: drops a lead before unlocking the result) -->
-            <div id="hero-preview-form" class="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4 max-w-xl">
-              <label for="hero-address" class="block text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-2">Free preview — see your roof in 60 seconds</label>
-              <input id="hero-address" type="text" placeholder="Enter a property address&#x2026;"
-                autocomplete="off" inputmode="text"
-                style="width:100%;padding:14px 16px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:12px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:8px"
-                onfocus="this.style.borderColor='#00FF88'"
-                onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
-              <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <input id="hero-email" type="email" placeholder="Work email" autocomplete="email" inputmode="email"
-                  style="flex:1;min-width:200px;padding:14px 16px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:12px;font-size:16px;outline:none;box-sizing:border-box"
+            <!-- Contact Us form (replaces the legacy address-preview form) -->
+            <div id="hero-contact-form" class="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 max-w-xl">
+              <div class="text-[11px] uppercase tracking-wider text-[#00FF88] font-bold mb-1">Contact Us Today</div>
+              <p class="text-sm text-gray-400 mb-3">Tell us about your roofing business — we'll be in touch shortly.</p>
+              <form id="hero-contact-form-el" onsubmit="return submitHeroContact(event)">
+                <input id="hc-name" name="name" type="text" placeholder="Your name" autocomplete="name" required
+                  style="width:100%;padding:12px 14px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:8px"
                   onfocus="this.style.borderColor='#00FF88'"
                   onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
-                <button type="button" id="hero-preview-btn" onclick="startPreview()"
-                  style="padding:14px 20px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:12px;font-size:14px;cursor:pointer;white-space:nowrap;flex-shrink:0">
-                  Preview roof &#x2192;
-                </button>
-              </div>
-              <p id="hero-preview-msg" style="margin:8px 0 0;font-size:11px;color:#9ca3af">Email unlocks the satellite view and metrics. No spam — we only send your preview.</p>
-            </div>
-
-            <!-- Preview result panel (unchanged behavior, demoted Book demo to plain text) -->
-            <div id="hero-preview-result" style="display:none;margin-bottom:16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:16px">
-              <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
-                <img id="preview-sat-img" src="" alt="Satellite view of the property you entered"
-                  style="width:130px;height:90px;object-fit:cover;border-radius:8px;flex-shrink:0;background:#1a1a1a">
-                <div style="flex:1;min-width:160px">
-                  <div id="preview-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px"></div>
-                  <a id="preview-cta-register" href="/register" onclick="try{rrTrack('cta_click',{location:'preview_result'})}catch(e){}"
-                    style="display:inline-block;background:#00FF88;color:#0A0A0A;font-weight:800;padding:9px 16px;border-radius:8px;font-size:13px;text-decoration:none;margin-right:8px">
-                    Create account to download &#x2192;
-                  </a>
+                <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+                  <input id="hc-email" name="email" type="email" placeholder="Email" autocomplete="email" inputmode="email" required
+                    style="flex:1;min-width:180px;padding:12px 14px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box"
+                    onfocus="this.style.borderColor='#00FF88'"
+                    onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
+                  <input id="hc-phone" name="phone" type="tel" placeholder="Phone number" autocomplete="tel" inputmode="tel"
+                    style="flex:1;min-width:180px;padding:12px 14px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box"
+                    onfocus="this.style.borderColor='#00FF88'"
+                    onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
                 </div>
+                <textarea id="hc-message" name="message" rows="3" placeholder="What can we help with?" required
+                  style="width:100%;padding:12px 14px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;resize:vertical;font-family:inherit;margin-bottom:10px"
+                  onfocus="this.style.borderColor='#00FF88'"
+                  onblur="this.style.borderColor='rgba(255,255,255,0.15)'"></textarea>
+                <input id="hc-website" name="website" type="text" tabindex="-1" autocomplete="off"
+                  style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" aria-hidden="true">
+                <button type="submit" id="hc-submit"
+                  style="width:100%;padding:14px 20px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:15px;cursor:pointer">
+                  <i class="fas fa-paper-plane" style="margin-right:8px"></i>Send message
+                </button>
+                <p id="hc-msg" style="margin:8px 0 0;font-size:11px;color:#9ca3af;text-align:center">We typically reply within one business day.</p>
+              </form>
+              <div id="hc-success" style="display:none;text-align:center;padding:24px 8px">
+                <div style="width:48px;height:48px;border-radius:50%;background:#00FF8820;display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><i class="fas fa-check" style="color:#00FF88;font-size:20px"></i></div>
+                <div style="color:#00FF88;font-weight:800;font-size:16px;margin-bottom:4px">Message received</div>
+                <div style="color:#9ca3af;font-size:13px">Thanks! We'll be in touch shortly.</div>
               </div>
             </div>
 
@@ -9162,66 +9164,76 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         return false;
       };
 
-      window.startPreview = function() {
-        var addr = document.getElementById('hero-address').value.trim();
-        var emailEl = document.getElementById('hero-email');
-        var email = emailEl ? emailEl.value.trim() : '';
-        var msgEl = document.getElementById('hero-preview-msg');
-        if (!addr) { document.getElementById('hero-address').focus(); return; }
-        // Email gate: required + basic format check before unlocking the preview.
-        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          if (msgEl) { msgEl.textContent = 'Enter your work email to unlock the satellite preview.'; msgEl.style.color = '#fca5a5'; }
-          if (emailEl) emailEl.focus();
-          return;
+      window.submitHeroContact = function(e) {
+        e.preventDefault();
+        var f = document.getElementById('hero-contact-form-el');
+        var btn = document.getElementById('hc-submit');
+        var msgEl = document.getElementById('hc-msg');
+        var name = document.getElementById('hc-name').value.trim();
+        var email = document.getElementById('hc-email').value.trim();
+        var phone = document.getElementById('hc-phone').value.trim();
+        var message = document.getElementById('hc-message').value.trim();
+        var hp = document.getElementById('hc-website');
+
+        if (!name || !email || !message) {
+          if (msgEl) { msgEl.textContent = 'Please fill in your name, email, and message.'; msgEl.style.color = '#fca5a5'; }
+          return false;
         }
-        if (msgEl) { msgEl.textContent = 'Unlocking your preview\u2026'; msgEl.style.color = '#9ca3af'; }
-        rrTrack('hero_cta_click', {variant: 'address_start'});
-        // Fire lead conversion + drop the email into the existing lead-capture endpoint (non-blocking).
-        try {
-          if (typeof window.setAdsUserData === 'function') { window.setAdsUserData(email, '', ''); }
-          if (typeof window.trackAdsConversion === 'function') { window.trackAdsConversion('lead', { value: 5, currency: 'CAD' }); }
-          if (typeof gtag === 'function') { gtag('event', 'lead_capture', { source: 'hero_address_preview' }); }
-          if (typeof fbq === 'function') { fbq('track', 'Lead', { content_name: 'hero_address_preview' }); }
-          if (typeof rrTrack === 'function') { rrTrack('lead_captured', { source: 'hero_address_preview' }); }
-          fetch('/api/asset-report/lead', {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ email: email, address: addr, source: 'hero_address_preview', tag: 'preview_unlock' }),
-            keepalive: true
-          }).catch(function(){});
-        } catch(_) {}
-        var btn = document.getElementById('hero-preview-btn');
-        btn.disabled = true; btn.textContent = 'Measuring\u2026';
-        var utm = {};
-        try { utm = Object.fromEntries(new URLSearchParams(sessionStorage.getItem('rr_utm') || '')); } catch(e) {}
-        fetch('/api/public/preview', {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          if (msgEl) { msgEl.textContent = 'Please enter a valid email address.'; msgEl.style.color = '#fca5a5'; }
+          document.getElementById('hc-email').focus();
+          return false;
+        }
+
+        // Honeypot \u2014 silently succeed if a bot filled it
+        if (hp && hp.value) {
+          f.style.display = 'none';
+          document.getElementById('hc-success').style.display = 'block';
+          return false;
+        }
+
+        btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px"></i>Sending\u2026';
+        if (msgEl) { msgEl.textContent = 'Sending\u2026'; msgEl.style.color = '#9ca3af'; }
+
+        var payload = {
+          name: name,
+          email: email,
+          phone: phone || undefined,
+          message: message,
+          interest: 'hero_contact'
+        };
+
+        fetch('/api/contact/lead', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({address: addr, email: email, utm: utm})
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          btn.disabled = false; btn.textContent = 'Measure this roof \u2192';
-          if (data.error === 'preview_limit') {
-            document.getElementById('hero-address').placeholder = 'Rate limit reached \u2014 create a free account for unlimited access';
+        .then(function(r) { return r.json().then(function(d){ return {ok:r.ok,d:d}; }); })
+        .then(function(res) {
+          if (!res.ok) {
+            if (msgEl) { msgEl.textContent = (res.d && res.d.error) || 'Something went wrong. Please try again.'; msgEl.style.color = '#fca5a5'; }
+            btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:8px"></i>Send message';
             return;
           }
-          if (data.error) {
-            document.getElementById('hero-address').placeholder = data.message || 'Could not find that address';
-            return;
-          }
-          rrTrack('preview_rendered', {area: data.estimated_area_sqft, pitch: data.pitch_deg});
-          document.getElementById('preview-sat-img').src = data.satellite_tile_url;
-          document.getElementById('preview-stats').innerHTML =
-            '<div style="text-align:center"><div style="font-size:18px;font-weight:800;color:#00FF88">' + (data.estimated_area_sqft ? data.estimated_area_sqft.toLocaleString() : '\u2014') + '</div><div style="font-size:10px;color:rgba(255,255,255,0.5)">sq ft</div></div>' +
-            '<div style="text-align:center"><div style="font-size:18px;font-weight:800;color:#00FF88">' + (data.pitch_deg ? data.pitch_deg + '\u00b0' : '\u2014') + '</div><div style="font-size:10px;color:rgba(255,255,255,0.5)">pitch</div></div>' +
-            '<div style="text-align:center"><div style="font-size:18px;font-weight:800;color:#00FF88">' + (data.segment_count || '\u2014') + '</div><div style="font-size:10px;color:rgba(255,255,255,0.5)">segments</div></div>';
-          var cta = document.getElementById('preview-cta-register');
-          if (cta && data.preview_id) cta.href = '/register?preview_id=' + encodeURIComponent(data.preview_id);
-          document.getElementById('hero-preview-result').style.display = 'block';
-          document.getElementById('hero-preview-form').style.display = 'none';
+          try { if (typeof gtag === 'function') gtag('event', 'generate_lead', { form_location: 'hero_contact', form: 'hero_contact', value: 1 }); } catch(_){}
+          try {
+            if (typeof window.fireMetaLeadEvent === 'function') { window.fireMetaLeadEvent({ content_name: 'hero_contact', form_location: 'hero_contact' }); }
+            else if (typeof fbq === 'function') { fbq('track', 'Lead', { content_name: 'hero_contact', form_location: 'hero_contact' }); }
+          } catch(_){}
+          try { if (typeof rrTrack === 'function') rrTrack('lead_submit', { form: 'hero_contact' }); } catch(_){}
+          try {
+            var fireAds = function(){ try { if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('contact_lead', { value: 10, currency: 'CAD' }); } catch(_){} };
+            if (typeof window.setAdsUserData === 'function') { window.setAdsUserData(email, phone, name).then(fireAds, fireAds); }
+            else { fireAds(); }
+          } catch(_){}
+          f.style.display = 'none';
+          document.getElementById('hc-success').style.display = 'block';
         })
-        .catch(function() { btn.disabled = false; btn.textContent = 'Measure this roof \u2192'; });
+        .catch(function() {
+          if (msgEl) { msgEl.textContent = 'Network error \u2014 please try again.'; msgEl.style.color = '#fca5a5'; }
+          btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:8px"></i>Send message';
+        });
+        return false;
       };
     })();
 
