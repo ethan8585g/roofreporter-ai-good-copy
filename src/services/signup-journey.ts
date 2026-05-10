@@ -50,8 +50,13 @@ export interface JourneyResult {
 }
 
 // Customer-facing pages a freshly-signed-up user would land on.
-// Kept narrow on purpose — Cloudflare Workers cap us at 50 subrequests
-// per invocation. Budget: pages + apis + toggles*3 + 2 (email) <= 50.
+// Kept narrow on purpose — Cloudflare Workers cap a single invocation at
+// 50 subrequests. Real budget once D1 + OAuth + email + recordExternalRun
+// are counted is closer to: pages + apis + toggles*3 + ~12 (D1+email+misc)
+// <= 50. Caps pages at 12 so a fail run with email can finish under the
+// limit. Lower-traffic surfaces (widget, google-business, google-ads,
+// website-builder, leads) are dropped here — they have lighter QPS and
+// are covered by the 4-hourly /ads-health and the daily /signup-health.
 // Including /customer (bare) on purpose — it currently 404s, which is
 // a real dead end for any user who types the URL without a sub-path.
 const CUSTOMER_PAGES = [
@@ -63,18 +68,10 @@ const CUSTOMER_PAGES = [
   '/customer/profile',
   '/customer/integrations',
   '/customer/material-calculator',
-  '/customer/property-imagery',
   '/customer/reports',
   '/customer/customers',
   '/customer/invoices',
-  '/customer/proposals',
   '/customer/jobs',
-  '/customer/pipeline',
-  '/customer/leads',
-  '/customer/widget',
-  '/customer/google-business',
-  '/customer/google-ads',
-  '/customer/website-builder',
 ]
 
 // Authenticated GETs that drive the dashboard. A 5xx here means the

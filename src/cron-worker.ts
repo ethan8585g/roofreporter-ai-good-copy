@@ -633,9 +633,15 @@ export default {
             loopId: 'signup_journey',
             source: 'cf_cron',
             status,
-            summary: `${result.verdict} · ${result.dead_ends?.length || 0} dead end(s) · pages ${result.pages?.checked - result.pages?.failed}/${result.pages?.checked} · APIs ${result.apis?.checked - result.apis?.failed}/${result.apis?.checked} · email ${email.skipped ? 'skipped' : email.ok ? 'sent' : `failed: ${email.error}`}`.slice(0, 500),
+            summary: `${result.verdict} · ${result.dead_ends?.length || 0} dead end(s) · pages ${(result.pages_checked || 0) - (result.pages_failed || 0)}/${result.pages_checked || 0} · APIs ${(result.apis_checked || 0) - (result.apis_failed || 0)}/${result.apis_checked || 0} · email ${email.skipped ? 'skipped' : email.ok ? 'sent' : `failed: ${email.error}`}`.slice(0, 500),
             durationMs: Date.now() - t0,
-            outputs: { verdict: result.verdict, pages: result.pages, apis: result.apis, toggles: result.toggles, email },
+            outputs: {
+              verdict: result.verdict,
+              pages: { checked: result.pages_checked, failed: result.pages_failed },
+              apis: { checked: result.apis_checked, failed: result.apis_failed },
+              toggles: { checked: result.toggles_checked, failed: result.toggles_failed },
+              email,
+            },
             findings,
             expectedAt,
           })
