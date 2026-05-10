@@ -176,13 +176,26 @@ export const ALL_TOOLS: ToolDef[] = [...ASSISTANT_TOOLS, ...GITHUB_TOOLS]
 
 export async function runTool(
   db: D1Database,
-  context: { githubToken: string; userPrompt: string; model: string },
+  context: {
+    githubToken: string
+    userPrompt: string
+    model: string
+    cloudflareApiToken?: string
+    cloudflareAccountId?: string
+    waitUntil?: (p: Promise<any>) => void
+  },
   name: string,
   input: any,
 ): Promise<any> {
   // GitHub tools dispatch through their own runner (needs the token + audit context)
   if (GITHUB_TOOLS.some(t => t.name === name)) {
-    return runGithubTool(context.githubToken, db, { userPrompt: context.userPrompt, model: context.model }, name, input)
+    return runGithubTool(context.githubToken, db, {
+      userPrompt: context.userPrompt,
+      model: context.model,
+      cloudflareApiToken: context.cloudflareApiToken,
+      cloudflareAccountId: context.cloudflareAccountId,
+      waitUntil: context.waitUntil,
+    }, name, input)
   }
   switch (name) {
     case 'list_blog_posts':

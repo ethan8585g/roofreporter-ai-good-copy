@@ -108,7 +108,13 @@ export const GITHUB_TOOLS: ToolDef[] = [
 export async function runGithubTool(
   token: string,
   db: D1Database,
-  context: { userPrompt: string; model: string },
+  context: {
+    userPrompt: string
+    model: string
+    cloudflareApiToken?: string
+    cloudflareAccountId?: string
+    waitUntil?: (p: Promise<any>) => void
+  },
   name: string,
   input: any,
 ): Promise<any> {
@@ -177,11 +183,22 @@ async function readFile(token: string, path: string) {
 async function writeFile(
   token: string,
   db: D1Database,
-  context: { userPrompt: string; model: string },
+  context: {
+    userPrompt: string
+    model: string
+    cloudflareApiToken?: string
+    cloudflareAccountId?: string
+    waitUntil?: (p: Promise<any>) => void
+  },
   input: any,
 ) {
   if (!input?.path || input?.content === undefined || !input?.message) {
     return { error: 'path, content, message are required' }
+  }
+  // ── Pre-push validation ────────────────────────────────
+  const validation = await validateWrite(token, input.path, input.content, context.userPrompt)
+  if (!validation.ok) {
+    return { error: `Pre-push validation failed: ${validation.error}`, validation_failed: true }
   }
   const url = `${API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}/contents/${encodeURIPath(input.path)}`
   const body: any = {
@@ -221,15 +238,108 @@ async function writeFile(
     // Don't fail the write if logging fails — surface as a warning
     console.warn('[ai-assistant] audit log insert failed:', e?.message)
   }
+  // Kick off background deployment monitor (waitUntil keeps it running after we respond)
+  let monitorNote = 'Cloudflare Pages will auto-deploy this commit within ~30 seconds.'
+  if (commitSha && context.cloudflareApiToken && context.cloudflareAccountId) {
+    const monitorPromise = monitorDeployment(
+      token, db, context, commitSha, input.path,
+    )
+    if (context.waitUntil) {
+      context.waitUntil(monitorPromise)
+      monitorNote = `Pushed ${commitSha.slice(0, 7)}. Monitoring Cloudflare Pages build for ~90s — if it fails, this commit will be auto-reverted. Check list_assistant_commits to see the final outcome.`
+    } else {
+      // No waitUntil — fire-and-forget; result still lands in assistant_commits
+      monitorPromise.catch((e) => console.warn('[ai-assistant] deployment monitor crashed:', e?.message))
+      monitorNote = `Pushed ${commitSha.slice(0, 7)}. Build will be monitored in the background.`
+    }
+  }
   return {
     ok: true,
     path: data?.content?.path,
     sha: data?.content?.sha,
     commit_sha: commitSha,
     commit_url: data?.commit?.html_url,
-    note: 'Cloudflare Pages will auto-deploy this commit within ~30 seconds.',
+    note: monitorNote,
   }
 }
+
+// ─── Post-push deployment monitor ────────────────────────────────────
+// Polls Cloudflare Pages for the deployment of the commit we just pushed.
+// If the build FAILS, auto-reverts the commit and logs the outcome to
+// assistant_commits.reverted. If it succeeds, logs success. Either way the
+// operator has a record. Runs in the background via ctx.waitUntil so the
+// chat doesn't block.
+const CF_PAGES_PROJECT = 'roofing-measurement-tool'
+async function monitorDeployment(
+  ghToken: string,
+  db: D1Database,
+  context: { cloudflareApiToken?: string; cloudflareAccountId?: string; userPrompt: string; model: string },
+  commitSha: string,
+  filePath: string,
+): Promise<void> {
+  if (!context.cloudflareApiToken || !context.cloudflareAccountId) return
+
+  // Give Cloudflare ~12s to register the push and start a build
+  await sleep(12_000)
+
+  const shortSha = commitSha.slice(0, 7)
+  const headers = {
+    Authorization: `Bearer ${context.cloudflareApiToken}`,
+    'Content-Type': 'application/json',
+  }
+  const deploymentsUrl =
+    `https://api.cloudflare.com/client/v4/accounts/${context.cloudflareAccountId}/pages/projects/${CF_PAGES_PROJECT}/deployments?env=production`
+
+  // Poll up to 90 seconds
+  for (let attempt = 0; attempt < 15; attempt++) {
+    try {
+      const res = await fetch(deploymentsUrl, { headers })
+      if (!res.ok) break
+      const data = await res.json() as any
+      const list: any[] = data?.result || []
+      // Find the deployment whose commit_hash matches our SHA
+      const dep = list.find((d) => {
+        const hash: string | undefined = d?.deployment_trigger?.metadata?.commit_hash || d?.source?.config?.commit_hash
+        return hash && hash.slice(0, 7) === shortSha
+      })
+      if (dep) {
+        const stage = dep.latest_stage?.status || dep.status
+        if (stage === 'success') {
+          await markCommitDeployment(db, commitSha, 'success', null)
+          return
+        }
+        if (stage === 'failure' || stage === 'failed') {
+          // AUTO-REVERT
+          try {
+            const result = await revertCommit(ghToken, db, { userPrompt: context.userPrompt, model: context.model }, commitSha)
+            await markCommitDeployment(db, commitSha, 'auto_reverted', JSON.stringify({ reason: 'cloudflare_build_failed', dep_id: dep.id, revert_result: result }))
+          } catch (e: any) {
+            await markCommitDeployment(db, commitSha, 'failed_revert_failed', JSON.stringify({ reason: 'cloudflare_build_failed', dep_id: dep.id, revert_error: e?.message }))
+          }
+          return
+        }
+      }
+    } catch (_) { /* keep polling */ }
+    await sleep(6_000)
+  }
+  await markCommitDeployment(db, commitSha, 'timeout', null)
+}
+
+async function markCommitDeployment(db: D1Database, sha: string, status: string, details: string | null) {
+  try {
+    // Append the status into the audit row via the message column (cheap, no new schema)
+    await db.prepare(
+      `UPDATE assistant_commits
+       SET reverted = CASE WHEN ? = 'auto_reverted' THEN 1 ELSE reverted END,
+           message = COALESCE(message,'') || ' [deploy=' || ? || ']'
+       WHERE sha = ?`
+    ).bind(status, status + (details ? ` ${details.slice(0, 200)}` : ''), sha).run()
+  } catch (e: any) {
+    console.warn('[ai-assistant] markCommitDeployment failed:', e?.message)
+  }
+}
+
+function sleep(ms: number) { return new Promise<void>((res) => setTimeout(res, ms)) }
 
 async function deleteFile(token: string, input: any) {
   if (!input?.path || !input?.sha || !input?.message) {
@@ -374,6 +484,197 @@ async function listAssistantCommits(db: D1Database, limit?: number) {
 // Encode a path for URL while preserving slashes
 function encodeURIPath(p: string): string {
   return p.split('/').map(encodeURIComponent).join('/')
+}
+
+// ── Pre-push validation ────────────────────────────────────────────────
+// These run before every write_file. Each is fast and synchronous. The goal
+// is to catch the obvious "this commit would break production" cases before
+// they ship — corrupted JSON, unbalanced braces, truncation markers from the
+// model, oversized writes, and writes to high-risk paths without explicit
+// operator approval.
+
+const MAX_FILE_BYTES = 500 * 1024  // 500KB cap — sanity limit
+const HARD_BLOCK_PATHS = [
+  /^\.env/,                                    // .env, .env.local etc — should never live in repo
+  /^wrangler\.jsonc$/,                         // Cloudflare worker config
+  /^wrangler-cron\.jsonc$/,                    // Cron worker config
+]
+const DANGER_PATHS = [
+  /^migrations\//,                             // Schema migrations
+  /^src\/routes\/auth\.ts$/,                   // Admin auth
+  /^src\/routes\/customer-auth\.ts$/,          // Customer auth
+  /^src\/routes\/square\.ts$/,                 // Payments — Square
+  /^src\/routes\/stripe\.ts$/,                 // Payments — Stripe
+  /^src\/routes\/payments\.ts$/,
+  /^src\/routes\/lead-capture\.ts$/,           // Lead capture — high traffic
+  /^src\/services\/gcp-auth\.ts$/,             // GCP service-account JWT minting
+  /^src\/services\/gmail-oauth\.ts$/,          // Email transport credentials
+  /^src\/services\/email\.ts$/,                // Email transport
+  /^src\/cron-worker\.ts$/,                    // Cron worker entrypoint
+  /^src\/index\.tsx$/,                         // Main app entrypoint — huge blast radius
+  /^package\.json$/,
+  /^package-lock\.json$/,
+  /^tsconfig\.json$/,
+  /^build\.mjs$/,
+]
+const APPROVAL_TOKENS = [
+  'confirm',
+  'approved',
+  'ok to push',
+  'go ahead',
+  'do it',
+  'ship it',
+  'i confirm',
+  'yes change',
+  'yes edit',
+  'yes deploy',
+]
+
+async function validateWrite(
+  token: string,
+  path: string,
+  content: string,
+  userPrompt: string,
+): Promise<{ ok: boolean; error?: string }> {
+  // 1. Empty content
+  if (!content || !content.trim()) {
+    return { ok: false, error: 'Empty file content. Refusing — if you intended to delete the file, use delete_file.' }
+  }
+  // 2. Size cap
+  if (content.length > MAX_FILE_BYTES) {
+    return { ok: false, error: `File exceeds ${MAX_FILE_BYTES} bytes (${content.length}). If this is intentional, split the change.` }
+  }
+  // 3. Hard-block paths — never writable, regardless of approval
+  for (const re of HARD_BLOCK_PATHS) {
+    if (re.test(path)) {
+      return { ok: false, error: `Path "${path}" is hard-blocked. This file should not be edited from the chat. Make the change in the Cloudflare dashboard or via wrangler.` }
+    }
+  }
+  // 4. Danger paths — require explicit approval phrase from the operator
+  for (const re of DANGER_PATHS) {
+    if (re.test(path)) {
+      const lower = (userPrompt || '').toLowerCase()
+      const ok = APPROVAL_TOKENS.some(t => lower.includes(t))
+      if (!ok) {
+        return {
+          ok: false,
+          error: `"${path}" is a high-risk path. Refusing — ask the operator to confirm with a phrase like "confirm", "go ahead", "ok to push", or "ship it". Then retry.`,
+        }
+      }
+    }
+  }
+  // 5. Truncation marker detection — common AI failure mode where the model
+  //    writes "// ... rest unchanged" and the worker overwrites the whole file.
+  const truncationMarkers = [
+    /\/\/\s*\.\.\.\s*(rest|remaining|other)/i,
+    /\/\*\s*\.\.\.\s*(rest|remaining|other)/i,
+    /#\s*\.\.\.\s*(rest|remaining|other)/i,
+    /<!--\s*\.\.\.\s*(rest|remaining|other)/i,
+    /^\s*(\.\.\.|… )/m,                    // bare ellipsis as a line
+    /^\s*\/\/\s*\(unchanged\)/im,
+    /^\s*\/\/\s*\(omitted\)/im,
+    /<existing[_-]code>/i,
+  ]
+  for (const re of truncationMarkers) {
+    if (re.test(content)) {
+      return {
+        ok: false,
+        error: 'Detected what looks like a truncation marker ("...", "rest unchanged", "<existing_code>") in the new content. Refusing — write_file overwrites the whole file, so partial content would destroy code. Re-issue write_file with the COMPLETE new file contents.',
+      }
+    }
+  }
+  // 6. File-type-specific syntax checks
+  if (/\.(json|jsonc)$/.test(path)) {
+    try {
+      // Strip line comments + trailing commas for .jsonc; otherwise strict
+      const stripped = path.endsWith('.jsonc')
+        ? content.replace(/\/\/[^\n]*/g, '').replace(/,(\s*[}\]])/g, '$1')
+        : content
+      JSON.parse(stripped)
+    } catch (e: any) {
+      return { ok: false, error: `Invalid JSON: ${e?.message || e}` }
+    }
+  }
+  if (/\.(ts|tsx|js|jsx|html|css|json)$/.test(path)) {
+    const balance = checkDelimiterBalance(content, path)
+    if (!balance.ok) return { ok: false, error: `Delimiter balance check failed: ${balance.error}` }
+  }
+  // 7. Size-shrinkage check against current file (catches accidental overwrites
+  //    with truncated content even when no marker is present)
+  try {
+    const currentRes = await fetch(
+      `${API_BASE}/repos/${REPO_OWNER}/${REPO_NAME}/contents/${encodeURIPath(path)}?ref=${BRANCH}`,
+      { headers: ghHeaders(token) },
+    )
+    if (currentRes.ok) {
+      const current = await currentRes.json() as any
+      const oldSize = current?.size || 0
+      const newSize = new TextEncoder().encode(content).length
+      // If we're shrinking the file by more than 60%, require approval
+      if (oldSize > 2048 && newSize < oldSize * 0.4) {
+        const lower = (userPrompt || '').toLowerCase()
+        const approved = APPROVAL_TOKENS.some(t => lower.includes(t))
+        if (!approved) {
+          return {
+            ok: false,
+            error: `New content is ${Math.round(100 * (1 - newSize / oldSize))}% smaller than current file (${oldSize} -> ${newSize} bytes). Looks like accidental truncation. If this is intentional, ask the operator to confirm with a phrase like "confirm" or "go ahead".`,
+          }
+        }
+      }
+    }
+  } catch (_) { /* if we can't fetch current, don't block */ }
+  return { ok: true }
+}
+
+function checkDelimiterBalance(content: string, path: string): { ok: boolean; error?: string } {
+  // Walk character-by-character ignoring content inside strings + comments
+  let depth = { '(': 0, '[': 0, '{': 0 }
+  let i = 0
+  const n = content.length
+  let line = 1
+  const isJsFamily = /\.(ts|tsx|js|jsx)$/.test(path)
+  while (i < n) {
+    const ch = content[i]
+    if (ch === '\n') { line++; i++; continue }
+    // Skip strings
+    if (ch === '"' || ch === "'" || ch === '`') {
+      const quote = ch
+      i++
+      while (i < n && content[i] !== quote) {
+        if (content[i] === '\\') { i += 2; continue }
+        if (content[i] === '\n') line++
+        i++
+      }
+      i++
+      continue
+    }
+    // Skip line + block comments (JS family + CSS family handled together)
+    if (isJsFamily && ch === '/' && content[i + 1] === '/') {
+      while (i < n && content[i] !== '\n') i++
+      continue
+    }
+    if ((isJsFamily || /\.css$/.test(path)) && ch === '/' && content[i + 1] === '*') {
+      i += 2
+      while (i < n && !(content[i] === '*' && content[i + 1] === '/')) {
+        if (content[i] === '\n') line++
+        i++
+      }
+      i += 2
+      continue
+    }
+    if (ch === '(' || ch === '[' || ch === '{') depth[ch as '('|'['|'{']++
+    else if (ch === ')') depth['(']--
+    else if (ch === ']') depth['[']--
+    else if (ch === '}') depth['{']--
+    if (depth['('] < 0) return { ok: false, error: `Unmatched ')' near line ${line}` }
+    if (depth['['] < 0) return { ok: false, error: `Unmatched ']' near line ${line}` }
+    if (depth['{'] < 0) return { ok: false, error: `Unmatched '}' near line ${line}` }
+    i++
+  }
+  if (depth['('] !== 0) return { ok: false, error: `${depth['('] > 0 ? 'Missing' : 'Extra'} ${Math.abs(depth['('])} ')'` }
+  if (depth['['] !== 0) return { ok: false, error: `${depth['['] > 0 ? 'Missing' : 'Extra'} ${Math.abs(depth['['])} ']'` }
+  if (depth['{'] !== 0) return { ok: false, error: `${depth['{'] > 0 ? 'Missing' : 'Extra'} ${Math.abs(depth['{'])} '}'` }
+  return { ok: true }
 }
 
 // Decode a base64 string (as returned by the GitHub Contents API) into a real
