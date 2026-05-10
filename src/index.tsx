@@ -314,6 +314,9 @@ window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);
 gtag('js', new Date());
 gtag('config', 'AW-18080319225');
 gtag('config', 'AW-17810045368');
+gtag('config', 'AW-18080319225/03-qCMDE3KocEPmNr61D', {
+  'phone_conversion_number': '7809833335'
+});
 // Conversion labels — real labels look like '26MMCMOgxaYcEPmNr61D'. The trackAdsConversion()
 // helper no-ops on XXX_ values, so all wired fires below stay safe until labels are pasted.
 // Labels are server-injected from env so non-engineers can hot-swap them without a deploy:
@@ -326,9 +329,6 @@ window.GOOGLE_ADS_CONVERSIONS = {
   signup:       'AW-18080319225/eMC-CPy_yagcEPmNr61D',   // account created (LIVE)
   purchase:     'AW-18080319225/${(c.env as any).GADS_PURCHASE_LABEL || 'XXX_PURCHASE_LABEL'}'
 };
-// Phone tracking removed — phone is not a lead source for this business and
-// the Call-from-Ads gtag('config') was causing repeated failed "Calls (uploads)"
-// in Tag Assistant on every page load.
 
 // Persist Google Ads click ID + UTMs from the URL into localStorage so they
 // survive across navigation and can be sent at register time. Stored for 90
