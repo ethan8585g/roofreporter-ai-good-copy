@@ -19042,6 +19042,7 @@ function getCrmSubPageHTML(module: string, title: string, icon: string) {
   </script>
   <script src="/static/crm-module.js?v=${Date.now()}"></script>
   <script src="/static/solar-calculator.js?v=${Date.now()}"></script>
+  <script src="/static/customer-3d-modal.js?v=${Date.now()}"></script>
   <script>
     // Leads badge on CRM pages
     (function() {
