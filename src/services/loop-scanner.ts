@@ -71,8 +71,28 @@ type ProbeMetric = { kind: 'link' | 'api' | 'form' | 'console' | 'health'; path?
 
 // Surfaces are intentionally narrow — adding URLs is cheap, but a runaway
 // crawler is expensive (Browser Rendering bills per invocation).
+// Public list is the explicit set of marketing surfaces — the broken-link
+// crawler does NOT recurse into discovered hrefs (would blow the 50-subrequest
+// Worker cap once /blog and /coverage fan out to dozens of pages).
 const PUBLIC_SURFACE: SurfaceConfig = {
-  seedPaths: ['/', '/pricing', '/contact', '/login', '/signup', '/blog'],
+  seedPaths: [
+    '/', '/pricing', '/contact', '/login', '/signup',
+    '/coverage', '/lander', '/faq', '/tools',
+    '/tools/pitch-calculator', '/tools/material-estimator',
+    '/blog',
+    '/blog/roof-manager-vs-eagleview',
+    '/blog/roof-manager-vs-roofsnap',
+    '/blog/roof-measurement-report-api-developer-access-2026',
+    '/blog/fort-lauderdale-luxury-real-estate-roof-audit',
+    '/blog/living-on-a-canal-cape-coral-roofing',
+    '/blog/student-activities-tallahassee-landlord-roofing',
+    '/blog/port-st-lucie-vs-fort-lauderdale-family-roofing',
+    '/roof-measurement/new-york', '/roof-measurement/los-angeles',
+    '/roof-measurement/chicago', '/roof-measurement/houston',
+    '/roof-measurement/dallas', '/roof-measurement/miami',
+    '/roof-measurement/atlanta', '/roof-measurement/denver',
+    '/roof-measurement/phoenix',
+  ],
   apiHealthRoutes: [],
   formTests: [
     {
@@ -186,7 +206,11 @@ async function crawlLinks(seedPaths: string[], auth: Record<string, string>, met
   const findings: Finding[] = []
   const visited = new Set<string>()
   const queue: { path: string; from: string }[] = seedPaths.map(p => ({ path: p, from: 'seed' }))
-  const maxPages = 40
+  // No recursion: every URL must be in seedPaths. Why: discovered-href fan-out
+  // blew past the Worker 50-subrequest cap (/blog alone links to ~10 posts,
+  // / links to /coverage + /tools/* + 9 city pages). Cap stays as a safety
+  // net in case seedPaths grows past the budget.
+  const maxPages = 30
   let processed = 0
 
   while (queue.length > 0 && processed < maxPages) {
@@ -210,18 +234,6 @@ async function crawlLinks(seedPaths: string[], auth: Record<string, string>, met
             message: `HTTP ${res.status} on ${path}`,
             details: { status: res.status, linkedFrom: from, durationMs: dur },
           })
-          return
-        }
-        if (res.status >= 300 && res.status < 400) return // redirects ok
-
-        // Discover internal hrefs from HTML responses (depth ≤ 1 from seeds).
-        const ct = res.headers.get('content-type') || ''
-        if (!ct.includes('html')) return
-        const html = await res.text()
-        for (const href of extractInternalHrefs(html)) {
-          if (!visited.has(href) && processed < maxPages) {
-            queue.push({ path: href, from: path })
-          }
         }
       } catch (e: any) {
         metrics.push({ kind: 'link', path, durationMs: Date.now() - probeT0, ok: false })
@@ -236,21 +248,6 @@ async function crawlLinks(seedPaths: string[], auth: Record<string, string>, met
     }))
   }
   return findings
-}
-
-function extractInternalHrefs(html: string): string[] {
-  const out = new Set<string>()
-  const re = /href="([^"#?]+)/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(html)) !== null) {
-    const href = m[1]
-    // /cdn-cgi/ paths are Cloudflare-internal endpoints (email-protection,
-    // challenge-platform, etc.), not application routes — skip them.
-    if (href.startsWith('/') && !href.startsWith('//') && !href.startsWith('/static/') && !href.startsWith('/cdn-cgi/') && !href.match(/\.(jpg|jpeg|png|svg|webp|css|js|ico|pdf|xml|map)$/i)) {
-      out.add(href)
-    }
-  }
-  return Array.from(out).slice(0, 30) // cap fan-out per page
 }
 
 // ── Check: API health pings ─────────────────────────────────────
@@ -376,6 +373,14 @@ async function captureConsoleErrors(
       const json: any = await apiRes.json().catch(() => ({}))
       const dur = Date.now() - probeT0
       metrics.push({ kind: 'console', path, status: apiRes.status, durationMs: dur, ok: apiRes.ok })
+      // 401/403 from the Cloudflare API itself = our token isn't scoped for
+      // Browser Rendering. That's an infra-cred state, not an app bug — bail
+      // silently for the rest of the paths so we don't emit a warn finding
+      // per path every scan. (The same path is taken when the secret is
+      // unset above; this just extends "degraded mode" to "scope missing".)
+      if (apiRes.status === 401 || apiRes.status === 403) {
+        return []
+      }
       // Browser Rendering returns console messages on errors.
       const consoleMsgs: any[] = json?.result?.consoleMessages || json?.consoleMessages || []
       const errors = consoleMsgs.filter(m => m.type === 'error' || m.level === 'error')
