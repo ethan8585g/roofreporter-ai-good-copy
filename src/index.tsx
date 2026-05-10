@@ -6,6 +6,7 @@ import { trackReportView } from './services/report-view-tracker'
 import { buildClientAnalyticsScript } from './services/analytics-events'
 import { AB_SCRIPT } from './lib/ab'
 import { blogLeadMagnetHTML, freeMeasurementReportFormHTML } from './lib/lead-forms'
+import { limitByIp, limitByKey } from './lib/rate-limit'
 import { ordersRoutes } from './routes/orders'
 import { companiesRoutes } from './routes/companies'
 import { settingsRoutes } from './routes/settings'
@@ -3580,12 +3581,25 @@ app.get('/demo-portal', (c) => c.html(getDemoPortalHTML()))
 // Lead capture API — public, no auth required
 app.post('/api/demo/lead', async (c) => {
   try {
+    // Per-IP rate limit — public, unauth, sends sales-notify email + DB row
+    // per call. Without a cap a bot floods demo_leads + the sales inbox with
+    // multi-MB payloads. 5 leads per IP per hour is generous for a real demo.
+    const rl = await limitByIp(c, 'demo-lead-ip', 5, 3600)
+    if (!rl.ok) return c.json({ error: 'Too many demo requests from your network. Try again in an hour.' }, 429)
+
     const body = await c.req.json()
     const { name, email, phone, company, message, utm_source, utm_medium, utm_campaign, utm_content } = body
 
     if (!name || !email) {
       return c.json({ error: 'Name and email are required' }, 400)
     }
+    // Bound input lengths so a bot can't shove multi-MB strings into the DB.
+    const cap = (v: any, n: number) => v == null ? null : String(v).slice(0, n)
+    const safeName = cap(name, 200)
+    const safeEmail = cap(email, 200)
+    const safePhone = cap(phone, 40)
+    const safeCompany = cap(company, 200)
+    const safeMessage = cap(message, 2000)
 
     // Store lead in demo_leads table
     await c.env.DB.prepare(`
@@ -3613,14 +3627,14 @@ app.post('/api/demo/lead', async (c) => {
       INSERT INTO demo_leads (name, email, phone, company, message, utm_source, utm_medium, utm_campaign, utm_content)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      name, email, phone || '', company || '', message || '',
-      utm_source || '', utm_medium || '', utm_campaign || '', utm_content || ''
+      safeName, safeEmail, safePhone || '', safeCompany || '', safeMessage || '',
+      cap(utm_source, 200) || '', cap(utm_medium, 200) || '', cap(utm_campaign, 200) || '', cap(utm_content, 200) || ''
     ).run()
 
     notifySalesNewLead(c.env, {
       source: 'demo_portal',
-      name, email, phone, company, message,
-      extra: { utm_source, utm_medium, utm_campaign, utm_content }
+      name: safeName, email: safeEmail, phone: safePhone, company: safeCompany, message: safeMessage,
+      extra: { utm_source: cap(utm_source, 200), utm_medium: cap(utm_medium, 200), utm_campaign: cap(utm_campaign, 200), utm_content: cap(utm_content, 200) }
     }).catch((e: any) => console.error('[demo-portal/lead] email notification failed:', e?.message || e))
 
     return c.json({ success: true })

@@ -4,6 +4,7 @@ import { resolveTeamOwner } from './team'
 import { trueAreaFromFootprint, pitchToRatio } from '../utils/geo-math'
 import { calculateTieredProposals, calculateProposal, DEFAULT_PRESETS, TIER_PRESETS } from '../services/pricing-engine'
 import type { RoofMeasurements, RoofPresetCosts } from '../services/pricing-engine'
+import { limitByIp, limitByKey } from '../lib/rate-limit'
 
 export const widgetRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -90,12 +91,22 @@ widgetRoutes.get('/public/config/:public_key', async (c) => {
 // POST /public/estimate — run Solar API measurement + pricing, save lead
 widgetRoutes.post('/public/estimate', async (c) => {
   try {
+    // Rate limit: each call hits the paid Google Solar API and inserts a
+    // widget_leads row. Without caps, an attacker can both run up the Solar
+    // API bill and flood the contractor's lead inbox with garbage. Limit per
+    // IP AND per public_key (so a single widget can't be DoS'd either).
+    const ipRl = await limitByIp(c, 'widget-estimate-ip', 10, 600)
+    if (!ipRl.ok) return c.json({ error: 'Too many estimate requests from your network. Try again in 10 minutes.' }, 429)
+
     const body = await c.req.json()
     const { public_key, address, lat, lng, name, email, phone } = body
 
     if (!public_key || !address || !lat || !lng) {
       return c.json({ error: 'public_key, address, lat, and lng are required' }, 400)
     }
+    // Per-widget cap so one badly-targeted widget can't drain Solar API quota.
+    const widgetRl = await limitByKey(c, 'widget-estimate-key', String(public_key), 30, 600)
+    if (!widgetRl.ok) return c.json({ error: 'This widget has hit its rate limit. Try again in 10 minutes.' }, 429)
 
     // Look up widget config
     const config = await c.env.DB.prepare(`

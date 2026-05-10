@@ -14,7 +14,9 @@ const META_GRAPH_API = 'https://graph.facebook.com/v21.0'
 
 // ── Server-Side Conversions API (CAPI) helper ──
 // Sends hashed lead data to Meta for ad optimization & attribution
-// Can be called from any route (not auth-guarded) — uses system token
+// Can be called from any route (not auth-guarded) — uses system token.
+// Pass testEventCode to route the event to Meta's "Test Events" tab in
+// Events Manager (not counted as a production conversion). Used by /ads-health.
 async function sendMetaConversion(env: any, opts: {
   eventName: string
   email?: string
@@ -22,7 +24,8 @@ async function sendMetaConversion(env: any, opts: {
   sourcePage?: string
   sourceUrl?: string
   customData?: Record<string, any>
-}): Promise<{ success: boolean; error?: string }> {
+  testEventCode?: string
+}): Promise<{ success: boolean; error?: string; fbtrace_id?: string; http_status_code?: number }> {
   const pixelId = env.META_PIXEL_ID || ''
   const accessToken = env.META_CAPI_ACCESS_TOKEN || ''
   if (!pixelId || !accessToken) {
@@ -31,7 +34,7 @@ async function sendMetaConversion(env: any, opts: {
     // and we couldn't tell missing-token from no-events-firing.
     try {
       await env.DB.prepare(
-        `INSERT INTO meta_conversion_events (event_name, event_id, pixel_id, user_email_hash, user_phone_hash, custom_data, source_page, status, meta_response) VALUES (?,?,?,?,?,?,?,?,?)`
+        `INSERT INTO meta_conversion_events (event_name, event_id, pixel_id, user_email_hash, user_phone_hash, custom_data, source_page, status, meta_response, test_event_code) VALUES (?,?,?,?,?,?,?,?,?,?)`
       ).bind(
         opts.eventName,
         `skip_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -40,7 +43,8 @@ async function sendMetaConversion(env: any, opts: {
         JSON.stringify(opts.customData || {}),
         opts.sourcePage || '',
         'skipped',
-        JSON.stringify({ reason: !pixelId ? 'META_PIXEL_ID unset' : 'META_CAPI_ACCESS_TOKEN unset' })
+        JSON.stringify({ reason: !pixelId ? 'META_PIXEL_ID unset' : 'META_CAPI_ACCESS_TOKEN unset' }),
+        opts.testEventCode || null
       ).run()
     } catch {}
     return { success: false, error: 'CAPI not configured' }
@@ -58,7 +62,7 @@ async function sendMetaConversion(env: any, opts: {
   if (opts.email) userData.em = [await sha256(opts.email)]
   if (opts.phone) userData.ph = [await sha256(opts.phone.replace(/\D/g, ''))]
 
-  const payload = {
+  const payload: Record<string, any> = {
     data: [{
       event_name: opts.eventName,
       event_time: Math.floor(Date.now() / 1000),
@@ -70,32 +74,41 @@ async function sendMetaConversion(env: any, opts: {
     }],
     access_token: accessToken,
   }
+  if (opts.testEventCode) payload.test_event_code = opts.testEventCode
 
+  let httpStatus = 0
+  let fbtraceId: string | undefined
   try {
     const res = await fetch(`${META_GRAPH_API}/${pixelId}/events`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
-    const result = await res.json() as any
+    httpStatus = res.status
+    const result = await res.json().catch(() => ({})) as any
+    fbtraceId = result?.fbtrace_id || result?.error?.fbtrace_id
 
-    // Log the conversion event
+    // Log the conversion event with diagnostic columns so a Meta-side outage,
+    // expired token, or bad payload can be triaged without re-running the call.
     try {
       await env.DB.prepare(
-        `INSERT INTO meta_conversion_events (event_name, event_id, pixel_id, user_email_hash, user_phone_hash, custom_data, source_page, status, meta_response) VALUES (?,?,?,?,?,?,?,?,?)`
+        `INSERT INTO meta_conversion_events (event_name, event_id, pixel_id, user_email_hash, user_phone_hash, custom_data, source_page, status, meta_response, fbtrace_id, http_status_code, test_event_code) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
       ).bind(
         opts.eventName, eventId, pixelId,
         userData.em?.[0] || '', userData.ph?.[0] || '',
         JSON.stringify(opts.customData || {}), opts.sourcePage || '',
         result.events_received ? 'sent' : 'failed',
-        JSON.stringify(result).slice(0, 500)
+        JSON.stringify(result).slice(0, 500),
+        fbtraceId || null,
+        httpStatus,
+        opts.testEventCode || null
       ).run()
     } catch {}
 
-    return { success: !!result.events_received }
+    return { success: !!result.events_received, fbtrace_id: fbtraceId, http_status_code: httpStatus }
   } catch (e: any) {
     console.error('[Meta CAPI]', e?.message || e)
-    return { success: false, error: e?.message || 'Network error' }
+    return { success: false, error: e?.message || 'Network error', http_status_code: httpStatus || undefined }
   }
 }
 

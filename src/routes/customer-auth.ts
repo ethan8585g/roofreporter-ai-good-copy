@@ -7,6 +7,7 @@ import { hashPassword, verifyPassword, isLegacyHash, dummyVerify } from '../lib/
 import { getCustomerSessionToken } from '../lib/session-tokens'
 import { notifyNewUserSignup, sendWelcomeEmail, loadGmailCreds, sendGmailOAuth2 } from '../services/email'
 import { generateCsrfToken, csrfCookieAttrs, makeCsrfMiddleware } from '../lib/csrf'
+import { limitByIp, limitByKey } from '../lib/rate-limit'
 
 // P1-11: sanitize values before splicing into MIME headers. Strips CR/LF and
 // control chars that could be used for header injection (inject Bcc, etc.).
@@ -931,6 +932,14 @@ customerAuthRoutes.post('/login', async (c) => {
 
     const cleanEmail = email.toLowerCase().trim()
 
+    // Per-email + per-IP rate limits — slow credential stuffing without
+    // breaking legitimate users behind shared NATs. 8 attempts per email per
+    // 15min, 30 attempts per IP per 15min. Both must pass.
+    const emailRl = await limitByKey(c, 'login-email', cleanEmail, 8, 900)
+    if (!emailRl.ok) return c.json({ error: 'Too many login attempts for this account. Try again in a few minutes.' }, 429)
+    const ipRl = await limitByIp(c, 'login-ip', 30, 900)
+    if (!ipRl.ok) return c.json({ error: 'Too many login attempts from your network. Try again in a few minutes.' }, 429)
+
     // ============================================================
     // P0-04: source-level dev bypass removed. The dev@reusecanada.ca
     // row exists in DB and logs in through the normal path below.
@@ -1521,6 +1530,11 @@ customerAuthRoutes.post('/set-tier', async (c) => {
 customerAuthRoutes.post('/change-password', async (c) => {
   const token = getCustomerSessionToken(c)
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
+
+  // Per-IP rate limit — slows brute-force of `current_password` by an
+  // attacker who's stolen a session token. 10 attempts per 10 min.
+  const rl = await limitByIp(c, 'change-password-ip', 10, 600)
+  if (!rl.ok) return c.json({ error: 'Too many password-change attempts. Try again in a few minutes.' }, 429)
 
   const session = await c.env.DB.prepare(`
     SELECT cs.customer_id, cu.password_hash
@@ -2183,12 +2197,32 @@ customerAuthRoutes.post('/item-library', async (c) => {
     const { name, description, category, default_unit, default_unit_price, default_quantity, is_taxable } = await c.req.json()
     if (!name) return c.json({ error: 'Name is required' }, 400)
 
+    // Validate numeric inputs — without this, a customer can store negative
+    // or NaN-coerced unit prices that flow into proposal/invoice math and
+    // produce nonsense totals (or negative balances).
+    const priceNum = Number(default_unit_price)
+    if (default_unit_price != null && default_unit_price !== '' && (!Number.isFinite(priceNum) || priceNum < 0)) {
+      return c.json({ error: 'default_unit_price must be a non-negative finite number' }, 400)
+    }
+    const qtyNum = Number(default_quantity)
+    if (default_quantity != null && default_quantity !== '' && (!Number.isFinite(qtyNum) || qtyNum <= 0)) {
+      return c.json({ error: 'default_quantity must be a positive finite number' }, 400)
+    }
+    // Bound text fields too so the same row doesn't get bloated with multi-MB strings.
+    const cap = (v: any, n: number) => v == null ? null : String(v).trim().slice(0, n)
+    const safeName = cap(name, 200)
+    const safeDesc = cap(description, 1000) || ''
+    const safeCategory = cap(category, 60) || 'roofing'
+    const safeUnit = cap(default_unit, 40) || 'each'
+    const safePrice = (Number.isFinite(priceNum) && priceNum >= 0) ? priceNum : 0
+    const safeQty = (Number.isFinite(qtyNum) && qtyNum > 0) ? qtyNum : 1
+
     const result = await c.env.DB.prepare(`
       INSERT INTO item_library (owner_customer_id, name, description, category, default_unit, default_unit_price, default_quantity, is_taxable)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      ownerId, name, description || '', category || 'roofing',
-      default_unit || 'each', default_unit_price || 0, default_quantity || 1, is_taxable ? 1 : 0
+      ownerId, safeName, safeDesc, safeCategory,
+      safeUnit, safePrice, safeQty, is_taxable ? 1 : 0
     ).run()
 
     return c.json({ success: true, id: result.meta.last_row_id }, 201)
@@ -2626,6 +2660,14 @@ customerAuthRoutes.post('/magic-link', async (c) => {
   try { body = await c.req.json() } catch { return c.json({ error: 'invalid_body' }, 400) }
   const email = (body.email || '').trim().toLowerCase()
   if (!email || !email.includes('@')) return c.json({ error: 'invalid_email' }, 400)
+
+  // Per-IP and per-email rate limits — magic-link emails are free for an
+  // attacker to spam any victim's inbox AND burn our Resend/Gmail send quota.
+  // 3 emails per address per hour, 10 per IP per hour.
+  const emailRl = await limitByKey(c, 'magic-link-email', email, 3, 3600)
+  if (!emailRl.ok) return c.json({ error: 'Too many magic links sent to this email. Check your inbox or try again later.' }, 429)
+  const ipRl = await limitByIp(c, 'magic-link-ip', 10, 3600)
+  if (!ipRl.ok) return c.json({ error: 'Too many magic-link requests from your network. Try again later.' }, 429)
 
   const db = (c.env as any).DB
   const tokenBytes = Array.from(crypto.getRandomValues(new Uint8Array(32))).map((b: number) => b.toString(16).padStart(2, '0')).join('')

@@ -18,6 +18,10 @@ import { pruneExpiredScanSessions } from './services/synthetic-auth'
 import { runBacklinkHealthSweep } from './routes/backlinks'
 import { runAdsHealthCheck } from './services/ads-health'
 import { sendAdsHealthEmail } from './services/ads-health-email'
+import { runSignupJourney } from './services/signup-journey'
+import { sendJourneyEmail } from './services/journey-email'
+import { runSignupHealthCheck } from './services/signup-health'
+import { sendSignupHealthEmail } from './services/health-email'
 
 // ── Abandoned signup recovery ─────────────────────────────────────────────────
 async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number; skipped: number }> {
@@ -602,6 +606,69 @@ export default {
           })
         } catch (err: any) {
           console.error('[CRON:scan_ads_health] Error:', err?.message)
+        }
+      })())
+    }
+
+    // Signup-journey synthetic test — every hour at :00. Walks every
+    // /customer/* page + the major auth'd APIs + a few toggle round-trips
+    // against PROD, emails dead ends to support if any. Cheap (~3-4s) and
+    // catches CSRF/auth/route regressions within the hour.
+    if (minute === 0 && await isAgentEnabled('signup_journey')) {
+      const expectedAt = new Date(now)
+      expectedAt.setUTCMinutes(0, 0, 0)
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const result = await runSignupJourney(env)
+          const email = await sendJourneyEmail(env, result)
+          const status: 'pass' | 'fail' = result.verdict === 'fail' ? 'fail' : 'pass'
+          const findings = (result.dead_ends || []).map((d: any) => ({
+            severity: (d.severity === 'error' ? 'error' : 'warn') as 'error' | 'warn',
+            category: 'signup_journey',
+            message: `${d.category} ${d.path} → ${d.status ?? '—'}: ${d.message}`,
+            details: d,
+          }))
+          await recordExternalRun(env, {
+            loopId: 'signup_journey',
+            source: 'cf_cron',
+            status,
+            summary: `${result.verdict} · ${result.dead_ends?.length || 0} dead end(s) · pages ${result.pages?.checked - result.pages?.failed}/${result.pages?.checked} · APIs ${result.apis?.checked - result.apis?.failed}/${result.apis?.checked} · email ${email.skipped ? 'skipped' : email.ok ? 'sent' : `failed: ${email.error}`}`.slice(0, 500),
+            durationMs: Date.now() - t0,
+            outputs: { verdict: result.verdict, pages: result.pages, apis: result.apis, toggles: result.toggles, email },
+            findings,
+            expectedAt,
+          })
+        } catch (err: any) {
+          console.error('[CRON:signup_journey] Error:', err?.message)
+        }
+      })())
+    }
+
+    // Signup-health daily sweep at 10:00 UTC — probes signup surface +
+    // Gmail transport + funnel regression + backend secrets + reports +
+    // payments. Always emails the summary to support (digest, not just
+    // failures).
+    if (hour === 10 && minute === 0 && await isAgentEnabled('signup_health')) {
+      const expectedAt = new Date(now)
+      expectedAt.setUTCHours(10, 0, 0, 0)
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const result = await runSignupHealthCheck(env)
+          const email = await sendSignupHealthEmail(env, result)
+          const status: 'pass' | 'fail' = result.verdict === 'fail' ? 'fail' : 'pass'
+          await recordExternalRun(env, {
+            loopId: 'signup_health',
+            source: 'cf_cron',
+            status,
+            summary: `${result.verdict} · ${(result.sections || []).length} section(s) · email ${email.ok ? 'sent' : `failed: ${email.error}`}`.slice(0, 500),
+            durationMs: Date.now() - t0,
+            outputs: { verdict: result.verdict, sections: result.sections, email },
+            expectedAt,
+          })
+        } catch (err: any) {
+          console.error('[CRON:signup_health] Error:', err?.message)
         }
       })())
     }

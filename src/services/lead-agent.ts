@@ -138,7 +138,30 @@ export async function runLeadAgent(env: Bindings): Promise<LeadRunResult> {
 
   const client = getAnthropicClient(env.ANTHROPIC_API_KEY)
 
+  // Lightweight email format check — reject obviously broken addresses BEFORE
+  // burning the LLM budget + a Gmail/Resend send attempt that's guaranteed to
+  // bounce. Mark as failed so the OUTER query doesn't re-pick it next tick.
+  const isValidEmail = (e: string | null | undefined): boolean => {
+    if (!e || typeof e !== 'string') return false
+    const trimmed = e.trim()
+    if (trimmed.length < 5 || trimmed.length > 320) return false
+    // RFC-lite — covers ~99% of real-world addresses, rejects whitespace,
+    // multiple @, missing TLD, etc.
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)
+  }
+
   for (const lead of leads.results) {
+    if (!isValidEmail(lead.email)) {
+      result.errors.push(`Lead ${lead.email || '<empty>'}: invalid email format — skipped`)
+      // Record so we don't re-pick this row on every tick.
+      try {
+        await env.DB.prepare(
+          `INSERT OR IGNORE INTO lead_responses (lead_email, lead_source, response_subject, success)
+           VALUES (lower(?), ?, 'INVALID_EMAIL', 0)`
+        ).bind(String(lead.email || ''), lead.source).run()
+      } catch {}
+      continue
+    }
     try {
       const msg = await client.messages.create({
         model: CLAUDE_MODEL,

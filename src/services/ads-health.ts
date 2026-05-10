@@ -292,19 +292,32 @@ async function checkCapiVolume(env: Bindings): Promise<Omit<SectionResult, 'key'
   const counts: Record<string, number> = { sent: 0, failed: 0, skipped: 0 }
   for (const r of rows.results || []) counts[r.status] = (counts[r.status] || 0) + r.n
   const total = counts.sent + counts.failed + counts.skipped
+
+  // Pull HTTP status code distribution for the FAILED rows only — lets us
+  // distinguish "Meta was down (5xx)" from "our token is dead (401/403)" from
+  // "rate-limited (429)" without opening Events Manager. Skipped rows have
+  // null http_status, sent rows are by definition 200.
+  const httpRows = await env.DB.prepare(
+    `SELECT http_status_code AS code, COUNT(*) AS n FROM meta_conversion_events
+     WHERE status = 'failed' AND created_at >= datetime('now','-1 day')
+     GROUP BY http_status_code ORDER BY n DESC`
+  ).all<{ code: number | null; n: number }>().catch(() => ({ results: [] as Array<{ code: number | null; n: number }> }))
+  const httpMix = (httpRows.results || []).map(r => `${r.code ?? 'no-code'}:${r.n}`).join(' / ')
+
   if (total === 0) {
-    return { status: 'warn', summary: 'no Meta CAPI calls in last 24h — either no conversions or integration paused', details: counts }
+    return { status: 'warn', summary: 'no Meta CAPI calls in last 24h — either no conversions or integration paused', details: { ...counts, http_mix: '' } }
   }
   if (counts.skipped === total) {
-    return { status: 'warn', summary: `100% of CAPI calls skipped (${total}/${total}) — META_CAPI_ACCESS_TOKEN almost certainly unset`, details: counts }
+    return { status: 'warn', summary: `100% of CAPI calls skipped (${total}/${total}) — META_CAPI_ACCESS_TOKEN almost certainly unset`, details: { ...counts, http_mix: '' } }
   }
+  const httpSuffix = httpMix ? ` · failed http: ${httpMix}` : ''
   if (counts.failed > 0 && counts.failed >= total / 2) {
-    return { status: 'fail', summary: `${counts.failed}/${total} CAPI calls failed (${Math.round(100 * counts.failed / total)}%)`, details: counts }
+    return { status: 'fail', summary: `${counts.failed}/${total} CAPI calls failed (${Math.round(100 * counts.failed / total)}%)${httpSuffix}`, details: { ...counts, http_mix: httpMix } }
   }
   if (counts.failed > 0) {
-    return { status: 'warn', summary: `${counts.sent} sent · ${counts.failed} failed · ${counts.skipped} skipped (24h)`, details: counts }
+    return { status: 'warn', summary: `${counts.sent} sent · ${counts.failed} failed · ${counts.skipped} skipped (24h)${httpSuffix}`, details: { ...counts, http_mix: httpMix } }
   }
-  return { status: 'pass', summary: `${counts.sent} sent · 0 failed · ${counts.skipped} skipped (24h)`, details: counts }
+  return { status: 'pass', summary: `${counts.sent} sent · 0 failed · ${counts.skipped} skipped (24h)`, details: { ...counts, http_mix: '' } }
 }
 
 // ── 7. gclid capture on signup ──────────────────────────────────

@@ -851,9 +851,55 @@ squareRoutes.post('/use-credit', async (c) => {
     const autoInvEmail = autoInvEmailRaw && isValidEmail(autoInvEmailRaw) ? autoInvEmailRaw : null
     const autoInvPhone = invoice_customer_phone ? String(invoice_customer_phone).trim().slice(0, 40) : null
 
+    // ── Credit deduct FIRST, then order INSERT ─────────────────
+    // Atomicity fix: previously the order was INSERTed first, then the
+    // credit deduct UPDATE ran. If the deduct returned 0 changes (out of
+    // credits in a concurrent claim race), the route returned 402 but the
+    // order row was already in the DB — phantom paid order, no charge,
+    // admin sees an orphan to fulfill.
+    // New flow: deduct first; only INSERT if deduct succeeded; refund the
+    // deduct if INSERT throws (rare — UNIQUE replay handled separately).
+    if (!isDev) {
+      if (isTrial) {
+        const deductResult = await c.env.DB.prepare(
+          'UPDATE customers SET free_trial_used = COALESCE(free_trial_used, 0) + 1, updated_at = datetime("now") WHERE id = ? AND COALESCE(free_trial_used, 0) < COALESCE(free_trial_total, 4)'
+        ).bind(customer.customer_id).run()
+        if (!deductResult.meta.changes) {
+          return c.json({ error: 'No free trials remaining', credits_remaining: 0 }, 402)
+        }
+      } else {
+        const deductResult = await c.env.DB.prepare(
+          'UPDATE customers SET credits_used = COALESCE(credits_used, 0) + 1, updated_at = datetime("now") WHERE id = ? AND COALESCE(credits_used, 0) < COALESCE(report_credits, 0)'
+        ).bind(customer.customer_id).run()
+        if (!deductResult.meta.changes) {
+          return c.json({ error: 'No credits remaining', credits_remaining: 0 }, 402)
+        }
+      }
+    }
+    // Helper to refund the deduct if the order INSERT fails for any reason
+    // other than an idempotency UNIQUE replay (which keeps the existing
+    // order — see the catch block below).
+    async function _refundDeduct(): Promise<void> {
+      if (isDev) return
+      try {
+        if (isTrial) {
+          await c.env.DB.prepare(
+            'UPDATE customers SET free_trial_used = MAX(0, COALESCE(free_trial_used, 0) - 1), updated_at = datetime("now") WHERE id = ?'
+          ).bind(customer.customer_id).run()
+        } else {
+          await c.env.DB.prepare(
+            'UPDATE customers SET credits_used = MAX(0, COALESCE(credits_used, 0) - 1), updated_at = datetime("now") WHERE id = ?'
+          ).bind(customer.customer_id).run()
+        }
+      } catch (refundErr: any) {
+        console.error('[use-credit] CRITICAL: deduct succeeded but order INSERT failed AND refund also failed for customer', customer.customer_id, '— manual reconciliation required:', refundErr?.message)
+      }
+    }
+
     // Create order. If two concurrent requests share the same idempotency_key,
     // the unique index (customer_id, idempotency_key) will reject the second —
-    // we catch that and return the already-created order without deducting.
+    // we catch that, refund the deduct (we already debited above), and return
+    // the already-created order.
     let result: any
     try {
       // trace_source: 'self' when the customer submitted their own trace
@@ -904,12 +950,14 @@ squareRoutes.post('/use-credit', async (c) => {
       ).run()
     } catch (insertErr: any) {
       // Race with a concurrent request for the same idempotency_key — fetch
-      // and return that order. Do NOT deduct credits.
+      // and return that order. Refund the deduct we did above (the prior
+      // request already deducted its own credit when it inserted first).
       if (idemKey && /UNIQUE|constraint/i.test(String(insertErr?.message || ''))) {
         const dup = await c.env.DB.prepare(
           'SELECT id, order_number, property_address, service_tier, price, status, payment_status, is_trial, latitude, longitude FROM orders WHERE customer_id = ? AND idempotency_key = ? LIMIT 1'
         ).bind(customer.customer_id, idemKey).first<any>()
         if (dup) {
+          await _refundDeduct()
           const trialRem = isDev ? 999999 : Math.max(0, (customer.free_trial_total || 0) - (customer.free_trial_used || 0))
           const paidRem = isDev ? 999999 : Math.max(0, (customer.report_credits || 0) - (customer.credits_used || 0))
           return c.json({
@@ -928,6 +976,10 @@ squareRoutes.post('/use-credit', async (c) => {
           })
         }
       }
+      // Any other INSERT failure: refund the deduct so the customer isn't
+      // billed for an order that didn't exist. The error response surfaces
+      // the cause to the client.
+      await _refundDeduct()
       throw insertErr
     }
 
@@ -958,27 +1010,8 @@ squareRoutes.post('/use-credit', async (c) => {
       ;(c as any).executionCtx.waitUntil(notifyPromise)
     }
 
-    // Atomic deduct: WHERE clause prevents overselling even with concurrent
-    // requests. COALESCE() guards legacy customers whose counters are NULL —
-    // SQLite NULL comparisons return NULL (falsy), which would block their
-    // first trial claim despite being entitled to it.
-    if (!isDev) {
-      if (isTrial) {
-        const deductResult = await c.env.DB.prepare(
-          'UPDATE customers SET free_trial_used = COALESCE(free_trial_used, 0) + 1, updated_at = datetime("now") WHERE id = ? AND COALESCE(free_trial_used, 0) < COALESCE(free_trial_total, 4)'
-        ).bind(customer.customer_id).run()
-        if (!deductResult.meta.changes) {
-          return c.json({ error: 'No free trials remaining', credits_remaining: 0 }, 402)
-        }
-      } else {
-        const deductResult = await c.env.DB.prepare(
-          'UPDATE customers SET credits_used = COALESCE(credits_used, 0) + 1, updated_at = datetime("now") WHERE id = ? AND COALESCE(credits_used, 0) < COALESCE(report_credits, 0)'
-        ).bind(customer.customer_id).run()
-        if (!deductResult.meta.changes) {
-          return c.json({ error: 'No credits remaining', credits_remaining: 0 }, 402)
-        }
-      }
-    }
+    // (Credit deduct now happens BEFORE the order INSERT — see the block
+    // above with the _refundDeduct helper. Phantom-order bug fixed.)
 
     // Audit trail for trial claims so per-IP rate-limit can see this account.
     if (!isDev && isTrial) {

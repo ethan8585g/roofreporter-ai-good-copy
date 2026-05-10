@@ -122,6 +122,18 @@ function authHeaders() { return { 'Authorization': 'Bearer ' + getToken(), 'Cont
 
 document.addEventListener('DOMContentLoaded', async () => {
   await loadOrderData();
+  // Restore in-progress trace state from localStorage BEFORE first render so
+  // the page reflects the user's prior work (eaves polygon, sections, ridges,
+  // etc.). Only restores when there's actual progress and the snapshot is
+  // <24h old. Skipped when the URL carries ?address= (onboarding hand-off
+  // wins over a stale draft).
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const hasAddressSeed = !!params.get('address');
+    if (!hasAddressSeed && typeof window.restoreOrderStateIfPresent === 'function') {
+      window.restoreOrderStateIfPresent();
+    }
+  } catch (_) {}
   renderOrderPage();
   initMap();
   // Pre-fill the search input from ?address= so the onboarding hand-off
@@ -4188,6 +4200,8 @@ function showOrderSuccessOverlay(order) {
   `;
   document.body.appendChild(overlay);
 
+  // Order placed — clear the persisted draft so the next visit starts fresh.
+  try { if (typeof clearOrderState === 'function') clearOrderState(); } catch (_) {}
   // Redirect to dashboard after 1.5 seconds
   setTimeout(() => { window.location.href = '/customer/dashboard'; }, 1500);
 }
@@ -4211,6 +4225,10 @@ async function payWithSquare() {
     });
     const data = await res.json();
     if (data.checkout_url) {
+      // Square checkout starts — order will be created server-side on
+      // payment confirmation. Clear the persisted draft so a return visit
+      // doesn't double-place. (Refund/back from Square won't restore.)
+      try { if (typeof clearOrderState === 'function') clearOrderState(); } catch (_) {}
       window.location.href = data.checkout_url;
     } else {
       showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>' + (data.error || 'Checkout failed'));
@@ -4506,3 +4524,106 @@ function undoLastCaptured3DFeature(kind) {
   if (poly) { try { poly.setMap(null); } catch(_){} }
   if (typeof updateTraceUI === 'function') updateTraceUI();
 }
+
+// ============================================================
+// orderState persistence — survive accidental refresh / nav
+// ============================================================
+// Without this, a browser refresh, accidental "Back", or mobile Safari tab
+// eviction silently destroys all eaves points, sections, ridges, hips,
+// valleys, dormers, vents, etc. Persists only safe scalar/array fields
+// (no Google Maps Polygon/Marker/Map references) under a per-customer key
+// in localStorage so different customers on the same device don't collide.
+const ORDER_STATE_KEY = (function () {
+  try {
+    var raw = localStorage.getItem('rc_customer');
+    if (raw) { var c = JSON.parse(raw); if (c && c.id) return 'rc_order_state_' + c.id; }
+  } catch (_) {}
+  return 'rc_order_state_anon';
+})();
+const ORDER_STATE_TTL_MS = 24 * 60 * 60 * 1000; // 24h — older drafts get nuked
+const ORDER_STATE_PERSIST_FIELDS = [
+  'step', 'address', 'lat', 'lng', 'city', 'province', 'postalCode',
+  'selectedTier', 'attachedCrmCustomerId', 'attachedCrmCustomerName',
+  'invoiceCustomerName', 'invoiceCustomerPhone', 'invoiceCustomerEmail',
+  'invoicingAutoEnabled', 'sendReportToEmail', 'customerNotes',
+  'houseSqft',
+  // Trace inputs (pure data, no Google Maps refs)
+  'traceMode',
+  'traceEavesPoints', 'traceRidgeLines', 'traceHipLines', 'traceValleyLines',
+  'traceCurrentLine',
+  'traceEavesSections', 'traceDormers', 'traceCutouts',
+  'traceDormerCurrent', 'traceCutoutCurrent',
+  'traceVents', 'traceSkylights', 'traceChimneys', 'tracePipeBoots',
+  'traceWallLines',
+];
+function _serializeOrderState() {
+  var snapshot = { _saved_at: Date.now() };
+  for (var i = 0; i < ORDER_STATE_PERSIST_FIELDS.length; i++) {
+    var k = ORDER_STATE_PERSIST_FIELDS[i];
+    if (k in orderState) snapshot[k] = orderState[k];
+  }
+  // verifiedFaces carry a `polygon` Google Maps object — strip it before save
+  if (Array.isArray(orderState.verifiedFaces) && orderState.verifiedFaces.length > 0) {
+    snapshot.verifiedFaces = orderState.verifiedFaces.map(function (f) {
+      var o = {}; for (var k in f) { if (k !== 'polygon') o[k] = f[k]; } return o;
+    });
+  }
+  return snapshot;
+}
+let _orderSaveTimer = null;
+function saveOrderState() {
+  try {
+    var snap = _serializeOrderState();
+    localStorage.setItem(ORDER_STATE_KEY, JSON.stringify(snap));
+  } catch (_) { /* quota exceeded / disabled — silently skip */ }
+}
+function scheduleOrderStateSave() {
+  if (_orderSaveTimer) return;
+  _orderSaveTimer = setTimeout(function () { _orderSaveTimer = null; saveOrderState(); }, 800);
+}
+function clearOrderState() {
+  try { localStorage.removeItem(ORDER_STATE_KEY); } catch (_) {}
+}
+function restoreOrderState() {
+  try {
+    var raw = localStorage.getItem(ORDER_STATE_KEY);
+    if (!raw) return false;
+    var snap = JSON.parse(raw);
+    if (!snap || typeof snap !== 'object') return false;
+    // TTL — drafts older than 24h are likely stale (different property, etc.)
+    if (snap._saved_at && (Date.now() - snap._saved_at) > ORDER_STATE_TTL_MS) {
+      clearOrderState();
+      return false;
+    }
+    // Only restore if there's actually some trace work (avoid restoring an
+    // empty step='pin' over a fresh load).
+    var hasWork = (snap.step && snap.step !== 'pin')
+      || (snap.address && snap.address.length > 0)
+      || (Array.isArray(snap.traceEavesPoints) && snap.traceEavesPoints.length > 0);
+    if (!hasWork) return false;
+    for (var k in snap) {
+      if (k === '_saved_at') continue;
+      if (k in orderState) orderState[k] = snap[k];
+    }
+    return true;
+  } catch (_) { return false; }
+}
+
+// Periodic + visibility-change + beforeunload backstops so the persisted
+// snapshot stays close to live state even if individual mutation sites
+// don't call scheduleOrderStateSave() directly.
+setInterval(saveOrderState, 5000);
+document.addEventListener('visibilitychange', function () { if (document.hidden) saveOrderState(); });
+window.addEventListener('beforeunload', saveOrderState);
+
+// Try to restore at the next tick so the inline restore script runs after
+// orderState is in the DOMContentLoaded flow but before initMap fits the
+// view to a real address (which would override stale lat/lng). Exposed on
+// window so the existing init can call it explicitly if needed.
+window.restoreOrderStateIfPresent = function () {
+  var restored = restoreOrderState();
+  if (restored && typeof renderOrderPage === 'function') {
+    try { renderOrderPage(); } catch (_) {}
+  }
+  return restored;
+};

@@ -187,15 +187,22 @@
   function flush() {
     if (queue.length === 0) return;
     var batch = queue.splice(0, 20);
-    
-    // Use sendBeacon for reliability (works even during page unload)
+    var payload = JSON.stringify(batch);
+
+    // Try sendBeacon first (best on page-unload). It silently returns false
+    // when the payload exceeds the browser's per-origin queue (~64KB on most
+    // browsers) or is otherwise rejected — fall through to fetch in that case
+    // so events aren't dropped on the floor. Older Safari without sendBeacon
+    // also goes straight to fetch.
+    var beaconSent = false;
     if (navigator.sendBeacon) {
-      navigator.sendBeacon('/api/analytics/track', JSON.stringify(batch));
-    } else {
+      try { beaconSent = navigator.sendBeacon('/api/analytics/track', payload); } catch (_) { beaconSent = false; }
+    }
+    if (!beaconSent) {
       fetch('/api/analytics/track', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(batch),
+        body: payload,
         keepalive: true
       }).catch(function() {});
     }
@@ -540,8 +547,22 @@
       language: navigator.language
     }];
 
+    var exitPayload = JSON.stringify(exitEvent);
+    var exitSent = false;
     if (navigator.sendBeacon) {
-      navigator.sendBeacon('/api/analytics/track', JSON.stringify(exitEvent));
+      try { exitSent = navigator.sendBeacon('/api/analytics/track', exitPayload); } catch (_) { exitSent = false; }
+    }
+    if (!exitSent) {
+      // Fallback for older Safari, or beacon rejection — keepalive lets the
+      // request survive page-unload like sendBeacon does.
+      try {
+        fetch('/api/analytics/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: exitPayload,
+          keepalive: true
+        }).catch(function() {});
+      } catch (_) {}
     }
 
     // Send exit event to GA4 with full engagement data

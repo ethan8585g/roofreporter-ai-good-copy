@@ -3,6 +3,7 @@ import type { Bindings } from '../types'
 import { validateAdminSession } from './auth'
 import { recordAndNotify } from '../services/admin-notifications'
 import { autoProcessOrder } from '../services/ai-agent'
+import { trackOrderPlaced } from '../services/ga4-events'
 
 export const ordersRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -122,6 +123,21 @@ ordersRoutes.post('/', async (c) => {
     }).catch((e) => console.warn("[admin-notif] admin POST /api/orders:", (e && e.message) || e))
     if ((c as any).executionCtx?.waitUntil) {
       ;(c as any).executionCtx.waitUntil(notifyPromise)
+    }
+
+    // Fire GA4 begin_checkout — Smart Bidding's mid-funnel signal. Without this,
+    // Google Ads only sees signup + purchase and can't optimize for users who
+    // get to the order form but bail at payment. trackOrderPlaced was defined
+    // months ago but was never wired into any code path.
+    const beginCheckoutPromise = trackOrderPlaced(
+      c.env as any,
+      orderNumber,
+      property_address || '',
+      undefined,
+      { service_tier, value: Number(price) || 0, currency: 'CAD', source: 'admin_post_orders' },
+    ).catch((e: any) => console.warn('[ga4-server] begin_checkout fire failed:', (e && e.message) || e))
+    if ((c as any).executionCtx?.waitUntil) {
+      ;(c as any).executionCtx.waitUntil(beginCheckoutPromise)
     }
 
     // ── AI Agent Auto-Trigger ──
