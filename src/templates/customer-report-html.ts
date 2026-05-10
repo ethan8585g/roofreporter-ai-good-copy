@@ -10,7 +10,11 @@
 // ============================================================
 
 import type { RoofReport } from '../types'
-import { generateTraceBasedDiagramSVG } from './svg-diagrams'
+import {
+  generateTraceBasedDiagramSVG,
+  generateLengthDiagramSVG, generatePitchDiagramSVG2,
+  generateAreaDiagramSVG, generateNotesDiagramSVG,
+} from './svg-diagrams'
 
 const escapeHtml = (s: string): string =>
   String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
@@ -30,31 +34,34 @@ export function generateCustomerReportHTML(report: RoofReport): string {
 
   // 2D — re-render from the raw trace with hideMeasurements:true so no
   // dimension labels appear. The route stashes the parsed trace on
-  // reportData.customer_trace_input before calling this template.
+  // reportData.customer_trace_input before calling this template. We
+  // generate the 4-page EagleView-style sequence (Length / Pitch / Area /
+  // Notes), all with hideMeasurements:true so no quantitative info leaks.
   let twoDSVG = ''
+  let lengthSVG = '', pitchSVG = '', areaSVG = '', notesSVG = ''
   try {
     const trace = (report as any).customer_trace_input || null
     if (trace) {
-      twoDSVG = generateTraceBasedDiagramSVG(
-        {
-          eaves: trace.eaves || [],
-          eaves_sections: trace.eaves_sections || undefined,
-          eaves_section_pitches: trace.eaves_section_pitches || undefined,
-          eaves_section_kinds: trace.eaves_section_kinds || undefined,
-          ridges: trace.ridges || [],
-          hips: trace.hips || [],
-          valleys: trace.valleys || [],
-          dormers: trace.dormers || undefined,
-          cutouts: trace.cutouts || undefined,
-        },
-        { total_ridge_ft: 0, total_hip_ft: 0, total_valley_ft: 0, total_eave_ft: 0, total_rake_ft: 0 },
-        0,
-        0,
-        '',
-        0,
-        0,
-        { hideMeasurements: true },
-      )
+      const traceInput = {
+        eaves: trace.eaves || [],
+        eaves_sections: trace.eaves_sections || undefined,
+        eaves_section_pitches: trace.eaves_section_pitches || undefined,
+        eaves_section_kinds: trace.eaves_section_kinds || undefined,
+        ridges: trace.ridges || [],
+        hips: trace.hips || [],
+        valleys: trace.valleys || [],
+        walls: trace.walls,
+        dormers: trace.dormers || undefined,
+        cutouts: trace.cutouts || undefined,
+        annotations: trace.annotations || {},
+      }
+      const baseEdge = { total_ridge_ft: 0, total_hip_ft: 0, total_valley_ft: 0, total_eave_ft: 0, total_rake_ft: 0 }
+      const opts = { hideMeasurements: true }
+      twoDSVG   = generateTraceBasedDiagramSVG(traceInput, baseEdge, 0, 0, '', 0, 0, opts)
+      lengthSVG = generateLengthDiagramSVG(traceInput, baseEdge, 0, 0, '', 0, 0, opts)
+      pitchSVG  = generatePitchDiagramSVG2(traceInput, baseEdge, 0, 0, '', 0, 0, opts)
+      areaSVG   = generateAreaDiagramSVG(traceInput, baseEdge, 0, 0, '', 0, 0, opts)
+      notesSVG  = generateNotesDiagramSVG(traceInput, baseEdge, 0, 0, '', 0, 0, opts)
     }
   } catch {
     twoDSVG = ''
@@ -98,6 +105,34 @@ export function generateCustomerReportHTML(report: RoofReport): string {
     </section>`
     : ''
 
+  // EagleView-style 4-page sequence — each page focuses on one aspect of the
+  // roof. All measurements suppressed (hideMeasurements:true) so the customer
+  // sees what was traced without exposing quantitative data.
+  const sectionLength = lengthSVG ? `
+    <section class="page">
+      <h2>Length Diagram</h2>
+      <div class="frame">${lengthSVG}</div>
+      <p class="note">Roof edges color-coded by type (eaves, rakes, ridges, hips, valleys).</p>
+    </section>` : ''
+  const sectionPitch = pitchSVG ? `
+    <section class="page">
+      <h2>Pitch Diagram</h2>
+      <div class="frame">${pitchSVG}</div>
+      <p class="note">Each facet shaded by pitch class. Arrows point downslope.</p>
+    </section>` : ''
+  const sectionArea = areaSVG ? `
+    <section class="page">
+      <h2>Area Diagram</h2>
+      <div class="frame">${areaSVG}</div>
+      <p class="note">Per-facet roof areas with a 10ft × 10ft squares grid for scale.</p>
+    </section>` : ''
+  const sectionNotes = notesSVG ? `
+    <section class="page">
+      <h2>Notes Diagram</h2>
+      <div class="frame">${notesSVG}</div>
+      <p class="note">Roof penetrations: chimneys, vents, skylights, pipe boots, downspouts.</p>
+    </section>` : ''
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -120,7 +155,10 @@ export function generateCustomerReportHTML(report: RoofReport): string {
     <p class="note"><span class="stamp">CUSTOMER COPY</span> &nbsp; This summary shows the property aerial and the roof diagrams produced for this order. Detailed measurements, edge lengths and material take-off are provided to your roofing contractor in a separate document.</p>
   </section>
   ${sectionSatellite}
-  ${section2D}
+  ${sectionLength}
+  ${sectionPitch}
+  ${sectionArea}
+  ${sectionNotes}
   <section class="page">
     <div class="footer">
       <div>Generated by Roof Manager &middot; roofmanager.ca</div>

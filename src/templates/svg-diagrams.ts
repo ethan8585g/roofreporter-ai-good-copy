@@ -14,6 +14,118 @@ import {
 } from '../utils/geo-math'
 import { computeFacetDisplayData } from '../services/report-engine'
 
+// ============================================================
+// DIAGRAM LAYERS — EagleView-style discipline
+//
+// Each report page asks one question. Length diagram = edges only.
+// Pitch diagram = facet shading + downslope arrows. Area diagram =
+// facet letters + sqft. Notes diagram = annotations only. The combined
+// preset preserves legacy behavior (everything on at once).
+// ============================================================
+
+export type DiagramLayers = {
+  // Geometry
+  perimeter: boolean
+  facetFills: boolean
+  pitchClassShading?: boolean    // color facets by pitch bucket
+  squaresGridOverlay?: boolean   // 10ft grid on Area diagram
+
+  // Internal lines
+  ridges: boolean
+  hips: boolean
+  valleys: boolean
+  walls: boolean
+
+  // Annotations
+  chimneys: boolean
+  pipeBoots: boolean
+  downspouts: boolean
+  vents: boolean
+  skylights: boolean
+  cutouts: boolean
+  dormers: boolean
+
+  // Labels / overlays
+  edgeDimensions: boolean
+  edgeDimensionsMinFt?: number    // drop labels below this length
+  facetLabels: boolean
+  facetAzimuthInLabel?: boolean   // include "S 175°" in label
+  facetPitchInLabel?: boolean     // include "6:12" in label
+  pitchArrows: boolean
+  vertexDots: boolean
+
+  // Page-level chrome
+  legend: boolean
+  scaleBar: boolean
+  compassRose: boolean
+  sourceBadge: boolean
+  footerBar: boolean
+  annotationLegendTable?: boolean // printed glyph map for Notes diagram
+}
+
+// Combined = legacy default. Every layer ON, no min-ft cutoff. Existing
+// callers that don't pass `layers` see no behavior change.
+export const COMBINED_LAYERS: DiagramLayers = {
+  perimeter: true, facetFills: true,
+  ridges: true, hips: true, valleys: true, walls: true,
+  chimneys: true, pipeBoots: true, downspouts: true, vents: true, skylights: true,
+  cutouts: true, dormers: true,
+  edgeDimensions: true, edgeDimensionsMinFt: 0,
+  facetLabels: true, pitchArrows: true, vertexDots: true,
+  legend: true, scaleBar: true, compassRose: true, sourceBadge: true, footerBar: true,
+}
+
+// Length diagram: edges + dimensions, no facet shading, no annotations.
+// Drops dimension labels on edges < 4ft to match EagleView's "intentional
+// omission for readability" convention.
+export const LENGTH_LAYERS: DiagramLayers = {
+  perimeter: true, facetFills: false,
+  ridges: true, hips: true, valleys: true, walls: true,
+  chimneys: false, pipeBoots: false, downspouts: false, vents: false, skylights: false,
+  cutouts: true, dormers: true,
+  edgeDimensions: true, edgeDimensionsMinFt: 4,
+  facetLabels: false, pitchArrows: false, vertexDots: true,
+  legend: true, scaleBar: true, compassRose: true, sourceBadge: false, footerBar: true,
+}
+
+// Pitch diagram: facet shading by pitch bucket, downslope arrows, X:12
+// labels. No edge dimensions, no annotations.
+export const PITCH_LAYERS: DiagramLayers = {
+  perimeter: true, facetFills: true, pitchClassShading: true,
+  ridges: true, hips: true, valleys: true, walls: false,
+  chimneys: false, pipeBoots: false, downspouts: false, vents: false, skylights: false,
+  cutouts: true, dormers: true,
+  edgeDimensions: false,
+  facetLabels: true, facetPitchInLabel: true, facetAzimuthInLabel: true,
+  pitchArrows: true, vertexDots: false,
+  legend: false, scaleBar: true, compassRose: true, sourceBadge: false, footerBar: true,
+}
+
+// Area diagram: facet letter + sqft, optional 10ft grid. No internal
+// lines, no annotations, no dimensions.
+export const AREA_LAYERS: DiagramLayers = {
+  perimeter: true, facetFills: true, squaresGridOverlay: true,
+  ridges: false, hips: false, valleys: false, walls: false,
+  chimneys: false, pipeBoots: false, downspouts: false, vents: false, skylights: false,
+  cutouts: true, dormers: true,
+  edgeDimensions: false,
+  facetLabels: true, pitchArrows: false, vertexDots: false,
+  legend: false, scaleBar: true, compassRose: true, sourceBadge: false, footerBar: true,
+}
+
+// Notes diagram: outline + annotation glyphs only, plus a printed legend
+// table. No internal lines, no facet shading, no edges/dimensions.
+export const NOTES_LAYERS: DiagramLayers = {
+  perimeter: true, facetFills: false,
+  ridges: false, hips: false, valleys: false, walls: false,
+  chimneys: true, pipeBoots: true, downspouts: true, vents: true, skylights: true,
+  cutouts: true, dormers: false,
+  edgeDimensions: false,
+  facetLabels: false, pitchArrows: false, vertexDots: false,
+  legend: false, scaleBar: true, compassRose: true, sourceBadge: false, footerBar: false,
+  annotationLegendTable: true,
+}
+
 export function generateArchitecturalDiagramSVG(
   aiGeometry: AIMeasurementAnalysis | null | undefined,
   segments: RoofSegment[],
@@ -2409,9 +2521,17 @@ export function generateTraceBasedDiagramSVG(
   predominantPitch: string,
   grossSquares: number,
   trueAreaSqft: number,
-  opts: { hideMeasurements?: boolean } = {}
+  opts: {
+    hideMeasurements?: boolean
+    layers?: DiagramLayers
+    /** Per-face metadata from the engine — keyed by index aligning with the
+     *  facet order produced by the diagram's polygon split. Used to surface
+     *  azimuth + per-face pitch in the Pitch diagram label. Optional. */
+    faceMeta?: Array<{ pitch_rise?: number; pitch_label?: string; azimuth_deg?: number | null }>
+  } = {}
 ): string {
   const HIDE = opts.hideMeasurements === true
+  const L: DiagramLayers = opts.layers || COMBINED_LAYERS
   const W = 700, H = HIDE ? 660 : 700
   const PAD = 55
   const FOOTER_H = HIDE ? 0 : 56
@@ -2848,7 +2968,10 @@ export function generateTraceBasedDiagramSVG(
       facets.forEach(f => { f.areaSqft = Math.round(f.areaSqft * scale) })
     }
 
-    // Re-letter facets
+    // Sort facets smallest-to-largest by area (EagleView convention) and
+    // re-letter A, B, C... so the smallest face is "A". Caller's faceMeta
+    // (if provided) must be aligned to the post-sort order.
+    facets.sort((a, b) => a.areaSqft - b.areaSqft)
     facets.forEach((f, i) => { f.label = String.fromCharCode(65 + i) })
   }
 
@@ -2871,13 +2994,56 @@ export function generateTraceBasedDiagramSVG(
   svg += `</defs>`
 
   // ── FACET FILLS (subtle shading per facet) ──
+  // Pitch-class shading: when L.pitchClassShading is on, override the
+  // pastel rotation with a per-pitch bucket so walkable vs. low-slope
+  // reads at a glance (slate <2:12, blue 2-4, green 4-9, red >=9).
   const hatchIds = ['tr-hatch-a', 'tr-hatch-b', 'tr-hatch-c', 'tr-hatch-d']
-  facets.forEach((facet, fi) => {
+  const pitchClassFill = (rise: number | null | undefined): string => {
+    const r = typeof rise === 'number' && rise > 0 ? rise : avgPitchDeg > 0 ? Math.tan(avgPitchDeg * Math.PI / 180) * 12 : 0
+    if (r < 2)  return 'rgba(148,163,184,0.25)'   // slate / low-slope
+    if (r < 4)  return 'rgba(56,189,248,0.22)'    // light blue / low
+    if (r < 9)  return 'rgba(34,197,94,0.18)'     // green / standard walkable
+    return 'rgba(220,38,38,0.20)'                 // red / steep
+  }
+  if (L.facetFills) facets.forEach((facet, fi) => {
     const pts = facet.points.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
+    const fillColor = L.pitchClassShading
+      ? pitchClassFill(opts.faceMeta?.[fi]?.pitch_rise)
+      : FACET_FILLS[fi % FACET_FILLS.length]
     // Light fill + directional hatch
-    svg += `<polygon points="${pts}" fill="${FACET_FILLS[fi % FACET_FILLS.length]}" stroke="none"/>`
+    svg += `<polygon points="${pts}" fill="${fillColor}" stroke="none"/>`
     svg += `<polygon points="${pts}" fill="url(#${hatchIds[fi % hatchIds.length]})" stroke="none"/>`
   })
+
+  // ── SQUARES GRID OVERLAY (10ft × 10ft, clipped to perimeter) ──
+  // EagleView-style "Area Diagram" treatment: each square = 1 roofing square
+  // (100 sqft of footprint). Grid sits between facet fills and cutouts so
+  // non-roof voids visually cover it.
+  if (L.squaresGridOverlay) {
+    const pxPerFt_grid = sc * 0.3048
+    const gridFt = 10
+    const stepPx = gridFt * pxPerFt_grid
+    if (stepPx > 4) {
+      const clipId = `tr-perim-clip-${Math.random().toString(36).slice(2, 8)}`
+      const clipPts = eavesXY.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
+      svg += `<defs><clipPath id="${clipId}"><polygon points="${clipPts}"/></clipPath></defs>`
+      // Bounding box of the perimeter for grid extent
+      const xs = eavesXY.map(p => tx(p.x))
+      const ys = eavesXY.map(p => ty(p.y))
+      const gMinX = Math.floor(Math.min(...xs) / stepPx) * stepPx
+      const gMaxX = Math.ceil(Math.max(...xs) / stepPx) * stepPx
+      const gMinY = Math.floor(Math.min(...ys) / stepPx) * stepPx
+      const gMaxY = Math.ceil(Math.max(...ys) / stepPx) * stepPx
+      svg += `<g clip-path="url(#${clipId})" stroke="#cbd5e1" stroke-width="0.5" stroke-opacity="0.7">`
+      for (let gx = gMinX; gx <= gMaxX; gx += stepPx) {
+        svg += `<line x1="${gx.toFixed(1)}" y1="${gMinY.toFixed(1)}" x2="${gx.toFixed(1)}" y2="${gMaxY.toFixed(1)}"/>`
+      }
+      for (let gy = gMinY; gy <= gMaxY; gy += stepPx) {
+        svg += `<line x1="${gMinX.toFixed(1)}" y1="${gy.toFixed(1)}" x2="${gMaxX.toFixed(1)}" y2="${gy.toFixed(1)}"/>`
+      }
+      svg += `</g>`
+    }
+  }
 
   // ── CUTOUTS (non-roof voids — grey shaded + dashed) ──
   // Rendered after facet fills so they visually mask the excluded region;
@@ -2910,7 +3076,7 @@ export function generateTraceBasedDiagramSVG(
 
   // ── EAVE PERIMETER (clean black outline — primary section) ──
   const eavePts = eavesXY.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
-  svg += `<polygon points="${eavePts}" fill="none" stroke="#1a1a1a" stroke-width="2.2" stroke-linejoin="round"/>`
+  if (L.perimeter) svg += `<polygon points="${eavePts}" fill="none" stroke="#1a1a1a" stroke-width="2.2" stroke-linejoin="round"/>`
 
   // ── EXTRA EAVE SECTIONS (detached structures, lower-eave lips, etc.) ──
   // Each extra section gets its own per-edge dimension labels and an area label
@@ -2933,7 +3099,7 @@ export function generateTraceBasedDiagramSVG(
   // and "Structure N+1, N+2…" without the numbering jumping when both are present.
   let lowerEaveCounter = 0
   let mainStructCounter = 0
-  renderOrder.forEach(si => {
+  if (L.perimeter) renderOrder.forEach(si => {
     const sec = extraSections[si]
     const isLower = extraSectionKinds[si] === 'lower_tier'
     // Lower-tier styling: blue dashed (#2563eb) on a faint blue tint, evoking
@@ -3034,23 +3200,23 @@ export function generateTraceBasedDiagramSVG(
   // Stroke hierarchy: ridge (3.0) > hip (2.2) > valley (1.8 dashed) so the
   // diagram reads as a structural hierarchy at a glance instead of a flat
   // web of lines.
-  internalLines.filter(l => l.type === 'RIDGE').forEach(l => {
+  if (L.ridges) internalLines.filter(l => l.type === 'RIDGE').forEach(l => {
     svg += `<line x1="${tx(l.start.x).toFixed(1)}" y1="${ty(l.start.y).toFixed(1)}" x2="${tx(l.end.x).toFixed(1)}" y2="${ty(l.end.y).toFixed(1)}" stroke="${EDGE_COLOR['RIDGE']}" stroke-width="3.0" stroke-linecap="round"/>`
   })
 
   // ── HIP LINES (orange, mid-weight) ──
-  internalLines.filter(l => l.type === 'HIP').forEach(l => {
+  if (L.hips) internalLines.filter(l => l.type === 'HIP').forEach(l => {
     svg += `<line x1="${tx(l.start.x).toFixed(1)}" y1="${ty(l.start.y).toFixed(1)}" x2="${tx(l.end.x).toFixed(1)}" y2="${ty(l.end.y).toFixed(1)}" stroke="${EDGE_COLOR['HIP']}" stroke-width="2.2" stroke-linecap="round"/>`
   })
 
   // ── VALLEY LINES (blue, dashed, slightly heavier than before) ──
-  internalLines.filter(l => l.type === 'VALLEY').forEach(l => {
+  if (L.valleys) internalLines.filter(l => l.type === 'VALLEY').forEach(l => {
     svg += `<line x1="${tx(l.start.x).toFixed(1)}" y1="${ty(l.start.y).toFixed(1)}" x2="${tx(l.end.x).toFixed(1)}" y2="${ty(l.end.y).toFixed(1)}" stroke="${EDGE_COLOR['VALLEY']}" stroke-width="1.8" stroke-dasharray="6,3" stroke-linecap="round"/>`
   })
 
   // ── WALL FLASHING LINES (amber=step, orange=headwall, hash pattern) ──
   // These render only when the customer drew a wall layer in the tracer.
-  ;(roofTrace.walls || []).forEach((line) => {
+  if (L.walls) (roofTrace.walls || []).forEach((line) => {
     const pts = Array.isArray(line) ? line : (line as any).pts
     const kind: 'step' | 'headwall' = (!Array.isArray(line) && (line as any).kind === 'headwall') ? 'headwall' : 'step'
     if (!pts || pts.length < 2) return
@@ -3062,7 +3228,7 @@ export function generateTraceBasedDiagramSVG(
   })
 
   // ── CHIMNEYS (filled brown squares with "C" label) ──
-  ;((roofTrace.annotations && roofTrace.annotations.chimneys) || []).forEach((pt) => {
+  if (L.chimneys) ((roofTrace.annotations && roofTrace.annotations.chimneys) || []).forEach((pt) => {
     const xy = toXY(pt)
     const px = tx(xy.x), py = ty(xy.y)
     svg += `<rect x="${(px-5).toFixed(1)}" y="${(py-5).toFixed(1)}" width="10" height="10" fill="#B45309" stroke="#fff" stroke-width="1"/>`
@@ -3070,7 +3236,7 @@ export function generateTraceBasedDiagramSVG(
   })
 
   // ── PIPE BOOTS (filled cyan circles with "P" label) ──
-  ;((roofTrace.annotations && roofTrace.annotations.pipe_boots) || []).forEach((pt) => {
+  if (L.pipeBoots) ((roofTrace.annotations && roofTrace.annotations.pipe_boots) || []).forEach((pt) => {
     const xy = toXY(pt)
     const px = tx(xy.x), py = ty(xy.y)
     svg += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="#0891b2" stroke="#fff" stroke-width="1"/>`
@@ -3078,7 +3244,7 @@ export function generateTraceBasedDiagramSVG(
   })
 
   // ── DOWNSPOUTS (down-pointing dark-gray triangles — water flows down here) ──
-  ;((roofTrace.annotations && (roofTrace.annotations as any).downspouts) || []).forEach((pt: any) => {
+  if (L.downspouts) ((roofTrace.annotations && (roofTrace.annotations as any).downspouts) || []).forEach((pt: any) => {
     const xy = toXY(pt)
     const px = tx(xy.x), py = ty(xy.y)
     const tri = `${(px-4).toFixed(1)},${(py-3).toFixed(1)} ${(px+4).toFixed(1)},${(py-3).toFixed(1)} ${px.toFixed(1)},${(py+5).toFixed(1)}`
@@ -3086,7 +3252,7 @@ export function generateTraceBasedDiagramSVG(
   })
 
   // ── VENTS (filled green circles with "V" label) ──
-  ;((roofTrace.annotations && roofTrace.annotations.vents) || []).forEach((pt) => {
+  if (L.vents) ((roofTrace.annotations && roofTrace.annotations.vents) || []).forEach((pt) => {
     const xy = toXY(pt)
     const px = tx(xy.x), py = ty(xy.y)
     svg += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="#15803D" stroke="#fff" stroke-width="1"/>`
@@ -3094,7 +3260,7 @@ export function generateTraceBasedDiagramSVG(
   })
 
   // ── SKYLIGHTS (filled amber rectangles with "S" label) ──
-  ;((roofTrace.annotations && roofTrace.annotations.skylights) || []).forEach((pt) => {
+  if (L.skylights) ((roofTrace.annotations && roofTrace.annotations.skylights) || []).forEach((pt) => {
     const xy = toXY(pt)
     const px = tx(xy.x), py = ty(xy.y)
     svg += `<rect x="${(px-5).toFixed(1)}" y="${(py-5).toFixed(1)}" width="10" height="10" fill="#EAB308" stroke="#fff" stroke-width="1"/>`
@@ -3106,6 +3272,7 @@ export function generateTraceBasedDiagramSVG(
   // perimeter block) so the extra-sections loop can use them without TDZ.
   for (let i = 0; i < n; i++) {
     if (HIDE) break
+    if (!L.edgeDimensions) break
     const a = eaves[i], b = eaves[(i + 1) % n]
     const p1 = eavesXY[i], p2 = eavesXY[(i + 1) % n]
     const sx = tx(p1.x), sy = ty(p1.y), ex = tx(p2.x), ey = ty(p2.y)
@@ -3115,6 +3282,7 @@ export function generateTraceBasedDiagramSVG(
 
     const ftVal = haversineFt(a, b)
     if (ftVal < 1) continue
+    if (ftVal < (L.edgeDimensionsMinFt ?? 0)) continue
     const label = fmtFtUnit(ftVal)
     if (!label) continue
 
@@ -3170,7 +3338,9 @@ export function generateTraceBasedDiagramSVG(
   // ── INTERNAL LINE DIMENSION LABELS (Ridge/Hip/Valley — collision-aware) ──
   internalLines.forEach(l => {
     if (HIDE) return
+    if (!L.edgeDimensions) return
     if (l.ftLen < 1.5) return
+    if (l.ftLen < (L.edgeDimensionsMinFt ?? 0)) return
     const sx = tx(l.start.x), sy = ty(l.start.y), ex = tx(l.end.x), ey = ty(l.end.y)
     const segPx = Math.sqrt((ex - sx) ** 2 + (ey - sy) ** 2)
     // Raised from 25px → 32px for cleaner internal labels
@@ -3209,13 +3379,39 @@ export function generateTraceBasedDiagramSVG(
   })
 
   // ── FACET LABELS (A, B, C... with area) ──
-  if (!HIDE) {
+  // When pitch/azimuth flags are on, the small line shows e.g. "B · S 175° · 6:12"
+  // instead of just "1,234 SF". Falls back gracefully when faceMeta is absent.
+  const azimuthCardinal = (deg: number | null | undefined): string => {
+    if (deg == null || !isFinite(deg)) return ''
+    const d = ((deg % 360) + 360) % 360
+    if (d < 22.5 || d >= 337.5) return 'N'
+    if (d < 67.5)  return 'NE'
+    if (d < 112.5) return 'E'
+    if (d < 157.5) return 'SE'
+    if (d < 202.5) return 'S'
+    if (d < 247.5) return 'SW'
+    if (d < 292.5) return 'W'
+    return 'NW'
+  }
+  if (!HIDE && L.facetLabels) {
     facets.forEach((facet, fi) => {
       const cx = tx(facet.centerX), cy = ty(facet.centerY)
       // Facet letter (large)
       svg += `<text x="${cx.toFixed(1)}" y="${(cy - 2).toFixed(1)}" text-anchor="middle" font-size="16" font-weight="800" fill="#C62828" fill-opacity="0.55" ${FONT}>${facet.label}</text>`
-      // Facet area (small)
-      svg += `<text x="${cx.toFixed(1)}" y="${(cy + 12).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="600" fill="#555" fill-opacity="0.7" ${FONT}>${facet.areaSqft.toLocaleString()} SF</text>`
+      // Build the small line: area always, optional azimuth cardinal+deg, optional pitch
+      const meta = opts.faceMeta?.[fi]
+      const parts: string[] = [`${facet.areaSqft.toLocaleString()} SF`]
+      if (L.facetAzimuthInLabel && meta?.azimuth_deg != null && isFinite(meta.azimuth_deg as number)) {
+        const card = azimuthCardinal(meta.azimuth_deg)
+        parts.push(`${card} ${Math.round(meta.azimuth_deg as number)}°`)
+      }
+      if (L.facetPitchInLabel) {
+        const rise = meta?.pitch_rise
+        const pitchStr = meta?.pitch_label
+          || (typeof rise === 'number' && rise > 0 ? `${rise % 1 === 0 ? rise.toFixed(0) : rise.toFixed(1)}:12` : '')
+        if (pitchStr) parts.push(pitchStr)
+      }
+      svg += `<text x="${cx.toFixed(1)}" y="${(cy + 12).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="600" fill="#555" fill-opacity="0.7" ${FONT}>${parts.join(' · ')}</text>`
     })
   }
 
@@ -3225,7 +3421,7 @@ export function generateTraceBasedDiagramSVG(
   // which face drains where — useful for downspout / gutter planning.
   // Skipped for tiny facets (< 60px diameter) where the arrow would just
   // crowd the area label.
-  if (!HIDE && facets.length > 0 && internalLines.some(l => l.type === 'RIDGE')) {
+  if (!HIDE && L.pitchArrows && facets.length > 0 && internalLines.some(l => l.type === 'RIDGE')) {
     const ridgeLines = internalLines.filter(l => l.type === 'RIDGE')
     facets.forEach(f => {
       // Nearest ridge to this facet's centroid
@@ -3271,28 +3467,30 @@ export function generateTraceBasedDiagramSVG(
   }
 
   // ── VERTEX DOTS (clean small circles at intersections — slightly smaller for cleanliness) ──
-  eavesXY.forEach(p => {
-    svg += `<circle cx="${tx(p.x).toFixed(1)}" cy="${ty(p.y).toFixed(1)}" r="2" fill="#1a1a1a"/>`
-  })
-  // Interior vertices (ridge/hip endpoints — only draw if not already snapped to eave)
-  const drawnVertices: { x: number; y: number }[] = [...eavesXY]
-  internalLines.forEach(l => {
-    const drawIfNew = (pt: { x: number; y: number }) => {
-      const tooClose = drawnVertices.some(v => distXY(v, pt) < geoW * 0.03)
-      if (!tooClose) {
-        svg += `<circle cx="${tx(pt.x).toFixed(1)}" cy="${ty(pt.y).toFixed(1)}" r="2" fill="#C62828"/>`
-        drawnVertices.push(pt)
+  if (L.vertexDots) {
+    eavesXY.forEach(p => {
+      svg += `<circle cx="${tx(p.x).toFixed(1)}" cy="${ty(p.y).toFixed(1)}" r="2" fill="#1a1a1a"/>`
+    })
+    // Interior vertices (ridge/hip endpoints — only draw if not already snapped to eave)
+    const drawnVertices: { x: number; y: number }[] = [...eavesXY]
+    internalLines.forEach(l => {
+      const drawIfNew = (pt: { x: number; y: number }) => {
+        const tooClose = drawnVertices.some(v => distXY(v, pt) < geoW * 0.03)
+        if (!tooClose) {
+          svg += `<circle cx="${tx(pt.x).toFixed(1)}" cy="${ty(pt.y).toFixed(1)}" r="2" fill="#C62828"/>`
+          drawnVertices.push(pt)
+        }
       }
-    }
-    drawIfNew(l.start)
-    drawIfNew(l.end)
-  })
+      drawIfNew(l.start)
+      drawIfNew(l.end)
+    })
+  }
 
   // ── DORMER OVERLAYS ──
   // Drawn last (on top of facets, edges, vertex dots) so the purple outline
   // and pitch pill remain visible. Translucent fill keeps anything underneath
   // legible. Centroid label like "D-A · 12:12".
-  dormersXY.forEach((d, di) => {
+  if (L.dormers) dormersXY.forEach((d, di) => {
     if (d.pts.length < 3) return
     const path = d.pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${tx(p.x).toFixed(1)} ${ty(p.y).toFixed(1)}`).join(' ') + ' Z'
     // Layered fill: tinted base + diagonal cross-hatch makes dormers pop even
@@ -3313,13 +3511,10 @@ export function generateTraceBasedDiagramSVG(
     svg += `</g>`
   })
 
-  // ── LEGEND / SCALE BAR / SOURCE BADGE — all gated together so the customer
-  //     diagram has none of the measurement-bearing chrome. ──
-  if (HIDE) {
-    // Skip legend, scale bar, source badge — go straight to compass.
-  }
-  const __SKIP_LEGEND_BLOCK__ = HIDE
-  if (!__SKIP_LEGEND_BLOCK__) {
+  // ── LEGEND / SCALE BAR / SOURCE BADGE — each gated independently via L.legend,
+  //     L.scaleBar, L.sourceBadge. The HIDE flag (customer view) suppresses them
+  //     all. New EagleView-style pages (Pitch/Area/Notes) only opt into scaleBar.
+  if (!HIDE && L.legend) {
   // Per-type segment counts (from trace input — authoritative)
   const eaveSegCount = n
   const ridgeSegCount = roofTrace.ridges?.length || 0
@@ -3395,10 +3590,12 @@ export function generateTraceBasedDiagramSVG(
     svg += `<text x="${lgX + 8}" y="${iy}" font-size="7.5" font-weight="700" fill="#666" ${FONT} letter-spacing="0.3">${r.label.toUpperCase()}</text>`
     svg += `<text x="${lgX + lgW - 8}" y="${iy}" text-anchor="end" font-size="8" font-weight="800" fill="#1a1a1a" ${FONT}>${r.value}</text>`
   })
+  } // end if (!HIDE && L.legend)
 
   // ── SCALE BAR (bottom-left, above footer) ──
   // sc converts metres -> pixels; 1 ft = 0.3048 m
   const pxPerFt = sc * 0.3048
+  if (!HIDE && L.scaleBar) {
   const preferredBarPx = 90
   const rawFt = preferredBarPx / Math.max(pxPerFt, 0.01)
   let scaleBarFt = 20
@@ -3418,12 +3615,13 @@ export function generateTraceBasedDiagramSVG(
     svg += `<text x="${(sbX + half).toFixed(1)}" y="${sbY + 14}" text-anchor="middle" font-size="6.5" font-weight="700" fill="#333" ${FONT}>${(scaleBarFt / 2).toFixed(0)}</text>`
     svg += `<text x="${(sbX + scaleBarPx).toFixed(1)}" y="${sbY + 14}" text-anchor="middle" font-size="6.5" font-weight="700" fill="#333" ${FONT}>${scaleBarFt} ft</text>`
   }
+  } // close L.scaleBar
 
   // ── SOURCE BADGE ──
-  svg += `<text x="${W / 2}" y="${H - FOOTER_H - 6}" text-anchor="middle" font-size="6.5" fill="#666" ${FONT} font-weight="500" letter-spacing="0.5">AI-GENERATED ROOF DIAGRAM \u2014 TRACED FROM GPS COORDINATES \u2014 All dimensions in feet. Pitch multiplier applied for true 3D area.</text>`
-  } // end if (!__SKIP_LEGEND_BLOCK__)
+  if (!HIDE && L.sourceBadge) svg += `<text x="${W / 2}" y="${H - FOOTER_H - 6}" text-anchor="middle" font-size="6.5" fill="#666" ${FONT} font-weight="500" letter-spacing="0.5">AI-GENERATED ROOF DIAGRAM \u2014 TRACED FROM GPS COORDINATES \u2014 All dimensions in feet. Pitch multiplier applied for true 3D area.</text>`
 
   // ── COMPASS ROSE (professional style) ──
+  if (L.compassRose) {
   const cX = W - 38, cY = 34
   svg += `<g transform="translate(${cX},${cY})">`
   svg += `<circle cx="0" cy="0" r="16" fill="#fff" fill-opacity="0.9" stroke="#ccc" stroke-width="0.6"/>`
@@ -3436,10 +3634,40 @@ export function generateTraceBasedDiagramSVG(
   svg += `<text x="20" y="2.5" text-anchor="middle" font-size="5.5" font-weight="600" fill="#999" ${FONT}>E</text>`
   svg += `<text x="-20" y="2.5" text-anchor="middle" font-size="5.5" font-weight="600" fill="#999" ${FONT}>W</text>`
   svg += `</g>`
+  }
+
+  // ── ANNOTATION LEGEND TABLE (Notes diagram only) ──
+  // Top-left mini-table listing only the glyphs actually present so the
+  // customer can decode each marker without hunting through the diagram.
+  if (L.annotationLegendTable) {
+    const ann = roofTrace.annotations || {}
+    const rows: { glyph: string; color: string; label: string; count: number }[] = []
+    if ((ann.chimneys || []).length)   rows.push({ glyph: 'C', color: '#B45309', label: 'Chimneys',   count: (ann.chimneys || []).length })
+    if ((ann.vents || []).length)      rows.push({ glyph: 'V', color: '#15803D', label: 'Vents',      count: (ann.vents || []).length })
+    if ((ann.skylights || []).length)  rows.push({ glyph: 'S', color: '#EAB308', label: 'Skylights',  count: (ann.skylights || []).length })
+    if ((ann.pipe_boots || []).length) rows.push({ glyph: 'P', color: '#0891b2', label: 'Pipe boots', count: (ann.pipe_boots || []).length })
+    if (((ann as any).downspouts || []).length) rows.push({ glyph: '▼', color: '#475569', label: 'Downspouts', count: ((ann as any).downspouts || []).length })
+    if (rows.length > 0) {
+      const algX = 8, algY = 8
+      const algW = 158, titleH = 16, rowH = 13
+      const algH = titleH + rows.length * rowH + 8
+      svg += `<rect x="${algX}" y="${algY}" width="${algW}" height="${algH}" rx="3" fill="#fff" fill-opacity="0.97" stroke="#c8c8c8" stroke-width="0.6"/>`
+      svg += `<rect x="${algX}" y="${algY}" width="${algW}" height="${titleH}" rx="3" fill="#002244"/>`
+      svg += `<rect x="${algX}" y="${algY + titleH - 4}" width="${algW}" height="4" fill="#002244"/>`
+      svg += `<text x="${algX + algW / 2}" y="${algY + 11}" text-anchor="middle" font-size="7.5" font-weight="800" fill="#fff" ${FONT} letter-spacing="1.2">PENETRATIONS</text>`
+      rows.forEach((r, i) => {
+        const iy = algY + titleH + 10 + i * rowH
+        svg += `<rect x="${algX + 8}" y="${iy - 6}" width="11" height="11" rx="1.5" fill="${r.color}" stroke="#fff" stroke-width="0.6"/>`
+        svg += `<text x="${algX + 13.5}" y="${iy + 2}" text-anchor="middle" font-size="6.5" font-weight="800" fill="#fff" ${FONT}>${r.glyph}</text>`
+        svg += `<text x="${algX + 26}" y="${iy + 3}" font-size="8" font-weight="600" fill="#333" ${FONT}>${r.label}</text>`
+        svg += `<text x="${algX + algW - 8}" y="${iy + 3}" text-anchor="end" font-size="7.5" font-weight="700" fill="${r.color}" ${FONT}>${r.count}</text>`
+      })
+    }
+  }
 
   // ── FOOTER BAR ──
   // Single authoritative TOTAL ROOF AREA + waste calculations at 5%, 10%, 15%
-  if (!HIDE) {
+  if (!HIDE && L.footerBar) {
   const fY = H - FOOTER_H
   const barW = W * 0.94, barX = (W - barW) / 2
   const cols = 6
@@ -3469,6 +3697,53 @@ export function generateTraceBasedDiagramSVG(
 
   svg += `</svg>`
   return svg
+}
+
+// ============================================================
+// EAGLEVIEW-STYLE 4-PAGE DIAGRAM WRAPPERS
+//
+// Each wrapper hands the same trace/edge/pitch/area args to the core
+// generateTraceBasedDiagramSVG with a different DiagramLayers preset so
+// each report page answers exactly one question. Callers don't pass
+// `layers` directly — that's the wrapper's job.
+//
+// Shared signature mirrors generateTraceBasedDiagramSVG. opts.faceMeta
+// (when provided) flows through for per-face azimuth/pitch labels on
+// the Pitch diagram.
+// ============================================================
+
+type _TraceDiagramArgs = Parameters<typeof generateTraceBasedDiagramSVG>
+
+export function generateLengthDiagramSVG(...args: _TraceDiagramArgs): string {
+  const [roofTrace, edgeSummary, totalFootprintSqft, avgPitchDeg, predominantPitch, grossSquares, trueAreaSqft, opts = {}] = args
+  return generateTraceBasedDiagramSVG(
+    roofTrace, edgeSummary, totalFootprintSqft, avgPitchDeg, predominantPitch, grossSquares, trueAreaSqft,
+    { ...opts, layers: LENGTH_LAYERS }
+  )
+}
+
+export function generatePitchDiagramSVG2(...args: _TraceDiagramArgs): string {
+  const [roofTrace, edgeSummary, totalFootprintSqft, avgPitchDeg, predominantPitch, grossSquares, trueAreaSqft, opts = {}] = args
+  return generateTraceBasedDiagramSVG(
+    roofTrace, edgeSummary, totalFootprintSqft, avgPitchDeg, predominantPitch, grossSquares, trueAreaSqft,
+    { ...opts, layers: PITCH_LAYERS }
+  )
+}
+
+export function generateAreaDiagramSVG(...args: _TraceDiagramArgs): string {
+  const [roofTrace, edgeSummary, totalFootprintSqft, avgPitchDeg, predominantPitch, grossSquares, trueAreaSqft, opts = {}] = args
+  return generateTraceBasedDiagramSVG(
+    roofTrace, edgeSummary, totalFootprintSqft, avgPitchDeg, predominantPitch, grossSquares, trueAreaSqft,
+    { ...opts, layers: AREA_LAYERS }
+  )
+}
+
+export function generateNotesDiagramSVG(...args: _TraceDiagramArgs): string {
+  const [roofTrace, edgeSummary, totalFootprintSqft, avgPitchDeg, predominantPitch, grossSquares, trueAreaSqft, opts = {}] = args
+  return generateTraceBasedDiagramSVG(
+    roofTrace, edgeSummary, totalFootprintSqft, avgPitchDeg, predominantPitch, grossSquares, trueAreaSqft,
+    { ...opts, layers: NOTES_LAYERS }
+  )
 }
 
 

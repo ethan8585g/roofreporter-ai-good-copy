@@ -15,7 +15,8 @@ import {
 import {
   generateSatelliteOverlaySVG, generateOverlayLegend, generateBlueprintSVG,
   generateArchitecturalDiagramSVG, generatePreciseAIOverlaySVG,
-  generateSquaresGridDiagramSVG, generateTraceBasedDiagramSVG
+  generateSquaresGridDiagramSVG, generateTraceBasedDiagramSVG,
+  generateLengthDiagramSVG, generatePitchDiagramSVG2, generateAreaDiagramSVG, generateNotesDiagramSVG,
 } from './svg-diagrams'
 import {
   generateAllStructureSVGs, splitStructures, allocateMaterialsToStructures,
@@ -938,6 +939,128 @@ ${aerialTiles.length === 4 ? `
   </div>
 </div>
 ` : ''}
+
+${(() => {
+  // ============================================================
+  // 4-PAGE EAGLEVIEW-STYLE DIAGRAM SEQUENCE
+  // Length / Pitch / Area / Notes — each page answers one question.
+  // Uses the full roof trace (not per-structure). Per-structure detail
+  // pages still follow on PAGE 2 below.
+  // ============================================================
+  const rt: any = (report as any).roof_trace || {}
+  const tm: any = (report as any).trace_measurement || {}
+  const eaves = rt.eaves_sections?.[0] || rt.eaves || []
+  if (!eaves || eaves.length < 3) return ''  // skip 4-page split if no trace
+
+  const traceInput = {
+    eaves,
+    eaves_sections: rt.eaves_sections,
+    eaves_section_pitches: rt.eaves_section_pitches,
+    eaves_section_kinds: rt.eaves_section_kinds,
+    ridges: rt.ridges || [],
+    hips: rt.hips || [],
+    valleys: rt.valleys || [],
+    walls: rt.walls,
+    dormers: rt.dormers,
+    cutouts: rt.cutouts,
+    annotations: rt.annotations || {},
+  }
+  const edgeSum = (report as any).edge_summary || {
+    total_ridge_ft: 0, total_hip_ft: 0, total_valley_ft: 0, total_eave_ft: 0, total_rake_ft: 0
+  }
+  const fpSqft = report.total_footprint_sqft || 0
+  const pitchDeg = report.roof_pitch_degrees || 0
+  const pitchLbl = report.roof_pitch_ratio || predominantPitch || ''
+  const trueArea = report.total_true_area_sqft || 0
+  const grossSq = ((report as any).materials?.gross_squares || trueArea / 100) as number
+  // Pre-sort face_details by area ascending so faceMeta aligns with the
+  // diagram's smallest-to-largest A→B→C facet sort.
+  const sortedFaces = (tm.face_details || []).slice().sort((a: any, b: any) => (a.sloped_area_ft2 || 0) - (b.sloped_area_ft2 || 0))
+  const faceMeta = sortedFaces.map((f: any) => ({
+    pitch_rise: f.pitch_rise,
+    pitch_label: f.pitch_label,
+    azimuth_deg: f.azimuth_deg ?? null,
+  }))
+
+  const pageHeader = (title: string, sub: string) => `
+    <div style="height:4px;background:linear-gradient(90deg,${TEAL},${TEAL_DARK})"></div>
+    <div style="padding:10px 28px 4px;display:flex;align-items:baseline;justify-content:space-between">
+      <div style="font-size:14px;font-weight:800;color:#222">${title}</div>
+      <div style="font-size:8px;font-weight:600;color:#64748b;letter-spacing:0.5px;text-transform:uppercase">${sub}</div>
+    </div>
+  `
+
+  const lengthSvg = generateLengthDiagramSVG(traceInput, edgeSum, fpSqft, pitchDeg, pitchLbl, grossSq, trueArea)
+  const pitchSvg  = generatePitchDiagramSVG2(traceInput, edgeSum, fpSqft, pitchDeg, pitchLbl, grossSq, trueArea, { faceMeta })
+  const areaSvg   = generateAreaDiagramSVG(traceInput, edgeSum, fpSqft, pitchDeg, pitchLbl, grossSq, trueArea, { faceMeta })
+  const notesSvg  = generateNotesDiagramSVG(traceInput, edgeSum, fpSqft, pitchDeg, pitchLbl, grossSq, trueArea)
+
+  const wrap = (svg: string, caption: string) => `
+    <div style="padding:0 28px;margin-bottom:6px">
+      <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;overflow:hidden">${svg}</div>
+      <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">${caption}</div>
+    </div>
+  `
+
+  return `
+<!-- ==================== LENGTH DIAGRAM ==================== -->
+<div class="page">
+  ${pageHeader('Length Diagram', `Edge dimensions — ridges, hips, valleys, eaves, rakes`)}
+  ${wrap(lengthSvg, 'Every traced edge with its haversine length. Edges under 4ft hidden for clarity — see edge totals in the legend.')}
+</div>
+
+<!-- ==================== PITCH DIAGRAM ==================== -->
+<div class="page">
+  ${pageHeader('Pitch Diagram', 'Per-facet pitch + downslope direction')}
+  ${wrap(pitchSvg, 'Facets shaded by pitch class — slate <2:12, blue 2–4:12, green 4–9:12 (walkable), red ≥9:12. Arrows point downslope.')}
+  <div style="padding:0 28px;margin-top:4px">
+    <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:8px;background:#f5f7f9;border:1px solid #ddd;border-radius:4px;padding:6px 10px">
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:10px;background:rgba(148,163,184,0.45);border:1px solid #94a3b8;border-radius:2px"></span>Flat (&lt;2:12)</div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:10px;background:rgba(56,189,248,0.45);border:1px solid #38bdf8;border-radius:2px"></span>Low (2–4:12)</div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:10px;background:rgba(34,197,94,0.45);border:1px solid #22c55e;border-radius:2px"></span>Standard (4–9:12)</div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:10px;background:rgba(220,38,38,0.45);border:1px solid #dc2626;border-radius:2px"></span>Steep (≥9:12)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== AREA DIAGRAM ==================== -->
+<div class="page">
+  ${pageHeader('Area Diagram', 'Per-facet sloped area with 10ft squares grid')}
+  ${wrap(areaSvg, 'Each grid square = 10ft × 10ft = 1 roofing square (100 sqft of footprint). Facet letters are sorted smallest to largest.')}
+  ${sortedFaces.length > 0 ? `
+  <div style="padding:0 28px;margin-top:4px">
+    <table style="width:100%;border-collapse:collapse;font-size:8px;border:1px solid #d5dae3">
+      <thead>
+        <tr style="background:${TEAL_LIGHT}">
+          <th style="padding:4px 8px;text-align:left;font-weight:700;color:${TEAL_DARK}">Facet</th>
+          <th style="padding:4px 8px;text-align:right;font-weight:700;color:${TEAL_DARK}">Area (SF)</th>
+          <th style="padding:4px 8px;text-align:center;font-weight:700;color:${TEAL_DARK}">Pitch</th>
+          <th style="padding:4px 8px;text-align:right;font-weight:700;color:${TEAL_DARK}">% of Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sortedFaces.slice(0, 12).map((f: any, i: number) => {
+          const sf = Math.round(f.sloped_area_ft2 || 0)
+          const pct = trueArea > 0 ? Math.round(sf / trueArea * 1000) / 10 : 0
+          return `<tr style="${i % 2 === 0 ? 'background:#fafafa' : ''}">
+            <td style="padding:3px 8px;border-bottom:1px solid #eee;font-weight:700">${String.fromCharCode(65 + i)}</td>
+            <td style="padding:3px 8px;border-bottom:1px solid #eee;text-align:right">${sf.toLocaleString()}</td>
+            <td style="padding:3px 8px;border-bottom:1px solid #eee;text-align:center">${f.pitch_label || '—'}</td>
+            <td style="padding:3px 8px;border-bottom:1px solid #eee;text-align:right;color:#555">${pct}%</td>
+          </tr>`
+        }).join('')}
+      </tbody>
+    </table>
+  </div>` : ''}
+</div>
+
+<!-- ==================== NOTES DIAGRAM ==================== -->
+<div class="page">
+  ${pageHeader('Notes Diagram', 'Roof penetrations — chimneys, vents, skylights, pipes')}
+  ${wrap(notesSvg, 'Each penetration is marked at its traced location. Counts shown in the legend table.')}
+</div>
+`
+})()}
 
 <!-- ==================== PAGE 2: ROOF AREA ANALYSIS ==================== -->
 <div class="page">
