@@ -626,6 +626,100 @@ export async function notifyNewReportRequest(
   }
 }
 
+// Site-health alert: signup funnel regression detected by /funnel-monitor.
+// Throws on total delivery failure so the caller can mark email_status='failed'.
+export async function notifyFunnelRegression(
+  env: any,
+  data: {
+    order_number: string
+    drop_stage: string
+    notes: string[]
+    window: { start: string; end: string }
+    current: { pageviews: number; form_starts: number; form_submits: number; customers_created: number; email_verified: number; unique_visitors: number }
+    baseline_avg: { pageviews: number; form_starts: number; form_submits: number; customers_created: number; email_verified: number; unique_visitors: number }
+    last_hour?: { form_submits: number; customers_created: number }
+  }
+): Promise<void> {
+  const subject = `Signup funnel regression — ${data.drop_stage}`
+  const fmt = (n: number) => Number.isFinite(n) ? (Math.round(n * 10) / 10).toString() : '—'
+  const last1h = data.last_hour
+    ? `<tr><td style="padding:8px 0;color:#888">Last 1h (backend)</td><td style="padding:8px 0">${data.last_hour.form_submits} submits → ${data.last_hour.customers_created} customers</td></tr>`
+    : ''
+  const html = `
+<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
+  <h2 style="color:#b91c1c;margin-bottom:4px">Signup funnel regression</h2>
+  <p style="color:#555;margin-top:0">${htmlEsc(data.order_number)}</p>
+  <p style="margin:16px 0;font-weight:600">${htmlEsc(data.notes.join(' • '))}</p>
+  <table style="width:100%;border-collapse:collapse;margin:16px 0">
+    <tr><td style="padding:8px 0;color:#888;width:200px">Drop stage</td><td style="padding:8px 0;font-weight:600">${htmlEsc(data.drop_stage)}</td></tr>
+    <tr><td style="padding:8px 0;color:#888">Window (UTC)</td><td style="padding:8px 0">${htmlEsc(data.window.start)} → ${htmlEsc(data.window.end)}</td></tr>
+    <tr><td style="padding:8px 0;color:#888">/register pageviews</td><td style="padding:8px 0">${data.current.pageviews} <span style="color:#888">(baseline avg ${fmt(data.baseline_avg.pageviews)})</span></td></tr>
+    <tr><td style="padding:8px 0;color:#888">Form starts</td><td style="padding:8px 0">${data.current.form_starts} <span style="color:#888">(baseline ${fmt(data.baseline_avg.form_starts)})</span></td></tr>
+    <tr><td style="padding:8px 0;color:#888">Form submits</td><td style="padding:8px 0">${data.current.form_submits} <span style="color:#888">(baseline ${fmt(data.baseline_avg.form_submits)})</span></td></tr>
+    <tr><td style="padding:8px 0;color:#888">Customers created</td><td style="padding:8px 0">${data.current.customers_created} <span style="color:#888">(baseline ${fmt(data.baseline_avg.customers_created)})</span></td></tr>
+    ${last1h}
+  </table>
+  <a href="https://www.roofmanager.ca/super-admin/loop-tracker" style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">View Loop Tracker →</a>
+  <p style="color:#888;font-size:12px;margin-top:24px">Christine — site-health automated alert.</p>
+</div>`
+
+  const recipients = new Set<string>(['christinegourley04@gmail.com'])
+  if (env?.DB) {
+    try {
+      const rows = await env.DB.prepare(
+        "SELECT email FROM admin_users WHERE role='superadmin' AND is_active=1 AND email IS NOT NULL AND email != ''"
+      ).all<{ email: string }>()
+      for (const r of (rows?.results || [])) {
+        if (r?.email) recipients.add(r.email.trim().toLowerCase())
+      }
+    } catch {}
+  }
+
+  const clientId = env?.GMAIL_CLIENT_ID
+  let clientSecret = env?.GMAIL_CLIENT_SECRET || ''
+  let refreshToken = env?.GMAIL_REFRESH_TOKEN || ''
+  let senderEmail = env?.GMAIL_SENDER_EMAIL || ''
+  if (env?.DB && (!clientSecret || !refreshToken || !senderEmail)) {
+    try {
+      const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
+      if (r?.setting_value) refreshToken = r.setting_value
+      const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
+      if (s?.setting_value) clientSecret = s.setting_value
+      if (!senderEmail) {
+        const se = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_sender_email' AND master_company_id=1").first<any>()
+        if (se?.setting_value) senderEmail = se.setting_value
+      }
+    } catch {}
+  }
+
+  const errors: string[] = []
+  let delivered = 0
+  for (const to of recipients) {
+    let sent = false
+    if (env?.RESEND_API_KEY) {
+      try {
+        await sendViaResend(env.RESEND_API_KEY, to, subject, html)
+        sent = true
+      } catch (e: any) {
+        errors.push(`resend→${to}: ${e?.message || e}`)
+      }
+    }
+    if (!sent && clientId && clientSecret && refreshToken) {
+      try {
+        await sendGmailOAuth2(clientId, clientSecret, refreshToken, to, subject, html, senderEmail || null)
+        sent = true
+      } catch (e: any) {
+        errors.push(`gmail→${to}: ${e?.message || e}`)
+      }
+    }
+    if (sent) delivered++
+  }
+
+  if (delivered === 0) {
+    throw new Error(errors.length ? errors.join(' | ') : 'no email provider configured')
+  }
+}
+
 // ============================================================
 // GMAIL OAUTH2 — Send email using OAuth2 refresh token
 // Works with personal Gmail. One-time consent at /api/auth/gmail

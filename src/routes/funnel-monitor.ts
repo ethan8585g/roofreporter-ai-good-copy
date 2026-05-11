@@ -19,6 +19,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { recordExternalRun } from '../services/loop-scanner'
+import { notifyFunnelRegression } from '../services/email'
 
 export const funnelMonitorRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -330,11 +331,12 @@ function rate(num: number, den: number): number | null {
 async function queueRegressionAlert(env: Bindings, result: TickResult): Promise<number | null> {
   const orderNumber = `FUNNEL-${result.window.end.replace(/[^0-9]/g, '').slice(0, 12)}`
   const noteSummary = result.notes.join(' | ')
+  let notificationId: number | null = null
   try {
     const ins = await env.DB.prepare(`
       INSERT INTO super_admin_notifications (
         kind, order_number, property_address, severity, email_status, payload_json
-      ) VALUES ('funnel_regression', ?, ?, 'warn', 'skipped', ?)
+      ) VALUES ('funnel_regression', ?, ?, 'warn', 'pending', ?)
     `).bind(
       orderNumber,
       `Signup funnel regression — ${result.drop_stage || 'unknown stage'}`,
@@ -347,11 +349,41 @@ async function queueRegressionAlert(env: Bindings, result: TickResult): Promise<
         stages: result.stages,
       }),
     ).run()
-    return (ins?.meta?.last_row_id as number) || null
+    notificationId = (ins?.meta?.last_row_id as number) || null
   } catch (e: any) {
     console.error('[funnel-monitor] failed to insert regression alert:', e?.message || e, noteSummary)
     return null
   }
+
+  let emailStatus: 'sent' | 'failed' = 'failed'
+  let emailDetail = ''
+  try {
+    await notifyFunnelRegression(env, {
+      order_number: orderNumber,
+      drop_stage: result.drop_stage || 'unknown stage',
+      notes: result.notes,
+      window: result.window,
+      current: result.current,
+      baseline_avg: result.baseline_avg,
+      last_hour: result.last_hour,
+    })
+    emailStatus = 'sent'
+  } catch (e: any) {
+    emailDetail = String(e?.message || e).slice(0, 480)
+    console.warn('[funnel-monitor] regression email failed:', emailDetail)
+  }
+
+  if (notificationId) {
+    try {
+      await env.DB.prepare(
+        "UPDATE super_admin_notifications SET email_status = ?, email_detail = ? WHERE id = ?"
+      ).bind(emailStatus, emailDetail || null, notificationId).run()
+    } catch (e: any) {
+      console.warn('[funnel-monitor] status update failed:', e?.message || e)
+    }
+  }
+
+  return notificationId
 }
 
 function parseSqliteTs(ts: string): Date {
