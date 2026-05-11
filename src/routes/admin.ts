@@ -15,6 +15,7 @@ import { clientIp } from '../lib/rate-limit'
 import { encryptSecret, decryptSecret } from '../lib/secret-vault'
 import { trackActivity } from '../services/activity-tracker'
 import { getReportViewEvents, getReportViewSummary } from '../repositories/reports'
+import { runAutoTrace, type AutoTraceEdge } from '../services/auto-trace-agent'
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -4683,6 +4684,76 @@ adminRoutes.get('/superadmin/orders/needs-trace', async (c) => {
     return c.json({ orders: orders.results || [] })
   } catch (err: any) {
     return c.json({ error: err.message }, 500)
+  }
+})
+
+// ============================================================
+// AUTO-TRACE — Claude vision agent generates eave/hip/ridge polylines
+// ============================================================
+// Three endpoints, one per edge type. Fires ONLY when the super-admin
+// explicitly clicks the Auto-Trace button in the trace UI — never
+// background, never auto-persist. Returns a preview the admin reviews
+// and tweaks before submitting via /submit-trace.
+//
+// Body: { lat?, lng?, zoom?, imageWidth?, imageHeight? } — all optional.
+// Defaults fall back to the order's stored coords + zoom 20 + 1280×1280
+// effective image (Static Maps 640×640 × scale=2).
+// ============================================================
+adminRoutes.post('/superadmin/orders/:id/auto-trace/:edge', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+
+  const orderId = parseInt(c.req.param('id'))
+  if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
+
+  const edge = c.req.param('edge') as AutoTraceEdge
+  if (edge !== 'eaves' && edge !== 'hips' && edge !== 'ridges') {
+    return c.json({ error: 'edge must be eaves|hips|ridges' }, 400)
+  }
+
+  let body: any = {}
+  try { body = await c.req.json() } catch { /* empty body is fine — use defaults */ }
+
+  const order = await c.env.DB.prepare(
+    'SELECT id, order_number, latitude, longitude, property_address FROM orders WHERE id = ?'
+  ).bind(orderId).first<any>()
+  if (!order) return c.json({ error: 'Order not found' }, 404)
+
+  const lat = Number(body?.lat) || Number(order.latitude)
+  const lng = Number(body?.lng) || Number(order.longitude)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return c.json({ error: 'Order has no stored coordinates — pass lat/lng in the request body' }, 400)
+  }
+
+  try {
+    const result = await runAutoTrace(c.env, {
+      orderId,
+      edge,
+      lat, lng,
+      zoom: Number(body?.zoom) || 20,
+      imageWidth: Number(body?.imageWidth) || 640,
+      imageHeight: Number(body?.imageHeight) || 640,
+    })
+
+    // Audit row so the super-admin activity feed shows who ran what when.
+    // Non-fatal — auto-trace works even when the audit table is missing.
+    try {
+      await c.env.DB.prepare(
+        "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'admin_auto_trace', ?)"
+      ).bind(JSON.stringify({
+        order_id: orderId,
+        admin_id: admin.id,
+        edge,
+        confidence: result.confidence,
+        segments_returned: result.segments.length,
+        elapsed_ms: result.diagnostics.elapsed_ms,
+      })).run()
+    } catch { /* non-fatal */ }
+
+    return c.json({ success: true, ...result, order: { id: order.id, order_number: order.order_number } })
+  } catch (err: any) {
+    console.warn('[auto-trace] failed:', err?.message)
+    return c.json({ error: 'auto_trace_failed', message: err?.message || String(err) }, 500)
   }
 })
 

@@ -1746,6 +1746,13 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<button onclick="saTraceSetTool(\'chimney\')" id="sa-tool-chimney" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Chimney</button>' +
           '<button onclick="saTraceSetTool(\'downspout\')" id="sa-tool-downspout" title="Click each eave corner where a downspout drops to the ground. Each point becomes one downspout in the materials list." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Downspout</button>' +
           '<button onclick="saAutoDetectOutline()" id="sa-tool-auto-outline" title="AI-detect the eaves outline of the building at the current map center" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.4)"><i class="fas fa-wand-magic-sparkles mr-1"></i>AI Outline</button>' +
+          // Auto-Trace agent: Claude Opus 4.7 vision + Google Solar API context +
+          // 3D tiles + past human traces as few-shot examples. Three buttons —
+          // one per edge type. Each fires only on click (no background runs)
+          // and previews the result on the map; admin reviews + submits.
+          '<button onclick="saAutoTrace(\'eaves\')" id="sa-tool-auto-eaves" title="Auto-trace the eave outline using Claude vision + Solar API + past traces. Preview only — review and tweak before Submit." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(34,197,94,0.15);color:#86efac;border:1px solid rgba(34,197,94,0.4)"><i class="fas fa-robot mr-1"></i>Auto-Trace Eaves</button>' +
+          '<button onclick="saAutoTrace(\'hips\')" id="sa-tool-auto-hips" title="Auto-trace the hip lines using Claude vision + Solar API + past traces. Preview only — review and tweak before Submit." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(245,158,11,0.15);color:#fbbf24;border:1px solid rgba(245,158,11,0.4)"><i class="fas fa-robot mr-1"></i>Auto-Trace Hips</button>' +
+          '<button onclick="saAutoTrace(\'ridges\')" id="sa-tool-auto-ridges" title="Auto-trace the ridge lines using Claude vision + Solar API + past traces. Preview only — review and tweak before Submit." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(59,130,246,0.15);color:#93c5fd;border:1px solid rgba(59,130,246,0.4)"><i class="fas fa-robot mr-1"></i>Auto-Trace Ridges</button>' +
           '<button onclick="saAddStructure()" id="sa-tool-add-structure" title="Trace another structure such as a detached garage" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.4)"><i class="fas fa-plus mr-1"></i>Add another building</button>' +
           '<button onclick="saAddLowerEave()" id="sa-tool-add-lower-eave" title="Add a visible lower-eave lip beneath an upper-story roof. Use the 3D Reference and Street View to gauge the lip\'s extent — click points on the satellite to outline only the visible lip below the upper-story face." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(37,99,235,0.15);color:#93c5fd;border:1px solid rgba(37,99,235,0.4)"><i class="fas fa-arrow-down-short-wide mr-1"></i>Add Lower Eave</button>' +
           '<button onclick="saTraceUndo()" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">Undo</button>' +
@@ -3835,6 +3842,142 @@ window.saAutoDetectOutline = async function() {
     }
   }
 };
+
+// ── Auto-Trace agent — Claude Opus 4.7 vision generates eave/hip/ridge polylines
+// ── Pipeline: POST /api/admin/superadmin/orders/:id/auto-trace/{edge} → returns
+//    { segments:[[{lat,lng}...]], confidence, reasoning, diagnostics }. The
+//    super-admin reviews + tweaks the result; nothing persists until Submit.
+//    Fires ONLY on explicit button click — no background polling.
+window.saAutoTrace = async function(edge) {
+  var s = window._saTraceState;
+  if (!s || !s.map) { alert('Trace map not ready.'); return; }
+  if (!s.orderId) { alert('No order loaded.'); return; }
+  if (edge !== 'eaves' && edge !== 'hips' && edge !== 'ridges') return;
+
+  var btnId = edge === 'eaves' ? 'sa-tool-auto-eaves' : edge === 'hips' ? 'sa-tool-auto-hips' : 'sa-tool-auto-ridges';
+  var btn = document.getElementById(btnId);
+  var origHTML = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Tracing…';
+    btn.style.opacity = '0.7';
+    btn.style.cursor = 'wait';
+  }
+
+  try {
+    var c = s.map.getCenter();
+    var zoom = s.map.getZoom() || 20;
+    var mapEl = document.getElementById('sa-trace-map');
+    var w = (mapEl && mapEl.clientWidth) || 640;
+    var h = (mapEl && mapEl.clientHeight) || 640;
+    var resp = await saFetch('/api/admin/superadmin/orders/' + s.orderId + '/auto-trace/' + edge, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lat: c ? c.lat() : undefined,
+        lng: c ? c.lng() : undefined,
+        zoom: zoom,
+        imageWidth: w,
+        imageHeight: h,
+      }),
+    });
+    var data = null;
+    try { data = await resp.json(); } catch (_) { data = {}; }
+    if (!resp.ok || !data || !Array.isArray(data.segments)) {
+      var msg = (data && (data.message || data.error)) || ('HTTP ' + resp.status);
+      alert('Auto-trace failed.\n\n' + msg + '\n\nTry centering the building on the map first, or trace manually.');
+      return;
+    }
+    if (data.segments.length === 0) {
+      alert('No ' + edge + ' detected.\n\n' + (data.reasoning || 'The agent could not see this edge type from the satellite image.'));
+      return;
+    }
+
+    var confidence = typeof data.confidence === 'number' ? data.confidence : 0;
+    console.log('[auto-trace ' + edge + '] confidence=' + confidence + ' segments=' + data.segments.length, data.diagnostics);
+
+    // Inject the segments into the appropriate trace state. Eaves are
+    // closed polygons; hips/ridges are open polylines. We use the exact
+    // shape the manual-trace path produces so submit-trace / verify-planes
+    // / re-edit all work without special-casing auto-traced lines.
+    if (edge === 'eaves') {
+      saInjectAutoEaves(data.segments);
+    } else {
+      saInjectAutoLines(edge, data.segments);
+    }
+
+    // Confidence toast — UI-only, no persistence. Admin uses it as the
+    // signal for "trust this and submit" vs "redo by hand".
+    var toastColor = confidence >= 75 ? '#15803d' : confidence >= 50 ? '#9a3412' : '#7c1d1d';
+    var label = edge.charAt(0).toUpperCase() + edge.slice(1);
+    saAutoTraceToast(label + ' auto-traced (' + confidence + '% confidence)', toastColor);
+  } catch (err) {
+    console.warn('[SA Trace] auto-trace failed', err);
+    alert('Auto-trace failed. Check the console for details.');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHTML;
+      btn.style.opacity = '1';
+      btn.style.cursor = 'pointer';
+    }
+  }
+};
+
+// Append each Claude-returned polygon as its own eave section, mirroring
+// what saCloseEaveSection does for manual draws. Existing closed sections
+// are preserved — admin can keep auto-eaves of the house and manually
+// trace a detached garage afterwards.
+function saInjectAutoEaves(polygons) {
+  var s = window._saTraceState; if (!s) return;
+  polygons.forEach(function(poly) {
+    if (!Array.isArray(poly) || poly.length < 3) return;
+    s._eaveLatLngs = poly.map(function(p) { return new google.maps.LatLng(p.lat, p.lng); });
+    s.eavePoints = poly.slice();
+    if (s.eavePoly) { s.eavePoly.setMap(null); s.eavePoly = null; }
+    (s._eaveMarkers || []).forEach(function(m) { m.setMap(null); });
+    s._eaveMarkers = [];
+    saCloseEaveSection();
+  });
+}
+
+// Render each polyline as a google.maps.Polyline (same factory the manual
+// commit at line ~2622 uses) and stash the lat/lng pairs in _ridgeData /
+// _hipData so submit-trace and undo see them.
+function saInjectAutoLines(edge, polylines) {
+  var s = window._saTraceState; if (!s || !s.map) return;
+  var colorMap = { ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb' };
+  // edge is plural ('ridges' / 'hips') — strip the 's' for the lookups
+  // that mirror the manual-commit path.
+  var kind = edge === 'ridges' ? 'ridge' : edge === 'hips' ? 'hip' : null;
+  if (!kind) return;
+  var color = colorMap[kind];
+  polylines.forEach(function(line) {
+    if (!Array.isArray(line) || line.length < 2) return;
+    var path = line.map(function(p) { return new google.maps.LatLng(p.lat, p.lng); });
+    var poly = new google.maps.Polyline({ path: path, strokeColor: color, strokeWeight: 2, map: s.map });
+    var seg = line.map(function(p) { return { lat: p.lat, lng: p.lng }; });
+    if (kind === 'ridge') { s.ridges.push(poly); s._ridgeData.push(seg); }
+    else if (kind === 'hip') { s.hips.push(poly); s._hipData.push(seg); }
+  });
+}
+
+// Lightweight toast (sa-trace UI has no existing toast — we render one
+// inline above the toolbar so the admin sees confidence at a glance).
+function saAutoTraceToast(msg, color) {
+  var el = document.getElementById('sa-auto-trace-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'sa-auto-trace-toast';
+    el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);padding:10px 18px;border-radius:8px;color:#fff;font-size:13px;font-weight:700;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,0.4);transition:opacity .25s ease;opacity:0';
+    document.body.appendChild(el);
+  }
+  el.style.background = color || '#15803d';
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(window._saAutoTraceToastT);
+  window._saAutoTraceToastT = setTimeout(function() { el.style.opacity = '0'; }, 4500);
+}
 
 // Render the per-section pitch panel (visible only when 1+ eaves sections
 // exist). Each input persists into eaveSections[i].pitch_rise on change so
