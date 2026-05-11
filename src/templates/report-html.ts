@@ -641,6 +641,16 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 .wf-cell{padding:5px 6px;font-size:8.5px;text-align:center;border:1px solid #e0e0e0;background:#fafafa}
 .wf-cell-pct{font-weight:700;color:#333}
 .wf-cell-val{color:#555}
+
+/* ===== Per-structure diagram height caps (Page 2) =====
+   Without these caps, the axo (1200×750 viewBox) renders ~4.7in tall
+   and the 2D plan (700×700) renders ~7.5in tall — combined they push
+   the structure card past the 11in page height. Caps + auto width keep
+   each card to a single 8.5×11 page. */
+.diag-cap-axo{display:flex;justify-content:center;align-items:center;height:3.0in;overflow:hidden}
+.diag-cap-axo svg{max-height:3.0in !important;width:auto !important;height:auto !important;display:block}
+.diag-cap-plan{display:flex;justify-content:center;align-items:center;height:3.3in;overflow:hidden}
+.diag-cap-plan svg{max-height:3.3in !important;width:auto !important;height:auto !important;display:block}
 </style>
 </head>
 <body>
@@ -1017,11 +1027,11 @@ ${aerialTiles.length === 4 ? `
         </div>
         <div style="border-top:1px solid #e2e8f0;padding:6px 12px 0;background:#fafbfc">
           <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">3D Axonometric View &mdash; Roof Geometry</div>
-          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:3px;overflow:hidden">${svg}</div>
+          <div class="diag-cap-axo" style="background:#fff;border:1px solid #e2e8f0;border-radius:3px">${svg}</div>
         </div>
         <div style="padding:6px 12px 0;background:#fafbfc">
           <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">2D Plan View &mdash; Edge Dimensions</div>
-          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:3px;overflow:hidden">${flat2dSvg}</div>
+          <div class="diag-cap-plan" style="background:#fff;border:1px solid #e2e8f0;border-radius:3px">${flat2dSvg}</div>
         </div>
       </div>
     `}).join('')}
@@ -1049,9 +1059,9 @@ ${aerialTiles.length === 4 ? `
       )
       return `
       <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">3D Axonometric View &mdash; Roof Geometry</div>
-      <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center;margin-bottom:6px">${axoSvg}</div>
-      <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">2D Plan View &mdash; Edge Dimensions</div>
-      <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center">${flat}</div>
+      <div class="diag-cap-axo" style="border:1px solid #d5dae3;border-radius:4px;background:#fff;margin-bottom:6px">${axoSvg}</div>
+      <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-top:8px;margin-bottom:2px">2D Plan View &mdash; Edge Dimensions</div>
+      <div class="diag-cap-plan" style="border:1px solid #d5dae3;border-radius:4px;background:#fff">${flat}</div>
       <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">3D view shows pitch-shaded facets with Lambert lighting. 2D view shows every traced edge with its haversine length.</div>
     `})() : `
       <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center">${architecturalDiagramSVG}</div>

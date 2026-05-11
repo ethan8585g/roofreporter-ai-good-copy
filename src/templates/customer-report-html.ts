@@ -100,6 +100,13 @@ export function generateCustomerReportHTML(report: RoofReport): string {
     .frame{border:1px solid #e2e8f0;border-radius:6px;background:#fff;padding:8px;display:flex;justify-content:center;align-items:center}
     .frame img{max-width:100%;height:auto;display:block;border-radius:4px}
     .frame svg{max-width:100%;height:auto;display:block}
+    /* Cap per-structure diagrams so each section fits on screen and prints
+       cleanly. Without these, the axo (1200×750) renders ~4.7in tall and
+       the 2D plan (700×700) renders ~7.5in tall — too dominant. */
+    .frame-axo{height:320px;overflow:hidden}
+    .frame-axo svg{max-height:320px !important;width:auto !important;height:auto !important}
+    .frame-plan{height:360px;overflow:hidden}
+    .frame-plan svg{max-height:360px !important;width:auto !important;height:auto !important}
     .note{font-size:12px;color:#64748b;margin-top:10px;line-height:1.5}
     .footer{margin-top:28px;padding-top:14px;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b;display:flex;justify-content:space-between;align-items:center}
     .stamp{display:inline-block;background:#0f172a;color:#fff;padding:4px 10px;border-radius:999px;font-size:10px;letter-spacing:1px;font-weight:700}
@@ -119,10 +126,10 @@ export function generateCustomerReportHTML(report: RoofReport): string {
     ? perStructure.map(s => `
     <section class="page">
       <h2>${escapeHtml(s.label)} &mdash; 3D View</h2>
-      <div class="frame">${s.axo}</div>
+      <div class="frame frame-axo">${s.axo}</div>
       <p class="note">Three-dimensional view of the roof geometry with pitch-shaded facets.</p>
       <h2 style="margin-top:24px">${escapeHtml(s.label)} &mdash; 2D Plan View</h2>
-      <div class="frame">${s.plan}</div>
+      <div class="frame frame-plan">${s.plan}</div>
       <p class="note">Top-down outline showing ridge, hip and valley layout.</p>
     </section>`).join('')
     : ''
