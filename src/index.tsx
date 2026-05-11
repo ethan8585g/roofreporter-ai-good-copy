@@ -1602,11 +1602,18 @@ app.get('/3d-verify', async (c) => {
       captureHandler.setInputAction(handleCanvasClick, Cesium.ScreenSpaceEventType.LEFT_CLICK);
     }
 
-    // Photorealistic 3D Tiles
-    Cesium.Cesium3DTileset.fromUrl(
-      'https://tile.googleapis.com/v1/3dtiles/root.json?key=' + encodeURIComponent(API_KEY),
-      { showCreditsOnScreen: true }
-    ).then((tileset) => {
+    // Photorealistic 3D Tiles. Use Cesium's helper — it handles Google's
+    // per-session token (`?session=...`) automatically. Loading root.json
+    // directly via Cesium3DTileset.fromUrl leaves child tile/texture
+    // requests un-authenticated, so geometry shows as a wireframe and no
+    // textures appear.
+    const tilesetPromise = (typeof Cesium.createGooglePhotorealistic3DTileset === 'function')
+      ? Cesium.createGooglePhotorealistic3DTileset(undefined, { apiKey: API_KEY, showCreditsOnScreen: true })
+      : Cesium.Cesium3DTileset.fromUrl(
+          'https://tile.googleapis.com/v1/3dtiles/root.json?key=' + encodeURIComponent(API_KEY),
+          { showCreditsOnScreen: true }
+        );
+    tilesetPromise.then((tileset) => {
       viewer.scene.primitives.add(tileset);
       flyToInitial(0);
 
