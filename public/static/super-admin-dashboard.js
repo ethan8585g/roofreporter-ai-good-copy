@@ -10062,9 +10062,19 @@ window.obLoadDeployments = async function() {
   try {
     var res = await saFetch('/api/admin/superadmin/secretary/deployment-status');
     if (!res) return;
-    SA.data.deployments = await res.json();
+    if (!res.ok) {
+      var msg = 'HTTP ' + res.status;
+      try { var j = await res.json(); msg = (j && j.error) || msg; } catch(_) {}
+      SA.data.deployments = { error: msg, deployments: [] };
+    } else {
+      SA.data.deployments = await res.json();
+    }
     obRenderDeployments();
-  } catch(e) { window.rmToast('Error loading deployments: ' + e.message, 'error'); }
+  } catch(e) {
+    SA.data.deployments = { error: e.message, deployments: [] };
+    obRenderDeployments();
+    window.rmToast('Error loading deployments: ' + e.message, 'error');
+  }
 };
 
 function obRenderDeployments() {
@@ -10232,15 +10242,31 @@ window.obLoadPhonePool = async function() {
   try {
     var res = await saFetch('/api/admin/superadmin/phone-numbers/owned');
     if (!res) return;
-    SA.data.phonePool = await res.json();
+    if (!res.ok) {
+      var msg = 'HTTP ' + res.status;
+      try { var j = await res.json(); msg = (j && j.error) || msg; } catch(_) {}
+      SA.data.phonePool = { error: msg, phones: [] };
+    } else {
+      SA.data.phonePool = await res.json();
+    }
     obRenderPhonePool();
-  } catch(e) { window.rmToast('Error loading phone pool: ' + e.message, 'error'); }
+  } catch(e) {
+    SA.data.phonePool = { error: e.message, phones: [] };
+    obRenderPhonePool();
+    window.rmToast('Error loading phone pool: ' + e.message, 'error');
+  }
 };
 
 function obRenderPhonePool() {
   var el = document.getElementById('ob-phone-pool-table');
   if (!el) return;
   var d = SA.data.phonePool || {};
+  if (d.error) {
+    el.innerHTML = '<div class="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">' +
+      '<i class="fas fa-exclamation-triangle mr-1"></i>Phone pool failed to load: ' + d.error +
+      '<p class="text-[11px] text-red-600 mt-1">Twilio credentials may be missing or the upstream API is down.</p></div>';
+    return;
+  }
   // The owned endpoint returns either `phones` or `numbers`
   var pool = d.phones || d.numbers || [];
 
@@ -11826,6 +11852,16 @@ function renderGeminiCommandView() {
   const isConfigured = status.configured && status.status === 'ok';
   const aiBackend = status.backend || (status.model === 'openai-fallback' ? 'openai' : 'gemini');
   const aiModel = status.model || 'gemini-2.5-flash';
+  // Surface the actual active backend so admin knows when fallback is in play.
+  const badgeLabel = !isConfigured ? 'Not Configured'
+    : aiBackend === 'openai' ? 'OpenAI Fallback (' + aiModel + ')'
+    : 'Gemini Connected (' + aiModel + ')';
+  const badgeClass = !isConfigured ? 'bg-red-100 text-red-700'
+    : aiBackend === 'openai' ? 'bg-amber-100 text-amber-700'
+    : 'bg-green-100 text-green-700';
+  const badgeIcon = !isConfigured ? 'fa-exclamation-triangle'
+    : aiBackend === 'openai' ? 'fa-exchange-alt'
+    : 'fa-check-circle';
 
   return `
   <div class="slide-in">
@@ -11841,9 +11877,9 @@ function renderGeminiCommandView() {
         <p class="text-slate-500 text-sm mt-1">Powered by Google Gemini 2.5 Flash — your AI co-pilot for platform management</p>
       </div>
       <div class="flex items-center gap-2">
-        <span class="px-3 py-1.5 rounded-full text-xs font-bold ${isConfigured ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
-          <i class="fas ${isConfigured ? 'fa-check-circle' : 'fa-exclamation-triangle'} mr-1"></i>
-          ${isConfigured ? 'Gemini Connected' : 'Not Configured'}
+        <span class="px-3 py-1.5 rounded-full text-xs font-bold ${badgeClass}">
+          <i class="fas ${badgeIcon} mr-1"></i>
+          ${badgeLabel}
         </span>
         <button onclick="geminiClearHistory()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-medium text-slate-600 transition-all">
           <i class="fas fa-trash mr-1"></i>Clear History
