@@ -60,11 +60,17 @@ export interface AutoTraceInput {
    *  satellite + DSM hillshade images so the operator can verify what Claude
    *  saw. Off by default — adds ~2MB to the response. */
   includeDebugImages?: boolean
-  /** Skip the post-processing dominant-angle snapping step. Default false
-   *  (snapping IS applied). Snapping cleans up jittery vertex placement on
-   *  rectilinear residential houses; turn it off when tracing organic
-   *  shapes (rare for residential) or to debug raw model output. */
+  /** Skip the post-processing dominant-angle snapping step. **Default true
+   *  (snapping is OFF)** as of 2026-05-11 after a regression: buildings
+   *  with bay windows, angled wings, hex porches, or any non-90° feature
+   *  were getting their real corners flattened. Pass `false` (or
+   *  `enableAngleSnapping`) only when you know the building is purely
+   *  rectilinear. */
   skipAngleSnapping?: boolean
+  /** Opt-IN flag for the dominant-angle snapping step. Mirror of
+   *  skipAngleSnapping with the opposite default so route consumers can
+   *  use either spelling. */
+  enableAngleSnapping?: boolean
   /** Allow the auto-trace to return DETACHED garages, sheds, and outbuildings
    *  as additional polygons instead of clamping to the single central
    *  structure. Default false — the bbox clamp suppresses these by design
@@ -564,11 +570,14 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   const pixelImgW = safeW * 2
   const pixelImgH = safeH * 2
   // Apply Manhattan-world dominant-angle snapping to eaves polygons before
-  // projection. Skipped for hips/ridges (those are polylines, not closed
-  // polygons — orthogonalizing them would lose the genuinely diagonal
-  // geometry that hips by definition have). Caller can disable via input.
+  // projection. **Default OFF** as of 2026-05-11 after a regression where
+  // bay windows / angled wings / hex porches got their real corners
+  // flattened. Opt-in via `enableAngleSnapping: true` per call when the
+  // building is genuinely rectilinear.
+  const snappingRequested = input.enableAngleSnapping === true ||
+    (input.skipAngleSnapping === false && input.enableAngleSnapping !== false)
   let snappingApplied = false
-  if (input.edge === 'eaves' && !input.skipAngleSnapping) {
+  if (input.edge === 'eaves' && snappingRequested) {
     const before = finalSegmentsPx
     finalSegmentsPx = finalSegmentsPx.map(seg => seg.length >= 4 ? snapPolygonToDominantAngle(seg) : seg)
     snappingApplied = finalSegmentsPx.some((seg, i) => seg !== before[i])
@@ -898,9 +907,15 @@ function buildSystemPrompt(
 function buildEavesSizeSanityClause(bbox: { widthFt: number; depthFt: number; trusted: boolean } | null): string {
   if (bbox && bbox.trusted) {
     const expected = Math.max(400, bbox.widthFt * bbox.depthFt)
-    const lo = Math.round(expected * 0.6)
-    const hi = Math.round(expected * 1.3)
-    return `SIZE SANITY (both directions): Solar API's bounding box for this address corresponds to roughly ${Math.round(expected)} sqft of building footprint. A correct eaves polygon for THIS property should land in ${lo}–${hi} sqft (60-130% of the Solar bbox area, accounting for jogs and porches). Bigger than ${hi} sqft → you are combining the target with a neighbour or outbuilding — shrink. Smaller than ${lo} sqft → you stopped at a tree-occluded eave or shadow — EXTEND through the canopy using the orthogonal-projection rule above.`
+    // Widened on 2026-05-11 from 0.6×-1.3× to 0.4×-1.8× after a regression
+    // where Solar's bbox under-reported real building area on tree-occluded
+    // lots, and the tight bracket told Claude to shrink an already-correct
+    // polygon. The bracket is meant as a sanity cap (catch neighbour merges
+    // + tree-stops), NOT a tight prior — leaving plenty of room for valid
+    // additions, porches, breezeways that Solar's footprint misses.
+    const lo = Math.round(expected * 0.4)
+    const hi = Math.round(expected * 1.8)
+    return `SIZE SANITY (loose sanity cap, not a tight constraint): Solar API's bounding box suggests roughly ${Math.round(expected)} sqft. A correct eaves polygon for THIS property would typically fall in ${lo}–${hi} sqft. Outside that range → recheck: bigger than ${hi} sqft usually means a neighbour got merged; smaller than ${lo} sqft usually means tree occlusion clipped the trace early. WITHIN this range, do not second-guess the satellite — Solar's bbox is often clipped at overhanging tree canopy and can under-report the real building by 20-30%.`
   }
   // No trusted Solar bbox — fall back to the generic Canadian residential band.
   return 'SIZE SANITY (both directions): a typical Canadian residential house footprint is 1,200–3,000 sqft. If your traced polygon is bigger than ~3,500 sqft you are combining the target with a neighbour or outbuilding — shrink it. If your traced polygon is smaller than ~800 sqft you have almost certainly stopped at a tree-occluded eave or shadow — EXTEND the trace to where the eave actually ends.'

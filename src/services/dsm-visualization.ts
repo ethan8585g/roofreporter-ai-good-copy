@@ -158,15 +158,22 @@ export async function fetchDsmHillshade(
       heights[i] = Number.isFinite(v) ? Math.max(groundLevel, Math.min(ceiling, v)) : groundLevel
     }
 
-    // Apply building mask — zero out non-building pixels so rustling tree
-    // canopies don't render as fake ridges in the hillshade. Pixels NOT
-    // covered by the mask get pushed down to ground level so they don't
-    // contribute slope to the Sobel filter or the illumination dot product.
-    // Without the mask this step is a no-op and behavior matches the
-    // pre-mask era exactly.
+    // Apply building mask — softened on 2026-05-11. Originally we zeroed
+    // non-building pixels to ground level so tree canopies didn't render
+    // as fake ridges. BUT: Solar's building mask is sometimes undersized
+    // (clipped at trees that overhang the roof), and zeroing was double-
+    // dropping real roof signal exactly where Claude needed it most. New
+    // behavior: blend toward ground only when the pixel is BOTH outside
+    // the mask AND elevated >2m above ground (likely a tree). Pixels at
+    // ground level outside the mask are left alone (no signal contributed
+    // anyway). Pixels INSIDE the mask are never touched.
     if (buildingMask) {
       for (let i = 0; i < heights.length; i++) {
-        if (buildingMask[i] === 0) heights[i] = groundLevel
+        if (buildingMask[i] === 0 && heights[i] > groundLevel + 2) {
+          // Tree (high + outside mask) — blend 60% toward ground so it
+          // contributes less hillshade noise without disappearing entirely.
+          heights[i] = groundLevel + (heights[i] - groundLevel) * 0.4
+        }
       }
     }
 
