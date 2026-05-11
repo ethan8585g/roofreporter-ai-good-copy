@@ -15093,6 +15093,10 @@ function ga4ProbeBanner(status) {
           'class="text-xs bg-white border border-red-300 text-red-700 px-2 py-1 rounded hover:bg-red-50">' +
           'Open GA4 Admin <i class="fas fa-external-link-alt ml-1"></i>' +
         '</a>' +
+        '<a href="/super-admin/ga4-grant" ' +
+          'class="text-xs bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded">' +
+          '<i class="fas fa-magic mr-1"></i>Auto-grant via OAuth' +
+        '</a>' +
       '</div>';
   } else if (saEmail) {
     // Non-perms failure but we still know the SA — show it small in case it helps diagnose.

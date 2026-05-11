@@ -77,6 +77,7 @@ import { superAdminLeads } from './routes/super-admin-leads'
 import { superAdminAttribution } from './routes/super-admin-attribution'
 import { superAdminLoopTracker } from './routes/super-admin-loop-tracker'
 import { superAdminAi } from './routes/super-admin-ai'
+import { ga4GrantRoutes } from './routes/ga4-grant'
 // runLoopScan + pruneExpiredScanSessions are imported by src/cron-worker.ts
 // (the actual cron Worker). They were imported here for the Pages-side
 // scheduled() handler that never fires — see comment near line 4970.
@@ -730,6 +731,7 @@ app.route('/api/super-admin/loop-tracker', superAdminLoopTracker)
 
 // Super-admin AI Assistant: chat UI at /super-admin/ai-assistant + SSE chat at the same prefix
 app.route('/super-admin/ai-assistant', superAdminAi)
+app.route('/super-admin/ga4-grant', ga4GrantRoutes)
 
 app.route('/super-admin/ltv', superAdminLtv)
 app.route('/api/super-admin/ltv', superAdminLtv)
