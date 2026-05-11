@@ -772,6 +772,39 @@ app.get('/api/activity/recent-reports', async (c) => {
   }
 })
 
+// Email open-tracking pixel — public, no auth. Mail clients fetch the
+// 1×1 GIF when they load images; we increment open_count + set opened_at
+// for the matching email_sends row.
+//
+// Caveat: Gmail/Apple Mail prefetch images server-side so "opened" can
+// register before the human actually reads it. Treat opens as directional,
+// not gospel. Click tracking is the reliable signal.
+app.get('/api/email-pixel/:token{.+\\.gif}', async (c) => {
+  const raw = c.req.param('token')
+  const token = (raw || '').replace(/\.gif$/, '')
+  const { recordEmailOpen, transparentGifBytes } = await import('./services/email-tracking')
+  // Run record asynchronously — don't make the mail client wait. waitUntil
+  // keeps the worker alive after the response goes out.
+  const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || null
+  const ua = c.req.header('User-Agent') || null
+  const promise = recordEmailOpen(c.env as any, token, ip, ua).catch((e: any) => {
+    console.warn('[email-pixel] recordEmailOpen failed:', e?.message || e)
+  })
+  // @ts-ignore — executionCtx is available in Workers runtime
+  if (c.executionCtx?.waitUntil) c.executionCtx.waitUntil(promise)
+  // Cache-Control: no-store so revisits re-fire (some clients re-fetch on
+  // each "show images" click — those are real opens too).
+  return new Response(transparentGifBytes(), {
+    status: 200,
+    headers: {
+      'Content-Type': 'image/gif',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    },
+  })
+})
+
 // Health check
 app.get('/api/health', (c) => {
   // Report which env vars are configured (true/false only — never expose values)

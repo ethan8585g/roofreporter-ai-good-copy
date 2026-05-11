@@ -1249,6 +1249,7 @@ export async function notifyNewUserSignup(env: any, data: {
 export async function sendWelcomeEmail(env: any, data: {
   email: string
   name?: string | null
+  customerId?: number | null
 }): Promise<void> {
   if (!data?.email) return
   const esc = (v: any) => String(v ?? '').replace(/[&<>"']/g, (m) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' } as any)[m])
@@ -1257,6 +1258,18 @@ export async function sendWelcomeEmail(env: any, data: {
   const demoUrl = 'https://calendar.app.google/KNLFST4CNxViPPN3A'
 
   const subject = 'Welcome to Roof Manager'
+
+  // Email-open tracking — log the send BEFORE we attempt transport so we
+  // capture even failed sends (with send_error). Pixel injected just before
+  // </body> in the HTML below.
+  const { logEmailSend, markEmailFailed, buildTrackingPixel } = await import('./email-tracking')
+  const trackingToken = await logEmailSend(env, {
+    customerId: data.customerId ?? null,
+    recipient: data.email,
+    kind: 'welcome',
+    subject,
+  })
+  const pixel = buildTrackingPixel(trackingToken)
   const html = `
 <div style="max-width:600px;margin:0 auto;font-family:Inter,Arial,Helvetica,sans-serif;background:#f4f4f5;padding:24px">
   <div style="background:#000;padding:24px;border-radius:12px 12px 0 0;text-align:center">
@@ -1285,7 +1298,8 @@ export async function sendWelcomeEmail(env: any, data: {
     <p style="font-size:12px;color:#9CA3AF;margin:18px 0 0;text-align:center;word-break:break-all">${demoUrl}</p>
   </div>
   <p style="font-size:11px;color:#9CA3AF;text-align:center;margin:16px 0 0">© Roof Manager · www.roofmanager.ca</p>
-</div>`
+</div>
+${pixel}`
 
   // Strategy 1: Gmail OAuth2
   let sent = false
@@ -1337,5 +1351,6 @@ export async function sendWelcomeEmail(env: any, data: {
 
   if (!sent) {
     console.error('[sendWelcomeEmail] ALL email methods failed — welcome email for', data.email, 'was NOT delivered')
+    await markEmailFailed(env, trackingToken, 'All transports failed (Gmail OAuth2 / Resend / GCP SA)')
   }
 }

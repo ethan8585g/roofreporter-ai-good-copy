@@ -662,7 +662,7 @@ customerAuthRoutes.post('/google', async (c) => {
 
       // Send "Welcome to Roof Manager" email to the new user (non-blocking)
       try {
-        c.executionCtx.waitUntil(sendWelcomeEmail(c.env as any, { email, name })
+        c.executionCtx.waitUntil(sendWelcomeEmail(c.env as any, { email, name, customerId: customer.id as number })
           .catch((e) => console.warn('[customer-auth] sendWelcomeEmail (google) failed:', e?.message || e)))
       } catch (e: any) { console.warn('[customer-auth] sendWelcomeEmail (google) skip:', e?.message) }
     }
@@ -936,7 +936,7 @@ customerAuthRoutes.post('/register', async (c) => {
 
     // Send "Welcome to Roof Manager" email to the new user (non-blocking)
     try {
-      c.executionCtx.waitUntil(sendWelcomeEmail(c.env as any, { email: cleanEmail, name })
+      c.executionCtx.waitUntil(sendWelcomeEmail(c.env as any, { email: cleanEmail, name, customerId: (result?.meta?.last_row_id as number) || null })
         .catch((e) => console.warn('[customer-auth] sendWelcomeEmail (email) failed:', e?.message || e)))
     } catch (e: any) { console.warn('[customer-auth] sendWelcomeEmail (email) skip:', e?.message) }
 

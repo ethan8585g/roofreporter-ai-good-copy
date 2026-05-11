@@ -18,6 +18,7 @@
 // ============================================================
 
 import { loadGmailCreds, sendGmailOAuth2 } from './email'
+import { logEmailSend, markEmailFailed, buildTrackingPixel } from './email-tracking'
 
 export type NurtureStage = '1h' | '24h' | '3d'
 
@@ -183,7 +184,16 @@ export async function runSignupNurtureStage(env: any, stage: NurtureStage): Prom
 
     const firstName = firstNameFromCustomer(row.name, row.email)
     const subject = cfg.subject(firstName)
-    const html = cfg.body(firstName)
+    const rawHtml = cfg.body(firstName)
+    // Log to email_sends BEFORE attempting send so we capture failures too.
+    const trackingToken = await logEmailSend(env, {
+      customerId: row.id, recipient: row.email, kind: `nurture_${stage}`, subject,
+    })
+    const pixel = buildTrackingPixel(trackingToken)
+    // Inject pixel just before </body>. Fallback: append at end.
+    const html = rawHtml.includes('</body>')
+      ? rawHtml.replace('</body>', `${pixel}</body>`)
+      : rawHtml + pixel
 
     try {
       await sendGmailOAuth2(
@@ -198,6 +208,7 @@ export async function runSignupNurtureStage(env: any, stage: NurtureStage): Prom
       result.failed++
       result.errors.push(`[${stage}] #${row.id} ${row.email}: ${e?.message || e}`)
       console.warn(`[signup-nurture:${stage}] send failed for customer ${row.id}:`, e?.message || e)
+      await markEmailFailed(env, trackingToken, String(e?.message || e))
       try {
         await env.DB.prepare(
           `INSERT INTO user_activity_log (company_id, action, details) VALUES (1, ?, ?)`
@@ -244,7 +255,14 @@ export async function sendSignupNurtureToCustomer(
 
   const firstName = firstNameFromCustomer(customer.name, customer.email)
   const subject = cfg.subject(firstName)
-  const html = cfg.body(firstName)
+  const rawHtml = cfg.body(firstName)
+  const trackingToken = await logEmailSend(env, {
+    customerId: customer.id, recipient: customer.email, kind: `nurture_${stage}`, subject,
+  })
+  const pixel = buildTrackingPixel(trackingToken)
+  const html = rawHtml.includes('</body>')
+    ? rawHtml.replace('</body>', `${pixel}</body>`)
+    : rawHtml + pixel
 
   try {
     await sendGmailOAuth2(
@@ -259,6 +277,7 @@ export async function sendSignupNurtureToCustomer(
     })).run()
     return { success: true, sent_to: customer.email, subject }
   } catch (e: any) {
+    await markEmailFailed(env, trackingToken, String(e?.message || e))
     return { success: false, error: e?.message || String(e) }
   }
 }

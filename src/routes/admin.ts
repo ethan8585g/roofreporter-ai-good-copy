@@ -5579,7 +5579,7 @@ adminRoutes.get('/customers/:id/journey.html', async (c) => {
      FROM analytics_attribution WHERE customer_id = ?`
   ).bind(id).first<any>().catch(() => null) as any
 
-  const [pathEvents, orderEvents, activityEvents] = await Promise.all([
+  const [pathEvents, orderEvents, activityEvents, emailSends] = await Promise.all([
     c.env.DB.prepare(
       `SELECT path, module, occurred_at, ip_address, user_agent FROM user_path_events
        WHERE user_type='customer' AND user_id = ? ORDER BY occurred_at DESC LIMIT 200`
@@ -5592,6 +5592,10 @@ adminRoutes.get('/customers/:id/journey.html', async (c) => {
       `SELECT action, details, created_at FROM user_activity_log
        WHERE details LIKE ? ORDER BY created_at DESC LIMIT 100`
     ).bind(`%customer_id":${id}%`).all<any>().catch(() => ({ results: [] })) as any,
+    c.env.DB.prepare(
+      `SELECT id, kind, subject, sent_at, opened_at, open_count, last_opened_at, send_error
+       FROM email_sends WHERE customer_id = ? ORDER BY sent_at DESC LIMIT 50`
+    ).bind(id).all<any>().catch(() => ({ results: [] })) as any,
   ])
 
   const events: any[] = []
@@ -5604,10 +5608,16 @@ adminRoutes.get('/customers/:id/journey.html', async (c) => {
   for (const r of (activityEvents.results || [])) {
     events.push({ kind: 'activity', occurred_at: r.created_at, summary: r.action, detail: (r.details || '').slice(0, 140) })
   }
+  for (const r of (emailSends.results || [])) {
+    const status = r.opened_at
+      ? `✓ opened ${r.open_count}× (last ${r.last_opened_at || r.opened_at})`
+      : (r.send_error ? `✗ failed: ${String(r.send_error).slice(0, 80)}` : '○ delivered (not opened yet — or images blocked)')
+    events.push({ kind: 'email', occurred_at: r.sent_at, summary: `${r.kind}: ${r.subject || '(no subject)'}`, detail: status })
+  }
   events.sort((a, b) => String(b.occurred_at || '').localeCompare(String(a.occurred_at || '')))
 
   const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-  const kindBg: Record<string, string> = { page_view: '#dbeafe', order: '#dcfce7', activity: '#fef3c7' }
+  const kindBg: Record<string, string> = { page_view: '#dbeafe', order: '#dcfce7', activity: '#fef3c7', email: '#ede9fe' }
 
   const rowsHtml = events.map(e => `
     <tr>
