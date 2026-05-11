@@ -118,7 +118,12 @@
     iframe.className = 'rm-3d-iframe';
     iframe.src = '/3d-verify?orderId=' + encodeURIComponent(orderId);
     iframe.allow = 'fullscreen';
-    iframe.referrerPolicy = 'no-referrer';
+    // Match the working trace-tool pattern (customer-order.js:4430). The GCP
+    // GOOGLE_MAPS_API_KEY has HTTP-referrer restrictions that REQUIRE a Referer
+    // matching https://www.roofmanager.ca/*. 'no-referrer' was rejected with 401;
+    // 'strict-origin-when-cross-origin' sends https://www.roofmanager.ca/ which
+    // matches and is accepted.
+    iframe.referrerPolicy = 'strict-origin-when-cross-origin';
 
     var tryonToggle = document.createElement('button');
     tryonToggle.className = 'rm-3d-tryon-toggle';
