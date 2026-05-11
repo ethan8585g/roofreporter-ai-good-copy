@@ -1558,13 +1558,14 @@ app.get('/3d-verify', async (c) => {
   }
 
   try {
+    // Suppress the Ion access-token nag overlay — we use Google Photorealistic
+    // 3D Tiles, not Ion assets.
+    try { if (Cesium.Ion) Cesium.Ion.defaultAccessToken = ''; } catch(_){}
     viewer = new Cesium.Viewer('cesiumContainer', {
       // preserveDrawingBuffer is mandatory for canvas.toDataURL() capture
       contextOptions: { webgl: { preserveDrawingBuffer: true } },
-      // Disable default globe + atmosphere — Photorealistic 3D Tiles are the world
-      globe: false,
-      skyBox: false,
-      skyAtmosphere: false,
+      // Skip default Bing imagery (we replace the world with Photorealistic Tiles)
+      baseLayer: false,
       baseLayerPicker: false,
       geocoder: false,
       homeButton: false,
@@ -1576,6 +1577,13 @@ app.get('/3d-verify', async (c) => {
       infoBox: false,
       selectionIndicator: false
     });
+    // Hide the default globe/sky/atmosphere AFTER viewer creation. Passing
+    // globe:false / skyBox:false / skyAtmosphere:false to the constructor leaves
+    // those scene refs undefined, which broke Photorealistic 3D Tile rendering
+    // (textures didn't appear — only mesh wireframes).
+    if (viewer.scene.globe) viewer.scene.globe.show = false;
+    if (viewer.scene.skyBox) viewer.scene.skyBox.show = false;
+    if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = false;
     viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#000');
 
     // Active-capture wiring: register a LEFT_CLICK handler that runs only
