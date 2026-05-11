@@ -18,8 +18,30 @@
     sessionId: null,
     messages: [],
     loading: false,
-    customerName: ''
+    customerName: '',
+    firstName: '',
+    hasChattedBefore: false,
+    historyPromise: null
   };
+
+  // Morning/afternoon/evening from local time — used in the intro greeting.
+  function partOfDay() {
+    var h = new Date().getHours();
+    if (h < 12) return 'morning';
+    if (h < 17) return 'afternoon';
+    return 'evening';
+  }
+
+  // Long intro on the very first chat ever, short intro on every visit after.
+  // `hasChatted` comes from the server (tied to customer_id), not localStorage.
+  function buildIntro(firstName, hasChatted) {
+    var name = firstName || 'there';
+    var tod = partOfDay();
+    if (!hasChatted) {
+      return "Hey " + name + "! My name's Rover. I'm your new AI assistant here to help with anything you need related to roofing and growing your business. Think of me as the old guy on your roofing crew that literally knows everything — but the sober version of that guy that's way smarter. How can I help you get started this " + tod + "?";
+    }
+    return "Hey " + name + ", how can I help this " + tod + "?";
+  }
 
   function getToken() { return localStorage.getItem('rc_customer_token') || ''; }
   function authHeaders() { return { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' }; }
@@ -35,10 +57,11 @@
   }
   state.sessionId = getSessionId();
 
-  // Get customer name from localStorage
+  // Get customer name from localStorage (fallback if /history fetch fails)
   try {
     var cust = JSON.parse(localStorage.getItem('rc_customer') || '{}');
     state.customerName = cust.name || cust.email || '';
+    state.firstName = (cust.name || '').split(' ')[0] || '';
   } catch(e) {}
 
   // ============================================================
@@ -621,11 +644,15 @@
     fab.classList.toggle('hidden', state.open);
 
     if (state.open) {
-      // Show welcome on first open
-      if (state.messages.length === 0) {
-        var name = state.customerName ? state.customerName.split(' ')[0] : 'there';
-        addMessage('assistant', 'Hi! I\'m Roof Manager AI — your AI assistant to help you with anything Roof Manager! Whether it\'s navigating your user dashboard, helping with set-ups, acting as your personal sales assistant, or finding any data or information your business needs — I\'m here for you. How can I help you?');
-      }
+      // Wait for the in-flight history fetch (started at script load) so we know
+      // whether to render the long first-time intro or the short returning intro.
+      // If the fetch already resolved, this Promise.resolve() returns immediately.
+      var ready = state.historyPromise || Promise.resolve();
+      ready.then(function() {
+        if (state.messages.length === 0) {
+          addMessage('assistant', buildIntro(state.firstName, state.hasChattedBefore));
+        }
+      });
       setTimeout(function() { inputEl.focus(); }, 350);
     }
   };
@@ -789,6 +816,14 @@
       });
       if (res.ok) {
         var data = await res.json();
+        // Server-authoritative first-name + first-time-vs-returning flag.
+        // Overrides the localStorage fallback set at init.
+        if (typeof data.first_name === 'string' && data.first_name) {
+          state.firstName = data.first_name;
+        }
+        if (typeof data.has_chatted_before === 'boolean') {
+          state.hasChattedBefore = data.has_chatted_before;
+        }
         if (data.messages && data.messages.length > 0) {
           data.messages.forEach(function(m) {
             state.messages.push({ role: m.role, content: m.content });
@@ -802,7 +837,7 @@
       }
     } catch(e) { /* silent */ }
   }
-  restoreHistory();
+  state.historyPromise = restoreHistory();
 
   // ============================================================
   // KEYBOARD SHORTCUT: Ctrl+K or Cmd+K to toggle
