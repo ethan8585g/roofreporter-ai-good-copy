@@ -88,7 +88,7 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   }
 
   const imageUrl = buildSatelliteImageUrl(input.lat, input.lng, zoom, safeW, safeH, env.GOOGLE_MAPS_API_KEY)
-  const imageB64 = await fetchImageB64(imageUrl)
+  const { b64: imageB64, mediaType: imageMediaType } = await fetchImageB64(imageUrl)
 
   // Google Solar API context — pitches, azimuths, segment bounding boxes.
   // Skipped silently when the property is outside Solar coverage (rural)
@@ -130,14 +130,14 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
 
   const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
   const completion = await anthropic.messages.create({
+    // Opus 4.7 deprecated the `temperature` knob — leave the default.
     model: CLAUDE_VISION_MODEL,
     max_tokens: 4096,
-    temperature: 0.1,
     system: systemPrompt,
     messages: [{
       role: 'user',
       content: [
-        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageB64 } },
+        { type: 'image', source: { type: 'base64', media_type: imageMediaType, data: imageB64 } },
         { type: 'text', text: userPrompt },
       ],
     }],
@@ -265,13 +265,22 @@ function buildSatelliteImageUrl(lat: number, lng: number, zoom: number, w: numbe
   return `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${zoom}&size=${w}x${h}&scale=2&maptype=satellite&key=${key}`
 }
 
-async function fetchImageB64(url: string): Promise<string> {
+async function fetchImageB64(url: string): Promise<{ b64: string; mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' }> {
   const resp = await fetch(url)
   if (!resp.ok) throw new Error(`satellite image fetch failed (${resp.status})`)
+  // Google Static Maps returns PNG by default — the Anthropic API rejects a
+  // mismatched media_type, so always read the actual Content-Type instead
+  // of assuming JPEG. Fall back to PNG since that's the Static Maps default.
+  const ctRaw = (resp.headers.get('content-type') || 'image/png').toLowerCase()
+  const mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' =
+    ctRaw.includes('jpeg') ? 'image/jpeg'
+    : ctRaw.includes('gif')  ? 'image/gif'
+    : ctRaw.includes('webp') ? 'image/webp'
+    : 'image/png'
   const buf = new Uint8Array(await resp.arrayBuffer())
   let bin = ''
   for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i])
-  return btoa(bin)
+  return { b64: btoa(bin), mediaType }
 }
 
 function pxToLatLng(px: number, py: number, centerLat: number, centerLng: number, zoom: number, pixelImgW: number, pixelImgH: number): LatLng {
