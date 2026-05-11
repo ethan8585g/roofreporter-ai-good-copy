@@ -17,6 +17,7 @@ import { trackActivity } from '../services/activity-tracker'
 import { getReportViewEvents, getReportViewSummary } from '../repositories/reports'
 import { runAutoTrace, type AutoTraceEdge } from '../services/auto-trace-agent'
 import { logCorrections as logAutoTraceCorrections } from '../services/auto-trace-learning'
+import { refreshTracedIndexCache } from '../services/trace-training-data'
 import { sendSignupNurtureToCustomer, type NurtureStage } from '../services/signup-nurture'
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>()
@@ -4690,6 +4691,46 @@ adminRoutes.get('/superadmin/orders/needs-trace', async (c) => {
 })
 
 // ============================================================
+// AUTO-TRACE TRAINING POOL — refresh the diverse few-shot cache
+// ============================================================
+// Pulls the latest admin- and self-traced reports from D1, applies the
+// same diversity-aware bucketing the bundled static index uses, and
+// writes up to N rows into traced_index_cache. Runs in <2s on
+// production-sized data.
+//
+// Body: { target_size? = 30 }. Returns { inserted, skipped, total_eligible }.
+// Manual trigger for now; the cron worker will fire this nightly once
+// wrangler-cron is updated.
+// ============================================================
+adminRoutes.post('/superadmin/refresh-traced-index', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  let body: any = {}
+  try { body = await c.req.json() } catch { /* empty body is fine */ }
+  const targetSize = Math.max(10, Math.min(100, Number(body?.target_size) || 30))
+  try {
+    const started = Date.now()
+    const result = await refreshTracedIndexCache(c.env, targetSize)
+    // Also report how many eligible rows existed before the refresh, so
+    // the operator can see whether the cache is now using the full corpus
+    // or still bottlenecked on the upstream pool size.
+    const eligible = await c.env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM orders o INNER JOIN reports r ON r.order_id = o.id WHERE o.roof_trace_json IS NOT NULL AND o.roof_trace_json != '' AND r.status = 'completed' AND (o.trace_source IN ('admin','self') OR o.trace_source IS NULL)"
+    ).first<{ n: number }>()
+    return c.json({
+      success: true,
+      inserted: result.inserted,
+      skipped: result.skipped,
+      total_eligible: Number(eligible?.n || 0),
+      target_size: targetSize,
+      elapsed_ms: Date.now() - started,
+    })
+  } catch (err: any) {
+    console.warn('[refresh-traced-index] failed:', err?.message)
+    return c.json({ error: 'refresh_failed', message: err?.message }, 500)
+  }
+})
+
 // AUTO-TRACE — Claude vision agent generates eave/hip/ridge polylines
 // ============================================================
 // Three endpoints, one per edge type. Fires ONLY when the super-admin
