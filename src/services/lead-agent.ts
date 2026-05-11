@@ -7,6 +7,7 @@
 import type { Bindings } from '../types'
 import { getAnthropicClient, CLAUDE_MODEL, extractJson } from './anthropic-client'
 import { sendViaResend, sendGmailOAuth2, loadGmailCreds } from './email'
+import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from './email-tracking'
 
 export interface LeadRow {
   id: number
@@ -171,24 +172,43 @@ export async function runLeadAgent(env: Bindings): Promise<LeadRunResult> {
       const text = msg.content[0].type === 'text' ? msg.content[0].text : ''
       const email = parseLeadEmail(text)
 
-      if (hasResend) {
-        await sendViaResend(
-          env.RESEND_API_KEY!,
-          lead.email,
-          email.subject,
-          email.html,
-          env.GMAIL_SENDER_EMAIL || null,
-        )
-      } else {
-        await sendGmailOAuth2(
-          gmailCreds.clientId!,
-          gmailCreds.clientSecret!,
-          gmailCreds.refreshToken!,
-          lead.email,
-          email.subject,
-          email.html,
-          gmailCreds.senderEmail || env.GMAIL_SENDER_EMAIL || null,
-        )
+      // Cold leads aren't customers yet — customerId stays null. kind tags
+      // the email_sends row so the Journey UI groups it as outreach.
+      const trackingToken = await logEmailSend(env, {
+        customerId: null,
+        recipient: lead.email,
+        kind: 'lead_outreach',
+        subject: email.subject,
+      })
+      const pixel = buildTrackingPixel(trackingToken)
+      const htmlWithPixel = email.html.includes('</body>')
+        ? email.html.replace('</body>', `${pixel}</body>`)
+        : email.html + pixel
+      const trackedHtml = wrapEmailLinks(htmlWithPixel, trackingToken)
+
+      try {
+        if (hasResend) {
+          await sendViaResend(
+            env.RESEND_API_KEY!,
+            lead.email,
+            email.subject,
+            trackedHtml,
+            env.GMAIL_SENDER_EMAIL || null,
+          )
+        } else {
+          await sendGmailOAuth2(
+            gmailCreds.clientId!,
+            gmailCreds.clientSecret!,
+            gmailCreds.refreshToken!,
+            lead.email,
+            email.subject,
+            trackedHtml,
+            gmailCreds.senderEmail || env.GMAIL_SENDER_EMAIL || null,
+          )
+        }
+      } catch (sendErr: any) {
+        await markEmailFailed(env, trackingToken, String(sendErr?.message || sendErr))
+        throw sendErr
       }
 
       await env.DB.prepare(

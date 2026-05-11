@@ -13,6 +13,7 @@ import { generateProfessionalReportHTML } from '../templates/report-html'
 import { generateTraceBasedDiagramSVG } from '../templates/svg-diagrams'
 import * as repo from '../repositories/reports'
 import { buildEmailWrapper, sendViaResend, sendGmailOAuth2 } from './email'
+import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from './email-tracking'
 import { recordAndNotify } from './admin-notifications'
 import { trackReportGenerated } from './ga4-events'
 
@@ -609,6 +610,15 @@ async function notifyReportReady(env: Bindings, order: any, orderId: number) {
 
   const reportUrl = `https://www.roofmanager.ca/api/reports/${orderId}/html`
   const subject = `Your Roof Report is Ready — ${order.property_address}`
+  // Track this send so it shows up in super-admin Journey > Email Tracking
+  // alongside the human-triggered notifyTraceCompletedToCustomer path.
+  const trackingToken = await logEmailSend(env as any, {
+    customerId: order.customer_id ?? null,
+    recipient: recipientEmail,
+    kind: 'report_ready_aiagent',
+    subject,
+  })
+  const pixel = buildTrackingPixel(trackingToken)
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1e3a5f; color: white; padding: 20px; text-align: center;">
@@ -631,17 +641,26 @@ async function notifyReportReady(env: Bindings, order: any, orderId: number) {
       <div style="padding: 15px; text-align: center; color: #999; font-size: 12px;">
         © ${new Date().getFullYear()} Roof Manager — AI-Powered Roofing Measurement
       </div>
+      ${pixel}
     </div>
   `
+  const trackedHtml = wrapEmailLinks(html, trackingToken)
 
   // Try Resend first, fall back to Gmail
   const resendKey = (env as any).RESEND_API_KEY
-  if (resendKey) {
-    await sendViaResend(resendKey, recipientEmail, subject, html)
-  } else {
-    const { GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN } = env as any
-    if (GMAIL_CLIENT_ID && GMAIL_CLIENT_SECRET && GMAIL_REFRESH_TOKEN) {
-      await sendGmailOAuth2(GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, recipientEmail, subject, html)
+  try {
+    if (resendKey) {
+      await sendViaResend(resendKey, recipientEmail, subject, trackedHtml)
+    } else {
+      const { GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN } = env as any
+      if (GMAIL_CLIENT_ID && GMAIL_CLIENT_SECRET && GMAIL_REFRESH_TOKEN) {
+        await sendGmailOAuth2(GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, recipientEmail, subject, trackedHtml)
+      } else {
+        await markEmailFailed(env as any, trackingToken, 'no email provider configured')
+      }
     }
+  } catch (e: any) {
+    await markEmailFailed(env as any, trackingToken, String(e?.message || e))
+    throw e
   }
 }

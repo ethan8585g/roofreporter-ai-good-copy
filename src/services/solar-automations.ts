@@ -13,6 +13,7 @@
 // ============================================================
 
 import { sendViaResend, sendGmailOAuth2, loadGmailCreds } from './email'
+import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from './email-tracking'
 
 type Env = {
   DB: D1Database
@@ -48,12 +49,33 @@ async function loadCustomer(env: Env, customerId: number) {
   ).bind(customerId).first<any>()
 }
 
-async function send(env: Env, to: string, subject: string, html: string, fromEmail?: string | null) {
+async function send(env: Env, to: string, subject: string, html: string, fromEmail?: string | null, tracking?: { customerId: number | null, kind: string }) {
+  // Tracking: log to email_sends BEFORE attempting send so failures land
+  // in the journey audit instead of disappearing. Pixel + wrapped links
+  // give us open + click signal in super-admin Journey.
+  let trackedHtml = html
+  let trackingToken: string | null = null
+  if (tracking) {
+    trackingToken = await logEmailSend(env as any, {
+      customerId: tracking.customerId,
+      recipient: to,
+      kind: tracking.kind,
+      subject,
+    })
+    if (trackingToken) {
+      const pixel = buildTrackingPixel(trackingToken)
+      trackedHtml = html.includes('</body>')
+        ? html.replace('</body>', `${pixel}</body>`)
+        : html + pixel
+      trackedHtml = wrapEmailLinks(trackedHtml, trackingToken)
+    }
+  }
+
   // Prefer Resend if configured; otherwise fall back to Gmail OAuth2
   // (env first, then D1 settings — works after /api/auth/gmail flow).
   if (env.RESEND_API_KEY) {
     try {
-      await sendViaResend(env.RESEND_API_KEY, to, subject, html, fromEmail || null)
+      await sendViaResend(env.RESEND_API_KEY, to, subject, trackedHtml, fromEmail || null)
       return
     } catch (e: any) {
       console.error('[solar-automations] resend failed, trying gmail:', e?.message || e)
@@ -64,14 +86,16 @@ async function send(env: Env, to: string, subject: string, html: string, fromEma
     if (creds.clientId && creds.clientSecret && creds.refreshToken) {
       await sendGmailOAuth2(
         creds.clientId, creds.clientSecret, creds.refreshToken,
-        to, subject, html,
+        to, subject, trackedHtml,
         fromEmail || creds.senderEmail || env.GMAIL_SENDER_EMAIL || null
       )
       return
     }
     console.log('[solar-automations] no email provider configured; skipping email to', to)
+    await markEmailFailed(env as any, trackingToken, 'no email provider configured')
   } catch (e: any) {
     console.error('[solar-automations] gmail send failed:', e?.message || e)
+    await markEmailFailed(env as any, trackingToken, String(e?.message || e))
   }
 }
 
@@ -143,12 +167,12 @@ export async function onDealStageChange(env: Env, deal: Deal, oldStage: string, 
 
   if (newStage === 'install_scheduled' && deal.homeowner_email) {
     const { subject, html } = buildSolarInstallScheduledEmail(deal, company)
-    await send(env, deal.homeowner_email, subject, html, from)
+    await send(env, deal.homeowner_email, subject, html, from, { customerId: deal.customer_id, kind: 'solar_install_scheduled' })
   }
 
   if (newStage === 'installed' && deal.homeowner_email) {
     const { subject, html } = buildSolarInstalledEmail(deal, company)
-    await send(env, deal.homeowner_email, subject, html, from)
+    await send(env, deal.homeowner_email, subject, html, from, { customerId: deal.customer_id, kind: 'solar_installed' })
   }
 }
 
@@ -166,7 +190,7 @@ export async function sendProposalEmail(env: Env, proposalId: number, origin: st
   }
   const company = await loadCustomer(env, row.customer_id)
   const { subject, html } = buildSolarProposalEmail(row, company, origin)
-  await send(env, row.homeowner_email, subject, html, env.GMAIL_SENDER_EMAIL || null)
+  await send(env, row.homeowner_email, subject, html, env.GMAIL_SENDER_EMAIL || null, { customerId: row.customer_id, kind: 'solar_proposal' })
 }
 
 export async function onProposalSigned(env: Env, proposalId: number): Promise<void> {
@@ -180,5 +204,7 @@ export async function onProposalSigned(env: Env, proposalId: number): Promise<vo
   const company = await loadCustomer(env, row.customer_id)
   const { subject, html } = buildSolarSignedEmailToRep(row, company)
   const repTo = row.cu_email
-  if (repTo) await send(env, repTo, subject, html, env.GMAIL_SENDER_EMAIL || null)
+  // Recipient is the roofer (customer record), not the homeowner — so
+  // customerId here is the platform user receiving the rep notification.
+  if (repTo) await send(env, repTo, subject, html, env.GMAIL_SENDER_EMAIL || null, { customerId: row.customer_id, kind: 'solar_proposal_signed' })
 }

@@ -7,6 +7,7 @@
 import type { Bindings } from '../types'
 import { getAnthropicClient, CLAUDE_MODEL, extractJson } from './anthropic-client'
 import { sendViaResend } from './email'
+import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from './email-tracking'
 
 export interface CampaignStats {
   total_contacts: number
@@ -175,14 +176,28 @@ export async function runEmailAgent(env: Bindings): Promise<EmailAgentResult> {
   result.campaign_name = content.campaign_name
   result.recipients = contacts.length
 
-  // Send to each contact
+  // Send to each contact — log to email_sends + pixel + click wrapping
+  // so each campaign send shows up in the Journey > Email Tracking feed
+  // alongside transactional mail. customerId stays null (these are
+  // prospects, not platform customers).
   for (const contact of contacts) {
+    const trackingToken = await logEmailSend(env, {
+      customerId: null,
+      recipient: contact.email,
+      kind: 'campaign',
+      subject: content.subject,
+    })
+    const pixel = buildTrackingPixel(trackingToken)
+    const htmlWithPixel = content.body_html.includes('</body>')
+      ? content.body_html.replace('</body>', `${pixel}</body>`)
+      : content.body_html + pixel
+    const trackedHtml = wrapEmailLinks(htmlWithPixel, trackingToken)
     try {
       await sendViaResend(
         env.RESEND_API_KEY,
         contact.email,
         content.subject,
-        content.body_html,
+        trackedHtml,
         env.GMAIL_SENDER_EMAIL || null,
       )
       await env.DB.prepare(
@@ -194,6 +209,7 @@ export async function runEmailAgent(env: Bindings): Promise<EmailAgentResult> {
       ).bind(campaignId, contact.id, contact.email).run()
       result.sent++
     } catch (err: any) {
+      await markEmailFailed(env, trackingToken, String(err?.message || err))
       result.errors.push(`${contact.email}: ${err.message}`)
     }
   }
