@@ -10783,8 +10783,8 @@ ${previewId ? `
               <div id="strength-bar" style="height:100%;width:0%;transition:width 0.3s,background 0.3s;border-radius:2px"></div>
             </div>
 
-            <label for="reg-phone" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Phone Number</label>
-            <input id="reg-phone" type="tel" name="phone" autocomplete="tel" required inputmode="tel"
+            <label for="reg-phone" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Phone Number <span style="font-weight:400;color:#9ca3af">(optional &mdash; you can add this later)</span></label>
+            <input id="reg-phone" type="tel" name="phone" autocomplete="tel" inputmode="tel"
               placeholder="(403) 555-0100"
               style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px"
               onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
@@ -11124,8 +11124,9 @@ ${previewId ? `
         var pwEl = document.getElementById('reg-password'); if (pwEl) pwEl.focus();
         return;
       }
-      if (!phone || phone.replace(/\D/g, '').length < 7) {
-        setRegError('A valid phone number is required.');
+      // Phone now optional — only validate format if provided.
+      if (phone && phone.replace(/\D/g, '').length < 7) {
+        setRegError('Phone number looks incomplete — please re-check or leave blank.');
         var phEl = document.getElementById('reg-phone'); if (phEl) phEl.focus();
         return;
       }

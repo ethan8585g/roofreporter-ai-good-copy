@@ -1369,8 +1369,8 @@ squareRoutes.post('/webhook', async (c) => {
               homeowner_name, homeowner_email,
               requester_name, requester_email,
               service_tier, price, status, payment_status, estimated_delivery,
-              notes
-            ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', 'paid', ?, ?)
+              notes, gclid
+            ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', 'paid', ?, ?, ?)
           `).bind(
             orderNumber, customerId,
             address, meta.property_city || null, meta.property_province || null, meta.property_postal_code || null,
@@ -1378,7 +1378,8 @@ squareRoutes.post('/webhook', async (c) => {
             custData?.name || '', custData?.email || '',
             custData?.name || '', custData?.email || '',
             tier, price, estimatedDelivery,
-            `Paid via Square (${payment.id})`
+            `Paid via Square (${payment.id})`,
+            custData?.gclid || null
           ).run()
 
           const webhookOrderId = orderResult.meta.last_row_id as number
@@ -1967,8 +1968,8 @@ squareRoutes.get('/verify-payment', async (c) => {
               homeowner_name, homeowner_email,
               requester_name, requester_email,
               service_tier, price, status, payment_status, estimated_delivery,
-              notes
-            ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', 'paid', ?, ?)
+              notes, gclid
+            ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', 'paid', ?, ?, ?)
           `).bind(
             orderNumber, customer.customer_id,
             address, meta.property_city || null, meta.property_province || null, meta.property_postal_code || null,
@@ -1976,7 +1977,8 @@ squareRoutes.get('/verify-payment', async (c) => {
             custData?.name || '', custData?.email || '',
             custData?.name || '', custData?.email || '',
             tier, price, estimatedDelivery,
-            `Paid via Square (verify-payment)`
+            `Paid via Square (verify-payment)`,
+            custData?.gclid || null
           ).run()
 
           const newOrderId = orderResult.meta.last_row_id as number
