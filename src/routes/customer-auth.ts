@@ -2177,7 +2177,23 @@ customerAuthRoutes.post('/reset-password', async (c) => {
     // P1-04: invalidate all sessions for this customer on password reset
     await c.env.DB.prepare('DELETE FROM customer_sessions WHERE customer_id = ?').bind(targetCustomerId).run().catch((err: any) => console.error('[customer-auth] session cleanup failed:', err?.message || err))
 
-    return c.json({ success: true, message: 'Password updated successfully. You can now sign in with your new password.' })
+    // Auto-login after reset: mint a fresh session and set the cookie so the
+    // user lands on /customer/dashboard with a single click instead of being
+    // bounced back to /customer/login.
+    const newSessionToken = generateSessionToken()
+    const newSessionExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    await c.env.DB.prepare(
+      'INSERT INTO customer_sessions (customer_id, session_token, expires_at) VALUES (?, ?, ?)'
+    ).bind(targetCustomerId, newSessionToken, newSessionExpires).run()
+    setCustomerSessionCookie(c, newSessionToken, 7 * 24 * 60 * 60)
+    try {
+      const ipForLog = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || null
+      await c.env.DB.prepare(
+        "INSERT INTO customer_login_events (customer_id, auth_method, ip_address) VALUES (?, 'password_reset', ?)"
+      ).bind(targetCustomerId, ipForLog).run()
+    } catch (e: any) { console.warn('[customer-auth] reset login_event insert failed:', e?.message) }
+
+    return c.json({ success: true, signed_in: true, redirect: '/customer/dashboard', message: 'Password updated successfully.' })
   } catch (err: any) {
     // Phase 2 #7
     console.error('[customer-auth] /reset-password 500:', err?.message || err)

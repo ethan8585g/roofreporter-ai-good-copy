@@ -7654,6 +7654,12 @@ function getCustomerResetPasswordHTML() {
         });
         const data = await res.json();
         if (res.ok && data.success) {
+          // Backend auto-signs the user in (sets session cookie) so we can
+          // jump straight to the dashboard — no manual login step.
+          if (data.signed_in && data.redirect) {
+            window.location.replace(data.redirect);
+            return;
+          }
           document.getElementById('resetForm').classList.add('hidden');
           document.getElementById('resetSuccess').classList.remove('hidden');
         } else {
