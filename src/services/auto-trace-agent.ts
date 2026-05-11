@@ -92,6 +92,12 @@ export interface AutoTraceResult {
     dsm_imagery_date?: string
     /** Whether the agent had the 3D viewport image in its prompt. */
     viewport_3d_used: boolean
+    /** Second-pass self-critique for eaves only — feeds the first-draft polygon
+     *  back to Claude overlaid on the satellite image so it can spot end-notches
+     *  it missed. 'skipped-non-eaves' for hips/ridges. */
+    refinement_pass: 'improved' | 'no-change' | 'failed' | 'skipped-non-eaves' | 'skipped-empty-draft'
+    refinement_vertices_added?: number
+    refinement_elapsed_ms?: number
     model: string
     elapsed_ms: number
   }
@@ -215,22 +221,69 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     .trim()
 
   const parsed = parseClaudeResponse(text)
+
+  // ── Self-critique pass (eaves only) ───────────────────────────
+  // Feed the first-draft polygon back to Claude overlaid on the satellite
+  // image so it can spot porch bump-outs, attached garages, and (most
+  // importantly) tree-occluded edges it stopped short of on the first
+  // pass. Hips/ridges are a different problem and skip this pass.
+  let finalSegmentsPx = parsed.segments
+  let finalConfidence = parsed.confidence
+  let finalReasoning = parsed.reasoning
+  let refinementPass: 'improved' | 'no-change' | 'failed' | 'skipped-non-eaves' | 'skipped-empty-draft' = 'skipped-non-eaves'
+  let refinementVerticesAdded = 0
+  let refinementElapsedMs = 0
+
+  if (input.edge === 'eaves') {
+    if (parsed.segments.length === 0 || parsed.segments.every(s => s.length < 3)) {
+      refinementPass = 'skipped-empty-draft'
+    } else {
+      const refineStart = Date.now()
+      try {
+        const refined = await refineEavesViaSelfCritique(env, anthropic, {
+          originalImageB64: imageB64,
+          originalMediaType: imageMediaType,
+          draftSegmentsPx: parsed.segments,
+          framing,
+          safeW,
+          safeH,
+          targetCenterPx,
+          targetBboxPx,
+        })
+        refinementElapsedMs = Date.now() - refineStart
+        if (refined) {
+          finalSegmentsPx = refined.segments
+          finalConfidence = Math.max(finalConfidence, refined.confidence)
+          finalReasoning = refined.reasoning
+          refinementVerticesAdded = refined.verticesAdded
+          refinementPass = refined.verticesAdded > 0 ? 'improved' : 'no-change'
+        } else {
+          refinementPass = 'failed'
+        }
+      } catch (e: any) {
+        console.warn('[auto-trace] refinement threw:', e?.message)
+        refinementPass = 'failed'
+        refinementElapsedMs = Date.now() - refineStart
+      }
+    }
+  }
+
   const pixelImgW = safeW * 2
   const pixelImgH = safeH * 2
   // Project Claude's pixel coords back to GPS using the SAME centre + zoom
   // that produced the satellite image (which may be Solar-recentred, not
   // the user's original pin).
-  const segments = parsed.segments.map(seg => seg.map(p => pxToLatLng(p.x, p.y, framing.lat, framing.lng, framing.zoom, pixelImgW, pixelImgH)))
+  const segments = finalSegmentsPx.map(seg => seg.map(p => pxToLatLng(p.x, p.y, framing.lat, framing.lng, framing.zoom, pixelImgW, pixelImgH)))
   // Calibration: scale the model's self-reported confidence by the historical
   // edit rate for this edge type. 100% edit rate → 0.6×; 0% → 1.0×.
   // services/auto-trace-learning.ts maintains this factor on every submit.
-  const calibratedConfidence = Math.round(parsed.confidence * calibrationFactor)
+  const calibratedConfidence = Math.round(finalConfidence * calibrationFactor)
 
   return {
     edge: input.edge,
     segments,
     confidence: calibratedConfidence,
-    reasoning: parsed.reasoning,
+    reasoning: finalReasoning,
     ...(input.includeDebugImages ? {
       debug_images: {
         satellite: { mediaType: imageMediaType, b64: imageB64 },
@@ -250,6 +303,9 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       dsm_hillshade_quality: hillshade?.quality,
       dsm_imagery_date: hillshade?.imageryDate,
       viewport_3d_used: hasViewport3d,
+      refinement_pass: refinementPass,
+      refinement_vertices_added: refinementVerticesAdded,
+      refinement_elapsed_ms: refinementElapsedMs,
       model: CLAUDE_VISION_MODEL,
       elapsed_ms: Date.now() - started,
     },
@@ -399,7 +455,7 @@ function buildSystemPrompt(
   },
 ): string {
   const role = edge === 'eaves'
-    ? 'detecting the OUTER PERIMETER of every building roof in the image — one closed polygon per structure (house + any detached garages/sheds visible). Trace at the EAVE LINE (drip edge), not the walls. Include all jogs, bump-outs, and lower-tier eaves. 8+ vertices per polygon; corners only — no points on straight edges.'
+    ? 'detecting the OUTER PERIMETER of every building roof in the image — one closed polygon per structure (house + any detached garages/sheds visible). Trace at the EAVE LINE (drip edge), not the walls. Include all jogs, bump-outs, and lower-tier eaves. 8+ vertices per polygon; corners only — no points on straight edges. Trees and shadows commonly hide parts of an eave — EXTRAPOLATE visible eave lines through the canopy. Residential roofs are RECTILINEAR with right-angle corners: if 3 sides are visible, the 4th follows by orthogonal projection from the last two visible corners. Do NOT stop the trace at the edge of a tree canopy and call that a corner.'
     : edge === 'ridges'
     ? 'detecting RIDGE LINES — the horizontal peaks where two opposing roof planes meet at the top. Each ridge is a polyline (2+ points). Hip-roof structures usually have one short central ridge; gable roofs have one long ridge per gable. Do NOT trace hips, valleys, or eaves.'
     : 'detecting HIP LINES — the diagonal edges that run from a roof peak down to an outside corner of the eave. Each hip is a polyline (usually 2 points: peak → corner). Hip-roof structures have 4 hips at the corners; gable roofs have zero. Do NOT trace ridges, valleys, or eaves.'
@@ -431,7 +487,7 @@ function buildSystemPrompt(
           : `⚠️ Google Solar API returned a ${opts.targetBboxPx.widthFt}ft × ${opts.targetBboxPx.depthFt}ft bounding box for this address — that is LARGER than a typical residential footprint, which means Solar has MERGED THIS HOUSE WITH A NEIGHBOUR or the full lot. DO NOT use Solar's bbox as a guide. Instead, trace ONLY the single building that contains the pin pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) and is bounded by visible separations (driveways, fences, grass) from any adjacent buildings. Stay within roughly the pixel rectangle (${opts.targetBboxPx.x1}, ${opts.targetBboxPx.y1}) to (${opts.targetBboxPx.x2}, ${opts.targetBboxPx.y2}) which has been clamped to a 60ft radius around the pin.`)
       : 'No Google Solar bounding box is available for this address — trace ONLY the building under the centre pixel and its directly-attached parts (e.g. attached garage). Do NOT trace any building separated from the centre by a clear gap (those are neighbours).',
     edge === 'eaves'
-      ? 'A typical Canadian residential house is 1,500–3,000 sqft. If your traced polygon is bigger than ~3,500 sqft, you are almost certainly combining the target with a neighbour or an unrelated outbuilding — re-evaluate and shrink the trace.'
+      ? 'SIZE SANITY (both directions): a typical Canadian residential house footprint is 1,200–3,000 sqft. If your traced polygon is bigger than ~3,500 sqft you are combining the target with a neighbour or outbuilding — shrink it. If your traced polygon is smaller than ~800 sqft you have almost certainly stopped at a tree-occluded eave or shadow — EXTEND the trace to where the eave actually ends, using visible corners + the orthogonal-projection rule above.'
       : 'If your traced lines extend beyond the target building bbox, you are tracing neighbour roofs — drop those lines.',
     '',
     'OUTPUT: Strict JSON only — no prose, no markdown fences. Schema:',
@@ -632,4 +688,154 @@ function parseClaudeResponse(text: string): { segments: { x: number; y: number }
   const confidence = Math.max(0, Math.min(100, Math.round(Number(parsed?.confidence) || 0)))
   const reasoning = String(parsed?.reasoning || '').slice(0, 500)
   return { segments, confidence, reasoning }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Self-critique pass (eaves only)
+// ─────────────────────────────────────────────────────────────
+// Builds a second Static Maps tile with the first-draft polygon
+// drawn ON TOP of the same satellite imagery, then asks Claude to
+// critique-and-refine. Static Maps and Claude's pixel coords share
+// the exact same Mercator projection, so the overlay lands on the
+// building 1:1 with the original image. Returns null on any
+// regression / failure so the caller falls back to the first draft.
+async function refineEavesViaSelfCritique(
+  env: Bindings,
+  anthropic: Anthropic,
+  args: {
+    originalImageB64: string
+    originalMediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+    draftSegmentsPx: { x: number; y: number }[][]
+    framing: { lat: number; lng: number; zoom: number }
+    safeW: number
+    safeH: number
+    targetCenterPx: { x: number; y: number }
+    targetBboxPx: { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean } | null
+  },
+): Promise<{
+  segments: { x: number; y: number }[][]
+  confidence: number
+  reasoning: string
+  verticesAdded: number
+} | null> {
+  const { framing, safeW, safeH, draftSegmentsPx } = args
+  const pixelImgW = safeW * 2
+  const pixelImgH = safeH * 2
+
+  // Project draft pixel coords back to lat/lng so Static Maps can render them.
+  const draftLatLngs = draftSegmentsPx.map(seg =>
+    seg.map(p => pxToLatLng(p.x, p.y, framing.lat, framing.lng, framing.zoom, pixelImgW, pixelImgH))
+  )
+
+  // Build path params — one path= per polygon, closed (first vertex repeated).
+  const pathParams = draftLatLngs
+    .filter(seg => seg.length >= 3)
+    .map(seg => {
+      const closed = [...seg, seg[0]]
+      const pts = closed.map(p => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`).join('|')
+      // Red outline (FF0000FF), light-green fill (00FF003F = 25% alpha).
+      return `path=color:0xff0000ff|weight:4|fillcolor:0x00ff003f|${pts}`
+    })
+    .join('&')
+
+  if (!pathParams) return null
+
+  const overlayUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${framing.lat},${framing.lng}&zoom=${framing.zoom}&size=${safeW}x${safeH}&scale=2&maptype=satellite&${pathParams}&key=${env.GOOGLE_MAPS_API_KEY}`
+
+  // Static Maps URL hard limit is ~8192 chars. For a single ~20-vertex polygon
+  // we're at ~700 chars; bail if we somehow blew past it (multi-building cases).
+  if (overlayUrl.length > 8000) {
+    console.warn('[auto-trace] refinement overlay URL too long, skipping critique')
+    return null
+  }
+
+  let overlay: { b64: string; mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' }
+  try {
+    overlay = await fetchImageB64(overlayUrl)
+  } catch (e: any) {
+    console.warn('[auto-trace] refinement overlay fetch failed:', e?.message)
+    return null
+  }
+
+  const bboxClause = args.targetBboxPx
+    ? `Target building is centred at pixel (${args.targetCenterPx.x}, ${args.targetCenterPx.y}); Solar bbox is ${args.targetBboxPx.widthFt}ft × ${args.targetBboxPx.depthFt}ft${args.targetBboxPx.trusted ? '' : ' (UNTRUSTED, may have merged a neighbour)'}.`
+    : `Target building is centred at pixel (${args.targetCenterPx.x}, ${args.targetCenterPx.y}).`
+
+  const critiqueSystem = [
+    'You are an expert roof measurement technician performing a SELF-CRITIQUE pass on a first-draft eave trace.',
+    '',
+    'INPUTS: 2 images.',
+    'Image 1 — clean Google satellite (target reference; ALL pixel coordinates you return must be in this image\'s coordinate space).',
+    'Image 2 — the SAME satellite with the first-draft polygon drawn in RED outline + faint green fill.',
+    '',
+    bboxClause,
+    '',
+    'Your job: critically evaluate the red polygon. Common misses to look for:',
+    '- Front porch / entry roof bump-outs',
+    '- Attached garages and breezeways',
+    '- Rear additions, mudrooms, sunrooms',
+    '- Bay windows, kitchen nooks, bumped-out corners',
+    '- Recessed entryways (porch CUT INTO the footprint, not added)',
+    '- HVAC mechanical bumps with their own small roof',
+    '- ⚠️ TREE-OCCLUDED edges — the first draft may have STOPPED at a tree canopy instead of extrapolating the eave through it. Residential roofs are RECTILINEAR with right-angle corners: if 3 sides are visible, the 4th follows by orthogonal projection. Push the trace through the tree to where the eave actually ends.',
+    '',
+    'Output rules:',
+    '- Keep the corners the first draft got right. Add the corners it missed. Remove any vertex that cuts off real roof or that traces a neighbour.',
+    '- If the first draft is correct as-is, return it unchanged with reasoning "first draft already complete".',
+    '- 8+ vertices per polygon; corners only — no points on straight edges. Clockwise. Do NOT repeat the first vertex at the end.',
+    '- Output STRICT JSON only, no prose, no markdown fences. Schema:',
+    '  { "segments": [ [{"x":int,"y":int}, ...], ... ], "confidence": int 0-100, "reasoning": "what you changed and why" }',
+  ].join('\n')
+
+  const critiqueUser = `Image 1 is ${pixelImgW}x${pixelImgH} pixels. Image 2 is the same dimensions, identical projection — pixel coords are interchangeable.\n\nFirst-draft vertex count per polygon: ${draftSegmentsPx.map(s => s.length).join(', ')}.\n\nReturn the refined ${draftSegmentsPx.length === 1 ? 'polygon' : 'polygons'} as JSON.`
+
+  let completion: any
+  try {
+    completion = await anthropic.messages.create({
+      model: CLAUDE_VISION_MODEL,
+      max_tokens: 4096,
+      system: critiqueSystem,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: args.originalMediaType, data: args.originalImageB64 } },
+          { type: 'image', source: { type: 'base64', media_type: overlay.mediaType, data: overlay.b64 } },
+          { type: 'text', text: critiqueUser },
+        ],
+      }],
+    })
+  } catch (e: any) {
+    console.warn('[auto-trace] refinement Claude call failed:', e?.message)
+    return null
+  }
+
+  const text = completion.content
+    .filter((b: any) => b.type === 'text')
+    .map((b: any) => b.text)
+    .join('\n')
+    .trim()
+
+  let parsed: { segments: { x: number; y: number }[][]; confidence: number; reasoning: string }
+  try {
+    parsed = parseClaudeResponse(text)
+  } catch (e: any) {
+    console.warn('[auto-trace] refinement parse failed:', e?.message)
+    return null
+  }
+
+  // Regression guards — better to keep the first draft than ship a worse one.
+  if (parsed.segments.length === 0) return null
+  if (parsed.segments.length < draftSegmentsPx.length) return null
+  const originalVerts = draftSegmentsPx.reduce((s, p) => s + p.length, 0)
+  const refinedVerts = parsed.segments.reduce((s, p) => s + p.length, 0)
+  // Refinement should never lose more than 30% of the vertices — if it did,
+  // Claude probably collapsed detail rather than adding it.
+  if (refinedVerts < originalVerts * 0.7) return null
+
+  return {
+    segments: parsed.segments,
+    confidence: parsed.confidence,
+    reasoning: parsed.reasoning,
+    verticesAdded: refinedVerts - originalVerts,
+  }
 }
