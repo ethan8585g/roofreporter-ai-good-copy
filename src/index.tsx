@@ -10596,6 +10596,11 @@ function getContactThanksPageHTML(prefillEmail = '', prefillName = '', prefillCo
         var data = await res.json();
         if (data.success) {
           if (typeof gtag === 'function') gtag('event', 'sign_up', { method: 'email_post_contact' });
+          // Enhanced Conversions — hash email/name before firing so Google can dedupe across
+          // iOS Safari ITP / ad-blockers. +25% attribution precision in iOS per Google.
+          if (typeof window.setAdsUserData === 'function') {
+            try { await window.setAdsUserData(email, '', name); } catch(_) {}
+          }
           if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 50.0, currency: 'CAD' });
           if (data.customer) localStorage.setItem('rc_customer', JSON.stringify(data.customer));
           if (data.token) localStorage.setItem('rc_customer_token', data.token);

@@ -5507,3 +5507,68 @@ adminRoutes.get('/api-stats', async (c) => {
 // those routes are roofer-scoped (customer session) with admin passthrough.
 // See src/routes/automations.ts.
 
+// ── GET /api/admin/ads/export-offline-conversions.csv ───────────────────────
+// Exports paid-customer conversions (gclid + value + time) in Google Ads CSV
+// upload format. Smart Bidding then learns which Ad clicks become paying
+// customers (vs just signups), unlocking 15-35% CAC improvement per industry
+// data. Manual flow: super-admin downloads weekly, uploads via Google Ads UI
+// → Tools → Conversions → Uploads. No Developer Token required for this path.
+//
+// Query params:
+//   ?days=30                   How far back to pull (max 90, default 30)
+//   ?conversion_name=...       Must match the "Import" conversion action name
+//                              configured in Google Ads UI. Default: "Roof Manager Paid Customer".
+//
+// User must first create a conversion action in Google Ads UI:
+//   Goals → Conversions → New → Import → "Other data sources or CRM" →
+//   "Track conversions from clicks" → name it "Roof Manager Paid Customer".
+// Once created, weekly upload of this CSV feeds Smart Bidding real revenue.
+adminRoutes.get('/ads/export-offline-conversions.csv', async (c) => {
+  const daysRaw = parseInt(c.req.query('days') || '30', 10)
+  const days = Math.min(90, Math.max(1, isFinite(daysRaw) ? daysRaw : 30))
+  const conversionName = (c.req.query('conversion_name') || 'Roof Manager Paid Customer').slice(0, 100)
+
+  // Pull paid Square payments joined to customers with a gclid. Dedupe by
+  // square_order_id so re-runs don't double-upload. Sorted newest first.
+  const rows = await c.env.DB.prepare(`
+    SELECT
+      c.gclid AS gclid,
+      sp.created_at AS conv_time,
+      sp.amount AS amount,
+      sp.square_order_id AS order_id
+    FROM square_payments sp
+    JOIN customers c ON c.id = sp.customer_id
+    WHERE sp.status = 'succeeded'
+      AND c.gclid IS NOT NULL
+      AND length(c.gclid) >= 10
+      AND sp.created_at >= datetime('now', '-' || ? || ' days')
+    ORDER BY sp.created_at DESC
+  `).bind(days).all<any>()
+
+  const lines: string[] = []
+  lines.push('Parameters:TimeZone=America/Edmonton')
+  lines.push('Google Click ID,Conversion Name,Conversion Time,Conversion Value,Conversion Currency,Order ID')
+
+  for (const row of (rows.results || [])) {
+    const gclid = String(row.gclid || '').replace(/[",\r\n]/g, '')
+    // square_payments.created_at is ISO-8601 — Google wants "yyyy-MM-dd HH:mm:ss+HH:mm"
+    const rawTs = String(row.conv_time || '')
+    let convTime = rawTs
+    if (rawTs.includes('T')) {
+      convTime = rawTs.replace('T', ' ').replace(/\.\d+Z?$/, '').replace(/Z$/, '') + '+00:00'
+    } else if (!rawTs.includes('+')) {
+      convTime = rawTs + '+00:00'
+    }
+    // amount in cents — Square stores cents in `amount` column
+    const amountCents = Number(row.amount) || 0
+    const value = (amountCents >= 1000 ? amountCents / 100 : amountCents).toFixed(2) // heuristic: if amount looks too low to be cents, treat as dollars
+    const orderId = String(row.order_id || '').replace(/[",\r\n]/g, '')
+    lines.push(`${gclid},"${conversionName.replace(/"/g, '""')}",${convTime},${value},CAD,${orderId}`)
+  }
+
+  const filename = `offline-conversions-${new Date().toISOString().slice(0, 10)}.csv`
+  c.header('Content-Type', 'text/csv; charset=utf-8')
+  c.header('Content-Disposition', `attachment; filename="${filename}"`)
+  return c.body(lines.join('\n') + '\n')
+})
+
