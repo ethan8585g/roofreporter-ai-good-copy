@@ -278,19 +278,32 @@ function renderDashboard() {
       '</div>' +
     '</aside>';
 
-  // Mobile horizontal nav — simplified 6-section layout
+  // Mobile horizontal nav — matches desktop sidebar feature set so mobile users
+  // can reach AI Secretary, D2D Manager, Storm Alerts, Automations, Commissions,
+  // Suppliers, Catalog, Referrals (previously hidden in the lg:flex sidebar)
+  // AND a prominent Buy Reports CTA (previously only in the desktop credits footer).
   var mobileNav =
     '<div class="lg:hidden overflow-x-auto" style="background:var(--bg-card);border-bottom:1px solid var(--border-color)">' +
       '<div class="flex gap-1 px-3 py-2 whitespace-nowrap">' +
         '<a href="/customer/dashboard" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-th-large"></i>Home</a>' +
-        '<a href="/customer/reports" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-file-alt"></i>Report History</a>' +
+        // Buy Reports — prominent CTA (mirrors the desktop sidebar credits-footer button)
+        '<a href="/customer/buy-reports" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-extrabold flex-shrink-0 shadow-md"><i class="fas fa-tag"></i>Buy Reports</a>' +
+        '<a href="/customer/order" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-plus-circle"></i>Order</a>' +
+        '<a href="/customer/reports" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-file-alt"></i>Reports</a>' +
         '<a href="/customer/leads" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold flex-shrink-0"><i class="fas fa-inbox"></i>Leads<span id="mobile-leads-badge" class="ml-1"></span></a>' +
         '<a href="/customer/jobs" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-hard-hat"></i>Jobs</a>' +
-        '<a href="/customer/order" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-plus-circle"></i>Order</a>' +
+        '<a href="/customer/secretary" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-headset"></i>AI Secretary</a>' +
+        '<a href="/customer/d2d" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-door-open"></i>D2D Manager</a>' +
+        '<a href="/customer/storm-scout" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-cloud-bolt"></i>Storm Alerts</a>' +
         '<a href="/customer/customers" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-users"></i>Customers</a>' +
         '<a href="/customer/invoices" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-file-invoice-dollar"></i>Invoices</a>' +
         '<a href="/customer/proposals" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-file-signature"></i>Proposals</a>' +
         '<a href="/customer/pipeline" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-funnel-dollar"></i>Pipeline</a>' +
+        '<a href="/customer/certificate-automations" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-robot"></i>Automations</a>' +
+        '<a href="/customer/commissions" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-dollar-sign"></i>Commissions</a>' +
+        '<a href="/customer/suppliers" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-store"></i>Suppliers</a>' +
+        '<a href="/customer/catalog" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-box-open"></i>Catalog</a>' +
+        '<a href="/customer/referrals" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-gift"></i>Referrals</a>' +
         '<a href="/customer/profile" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-cog"></i>Settings</a>' +
       '</div>' +
     '</div>';
@@ -298,6 +311,22 @@ function renderDashboard() {
   // Main content area
   var mainContent =
     '<main class="flex-1 min-w-0 p-5 md:p-6 overflow-auto">' +
+      // Mobile-only credits + Buy block — desktop has this in the sidebar credits footer;
+      // without it, mobile users couldn't see their balance or purchase from the dashboard.
+      '<div class="lg:hidden flex items-center gap-3 mb-4 px-4 py-3 rounded-xl" style="background:var(--bg-card);border:1px solid var(--border-color)">' +
+        '<div class="flex-1 flex flex-col gap-0.5 min-w-0">' +
+          (freeTrialRemaining > 0
+            ? '<div class="flex items-center justify-between text-xs"><span style="color:var(--text-muted)">Free trials left</span><span class="font-bold text-emerald-400">' + freeTrialRemaining + '</span></div>'
+            : '') +
+          (paidCredits > 0
+            ? '<div class="flex items-center justify-between text-xs"><span style="color:var(--text-muted)">Report credits</span><span class="font-bold text-blue-400">' + paidCredits + '</span></div>'
+            : '') +
+          (freeTrialRemaining <= 0 && paidCredits <= 0
+            ? '<div class="text-xs" style="color:var(--text-muted)">No credits left &mdash; buy reports to keep generating measurements</div>'
+            : '') +
+        '</div>' +
+        '<a href="/customer/buy-reports" class="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold rounded-lg text-xs shadow-md"><i class="fas fa-tag"></i>Buy Reports</a>' +
+      '</div>' +
       // Welcome header
       '<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">' +
         '<div>' +
