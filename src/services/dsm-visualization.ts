@@ -37,6 +37,10 @@ export interface DsmHillshadeResult {
   imageryDate?: string
   /** Solar API quality tier so the caller can decide how much to trust the result. */
   quality?: 'HIGH' | 'MEDIUM' | 'BASE'
+  /** True when the Solar building mask was fetched + applied to zero out
+   *  tree-canopy pixels before hillshade computation. False/undefined
+   *  means tree-canopy edges may show up as faint ridges in the hillshade. */
+  maskApplied?: boolean
 }
 
 /**
@@ -58,11 +62,16 @@ export async function fetchDsmHillshade(
   if (!env.GOOGLE_SOLAR_API_KEY) return null
   try {
     // 1. Find DSM URL
+    // FULL_LAYERS gives us BOTH dsmUrl AND maskUrl in a single call. The
+    // mask is a building footprint raster — 1 where Solar believes there's
+    // a roof, 0 elsewhere. Used to zero out tree-canopy pixels before
+    // hillshade so we don't render rustling deciduous canopies as fake
+    // ridges. Free with the same Solar quota.
     const params = new URLSearchParams({
       'location.latitude': lat.toFixed(6),
       'location.longitude': lng.toFixed(6),
       radiusMeters: String(radiusMeters),
-      view: 'DSM_LAYER',
+      view: 'FULL_LAYERS',
       requiredQuality: 'HIGH',
       pixelSizeMeters: '0.5',
       key: env.GOOGLE_SOLAR_API_KEY,
@@ -72,11 +81,22 @@ export async function fetchDsmHillshade(
       // 404 = no Solar coverage. Don't surface as an error.
       return null
     }
-    const meta = await resp.json() as { dsmUrl?: string; imageryDate?: any; imageryQuality?: 'HIGH' | 'MEDIUM' | 'BASE' }
+    const meta = await resp.json() as {
+      dsmUrl?: string
+      maskUrl?: string
+      imageryDate?: any
+      imageryQuality?: 'HIGH' | 'MEDIUM' | 'BASE'
+    }
     if (!meta?.dsmUrl) return null
 
-    // 2. Download + parse DSM GeoTIFF
-    const dsmResp = await fetch(`${meta.dsmUrl}&key=${env.GOOGLE_SOLAR_API_KEY}`)
+    // 2. Download + parse DSM GeoTIFF. Mask is best-effort — its absence
+    //    only loses the tree-filter; everything else still works.
+    const [dsmResp, maskResp] = await Promise.all([
+      fetch(`${meta.dsmUrl}&key=${env.GOOGLE_SOLAR_API_KEY}`),
+      meta.maskUrl
+        ? fetch(`${meta.maskUrl}&key=${env.GOOGLE_SOLAR_API_KEY}`).catch(() => null)
+        : Promise.resolve(null),
+    ])
     if (!dsmResp.ok) return null
     const buf = await dsmResp.arrayBuffer()
     const tiff = await geotiff.fromArrayBuffer(buf)
@@ -86,6 +106,37 @@ export async function fetchDsmHillshade(
     const w = image.getWidth()
     const h = image.getHeight()
     if (!dsmRaw || dsmRaw.length === 0) return null
+
+    // Parse mask if available + dimensions match. Solar publishes the mask
+    // at the same resolution as the DSM when both come from the same
+    // FULL_LAYERS call, so this should usually align without resampling.
+    let buildingMask: Uint8Array | null = null
+    if (maskResp && maskResp.ok) {
+      try {
+        const maskBuf = await maskResp.arrayBuffer()
+        const maskTiff = await geotiff.fromArrayBuffer(maskBuf)
+        const maskImg = await maskTiff.getImage()
+        const maskRas = await maskImg.readRasters()
+        const maskRaw = maskRas[0] as any
+        const mw = maskImg.getWidth(), mh = maskImg.getHeight()
+        if (mw === w && mh === h && maskRaw?.length === w * h) {
+          buildingMask = new Uint8Array(w * h)
+          for (let i = 0; i < w * h; i++) buildingMask[i] = Number(maskRaw[i]) > 0 ? 1 : 0
+        } else {
+          // Resample by nearest-neighbour to match DSM grid.
+          buildingMask = new Uint8Array(w * h)
+          for (let y = 0; y < h; y++) {
+            const sy = Math.min(mh - 1, Math.floor((y / h) * mh))
+            for (let x = 0; x < w; x++) {
+              const sx = Math.min(mw - 1, Math.floor((x / w) * mw))
+              buildingMask[y * w + x] = Number(maskRaw[sy * mw + sx]) > 0 ? 1 : 0
+            }
+          }
+        }
+      } catch (e: any) {
+        console.warn('[dsm-visualization] mask parse failed (continuing without):', e?.message)
+      }
+    }
 
     // 3. Normalize: clip to (ground..ground+30m) then map to 0..1
     const validValues: number[] = []
@@ -105,6 +156,18 @@ export async function fetchDsmHillshade(
     for (let i = 0; i < dsmRaw.length; i++) {
       const v = Number(dsmRaw[i])
       heights[i] = Number.isFinite(v) ? Math.max(groundLevel, Math.min(ceiling, v)) : groundLevel
+    }
+
+    // Apply building mask — zero out non-building pixels so rustling tree
+    // canopies don't render as fake ridges in the hillshade. Pixels NOT
+    // covered by the mask get pushed down to ground level so they don't
+    // contribute slope to the Sobel filter or the illumination dot product.
+    // Without the mask this step is a no-op and behavior matches the
+    // pre-mask era exactly.
+    if (buildingMask) {
+      for (let i = 0; i < heights.length; i++) {
+        if (buildingMask[i] === 0) heights[i] = groundLevel
+      }
     }
 
     // 4. Multi-azimuth hillshade composite. A single NW sun (the prior
@@ -145,6 +208,7 @@ export async function fetchDsmHillshade(
       height: targetSizePx,
       imageryDate: meta?.imageryDate ? formatImageryDate(meta.imageryDate) : undefined,
       quality: meta?.imageryQuality,
+      maskApplied: !!buildingMask,
     }
   } catch (e: any) {
     // Any failure (geotiff parse error, network, OOM) is non-fatal —

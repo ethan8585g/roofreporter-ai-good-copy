@@ -27,6 +27,8 @@ import { fetchTrainingExamples, type TrainingExample } from './trace-training-da
 import { buildLessonMemo, getCalibrationFactor } from './auto-trace-learning'
 import { fetchDsmHillshade, type DsmHillshadeResult } from './dsm-visualization'
 import { renderGridOverlay } from './grid-overlay'
+import { fetchFootprintPriors, type FootprintPrior } from './footprint-priors'
+import { decodePNG, encodePNG, lanczosResize, applyVARITint } from './image-preprocess'
 
 const CLAUDE_VISION_MODEL = 'claude-opus-4-7'
 
@@ -82,10 +84,28 @@ export interface AutoTraceInput {
    *  include it as a parallel image. Helps Claude anchor pixel
    *  references. Off by default — adds ~1MB to the request payload. */
   gridOverlay?: boolean
+  /** Decode the satellite PNG, paint vegetation pixels magenta via VARI
+   *  index, and send the tinted version as the primary image. Tells
+   *  Claude "the pink stuff is trees; the eave passes through them but
+   *  you can see where the roof picks up on the other side." Off by
+   *  default — adds ~200-400ms of pure-JS pixel work per call. */
+  vegetationTint?: boolean
+  /** Resample the satellite tile from Static Maps' 1280×1280 native
+   *  output up to Claude's 1568×1568 ceiling via Lanczos-3. Recovers
+   *  ~18-22% of the model's input resolution we currently leave on the
+   *  table. Off by default — adds ~500ms-1s of pure-JS work per call.
+   *  When combined with vegetationTint the work shares one decode. */
+  upscaleTo1568?: boolean
 }
 
 export interface AutoTraceResult {
   edge: AutoTraceEdge
+  /** Stable UUID identifying this exact run. The client MUST echo this
+   *  back when the operator submits a trace so the learning loop can
+   *  correlate the agent's draft against the admin's final geometry
+   *  deterministically — replacing the fuzzy "any run in the last 2h"
+   *  log-window match. */
+  run_id: string
   /** Eaves: a list of closed polygons (1 entry per structure).
    *  Hips/ridges: a list of polylines. */
   segments: LatLng[][]
@@ -124,6 +144,9 @@ export interface AutoTraceResult {
     dsm_hillshade_used: boolean
     dsm_hillshade_quality?: 'HIGH' | 'MEDIUM' | 'BASE'
     dsm_imagery_date?: string
+    /** True when the Solar building mask was applied during DSM render —
+     *  tree-canopy pixels zeroed so hillshade only carries roof structure. */
+    dsm_mask_applied?: boolean
     /** Whether the agent had the 3D viewport image in its prompt. */
     viewport_3d_used: boolean
     /** Second-pass self-critique for eaves only — feeds the first-draft polygon
@@ -161,6 +184,26 @@ export interface AutoTraceResult {
      *  'mid' (3-4), 'hi' (5+). Carried through to auto_trace_corrections
      *  via the route handler so lessonMemo + calibration can segment. */
     complexity_bucket?: string
+    /** External building-footprint priors that returned a polygon near
+     *  the click point. Each is `source/area_sqft/vertex_count`. */
+    footprint_priors?: Array<{ source: string; area_sqft: number; vertices: number; source_id?: string }>
+    /** Per-source priors timings (ms) so a slow Overpass doesn't silently
+     *  bloat auto-trace latency. */
+    footprint_priors_elapsed_ms?: { edmonton?: number; osm?: number }
+    /** True when VARI vegetation tint was applied (canopy painted magenta). */
+    vegetation_tint_applied?: boolean
+    /** Percentage of pixels flagged as vegetation (0-100). Helps the operator
+     *  decide whether tree-occlusion was a likely failure mode on this run. */
+    vegetation_pct?: number
+    /** True when the satellite tile was Lanczos-upscaled to 1568×1568 before
+     *  being sent to Claude. */
+    upscale_applied?: boolean
+    /** Time spent in PNG decode + tint + Lanczos + re-encode (ms). 0 when no
+     *  preprocessing was requested. */
+    preprocess_elapsed_ms?: number
+    /** Dimensions of the image Claude actually saw (vs the projection grid,
+     *  always safeW*2 = 1280). */
+    sent_image_dim?: number
     model: string
     elapsed_ms: number
   }
@@ -171,6 +214,13 @@ export interface AutoTraceResult {
 // ─────────────────────────────────────────────────────────────
 export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promise<AutoTraceResult> {
   const started = Date.now()
+  // Mint a stable per-run UUID so the learning loop can correlate draft
+  // → submit pairs deterministically (replaces the fuzzy 2h log match).
+  // crypto.randomUUID is on workerd by default; manual fallback covers any
+  // legacy runtime that hasn't enabled it yet.
+  const runId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `at-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
   const zoom = clampZoom(input.zoom)
   const safeW = Math.min(input.imageWidth || 640, 640)
   const safeH = Math.min(input.imageHeight || 640, 640)
@@ -182,12 +232,24 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     throw new Error('GOOGLE_MAPS_API_KEY not configured — auto-trace needs a satellite image')
   }
 
+  // Footprint priors (OSM + Edmonton city LiDAR) — fetched in parallel
+  // with Solar so they don't add to total latency. Both are best-effort:
+  // any failure is logged + ignored. The result is fed to the prompt as
+  // cross-check context AND used to validate Solar's bbox trust.
+  const priorsP = fetchFootprintPriors(input.lat, input.lng).catch((e: any) => {
+    console.warn('[auto-trace] footprint priors failed:', e?.message)
+    return { priors: [], elapsed_ms: {}, errors: {} }
+  })
+
   // Solar API gives us the building's actual lat/lng bounding box. We need
   // that BEFORE choosing the satellite image centre/zoom so we can frame
   // the image tightly on the target — otherwise the user's pin (often
   // landing on a lot boundary or in front of the actual building) puts a
   // neighbour right next to the target and Claude tries to trace both.
-  const solarInsights = await safelyFetchSolar(env, input.lat, input.lng)
+  const [solarInsights, footprintPriorsResult] = await Promise.all([
+    safelyFetchSolar(env, input.lat, input.lng),
+    priorsP,
+  ])
   const solarSummary = summarizeSolar(solarInsights)
 
   // Pick the satellite image's centre + zoom. When Solar gives us a
@@ -229,8 +291,58 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       : Promise.resolve(null),
     gridP,
   ])
-  const imageB64 = satellite.b64
-  const imageMediaType = satellite.mediaType
+  let imageB64 = satellite.b64
+  let imageMediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' = satellite.mediaType
+  // Image dimensions Claude actually sees. Defaults to Static Maps' native
+  // safeW*2 × safeH*2 (e.g. 1280×1280). If upscaling is applied below this
+  // becomes 1568×1568; Claude's returned coords are in this frame and we
+  // scale them back to the 1280 grid before projection.
+  let actualImageDim = safeW * 2
+  let vegetationTintApplied = false
+  let vegetationPct: number | undefined
+  let upscaleApplied = false
+  let preprocessElapsedMs = 0
+
+  // Optional preprocessing: VARI vegetation tint + Lanczos upscale. Both
+  // require decoding the PNG to RGBA, mutating pixels, then re-encoding.
+  // Wrapped in a single try/catch so any failure (non-PNG response,
+  // corrupt bytes, CPU budget exhaustion) falls back to the raw tile.
+  if ((input.vegetationTint || input.upscaleTo1568) && imageMediaType === 'image/png') {
+    const ppStart = Date.now()
+    try {
+      // Decode base64 → bytes → RGBA.
+      const pngBytes = Uint8Array.from(atob(imageB64), c => c.charCodeAt(0))
+      let img = await decodePNG(pngBytes)
+      // VARI tint first (cheap pixel pass). Lanczos benefits from operating
+      // on already-tinted pixels so the magenta carries through cleanly.
+      if (input.vegetationTint) {
+        const tinted = applyVARITint(img, { threshold: 0.05, blendStrength: 0.45 })
+        img = tinted.tinted
+        vegetationPct = tinted.vegetationPct
+        vegetationTintApplied = true
+      }
+      if (input.upscaleTo1568 && img.width < 1568) {
+        img = lanczosResize(img, 1568, 1568)
+        upscaleApplied = true
+      }
+      const reencoded = await encodePNG(img)
+      let bin = ''
+      const chunk = 0x8000
+      for (let i = 0; i < reencoded.length; i += chunk) {
+        bin += String.fromCharCode(...reencoded.subarray(i, Math.min(i + chunk, reencoded.length)))
+      }
+      imageB64 = btoa(bin)
+      imageMediaType = 'image/png'
+      actualImageDim = img.width
+    } catch (e: any) {
+      console.warn('[auto-trace] preprocessing failed (falling back to raw tile):', e?.message)
+      // Reset to defaults — original tile unchanged.
+      vegetationTintApplied = false
+      upscaleApplied = false
+    } finally {
+      preprocessElapsedMs = Date.now() - ppStart
+    }
+  }
 
   // Derive a complexity bucket from Solar's segment count so lessonMemo +
   // calibration can segment their stats. Same bucketing that
@@ -258,28 +370,50 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   ])
 
   const hasViewport3d = !!(input.viewport3dB64 && input.viewport3dB64.length > 1000)
-  // Compute the target building's bounding box in PIXEL space on the satellite
-  // image — now using framing.lat/lng/zoom (which may have been recentred on
-  // the Solar bbox above). Static Maps always centres the request lat/lng at
-  // (W/2, H/2). When the framing is the Solar centroid, the bbox lands neatly
-  // in the centre of the image and Claude has no other building to chase.
+  // Projection grid (Mercator) is always safeW*2 × safeH*2 = 1280×1280
+  // regardless of whether the actual sent image is upscaled. Claude's
+  // returned coords are scaled back from `actualImageDim` to this grid
+  // immediately after parsing so pxToLatLng works unchanged.
   const imagePxW = safeW * 2
   const imagePxH = safeH * 2
-  const targetCenterPx = { x: Math.round(imagePxW / 2), y: Math.round(imagePxH / 2) }
-  const targetBboxPx = computeTargetBboxPx(solarInsights, framing.lat, framing.lng, framing.zoom, imagePxW, imagePxH)
+  const projectionToSentScale = actualImageDim / imagePxW  // 1.0 default, 1.225 when upscaled
+  // What Claude sees: the target centre + bbox in the dimensions of the
+  // actual sent image. Computed in projection space then scaled up so the
+  // prompt's coordinate references line up with what Claude's eye reads.
+  const projectionBboxPx = computeTargetBboxPx(solarInsights, framing.lat, framing.lng, framing.zoom, imagePxW, imagePxH)
+  const targetCenterPx = {
+    x: Math.round((imagePxW / 2) * projectionToSentScale),
+    y: Math.round((imagePxH / 2) * projectionToSentScale),
+  }
+  const targetBboxPx = projectionBboxPx
+    ? {
+        x1: Math.round(projectionBboxPx.x1 * projectionToSentScale),
+        y1: Math.round(projectionBboxPx.y1 * projectionToSentScale),
+        x2: Math.round(projectionBboxPx.x2 * projectionToSentScale),
+        y2: Math.round(projectionBboxPx.y2 * projectionToSentScale),
+        widthFt: projectionBboxPx.widthFt,
+        depthFt: projectionBboxPx.depthFt,
+        trusted: projectionBboxPx.trusted,
+      }
+    : null
   const systemPrompt = buildSystemPrompt(input.edge, lessonMemo, {
     hasHillshade: !!hillshade,
     hasViewport3d,
     hasWideContext: !!wideContext,
     hasGridOverlay: !!gridOverlay,
+    vegetationTintApplied,
     targetCenterPx,
     targetBboxPx,
     includeOutbuildings: !!input.includeOutbuildings,
   })
   const userPrompt = buildUserPrompt({
     edge: input.edge,
-    imagePxW,
-    imagePxH,
+    // Tell Claude the dimensions of the image it ACTUALLY sees (may be
+    // upscaled to 1568). targetCenterPx + targetBboxPx are already in that
+    // sent-image frame above; coords come back in the sent-image frame and
+    // get scaled to the projection grid before pxToLatLng.
+    imagePxW: actualImageDim,
+    imagePxH: actualImageDim,
     solarSummary,
     examples,
     hillshade,
@@ -288,6 +422,7 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     hasViewport3d,
     targetCenterPx,
     targetBboxPx,
+    footprintPriors: footprintPriorsResult.priors,
   })
 
   // Build the multimodal content array. Order MUST match the system-
@@ -341,6 +476,17 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   const completion = await anthropic.messages.create(messageArgs as any)
 
   const parsed = parseToolResponse(completion)
+  // Claude returned coords in the dimensions of the image it actually saw
+  // (actualImageDim × actualImageDim). Our projection helpers expect the
+  // 1280-grid Static Maps tile (imagePxW × imagePxH). Scale back BEFORE
+  // any downstream geometry (IoU gate, refinement, snapping, projection).
+  if (projectionToSentScale !== 1) {
+    const inv = 1 / projectionToSentScale
+    parsed.segments = parsed.segments.map(seg => seg.map(p => ({
+      x: Math.round(p.x * inv),
+      y: Math.round(p.y * inv),
+    })))
+  }
 
   // ── Self-critique pass (eaves only) ───────────────────────────
   // Feed the first-draft polygon back to Claude overlaid on the satellite
@@ -360,12 +506,14 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     if (parsed.segments.length === 0 || parsed.segments.every(s => s.length < 3)) {
       refinementPass = 'skipped-empty-draft'
     } else if (
-      targetBboxPx && targetBboxPx.trusted &&
+      projectionBboxPx && projectionBboxPx.trusted &&
       (() => {
         // Pick the LARGEST polygon as the primary; small ancillary polygons
         // (porches/garages) shouldn't decide whether we re-run the critique.
+        // Compared in the PROJECTION grid (1280) since both coords have been
+        // scaled back already.
         const primary = parsed.segments.reduce((a, b) => a.length >= b.length ? a : b)
-        const iou = computeIoUWithRect(primary, targetBboxPx)
+        const iou = computeIoUWithRect(primary, projectionBboxPx)
         refinementIouGate = Math.round(iou * 1000) / 1000
         // 0.85 threshold matches the Huang et al. + Lightman et al. guidance:
         // running self-critique on already-good drafts degrades them ~20-30%
@@ -467,6 +615,7 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
 
   return {
     edge: input.edge,
+    run_id: runId,
     segments,
     ...(finalKinds && finalKinds.length === segments.length ? { segment_kinds: finalKinds } : {}),
     confidence: finalConfidence,
@@ -490,6 +639,7 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       dsm_hillshade_used: !!hillshade,
       dsm_hillshade_quality: hillshade?.quality,
       dsm_imagery_date: hillshade?.imageryDate,
+      dsm_mask_applied: hillshade?.maskApplied,
       viewport_3d_used: hasViewport3d,
       refinement_pass: refinementPass,
       refinement_vertices_added: refinementVerticesAdded,
@@ -502,6 +652,20 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       wide_context_used: !!wideContext,
       grid_overlay_used: !!gridOverlay,
       complexity_bucket: complexityBucket,
+      footprint_priors: footprintPriorsResult.priors.length > 0
+        ? footprintPriorsResult.priors.map(p => ({
+            source: p.source,
+            area_sqft: Math.round(p.area_sqft),
+            vertices: p.ring.length,
+            source_id: p.source_id,
+          }))
+        : undefined,
+      footprint_priors_elapsed_ms: footprintPriorsResult.elapsed_ms,
+      vegetation_tint_applied: vegetationTintApplied || undefined,
+      vegetation_pct: vegetationPct,
+      upscale_applied: upscaleApplied || undefined,
+      preprocess_elapsed_ms: preprocessElapsedMs || undefined,
+      sent_image_dim: actualImageDim,
       model: CLAUDE_VISION_MODEL,
       elapsed_ms: Date.now() - started,
     },
@@ -656,6 +820,7 @@ function buildSystemPrompt(
     hasViewport3d: boolean
     hasWideContext: boolean
     hasGridOverlay: boolean
+    vegetationTintApplied: boolean
     targetCenterPx: { x: number; y: number }
     targetBboxPx: { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean } | null
     includeOutbuildings: boolean
@@ -674,7 +839,7 @@ function buildSystemPrompt(
   // having to infer from contents. Per Anthropic's multi-image docs.
   const imageRoster: string[] = []
   let imgN = 1
-  imageRoster.push(`Image ${imgN++} — PRIMARY: Google satellite (top-down, target reference; ALL pixel coordinates you emit must be in THIS image's coordinate space, origin top-left).`)
+  imageRoster.push(`Image ${imgN++} — PRIMARY: Google satellite (top-down, target reference; ALL pixel coordinates you emit must be in THIS image's coordinate space, origin top-left).${opts.vegetationTintApplied ? ' ⚠️ TREE TINT APPLIED: vegetation pixels have been painted MAGENTA via the VARI vegetation index. Magenta = tree canopy (likely deciduous in summer imagery). The eave often passes UNDER the magenta zones — extrapolate the visible eave line through the canopy using the orthogonal-projection rule. Do NOT treat the edge of the magenta as a roof corner.' : ''}`)
   if (opts.hasHillshade) {
     imageRoster.push(`Image ${imgN++} — DSM hillshade. A synthetic structural render of the Google Solar API elevation raster, RESAMPLED to the SAME size as Image 1 so pixel coordinates correspond 1:1. THREE independent signals are packed into the RGB channels: RED = multi-azimuth hillshade (omni-directional illumination, ridges and hips appear as bright lines regardless of orientation); GREEN = Sobel edge magnitude on the height field (SHARP green lines where the surface curvature changes — primary cue for ridges, hips, and the inset of valleys); BLUE = above-ground height (brighter blue = higher above ground; near-zero where the surface is at lawn level). Use red+green together to localize lines; use blue to discriminate roof (bright blue) from yard or driveway (dark blue).`)
   }
@@ -753,6 +918,7 @@ function buildUserPrompt(args: {
   hasViewport3d: boolean
   targetCenterPx: { x: number; y: number }
   targetBboxPx: { x1: number; y1: number; x2: number; y2: number } | null
+  footprintPriors: FootprintPrior[]
 }): string {
   const lines: string[] = []
   let img = 1
@@ -786,6 +952,31 @@ function buildUserPrompt(args: {
     lines.push('- Solar API unavailable (rural / no coverage). Lean on the image + few-shot examples.')
   }
   lines.push('')
+
+  // External footprint priors — OSM and/or Edmonton municipal LiDAR. Most
+  // useful when they CORROBORATE Solar (high agent confidence) or when
+  // they DISAGREE (something's wrong with one of the data sources — defer
+  // to the satellite image). We pass the polygon vertex count + area; the
+  // raw coordinates aren't useful to Claude since this prompt expects
+  // pixel output.
+  if (args.footprintPriors.length > 0) {
+    lines.push('External building-footprint priors (cross-check Solar bbox; do NOT copy these coordinates — they are lat/lng, not pixels):')
+    for (const p of args.footprintPriors) {
+      lines.push(`- ${p.source}: ${Math.round(p.area_sqft)} sqft polygon (${p.ring.length} vertices)`)
+    }
+    if (args.footprintPriors.length >= 2) {
+      // Two or more sources — surface agreement/disagreement.
+      const areas = args.footprintPriors.map(p => p.area_sqft)
+      const minA = Math.min(...areas), maxA = Math.max(...areas)
+      const ratio = minA > 0 ? maxA / minA : 0
+      if (ratio < 1.15) {
+        lines.push(`  → Sources AGREE within ${Math.round((ratio - 1) * 100)}%. Treat this as the high-confidence footprint area; your eaves polygon should target this size.`)
+      } else {
+        lines.push(`  → Sources DISAGREE (max/min ratio ${ratio.toFixed(2)}). Trust the satellite image over either prior; one of the data sources is wrong.`)
+      }
+    }
+    lines.push('')
+  }
 
   if (args.examples.length > 0) {
     lines.push(`Few-shot examples — ${args.examples.length} past super-admin traces of similar properties:`)

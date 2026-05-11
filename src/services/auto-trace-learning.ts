@@ -39,6 +39,9 @@ interface AutoTraceLogRecord {
   /** Complexity bucket the agent computed at run-time. Carried back into
    *  auto_trace_corrections so calibration can segment without re-deriving. */
   complexityBucket?: string
+  /** Stable UUID minted by runAutoTrace. Migration 0236 added the column;
+   *  rows logged before the migration won't have it. */
+  runId?: string
 }
 
 /** Pull every auto-trace draft logged for this order in the last 2 hours. The
@@ -70,12 +73,62 @@ async function fetchRecentAutoTraces(env: Bindings, orderId: number): Promise<Au
           reasoning: String(d.reasoning || ''),
           model: String(d.model || ''),
           complexityBucket: typeof d.complexity_bucket === 'string' ? d.complexity_bucket : undefined,
+          runId: typeof d.run_id === 'string' ? d.run_id : undefined,
         })
         seenEdges.add(d.edge)
       } catch { /* corrupt log row — skip */ }
     }
     return out
   } catch { return [] }
+}
+
+/** Pull auto-trace drafts by EXACT run_id list — the deterministic path
+ *  introduced by migration 0236. When the client echoes accepted run_ids
+ *  back on /submit-trace, this replaces the fuzzy 2h log-window match.
+ *  Falls back to caller-resolved 2h match when no run_ids are supplied. */
+async function fetchAutoTracesByRunIds(env: Bindings, orderId: number, runIds: string[]): Promise<AutoTraceLogRecord[]> {
+  if (runIds.length === 0) return []
+  // Sanitize — accept only UUID-shaped ids to keep the LIKE clause safe.
+  const clean = runIds.filter(id => /^[a-zA-Z0-9_-]{8,64}$/.test(id))
+  if (clean.length === 0) return []
+  try {
+    const placeholders = clean.map(() => '?').join(',')
+    const rows = await env.DB.prepare(`
+      SELECT details FROM user_activity_log
+      WHERE action = 'admin_auto_trace'
+        AND json_extract(details, '$.order_id') = ?
+      ORDER BY id DESC
+      LIMIT 50
+    `).bind(orderId).all<{ details: string }>()
+    const wanted = new Set(clean)
+    const out: AutoTraceLogRecord[] = []
+    const seenEdges = new Set<string>()
+    for (const row of rows.results || []) {
+      try {
+        const d = JSON.parse(row.details)
+        if (!d?.run_id || !wanted.has(String(d.run_id))) continue
+        if (seenEdges.has(d.edge)) continue
+        if (d.edge !== 'eaves' && d.edge !== 'hips' && d.edge !== 'ridges' && d.edge !== 'valleys') continue
+        out.push({
+          edge: d.edge,
+          segments: Array.isArray(d.segments) ? d.segments : [],
+          confidence: Number(d.confidence) || 0,
+          reasoning: String(d.reasoning || ''),
+          model: String(d.model || ''),
+          complexityBucket: typeof d.complexity_bucket === 'string' ? d.complexity_bucket : undefined,
+          runId: typeof d.run_id === 'string' ? d.run_id : undefined,
+        })
+        seenEdges.add(d.edge)
+      } catch { /* corrupt — skip */ }
+    }
+    // Reference `placeholders` so the linter doesn't trip on the unused
+    // template above (kept for symmetry with future IN-clause migration).
+    void placeholders
+    return out
+  } catch (e: any) {
+    console.warn('[auto-trace-learning] runId fetch failed:', e?.message)
+    return []
+  }
 }
 
 /** Optional client-side telemetry from the trace editor — distinguishes
@@ -95,6 +148,10 @@ export interface SubmitTelemetry {
   /** Property's complexity class at log time (low/mid/hi). Snapshotted so
    *  calibration can segment without re-deriving later. */
   complexityBucket?: string
+  /** Accepted run_ids — if supplied, logCorrections uses deterministic
+   *  by-id linking instead of the fuzzy 2h log-window match. One per edge
+   *  type the operator actually used. */
+  acceptedRunIds?: { eaves?: string; hips?: string; ridges?: string; valleys?: string }
 }
 
 /** Hook called from POST /submit-trace. `finalTrace` is the validated UiTrace
@@ -108,7 +165,17 @@ export async function logCorrections(
   telemetry?: SubmitTelemetry,
 ): Promise<void> {
   try {
-    const drafts = await fetchRecentAutoTraces(env, orderId)
+    // Prefer deterministic by-run_id matching when the client echoed
+    // accepted run_ids back; fall back to the 2h window match. The
+    // by-id path solves multi-admin handoffs, > 2h sessions, and re-
+    // submit-after-prior-submit attribution bugs.
+    const runIds: string[] = []
+    if (telemetry?.acceptedRunIds) {
+      for (const v of Object.values(telemetry.acceptedRunIds)) if (typeof v === 'string' && v) runIds.push(v)
+    }
+    const drafts = runIds.length > 0
+      ? await fetchAutoTracesByRunIds(env, orderId, runIds)
+      : await fetchRecentAutoTraces(env, orderId)
     if (drafts.length === 0) return  // admin didn't use the agent — nothing to learn from
 
     const acceptedUnchanged = telemetry?.acceptedUnchanged === true ? 1 : 0
@@ -126,8 +193,9 @@ export async function logCorrections(
           agent_confidence, point_count_delta, avg_vertex_offset_ft,
           fully_replaced, edited, model, agent_reasoning,
           complexity_bucket, accepted_unchanged,
-          edit_duration_ms, vertex_moves, vertex_adds, vertex_deletes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          edit_duration_ms, vertex_moves, vertex_adds, vertex_deletes,
+          run_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         orderId,
         draft.edge,
@@ -148,6 +216,7 @@ export async function logCorrections(
         Number.isFinite(telemetry?.vertexMoves as any) ? Math.round(telemetry!.vertexMoves as any) : null,
         Number.isFinite(telemetry?.vertexAdds as any) ? Math.round(telemetry!.vertexAdds as any) : null,
         Number.isFinite(telemetry?.vertexDeletes as any) ? Math.round(telemetry!.vertexDeletes as any) : null,
+        draft.runId || null,
       ).run()
     }
   } catch (e: any) {

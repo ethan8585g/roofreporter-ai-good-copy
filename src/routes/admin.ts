@@ -4762,6 +4762,8 @@ adminRoutes.post('/superadmin/orders/:id/auto-trace/:edge', async (c) => {
       thinkingBudget: Number(body?.thinking_budget) || 0,
       wideContext: body?.wide_context === true,
       gridOverlay: body?.grid_overlay === true,
+      vegetationTint: body?.vegetation_tint === true,
+      upscaleTo1568: body?.upscale_to_1568 === true,
     })
 
     // Audit row so the super-admin activity feed shows who ran what when,
@@ -4775,6 +4777,7 @@ adminRoutes.post('/superadmin/orders/:id/auto-trace/:edge', async (c) => {
         order_id: orderId,
         admin_id: admin.id,
         edge,
+        run_id: result.run_id,
         confidence: result.confidence,
         segments_returned: result.segments.length,
         segments: result.segments,
@@ -5005,6 +5008,17 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
       vertexAdds: Number(trace_telemetry.vertex_adds) || undefined,
       vertexDeletes: Number(trace_telemetry.vertex_deletes) || undefined,
       complexityBucket: typeof trace_telemetry.complexity_bucket === 'string' ? trace_telemetry.complexity_bucket : undefined,
+      // Client echoes back the run_ids it actually used per edge so the
+      // learning loop can do deterministic matching instead of "any draft
+      // in the last 2 hours" fuzzy linkage.
+      acceptedRunIds: trace_telemetry.accepted_run_ids && typeof trace_telemetry.accepted_run_ids === 'object'
+        ? {
+            eaves: typeof trace_telemetry.accepted_run_ids.eaves === 'string' ? trace_telemetry.accepted_run_ids.eaves : undefined,
+            hips: typeof trace_telemetry.accepted_run_ids.hips === 'string' ? trace_telemetry.accepted_run_ids.hips : undefined,
+            ridges: typeof trace_telemetry.accepted_run_ids.ridges === 'string' ? trace_telemetry.accepted_run_ids.ridges : undefined,
+            valleys: typeof trace_telemetry.accepted_run_ids.valleys === 'string' ? trace_telemetry.accepted_run_ids.valleys : undefined,
+          }
+        : undefined,
     } : undefined
     const logP = logAutoTraceCorrections(c.env, orderId, traceObj, telemetry)
       .catch((e: any) => console.warn('[auto-trace-learning] log failed:', e?.message))

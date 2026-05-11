@@ -1762,6 +1762,9 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<button onclick="saStartVerifyPlanes(' + orderId + ')" id="sa-verify-planes-btn" title="Confirm or override each detected roof plane\'s polygon and pitch. Locks the per-plane area math to user-verified values — no auto-split, no inference." style="padding:9px 18px;background:rgba(99,102,241,0.18);color:#a5b4fc;font-size:12px;font-weight:700;border:1px solid rgba(99,102,241,0.5);border-radius:10px;cursor:pointer">' +
             '<i class="fas fa-vector-square mr-1.5"></i>Verify Planes' +
           '</button>' +
+          '<button onclick="saAcceptAutoTraceAsIs(' + orderId + ')" id="sa-accept-asis-btn" title="Submit the auto-traced geometry exactly as the agent drew it (no edits). Tells the learning loop this was a clean draft — improves calibration. Only enabled when an auto-trace ran this session." style="padding:9px 16px;background:rgba(34,197,94,0.18);color:#86efac;font-size:12px;font-weight:700;border:1px solid rgba(34,197,94,0.5);border-radius:10px;cursor:pointer;display:none">' +
+            '<i class="fas fa-check-double mr-1.5"></i>Accept Auto-Trace As-Is' +
+          '</button>' +
           '<button onclick="saSubmitTrace(' + orderId + ')" id="sa-submit-trace-btn" style="padding:9px 22px;background:#f59e0b;color:#111;font-size:13px;font-weight:700;border:none;border-radius:10px;cursor:pointer">' +
             '<i class="fas fa-paper-plane mr-1.5"></i>Submit Report to Customer' +
           '</button>' +
@@ -3905,7 +3908,36 @@ window.saAutoTrace = async function(edge) {
     }
 
     var confidence = typeof data.confidence === 'number' ? data.confidence : 0;
-    console.log('[auto-trace ' + edge + '] confidence=' + confidence + ' segments=' + data.segments.length, data.diagnostics);
+    console.log('[auto-trace ' + edge + '] confidence=' + confidence + ' segments=' + data.segments.length + ' run_id=' + (data.run_id || 'none'), data.diagnostics);
+
+    // Record the run_id + start-of-edit timestamp so submit-trace can
+    // ship deterministic learning telemetry back to the server. The
+    // run_id replaces the fuzzy "any auto-trace in the last 2h" match
+    // with an exact draft → submit pair.
+    if (data.run_id) {
+      window._saAutoTraceRuns = window._saAutoTraceRuns || {};
+      window._saAutoTraceRuns[edge] = data.run_id;
+      // Stamp an editStartAt on first-ever auto-trace this session so
+      // edit_duration_ms is calculable on submit. Re-running auto-trace
+      // for a different edge type doesn't reset it.
+      if (!window._saAutoTraceEditStartAt) {
+        window._saAutoTraceEditStartAt = Date.now();
+      }
+      // Reset vertex-move tally on a fresh draft per edge — operators
+      // typically tweak hips after running them, separate from earlier
+      // eaves edits, but the aggregate count is what we care about so
+      // we keep accumulating across edge types this session.
+      window._saAutoTraceMoves = window._saAutoTraceMoves || { moves: 0, adds: 0, deletes: 0 };
+      // Snapshot the complexity_bucket the agent computed so submit
+      // carries it forward even if the operator triggers multiple edges.
+      if (data.diagnostics && data.diagnostics.complexity_bucket) {
+        window._saAutoTraceBucket = data.diagnostics.complexity_bucket;
+      }
+      // Reveal the Accept-As-Is button — only available once an
+      // auto-trace has actually run this session.
+      var acceptBtn = document.getElementById('sa-accept-asis-btn');
+      if (acceptBtn) acceptBtn.style.display = 'inline-flex';
+    }
 
     // Inject the segments into the appropriate trace state. Eaves are
     // closed polygons; hips/ridges are open polylines. We use the exact
@@ -4149,6 +4181,27 @@ function saRenderSectionPitches() {
   });
 }
 
+// Submits the trace WITHOUT showing any edits as edits. Sets the
+// accepted_unchanged ground-truth flag so the learning loop treats this
+// as a positive sample regardless of any sub-noise vertex drift from
+// the auto-trace projection round-trip. Hides the button on success to
+// avoid double-fire.
+window.saAcceptAutoTraceAsIs = async function(orderId) {
+  if (!window._saAutoTraceRuns || Object.keys(window._saAutoTraceRuns).length === 0) {
+    alert('Run an auto-trace first — Accept-As-Is requires an active draft from this session.');
+    return;
+  }
+  if (!confirm('Submit the auto-traced geometry exactly as the agent drew it? No further edits will be applied.')) return;
+  window._saAutoTraceAcceptedAsIs = true;
+  try {
+    await window.saSubmitTrace(orderId);
+  } finally {
+    // Always reset so a follow-on edit-then-submit doesn't carry the
+    // ground-truth flag forward.
+    window._saAutoTraceAcceptedAsIs = false;
+  }
+}
+
 window.saSubmitTrace = async function(orderId, force) {
   var s = window._saTraceState;
   if (!s) return;
@@ -4257,10 +4310,33 @@ window.saSubmitTrace = async function(orderId, force) {
     // Bundle any admin-captured 3D map screenshots into the submit payload.
     // Empty/missing → server skips the imagery merge, report renders as-is.
     var extraCaps = (s && Array.isArray(s.extra_captures)) ? s.extra_captures.slice(0, 4) : [];
+    // Bundle auto-trace learning telemetry so the server can correlate
+    // this submission with the exact draft(s) the operator started from.
+    // All fields nullable; the learner falls back to fuzzy time-window
+    // matching if absent.
+    var traceTelemetry = null;
+    if (window._saAutoTraceRuns && Object.keys(window._saAutoTraceRuns).length > 0) {
+      var editDur = window._saAutoTraceEditStartAt ? Date.now() - window._saAutoTraceEditStartAt : null;
+      var moves = window._saAutoTraceMoves || { moves: 0, adds: 0, deletes: 0 };
+      traceTelemetry = {
+        accepted_unchanged: !!window._saAutoTraceAcceptedAsIs,
+        edit_duration_ms: editDur,
+        vertex_moves: moves.moves || 0,
+        vertex_adds: moves.adds || 0,
+        vertex_deletes: moves.deletes || 0,
+        complexity_bucket: window._saAutoTraceBucket || null,
+        accepted_run_ids: window._saAutoTraceRuns,
+      };
+    }
     var res = await fetch('/api/admin/superadmin/orders/' + orderId + '/submit-trace', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roof_trace_json: traceJson, force: !!force, extra_captures: extraCaps })
+      body: JSON.stringify({
+        roof_trace_json: traceJson,
+        force: !!force,
+        extra_captures: extraCaps,
+        trace_telemetry: traceTelemetry,
+      })
     });
     var data = await res.json();
     if (data.success) {
