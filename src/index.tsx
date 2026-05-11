@@ -12070,6 +12070,34 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
       var unlimited = freeRem >= 999999 || paidRem >= 999999;
       if (!unlimited) {
         var freeUsed = Math.max(0, freeTotal - freeRem);
+        // First-time activation CTA — when user has full free trial untouched
+        // (freeRem === freeTotal), show a BIG "order your first free report"
+        // banner BEFORE the free-counter card. Without this, brand-new users
+        // landing on the dashboard saw "View packs" as the most prominent
+        // CTA — wrong invite for someone who hasn't even tried the free trial.
+        // Customers #57 + #58 (2026-05-11) both signed up + bounced from
+        // the dashboard without ordering, which is what this fixes.
+        var isFirstTime = (freeTotal > 0 && freeRem === freeTotal);
+        if (isFirstTime) {
+          html += '<div style="background:linear-gradient(135deg,#0A0A0A 0%,#001f10 100%);border:1.5px solid #00FF88;border-radius:16px;padding:24px;margin-bottom:16px;box-shadow:0 8px 32px -8px rgba(0,255,136,0.25)">'
+            + '<div style="display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap">'
+            +   '<div style="flex:1;min-width:260px">'
+            +     '<div style="display:inline-flex;align-items:center;gap:8px;background:rgba(0,255,136,0.12);color:#00FF88;font-size:11px;font-weight:800;letter-spacing:0.06em;padding:5px 11px;border-radius:999px;margin-bottom:10px;text-transform:uppercase"><i class="fas fa-gift"></i> ' + freeTotal + ' Free Reports Ready</div>'
+            +     '<div style="font-weight:800;color:#fff;font-size:20px;line-height:1.25;margin-bottom:6px">Order your first free roof report now</div>'
+            +     '<div style="color:#9ca3af;font-size:14px;line-height:1.5">Any property address. AI-measured from satellite imagery. Full report back in 1&mdash;2 hours. No credit card needed.</div>'
+            +   '</div>'
+            +   '<a href="/customer/order" style="background:#00FF88;color:#0A0A0A;font-weight:800;padding:14px 26px;border-radius:11px;text-decoration:none;font-size:15px;white-space:nowrap;box-shadow:0 4px 16px -4px rgba(0,255,136,0.6);display:inline-flex;align-items:center;gap:8px"><i class="fas fa-plus-circle"></i> Order First Report</a>'
+            + '</div>'
+            + '<div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08);font-size:13px;color:#9ca3af;display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
+            +   '<span><i class="fas fa-check-circle" style="color:#00FF88;margin-right:5px"></i>2&ndash;5% accuracy</span>'
+            +   '<span><i class="fas fa-check-circle" style="color:#00FF88;margin-right:5px"></i>Full materials BOM</span>'
+            +   '<span><i class="fas fa-check-circle" style="color:#00FF88;margin-right:5px"></i>PDF + dashboard delivery</span>'
+            +   '<a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" style="color:#22d3ee;text-decoration:none;font-weight:600;margin-left:auto"><i class="fas fa-eye"></i> See sample first</a>'
+            + '</div>'
+            + '</div>';
+        }
+        // Free-reports remaining card (always shown for non-unlimited accounts).
+        // For first-time users this is now secondary to the activation CTA above.
         html += '<div style="background:#111111;border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:18px 20px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap">'
           + '<div style="flex:1;min-width:240px"><div style="font-weight:800;color:#fff;font-size:15px;margin-bottom:4px">'
           + (freeRem > 0
