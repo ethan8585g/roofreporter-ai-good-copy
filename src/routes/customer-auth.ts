@@ -164,7 +164,14 @@ function generateVerificationCode(): string {
 async function sendVerificationEmail(env: any, toEmail: string, code: string, db?: any): Promise<boolean> {
   const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca'
   const emailSubject = `Your Roof Manager Verification Code: ${code}`
-  const emailHtml = getVerificationEmailHTML(code)
+  // Tracking: pre-signup so customerId is null. Pixel still useful — open
+  // signal tells us mail reached the user even before they type the code.
+  const { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } = await import('../services/email-tracking')
+  const trackingToken = await logEmailSend(env, { customerId: null, recipient: toEmail, kind: 'email_verification', subject: emailSubject })
+  const rawHtml = getVerificationEmailHTML(code)
+  const pixel = buildTrackingPixel(trackingToken)
+  const htmlWithPixel = rawHtml.includes('</body>') ? rawHtml.replace('</body>', `${pixel}</body>`) : rawHtml + pixel
+  const emailHtml = wrapEmailLinks(htmlWithPixel, trackingToken)
 
   // ---- METHOD 1: Resend API (simplest) ----
   const resendKey = (env as any).RESEND_API_KEY
@@ -345,6 +352,7 @@ async function sendVerificationEmail(env: any, toEmail: string, code: string, db
   }
 
   console.error('[Verification Email] ALL methods failed for:', toEmail, '| Resend:', !!resendKey, '| Gmail OAuth2:', !!(gmailRefreshToken && gmailClientId), '| GCP:', !!(env as any).GCP_SERVICE_ACCOUNT_KEY)
+  await markEmailFailed(env, trackingToken, 'all transports failed')
   return false
 }
 
@@ -2005,7 +2013,13 @@ customerAuthRoutes.get('/invoices/:id', async (c) => {
 async function sendPasswordResetEmail(env: any, toEmail: string, name: string, resetUrl: string, db?: any): Promise<boolean> {
   const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca'
   const subject = 'Reset your Roof Manager password'
-  const html = `
+  // Tracking: customerId looked up from email so the reset email links to the
+  // right person in Journey. Click on the reset button is the engagement signal.
+  const { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } = await import('../services/email-tracking')
+  const custRow = db ? await db.prepare('SELECT id FROM customers WHERE email = ?').bind(toEmail).first<any>().catch(() => null) : null
+  const trackingToken = await logEmailSend(env, { customerId: custRow?.id ?? null, recipient: toEmail, kind: 'password_reset', subject })
+  const pixel = buildTrackingPixel(trackingToken)
+  const rawHtml = `
   <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
     <div style="text-align: center; margin-bottom: 32px;">
       <div style="background:#000;padding:24px;border-radius:16px;display:inline-block">
@@ -2022,7 +2036,9 @@ async function sendPasswordResetEmail(env: any, toEmail: string, name: string, r
       <p style="color: #9ca3af; font-size: 12px; margin: 0;">If you didn't request a password reset, you can safely ignore this email — your password won't change.</p>
     </div>
     <p style="color: #d1d5db; font-size: 11px; text-align: center; margin-top: 24px;">&copy; 2026 Roof Manager &middot; Alberta, Canada</p>
+    ${pixel}
   </div>`
+  const html = wrapEmailLinks(rawHtml, trackingToken)
 
   // Try Resend first
   const resendKey = (env as any).RESEND_API_KEY
@@ -2069,6 +2085,7 @@ async function sendPasswordResetEmail(env: any, toEmail: string, name: string, r
   }
 
   console.error('[PasswordReset] All email methods failed for:', toEmail)
+  await markEmailFailed(env, trackingToken, 'all transports failed')
   return false
 }
 

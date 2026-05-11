@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { validateAdminSession } from './auth'
 import { sendGmailOAuth2, loadGmailCreds } from '../services/email'
+import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from '../services/email-tracking'
 import { logFromContext } from '../lib/team-activity'
 import { resolveTeamOwner } from './team'
 import { loadPermissionContext, can, redactFinancials, type PermissionContext } from '../lib/permissions'
@@ -743,8 +744,19 @@ invoiceRoutes.post('/:id/send', async (c) => {
     <p style="color:#94a3b8;font-size:11px;margin:0">Powered by Roof Manager — Canada's AI Roof Measurement Platform</p>
   </div>
 </div>`
-        await sendGmailOAuth2(clientId, clientSecret, refreshToken, invoice.customer_email, `${docLabel} ${invoice.invoice_number} — $${Number(invoice.total || 0).toFixed(2)}`, emailHtml, senderEmail || c.env.GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca')
-        emailSent = true
+        const invoiceSubject = `${docLabel} ${invoice.invoice_number} — $${Number(invoice.total || 0).toFixed(2)}`
+        const trackingToken = await logEmailSend(c.env as any, { customerId: invoice.customer_id ?? null, recipient: invoice.customer_email, kind: 'invoice', subject: invoiceSubject })
+        const pixel = buildTrackingPixel(trackingToken)
+        const withPixel = emailHtml.includes('</body>') ? emailHtml.replace('</body>', `${pixel}</body>`) : emailHtml + pixel
+        const trackedHtml = wrapEmailLinks(withPixel, trackingToken)
+        try {
+          await sendGmailOAuth2(clientId, clientSecret, refreshToken, invoice.customer_email, invoiceSubject, trackedHtml, senderEmail || c.env.GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca')
+          emailSent = true
+        } catch (e: any) {
+          emailError = e.message || 'Email send failed'
+          await markEmailFailed(c.env as any, trackingToken, emailError)
+          console.error('[invoice-send] Gmail send failed:', emailError)
+        }
       } catch (e: any) {
         emailError = e.message || 'Email send failed'
         console.error('[invoice-send] Gmail send failed:', emailError)
@@ -1238,7 +1250,17 @@ invoiceRoutes.post('/:id/send-gmail', async (c) => {
     // Send email — env first, D1 settings fallback (honors /api/auth/gmail flow)
     const { clientId, clientSecret, refreshToken, senderEmail } = await loadGmailCreds(c.env)
     if (clientId && clientSecret && refreshToken) {
-      await sendGmailOAuth2(clientId, clientSecret, refreshToken, invoice.customer_email, `${docLabel} ${invoice.invoice_number} — $${Number(invoice.total || 0).toFixed(2)}`, emailHtml, senderEmail || c.env.GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca')
+      const invoiceSubject = `${docLabel} ${invoice.invoice_number} — $${Number(invoice.total || 0).toFixed(2)}`
+      const trackingToken = await logEmailSend(c.env as any, { customerId: invoice.customer_id ?? null, recipient: invoice.customer_email, kind: 'invoice_resend', subject: invoiceSubject })
+      const pixel = buildTrackingPixel(trackingToken)
+      const withPixel = emailHtml.includes('</body>') ? emailHtml.replace('</body>', `${pixel}</body>`) : emailHtml + pixel
+      const trackedHtml = wrapEmailLinks(withPixel, trackingToken)
+      try {
+        await sendGmailOAuth2(clientId, clientSecret, refreshToken, invoice.customer_email, invoiceSubject, trackedHtml, senderEmail || c.env.GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca')
+      } catch (e: any) {
+        await markEmailFailed(c.env as any, trackingToken, String(e?.message || e))
+        throw e
+      }
     } else {
       return c.json({ error: 'Gmail not configured. Connect Gmail at /api/auth/gmail or set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN.', connect_url: '/api/auth/gmail' }, 503)
     }
@@ -1353,12 +1375,17 @@ invoiceRoutes.post('/:id/send-certificate', async (c) => {
     return c.json({ error: 'Email not configured. Please connect Gmail in your account settings.' }, 400)
   }
 
+  const certSubject = `Certificate of New Roof Installation — ${propAddress || 'Your Property'}`
+  const trackingToken = await logEmailSend(c.env as any, { customerId: proposal.customer_id ?? null, recipient: customerEmail, kind: 'installation_certificate', subject: certSubject })
+  const pixel = buildTrackingPixel(trackingToken)
+  const certHtmlWithPixel = certHtml.includes('</body>') ? certHtml.replace('</body>', `${pixel}</body>`) : certHtml + pixel
+  const trackedCertHtml = wrapEmailLinks(certHtmlWithPixel, trackingToken)
   try {
     await sendGmailOAuth2(
       clientId, clientSecret, refreshToken,
       customerEmail,
-      `Certificate of New Roof Installation — ${propAddress || 'Your Property'}`,
-      certHtml,
+      certSubject,
+      trackedCertHtml,
       proposal.owner_email
     )
     await c.env.DB.prepare(
@@ -1366,6 +1393,7 @@ invoiceRoutes.post('/:id/send-certificate', async (c) => {
     ).bind(proposal.id).run()
     return c.json({ success: true, sent_to: customerEmail })
   } catch (err: any) {
+    await markEmailFailed(c.env as any, trackingToken, String(err?.message || err))
     return c.json({ error: 'Failed to send certificate: ' + (err?.message || 'Unknown error') }, 500)
   }
 })
@@ -1498,12 +1526,17 @@ invoiceRoutes.post('/respond/:token', async (c) => {
           const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
           const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ownerForCert.gmail_refresh_token || ''
           if (clientId && clientSecret && refreshToken) {
+            const certAutoSubject = `Certificate of New Roof Installation — ${propAddress || 'Your Property'}`
+            const certAutoToken = await logEmailSend(c.env as any, { customerId: fullProposal?.customer_id ?? null, recipient: homeownerEmail, kind: 'installation_certificate_auto', subject: certAutoSubject })
+            const certAutoPixel = buildTrackingPixel(certAutoToken)
+            const certAutoWithPixel = certHtml.includes('</body>') ? certHtml.replace('</body>', `${certAutoPixel}</body>`) : certHtml + certAutoPixel
+            const certAutoTracked = wrapEmailLinks(certAutoWithPixel, certAutoToken)
             try {
               await sendGmailOAuth2(
                 clientId, clientSecret, refreshToken,
                 homeownerEmail,
-                `Certificate of New Roof Installation — ${propAddress || 'Your Property'}`,
-                certHtml,
+                certAutoSubject,
+                certAutoTracked,
                 ownerForCert.email
               )
               await c.env.DB.prepare(
@@ -1511,6 +1544,7 @@ invoiceRoutes.post('/respond/:token', async (c) => {
               ).bind(proposal.id).run()
             } catch (emailErr: any) {
               console.error('[cert-auto-send] Email failed:', emailErr?.message || emailErr)
+              await markEmailFailed(c.env as any, certAutoToken, String(emailErr?.message || emailErr))
               // Don't mark certificate_sent_at — it wasn't actually sent
             }
           }

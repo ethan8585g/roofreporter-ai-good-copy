@@ -15,6 +15,7 @@
  */
 
 import { sendGmailOAuth2, loadGmailCreds } from './email'
+import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from './email-tracking'
 
 type Db = D1Database
 
@@ -336,10 +337,14 @@ export async function runDripCampaigns(env: any, opts: { previewOnly?: boolean }
 
       // Live send.
       if (!creds) { r.errors++; continue }
+      const dripToken = await logEmailSend(env as any, { customerId: row.id ?? null, recipient: row.email, kind: `drip_${template}`, subject: rendered.subject })
+      const dripPixel = buildTrackingPixel(dripToken)
+      const dripWithPixel = rendered.html.includes('</body>') ? rendered.html.replace('</body>', `${dripPixel}</body>`) : rendered.html + dripPixel
+      const dripHtml = wrapEmailLinks(dripWithPixel, dripToken)
       try {
         await sendGmailOAuth2(
           creds.clientId, creds.clientSecret, creds.refreshToken,
-          row.email, rendered.subject, rendered.html,
+          row.email, rendered.subject, dripHtml,
           cfg.sender_email
         )
         await db.prepare(`
@@ -354,6 +359,7 @@ export async function runDripCampaigns(env: any, opts: { previewOnly?: boolean }
         r.sent++
       } catch (e: any) {
         console.warn(`[drip-campaigns:${template}] send failed for ${row.email}:`, e?.message)
+        await markEmailFailed(env as any, dripToken, String(e?.message || e))
         r.errors++
       }
     }

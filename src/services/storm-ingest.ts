@@ -9,6 +9,7 @@ import { fetchECCCAlerts } from './storm-data'
 import { fetchNWSAlerts, fetchIEMLocalStormReports } from './nws-data'
 import { matchEvents, type ServiceArea, type Ring, type Match } from './storm-matcher'
 import { sendGmailEmail } from './email'
+import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from './email-tracking'
 import { sendWebPush, type VapidKeys } from './web-push'
 
 export interface DailySnapshot {
@@ -194,7 +195,18 @@ export async function matchSnapshotAndNotify(
   </p>
   <p style="color:#999;font-size:12px;margin-top:18px;">You can edit thresholds or turn off emails per territory inside Storm Scout.</p>
 </div>`.trim()
-        await sendGmailEmail(serviceAccountJson, cust.email, subject, html, cust.email)
+        const stormToken = await logEmailSend(env as any, { customerId: cid, recipient: cust.email, kind: 'storm_alert', subject })
+        const stormPixel = buildTrackingPixel(stormToken)
+        const stormHtml = wrapEmailLinks(
+          html.includes('</body>') ? html.replace('</body>', `${stormPixel}</body>`) : html + stormPixel,
+          stormToken
+        )
+        try {
+          await sendGmailEmail(serviceAccountJson, cust.email, subject, stormHtml, cust.email)
+        } catch (stormErr: any) {
+          await markEmailFailed(env as any, stormToken, String(stormErr?.message || stormErr))
+          throw stormErr
+        }
         // Mark all this batch as email_sent
         const ids = ms.map(m => m.dedupeKey)
         if (ids.length) {

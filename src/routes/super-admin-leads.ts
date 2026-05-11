@@ -12,6 +12,7 @@
  */
 import { Hono } from 'hono'
 import { validateAdminSession, requireSuperadmin } from './auth'
+import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from '../services/email-tracking'
 import {
   sendGmailOAuth2, sendGmailOAuth2WithAttachment, sendViaResend, sendGmailEmail, buildEmailWrapper
 } from '../services/email'
@@ -224,7 +225,14 @@ superAdminLeads.post('/:id/send-report', async (c) => {
 
     const addressLabel = lead.address ? String(lead.address) : 'your property'
     const reportNum = `RM-${lead.id}`
-    const wrappedHtml = buildEmailWrapper(body_html, addressLabel, reportNum, lead.email)
+    const baseWrappedHtml = buildEmailWrapper(body_html, addressLabel, reportNum, lead.email)
+    // Tracking: super-admin manual lead send. customerId null since leads
+    // aren't customers yet. kind tags it so Journey > Email Tracking groups
+    // these distinctly from automated outreach.
+    const adminLeadToken = await logEmailSend(c.env as any, { customerId: null, recipient: lead.email, kind: 'admin_lead_outreach', subject })
+    const adminLeadPixel = buildTrackingPixel(adminLeadToken)
+    const wrappedHtmlWithPixel = baseWrappedHtml.includes('</body>') ? baseWrappedHtml.replace('</body>', `${adminLeadPixel}</body>`) : baseWrappedHtml + adminLeadPixel
+    const wrappedHtml = wrapEmailLinks(wrappedHtmlWithPixel, adminLeadToken)
 
     // Try to fetch and attach the PDF; if fetch fails, fall back to URL link in body.
     let attachmentBytes: Uint8Array | null = null
@@ -308,7 +316,10 @@ superAdminLeads.post('/:id/send-report', async (c) => {
       }
     }
 
-    if (!sent) return c.json({ error: 'All email providers failed' }, 500)
+    if (!sent) {
+      await markEmailFailed(c.env as any, adminLeadToken, 'all transports failed')
+      return c.json({ error: 'All email providers failed' }, 500)
+    }
 
     const sentAt = new Date().toISOString()
     const noteAppend = `\n[${sentAt}] Report sent by admin ${admin?.email || admin?.id || 'unknown'} — subject: "${subject.slice(0, 120)}" (via ${providerUsed})`

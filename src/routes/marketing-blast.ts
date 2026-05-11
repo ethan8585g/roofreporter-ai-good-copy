@@ -21,6 +21,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { sendGmailOAuth2 } from '../services/email'
+import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from '../services/email-tracking'
 
 export const marketingBlastRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -66,11 +67,16 @@ marketingBlastRoutes.post('/reengagement-blast', async (c) => {
     }
     const firstName = testTo.split('@')[0]
     const display = firstName.charAt(0).toUpperCase() + firstName.slice(1)
-    const html = buildReengagementHtml(display, 'never_ordered', testTo)
+    const rawHtml = buildReengagementHtml(display, 'never_ordered', testTo)
+    const token = await logEmailSend(c.env as any, { customerId: null, recipient: testTo, kind: 'marketing_blast_test', subject })
+    const pixel = buildTrackingPixel(token)
+    const withPixel = rawHtml.includes('</body>') ? rawHtml.replace('</body>', `${pixel}</body>`) : rawHtml + pixel
+    const html = wrapEmailLinks(withPixel, token)
     try {
       const r = await sendGmailOAuth2(clientId, clientSecret, refreshToken, testTo, subject, html, senderEmail)
       return c.json({ ok: true, mode: 'test_to', sent_to: testTo, message_id: r.id })
     } catch (e: any) {
+      await markEmailFailed(c.env as any, token, String(e?.message || e))
       return c.json({ ok: false, mode: 'test_to', error: e?.message || String(e) }, 500)
     }
   }
@@ -154,15 +160,20 @@ marketingBlastRoutes.post('/reengagement-blast', async (c) => {
 
   for (let i = 0; i < targets.length; i++) {
     const r = targets[i]
-    const html = buildReengagementHtml(r.first_name, r.cohort, r.email)
+    const rawHtml = buildReengagementHtml(r.first_name, r.cohort, r.email)
     if (dryRun) {
       sent.push(r.email)
       continue
     }
+    const token = await logEmailSend(c.env as any, { customerId: r.id ?? null, recipient: r.email, kind: 'marketing_blast', subject })
+    const pixel = buildTrackingPixel(token)
+    const withPixel = rawHtml.includes('</body>') ? rawHtml.replace('</body>', `${pixel}</body>`) : rawHtml + pixel
+    const html = wrapEmailLinks(withPixel, token)
     try {
       await sendGmailOAuth2(clientId, clientSecret, refreshToken, r.email, subject, html, senderEmail)
       sent.push(r.email)
     } catch (e: any) {
+      await markEmailFailed(c.env as any, token, String(e?.message || e))
       failed.push({ email: r.email, error: e?.message || String(e) })
     }
     // Per-recipient throttle so we don't trip Gmail's send quotas on large

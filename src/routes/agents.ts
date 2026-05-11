@@ -3,6 +3,7 @@ import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 import { trackLeadCapture } from '../services/ga4-events'
 import { sendGmailOAuth2, sendViaResend, sendGmailEmail } from '../services/email'
+import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from '../services/email-tracking'
 import { sendMetaConversion } from './meta-connect'
 
 export const agentsRoutes = new Hono<{ Bindings: Bindings }>()
@@ -207,25 +208,34 @@ agentsRoutes.post('/leads', async (c) => {
             if (s?.setting_value) csec = s.setting_value
           } catch {}
         }
+        const ackToken = await logEmailSend(c.env as any, { customerId: null, recipient: emailClean, kind: isReportLead ? 'report_lead_ack' : 'lead_ack', subject: ackSubject })
+        const ackPixel = buildTrackingPixel(ackToken)
+        const ackTrackedHtml = wrapEmailLinks(
+          ackHtml.includes('</body>') ? ackHtml.replace('</body>', `${ackPixel}</body>`) : ackHtml + ackPixel,
+          ackToken
+        )
         if (cid && csec && rtok) {
           try {
-            await sendGmailOAuth2(cid, csec, rtok, emailClean, ackSubject, ackHtml, 'sales@roofmanager.ca')
+            await sendGmailOAuth2(cid, csec, rtok, emailClean, ackSubject, ackTrackedHtml, 'sales@roofmanager.ca')
             sent = true
           } catch (e: any) { console.warn('[Lead ack] Gmail OAuth2 failed:', e?.message || e) }
         }
         if (!sent && (c.env as any).RESEND_API_KEY) {
           try {
-            await sendViaResend((c.env as any).RESEND_API_KEY, emailClean, ackSubject, ackHtml, 'sales@roofmanager.ca')
+            await sendViaResend((c.env as any).RESEND_API_KEY, emailClean, ackSubject, ackTrackedHtml, 'sales@roofmanager.ca')
             sent = true
           } catch (e: any) { console.warn('[Lead ack] Resend failed:', e?.message || e) }
         }
         if (!sent && (c.env as any).GCP_SERVICE_ACCOUNT_JSON) {
           try {
-            await sendGmailEmail((c.env as any).GCP_SERVICE_ACCOUNT_JSON, emailClean, ackSubject, ackHtml, 'sales@roofmanager.ca')
+            await sendGmailEmail((c.env as any).GCP_SERVICE_ACCOUNT_JSON, emailClean, ackSubject, ackTrackedHtml, 'sales@roofmanager.ca')
             sent = true
           } catch (e: any) { console.warn('[Lead ack] GCP SA failed:', e?.message || e) }
         }
-        if (!sent) console.warn('[Lead ack] ALL methods failed for', emailClean)
+        if (!sent) {
+          await markEmailFailed(c.env as any, ackToken, 'all transports failed')
+          console.warn('[Lead ack] ALL methods failed for', emailClean)
+        }
       } catch (e: any) { console.warn('[Lead ack] unexpected error:', e?.message || e) }
     })().catch(() => {})
 

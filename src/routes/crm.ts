@@ -1092,13 +1092,26 @@ crmRoutes.post('/proposals/:id/send-certificate', async (c) => {
 
   try {
     const { sendGmailOAuth2 } = await import('../services/email')
-    await sendGmailOAuth2(
-      clientId, clientSecret, refreshToken,
-      proposal.customer_email,
-      `${sendDesign?.cert_title || 'Certificate of New Roof Installation'} — ${proposal.property_address}`,
-      certHtml,
-      owner?.email
+    const { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } = await import('../services/email-tracking')
+    const crmCertSubject = `${sendDesign?.cert_title || 'Certificate of New Roof Installation'} — ${proposal.property_address}`
+    const crmCertToken = await logEmailSend(c.env as any, { customerId: null, recipient: proposal.customer_email, kind: 'crm_installation_certificate', subject: crmCertSubject })
+    const crmCertPixel = buildTrackingPixel(crmCertToken)
+    const crmCertHtml = wrapEmailLinks(
+      certHtml.includes('</body>') ? certHtml.replace('</body>', `${crmCertPixel}</body>`) : certHtml + crmCertPixel,
+      crmCertToken
     )
+    try {
+      await sendGmailOAuth2(
+        clientId, clientSecret, refreshToken,
+        proposal.customer_email,
+        crmCertSubject,
+        crmCertHtml,
+        owner?.email
+      )
+    } catch (sendErr: any) {
+      await markEmailFailed(c.env as any, crmCertToken, String(sendErr?.message || sendErr))
+      throw sendErr
+    }
     await c.env.DB.prepare(
       `UPDATE crm_proposals SET certificate_sent_at = datetime('now') WHERE id = ?`
     ).bind(proposal.id).run()
@@ -1713,16 +1726,25 @@ crmRoutes.put('/jobs/:id', async (c) => {
             const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ownerForCert.gmail_refresh_token || ''
             if (clientId && clientSecret && refreshToken) {
               const { sendGmailOAuth2 } = await import('../services/email')
+              const { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } = await import('../services/email-tracking')
+              const jobCertSubject = `Certificate of New Roof Installation — ${job.property_address || job.title}`
+              const jobCertToken = await logEmailSend(c.env as any, { customerId: null, recipient: job.customer_email, kind: 'crm_job_installation_certificate', subject: jobCertSubject })
+              const jobCertPixel = buildTrackingPixel(jobCertToken)
+              const jobCertTracked = wrapEmailLinks(
+                certHtml.includes('</body>') ? certHtml.replace('</body>', `${jobCertPixel}</body>`) : certHtml + jobCertPixel,
+                jobCertToken
+              )
               try {
                 await sendGmailOAuth2(
                   clientId, clientSecret, refreshToken,
                   job.customer_email,
-                  `Certificate of New Roof Installation — ${job.property_address || job.title}`,
-                  certHtml,
+                  jobCertSubject,
+                  jobCertTracked,
                   ownerForCert.email,
                   c.env
                 )
               } catch (e: any) {
+                await markEmailFailed(c.env as any, jobCertToken, String((e && e.message) || e))
                 console.warn("[cert-on-job-complete] send failed:", (e && e.message) || e)
                 try {
                   await c.env.DB.prepare(

@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { sendGmailEmail, notifySalesNewLead } from '../services/email'
+import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from '../services/email-tracking'
 import { sendMetaConversion } from './meta-connect'
 
 export const leadCaptureRoutes = new Hono<{ Bindings: Bindings }>()
@@ -217,7 +218,16 @@ leadCaptureRoutes.post('/asset-report/lead', async (c) => {
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0">
           <p style="color:#9ca3af;font-size:12px">RoofManager &middot; Commercial Roof Asset Management &middot; Canada</p>
         </div>`
-      await sendGmailEmail(c.env.GCP_SERVICE_ACCOUNT_JSON, String(body.email), subject, html, 'sales@roofmanager.ca').catch((e) => console.error('[gmail-send-failed asset-report]', { to: body.email, error: (e && e.message) || e }))
+      const assetToken = await logEmailSend(c.env as any, { customerId: null, recipient: String(body.email), kind: 'asset_report_lead', subject })
+      const assetPixel = buildTrackingPixel(assetToken)
+      const assetHtml = wrapEmailLinks(
+        html.includes('</body>') ? html.replace('</body>', `${assetPixel}</body>`) : html + assetPixel,
+        assetToken
+      )
+      await sendGmailEmail(c.env.GCP_SERVICE_ACCOUNT_JSON, String(body.email), subject, assetHtml, 'sales@roofmanager.ca').catch(async (e) => {
+        await markEmailFailed(c.env as any, assetToken, String((e && e.message) || e))
+        console.error('[gmail-send-failed asset-report]', { to: body.email, error: (e && e.message) || e })
+      })
     } else {
       console.warn('[gmail-skip] GCP_SERVICE_ACCOUNT_JSON not set — skipping sample PDF email for', body.email)
     }
@@ -336,7 +346,16 @@ leadCaptureRoutes.post('/condo-lead', async (c) => {
           <p style="margin:24px 0"><a href="https://www.roofmanager.ca/static/RoofManager-Reserve-Fund-Cheat-Sheet.pdf" style="background:#00FF88;color:#0A0A0A;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:800">Download Cheat Sheet (PDF)</a></p>
           <p style="color:#6b7280;font-size:13px">We'll be in touch with more property-manager focused resources.</p>
         </div>`
-      await sendGmailEmail(c.env.GCP_SERVICE_ACCOUNT_JSON, String(body.email), subject, html, 'sales@roofmanager.ca').catch((e) => console.error('[gmail-send-failed condo-lead]', { to: body.email, error: (e && e.message) || e }))
+      const condoToken = await logEmailSend(c.env as any, { customerId: null, recipient: String(body.email), kind: 'condo_lead_cheatsheet', subject })
+      const condoPixel = buildTrackingPixel(condoToken)
+      const condoHtml = wrapEmailLinks(
+        html.includes('</body>') ? html.replace('</body>', `${condoPixel}</body>`) : html + condoPixel,
+        condoToken
+      )
+      await sendGmailEmail(c.env.GCP_SERVICE_ACCOUNT_JSON, String(body.email), subject, condoHtml, 'sales@roofmanager.ca').catch(async (e) => {
+        await markEmailFailed(c.env as any, condoToken, String((e && e.message) || e))
+        console.error('[gmail-send-failed condo-lead]', { to: body.email, error: (e && e.message) || e })
+      })
     } else {
       console.warn('[gmail-skip] GCP_SERVICE_ACCOUNT_JSON not set — skipping condo cheat sheet email for', body.email)
     }

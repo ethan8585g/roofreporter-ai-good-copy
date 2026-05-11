@@ -11,6 +11,7 @@ import { getCustomerSessionToken } from '../lib/session-tokens'
 import { resolveTeamOwner } from './team'
 import { createAutoInvoiceForOrder } from '../services/auto-invoice'
 import { trackReportView } from '../services/report-view-tracker'
+import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from '../services/email-tracking'
 
 // Services
 import { analyzeRoofGeometry } from '../services/gemini'
@@ -996,14 +997,29 @@ reportsRoutes.post('/:orderId/enhance-async', async (c) => {
           const enhReport = await repo.getReportHtml(c.env.DB, orderId)
           if (enhReport?.professional_report_html) {
             const order = await repo.getOrderById(c.env.DB, orderId)
-            const emailHtml = buildReportLinkEmail(new URL(c.req.url).origin, orderId, order?.property_address || '', `RM-${orderId}`, custRow.email)
+            const baseEmailHtml = buildReportLinkEmail(new URL(c.req.url).origin, orderId, order?.property_address || '', `RM-${orderId}`, custRow.email)
+            const reportSubject = `Roof Report - ${order?.property_address || 'Property'}`
+            // Tracking: customerId from the order. Self-trace copy to sales@
+            // skipped — that's internal, not customer engagement.
+            const custIdRow = await c.env.DB.prepare('SELECT customer_id FROM orders WHERE id=?').bind(orderId).first<any>()
+            const trackingToken = await logEmailSend(c.env as any, { customerId: custIdRow?.customer_id ?? null, recipient: custRow.email, kind: 'report_delivery', subject: reportSubject })
+            const pixel = buildTrackingPixel(trackingToken)
+            const withPixel = baseEmailHtml.includes('</body>') ? baseEmailHtml.replace('</body>', `${pixel}</body>`) : baseEmailHtml + pixel
+            const emailHtml = wrapEmailLinks(withPixel, trackingToken)
             const rt = (c.env as any).GMAIL_REFRESH_TOKEN, ci = (c.env as any).GMAIL_CLIENT_ID, cs = (c.env as any).GMAIL_CLIENT_SECRET
             if (rt && ci && cs) {
-              await sendGmailOAuth2(ci, cs, rt, custRow.email, `Roof Report - ${order?.property_address || 'Property'}`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
-              console.log(`[AutoEmail] Enhanced report ${orderId} auto-sent to ${custRow.email}`)
               try {
-                await sendGmailOAuth2(ci, cs, rt, 'sales@roofmanager.ca', `[Self-Trace Copy] Roof Report - ${order?.property_address || 'Property'} (sent to ${custRow.email})`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
+                await sendGmailOAuth2(ci, cs, rt, custRow.email, reportSubject, emailHtml, c.env.GMAIL_SENDER_EMAIL)
+                console.log(`[AutoEmail] Enhanced report ${orderId} auto-sent to ${custRow.email}`)
+              } catch (sendErr: any) {
+                await markEmailFailed(c.env as any, trackingToken, String(sendErr?.message || sendErr))
+                throw sendErr
+              }
+              try {
+                await sendGmailOAuth2(ci, cs, rt, 'sales@roofmanager.ca', `[Self-Trace Copy] Roof Report - ${order?.property_address || 'Property'} (sent to ${custRow.email})`, baseEmailHtml, c.env.GMAIL_SENDER_EMAIL)
               } catch (salesErr: any) { console.warn(`[SalesCopy] Failed for order ${orderId}: ${salesErr.message}`) }
+            } else {
+              await markEmailFailed(c.env as any, trackingToken, 'gmail oauth creds missing')
             }
           }
         }
@@ -2307,7 +2323,14 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
           const recipient = to_email || order.send_report_to_email || (autoEmailEnabled ? autoEmailRecipient : '') || order.homeowner_email || order.requester_email
           if (recipient) {
             try {
-              const emailHtml = buildReportLinkEmail(new URL(c.req.url).origin, orderId, order.property_address, `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`, recipient)
+              const baseEmailHtml = buildReportLinkEmail(new URL(c.req.url).origin, orderId, order.property_address, `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`, recipient)
+              const reportSubject = `Roof Report - ${order.property_address}`
+              // Tracking BEFORE send — same pixel + click rewrite regardless of
+              // which Gmail transport we land on. customerId from the order.
+              const trackingToken = await logEmailSend(c.env as any, { customerId: order.customer_id ?? null, recipient, kind: 'report_delivery', subject: reportSubject })
+              const pixel = buildTrackingPixel(trackingToken)
+              const withPixel = baseEmailHtml.includes('</body>') ? baseEmailHtml.replace('</body>', `${pixel}</body>`) : baseEmailHtml + pixel
+              const emailHtml = wrapEmailLinks(withPixel, trackingToken)
               const ci = (c.env as any).GMAIL_CLIENT_ID
               let cs = (c.env as any).GMAIL_CLIENT_SECRET
               if (!cs) try { cs = (await repo.getSettingValue(c.env.DB, 'gmail_client_secret')) || '' } catch {}
@@ -2320,12 +2343,12 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
                     'SELECT gmail_refresh_token, gmail_connected_email FROM customers c JOIN orders o ON o.customer_id=c.id WHERE o.id=?'
                   ).bind(orderId).first<any>()
                   if (custGmail?.gmail_refresh_token) {
-                    await sendGmailOAuth2(ci, cs, custGmail.gmail_refresh_token, recipient, `Roof Report - ${order.property_address}`, emailHtml, custGmail.gmail_connected_email)
+                    await sendGmailOAuth2(ci, cs, custGmail.gmail_refresh_token, recipient, reportSubject, emailHtml, custGmail.gmail_connected_email)
                     sent = true
                     console.log(`[AutoEmail] Report ${orderId} sent via customer Gmail: ${custGmail.gmail_connected_email}`)
                     try {
                       const platRt = (c.env as any).GMAIL_REFRESH_TOKEN || await repo.getSettingValue(c.env.DB, 'gmail_refresh_token')
-                      if (platRt) await sendGmailOAuth2(ci, cs, platRt, 'sales@roofmanager.ca', `[Self-Trace Copy] Roof Report - ${order.property_address} (sent to ${recipient})`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
+                      if (platRt) await sendGmailOAuth2(ci, cs, platRt, 'sales@roofmanager.ca', `[Self-Trace Copy] Roof Report - ${order.property_address} (sent to ${recipient})`, baseEmailHtml, c.env.GMAIL_SENDER_EMAIL)
                     } catch (salesErr: any) { console.warn(`[SalesCopy] Failed for order ${orderId}: ${salesErr.message}`) }
                   }
                 } catch (custErr: any) {
@@ -2337,14 +2360,15 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
               if (!sent) {
                 const rt = (c.env as any).GMAIL_REFRESH_TOKEN || await repo.getSettingValue(c.env.DB, 'gmail_refresh_token')
                 if (rt && ci && cs) {
-                  await sendGmailOAuth2(ci, cs, rt, recipient, `Roof Report - ${order.property_address}`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
+                  await sendGmailOAuth2(ci, cs, rt, recipient, reportSubject, emailHtml, c.env.GMAIL_SENDER_EMAIL)
                   sent = true
                   try {
-                    await sendGmailOAuth2(ci, cs, rt, 'sales@roofmanager.ca', `[Self-Trace Copy] Roof Report - ${order.property_address} (sent to ${recipient})`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
+                    await sendGmailOAuth2(ci, cs, rt, 'sales@roofmanager.ca', `[Self-Trace Copy] Roof Report - ${order.property_address} (sent to ${recipient})`, baseEmailHtml, c.env.GMAIL_SENDER_EMAIL)
                   } catch (salesErr: any) { console.warn(`[SalesCopy] Failed for order ${orderId}: ${salesErr.message}`) }
                 }
               }
 
+              if (!sent) await markEmailFailed(c.env as any, trackingToken, 'no gmail transport succeeded')
               if (sent && autoEmailEnabled) console.log(`[AutoEmail] Enhanced report ${orderId} auto-sent to ${recipient}`)
             } catch {}
           }
