@@ -17,7 +17,7 @@
 
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
-import { loadGmailCreds } from '../services/email'
+import { loadGmailCreds, notifyEmailHealthFailure } from '../services/email'
 import { recordExternalRun } from '../services/loop-scanner'
 
 export const emailHealthRoutes = new Hono<{ Bindings: Bindings }>()
@@ -166,11 +166,12 @@ async function probeGmailHealth(env: Bindings): Promise<HealthResult> {
 
 async function queueEmailHealthAlert(env: Bindings, result: HealthResult): Promise<number | null> {
   const orderNumber = `GMAIL-HEALTH-${result.checked_at.replace(/[^0-9]/g, '').slice(0, 12)}`
+  let notificationId: number | null = null
   try {
     const ins = await env.DB.prepare(`
       INSERT INTO super_admin_notifications (
         kind, order_number, property_address, severity, email_status, payload_json
-      ) VALUES ('email_health', ?, ?, 'urgent', 'skipped', ?)
+      ) VALUES ('email_health', ?, ?, 'urgent', 'pending', ?)
     `).bind(
       orderNumber,
       `Gmail OAuth2 transport unhealthy — ${result.token_mint.error || 'unknown error'}`,
@@ -181,9 +182,40 @@ async function queueEmailHealthAlert(env: Bindings, result: HealthResult): Promi
         notes: result.notes,
       }),
     ).run()
-    return (ins?.meta?.last_row_id as number) || null
+    notificationId = (ins?.meta?.last_row_id as number) || null
   } catch (e: any) {
     console.error('[email-health] failed to insert health alert:', e?.message || e)
     return null
   }
+
+  // Best-effort delivery. Resend (if configured) is tried first because the
+  // suspect transport is Gmail itself. If both fail, the DB row stays with
+  // email_status='failed' so super-admin still sees it in the dashboard.
+  let emailStatus: 'sent' | 'failed' = 'failed'
+  let emailDetail = ''
+  try {
+    await notifyEmailHealthFailure(env, {
+      order_number: orderNumber,
+      creds: result.creds,
+      token_mint: result.token_mint,
+      notes: result.notes,
+      checked_at: result.checked_at,
+    })
+    emailStatus = 'sent'
+  } catch (e: any) {
+    emailDetail = String(e?.message || e).slice(0, 480)
+    console.warn('[email-health] alert email failed:', emailDetail)
+  }
+
+  if (notificationId) {
+    try {
+      await env.DB.prepare(
+        "UPDATE super_admin_notifications SET email_status = ?, email_detail = ? WHERE id = ?"
+      ).bind(emailStatus, emailDetail || null, notificationId).run()
+    } catch (e: any) {
+      console.warn('[email-health] status update failed:', e?.message || e)
+    }
+  }
+
+  return notificationId
 }

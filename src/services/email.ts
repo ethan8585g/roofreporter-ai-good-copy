@@ -720,6 +720,99 @@ export async function notifyFunnelRegression(
   }
 }
 
+// Site-health alert: Gmail OAuth2 transport probe failed. Tries Resend first
+// since Gmail is the suspect transport, then falls back to Gmail (a probe
+// failure can be transient — sends may still succeed). Throws on total
+// delivery failure so the caller can mark email_status='failed'.
+export async function notifyEmailHealthFailure(
+  env: any,
+  data: {
+    order_number: string
+    creds: { client_id: string; client_secret: string; refresh_token: string; sender_email: string }
+    token_mint: { ok: boolean; status: number | null; expires_in_s: number | null; scope: string | null; error: string | null }
+    notes: string[]
+    checked_at: string
+  }
+): Promise<void> {
+  const subject = `URGENT — Gmail OAuth2 transport unhealthy`
+  const html = `
+<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
+  <h2 style="color:#b91c1c;margin-bottom:4px">Gmail OAuth2 transport unhealthy</h2>
+  <p style="color:#555;margin-top:0">${htmlEsc(data.order_number)}</p>
+  <p style="margin:16px 0;font-weight:600">All outbound email (customer reports, admin alerts, password resets) is at risk. Gmail is the only configured transport in prod.</p>
+  <table style="width:100%;border-collapse:collapse;margin:16px 0">
+    <tr><td style="padding:8px 0;color:#888;width:200px">Checked at</td><td style="padding:8px 0">${htmlEsc(data.checked_at)}</td></tr>
+    <tr><td style="padding:8px 0;color:#888">client_id</td><td style="padding:8px 0">${htmlEsc(data.creds.client_id)}</td></tr>
+    <tr><td style="padding:8px 0;color:#888">client_secret</td><td style="padding:8px 0">${htmlEsc(data.creds.client_secret)}</td></tr>
+    <tr><td style="padding:8px 0;color:#888">refresh_token</td><td style="padding:8px 0">${htmlEsc(data.creds.refresh_token)}</td></tr>
+    <tr><td style="padding:8px 0;color:#888">sender_email</td><td style="padding:8px 0">${htmlEsc(data.creds.sender_email)}</td></tr>
+    <tr><td style="padding:8px 0;color:#888">Token-mint HTTP</td><td style="padding:8px 0">${data.token_mint.status ?? 'n/a'}</td></tr>
+    <tr><td style="padding:8px 0;color:#888">Error</td><td style="padding:8px 0;font-family:monospace;font-size:12px;word-break:break-all">${htmlEsc(data.token_mint.error || '(none)')}</td></tr>
+  </table>
+  <p style="margin:16px 0">Fix path: re-grant OAuth consent at <code>/api/auth/gmail</code> on prod, or refresh the token via super-admin email settings.</p>
+  <a href="https://www.roofmanager.ca/super-admin/loop-tracker" style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">View Loop Tracker →</a>
+  <p style="color:#888;font-size:12px;margin-top:24px">Christine — site-health automated alert.</p>
+</div>`
+
+  const recipients = new Set<string>(['christinegourley04@gmail.com'])
+  if (env?.DB) {
+    try {
+      const rows = await env.DB.prepare(
+        "SELECT email FROM admin_users WHERE role='superadmin' AND is_active=1 AND email IS NOT NULL AND email != ''"
+      ).all<{ email: string }>()
+      for (const r of (rows?.results || [])) {
+        if (r?.email) recipients.add(r.email.trim().toLowerCase())
+      }
+    } catch {}
+  }
+
+  // Try Resend first — Gmail is the suspect transport. If Resend isn't
+  // configured, fall back to Gmail anyway (probe failures can be transient).
+  const clientId = env?.GMAIL_CLIENT_ID
+  let clientSecret = env?.GMAIL_CLIENT_SECRET || ''
+  let refreshToken = env?.GMAIL_REFRESH_TOKEN || ''
+  let senderEmail = env?.GMAIL_SENDER_EMAIL || ''
+  if (env?.DB && (!clientSecret || !refreshToken || !senderEmail)) {
+    try {
+      const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
+      if (r?.setting_value) refreshToken = r.setting_value
+      const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
+      if (s?.setting_value) clientSecret = s.setting_value
+      if (!senderEmail) {
+        const se = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_sender_email' AND master_company_id=1").first<any>()
+        if (se?.setting_value) senderEmail = se.setting_value
+      }
+    } catch {}
+  }
+
+  const errors: string[] = []
+  let delivered = 0
+  for (const to of recipients) {
+    let sent = false
+    if (env?.RESEND_API_KEY) {
+      try {
+        await sendViaResend(env.RESEND_API_KEY, to, subject, html)
+        sent = true
+      } catch (e: any) {
+        errors.push(`resend→${to}: ${e?.message || e}`)
+      }
+    }
+    if (!sent && clientId && clientSecret && refreshToken) {
+      try {
+        await sendGmailOAuth2(clientId, clientSecret, refreshToken, to, subject, html, senderEmail || null)
+        sent = true
+      } catch (e: any) {
+        errors.push(`gmail→${to}: ${e?.message || e}`)
+      }
+    }
+    if (sent) delivered++
+  }
+
+  if (delivered === 0) {
+    throw new Error(errors.length ? errors.join(' | ') : 'no email provider configured')
+  }
+}
+
 // ============================================================
 // GMAIL OAUTH2 — Send email using OAuth2 refresh token
 // Works with personal Gmail. One-time consent at /api/auth/gmail

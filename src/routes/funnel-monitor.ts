@@ -41,6 +41,15 @@ const TREND_WINDOW_HOURS = 24
 const BACKEND_TRIPWIRE_HOURS = 1
 const BACKEND_TRIPWIRE_MIN_SUBMITS = 3
 
+// Site-wide pageview drop check. Catches "ads paused" scenarios early —
+// /register goes dark hours/days after the broader traffic does, so by the
+// time pageview_to_customer alerts the damage is already done.
+// 0.50 = current 24h must be at least 50% below baseline avg to fire.
+// MIN_SITEWIDE_BASELINE filters out days when baseline traffic was already
+// near zero (avoids false alarms during quiet stretches).
+const SITEWIDE_DROP_RATIO = 0.50
+const MIN_SITEWIDE_BASELINE = 30
+
 // Pages that count as the signup funnel entry. /signup is a 302 to /register
 // but is occasionally hit directly. utm/query strings are stripped via LIKE.
 const REGISTER_PATH_PATTERNS = ["/register", "/register?%", "/register#%", "/signup", "/signup?%"]
@@ -69,6 +78,13 @@ interface FunnelStage {
   alerts_on_drop: boolean
 }
 
+interface SitewideCheck {
+  current_pv: number
+  baseline_pv_avg: number
+  delta_pct: number | null
+  drop_flagged: boolean
+}
+
 interface TickResult {
   window: { start: string; end: string }
   current: BucketCounts
@@ -79,6 +95,7 @@ interface TickResult {
   alert_id: number | null
   notes: string[]
   last_hour: { form_submits: number; customers_created: number }
+  sitewide: SitewideCheck
 }
 
 funnelMonitorRoutes.use('*', async (c, next) => {
@@ -123,7 +140,7 @@ funnelMonitorRoutes.post('/tick', async (c) => {
     summary: `Verdict: ${result.verdict}${result.drop_stage ? ` (${result.drop_stage})` : ''} · ${result.notes.length} note(s)`,
     durationMs: Date.now() - t0,
     inputs: { dry_run: dryRun },
-    outputs: { verdict: result.verdict, drop_stage: result.drop_stage, alert_id: result.alert_id, last_hour: result.last_hour },
+    outputs: { verdict: result.verdict, drop_stage: result.drop_stage, alert_id: result.alert_id, last_hour: result.last_hour, sitewide: result.sitewide },
     findings,
   }).catch(e => console.warn('[funnel-monitor] tracker write failed:', e?.message || e))
 
@@ -156,6 +173,15 @@ async function evaluateFunnel(env: Bindings): Promise<TickResult> {
     FROM customers
     WHERE created_at >= ?
   `).bind(fetchStartIso).all()
+
+  // Site-wide pageview check (all paths, not just /register). Catches
+  // "ads paused" / "DNS broken" / "Cloudflare outage" earlier than the
+  // funnel-stage check — site-wide collapses hours before /register does.
+  const sitewideRes = await env.DB.prepare(`
+    SELECT created_at FROM site_analytics
+    WHERE created_at >= ? AND event_type = 'pageview'
+  `).bind(fetchStartIso).all()
+  const sitewideRows = (sitewideRes.results || []) as Array<{ created_at: string }>
 
   const analyticsRows = (analyticsRes.results || []) as Array<{ created_at: string; event_type: string; visitor_id: string | null }>
   const customerRows = (customersRes.results || []) as Array<{ created_at: string; email_verified: number }>
@@ -239,6 +265,29 @@ async function evaluateFunnel(env: Bindings): Promise<TickResult> {
     notes.push(`backend tripwire: ${tripwireSubmits} form_submits in last ${BACKEND_TRIPWIRE_HOURS}h but 0 customer rows — registration endpoint likely failing`)
   }
 
+  // Site-wide pageview drop (catches ads-paused / outage before /register PV reaches 0).
+  let sitewideCurrent = 0
+  const sitewideBaselineBuckets = [0, 0, 0, 0, 0, 0, 0]
+  for (const row of sitewideRows) {
+    const slot = classifySlot(row.created_at, windowStart, windowEnd, TREND_WINDOW_HOURS)
+    if (slot === 'current') sitewideCurrent++
+    else if (typeof slot === 'number') sitewideBaselineBuckets[slot]++
+  }
+  const sitewideBaselineAvg = sitewideBaselineBuckets.reduce((a, b) => a + b, 0) / sitewideBaselineBuckets.length
+  let sitewideDeltaPct: number | null = null
+  let sitewideFlagged = false
+  if (sitewideBaselineAvg >= MIN_SITEWIDE_BASELINE) {
+    sitewideDeltaPct = ((sitewideCurrent - sitewideBaselineAvg) / sitewideBaselineAvg) * 100
+    if (sitewideCurrent < sitewideBaselineAvg * (1 - SITEWIDE_DROP_RATIO)) {
+      sitewideFlagged = true
+      verdict = 'alert'
+      dropStage = dropStage || 'sitewide_traffic'
+      notes.push(`site-wide pageviews dropped ${(-sitewideDeltaPct).toFixed(0)}% (${sitewideCurrent} vs baseline avg ${sitewideBaselineAvg.toFixed(0)}) — check ads spend, DNS, Cloudflare status`)
+    }
+  } else if (sitewideBaselineAvg > 0) {
+    notes.push(`site-wide baseline avg ${sitewideBaselineAvg.toFixed(0)}pv/24h < ${MIN_SITEWIDE_BASELINE}; skipping site-wide drop check`)
+  }
+
   return {
     window: { start: isoForSqlite(windowStart), end: isoForSqlite(windowEnd) },
     current,
@@ -249,6 +298,12 @@ async function evaluateFunnel(env: Bindings): Promise<TickResult> {
     alert_id: null,
     notes,
     last_hour: { form_submits: tripwireSubmits, customers_created: tripwireCustomers },
+    sitewide: {
+      current_pv: sitewideCurrent,
+      baseline_pv_avg: sitewideBaselineAvg,
+      delta_pct: sitewideDeltaPct,
+      drop_flagged: sitewideFlagged,
+    },
   }
 }
 
