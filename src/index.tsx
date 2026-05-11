@@ -93,7 +93,7 @@ import { customerLeadsRoutes } from './routes/customer-leads'
 import { customerApiConnectionsRoutes } from './routes/customer-api-connections'
 import { getCustomerIntegrationsHTML } from './routes/integrations-page'
 import { activityRoutes } from './routes/activity'
-import { rollupYesterday as activityRollupYesterday } from './services/activity-tracker'
+import { rollupYesterday as activityRollupYesterday, trackActivity, trackPathEvent } from './services/activity-tracker'
 import usStatesRoutes from './routes/us-states'
 import usVerticalsRoutes from './routes/us-verticals'
 import usComparisonsRoutes from './routes/us-comparisons'
@@ -155,6 +155,51 @@ app.use('/api/*', cors({
   credentials: true,
   maxAge: 3600,
 }))
+
+// Customer page-tracking middleware — writes one row to user_path_events
+// per /customer/* page visit so the super-admin Customer Journey view can
+// reconstruct exact navigation paths. Scoped to HTML pages only (not
+// /api/customer/*) to avoid DB load from polling endpoints. Non-blocking.
+app.use('*', async (c, next) => {
+  await next()
+  try {
+    const path = new URL(c.req.url).pathname
+    const isCustomerPagePath = path === '/customer' || path.startsWith('/customer/')
+    if (!isCustomerPagePath) return
+    if (path === '/customer/login' || path.startsWith('/customer/login/')) return // anonymous, no session yet
+
+    // Read customer session cookie
+    const cookieHeader = c.req.header('Cookie') || ''
+    let token: string | null = null
+    for (const part of cookieHeader.split(/;\s*/)) {
+      if (part.startsWith('rm_customer_session=')) {
+        token = decodeURIComponent(part.slice(20)); break
+      }
+    }
+    if (!token) return
+
+    const session = await (c.env as any).DB.prepare(
+      "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now') LIMIT 1"
+    ).bind(token).first()
+    const cid = Number((session as any)?.customer_id) || 0
+    if (!cid) return
+
+    const fullPath = path + (new URL(c.req.url).search || '')
+    const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || null
+    const ua = c.req.header('User-Agent') || null
+    const params = { userType: 'customer' as const, userId: cid, path: fullPath, ip, ua }
+
+    // @ts-ignore — executionCtx available in Workers runtime
+    if (c.executionCtx?.waitUntil) {
+      c.executionCtx.waitUntil(Promise.all([
+        trackActivity(c.env as any, params),
+        trackPathEvent(c.env as any, params),
+      ]).catch(() => {}))
+    }
+  } catch (e: any) {
+    console.warn('[customer-tracker] middleware failed:', e?.message || e)
+  }
+})
 
 // Analytics tracker injection middleware — auto-injects tracker.js + GA4 gtag.js into HTML pages
 // Skips API routes, static files, and the tracker itself

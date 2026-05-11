@@ -133,6 +133,36 @@ export function classifyModule(path: string): string | null {
 }
 
 /**
+ * Append a granular per-page-view row to user_path_events. Unlike
+ * trackActivity (which upserts a single row per user+module in active_visits),
+ * this writes one row per page hit — used by the super-admin Customer Journey
+ * view to reconstruct exact navigation paths after the fact.
+ *
+ * Safe to call from waitUntil — never throws, never blocks. ~1 D1 write per call.
+ */
+export async function trackPathEvent(env: Bindings, p: TrackParams): Promise<void> {
+  try {
+    const module = classifyModule(p.path)
+    if (!module) return
+    if (!p.userId || p.userId <= 0) return
+
+    const ip = (p.ip || '').slice(0, 64) || null
+    const ua = (p.ua || '').slice(0, 255) || null
+    // Persist FULL path with query string — that's what makes the difference
+    // between "they hit /register" and "they hit /register?gad_source=1&gclid=Cj0KCQ...".
+    const fullPath = (p.path || '').slice(0, 2000)
+
+    await env.DB.prepare(
+      `INSERT INTO user_path_events
+         (user_type, user_id, path, module, occurred_at, ip_address, user_agent)
+       VALUES (?, ?, ?, ?, datetime('now'), ?, ?)`
+    ).bind(p.userType, p.userId, fullPath, module, ip, ua).run()
+  } catch (e: any) {
+    console.warn('[activity-tracker] trackPathEvent failed:', e?.message || e)
+  }
+}
+
+/**
  * Upsert the active visit row for this (user, module). Safe to call from
  * waitUntil — never throws, never blocks. ~1 D1 write per call.
  */

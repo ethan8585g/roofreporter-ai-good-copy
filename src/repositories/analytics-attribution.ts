@@ -6,6 +6,13 @@
 
 export type AttributionRow = {
   customer_id: number
+  // Full URLs (with query string) — used by super-admin Journey view so
+  // analysts can see gclid/utm/ref code on the actual touch URL. Was
+  // previously dropped (null) and only the path template was kept; that
+  // made tracing individual signups frustrating ("first_touch_path: null,
+  // first_touch_path_template: /lander" — useless without the gclid).
+  first_touch_path: string | null
+  last_touch_path: string | null
   first_touch_path_template: string | null
   first_touch_page_type: string | null
   first_touch_utm_source: string | null
@@ -173,12 +180,12 @@ export async function upsertAttribution(db: D1Database, row: AttributionRow) {
       computed_at = datetime('now')
   `).bind(
     row.customer_id,
-    null /* session_id captured below */, null, null,
+    null /* session_id captured below */, null, row.first_touch_path,
     row.first_touch_path_template, row.first_touch_page_type,
     null, row.first_touch_referrer_domain,
     row.first_touch_utm_source, null, null,
     row.first_touch_at,
-    null, null, row.last_touch_path_template, null,
+    null, row.last_touch_path, row.last_touch_path_template, null,
     null, row.last_touch_utm_source, row.last_touch_at,
     row.touch_count, row.session_count, row.journey_path_templates, row.days_to_convert,
     row.converted_at, row.first_paid_at, row.total_orders, row.total_paid_orders, row.revenue_cents

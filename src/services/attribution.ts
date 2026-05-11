@@ -133,6 +133,8 @@ export async function recomputeAttributionForCustomer(db: D1Database, customerId
     const rev = await getCustomerRevenueSnapshot(db, customerId)
     const row: AttributionRow = {
       customer_id: customerId,
+      first_touch_path: null,
+      last_touch_path: null,
       first_touch_path_template: null,
       first_touch_page_type: null,
       first_touch_utm_source: null,
@@ -185,6 +187,10 @@ export async function recomputeAttributionForCustomer(db: D1Database, customerId
 
   const row: AttributionRow = {
     customer_id: customerId,
+    // Full URLs (with query string, including gclid + utms + ref code) —
+    // the difference between actionable trace data and just "/lander".
+    first_touch_path: (first.page_url ? String(first.page_url).slice(0, 2000) : null),
+    last_touch_path: (lastBeforeConv.page_url ? String(lastBeforeConv.page_url).slice(0, 2000) : null),
     first_touch_path_template: firstClass.path_template,
     first_touch_page_type: firstClass.page_type,
     first_touch_utm_source: first.utm_source || null,
