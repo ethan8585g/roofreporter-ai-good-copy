@@ -4727,6 +4727,20 @@ adminRoutes.post('/superadmin/orders/:id/auto-trace/:edge', async (c) => {
   }
 
   try {
+    // viewport_3d_b64 is the client's screenshot of the <gmp-map-3d>
+    // beside the trace map. Cap at ~4MB after base64 (matches the
+    // existing extra_captures cap on /submit-trace) so a runaway client
+    // can't blow the worker's memory ceiling. Stripping is handled
+    // inside auto-trace-agent.ts so the route stays a thin pass-through.
+    let viewport3dB64: string | undefined
+    if (typeof body?.viewport_3d_b64 === 'string' && body.viewport_3d_b64.length > 1000) {
+      if (body.viewport_3d_b64.length <= 5_500_000) {
+        viewport3dB64 = body.viewport_3d_b64
+      } else {
+        console.warn('[auto-trace] viewport_3d_b64 too large, ignoring:', body.viewport_3d_b64.length, 'chars')
+      }
+    }
+
     const result = await runAutoTrace(c.env, {
       orderId,
       edge,
@@ -4734,6 +4748,7 @@ adminRoutes.post('/superadmin/orders/:id/auto-trace/:edge', async (c) => {
       zoom: Number(body?.zoom) || 20,
       imageWidth: Number(body?.imageWidth) || 640,
       imageHeight: Number(body?.imageHeight) || 640,
+      viewport3dB64,
     })
 
     // Audit row so the super-admin activity feed shows who ran what when,

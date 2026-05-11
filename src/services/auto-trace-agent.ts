@@ -25,6 +25,7 @@ import type { LatLng } from '../utils/trace-validation'
 import { fetchBuildingInsightsRaw } from './solar-api'
 import { fetchTrainingExamples, type TrainingExample } from './trace-training-data'
 import { buildLessonMemo, getCalibrationFactor } from './auto-trace-learning'
+import { fetchDsmHillshade, type DsmHillshadeResult } from './dsm-visualization'
 
 const CLAUDE_VISION_MODEL = 'claude-opus-4-7'
 
@@ -45,6 +46,13 @@ export interface AutoTraceInput {
    *  Static Maps limit) and pass scale=2 for 1280×1280 effective resolution. */
   imageWidth?: number
   imageHeight?: number
+  /** Optional base64-encoded JPEG snapshot of the super-admin's 3D
+   *  reference map (the `<gmp-map-3d>` panel beside the 2D trace map).
+   *  Captured client-side via the same WebGL readPixels path the existing
+   *  "Capture View" button uses. Lets Claude correlate ridge/hip
+   *  visibility from an oblique perspective the satellite view can't
+   *  show. Strip any `data:image/...;base64,` prefix client-side. */
+  viewport3dB64?: string
 }
 
 export interface AutoTraceResult {
@@ -66,6 +74,12 @@ export interface AutoTraceResult {
     raw_model_confidence?: number
     calibration_factor?: number
     lesson_memo_chars?: number
+    /** Whether the agent had the DSM hillshade image in its prompt. */
+    dsm_hillshade_used: boolean
+    dsm_hillshade_quality?: 'HIGH' | 'MEDIUM' | 'BASE'
+    dsm_imagery_date?: string
+    /** Whether the agent had the 3D viewport image in its prompt. */
+    viewport_3d_used: boolean
     model: string
     elapsed_ms: number
   }
@@ -88,19 +102,20 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   }
 
   const imageUrl = buildSatelliteImageUrl(input.lat, input.lng, zoom, safeW, safeH, env.GOOGLE_MAPS_API_KEY)
-  const { b64: imageB64, mediaType: imageMediaType } = await fetchImageB64(imageUrl)
 
-  // Google Solar API context — pitches, azimuths, segment bounding boxes.
-  // Skipped silently when the property is outside Solar coverage (rural)
-  // so the agent still runs from vision + few-shot alone.
-  let solarInsights: any = null
-  try {
-    if (env.GOOGLE_SOLAR_API_KEY) {
-      solarInsights = await fetchBuildingInsightsRaw(input.lat, input.lng, env.GOOGLE_SOLAR_API_KEY)
-    }
-  } catch (e: any) {
-    console.warn('[auto-trace] solar insights fetch failed:', e?.message)
-  }
+  // Fetch all three vision inputs + Solar context concurrently. The agent
+  // gracefully degrades when any one fails — only the satellite image is
+  // mandatory.
+  const [satellite, solarInsights, hillshade] = await Promise.all([
+    fetchImageB64(imageUrl),
+    safelyFetchSolar(env, input.lat, input.lng),
+    fetchDsmHillshade(env, input.lat, input.lng, safeW * 2).catch((e: any) => {
+      console.warn('[auto-trace] DSM hillshade fetch failed:', e?.message)
+      return null
+    }),
+  ])
+  const imageB64 = satellite.b64
+  const imageMediaType = satellite.mediaType
   const solarSummary = summarizeSolar(solarInsights)
 
   // Past human traces of similar properties + lesson memo from past
@@ -119,14 +134,34 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     getCalibrationFactor(env, input.edge),
   ])
 
-  const systemPrompt = buildSystemPrompt(input.edge, lessonMemo)
+  const hasViewport3d = !!(input.viewport3dB64 && input.viewport3dB64.length > 1000)
+  const systemPrompt = buildSystemPrompt(input.edge, lessonMemo, {
+    hasHillshade: !!hillshade,
+    hasViewport3d,
+  })
   const userPrompt = buildUserPrompt({
     edge: input.edge,
     imagePxW: safeW * 2,
     imagePxH: safeH * 2,
     solarSummary,
     examples,
+    hillshade,
+    hasViewport3d,
   })
+
+  // Build the multimodal content array. Order matters — Claude reads them
+  // in sequence, so satellite (truth) → hillshade (structure) → 3D
+  // (perspective) keeps the most important signal first.
+  const content: any[] = [
+    { type: 'image', source: { type: 'base64', media_type: imageMediaType, data: imageB64 } },
+  ]
+  if (hillshade) {
+    content.push({ type: 'image', source: { type: 'base64', media_type: hillshade.mediaType, data: hillshade.b64 } })
+  }
+  if (hasViewport3d) {
+    content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: stripDataUrl(input.viewport3dB64!) } })
+  }
+  content.push({ type: 'text', text: userPrompt })
 
   const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
   const completion = await anthropic.messages.create({
@@ -134,13 +169,7 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     model: CLAUDE_VISION_MODEL,
     max_tokens: 4096,
     system: systemPrompt,
-    messages: [{
-      role: 'user',
-      content: [
-        { type: 'image', source: { type: 'base64', media_type: imageMediaType, data: imageB64 } },
-        { type: 'text', text: userPrompt },
-      ],
-    }],
+    messages: [{ role: 'user', content }],
   })
 
   const text = completion.content
@@ -170,41 +199,82 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       raw_model_confidence: parsed.confidence,
       calibration_factor: calibrationFactor,
       lesson_memo_chars: lessonMemo.length,
+      dsm_hillshade_used: !!hillshade,
+      dsm_hillshade_quality: hillshade?.quality,
+      dsm_imagery_date: hillshade?.imageryDate,
+      viewport_3d_used: hasViewport3d,
       model: CLAUDE_VISION_MODEL,
       elapsed_ms: Date.now() - started,
     },
   }
 }
 
+async function safelyFetchSolar(env: Bindings, lat: number, lng: number): Promise<any> {
+  try {
+    if (!env.GOOGLE_SOLAR_API_KEY) return null
+    return await fetchBuildingInsightsRaw(lat, lng, env.GOOGLE_SOLAR_API_KEY)
+  } catch (e: any) {
+    console.warn('[auto-trace] solar insights fetch failed:', e?.message)
+    return null
+  }
+}
+
+// `data:image/jpeg;base64,...` → just the base64 payload. Tolerates either
+// form so the client can send the raw output of canvas.toDataURL() directly.
+function stripDataUrl(s: string): string {
+  const comma = s.indexOf(',')
+  return comma >= 0 && s.startsWith('data:') ? s.slice(comma + 1) : s
+}
+
 // ─────────────────────────────────────────────────────────────
 // Prompts
 // ─────────────────────────────────────────────────────────────
-function buildSystemPrompt(edge: AutoTraceEdge, lessonMemo: string): string {
+function buildSystemPrompt(
+  edge: AutoTraceEdge,
+  lessonMemo: string,
+  opts: { hasHillshade: boolean; hasViewport3d: boolean },
+): string {
   const role = edge === 'eaves'
     ? 'detecting the OUTER PERIMETER of every building roof in the image — one closed polygon per structure (house + any detached garages/sheds visible). Trace at the EAVE LINE (drip edge), not the walls. Include all jogs, bump-outs, and lower-tier eaves. 8+ vertices per polygon; corners only — no points on straight edges.'
     : edge === 'ridges'
     ? 'detecting RIDGE LINES — the horizontal peaks where two opposing roof planes meet at the top. Each ridge is a polyline (2+ points). Hip-roof structures usually have one short central ridge; gable roofs have one long ridge per gable. Do NOT trace hips, valleys, or eaves.'
     : 'detecting HIP LINES — the diagonal edges that run from a roof peak down to an outside corner of the eave. Each hip is a polyline (usually 2 points: peak → corner). Hip-roof structures have 4 hips at the corners; gable roofs have zero. Do NOT trace ridges, valleys, or eaves.'
 
+  // Image-count phrasing — Claude sees up to 3 images. We tell it which
+  // is which so it knows to read pixel coords off the FIRST image only.
+  const imageCount = 1 + (opts.hasHillshade ? 1 : 0) + (opts.hasViewport3d ? 1 : 0)
+  const imageRoster: string[] = ['Image 1 — Google satellite (top-down, target reference; ALL pixel coordinates you return must be in this image\'s coordinate space).']
+  if (opts.hasHillshade) {
+    imageRoster.push('Image 2 — DSM hillshade. A synthetic shaded-relief render of the Google Solar API elevation raster, RESAMPLED to the SAME size as Image 1 so pixel coordinates correspond 1:1. Brightness = sun-from-NW illumination of the roof surface; warmer yellow tints = higher above ground. Use it to see ridges (bright lines where two slopes meet at the top), hips (bright diagonal lines from peak to corner), valleys (dark inset lines), and the eave drop where the surface falls to ground level.')
+  }
+  if (opts.hasViewport3d) {
+    imageRoster.push('Image 3 — Oblique 3D photorealistic view of the same property (Google Maps 3D tiles, super-admin\'s current camera angle). Use it for perspective — gables, dormers, ridge orientation that\'s ambiguous from above. Do NOT use it for pixel coordinates.')
+  }
+
   return [
     `You are an expert roof measurement technician ${role}`,
     '',
-    'INPUT: One high-resolution Google satellite image of a residential property. Coordinate origin is top-left (0,0). All coordinates you return must be in pixels.',
+    `INPUTS: ${imageCount} image${imageCount > 1 ? 's' : ''}, in this order:`,
+    ...imageRoster,
+    '',
+    'Coordinate origin for the target image is top-left (0,0). All coordinates you return must be in pixels of Image 1.',
     '',
     'OUTPUT: Strict JSON only — no prose, no markdown fences. Schema:',
     '{',
     '  "segments": [ [{"x":int,"y":int}, ...], ... ],',
     '  "confidence": int 0-100,',
-    '  "reasoning": "one short sentence on what you saw"',
+    '  "reasoning": "one short sentence on what you saw, citing which image(s) drove your decisions"',
     '}',
     '',
     'RULES:',
-    '- Pixel coordinates must be integers within the image bounds.',
+    '- Pixel coordinates must be integers within Image 1\'s bounds.',
     '- Eaves: each segment is a CLOSED polygon listed clockwise. Do NOT repeat the first vertex at the end.',
     '- Hips/ridges: each segment is an open polyline (2+ points). Points are roof corners or ridge endpoints, never on a straight edge.',
     '- If you cannot see a roof of the requested edge type, return { "segments": [], "confidence": 0, "reasoning": "..." }.',
     '- Use the few-shot examples below as a tracing style reference (vertex density, where corners go) — they are real super-admin traces of similar properties.',
     '- Use the Google Solar API context (segment count, pitch, azimuths) as a structural hint — a 1-segment building has one big ridge; a 4-segment hip roof has 4 hips.',
+    opts.hasHillshade ? '- For ridges and hips specifically: cross-check your pixel picks against Image 2. A "ridge" you draw should sit on a bright line in the hillshade; a "hip" should run along a bright diagonal toward a corner. If the hillshade disagrees with what the satellite suggests, trust the hillshade — it sees through tree shadows and roofing-material color noise.' : '',
+    opts.hasViewport3d ? '- Use Image 3 to disambiguate gable-vs-hip and to spot dormers/skylights you might have missed from above. Do NOT trace coordinates from Image 3 — only Image 1.' : '',
     lessonMemo ? '\n' + lessonMemo : '',
   ].filter(Boolean).join('\n')
 }
@@ -215,9 +285,17 @@ function buildUserPrompt(args: {
   imagePxH: number
   solarSummary: ReturnType<typeof summarizeSolar>
   examples: TrainingExample[]
+  hillshade: DsmHillshadeResult | null
+  hasViewport3d: boolean
 }): string {
   const lines: string[] = []
-  lines.push(`Image size: ${args.imagePxW}x${args.imagePxH} pixels.`)
+  lines.push(`Image 1 (target satellite): ${args.imagePxW}x${args.imagePxH} pixels.`)
+  if (args.hillshade) {
+    lines.push(`Image 2 (DSM hillshade): ${args.hillshade.width}x${args.hillshade.height} pixels, same coordinate space as Image 1. Solar API quality=${args.hillshade.quality || 'unknown'}${args.hillshade.imageryDate ? `, imagery dated ${args.hillshade.imageryDate}` : ''}.`)
+  }
+  if (args.hasViewport3d) {
+    lines.push('Image 3 (3D oblique): perspective only — do not use for pixel coordinates.')
+  }
   lines.push('')
   lines.push('Google Solar API context for this address:')
   if (args.solarSummary.available) {

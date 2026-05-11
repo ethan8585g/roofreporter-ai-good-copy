@@ -3870,6 +3870,16 @@ window.saAutoTrace = async function(edge) {
     var mapEl = document.getElementById('sa-trace-map');
     var w = (mapEl && mapEl.clientWidth) || 640;
     var h = (mapEl && mapEl.clientHeight) || 640;
+    // Capture the 3D reference map (the <gmp-map-3d> panel beside the
+    // trace map) so the agent gets an oblique perspective alongside the
+    // top-down satellite. Silently skipped if the 3D map isn't loaded
+    // or the canvas frame is blank — the agent runs fine without it.
+    var viewport3dB64 = null;
+    try {
+      viewport3dB64 = await saCapture3dForAgent();
+    } catch (e) {
+      console.warn('[auto-trace] 3D capture failed, continuing without:', e && e.message);
+    }
     var resp = await saFetch('/api/admin/superadmin/orders/' + s.orderId + '/auto-trace/' + edge, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3879,6 +3889,7 @@ window.saAutoTrace = async function(edge) {
         zoom: zoom,
         imageWidth: w,
         imageHeight: h,
+        viewport_3d_b64: viewport3dB64 || undefined,
       }),
     });
     var data = null;
@@ -3923,6 +3934,114 @@ window.saAutoTrace = async function(edge) {
     }
   }
 };
+
+// Promise-returning slim variant of saCaptureView() — used by the
+// Auto-Trace buttons so the agent gets a 3D oblique view alongside the
+// satellite. Mirrors saCaptureView's three-fallback capture path
+// (toDataURL → readPixels → blank-frame detect) without the side-effects
+// (no _saTraceState push, no toast, no UI render). Returns a base64
+// data URL string or null when the 3D map isn't capturable.
+async function saCapture3dForAgent() {
+  var host = document.getElementById('sa-trace-map-3d');
+  if (!host) return null;
+
+  function findAllCanvases(root, out) {
+    out = out || [];
+    if (!root) return out;
+    if (root.tagName === 'CANVAS') out.push(root);
+    var kids = root.querySelectorAll ? root.querySelectorAll('*') : [];
+    for (var i = 0; i < kids.length; i++) {
+      var el = kids[i];
+      if (el.tagName === 'CANVAS') out.push(el);
+      if (el.shadowRoot) findAllCanvases(el.shadowRoot, out);
+    }
+    if (root.shadowRoot) findAllCanvases(root.shadowRoot, out);
+    return out;
+  }
+
+  function pickRenderCanvas() {
+    var all = findAllCanvases(host, []).filter(function(c) { return c.width > 100 && c.height > 100; });
+    all.sort(function(a, b) { return (b.width * b.height) - (a.width * a.height); });
+    return all[0] || null;
+  }
+
+  function looksBlank(canvas) {
+    try {
+      var t = document.createElement('canvas');
+      t.width = 32; t.height = 32;
+      var ctx = t.getContext('2d');
+      ctx.drawImage(canvas, 0, 0, 32, 32);
+      var d = ctx.getImageData(0, 0, 32, 32).data;
+      for (var i = 0; i < d.length; i += 4) {
+        if (d[i] > 12 || d[i+1] > 12 || d[i+2] > 12) return false;
+      }
+      return true;
+    } catch (_) { return false; }
+  }
+
+  function captureViaReadPixels(canvas) {
+    try {
+      var gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (!gl) return null;
+      var w = canvas.width, h = canvas.height;
+      var pixels = new Uint8Array(w * h * 4);
+      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      var any = false;
+      for (var i = 0; i < pixels.length; i += 4 * 256) {
+        if (pixels[i] > 12 || pixels[i+1] > 12 || pixels[i+2] > 12) { any = true; break; }
+      }
+      if (!any) return null;
+      var c2 = document.createElement('canvas');
+      c2.width = w; c2.height = h;
+      var ctx = c2.getContext('2d');
+      var img = ctx.createImageData(w, h);
+      var rowBytes = w * 4;
+      for (var y = 0; y < h; y++) {
+        var src = (h - 1 - y) * rowBytes;
+        var dst = y * rowBytes;
+        img.data.set(pixels.subarray(src, src + rowBytes), dst);
+      }
+      ctx.putImageData(img, 0, 0);
+      return c2.toDataURL('image/jpeg', 0.82);
+    } catch (_) { return null; }
+  }
+
+  // Nudge the camera so the WebGL engine schedules a fresh draw, then
+  // wait two animation frames before reading.
+  try {
+    if (typeof host.flyCameraTo === 'function' && host.center) {
+      host.flyCameraTo({
+        endCamera: {
+          center: host.center,
+          range: (typeof host.range === 'number' ? host.range : 250) + 0.01,
+          tilt: host.tilt, heading: host.heading, roll: host.roll
+        },
+        durationMillis: 0
+      });
+    }
+  } catch (_) {}
+
+  return new Promise(function(resolve) {
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        var canvas = pickRenderCanvas();
+        if (!canvas) { resolve(null); return; }
+        var dataUrl = null;
+        try {
+          var u = canvas.toDataURL('image/jpeg', 0.82);
+          if (u && u.startsWith('data:image/') && u.length >= 5000 && !looksBlank(canvas)) dataUrl = u;
+        } catch (_) {}
+        if (!dataUrl) {
+          var fb = captureViaReadPixels(canvas);
+          if (fb && fb.length >= 5000) dataUrl = fb;
+        }
+        // Reject monster captures — backend caps at ~5.5MB base64 chars.
+        if (dataUrl && dataUrl.length > 5_400_000) dataUrl = null;
+        resolve(dataUrl);
+      });
+    });
+  });
+}
 
 // Append each Claude-returned polygon as its own eave section, mirroring
 // what saCloseEaveSection does for manual draws. Existing closed sections
