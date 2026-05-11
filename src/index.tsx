@@ -10752,6 +10752,12 @@ function getContactThanksPageHTML(prefillEmail = '', prefillName = '', prefillCo
         var data = await res.json();
         if (data.success) {
           if ((data.is_new || data.welcome) && typeof gtag === 'function') gtag('event', 'sign_up', { method: 'google_post_contact' });
+          if ((data.is_new || data.welcome) && data.customer) {
+            if (typeof window.setAdsUserData === 'function') {
+              try { await window.setAdsUserData(data.customer.email||'', data.customer.phone||'', data.customer.name||''); } catch(_) {}
+            }
+            if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 50.0, currency: 'CAD' });
+          }
           if (data.customer) localStorage.setItem('rc_customer', JSON.stringify(data.customer));
           if (data.token) localStorage.setItem('rc_customer_token', data.token);
           window.location.href = (data.is_new || data.welcome) ? '/onboarding' : '/customer/dashboard';
@@ -11852,6 +11858,12 @@ function getCustomerLoginHTML(googleClientId = '') {
       const data = await res.json();
       if (data.success) {
         rrTrack('oauth_success', {provider: 'google'});
+        if ((data.is_new || data.welcome) && data.customer) {
+          if (typeof window.setAdsUserData === 'function') {
+            try { await window.setAdsUserData(data.customer.email||'', data.customer.phone||'', data.customer.name||''); } catch(_) {}
+          }
+          if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 50.0, currency: 'CAD' });
+        }
         window.location.href = '/customer/dashboard?welcome=1';
       } else {
         rrTrack('oauth_error', {provider: 'google', reason: data.error});
