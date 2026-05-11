@@ -371,7 +371,7 @@ window.GOOGLE_ADS_CONVERSIONS = {
   lead:         'AW-18080319225/${(c.env as any).GADS_LEAD_LABEL || 'XXX_LEAD_LABEL'}',
   contact_lead: 'AW-18080319225/${(c.env as any).GADS_CONTACT_LABEL || 'XXX_CONTACT_LABEL'}',
   demo:         'AW-18080319225/${(c.env as any).GADS_DEMO_LABEL || 'XXX_DEMO_LABEL'}',
-  signup:       'AW-18080319225/eMC-CPy_yagcEPmNr61D',   // account created (LIVE)
+  signup:       'AW-18080319225/26MMCMOgxaYcEPmNr61D',   // account created (LIVE — matches Google Ads conversion action id 7597019203 "Sign-up" event_snippet, verified 2026-05-11 via Supermetrics conversions pull)
   purchase:     'AW-18080319225/${(c.env as any).GADS_PURCHASE_LABEL || 'XXX_PURCHASE_LABEL'}'
 };
 
