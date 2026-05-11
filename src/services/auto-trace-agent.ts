@@ -363,12 +363,22 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   // corrections + calibration factor — all three are how this agent
   // adapts to super-admin edits over time. Each is tolerant of an
   // empty data pool so first-day behavior matches steady-state behavior.
+  // Derive a sqft target from the Solar bbox so the few-shot retriever's
+  // sqftDelta scoring isn't degenerate. Previously this caller never
+  // passed targetSqft → scoreExample fell back to 0.5 for every example
+  // → similarity ranking ignored building size entirely. With Solar bbox
+  // dimensions available we get a clean signal for free.
+  const targetSqftFromSolar = solarSummary.available && solarSummary.bbox_width_ft > 0 && solarSummary.bbox_depth_ft > 0
+    ? Math.round(solarSummary.bbox_width_ft * solarSummary.bbox_depth_ft)
+    : undefined
+
   const [examples, lessonMemo, calibrationFactor] = await Promise.all([
     fetchTrainingExamples(env, {
       edge: input.edge,
       centroidLat: framing.lat,
       centroidLng: framing.lng,
       targetSegments: solarSummary.segments_count,
+      targetSqft: targetSqftFromSolar,
       limit: 5,
     }),
     buildLessonMemo(env, input.edge, complexityBucket),
