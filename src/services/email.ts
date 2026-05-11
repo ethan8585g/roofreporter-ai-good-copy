@@ -565,17 +565,11 @@ export async function notifyNewReportRequest(
   <a href="https://www.roofmanager.ca/admin/superadmin" style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">View in Super Admin →</a>
 </div>`
 
+  // Single canonical recipient. Forwarding to individual super admins lives
+  // in Gmail filters/rules — sending direct to multiple admin mailboxes was
+  // producing 3-4 duplicate copies (sales@ direct + sales→admin forwards +
+  // each admin_users row) per order.
   const recipients = new Set<string>(['sales@roofmanager.ca'])
-  if (env?.DB) {
-    try {
-      const rows = await env.DB.prepare(
-        "SELECT email FROM admin_users WHERE role='superadmin' AND is_active=1 AND email IS NOT NULL AND email != ''"
-      ).all<{ email: string }>()
-      for (const r of (rows?.results || [])) {
-        if (r?.email) recipients.add(r.email.trim().toLowerCase())
-      }
-    } catch {}
-  }
 
   const clientId = env?.GMAIL_CLIENT_ID
   let clientSecret = env?.GMAIL_CLIENT_SECRET || ''
