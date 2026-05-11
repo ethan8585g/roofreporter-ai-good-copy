@@ -97,6 +97,7 @@ async function fetchLiveExamples(env: Bindings, args: FetchTrainingArgs): Promis
       WHERE o.roof_trace_json IS NOT NULL
         AND o.roof_trace_json != ''
         AND r.status = 'completed'
+        AND (o.trace_source IN ('admin','self') OR o.trace_source IS NULL)
       ORDER BY o.id DESC
       LIMIT 30
     `).all<any>()
@@ -162,6 +163,7 @@ export async function refreshTracedIndexCache(env: Bindings, targetSize = 30): P
     WHERE o.roof_trace_json IS NOT NULL
       AND o.roof_trace_json != ''
       AND r.status = 'completed'
+      AND (o.trace_source IN ('admin','self') OR o.trace_source IS NULL)
     ORDER BY o.id DESC
     LIMIT 300
   `).all<any>()

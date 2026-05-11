@@ -176,7 +176,12 @@ function diffSegments(draft: LatLng[][], final: LatLng[][]): DiffMetrics {
     }
   }
   const fully_replaced = (nearCount / Math.max(finalPoints.length, 1)) < 0.30
-  const edited = avgOffset > 0.5 || Math.abs(finalPoints.length - draftPoints.length) > 0
+  // 2 ft threshold (was 0.5 ft) — anything below 2 ft is at or under GPS
+  // jitter + Static-Maps pixel-snapping noise. A trace where the admin
+  // accepted the agent's polygon as-is can still show 1-1.5 ft of "drift"
+  // purely from coordinate quantization; treating that as `edited=1`
+  // collapsed the calibration factor to its 0.6 floor permanently.
+  const edited = avgOffset > 2.0 || Math.abs(finalPoints.length - draftPoints.length) > 0
   return {
     point_count_delta: finalPoints.length - draftPoints.length,
     avg_vertex_offset_ft: Math.round(avgOffset * 100) / 100,

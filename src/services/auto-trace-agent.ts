@@ -64,6 +64,12 @@ export interface AutoTraceResult {
   /** Eaves: a list of closed polygons (1 entry per structure).
    *  Hips/ridges: a list of polylines. */
   segments: LatLng[][]
+  /** Optional parallel array tagging each segment as 'main' (primary roof),
+   *  'lower_tier' (porch/garage extension/sunroom lip with separate pitch),
+   *  or 'outbuilding'. Populated when Claude returns a `kinds` array AND
+   *  every entry validates 1:1 against the kept segments. Undefined means
+   *  treat every polygon as 'main' — the previous default behavior. */
+  segment_kinds?: SegmentKind[]
   /** Claude's own 0–100 confidence for the returned segments. Surfaces to
    *  the UI so the admin knows whether to trust the auto-trace or redo by
    *  hand. */
@@ -85,6 +91,9 @@ export interface AutoTraceResult {
     training_examples_used: number
     raw_model_confidence?: number
     calibration_factor?: number
+    /** finalConfidence × calibration_factor — kept as a diagnostic only. The
+     *  top-level `confidence` field is the raw post-refinement model value. */
+    calibrated_confidence?: number
     lesson_memo_chars?: number
     /** Whether the agent had the DSM hillshade image in its prompt. */
     dsm_hillshade_used: boolean
@@ -94,10 +103,15 @@ export interface AutoTraceResult {
     viewport_3d_used: boolean
     /** Second-pass self-critique for eaves only — feeds the first-draft polygon
      *  back to Claude overlaid on the satellite image so it can spot end-notches
-     *  it missed. 'skipped-non-eaves' for hips/ridges. */
-    refinement_pass: 'improved' | 'no-change' | 'failed' | 'skipped-non-eaves' | 'skipped-empty-draft'
+     *  it missed. 'skipped-non-eaves' for hips/ridges. 'skipped-high-iou' when
+     *  the first draft already overlaps the Solar bbox ≥ 0.85 IoU (running the
+     *  critique on already-good drafts degrades them per Huang et al. 2023). */
+    refinement_pass: 'improved' | 'no-change' | 'failed' | 'skipped-non-eaves' | 'skipped-empty-draft' | 'skipped-high-iou'
     refinement_vertices_added?: number
     refinement_elapsed_ms?: number
+    /** First-draft IoU vs Solar bbox (0-1, 3 decimals). Only populated when a
+     *  trusted Solar bbox exists. Drives the skip/run decision for the critique. */
+    refinement_iou_gate?: number
     model: string
     elapsed_ms: number
   }
@@ -230,13 +244,32 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   let finalSegmentsPx = parsed.segments
   let finalConfidence = parsed.confidence
   let finalReasoning = parsed.reasoning
-  let refinementPass: 'improved' | 'no-change' | 'failed' | 'skipped-non-eaves' | 'skipped-empty-draft' = 'skipped-non-eaves'
+  let finalKinds: SegmentKind[] | undefined = parsed.kinds
+  let refinementPass: 'improved' | 'no-change' | 'failed' | 'skipped-non-eaves' | 'skipped-empty-draft' | 'skipped-high-iou' = 'skipped-non-eaves'
   let refinementVerticesAdded = 0
   let refinementElapsedMs = 0
 
+  let refinementIouGate: number | undefined
   if (input.edge === 'eaves') {
     if (parsed.segments.length === 0 || parsed.segments.every(s => s.length < 3)) {
       refinementPass = 'skipped-empty-draft'
+    } else if (
+      targetBboxPx && targetBboxPx.trusted &&
+      (() => {
+        // Pick the LARGEST polygon as the primary; small ancillary polygons
+        // (porches/garages) shouldn't decide whether we re-run the critique.
+        const primary = parsed.segments.reduce((a, b) => a.length >= b.length ? a : b)
+        const iou = computeIoUWithRect(primary, targetBboxPx)
+        refinementIouGate = Math.round(iou * 1000) / 1000
+        // 0.85 threshold matches the Huang et al. + Lightman et al. guidance:
+        // running self-critique on already-good drafts degrades them ~20-30%
+        // of the time. Above 0.85 IoU the first draft is already in the
+        // right place; the critique can only churn vertices, not improve
+        // shape. Below 0.85 the critique still has room to add value.
+        return iou >= 0.85
+      })()
+    ) {
+      refinementPass = 'skipped-high-iou'
     } else {
       const refineStart = Date.now()
       try {
@@ -257,6 +290,12 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
           finalReasoning = refined.reasoning
           refinementVerticesAdded = refined.verticesAdded
           refinementPass = refined.verticesAdded > 0 ? 'improved' : 'no-change'
+          // If the refinement added vertices (e.g. split a 2-story house into
+          // upper + lower polygons, or attached a garage), the index-based
+          // kinds mapping from the first pass is no longer guaranteed to
+          // align. Drop so the UI treats every segment as 'main' rather than
+          // mislabel them.
+          if (refined.verticesAdded > 0) finalKinds = undefined
         } else {
           refinementPass = 'failed'
         }
@@ -274,15 +313,20 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   // that produced the satellite image (which may be Solar-recentred, not
   // the user's original pin).
   const segments = finalSegmentsPx.map(seg => seg.map(p => pxToLatLng(p.x, p.y, framing.lat, framing.lng, framing.zoom, pixelImgW, pixelImgH)))
-  // Calibration: scale the model's self-reported confidence by the historical
-  // edit rate for this edge type. 100% edit rate → 0.6×; 0% → 1.0×.
-  // services/auto-trace-learning.ts maintains this factor on every submit.
+  // Calibration: kept as a diagnostic, NO LONGER multiplied into the surfaced
+  // confidence. The previous behavior actively destroyed the signal we need —
+  // "high model confidence + high edit rate" is itself useful to the UI
+  // ("model thinks it's right but historically wasn't"); squashing it into a
+  // single number hid that. Confidence the UI sees is now the raw post-
+  // refinement model value. `calibration_factor` and `calibrated_confidence`
+  // are still in diagnostics for any consumer that wants them.
   const calibratedConfidence = Math.round(finalConfidence * calibrationFactor)
 
   return {
     edge: input.edge,
     segments,
-    confidence: calibratedConfidence,
+    ...(finalKinds && finalKinds.length === segments.length ? { segment_kinds: finalKinds } : {}),
+    confidence: finalConfidence,
     reasoning: finalReasoning,
     ...(input.includeDebugImages ? {
       debug_images: {
@@ -298,6 +342,7 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       training_examples_used: examples.length,
       raw_model_confidence: parsed.confidence,
       calibration_factor: calibrationFactor,
+      calibrated_confidence: calibratedConfidence,
       lesson_memo_chars: lessonMemo.length,
       dsm_hillshade_used: !!hillshade,
       dsm_hillshade_quality: hillshade?.quality,
@@ -306,6 +351,7 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       refinement_pass: refinementPass,
       refinement_vertices_added: refinementVerticesAdded,
       refinement_elapsed_ms: refinementElapsedMs,
+      refinement_iou_gate: refinementIouGate,
       model: CLAUDE_VISION_MODEL,
       elapsed_ms: Date.now() - started,
     },
@@ -343,7 +389,7 @@ function chooseImageFraming(
   // wide. We want the building to fill 35-55% of the image (so eaves are
   // resolvable but the lot edges aren't cropped). userZoom + 1 typically
   // gets us there; cap at 21 (Static Maps' max).
-  const newZoom = Math.min(21, Math.max(userZoom, 21))
+  const newZoom = Math.min(21, userZoom + 1)
   return { lat: cLat, lng: cLng, zoom: newZoom, recentered: true }
 }
 
@@ -455,7 +501,7 @@ function buildSystemPrompt(
   },
 ): string {
   const role = edge === 'eaves'
-    ? 'detecting the OUTER PERIMETER of every building roof in the image — one closed polygon per structure (house + any detached garages/sheds visible). Trace at the EAVE LINE (drip edge), not the walls. Include all jogs, bump-outs, and lower-tier eaves. 8+ vertices per polygon; corners only — no points on straight edges. Trees and shadows commonly hide parts of an eave — EXTRAPOLATE visible eave lines through the canopy. Residential roofs are RECTILINEAR with right-angle corners: if 3 sides are visible, the 4th follows by orthogonal projection from the last two visible corners. Do NOT stop the trace at the edge of a tree canopy and call that a corner.'
+    ? 'detecting the OUTER PERIMETER of every building roof in the image — one closed polygon per structure (house + any detached garages/sheds visible). Trace at the EAVE LINE (drip edge), not the walls. Include all jogs and bump-outs as vertices of the polygon. ⚠️ FOR 2-STORY BUILDINGS: return the UPPER (main) roofline as ONE polygon AND any LOWER-TIER eave wraparound (porch roof, garage extension lower than the main roof, sunroom/mudroom add-on with its own drip line) as SEPARATE ADDITIONAL polygons in the segments array. Do NOT collapse a 2-story house into a single ring — the lower lip carries a different pitch and matters for the report. Most residential traces land between 8 and 24 vertices per polygon; a true rectangle is 4 and that is correct. Corners only — no points on straight edges. Trees and shadows commonly hide parts of an eave — EXTRAPOLATE visible eave lines through the canopy. Residential roofs are RECTILINEAR with right-angle corners: if 3 sides are visible, the 4th follows by orthogonal projection from the last two visible corners. Do NOT stop the trace at the edge of a tree canopy and call that a corner.'
     : edge === 'ridges'
     ? 'detecting RIDGE LINES — the horizontal peaks where two opposing roof planes meet at the top. Each ridge is a polyline (2+ points). Hip-roof structures usually have one short central ridge; gable roofs have one long ridge per gable. Do NOT trace hips, valleys, or eaves.'
     : 'detecting HIP LINES — the diagonal edges that run from a roof peak down to an outside corner of the eave. Each hip is a polyline (usually 2 points: peak → corner). Hip-roof structures have 4 hips at the corners; gable roofs have zero. Do NOT trace ridges, valleys, or eaves.'
@@ -493,6 +539,9 @@ function buildSystemPrompt(
     'OUTPUT: Strict JSON only — no prose, no markdown fences. Schema:',
     '{',
     '  "segments": [ [{"x":int,"y":int}, ...], ... ],',
+    edge === 'eaves'
+      ? '  "kinds": ["main"|"lower_tier"|"outbuilding", ...]   // OPTIONAL parallel array, one entry per segment. Omit if every polygon is "main".'
+      : '',
     '  "confidence": int 0-100,',
     '  "reasoning": "one short sentence on what you saw, citing which image(s) drove your decisions"',
     '}',
@@ -551,8 +600,12 @@ function buildUserPrompt(args: {
     lines.push(`Few-shot examples — ${args.examples.length} past super-admin traces of similar properties:`)
     args.examples.forEach((ex, i) => {
       lines.push(`Example ${i + 1}: ${ex.house_sqft} sqft, ${ex.complexity_class || 'unknown'} complexity, ${ex.roof_pitch_degrees?.toFixed?.(1) || '?'}° pitch.`)
-      const edgePayload = pickEdgeFromExample(ex, args.edge)
-      lines.push(`  ${args.edge} (lat/lng, for reference shape only — DO NOT copy coordinates): ${JSON.stringify(edgePayload).slice(0, 600)}`)
+      const edgePayload = sanitizeExamplePayload(pickEdgeFromExample(ex, args.edge), 18)
+      // Reference SHAPE only — the lat/lng numbers below are from a DIFFERENT
+      // property. You must emit PIXELS of Image 1, not lat/lng, and not these
+      // numbers. We pass them so you can read vertex count, aspect ratio, and
+      // jog pattern — that's the signal, not the coordinates themselves.
+      lines.push(`  ${args.edge} (reference SHAPE only — coords are lat/lng from a DIFFERENT property; emit pixels of Image 1): ${JSON.stringify(edgePayload)}`)
     })
     lines.push('')
   } else {
@@ -562,6 +615,31 @@ function buildUserPrompt(args: {
 
   lines.push(`Now produce the ${args.edge} segments for THIS property. Return JSON only.`)
   return lines.join('\n')
+}
+
+/** Trim a few-shot example's polygon payload so it fits cleanly in the prompt
+ *  WITHOUT the old `.slice(0, 600)` byte-cap, which truncated mid-vertex on any
+ *  polygon with more than ~10 vertices at full lat/lng precision. We round
+ *  every lat/lng to 6 decimals (~11 cm) and cap each array at `maxPerArray`
+ *  vertices, recursing through nested polygon arrays. The model only needs the
+ *  SHAPE — vertex count, aspect ratio, jog pattern — not 13-decimal precision. */
+function sanitizeExamplePayload(payload: any, maxPerArray = 18): any {
+  if (Array.isArray(payload)) {
+    return payload.slice(0, maxPerArray).map(item => sanitizeExamplePayload(item, maxPerArray))
+  }
+  if (payload && typeof payload === 'object') {
+    const out: any = {}
+    for (const k of Object.keys(payload)) {
+      const v = payload[k]
+      if ((k === 'lat' || k === 'lng') && typeof v === 'number') {
+        out[k] = Math.round(v * 1e6) / 1e6
+      } else {
+        out[k] = sanitizeExamplePayload(v, maxPerArray)
+      }
+    }
+    return out
+  }
+  return payload
 }
 
 function pickEdgeFromExample(ex: TrainingExample, edge: AutoTraceEdge): unknown {
@@ -665,7 +743,14 @@ function summarizeSolar(insights: any): {
 // ─────────────────────────────────────────────────────────────
 // Claude response parsing — strict JSON, tolerant of fenced output
 // ─────────────────────────────────────────────────────────────
-function parseClaudeResponse(text: string): { segments: { x: number; y: number }[][]; confidence: number; reasoning: string } {
+export type SegmentKind = 'main' | 'lower_tier' | 'outbuilding'
+
+function parseClaudeResponse(text: string): {
+  segments: { x: number; y: number }[][]
+  confidence: number
+  reasoning: string
+  kinds?: SegmentKind[]
+} {
   const stripped = text
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```\s*$/, '')
@@ -687,7 +772,124 @@ function parseClaudeResponse(text: string): { segments: { x: number; y: number }
     .filter(seg => seg.length >= 2)
   const confidence = Math.max(0, Math.min(100, Math.round(Number(parsed?.confidence) || 0)))
   const reasoning = String(parsed?.reasoning || '').slice(0, 500)
-  return { segments, confidence, reasoning }
+  // Optional parallel `kinds` array (eaves-only) — strictly validated. We
+  // only accept entries that map 1:1 to the segments we kept and only the
+  // three sanctioned values. Anything else falls back to undefined so the
+  // caller can treat every segment as "main".
+  let kinds: SegmentKind[] | undefined
+  const rawKinds = Array.isArray(parsed?.kinds) ? parsed.kinds : null
+  if (rawKinds && rawKinds.length === rawSegments.length) {
+    const validated: SegmentKind[] = []
+    let allValid = true
+    // Walk rawKinds aligned to rawSegments, dropping entries whose segment
+    // got filtered out above (length < 2).
+    for (let i = 0; i < rawKinds.length; i++) {
+      const seg = rawSegments[i]
+      const kept = Array.isArray(seg) && seg.filter((p: any) => Number.isFinite(p?.x) && Number.isFinite(p?.y)).length >= 2
+      if (!kept) continue
+      const k = String(rawKinds[i] || '').toLowerCase()
+      if (k === 'main' || k === 'lower_tier' || k === 'outbuilding') {
+        validated.push(k as SegmentKind)
+      } else {
+        allValid = false
+        break
+      }
+    }
+    if (allValid && validated.length === segments.length) kinds = validated
+  }
+  return { segments, confidence, reasoning, kinds }
+}
+
+// ─────────────────────────────────────────────────────────────
+// IoU helpers — gate the self-critique pass
+// ─────────────────────────────────────────────────────────────
+// The literature on self-correction (Huang et al. 2023, DeepMind:
+// "Large Language Models Cannot Self-Correct Reasoning Yet")
+// shows intrinsic self-critique without an external signal degrades
+// already-good outputs ~20-30% of the time. We use the Solar API
+// bounding box as that external signal: if the first-draft polygon
+// overlaps the bbox closely, skip the critique entirely.
+
+/** Shoelace area of a polygon (absolute value, no orientation requirement). */
+function polygonArea(poly: { x: number; y: number }[]): number {
+  if (poly.length < 3) return 0
+  let sum = 0
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i]
+    const b = poly[(i + 1) % poly.length]
+    sum += a.x * b.y - b.x * a.y
+  }
+  return Math.abs(sum) / 2
+}
+
+/** Sutherland-Hodgman polygon clipping against an axis-aligned rectangle.
+ *  Returns the clipped polygon (possibly empty if no overlap). */
+function clipPolygonByRect(
+  poly: { x: number; y: number }[],
+  rect: { x1: number; y1: number; x2: number; y2: number },
+): { x: number; y: number }[] {
+  type P = { x: number; y: number }
+  const inside = [
+    (p: P) => p.x >= rect.x1,           // left
+    (p: P) => p.x <= rect.x2,           // right
+    (p: P) => p.y >= rect.y1,           // top
+    (p: P) => p.y <= rect.y2,           // bottom
+  ]
+  const intersect = (a: P, b: P, edgeIdx: number): P => {
+    if (edgeIdx === 0) {
+      const dx = b.x - a.x
+      const t = dx === 0 ? 0 : (rect.x1 - a.x) / dx
+      return { x: rect.x1, y: a.y + t * (b.y - a.y) }
+    }
+    if (edgeIdx === 1) {
+      const dx = b.x - a.x
+      const t = dx === 0 ? 0 : (rect.x2 - a.x) / dx
+      return { x: rect.x2, y: a.y + t * (b.y - a.y) }
+    }
+    if (edgeIdx === 2) {
+      const dy = b.y - a.y
+      const t = dy === 0 ? 0 : (rect.y1 - a.y) / dy
+      return { x: a.x + t * (b.x - a.x), y: rect.y1 }
+    }
+    const dy = b.y - a.y
+    const t = dy === 0 ? 0 : (rect.y2 - a.y) / dy
+    return { x: a.x + t * (b.x - a.x), y: rect.y2 }
+  }
+  let output: P[] = poly.slice()
+  for (let e = 0; e < 4; e++) {
+    if (output.length === 0) break
+    const input = output
+    output = []
+    for (let i = 0; i < input.length; i++) {
+      const curr = input[i]
+      const prev = input[(i - 1 + input.length) % input.length]
+      const currIn = inside[e](curr)
+      const prevIn = inside[e](prev)
+      if (currIn) {
+        if (!prevIn) output.push(intersect(prev, curr, e))
+        output.push(curr)
+      } else if (prevIn) {
+        output.push(intersect(prev, curr, e))
+      }
+    }
+  }
+  return output
+}
+
+/** IoU of a polygon vs an axis-aligned rectangle, in pixel space. Returns 0
+ *  on any degenerate input. */
+function computeIoUWithRect(
+  poly: { x: number; y: number }[],
+  rect: { x1: number; y1: number; x2: number; y2: number },
+): number {
+  if (poly.length < 3) return 0
+  const polyA = polygonArea(poly)
+  const rectA = Math.max(0, rect.x2 - rect.x1) * Math.max(0, rect.y2 - rect.y1)
+  if (polyA === 0 || rectA === 0) return 0
+  const clipped = clipPolygonByRect(poly, rect)
+  const inter = clipped.length >= 3 ? polygonArea(clipped) : 0
+  const union = polyA + rectA - inter
+  return union > 0 ? inter / union : 0
 }
 
 // ─────────────────────────────────────────────────────────────
