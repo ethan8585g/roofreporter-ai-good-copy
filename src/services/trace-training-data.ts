@@ -296,8 +296,9 @@ function exampleHasEdge(ex: TrainingExample, edge: AutoTraceEdge): boolean {
       return (Array.isArray(trace.eaves_sections) && trace.eaves_sections.length > 0)
           || (Array.isArray(trace.eaves) && trace.eaves.length >= 3)
     }
-    if (edge === 'ridges') return Array.isArray(trace.ridges) && trace.ridges.length > 0
-    if (edge === 'hips')   return Array.isArray(trace.hips)   && trace.hips.length > 0
+    if (edge === 'ridges')  return Array.isArray(trace.ridges)  && trace.ridges.length > 0
+    if (edge === 'hips')    return Array.isArray(trace.hips)    && trace.hips.length > 0
+    if (edge === 'valleys') return Array.isArray(trace.valleys) && trace.valleys.length > 0
   } catch { /* corrupt — skip */ }
   return false
 }

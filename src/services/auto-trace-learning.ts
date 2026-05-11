@@ -59,7 +59,7 @@ async function fetchRecentAutoTraces(env: Bindings, orderId: number): Promise<Au
         // Most recent run per edge type wins (the log stores both runs
         // when the admin clicks the button twice).
         if (seenEdges.has(d.edge)) continue
-        if (d.edge !== 'eaves' && d.edge !== 'hips' && d.edge !== 'ridges') continue
+        if (d.edge !== 'eaves' && d.edge !== 'hips' && d.edge !== 'ridges' && d.edge !== 'valleys') continue
         out.push({
           edge: d.edge,
           segments: Array.isArray(d.segments) ? d.segments : [],
@@ -131,7 +131,9 @@ function extractFinalSegments(trace: any, edge: AutoTraceEdge): LatLng[][] {
     }
     return []
   }
-  const lines = edge === 'ridges' ? trace.ridges : trace.hips
+  const lines = edge === 'ridges' ? trace.ridges
+              : edge === 'valleys' ? trace.valleys
+              : trace.hips
   if (!Array.isArray(lines)) return []
   return lines
     .map((l: any) => Array.isArray(l) ? l : (l && Array.isArray(l.pts) ? l.pts : null))
@@ -209,10 +211,14 @@ export async function buildLessonMemo(env: Bindings, edge: AutoTraceEdge): Promi
     fully_replaced: number
     edited: number
     agent_confidence: number
+    age_days: number | null
   }>
   try {
+    // Pull submitted_at so we can recency-weight every aggregate. A trace
+    // edited 6 months ago shouldn't outvote one edited yesterday.
     const res = await env.DB.prepare(`
-      SELECT point_count_delta, avg_vertex_offset_ft, fully_replaced, edited, agent_confidence
+      SELECT point_count_delta, avg_vertex_offset_ft, fully_replaced, edited, agent_confidence,
+             CAST((julianday('now') - julianday(submitted_at)) AS REAL) AS age_days
       FROM auto_trace_corrections
       WHERE edge = ?
       ORDER BY submitted_at DESC
@@ -222,35 +228,42 @@ export async function buildLessonMemo(env: Bindings, edge: AutoTraceEdge): Promi
   } catch { return '' }
   if (rows.length === 0) return ''
 
+  // Recency weight: exp(-age_days / 30). Sample from today has weight ~1.0,
+  // one month ago ~0.37, three months ago ~0.05. Past ~90 days contributes
+  // near-zero — closer to "fresh signal" than "lifetime average".
+  const weights = rows.map(r => Math.exp(-Math.max(0, Number(r.age_days) || 0) / 30))
+  const sumW = weights.reduce((s, w) => s + w, 0) || 1
+  const weightedSum = (vals: number[]) =>
+    vals.reduce((s, v, i) => s + v * weights[i], 0) / sumW
+
   const n = rows.length
-  const edited = rows.filter(r => r.edited).length
-  const fullyReplaced = rows.filter(r => r.fully_replaced).length
-  const avgOffset = rows
-    .map(r => r.avg_vertex_offset_ft)
-    .filter((v): v is number => typeof v === 'number')
-    .reduce((s, v, _, arr) => s + v / arr.length, 0)
-  const pointDeltas = rows
-    .map(r => r.point_count_delta)
-    .filter((v): v is number => typeof v === 'number')
-  const avgPointDelta = pointDeltas.length > 0
-    ? pointDeltas.reduce((s, v) => s + v, 0) / pointDeltas.length
-    : 0
+  const editedW = weightedSum(rows.map(r => r.edited ? 1 : 0))
+  const fullyW = weightedSum(rows.map(r => r.fully_replaced ? 1 : 0))
+  const offsetVals = rows.map(r => Number(r.avg_vertex_offset_ft || 0))
+  const offsetW = weightedSum(offsetVals)
+  const pointDeltaVals = rows.map(r => Number(r.point_count_delta || 0))
+  const pointDeltaW = weightedSum(pointDeltaVals)
 
   const lines: string[] = []
-  lines.push(`HISTORICAL ${edge.toUpperCase()} CORRECTION DATA (last ${n} super-admin reviews of your output):`)
-  lines.push(`- Edit rate: ${Math.round(100 * edited / n)}% (${edited}/${n}) — these traces required at least one vertex move.`)
-  if (fullyReplaced > 0) {
-    lines.push(`- Full redraws: ${Math.round(100 * fullyReplaced / n)}% (${fullyReplaced}/${n}) — admin discarded your output entirely.`)
+  lines.push(`HISTORICAL ${edge.toUpperCase()} CORRECTION DATA (last ${n} super-admin reviews; recency-weighted toward fresh submissions):`)
+  lines.push(`- Edit rate: ${Math.round(100 * editedW)}% — fraction of recent traces that required at least one vertex move.`)
+  if (fullyW > 0) {
+    lines.push(`- Full redraws: ${Math.round(100 * fullyW)}% — fraction where the admin discarded your output entirely.`)
   }
-  if (avgOffset > 0) {
-    lines.push(`- Average vertex shift: ${avgOffset.toFixed(1)} ft.`)
+  if (offsetW > 0) {
+    lines.push(`- Average vertex shift: ${offsetW.toFixed(1)} ft.`)
   }
-  if (Math.abs(avgPointDelta) >= 1) {
-    if (avgPointDelta > 0) {
-      lines.push(`- You consistently UNDER-COUNT vertices by ~${Math.round(avgPointDelta)} per trace. Look harder for jogs, bump-outs, and small corners you may be smoothing over.`)
+  if (Math.abs(pointDeltaW) >= 1) {
+    if (pointDeltaW > 0) {
+      lines.push(`- You consistently UNDER-COUNT vertices by ~${Math.round(pointDeltaW)} per trace. Look harder for jogs, bump-outs, and small corners you may be smoothing over.`)
     } else {
-      lines.push(`- You consistently OVER-COUNT vertices by ~${Math.abs(Math.round(avgPointDelta))} per trace. Stop putting points on straight edges — corners only.`)
+      lines.push(`- You consistently OVER-COUNT vertices by ~${Math.abs(Math.round(pointDeltaW))} per trace. Stop putting points on straight edges — corners only.`)
     }
+  }
+  // Surface a positive signal too — pure self-flagellation collapses
+  // confidence and worsens output. If recent edit rate is low, say so.
+  if (editedW < 0.35 && n >= 5) {
+    lines.push(`- You've been landing recent ${edge} traces well — the admin accepted or only lightly tweaked the majority. Keep doing what you're doing on this type.`)
   }
   lines.push('Use this as a self-correction signal — adjust your tendencies for THIS request based on the pattern above.')
   return lines.join('\n')
@@ -258,28 +271,32 @@ export async function buildLessonMemo(env: Bindings, edge: AutoTraceEdge): Promi
 
 // ── 3. Confidence calibration ──────────────────────────────────
 
-/** Returns a multiplier in [0.5, 1.0] to apply to the model's self-reported
- *  confidence before returning it to the UI. Logic:
- *    - If <10 recent samples: 1.0 (not enough data yet).
- *    - Otherwise: 1 - (edit_rate × 0.4). 100% edit rate → 0.6 multiplier;
- *      0% edit rate → 1.0. Floor 0.5 so even consistently-edited bands keep
- *      some signal value.
- *  The calibrator does NOT subtract from confidence directly because Claude's
- *  baseline confidence is itself useful (a high confidence + 50% edit rate
- *  means "model thinks it's right but historically wasn't" — useful to the UI). */
+/** Returns a multiplier in [0.5, 1.0] derived from historical edit rate.
+ *  Surfaced as a diagnostic ONLY — the displayed confidence is no longer
+ *  multiplied by it (that destroyed the high-confidence-but-edited signal).
+ *
+ *  Logic (was: hard `if (n<10) return 1.0` cliff with no recency weighting):
+ *    - Beta-Bernoulli shrinkage: editRate = (edited + 2) / (n + 4). This is
+ *      Bayesian smoothing with a uniform Beta(2,2) prior, so we always have
+ *      a meaningful estimate even at N=1 instead of waiting for N≥10. As N
+ *      grows, the prior wears off naturally.
+ *    - Recency weighting: SUM(exp(-age_days/30)) instead of COUNT(*). A
+ *      trace edited 6 months ago shouldn't outvote one edited yesterday.
+ *    - Output: 1 - (editRate × 0.4), floored at 0.5. Matches the old shape
+ *      so downstream consumers see no abrupt change. */
 export async function getCalibrationFactor(env: Bindings, edge: AutoTraceEdge): Promise<number> {
   try {
     const res = await env.DB.prepare(`
-      SELECT COUNT(*) AS n,
-             SUM(CASE WHEN edited = 1 THEN 1 ELSE 0 END) AS edited
+      SELECT SUM(exp(-(julianday('now') - julianday(submitted_at)) / 30.0)) AS n_w,
+             SUM(CASE WHEN edited = 1 THEN exp(-(julianday('now') - julianday(submitted_at)) / 30.0) ELSE 0 END) AS edited_w
       FROM auto_trace_corrections
       WHERE edge = ?
         AND submitted_at > datetime('now', '-90 days')
-    `).bind(edge).first<{ n: number; edited: number }>()
-    const n = Number(res?.n || 0)
-    const edited = Number(res?.edited || 0)
-    if (n < 10) return 1.0
-    const editRate = edited / n
+    `).bind(edge).first<{ n_w: number; edited_w: number }>()
+    const n = Number(res?.n_w || 0)
+    const edited = Number(res?.edited_w || 0)
+    // Beta(2,2) prior — smooth from N=0 instead of an N<10 cliff.
+    const editRate = (edited + 2) / (n + 4)
     return Math.max(0.5, Math.min(1.0, 1.0 - editRate * 0.4))
   } catch {
     return 1.0

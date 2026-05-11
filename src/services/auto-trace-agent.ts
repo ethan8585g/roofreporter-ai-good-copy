@@ -29,7 +29,7 @@ import { fetchDsmHillshade, type DsmHillshadeResult } from './dsm-visualization'
 
 const CLAUDE_VISION_MODEL = 'claude-opus-4-7'
 
-export type AutoTraceEdge = 'eaves' | 'hips' | 'ridges'
+export type AutoTraceEdge = 'eaves' | 'hips' | 'ridges' | 'valleys'
 
 export interface AutoTraceInput {
   orderId: number
@@ -57,6 +57,16 @@ export interface AutoTraceInput {
    *  satellite + DSM hillshade images so the operator can verify what Claude
    *  saw. Off by default — adds ~2MB to the response. */
   includeDebugImages?: boolean
+  /** Skip the post-processing dominant-angle snapping step. Default false
+   *  (snapping IS applied). Snapping cleans up jittery vertex placement on
+   *  rectilinear residential houses; turn it off when tracing organic
+   *  shapes (rare for residential) or to debug raw model output. */
+  skipAngleSnapping?: boolean
+  /** Allow the auto-trace to return DETACHED garages, sheds, and outbuildings
+   *  as additional polygons instead of clamping to the single central
+   *  structure. Default false — the bbox clamp suppresses these by design
+   *  because most reports cover the main house only. */
+  includeOutbuildings?: boolean
 }
 
 export interface AutoTraceResult {
@@ -112,6 +122,20 @@ export interface AutoTraceResult {
     /** First-draft IoU vs Solar bbox (0-1, 3 decimals). Only populated when a
      *  trusted Solar bbox exists. Drives the skip/run decision for the critique. */
     refinement_iou_gate?: number
+    /** True when Manhattan-world dominant-angle snapping changed at least one
+     *  vertex. False/undefined means either snapping was skipped (hips/ridges,
+     *  or input.skipAngleSnapping) or the polygon was already orthogonal. */
+    angle_snapping_applied?: boolean
+    /** Sanity-gate signal: how many polygons we returned vs how many roof
+     *  segments Solar API detected for this address. Drift of |delta| > 1
+     *  flags either a Claude collapse (merged segments) or a Solar miscount
+     *  (Solar over-detected facets). Only populated for the eaves path with
+     *  a trusted Solar bbox. */
+    plane_count_drift?: { agent_polygons: number; solar_segments: number; delta: number }
+    /** Footprint-area ratio: traced polygon area (sqft) / Solar bbox area
+     *  (sqft). 0.8-1.2 is healthy; outside is a leading indicator of trace
+     *  drift. Same gating as plane_count_drift. */
+    footprint_area_ratio?: number
     model: string
     elapsed_ms: number
   }
@@ -192,6 +216,7 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     hasViewport3d,
     targetCenterPx,
     targetBboxPx,
+    includeOutbuildings: !!input.includeOutbuildings,
   })
   const userPrompt = buildUserPrompt({
     edge: input.edge,
@@ -220,21 +245,23 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   content.push({ type: 'text', text: userPrompt })
 
   const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
+  // Tool-use enforced output. Previously we asked Claude for "strict JSON
+  // only" in prose and parsed the response (with two fallback layers — fence
+  // stripping + last-ditch regex). That contract leaks ~3-5% of the time
+  // (markdown fences, trailing prose, missing fields). With a typed tool
+  // schema the SDK guarantees a structured input that maps 1:1 to our parser.
+  const emitTraceTool = buildEmitTraceTool(input.edge)
   const completion = await anthropic.messages.create({
     // Opus 4.7 deprecated the `temperature` knob — leave the default.
     model: CLAUDE_VISION_MODEL,
     max_tokens: 4096,
     system: systemPrompt,
+    tools: [emitTraceTool],
+    tool_choice: { type: 'tool', name: emitTraceTool.name },
     messages: [{ role: 'user', content }],
-  })
+  } as any)
 
-  const text = completion.content
-    .filter((b: any) => b.type === 'text')
-    .map((b: any) => b.text)
-    .join('\n')
-    .trim()
-
-  const parsed = parseClaudeResponse(text)
+  const parsed = parseToolResponse(completion)
 
   // ── Self-critique pass (eaves only) ───────────────────────────
   // Feed the first-draft polygon back to Claude overlaid on the satellite
@@ -309,10 +336,47 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
 
   const pixelImgW = safeW * 2
   const pixelImgH = safeH * 2
+  // Apply Manhattan-world dominant-angle snapping to eaves polygons before
+  // projection. Skipped for hips/ridges (those are polylines, not closed
+  // polygons — orthogonalizing them would lose the genuinely diagonal
+  // geometry that hips by definition have). Caller can disable via input.
+  let snappingApplied = false
+  if (input.edge === 'eaves' && !input.skipAngleSnapping) {
+    const before = finalSegmentsPx
+    finalSegmentsPx = finalSegmentsPx.map(seg => seg.length >= 4 ? snapPolygonToDominantAngle(seg) : seg)
+    snappingApplied = finalSegmentsPx.some((seg, i) => seg !== before[i])
+  }
   // Project Claude's pixel coords back to GPS using the SAME centre + zoom
   // that produced the satellite image (which may be Solar-recentred, not
   // the user's original pin).
   const segments = finalSegmentsPx.map(seg => seg.map(p => pxToLatLng(p.x, p.y, framing.lat, framing.lng, framing.zoom, pixelImgW, pixelImgH)))
+
+  // Verify-Planes sanity gate (eaves + trusted Solar bbox only). Compares
+  // agent output against the two Solar signals we already have (segment
+  // count + bbox area). Surfaced as diagnostics, NOT used to mutate the
+  // returned polygon — operator sees the drift and decides. Cheap; no
+  // extra service calls. Engine-level Verify-Planes (faces × pitches)
+  // requires a full UiTrace which the single-edge agent can't synthesize.
+  let planeCountDrift: { agent_polygons: number; solar_segments: number; delta: number } | undefined
+  let footprintAreaRatio: number | undefined
+  if (input.edge === 'eaves' && targetBboxPx && targetBboxPx.trusted && solarSummary.available && finalSegmentsPx.length > 0) {
+    const solarSegs = solarSummary.segments_count
+    const agentPolys = finalSegmentsPx.length
+    planeCountDrift = { agent_polygons: agentPolys, solar_segments: solarSegs, delta: agentPolys - solarSegs }
+    // Pixel-space area → real sqft via the same Mercator scale. At
+    // zoom 21 / scale=2 / lat ≈53°N, 1 px ≈ 0.146 ft. Use the framing
+    // zoom because that's what produced the pixels.
+    const scale = 1 << framing.zoom
+    const groundMPerPx = (40_075_016 * Math.cos((framing.lat * Math.PI) / 180)) / (256 * scale * 2)
+    const ftPerPx = groundMPerPx * 3.28084
+    const ftPerPx2 = ftPerPx * ftPerPx
+    const tracedAreaSqft = finalSegmentsPx.reduce((sum, seg) => sum + polygonArea(seg) * ftPerPx2, 0)
+    const solarAreaSqft = targetBboxPx.widthFt * targetBboxPx.depthFt
+    if (solarAreaSqft > 0) {
+      footprintAreaRatio = Math.round((tracedAreaSqft / solarAreaSqft) * 100) / 100
+    }
+  }
+
   // Calibration: kept as a diagnostic, NO LONGER multiplied into the surfaced
   // confidence. The previous behavior actively destroyed the signal we need —
   // "high model confidence + high edit rate" is itself useful to the UI
@@ -352,6 +416,9 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       refinement_vertices_added: refinementVerticesAdded,
       refinement_elapsed_ms: refinementElapsedMs,
       refinement_iou_gate: refinementIouGate,
+      angle_snapping_applied: snappingApplied,
+      plane_count_drift: planeCountDrift,
+      footprint_area_ratio: footprintAreaRatio,
       model: CLAUDE_VISION_MODEL,
       elapsed_ms: Date.now() - started,
     },
@@ -378,7 +445,13 @@ function chooseImageFraming(
   const lngDiffM = Math.abs(ne.longitude - sw.longitude) * 111_320 * Math.cos((pinLat * Math.PI) / 180)
   const widthFt = lngDiffM * 3.28084
   const depthFt = latDiffM * 3.28084
-  const trusted = widthFt <= 60 && depthFt <= 60
+  // Asymmetric trust check (was: widthFt ≤ 60 && depthFt ≤ 60). The old
+  // symmetric 60ft cutoff failed long-narrow townhouses (e.g. Vancouver
+  // 25×100ft rowhouses → depthFt=100 → untrusted → 60ft clamp crops the
+  // rear of the building). New check: max(w,d) ≤ 100ft AND area ≤ 4500
+  // sqft. Long-narrow lots pass; genuine merged-neighbour bboxes
+  // (typically square and > 5000 sqft) still fail.
+  const trusted = Math.max(widthFt, depthFt) <= 100 && (widthFt * depthFt) <= 4500
   if (!trusted) {
     // Solar merged a neighbour — its bbox is unreliable, don't recentre on it.
     return { lat: pinLat, lng: pinLng, zoom: userZoom, recentered: false }
@@ -438,10 +511,12 @@ function computeTargetBboxPx(
   const lngDiffM = Math.abs(ne.longitude - sw.longitude) * 111_320 * Math.cos((centerLat * Math.PI) / 180)
   const widthFt = Math.round(lngDiffM * 3.28084)
   const depthFt = Math.round(latDiffM * 3.28084)
-  // Mirrors CLAUDE.md's 60ft threshold (OVERLAP_THRESHOLD_M = 18.288).
-  // A bbox bigger than that is almost certainly a Solar-merged neighbour
-  // or the full lot, not a single residential footprint.
-  const trusted = widthFt <= 60 && depthFt <= 60
+  // Asymmetric trust (was widthFt ≤ 60 && depthFt ≤ 60). Long-narrow
+  // residential rowhouses (e.g. Vancouver 25×100ft) need to pass the
+  // trust check; genuine merged-neighbour bboxes (typically square &
+  // > 5000 sqft) still fail. Threshold: max(w,d) ≤ 100ft AND area ≤ 4500
+  // sqft.
+  const trusted = Math.max(widthFt, depthFt) <= 100 && (widthFt * depthFt) <= 4500
 
   // 15% outward pad to forgive small Solar slop — only applied for trusted bboxes.
   if (trusted) {
@@ -498,12 +573,15 @@ function buildSystemPrompt(
     hasViewport3d: boolean
     targetCenterPx: { x: number; y: number }
     targetBboxPx: { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean } | null
+    includeOutbuildings: boolean
   },
 ): string {
   const role = edge === 'eaves'
     ? 'detecting the OUTER PERIMETER of every building roof in the image — one closed polygon per structure (house + any detached garages/sheds visible). Trace at the EAVE LINE (drip edge), not the walls. Include all jogs and bump-outs as vertices of the polygon. ⚠️ FOR 2-STORY BUILDINGS: return the UPPER (main) roofline as ONE polygon AND any LOWER-TIER eave wraparound (porch roof, garage extension lower than the main roof, sunroom/mudroom add-on with its own drip line) as SEPARATE ADDITIONAL polygons in the segments array. Do NOT collapse a 2-story house into a single ring — the lower lip carries a different pitch and matters for the report. Most residential traces land between 8 and 24 vertices per polygon; a true rectangle is 4 and that is correct. Corners only — no points on straight edges. Trees and shadows commonly hide parts of an eave — EXTRAPOLATE visible eave lines through the canopy. Residential roofs are RECTILINEAR with right-angle corners: if 3 sides are visible, the 4th follows by orthogonal projection from the last two visible corners. Do NOT stop the trace at the edge of a tree canopy and call that a corner.'
     : edge === 'ridges'
     ? 'detecting RIDGE LINES — the horizontal peaks where two opposing roof planes meet at the top. Each ridge is a polyline (2+ points). Hip-roof structures usually have one short central ridge; gable roofs have one long ridge per gable. Do NOT trace hips, valleys, or eaves.'
+    : edge === 'valleys'
+    ? 'detecting VALLEY LINES — the INWARD diagonal seams where two roof planes meet in a concave V (the inverse of a hip). Valleys appear where a perpendicular section (dormer, ell, addition) joins the main roof, and run from the ridge intersection DOWN toward an inside eave corner. On the DSM hillshade (Image 2 when present) valleys show as DARK INSET LINES — the surface dips between two planes. Each valley is a polyline (2+ points). A simple gable or hip roof with no perpendicular sections has ZERO valleys. Do NOT trace ridges, hips, or eaves.'
     : 'detecting HIP LINES — the diagonal edges that run from a roof peak down to an outside corner of the eave. Each hip is a polyline (usually 2 points: peak → corner). Hip-roof structures have 4 hips at the corners; gable roofs have zero. Do NOT trace ridges, valleys, or eaves.'
 
   // Image-count phrasing — Claude sees up to 3 images. We tell it which
@@ -526,25 +604,19 @@ function buildSystemPrompt(
     'Coordinate origin for the target image is top-left (0,0). All coordinates you return must be in pixels of Image 1.',
     '',
     '⚠️ TARGET BUILDING — CRITICAL:',
-    `The target building is centred at pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) on Image 1 — the satellite image has been recentred and zoomed so the target sits in the middle of the frame. Trace ONLY this central building. Any other buildings visible at the edges of the image are NEIGHBOURS, not the target.`,
+    opts.includeOutbuildings
+      ? `The target property is centred at pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) on Image 1. Trace the MAIN HOUSE (centre) AND any DETACHED OUTBUILDINGS on the same lot — detached garage, shed, workshop, carport — as ADDITIONAL polygons in segments[]. Each outbuilding gets its own closed polygon. Do NOT trace neighbour houses on adjacent lots (separated by driveways, fences, or property lines).`
+      : `The target building is centred at pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) on Image 1 — the satellite image has been recentred and zoomed so the target sits in the middle of the frame. Trace ONLY this central building. Any other buildings visible at the edges of the image are NEIGHBOURS, not the target.`,
     opts.targetBboxPx
       ? (opts.targetBboxPx.trusted
           ? `Google Solar API's footprint for that building covers approximately the pixel rectangle (${opts.targetBboxPx.x1}, ${opts.targetBboxPx.y1}) to (${opts.targetBboxPx.x2}, ${opts.targetBboxPx.y2}) on Image 1 — ${opts.targetBboxPx.widthFt}ft wide × ${opts.targetBboxPx.depthFt}ft deep. Your output polygon for ${edge === 'eaves' ? 'each eave section' : 'each line'} should sit ENTIRELY within or immediately adjacent to that rectangle. Anything outside it is a neighbour's house, driveway, garden bed, or street — DO NOT TRACE THOSE.`
           : `⚠️ Google Solar API returned a ${opts.targetBboxPx.widthFt}ft × ${opts.targetBboxPx.depthFt}ft bounding box for this address — that is LARGER than a typical residential footprint, which means Solar has MERGED THIS HOUSE WITH A NEIGHBOUR or the full lot. DO NOT use Solar's bbox as a guide. Instead, trace ONLY the single building that contains the pin pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) and is bounded by visible separations (driveways, fences, grass) from any adjacent buildings. Stay within roughly the pixel rectangle (${opts.targetBboxPx.x1}, ${opts.targetBboxPx.y1}) to (${opts.targetBboxPx.x2}, ${opts.targetBboxPx.y2}) which has been clamped to a 60ft radius around the pin.`)
       : 'No Google Solar bounding box is available for this address — trace ONLY the building under the centre pixel and its directly-attached parts (e.g. attached garage). Do NOT trace any building separated from the centre by a clear gap (those are neighbours).',
     edge === 'eaves'
-      ? 'SIZE SANITY (both directions): a typical Canadian residential house footprint is 1,200–3,000 sqft. If your traced polygon is bigger than ~3,500 sqft you are combining the target with a neighbour or outbuilding — shrink it. If your traced polygon is smaller than ~800 sqft you have almost certainly stopped at a tree-occluded eave or shadow — EXTEND the trace to where the eave actually ends, using visible corners + the orthogonal-projection rule above.'
+      ? buildEavesSizeSanityClause(opts.targetBboxPx)
       : 'If your traced lines extend beyond the target building bbox, you are tracing neighbour roofs — drop those lines.',
     '',
-    'OUTPUT: Strict JSON only — no prose, no markdown fences. Schema:',
-    '{',
-    '  "segments": [ [{"x":int,"y":int}, ...], ... ],',
-    edge === 'eaves'
-      ? '  "kinds": ["main"|"lower_tier"|"outbuilding", ...]   // OPTIONAL parallel array, one entry per segment. Omit if every polygon is "main".'
-      : '',
-    '  "confidence": int 0-100,',
-    '  "reasoning": "one short sentence on what you saw, citing which image(s) drove your decisions"',
-    '}',
+    'OUTPUT: Call the emit_trace tool with your detected geometry. DO NOT write prose; the tool schema is the contract. Required fields: segments (pixel polygons/polylines in Image 1 space), confidence (0-100), reasoning (one short sentence citing which image(s) drove your decisions).' + (edge === 'eaves' ? ' Optional field: kinds (parallel array of "main"/"lower_tier"/"outbuilding" — omit if every polygon is "main").' : ''),
     '',
     'RULES:',
     '- Pixel coordinates must be integers within Image 1\'s bounds.',
@@ -557,6 +629,22 @@ function buildSystemPrompt(
     opts.hasViewport3d ? '- Use Image 3 to disambiguate gable-vs-hip and to spot dormers/skylights you might have missed from above. Do NOT trace coordinates from Image 3 — only Image 1.' : '',
     lessonMemo ? '\n' + lessonMemo : '',
   ].filter(Boolean).join('\n')
+}
+
+/** Per-property size-sanity range derived from the Solar bbox, replacing the
+ *  hard-coded 1200–3000 sqft band. A 4500-sqft acreage home and a 900-sqft
+ *  cottage are both legitimate; flagging them as "you merged a neighbour" or
+ *  "you stopped at a tree" caused real false negatives. When Solar has a
+ *  trusted bbox we anchor on that; otherwise fall back to the prior band. */
+function buildEavesSizeSanityClause(bbox: { widthFt: number; depthFt: number; trusted: boolean } | null): string {
+  if (bbox && bbox.trusted) {
+    const expected = Math.max(400, bbox.widthFt * bbox.depthFt)
+    const lo = Math.round(expected * 0.6)
+    const hi = Math.round(expected * 1.3)
+    return `SIZE SANITY (both directions): Solar API's bounding box for this address corresponds to roughly ${Math.round(expected)} sqft of building footprint. A correct eaves polygon for THIS property should land in ${lo}–${hi} sqft (60-130% of the Solar bbox area, accounting for jogs and porches). Bigger than ${hi} sqft → you are combining the target with a neighbour or outbuilding — shrink. Smaller than ${lo} sqft → you stopped at a tree-occluded eave or shadow — EXTEND through the canopy using the orthogonal-projection rule above.`
+  }
+  // No trusted Solar bbox — fall back to the generic Canadian residential band.
+  return 'SIZE SANITY (both directions): a typical Canadian residential house footprint is 1,200–3,000 sqft. If your traced polygon is bigger than ~3,500 sqft you are combining the target with a neighbour or outbuilding — shrink it. If your traced polygon is smaller than ~800 sqft you have almost certainly stopped at a tree-occluded eave or shadow — EXTEND the trace to where the eave actually ends.'
 }
 
 function buildUserPrompt(args: {
@@ -649,6 +737,7 @@ function pickEdgeFromExample(ex: TrainingExample, edge: AutoTraceEdge): unknown 
     if (edge === 'eaves') return trace.eaves_sections || trace.eaves || []
     if (edge === 'ridges') return trace.ridges || []
     if (edge === 'hips') return trace.hips || []
+    if (edge === 'valleys') return trace.valleys || []
   } catch { /* corrupt example — skip */ }
   return []
 }
@@ -678,6 +767,11 @@ async function fetchImageB64(url: string): Promise<{ b64: string; mediaType: 'im
   return { b64: btoa(bin), mediaType }
 }
 
+/** Web Mercator pixel → lat/lng for the satellite tile we sent to Claude.
+ *  Inverse of the Static Maps projection. Note: this function does NOT handle
+ *  the ±180° meridian wrap (a polygon spanning the antimeridian would project
+ *  incorrectly). Acceptable for the current Canadian-only deployment; if the
+ *  service expands to NZ / Fiji / eastern Russia, add a wrap-around branch. */
 function pxToLatLng(px: number, py: number, centerLat: number, centerLng: number, zoom: number, pixelImgW: number, pixelImgH: number): LatLng {
   const scale = 1 << zoom
   const sin = Math.sin(centerLat * Math.PI / 180)
@@ -745,6 +839,126 @@ function summarizeSolar(insights: any): {
 // ─────────────────────────────────────────────────────────────
 export type SegmentKind = 'main' | 'lower_tier' | 'outbuilding'
 
+/** Tool-use schema for the auto-trace output. Returned by the SDK as
+ *  structured `input` on a `tool_use` content block — no JSON parsing,
+ *  no fence-stripping, no regex fallback. The schema differs by edge
+ *  type only in the `kinds` field (eaves-only). */
+function buildEmitTraceTool(edge: AutoTraceEdge): {
+  name: string
+  description: string
+  input_schema: any
+} {
+  const baseProps: any = {
+    segments: {
+      type: 'array',
+      description: edge === 'eaves'
+        ? 'List of closed polygons (one per structure). Eaves: clockwise vertices, do NOT repeat the first vertex at the end. Each polygon needs >= 3 vertices.'
+        : 'List of polylines (one per detected line). Each polyline is an ordered sequence of >= 2 points (corners or endpoints).',
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['x', 'y'],
+          properties: {
+            x: { type: 'integer', description: 'Pixel x in Image 1 coordinate space' },
+            y: { type: 'integer', description: 'Pixel y in Image 1 coordinate space (origin top-left)' },
+          },
+        },
+      },
+    },
+    confidence: {
+      type: 'integer',
+      description: '0-100 self-reported confidence for this trace.',
+      minimum: 0,
+      maximum: 100,
+    },
+    reasoning: {
+      type: 'string',
+      description: 'One short sentence on what you saw, citing which image(s) drove your decisions.',
+    },
+  }
+  if (edge === 'eaves') {
+    baseProps.kinds = {
+      type: 'array',
+      description: 'OPTIONAL parallel array tagging each polygon as "main", "lower_tier" (porch/garage/sunroom lip with separate pitch), or "outbuilding". Omit entirely if every polygon is "main".',
+      items: { type: 'string', enum: ['main', 'lower_tier', 'outbuilding'] },
+    }
+  }
+  return {
+    name: 'emit_trace',
+    description: `Emit the ${edge} geometry detected in Image 1.`,
+    input_schema: {
+      type: 'object',
+      required: ['segments', 'confidence', 'reasoning'],
+      properties: baseProps,
+    },
+  }
+}
+
+/** Pull the tool_use block out of a tool-enforced completion and validate
+ *  its shape. Falls through to text-parsing if the tool call is missing
+ *  (defensive — shouldn't happen with tool_choice forced, but keeps the
+ *  pipeline resilient to API changes). */
+function parseToolResponse(completion: any): {
+  segments: { x: number; y: number }[][]
+  confidence: number
+  reasoning: string
+  kinds?: SegmentKind[]
+} {
+  const toolUse = (completion?.content || []).find((b: any) => b?.type === 'tool_use' && b?.name === 'emit_trace')
+  if (toolUse && toolUse.input) {
+    return normalizeParsedTrace(toolUse.input)
+  }
+  // Fallback: SDK returned text only (some failure modes do this).
+  const text = (completion?.content || [])
+    .filter((b: any) => b.type === 'text')
+    .map((b: any) => b.text)
+    .join('\n')
+    .trim()
+  return parseClaudeResponse(text)
+}
+
+/** Normalize either a tool_use.input object or a parsed JSON dict into the
+ *  internal shape. Single source of truth for the validation rules. */
+function normalizeParsedTrace(parsed: any): {
+  segments: { x: number; y: number }[][]
+  confidence: number
+  reasoning: string
+  kinds?: SegmentKind[]
+} {
+  const rawSegments: any[] = Array.isArray(parsed?.segments) ? parsed.segments : []
+  const segments = rawSegments
+    .map((seg: any[]) => Array.isArray(seg)
+      ? seg.filter((p: any) => Number.isFinite(p?.x) && Number.isFinite(p?.y)).map((p: any) => ({ x: Math.round(p.x), y: Math.round(p.y) }))
+      : [])
+    .filter(seg => seg.length >= 2)
+  const confidence = Math.max(0, Math.min(100, Math.round(Number(parsed?.confidence) || 0)))
+  const reasoning = String(parsed?.reasoning || '').slice(0, 500)
+  let kinds: SegmentKind[] | undefined
+  const rawKinds = Array.isArray(parsed?.kinds) ? parsed.kinds : null
+  if (rawKinds && rawKinds.length === rawSegments.length) {
+    const validated: SegmentKind[] = []
+    let allValid = true
+    for (let i = 0; i < rawKinds.length; i++) {
+      const seg = rawSegments[i]
+      const kept = Array.isArray(seg) && seg.filter((p: any) => Number.isFinite(p?.x) && Number.isFinite(p?.y)).length >= 2
+      if (!kept) continue
+      const k = String(rawKinds[i] || '').toLowerCase()
+      if (k === 'main' || k === 'lower_tier' || k === 'outbuilding') {
+        validated.push(k as SegmentKind)
+      } else {
+        allValid = false
+        break
+      }
+    }
+    if (allValid && validated.length === segments.length) kinds = validated
+  }
+  return { segments, confidence, reasoning, kinds }
+}
+
+/** Legacy prose-JSON parser. Kept ONLY for the critique-pass fallback path
+ *  and for the tool-use safety-net in parseToolResponse(). All happy-path
+ *  parsing now goes through normalizeParsedTrace() via the tool-use input. */
 function parseClaudeResponse(text: string): {
   segments: { x: number; y: number }[][]
   confidence: number
@@ -764,40 +978,103 @@ function parseClaudeResponse(text: string): {
     if (!m) throw new Error('Claude returned non-JSON output')
     parsed = JSON.parse(m[0])
   }
-  const rawSegments: any[] = Array.isArray(parsed?.segments) ? parsed.segments : []
-  const segments = rawSegments
-    .map((seg: any[]) => Array.isArray(seg)
-      ? seg.filter((p: any) => Number.isFinite(p?.x) && Number.isFinite(p?.y)).map((p: any) => ({ x: Math.round(p.x), y: Math.round(p.y) }))
-      : [])
-    .filter(seg => seg.length >= 2)
-  const confidence = Math.max(0, Math.min(100, Math.round(Number(parsed?.confidence) || 0)))
-  const reasoning = String(parsed?.reasoning || '').slice(0, 500)
-  // Optional parallel `kinds` array (eaves-only) — strictly validated. We
-  // only accept entries that map 1:1 to the segments we kept and only the
-  // three sanctioned values. Anything else falls back to undefined so the
-  // caller can treat every segment as "main".
-  let kinds: SegmentKind[] | undefined
-  const rawKinds = Array.isArray(parsed?.kinds) ? parsed.kinds : null
-  if (rawKinds && rawKinds.length === rawSegments.length) {
-    const validated: SegmentKind[] = []
-    let allValid = true
-    // Walk rawKinds aligned to rawSegments, dropping entries whose segment
-    // got filtered out above (length < 2).
-    for (let i = 0; i < rawKinds.length; i++) {
-      const seg = rawSegments[i]
-      const kept = Array.isArray(seg) && seg.filter((p: any) => Number.isFinite(p?.x) && Number.isFinite(p?.y)).length >= 2
-      if (!kept) continue
-      const k = String(rawKinds[i] || '').toLowerCase()
-      if (k === 'main' || k === 'lower_tier' || k === 'outbuilding') {
-        validated.push(k as SegmentKind)
-      } else {
-        allValid = false
-        break
-      }
-    }
-    if (allValid && validated.length === segments.length) kinds = validated
+  return normalizeParsedTrace(parsed)
+}
+
+// ─────────────────────────────────────────────────────────────
+// Dominant-angle snapping (Manhattan-world regularization)
+// ─────────────────────────────────────────────────────────────
+// Residential roofs in North America are overwhelmingly axis-aligned
+// rectilinear shapes — even L/T/U composites are made of right-angle
+// corners. After Claude returns a polygon, snap every edge to the
+// nearest 0° / 90° offset from the building's dominant angle. This is
+// a JOSM-style "orthogonalize shape" pass: deterministic, ~30 lines,
+// catches the kind of jittery vertex placement the prompt's
+// "extrapolate through canopy" instruction can produce.
+//
+// Algorithm: histogram of edge orientations (mod 90°), pick the bin
+// with the largest weighted length, then for each edge, rotate it to
+// the nearest k×90° offset from that dominant. Vertices are the
+// intersection of consecutive snapped edges.
+
+const SNAP_TOLERANCE_DEG = 12  // edges within ±12° of an axis snap; outside, leave alone
+
+function snapPolygonToDominantAngle(poly: { x: number; y: number }[]): { x: number; y: number }[] {
+  if (poly.length < 4) return poly  // triangles & lower — nothing to snap
+  // 1. Build edges + their orientations (radians, mod π/2 since we treat
+  //    horizontal and vertical as the same axis family).
+  type Edge = { a: { x: number; y: number }; b: { x: number; y: number }; theta: number; len: number }
+  const edges: Edge[] = []
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i]
+    const b = poly[(i + 1) % poly.length]
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const len = Math.hypot(dx, dy)
+    if (len < 1) continue
+    const t = Math.atan2(dy, dx)
+    // Map to [0, π/2) — direction-agnostic, so a NS edge and EW edge are π/2 apart.
+    let modT = ((t % (Math.PI / 2)) + Math.PI / 2) % (Math.PI / 2)
+    edges.push({ a, b, theta: modT, len })
   }
-  return { segments, confidence, reasoning, kinds }
+  if (edges.length < 4) return poly
+  // 2. Find the dominant angle in [0, π/2) by length-weighted histogram. 36 bins
+  //    of 2.5° each gives enough resolution to distinguish a 5° tilt from 0°.
+  const BINS = 36
+  const binW = Math.PI / 2 / BINS
+  const hist = new Float64Array(BINS)
+  for (const e of edges) {
+    const idx = Math.min(BINS - 1, Math.floor(e.theta / binW))
+    hist[idx] += e.len
+  }
+  let bestBin = 0, bestW = hist[0]
+  for (let i = 1; i < BINS; i++) if (hist[i] > bestW) { bestW = hist[i]; bestBin = i }
+  const dominantTheta = (bestBin + 0.5) * binW  // centre of the dominant bin
+  // 3. For each edge, compute the angular distance to dominantTheta (mod π/2).
+  //    If within tolerance, snap it onto axis k * π/2 + dominantTheta for the
+  //    nearest k. Otherwise leave as-is (preserves angled wings, mansard cuts).
+  const tolRad = SNAP_TOLERANCE_DEG * Math.PI / 180
+  const snappedEdges = edges.map(e => {
+    // True orientation in [-π, π]
+    const trueTheta = Math.atan2(e.b.y - e.a.y, e.b.x - e.a.x)
+    // Nearest multiple of π/2 plus dominantTheta
+    const offsetFromDominant = trueTheta - dominantTheta
+    const k = Math.round(offsetFromDominant / (Math.PI / 2))
+    const targetTheta = dominantTheta + k * (Math.PI / 2)
+    const diff = Math.abs(((trueTheta - targetTheta + Math.PI) % (2 * Math.PI)) - Math.PI)
+    if (diff > tolRad) return { ...e, snappedTheta: null as number | null }
+    return { ...e, snappedTheta: targetTheta }
+  })
+  // 4. Rebuild vertices as intersections of consecutive snapped edges. Anchor
+  //    each snapped edge at its midpoint (so the polygon stays roughly in place
+  //    rather than drifting). Edges that weren't snapped contribute their
+  //    original endpoints back into the polygon directly.
+  const out: { x: number; y: number }[] = []
+  for (let i = 0; i < snappedEdges.length; i++) {
+    const e = snappedEdges[i]
+    const prev = snappedEdges[(i - 1 + snappedEdges.length) % snappedEdges.length]
+    if (e.snappedTheta === null && prev.snappedTheta === null) {
+      out.push(e.a)
+      continue
+    }
+    if (e.snappedTheta !== null && prev.snappedTheta !== null) {
+      // Intersect prev (anchored at its midpoint) with e (anchored at its midpoint).
+      const pMx = (prev.a.x + prev.b.x) / 2, pMy = (prev.a.y + prev.b.y) / 2
+      const eMx = (e.a.x + e.b.x) / 2, eMy = (e.a.y + e.b.y) / 2
+      const pDx = Math.cos(prev.snappedTheta!), pDy = Math.sin(prev.snappedTheta!)
+      const eDx = Math.cos(e.snappedTheta!),    eDy = Math.sin(e.snappedTheta!)
+      // Solve [pDx -eDx; pDy -eDy] [t; s] = [eMx-pMx; eMy-pMy]
+      const det = pDx * (-eDy) - (-eDx) * pDy
+      if (Math.abs(det) < 1e-6) { out.push(e.a); continue }
+      const rhsX = eMx - pMx, rhsY = eMy - pMy
+      const t = (rhsX * (-eDy) - (-eDx) * rhsY) / det
+      out.push({ x: Math.round(pMx + t * pDx), y: Math.round(pMy + t * pDy) })
+      continue
+    }
+    // Only one side is snapped — anchor at the original shared vertex.
+    out.push(e.a)
+  }
+  return out
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -984,19 +1261,21 @@ async function refineEavesViaSelfCritique(
     'Output rules:',
     '- Keep the corners the first draft got right. Add the corners it missed. Remove any vertex that cuts off real roof or that traces a neighbour.',
     '- If the first draft is correct as-is, return it unchanged with reasoning "first draft already complete".',
-    '- 8+ vertices per polygon; corners only — no points on straight edges. Clockwise. Do NOT repeat the first vertex at the end.',
-    '- Output STRICT JSON only, no prose, no markdown fences. Schema:',
-    '  { "segments": [ [{"x":int,"y":int}, ...], ... ], "confidence": int 0-100, "reasoning": "what you changed and why" }',
+    '- One vertex per corner — no points on straight edges. Clockwise. Do NOT repeat the first vertex at the end. Most residential traces land between 8 and 24 vertices per polygon; a true rectangle is 4 and that is correct.',
+    '- Call the emit_trace tool with the refined geometry. DO NOT write prose response; the tool schema is the contract.',
   ].join('\n')
 
   const critiqueUser = `Image 1 is ${pixelImgW}x${pixelImgH} pixels. Image 2 is the same dimensions, identical projection — pixel coords are interchangeable.\n\nFirst-draft vertex count per polygon: ${draftSegmentsPx.map(s => s.length).join(', ')}.\n\nReturn the refined ${draftSegmentsPx.length === 1 ? 'polygon' : 'polygons'} as JSON.`
 
+  const critiqueTool = buildEmitTraceTool('eaves')
   let completion: any
   try {
     completion = await anthropic.messages.create({
       model: CLAUDE_VISION_MODEL,
       max_tokens: 4096,
       system: critiqueSystem,
+      tools: [critiqueTool],
+      tool_choice: { type: 'tool', name: critiqueTool.name },
       messages: [{
         role: 'user',
         content: [
@@ -1005,21 +1284,15 @@ async function refineEavesViaSelfCritique(
           { type: 'text', text: critiqueUser },
         ],
       }],
-    })
+    } as any)
   } catch (e: any) {
     console.warn('[auto-trace] refinement Claude call failed:', e?.message)
     return null
   }
 
-  const text = completion.content
-    .filter((b: any) => b.type === 'text')
-    .map((b: any) => b.text)
-    .join('\n')
-    .trim()
-
   let parsed: { segments: { x: number; y: number }[][]; confidence: number; reasoning: string }
   try {
-    parsed = parseClaudeResponse(text)
+    parsed = parseToolResponse(completion)
   } catch (e: any) {
     console.warn('[auto-trace] refinement parse failed:', e?.message)
     return null

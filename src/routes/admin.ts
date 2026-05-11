@@ -4708,8 +4708,8 @@ adminRoutes.post('/superadmin/orders/:id/auto-trace/:edge', async (c) => {
   if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
 
   const edge = c.req.param('edge') as AutoTraceEdge
-  if (edge !== 'eaves' && edge !== 'hips' && edge !== 'ridges') {
-    return c.json({ error: 'edge must be eaves|hips|ridges' }, 400)
+  if (edge !== 'eaves' && edge !== 'hips' && edge !== 'ridges' && edge !== 'valleys') {
+    return c.json({ error: 'edge must be eaves|hips|ridges|valleys' }, 400)
   }
 
   let body: any = {}
@@ -4756,6 +4756,8 @@ adminRoutes.post('/superadmin/orders/:id/auto-trace/:edge', async (c) => {
       imageHeight: Number(body?.imageHeight) || 640,
       viewport3dB64,
       includeDebugImages: debugImages,
+      includeOutbuildings: body?.include_outbuildings === true,
+      skipAngleSnapping: body?.skip_angle_snapping === true,
     })
 
     // Audit row so the super-admin activity feed shows who ran what when,
