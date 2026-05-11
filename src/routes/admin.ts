@@ -17,6 +17,7 @@ import { trackActivity } from '../services/activity-tracker'
 import { getReportViewEvents, getReportViewSummary } from '../repositories/reports'
 import { runAutoTrace, type AutoTraceEdge } from '../services/auto-trace-agent'
 import { logCorrections as logAutoTraceCorrections } from '../services/auto-trace-learning'
+import { sendSignupNurtureToCustomer, type NurtureStage } from '../services/signup-nurture'
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -5521,6 +5522,177 @@ adminRoutes.get('/api-stats', async (c) => {
 // Auto-proposal observability moved to /api/automations/proposal/* —
 // those routes are roofer-scoped (customer session) with admin passthrough.
 // See src/routes/automations.ts.
+
+// ── POST /api/admin/customers/:id/send-nurture ───────────────────────────
+// Manually fire one nurture-stage email at a specific customer. Bypasses the
+// cron's time-window check so super-admin can re-engage a single signup
+// on demand. Body: { "stage": "1h" | "24h" | "3d" }.
+adminRoutes.post('/customers/:id/send-nurture', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (!Number.isFinite(id) || id <= 0) return c.json({ error: 'Invalid customer id' }, 400)
+  let body: any = {}
+  try { body = await c.req.json() } catch { /* default to 1h */ }
+  const stage = (body?.stage || '1h') as NurtureStage
+  if (!['1h', '24h', '3d'].includes(stage)) {
+    return c.json({ error: `Invalid stage '${stage}'. Must be one of: 1h, 24h, 3d` }, 400)
+  }
+  const result = await sendSignupNurtureToCustomer(c.env as any, id, stage)
+  if (!result.success) return c.json(result, 502)
+  return c.json(result)
+})
+
+// ── GET /api/admin/customers/:id/journey.html ────────────────────────────
+// HTML wrapper around the /api/admin/customers/:id/journey JSON endpoint
+// — renders a clean chronological table for super-admin diagnostics.
+// Useful when investigating a specific signup (e.g. "what did customer #57
+// do before bouncing?"). One-page, no JS needed for the basic table.
+adminRoutes.get('/customers/:id/journey.html', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (!Number.isFinite(id) || id <= 0) return c.html('<p style="font-family:sans-serif;color:#c00">Invalid customer id</p>', 400)
+
+  const customer = await c.env.DB.prepare(
+    `SELECT id, email, name, company_name, phone, email_verified, free_trial_total,
+            free_trial_used, credits_used, gclid, google_id, last_login, created_at
+     FROM customers WHERE id = ?`
+  ).bind(id).first<any>()
+  if (!customer) return c.html('<p style="font-family:sans-serif;color:#c00">Customer not found</p>', 404)
+
+  const attribution = await c.env.DB.prepare(
+    `SELECT first_touch_path, first_touch_path_template, first_touch_referrer_domain,
+            first_touch_utm_source, first_touch_utm_medium, first_touch_utm_campaign,
+            first_touch_at, last_touch_path, last_touch_at, touch_count,
+            first_paid_at, total_orders, revenue_cents
+     FROM analytics_attribution WHERE customer_id = ?`
+  ).bind(id).first<any>().catch(() => null) as any
+
+  const [pathEvents, orderEvents, activityEvents] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT path, module, occurred_at, ip_address, user_agent FROM user_path_events
+       WHERE user_type='customer' AND user_id = ? ORDER BY occurred_at DESC LIMIT 200`
+    ).bind(id).all<any>().catch(() => ({ results: [] })) as any,
+    c.env.DB.prepare(
+      `SELECT id, order_number, status, payment_status, price, property_address, created_at
+       FROM orders WHERE customer_id = ? ORDER BY created_at DESC LIMIT 50`
+    ).bind(id).all<any>().catch(() => ({ results: [] })) as any,
+    c.env.DB.prepare(
+      `SELECT action, details, created_at FROM user_activity_log
+       WHERE details LIKE ? ORDER BY created_at DESC LIMIT 100`
+    ).bind(`%customer_id":${id}%`).all<any>().catch(() => ({ results: [] })) as any,
+  ])
+
+  const events: any[] = []
+  for (const r of (pathEvents.results || [])) {
+    events.push({ kind: 'page_view', occurred_at: r.occurred_at, summary: r.path, detail: r.module || '' })
+  }
+  for (const r of (orderEvents.results || [])) {
+    events.push({ kind: 'order', occurred_at: r.created_at, summary: `Order ${r.order_number} (${r.status}/${r.payment_status}) $${r.price}`, detail: r.property_address || '' })
+  }
+  for (const r of (activityEvents.results || [])) {
+    events.push({ kind: 'activity', occurred_at: r.created_at, summary: r.action, detail: (r.details || '').slice(0, 140) })
+  }
+  events.sort((a, b) => String(b.occurred_at || '').localeCompare(String(a.occurred_at || '')))
+
+  const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  const kindBg: Record<string, string> = { page_view: '#dbeafe', order: '#dcfce7', activity: '#fef3c7' }
+
+  const rowsHtml = events.map(e => `
+    <tr>
+      <td style="padding:8px 10px;font-family:ui-monospace,monospace;font-size:12px;color:#374151;white-space:nowrap;">${esc(e.occurred_at)}</td>
+      <td style="padding:8px 10px;"><span style="background:${kindBg[e.kind] || '#e5e7eb'};color:#111;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">${esc(e.kind)}</span></td>
+      <td style="padding:8px 10px;font-size:13px;color:#111;">${esc(e.summary)}</td>
+      <td style="padding:8px 10px;font-size:12px;color:#6b7280;">${esc(e.detail)}</td>
+    </tr>`).join('')
+
+  const html = `<!DOCTYPE html><html><head><title>Customer #${id} Journey</title>
+<style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;background:#f9fafb;color:#111;margin:0;padding:24px;}
+h1{margin:0 0 8px;font-size:22px;}h2{margin:24px 0 12px;font-size:15px;color:#374151;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:20px;margin-bottom:16px;}
+.kv{display:grid;grid-template-columns:160px 1fr;gap:6px 12px;font-size:13px;}
+.kv strong{color:#6b7280;font-weight:500;}.kv span{color:#111;font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;}
+table{width:100%;border-collapse:collapse;font-size:13px;}thead{background:#f3f4f6;}thead th{padding:8px 10px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #e5e7eb;}
+tbody tr{border-bottom:1px solid #f3f4f6;}tbody tr:hover{background:#fafafa;}
+.actions{margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;}
+.btn{padding:8px 14px;background:#00FF88;color:#0A0A0A;font-weight:700;border:none;border-radius:8px;cursor:pointer;font-size:13px;text-decoration:none;display:inline-block;}
+.btn-secondary{background:#e5e7eb;color:#111;}
+.empty{padding:24px;text-align:center;color:#9ca3af;font-size:13px;}
+</style></head><body>
+<a href="/super-admin/customers" style="font-size:13px;color:#00CC70;text-decoration:none;">← All customers</a>
+<h1>Customer #${id} — ${esc(customer.email)}</h1>
+<p style="color:#6b7280;font-size:14px;margin:4px 0 16px;">Signed up ${esc(customer.created_at)} via ${customer.google_id ? 'Google SSO' : 'email/password'}</p>
+
+<div class="card">
+  <h2 style="margin-top:0;">Identity</h2>
+  <div class="kv">
+    <strong>Name</strong><span>${esc(customer.name || '(none)')}</span>
+    <strong>Company</strong><span>${esc(customer.company_name || '(none)')}</span>
+    <strong>Phone</strong><span>${esc(customer.phone || '(none)')}</span>
+    <strong>Email verified</strong><span>${customer.email_verified ? 'YES' : 'no'}</span>
+    <strong>Free reports</strong><span>${customer.free_trial_used}/${customer.free_trial_total} used</span>
+    <strong>Paid credits used</strong><span>${customer.credits_used}</span>
+    <strong>gclid</strong><span>${esc(customer.gclid || '(none — see attribution below)')}</span>
+    <strong>Last login</strong><span>${esc(customer.last_login || '(never)')}</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Attribution</h2>
+  ${attribution ? `<div class="kv">
+    <strong>First touch path</strong><span>${esc(attribution.first_touch_path || '(template only: ' + (attribution.first_touch_path_template || 'unknown') + ')')}</span>
+    <strong>First touch at</strong><span>${esc(attribution.first_touch_at || '?')}</span>
+    <strong>Referrer domain</strong><span>${esc(attribution.first_touch_referrer_domain || '(direct)')}</span>
+    <strong>UTM source / medium</strong><span>${esc(attribution.first_touch_utm_source || '?')} / ${esc(attribution.first_touch_utm_medium || '?')}</span>
+    <strong>UTM campaign</strong><span>${esc(attribution.first_touch_utm_campaign || '?')}</span>
+    <strong>Last touch path</strong><span>${esc(attribution.last_touch_path || '?')}</span>
+    <strong>Touch count</strong><span>${esc(attribution.touch_count || 0)}</span>
+    <strong>First paid at</strong><span>${esc(attribution.first_paid_at || '(not yet)')}</span>
+    <strong>Revenue (cents)</strong><span>${esc(attribution.revenue_cents || 0)}</span>
+  </div>` : '<p class="empty">No attribution row yet (cron-driven recompute hasn\'t reached this customer)</p>'}
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Manual Actions</h2>
+  <div class="actions">
+    <button class="btn" onclick="sendNurture('1h')">Send +1h Nurture</button>
+    <button class="btn" onclick="sendNurture('24h')">Send +24h Nurture</button>
+    <button class="btn" onclick="sendNurture('3d')">Send +3d Nurture</button>
+    <a class="btn btn-secondary" href="/api/admin/customers/${id}/journey" target="_blank">View JSON</a>
+  </div>
+  <div id="action-result" style="margin-top:12px;font-size:13px;color:#374151;"></div>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Timeline (${events.length} events)</h2>
+  ${events.length > 0 ? `<table><thead><tr><th>When (UTC)</th><th>Kind</th><th>What</th><th>Detail</th></tr></thead><tbody>${rowsHtml}</tbody></table>` : '<p class="empty">No events captured yet — page tracking went live 2026-05-11; events recorded from that point forward.</p>'}
+</div>
+
+<script>
+async function sendNurture(stage) {
+  const el = document.getElementById('action-result');
+  el.textContent = 'Sending...';
+  try {
+    const r = await fetch('/api/admin/customers/${id}/send-nurture', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin',
+      body: JSON.stringify({ stage })
+    });
+    const data = await r.json();
+    if (data.success) {
+      el.style.color = '#15803d';
+      el.textContent = '✓ Sent "' + data.subject + '" to ' + data.sent_to;
+    } else {
+      el.style.color = '#c00';
+      el.textContent = '✗ Failed: ' + (data.error || 'unknown');
+    }
+  } catch (e) {
+    el.style.color = '#c00';
+    el.textContent = '✗ Network error: ' + e.message;
+  }
+}
+</script>
+</body></html>`
+  return c.html(html)
+})
 
 // ── GET /api/admin/customers/:id/journey ─────────────────────────────────────
 // Chronological combined feed of everything we know about one customer:
