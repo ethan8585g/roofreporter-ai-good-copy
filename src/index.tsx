@@ -1205,6 +1205,7 @@ app.get('/3d-verify', async (c) => {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="referrer" content="no-referrer" />
 <title>3D Roof Verify · Roof Manager</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.121.0/Build/Cesium/Widgets/widgets.min.css">
 <style>
