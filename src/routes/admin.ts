@@ -5555,6 +5555,95 @@ adminRoutes.post('/customers/:id/send-nurture', async (c) => {
   return c.json(result)
 })
 
+// ── GET /superadmin/journey/customers ────────────────────────────────────
+// Powers the "Customer Timelines" tab of the new Journey sidebar module.
+// Returns one row per customer ranked by most-recent signal (page view,
+// email click, login, signup) so you see the freshest activity first.
+adminRoutes.get('/superadmin/journey/customers', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  try {
+    const search = c.req.query('search') || ''
+    const limit = Math.min(parseInt(c.req.query('limit') || '100'), 500)
+    // user_path_events / email_sends may be empty on fresh DBs — left-join with COALESCE
+    // so the query never fails even if those tables are pre-migration.
+    const where = search
+      ? `WHERE c.email LIKE ? OR c.name LIKE ? OR c.company_name LIKE ?`
+      : ``
+    const sql = `
+      SELECT c.id, c.email, c.name, c.company_name, c.created_at, c.last_login, c.email_verified,
+             (SELECT MAX(occurred_at) FROM user_path_events
+                WHERE user_type='customer' AND user_id=c.id) AS last_page_at,
+             (SELECT COUNT(*) FROM email_sends WHERE customer_id=c.id) AS email_count,
+             (SELECT COALESCE(SUM(open_count),0) FROM email_sends WHERE customer_id=c.id) AS total_opens,
+             (SELECT COALESCE(SUM(click_count),0) FROM email_sends WHERE customer_id=c.id) AS total_clicks,
+             (SELECT MAX(last_clicked_at) FROM email_sends WHERE customer_id=c.id) AS last_click_at,
+             (SELECT COUNT(*) FROM orders WHERE customer_id=c.id) AS order_count
+      FROM customers c
+      ${where}
+      ORDER BY COALESCE(
+        (SELECT MAX(occurred_at) FROM user_path_events WHERE user_type='customer' AND user_id=c.id),
+        (SELECT MAX(last_clicked_at) FROM email_sends WHERE customer_id=c.id),
+        c.last_login,
+        c.created_at
+      ) DESC
+      LIMIT ?`
+    const stmt = search
+      ? c.env.DB.prepare(sql).bind(`%${search}%`, `%${search}%`, `%${search}%`, limit)
+      : c.env.DB.prepare(sql).bind(limit)
+    const res = await stmt.all<any>().catch(() => ({ results: [] }))
+    return c.json({ customers: res.results || [] })
+  } catch (err: any) {
+    return c.json({ error: err.message, customers: [] }, 500)
+  }
+})
+
+// ── GET /superadmin/journey/emails ───────────────────────────────────────
+// Powers the "Email Tracking" tab of the Journey module. Reverse-chrono
+// feed of every row in email_sends, joined to the customers table so the
+// UI can show recipient name and link straight into the per-customer
+// journey view.
+adminRoutes.get('/superadmin/journey/emails', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  try {
+    const kind = c.req.query('kind') || ''
+    const search = c.req.query('search') || ''
+    const limit = Math.min(parseInt(c.req.query('limit') || '200'), 1000)
+    const conds: string[] = []
+    const binds: any[] = []
+    if (kind) { conds.push(`es.kind = ?`); binds.push(kind) }
+    if (search) {
+      conds.push(`(es.recipient LIKE ? OR es.subject LIKE ? OR c.email LIKE ? OR c.name LIKE ?)`)
+      binds.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`)
+    }
+    const where = conds.length ? `WHERE ${conds.join(' AND ')}` : ``
+    binds.push(limit)
+    const sql = `
+      SELECT es.id, es.customer_id, es.recipient, es.kind, es.subject,
+             es.sent_at, es.opened_at, es.open_count, es.last_opened_at,
+             es.click_count, es.first_clicked_at, es.last_clicked_at, es.last_clicked_url,
+             es.send_error,
+             c.email AS customer_email, c.name AS customer_name
+      FROM email_sends es
+      LEFT JOIN customers c ON c.id = es.customer_id
+      ${where}
+      ORDER BY es.sent_at DESC
+      LIMIT ?`
+    const res = await c.env.DB.prepare(sql).bind(...binds).all<any>().catch(() => ({ results: [] }))
+    // Kind distribution for the filter chips — quick aggregate.
+    const kindAgg = await c.env.DB.prepare(
+      `SELECT kind, COUNT(*) AS total,
+              COALESCE(SUM(CASE WHEN opened_at IS NOT NULL THEN 1 ELSE 0 END),0) AS opened,
+              COALESCE(SUM(CASE WHEN click_count > 0 THEN 1 ELSE 0 END),0) AS clicked
+       FROM email_sends GROUP BY kind ORDER BY total DESC`
+    ).all<any>().catch(() => ({ results: [] }))
+    return c.json({ emails: res.results || [], kinds: kindAgg.results || [] })
+  } catch (err: any) {
+    return c.json({ error: err.message, emails: [], kinds: [] }, 500)
+  }
+})
+
 // ── GET /api/admin/customers/:id/journey.html ────────────────────────────
 // HTML wrapper around the /api/admin/customers/:id/journey JSON endpoint
 // — renders a clean chronological table for super-admin diagnostics.

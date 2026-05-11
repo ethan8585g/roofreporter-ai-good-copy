@@ -45,6 +45,13 @@ const SA_SECTIONS = {
       { id: 'customer-onboarding', label: 'Onboarding', icon: 'fa-user-cog' }
     ]
   },
+  journey: {
+    label: 'Journey', icon: 'fa-route',
+    tabs: [
+      { id: 'journey-customers', label: 'Customer Timelines', icon: 'fa-user-clock' },
+      { id: 'journey-emails', label: 'Email Tracking', icon: 'fa-envelope-open-text' }
+    ]
+  },
   revenue: {
     label: 'Revenue', icon: 'fa-dollar-sign',
     tabs: [
@@ -498,6 +505,25 @@ async function loadView(view) {
           if (laRes && laRes.ok) SA.data.liveActivity = await laRes.json();
         } catch(e) { console.warn('Live activity load error:', e); }
         break;
+      case 'journey-customers':
+        try {
+          var jcSearch = SA.journeyCustSearch || '';
+          var jcUrl = '/api/admin/superadmin/journey/customers?limit=100' + (jcSearch ? '&search=' + encodeURIComponent(jcSearch) : '');
+          var jcRes = await saFetch(jcUrl);
+          if (jcRes && jcRes.ok) SA.data.journeyCustomers = await jcRes.json();
+        } catch(e) { console.warn('Journey customers load error:', e); }
+        break;
+      case 'journey-emails':
+        try {
+          var jeKind = SA.journeyEmailKind || '';
+          var jeSearch = SA.journeyEmailSearch || '';
+          var jeUrl = '/api/admin/superadmin/journey/emails?limit=200' +
+            (jeKind ? '&kind=' + encodeURIComponent(jeKind) : '') +
+            (jeSearch ? '&search=' + encodeURIComponent(jeSearch) : '');
+          var jeRes = await saFetch(jeUrl);
+          if (jeRes && jeRes.ok) SA.data.journeyEmails = await jeRes.json();
+        } catch(e) { console.warn('Journey emails load error:', e); }
+        break;
       case 'users':
         const usersRes = await saFetch('/api/admin/superadmin/users');
         if (usersRes && usersRes.ok) SA.data.users = await usersRes.json();
@@ -872,6 +898,8 @@ function renderContent() {
     case 'platform-health-log': root.innerHTML = tabBar + renderHealthCheckLogView(); break;
     case 'platform-settings': root.innerHTML = tabBar + renderPlatformSettingsView(); break;
     case 'people-directory': root.innerHTML = tabBar + renderPeopleDirectoryView(); break;
+    case 'journey-customers': root.innerHTML = tabBar + renderJourneyCustomersView(); break;
+    case 'journey-emails': root.innerHTML = tabBar + renderJourneyEmailsView(); break;
     case 'live-activity': root.innerHTML = tabBar + renderLiveActivityView(); saLiveActivityStartPolling(); break;
     case 'users': root.innerHTML = tabBar + renderUsersView(); break;
     case 'sales': root.innerHTML = tabBar + renderSalesView(); break;
@@ -15850,6 +15878,250 @@ function saLiveActivityStop() {
     clearInterval(window._saLiveActivityTimer);
     window._saLiveActivityTimer = null;
   }
+}
+
+// ============================================================
+// JOURNEY MODULE — Customer Timelines + Email Tracking
+// Top-level sidebar module that surfaces the email + page-event signal
+// per customer. Drill-in re-uses /api/admin/customers/:id/journey.html.
+// ============================================================
+function renderJourneyCustomersView() {
+  // Detail mode — embed the existing per-customer journey page in an iframe
+  // so we get the full timeline (page views, orders, activity, emails) without
+  // re-implementing it.
+  if (SA.journeyDetailId) {
+    return (
+      '<div class="flex items-center gap-3 mb-3">' +
+        '<button onclick="saJourneyBack()" class="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-xs font-semibold text-gray-700">' +
+          '<i class="fas fa-arrow-left mr-1"></i>Back to timelines' +
+        '</button>' +
+        '<a href="/api/admin/customers/' + SA.journeyDetailId + '/journey.html" target="_blank" class="ml-auto text-xs text-teal-600 hover:underline">' +
+          '<i class="fas fa-external-link-alt mr-1"></i>Open in new tab' +
+        '</a>' +
+      '</div>' +
+      '<iframe src="/api/admin/customers/' + SA.journeyDetailId + '/journey.html" ' +
+        'style="width:100%;height:calc(100vh - 180px);border:1px solid #e5e7eb;border-radius:10px;background:#fff;"></iframe>'
+    );
+  }
+
+  var d = SA.data.journeyCustomers || {};
+  var customers = d.customers || [];
+  var search = SA.journeyCustSearch || '';
+
+  function fmtAgo(dt) {
+    if (!dt) return '<span class="text-gray-400">—</span>';
+    var t = Date.parse(String(dt).replace(' ', 'T') + 'Z');
+    if (!Number.isFinite(t)) return '<span class="text-gray-400">—</span>';
+    var s = Math.floor((Date.now() - t) / 1000);
+    if (s < 60) return s + 's ago';
+    if (s < 3600) return Math.floor(s/60) + 'm ago';
+    if (s < 86400) return Math.floor(s/3600) + 'h ago';
+    return Math.floor(s/86400) + 'd ago';
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+  var rows = customers.map(function(r) {
+    var lastActivity = r.last_page_at || r.last_click_at || r.last_login || r.created_at;
+    var clickBadge = (r.total_clicks > 0)
+      ? '<span class="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[10px] font-bold">🎯 ' + r.total_clicks + '</span>'
+      : '';
+    var openBadge = (r.total_opens > 0)
+      ? '<span class="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-semibold">✓ ' + r.total_opens + '</span>'
+      : '';
+    var orderBadge = (r.order_count > 0)
+      ? '<span class="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-[10px] font-bold">' + r.order_count + ' order' + (r.order_count === 1 ? '' : 's') + '</span>'
+      : '';
+    return (
+      '<tr class="hover:bg-gray-50 cursor-pointer" onclick="saJourneyOpen(' + r.id + ')">' +
+        '<td class="px-3 py-2.5 text-sm">' +
+          '<div class="font-semibold text-gray-900">' + esc(r.name || r.email) + '</div>' +
+          '<div class="text-xs text-gray-500">' + esc(r.email) + (r.company_name ? ' · ' + esc(r.company_name) : '') + '</div>' +
+        '</td>' +
+        '<td class="px-3 py-2.5 text-xs text-gray-700 whitespace-nowrap">' + fmtAgo(lastActivity) + '</td>' +
+        '<td class="px-3 py-2.5 text-xs whitespace-nowrap">' +
+          '<span class="text-gray-600">' + (r.email_count || 0) + ' sent</span>' +
+          (openBadge ? ' ' + openBadge : '') +
+          (clickBadge ? ' ' + clickBadge : '') +
+        '</td>' +
+        '<td class="px-3 py-2.5 text-xs whitespace-nowrap">' + (orderBadge || '<span class="text-gray-400">—</span>') + '</td>' +
+        '<td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">' + esc((r.created_at || '').slice(0, 10)) + '</td>' +
+        '<td class="px-3 py-2.5 text-right"><i class="fas fa-chevron-right text-gray-300 text-xs"></i></td>' +
+      '</tr>'
+    );
+  }).join('');
+
+  return (
+    '<div class="bg-white rounded-xl border border-gray-200 p-5 mb-4">' +
+      '<div class="flex items-center justify-between mb-4 flex-wrap gap-3">' +
+        '<div>' +
+          '<h2 class="text-lg font-bold text-gray-900 flex items-center gap-2"><i class="fas fa-route text-teal-600"></i>Customer Timelines</h2>' +
+          '<p class="text-xs text-gray-500 mt-0.5">Ranked by most-recent signal — page view, email click, login. Click a row to drill into the full journey.</p>' +
+        '</div>' +
+        '<div class="relative">' +
+          '<i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>' +
+          '<input type="text" id="journey-cust-search" placeholder="Search name, email, company..." value="' + esc(search) + '" ' +
+            'onkeydown="if(event.key===\'Enter\'){saJourneyCustSearch(this.value)}" ' +
+            'class="pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-sm w-72 focus:outline-none focus:border-teal-400">' +
+        '</div>' +
+      '</div>' +
+      (customers.length === 0
+        ? '<div class="py-16 text-center text-gray-400 text-sm">No customers match this search.</div>'
+        : '<div class="overflow-x-auto">' +
+            '<table class="w-full text-sm">' +
+              '<thead><tr class="text-[10px] uppercase text-gray-500 tracking-wider border-b border-gray-200">' +
+                '<th class="px-3 py-2 text-left">Customer</th>' +
+                '<th class="px-3 py-2 text-left">Last Activity</th>' +
+                '<th class="px-3 py-2 text-left">Email Engagement</th>' +
+                '<th class="px-3 py-2 text-left">Orders</th>' +
+                '<th class="px-3 py-2 text-left">Signed Up</th>' +
+                '<th class="px-3 py-2"></th>' +
+              '</tr></thead>' +
+              '<tbody class="divide-y divide-gray-100">' + rows + '</tbody>' +
+            '</table>' +
+          '</div>') +
+    '</div>'
+  );
+}
+
+function saJourneyOpen(id) {
+  SA.journeyDetailId = id;
+  renderContent();
+}
+function saJourneyBack() {
+  SA.journeyDetailId = null;
+  renderContent();
+}
+function saJourneyCustSearch(v) {
+  SA.journeyCustSearch = v;
+  loadView('journey-customers');
+}
+
+function renderJourneyEmailsView() {
+  var d = SA.data.journeyEmails || {};
+  var emails = d.emails || [];
+  var kinds = d.kinds || [];
+  var activeKind = SA.journeyEmailKind || '';
+  var search = SA.journeyEmailSearch || '';
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+  // Filter chips — All + each distinct kind, with hit counts.
+  var totalAll = kinds.reduce(function(s, k) { return s + (k.total || 0); }, 0);
+  var chipBase = 'px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer';
+  var chips = '<div class="flex items-center gap-1.5 flex-wrap">' +
+    '<button onclick="saJourneyEmailKind(\'\')" class="' + chipBase + ' ' +
+      (activeKind === '' ? 'bg-slate-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200') + '">All <span class="opacity-60 ml-1">' + totalAll + '</span></button>' +
+    kinds.map(function(k) {
+      var active = activeKind === k.kind;
+      return '<button onclick="saJourneyEmailKind(\'' + esc(k.kind) + '\')" class="' + chipBase + ' ' +
+        (active ? 'bg-slate-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200') + '">' +
+        esc(k.kind) + ' <span class="opacity-60 ml-1">' + (k.total || 0) + '</span></button>';
+    }).join('') + '</div>';
+
+  // Aggregate strip — open + click rates per kind. Honest about which signal
+  // we trust: click is reliable, open isn't (image-prefetch + Outlook block).
+  var statsCards = kinds.map(function(k) {
+    var openRate = k.total > 0 ? Math.round((k.opened / k.total) * 100) : 0;
+    var clickRate = k.total > 0 ? Math.round((k.clicked / k.total) * 100) : 0;
+    return (
+      '<div class="bg-white border border-gray-200 rounded-lg p-3 min-w-[140px]">' +
+        '<div class="text-[10px] uppercase text-gray-500 font-semibold tracking-wider">' + esc(k.kind) + '</div>' +
+        '<div class="text-lg font-bold text-gray-900 mt-0.5">' + (k.total || 0) + ' <span class="text-xs font-normal text-gray-400">sent</span></div>' +
+        '<div class="flex items-center gap-2 mt-1 text-[11px]">' +
+          '<span class="text-blue-700">✓ ' + openRate + '% open</span>' +
+          '<span class="text-emerald-700 font-semibold">🎯 ' + clickRate + '% click</span>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+
+  function openCell(r) {
+    if (r.opened_at) {
+      var when = r.last_opened_at || r.opened_at;
+      return '<span class="text-blue-700 font-semibold" title="last opened ' + esc(when) + '">✓ ' + (r.open_count || 1) + '×</span>';
+    }
+    return '<span class="text-gray-300">—</span>';
+  }
+  function clickCell(r) {
+    if (r.click_count > 0) {
+      return '<span class="text-emerald-700 font-bold" title="last clicked ' + esc(r.last_clicked_at || '') + '">🎯 ' + r.click_count + '×</span>';
+    }
+    return '<span class="text-gray-300">—</span>';
+  }
+  function statusCell(r) {
+    if (r.send_error) return '<span class="text-red-600 font-semibold">✗ failed</span>';
+    if (r.click_count > 0) return '<span class="text-emerald-700">engaged</span>';
+    if (r.opened_at) return '<span class="text-blue-700">read</span>';
+    return '<span class="text-gray-400">delivered</span>';
+  }
+
+  var rows = emails.map(function(r) {
+    var who = r.customer_name || r.customer_email || r.recipient;
+    var custLink = r.customer_id
+      ? '<a href="#" onclick="event.stopPropagation();saJourneyOpen(' + r.customer_id + ');saSetView(\'journey-customers\');return false" class="text-teal-600 hover:underline">' + esc(who) + '</a>'
+      : esc(who);
+    var clickedUrl = r.last_clicked_url ? '<div class="text-[10px] text-emerald-700 mt-0.5 truncate max-w-[280px]" title="' + esc(r.last_clicked_url) + '">→ ' + esc(r.last_clicked_url) + '</div>' : '';
+    return (
+      '<tr class="hover:bg-gray-50">' +
+        '<td class="px-3 py-2 text-xs text-gray-600 whitespace-nowrap font-mono">' + esc((r.sent_at || '').replace('T', ' ').slice(0, 16)) + '</td>' +
+        '<td class="px-3 py-2 text-sm">' + custLink +
+          '<div class="text-[10px] text-gray-400">' + esc(r.recipient) + '</div></td>' +
+        '<td class="px-3 py-2"><span class="px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded text-[10px] font-semibold">' + esc(r.kind) + '</span></td>' +
+        '<td class="px-3 py-2 text-sm text-gray-800">' + esc(r.subject || '(no subject)') + clickedUrl + '</td>' +
+        '<td class="px-3 py-2 text-xs whitespace-nowrap text-center">' + openCell(r) + '</td>' +
+        '<td class="px-3 py-2 text-xs whitespace-nowrap text-center">' + clickCell(r) + '</td>' +
+        '<td class="px-3 py-2 text-xs whitespace-nowrap">' + statusCell(r) +
+          (r.send_error ? '<div class="text-[10px] text-red-500 mt-0.5 max-w-[220px] truncate" title="' + esc(r.send_error) + '">' + esc(r.send_error) + '</div>' : '') +
+        '</td>' +
+      '</tr>'
+    );
+  }).join('');
+
+  return (
+    '<div class="space-y-4">' +
+      (statsCards ? '<div class="flex items-stretch gap-2 overflow-x-auto pb-1">' + statsCards + '</div>' : '') +
+      '<div class="bg-white rounded-xl border border-gray-200 p-5">' +
+        '<div class="flex items-center justify-between mb-4 flex-wrap gap-3">' +
+          '<div>' +
+            '<h2 class="text-lg font-bold text-gray-900 flex items-center gap-2"><i class="fas fa-envelope-open-text text-teal-600"></i>Email Tracking</h2>' +
+            '<p class="text-xs text-gray-500 mt-0.5">Every outbound transactional email. Clicks are the trustworthy signal — opens can fire from image-prefetch.</p>' +
+          '</div>' +
+          '<div class="relative">' +
+            '<i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>' +
+            '<input type="text" placeholder="Search recipient, subject, name..." value="' + esc(search) + '" ' +
+              'onkeydown="if(event.key===\'Enter\'){saJourneyEmailSearch(this.value)}" ' +
+              'class="pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-sm w-72 focus:outline-none focus:border-teal-400">' +
+          '</div>' +
+        '</div>' +
+        '<div class="mb-3">' + chips + '</div>' +
+        (emails.length === 0
+          ? '<div class="py-16 text-center text-gray-400 text-sm">No emails match this filter.</div>'
+          : '<div class="overflow-x-auto">' +
+              '<table class="w-full text-sm">' +
+                '<thead><tr class="text-[10px] uppercase text-gray-500 tracking-wider border-b border-gray-200">' +
+                  '<th class="px-3 py-2 text-left">Sent (UTC)</th>' +
+                  '<th class="px-3 py-2 text-left">Recipient</th>' +
+                  '<th class="px-3 py-2 text-left">Kind</th>' +
+                  '<th class="px-3 py-2 text-left">Subject</th>' +
+                  '<th class="px-3 py-2 text-center" title="Image pixel pings — unreliable: Gmail/Apple prefetch fires this; Outlook blocks it.">Opens</th>' +
+                  '<th class="px-3 py-2 text-center" title="Wrapped link click — trustworthy human action.">Clicks</th>' +
+                  '<th class="px-3 py-2 text-left">Status</th>' +
+                '</tr></thead>' +
+                '<tbody class="divide-y divide-gray-100">' + rows + '</tbody>' +
+              '</table>' +
+            '</div>') +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function saJourneyEmailKind(kind) {
+  SA.journeyEmailKind = kind;
+  loadView('journey-emails');
+}
+function saJourneyEmailSearch(v) {
+  SA.journeyEmailSearch = v;
+  loadView('journey-emails');
 }
 
 function renderPeopleDirectoryView() {
