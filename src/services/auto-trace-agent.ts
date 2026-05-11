@@ -135,18 +135,33 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   ])
 
   const hasViewport3d = !!(input.viewport3dB64 && input.viewport3dB64.length > 1000)
+  // Compute the target building's bounding box in PIXEL space on the satellite
+  // image. Static Maps centers the requested lat/lng so the centroid is always
+  // at (W/2, H/2). The Solar API bounding box (when available) gives us the
+  // building extent in lat/lng — projecting through the same Mercator math
+  // the agent already uses for px↔latlng yields the pixel rectangle. This is
+  // the strongest hint we can give Claude for "trace THIS building, not the
+  // neighbors": a sub-image bbox at known pixel coords.
+  const imagePxW = safeW * 2
+  const imagePxH = safeH * 2
+  const targetCenterPx = { x: Math.round(imagePxW / 2), y: Math.round(imagePxH / 2) }
+  const targetBboxPx = computeTargetBboxPx(solarInsights, input.lat, input.lng, zoom, imagePxW, imagePxH)
   const systemPrompt = buildSystemPrompt(input.edge, lessonMemo, {
     hasHillshade: !!hillshade,
     hasViewport3d,
+    targetCenterPx,
+    targetBboxPx,
   })
   const userPrompt = buildUserPrompt({
     edge: input.edge,
-    imagePxW: safeW * 2,
-    imagePxH: safeH * 2,
+    imagePxW,
+    imagePxH,
     solarSummary,
     examples,
     hillshade,
     hasViewport3d,
+    targetCenterPx,
+    targetBboxPx,
   })
 
   // Build the multimodal content array. Order matters — Claude reads them
@@ -209,6 +224,83 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   }
 }
 
+/** Project the Solar API buildingInsights bounding box (lat/lng corners) into
+ *  pixel coordinates on the satellite image we send to Claude. Inverse of
+ *  pxToLatLng() — uses the identical Mercator math.
+ *
+ *  Also computes the bbox dimensions in feet so the caller can detect Google
+ *  Solar's "merged neighbour" failure mode: per CLAUDE.md, any side > 60 ft
+ *  signals the API has folded a neighbour or the whole lot into the
+ *  footprint. We surface that as `trusted = false` so the prompt can fall
+ *  back to a tighter "containing centre pixel only" instruction. */
+function computeTargetBboxPx(
+  insights: any,
+  centerLat: number, centerLng: number, zoom: number,
+  imgW: number, imgH: number,
+): { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean } | null {
+  if (!insights?.boundingBox) return null
+  const bb = insights.boundingBox
+  const sw = bb.sw || bb.southWest
+  const ne = bb.ne || bb.northEast
+  if (!sw?.latitude || !ne?.latitude) return null
+
+  const latLngToPx = (lat: number, lng: number) => {
+    const scale = 1 << zoom
+    const centerSin = Math.sin(centerLat * Math.PI / 180)
+    const centerWorldX = (256 * (0.5 + centerLng / 360)) * scale
+    const centerWorldY = (256 * (0.5 - Math.log((1 + centerSin) / (1 - centerSin)) / (4 * Math.PI))) * scale
+    const targetSin = Math.sin(lat * Math.PI / 180)
+    const targetWorldX = (256 * (0.5 + lng / 360)) * scale
+    const targetWorldY = (256 * (0.5 - Math.log((1 + targetSin) / (1 - targetSin)) / (4 * Math.PI))) * scale
+    return {
+      x: Math.round((targetWorldX - centerWorldX) * 2 + imgW / 2),
+      y: Math.round((targetWorldY - centerWorldY) * 2 + imgH / 2),
+    }
+  }
+  const swPx = latLngToPx(sw.latitude, sw.longitude)
+  const nePx = latLngToPx(ne.latitude, ne.longitude)
+  let x1 = Math.min(swPx.x, nePx.x)
+  let x2 = Math.max(swPx.x, nePx.x)
+  let y1 = Math.min(swPx.y, nePx.y)
+  let y2 = Math.max(swPx.y, nePx.y)
+
+  // Real-world bbox dimensions for the trust check
+  const latDiffM = Math.abs(ne.latitude - sw.latitude) * 111_320
+  const lngDiffM = Math.abs(ne.longitude - sw.longitude) * 111_320 * Math.cos((centerLat * Math.PI) / 180)
+  const widthFt = Math.round(lngDiffM * 3.28084)
+  const depthFt = Math.round(latDiffM * 3.28084)
+  // Mirrors CLAUDE.md's 60ft threshold (OVERLAP_THRESHOLD_M = 18.288).
+  // A bbox bigger than that is almost certainly a Solar-merged neighbour
+  // or the full lot, not a single residential footprint.
+  const trusted = widthFt <= 60 && depthFt <= 60
+
+  // 15% outward pad to forgive small Solar slop — only applied for trusted bboxes.
+  if (trusted) {
+    const padX = Math.round((x2 - x1) * 0.15)
+    const padY = Math.round((y2 - y1) * 0.15)
+    x1 = Math.max(0, x1 - padX)
+    y1 = Math.max(0, y1 - padY)
+    x2 = Math.min(imgW - 1, x2 + padX)
+    y2 = Math.min(imgH - 1, y2 + padY)
+  } else {
+    // Untrusted: clamp the box to a 60ft × 60ft rectangle centred on the pin
+    // so Claude has SOMETHING to constrain against. 60ft at zoom 20 lat 53° ≈
+    // 60/3.28084 m / pixelSizeMeters. At z=20 with scale=2, ground sampling
+    // ≈ 0.298m/px at lat 53.5 → 60ft ≈ 18.3m ≈ 61px. Half is 31px from centre.
+    const scale = 1 << zoom
+    const groundMPerPx = (40_075_016 * Math.cos((centerLat * Math.PI) / 180)) / (256 * scale * 2)
+    const halfPx = Math.round(18.288 / groundMPerPx)
+    const cx = Math.round(imgW / 2)
+    const cy = Math.round(imgH / 2)
+    x1 = Math.max(0, cx - halfPx)
+    y1 = Math.max(0, cy - halfPx)
+    x2 = Math.min(imgW - 1, cx + halfPx)
+    y2 = Math.min(imgH - 1, cy + halfPx)
+  }
+  if (x2 - x1 < 20 || y2 - y1 < 20) return null
+  return { x1, y1, x2, y2, widthFt, depthFt, trusted }
+}
+
 async function safelyFetchSolar(env: Bindings, lat: number, lng: number): Promise<any> {
   try {
     if (!env.GOOGLE_SOLAR_API_KEY) return null
@@ -232,7 +324,12 @@ function stripDataUrl(s: string): string {
 function buildSystemPrompt(
   edge: AutoTraceEdge,
   lessonMemo: string,
-  opts: { hasHillshade: boolean; hasViewport3d: boolean },
+  opts: {
+    hasHillshade: boolean
+    hasViewport3d: boolean
+    targetCenterPx: { x: number; y: number }
+    targetBboxPx: { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean } | null
+  },
 ): string {
   const role = edge === 'eaves'
     ? 'detecting the OUTER PERIMETER of every building roof in the image — one closed polygon per structure (house + any detached garages/sheds visible). Trace at the EAVE LINE (drip edge), not the walls. Include all jogs, bump-outs, and lower-tier eaves. 8+ vertices per polygon; corners only — no points on straight edges.'
@@ -258,6 +355,17 @@ function buildSystemPrompt(
     ...imageRoster,
     '',
     'Coordinate origin for the target image is top-left (0,0). All coordinates you return must be in pixels of Image 1.',
+    '',
+    '⚠️ TARGET BUILDING — CRITICAL:',
+    `The property pin is at pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) on Image 1. Trace ONLY the building that contains this pixel.`,
+    opts.targetBboxPx
+      ? (opts.targetBboxPx.trusted
+          ? `Google Solar API's footprint for that building covers approximately the pixel rectangle (${opts.targetBboxPx.x1}, ${opts.targetBboxPx.y1}) to (${opts.targetBboxPx.x2}, ${opts.targetBboxPx.y2}) on Image 1 — ${opts.targetBboxPx.widthFt}ft wide × ${opts.targetBboxPx.depthFt}ft deep. Your output polygon for ${edge === 'eaves' ? 'each eave section' : 'each line'} should sit ENTIRELY within or immediately adjacent to that rectangle. Anything outside it is a neighbour's house, driveway, garden bed, or street — DO NOT TRACE THOSE.`
+          : `⚠️ Google Solar API returned a ${opts.targetBboxPx.widthFt}ft × ${opts.targetBboxPx.depthFt}ft bounding box for this address — that is LARGER than a typical residential footprint, which means Solar has MERGED THIS HOUSE WITH A NEIGHBOUR or the full lot. DO NOT use Solar's bbox as a guide. Instead, trace ONLY the single building that contains the pin pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) and is bounded by visible separations (driveways, fences, grass) from any adjacent buildings. Stay within roughly the pixel rectangle (${opts.targetBboxPx.x1}, ${opts.targetBboxPx.y1}) to (${opts.targetBboxPx.x2}, ${opts.targetBboxPx.y2}) which has been clamped to a 60ft radius around the pin.`)
+      : 'No Google Solar bounding box is available for this address — trace ONLY the building under the centre pixel and its directly-attached parts (e.g. attached garage). Do NOT trace any building separated from the centre by a clear gap (those are neighbours).',
+    edge === 'eaves'
+      ? 'A typical Canadian residential house is 1,500–3,000 sqft. If your traced polygon is bigger than ~3,500 sqft, you are almost certainly combining the target with a neighbour or an unrelated outbuilding — re-evaluate and shrink the trace.'
+      : 'If your traced lines extend beyond the target building bbox, you are tracing neighbour roofs — drop those lines.',
     '',
     'OUTPUT: Strict JSON only — no prose, no markdown fences. Schema:',
     '{',
@@ -287,6 +395,8 @@ function buildUserPrompt(args: {
   examples: TrainingExample[]
   hillshade: DsmHillshadeResult | null
   hasViewport3d: boolean
+  targetCenterPx: { x: number; y: number }
+  targetBboxPx: { x1: number; y1: number; x2: number; y2: number } | null
 }): string {
   const lines: string[] = []
   lines.push(`Image 1 (target satellite): ${args.imagePxW}x${args.imagePxH} pixels.`)
@@ -295,6 +405,12 @@ function buildUserPrompt(args: {
   }
   if (args.hasViewport3d) {
     lines.push('Image 3 (3D oblique): perspective only — do not use for pixel coordinates.')
+  }
+  lines.push('')
+  lines.push(`TARGET: building at pixel (${args.targetCenterPx.x}, ${args.targetCenterPx.y}).`)
+  if (args.targetBboxPx) {
+    const b = args.targetBboxPx
+    lines.push(`Target bbox: (${b.x1}, ${b.y1}) → (${b.x2}, ${b.y2}) — ${b.widthFt}ft × ${b.depthFt}ft${b.trusted ? '' : ' (UNTRUSTED, Solar API merged neighbour — clamped to 60ft radius around pin)'}. Stay inside this rectangle.`)
   }
   lines.push('')
   lines.push('Google Solar API context for this address:')
