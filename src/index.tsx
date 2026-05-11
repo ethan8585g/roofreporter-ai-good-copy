@@ -363,17 +363,16 @@ gtag('config', 'AW-17810045368');
 gtag('config', 'AW-18080319225/03-qCMDE3KocEPmNr61D', {
   'phone_conversion_number': '7809833335'
 });
-// Conversion labels — real labels look like '26MMCMOgxaYcEPmNr61D'. The trackAdsConversion()
-// helper no-ops on XXX_ values, so all wired fires below stay safe until labels are pasted.
-// Labels are server-injected from env so non-engineers can hot-swap them without a deploy:
-//   GADS_LEAD_LABEL, GADS_CONTACT_LABEL, GADS_DEMO_LABEL, GADS_PURCHASE_LABEL
-// Each is the part AFTER 'AW-18080319225/'. Empty falls back to the placeholder.
+// Conversion labels — real labels look like '26MMCMOgxaYcEPmNr61D'. trackAdsConversion()
+// no-ops on null, so unconfigured kinds stay silent until the matching env var is set.
+// Set GADS_LEAD_LABEL / GADS_CONTACT_LABEL / GADS_DEMO_LABEL / GADS_PURCHASE_LABEL on the
+// Pages project to wire each fire. Value = the part AFTER 'AW-18080319225/'.
 window.GOOGLE_ADS_CONVERSIONS = {
-  lead:         'AW-18080319225/${(c.env as any).GADS_LEAD_LABEL || 'XXX_LEAD_LABEL'}',
-  contact_lead: 'AW-18080319225/${(c.env as any).GADS_CONTACT_LABEL || 'XXX_CONTACT_LABEL'}',
-  demo:         'AW-18080319225/${(c.env as any).GADS_DEMO_LABEL || 'XXX_DEMO_LABEL'}',
+  lead:         ${(c.env as any).GADS_LEAD_LABEL ? `'AW-18080319225/${(c.env as any).GADS_LEAD_LABEL}'` : 'null'},
+  contact_lead: ${(c.env as any).GADS_CONTACT_LABEL ? `'AW-18080319225/${(c.env as any).GADS_CONTACT_LABEL}'` : 'null'},
+  demo:         ${(c.env as any).GADS_DEMO_LABEL ? `'AW-18080319225/${(c.env as any).GADS_DEMO_LABEL}'` : 'null'},
   signup:       'AW-18080319225/26MMCMOgxaYcEPmNr61D',   // account created (LIVE — matches Google Ads conversion action id 7597019203 "Sign-up" event_snippet, verified 2026-05-11 via Supermetrics conversions pull)
-  purchase:     'AW-18080319225/${(c.env as any).GADS_PURCHASE_LABEL || 'XXX_PURCHASE_LABEL'}'
+  purchase:     ${(c.env as any).GADS_PURCHASE_LABEL ? `'AW-18080319225/${(c.env as any).GADS_PURCHASE_LABEL}'` : 'null'}
 };
 
 // Persist Google Ads click ID + UTMs from the URL into localStorage so they
