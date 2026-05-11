@@ -25,7 +25,6 @@ import { sendSignupHealthEmail } from './services/health-email'
 import { runMobileMonitor } from './services/mobile-monitor'
 import { sendMobileMonitorEmail } from './services/mobile-monitor-email'
 import { runDripCampaigns } from './services/drip-campaigns'
-import { refreshTracedIndexCache } from './services/trace-training-data'
 
 // ── Abandoned signup recovery ─────────────────────────────────────────────────
 async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number; skipped: number }> {
@@ -291,28 +290,6 @@ export default {
         .then(() => touchLoopDefinition(env, 'cron_worker_tick', 'pass', null))
         .catch((e: any) => console.warn('[cron_worker_tick] heartbeat write failed:', e?.message || e))
     )
-
-    // ── Auto-Trace Index Refresh (daily at 09:00 UTC, one cron tick) ──
-    // Rebuilds traced_index_cache (the warm few-shot pool the auto-trace
-    // agent retrieves on every super-admin button click). Diverse bucketed
-    // selection across sqft × segment-count combinations so Claude always
-    // sees a variety of property types. Cheap — ~30 D1 inserts. Logged
-    // through the standard agent_runs / loop tracker pipeline so the
-    // dashboard surfaces it like any other recurring agent.
-    if (hour === 9 && minute < 10) {
-      ctx.waitUntil((async () => {
-        const t0 = Date.now()
-        try {
-          const result = await refreshTracedIndexCache(env, 30)
-          const summary = `Refreshed traced_index_cache: ${result.inserted} inserted, ${result.skipped} skipped`
-          console.log(`[CRON:auto-trace-index] ${summary}`)
-          await logRun('auto_trace_index_refresh', 'success', summary, result, Date.now() - t0)
-        } catch (err: any) {
-          console.error('[CRON:auto-trace-index] Error:', err.message)
-          await logRun('auto_trace_index_refresh', 'error', err.message, {}, Date.now() - t0)
-        }
-      })())
-    }
 
     // ── Backlinks health sweep — Mondays at 13:00 UTC (one cron tick) ──
     // Checks ~50 oldest live/verified placements per week. Updates
