@@ -91,6 +91,45 @@ measureRoutes.post('/auto-detect', async (c) => {
     return c.json({ error: 'lat and lng required' }, 400)
   }
 
+  // Opt-in bridge to the full auto-trace agent (Claude Opus + Solar +
+  // DSM + few-shot + self-critique + snapping + verify-planes). When
+  // body.engine === 'claude' is set, route through runAutoTrace and
+  // return its eaves polygon in the same TracePayload shape this endpoint
+  // has always returned. Default (no engine field) keeps the existing
+  // Gemini-flash one-shot below, so no caller of /auto-detect changes
+  // behaviour unless they ask for it.
+  if (body?.engine === 'claude') {
+    try {
+      const { runAutoTrace } = await import('../services/auto-trace-agent')
+      const result = await runAutoTrace(c.env, {
+        orderId: Number(body?.order_id) || 0,
+        edge: 'eaves',
+        lat, lng, zoom,
+        imageWidth, imageHeight,
+      })
+      // /auto-detect's TracePayload shape: eaves is a SINGLE polygon (flat
+      // LatLng[]). runAutoTrace returns LatLng[][] (one polygon per
+      // structure). Pick the largest polygon as the eaves return; ignore
+      // any lower_tier / outbuilding polygons for backward compatibility.
+      const primary = result.segments.length > 0
+        ? result.segments.reduce((a, b) => a.length >= b.length ? a : b)
+        : []
+      return c.json({
+        eaves: primary,
+        ridges: [], hips: [], valleys: [],
+        pitch_rise: null,
+        agent: {
+          confidence: result.confidence,
+          reasoning: result.reasoning,
+          model: result.diagnostics.model,
+        },
+      })
+    } catch (err: any) {
+      console.warn('[measure/auto-detect:claude]', err?.message)
+      return c.json({ error: 'auto_detect_failed', engine: 'claude', message: err?.message }, 500)
+    }
+  }
+
   // Build the source image server-side so the API key never leaves the worker.
   // Static Maps caps width/height at 640px per side; scale=2 doubles effective resolution.
   const mapsKey = c.env.GOOGLE_MAPS_API_KEY

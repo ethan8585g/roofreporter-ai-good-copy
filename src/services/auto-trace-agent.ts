@@ -26,6 +26,7 @@ import { fetchBuildingInsightsRaw } from './solar-api'
 import { fetchTrainingExamples, type TrainingExample } from './trace-training-data'
 import { buildLessonMemo, getCalibrationFactor } from './auto-trace-learning'
 import { fetchDsmHillshade, type DsmHillshadeResult } from './dsm-visualization'
+import { renderGridOverlay } from './grid-overlay'
 
 const CLAUDE_VISION_MODEL = 'claude-opus-4-7'
 
@@ -67,6 +68,20 @@ export interface AutoTraceInput {
    *  structure. Default false — the bbox clamp suppresses these by design
    *  because most reports cover the main house only. */
   includeOutbuildings?: boolean
+  /** When > 0, enable Opus 4.7 extended thinking with this token budget.
+   *  Spatial-reasoning tasks (counting roof segments, comparing geometry
+   *  across images) benefit from a scratchpad; pixel-localization tasks
+   *  usually don't. Defaults to 0 (no thinking). Sensible values: 2000-4000.
+   *  Adds ~30-60% latency. */
+  thinkingBudget?: number
+  /** Send an additional wide-context satellite tile (one zoom level out)
+   *  so Claude can see property boundaries + neighbours without the tight
+   *  framing of the primary image. Off by default. */
+  wideContext?: boolean
+  /** Render a transparent 16×16 grid overlay (Set-of-Marks-style) and
+   *  include it as a parallel image. Helps Claude anchor pixel
+   *  references. Off by default — adds ~1MB to the request payload. */
+  gridOverlay?: boolean
 }
 
 export interface AutoTraceResult {
@@ -136,6 +151,16 @@ export interface AutoTraceResult {
      *  (sqft). 0.8-1.2 is healthy; outside is a leading indicator of trace
      *  drift. Same gating as plane_count_drift. */
     footprint_area_ratio?: number
+    /** Extended-thinking token budget used on this run (0 = disabled). */
+    thinking_budget?: number
+    /** True when a wide-context (zoom-1) tile was fetched + sent. */
+    wide_context_used?: boolean
+    /** True when the Set-of-Marks grid overlay was rendered + sent. */
+    grid_overlay_used?: boolean
+    /** Complexity bucket derived from Solar segment count — 'low' (≤2),
+     *  'mid' (3-4), 'hi' (5+). Carried through to auto_trace_corrections
+     *  via the route handler so lessonMemo + calibration can segment. */
+    complexity_bucket?: string
     model: string
     elapsed_ms: number
   }
@@ -173,17 +198,48 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
 
   const imageUrl = buildSatelliteImageUrl(framing.lat, framing.lng, framing.zoom, safeW, safeH, env.GOOGLE_MAPS_API_KEY)
 
-  // Fetch the two raster inputs in parallel. Both are now centred on
-  // `framing.lat/lng` at `framing.zoom` so their pixel grids align 1:1.
-  const [satellite, hillshade] = await Promise.all([
+  // Optional wide-context tile — one zoom level out, same centre. Gives
+  // Claude property-boundary awareness without inflating the primary tile.
+  const wideContextUrl = input.wideContext && framing.zoom > 17
+    ? buildSatelliteImageUrl(framing.lat, framing.lng, framing.zoom - 1, safeW, safeH, env.GOOGLE_MAPS_API_KEY)
+    : null
+
+  // Optional Set-of-Marks grid overlay — pure-JS render, no external call.
+  // Cheap to compute (~50ms) so we just kick it off in parallel.
+  const gridP = input.gridOverlay
+    ? renderGridOverlay(safeW * 2, safeH * 2).catch((e: any) => {
+        console.warn('[auto-trace] grid overlay render failed:', e?.message)
+        return null
+      })
+    : Promise.resolve(null)
+
+  // Fetch the raster inputs in parallel. All centred on framing.lat/lng at
+  // framing.zoom so pixel grids align 1:1 with the primary image.
+  const [satellite, hillshade, wideContext, gridOverlay] = await Promise.all([
     fetchImageB64(imageUrl),
     fetchDsmHillshade(env, framing.lat, framing.lng, safeW * 2).catch((e: any) => {
       console.warn('[auto-trace] DSM hillshade fetch failed:', e?.message)
       return null
     }),
+    wideContextUrl
+      ? fetchImageB64(wideContextUrl).catch((e: any) => {
+          console.warn('[auto-trace] wide-context tile fetch failed:', e?.message)
+          return null
+        })
+      : Promise.resolve(null),
+    gridP,
   ])
   const imageB64 = satellite.b64
   const imageMediaType = satellite.mediaType
+
+  // Derive a complexity bucket from Solar's segment count so lessonMemo +
+  // calibration can segment their stats. Same bucketing that
+  // refreshTracedIndexCache uses for diversity selection. Stored on the
+  // correction row at submit time too — closes the loop.
+  const complexityBucket =
+    solarSummary.segments_count <= 2 ? 'low'
+    : solarSummary.segments_count <= 4 ? 'mid'
+    : 'hi'
 
   // Past human traces of similar properties + lesson memo from past
   // corrections + calibration factor — all three are how this agent
@@ -197,8 +253,8 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       targetSegments: solarSummary.segments_count,
       limit: 5,
     }),
-    buildLessonMemo(env, input.edge),
-    getCalibrationFactor(env, input.edge),
+    buildLessonMemo(env, input.edge, complexityBucket),
+    getCalibrationFactor(env, input.edge, complexityBucket),
   ])
 
   const hasViewport3d = !!(input.viewport3dB64 && input.viewport3dB64.length > 1000)
@@ -214,6 +270,8 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   const systemPrompt = buildSystemPrompt(input.edge, lessonMemo, {
     hasHillshade: !!hillshade,
     hasViewport3d,
+    hasWideContext: !!wideContext,
+    hasGridOverlay: !!gridOverlay,
     targetCenterPx,
     targetBboxPx,
     includeOutbuildings: !!input.includeOutbuildings,
@@ -225,19 +283,28 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     solarSummary,
     examples,
     hillshade,
+    hasWideContext: !!wideContext,
+    hasGridOverlay: !!gridOverlay,
     hasViewport3d,
     targetCenterPx,
     targetBboxPx,
   })
 
-  // Build the multimodal content array. Order matters — Claude reads them
-  // in sequence, so satellite (truth) → hillshade (structure) → 3D
-  // (perspective) keeps the most important signal first.
+  // Build the multimodal content array. Order MUST match the system-
+  // prompt image roster: satellite → hillshade → wide-context →
+  // grid-overlay → 3D-oblique → text. Anything that drifts out of order
+  // means Claude reads about Image 2 while looking at Image 3.
   const content: any[] = [
     { type: 'image', source: { type: 'base64', media_type: imageMediaType, data: imageB64 } },
   ]
   if (hillshade) {
     content.push({ type: 'image', source: { type: 'base64', media_type: hillshade.mediaType, data: hillshade.b64 } })
+  }
+  if (wideContext) {
+    content.push({ type: 'image', source: { type: 'base64', media_type: wideContext.mediaType, data: wideContext.b64 } })
+  }
+  if (gridOverlay) {
+    content.push({ type: 'image', source: { type: 'base64', media_type: gridOverlay.mediaType, data: gridOverlay.b64 } })
   }
   if (hasViewport3d) {
     content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: stripDataUrl(input.viewport3dB64!) } })
@@ -251,15 +318,27 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   // (markdown fences, trailing prose, missing fields). With a typed tool
   // schema the SDK guarantees a structured input that maps 1:1 to our parser.
   const emitTraceTool = buildEmitTraceTool(input.edge)
-  const completion = await anthropic.messages.create({
+  const thinkingBudget = Math.max(0, Math.min(8000, Math.floor(Number(input.thinkingBudget) || 0)))
+  const messageArgs: any = {
     // Opus 4.7 deprecated the `temperature` knob — leave the default.
     model: CLAUDE_VISION_MODEL,
-    max_tokens: 4096,
+    max_tokens: thinkingBudget > 0 ? Math.max(4096, thinkingBudget + 4096) : 4096,
     system: systemPrompt,
     tools: [emitTraceTool],
     tool_choice: { type: 'tool', name: emitTraceTool.name },
     messages: [{ role: 'user', content }],
-  } as any)
+  }
+  if (thinkingBudget > 0) {
+    // Extended thinking lets the model produce internal reasoning tokens
+    // before emitting the tool call. Useful when the question is "how many
+    // segments are there?" or "does this polygon match the Solar bbox?".
+    // tool_choice must be 'auto' (not 'tool') when thinking is enabled — the
+    // SDK rejects forcing a tool with thinking. Schema is still enforced
+    // since we only registered one tool and the system prompt directs to it.
+    messageArgs.thinking = { type: 'enabled', budget_tokens: thinkingBudget }
+    messageArgs.tool_choice = { type: 'auto' }
+  }
+  const completion = await anthropic.messages.create(messageArgs as any)
 
   const parsed = parseToolResponse(completion)
 
@@ -419,6 +498,10 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       angle_snapping_applied: snappingApplied,
       plane_count_drift: planeCountDrift,
       footprint_area_ratio: footprintAreaRatio,
+      thinking_budget: thinkingBudget || undefined,
+      wide_context_used: !!wideContext,
+      grid_overlay_used: !!gridOverlay,
+      complexity_bucket: complexityBucket,
       model: CLAUDE_VISION_MODEL,
       elapsed_ms: Date.now() - started,
     },
@@ -571,6 +654,8 @@ function buildSystemPrompt(
   opts: {
     hasHillshade: boolean
     hasViewport3d: boolean
+    hasWideContext: boolean
+    hasGridOverlay: boolean
     targetCenterPx: { x: number; y: number }
     targetBboxPx: { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean } | null
     includeOutbuildings: boolean
@@ -584,16 +669,25 @@ function buildSystemPrompt(
     ? 'detecting VALLEY LINES — the INWARD diagonal seams where two roof planes meet in a concave V (the inverse of a hip). Valleys appear where a perpendicular section (dormer, ell, addition) joins the main roof, and run from the ridge intersection DOWN toward an inside eave corner. On the DSM hillshade (Image 2 when present) valleys show as DARK INSET LINES — the surface dips between two planes. Each valley is a polyline (2+ points). A simple gable or hip roof with no perpendicular sections has ZERO valleys. Do NOT trace ridges, hips, or eaves.'
     : 'detecting HIP LINES — the diagonal edges that run from a roof peak down to an outside corner of the eave. Each hip is a polyline (usually 2 points: peak → corner). Hip-roof structures have 4 hips at the corners; gable roofs have zero. Do NOT trace ridges, valleys, or eaves.'
 
-  // Image-count phrasing — Claude sees up to 3 images. We tell it which
-  // is which so it knows to read pixel coords off the FIRST image only.
-  const imageCount = 1 + (opts.hasHillshade ? 1 : 0) + (opts.hasViewport3d ? 1 : 0)
-  const imageRoster: string[] = ['Image 1 — Google satellite (top-down, target reference; ALL pixel coordinates you return must be in this image\'s coordinate space).']
+  // Image roster — order matches the multimodal content array. Caption
+  // each one immediately so Claude knows what it's looking at without
+  // having to infer from contents. Per Anthropic's multi-image docs.
+  const imageRoster: string[] = []
+  let imgN = 1
+  imageRoster.push(`Image ${imgN++} — PRIMARY: Google satellite (top-down, target reference; ALL pixel coordinates you emit must be in THIS image's coordinate space, origin top-left).`)
   if (opts.hasHillshade) {
-    imageRoster.push('Image 2 — DSM hillshade. A synthetic shaded-relief render of the Google Solar API elevation raster, RESAMPLED to the SAME size as Image 1 so pixel coordinates correspond 1:1. Brightness = sun-from-NW illumination of the roof surface; warmer yellow tints = higher above ground. Use it to see ridges (bright lines where two slopes meet at the top), hips (bright diagonal lines from peak to corner), valleys (dark inset lines), and the eave drop where the surface falls to ground level.')
+    imageRoster.push(`Image ${imgN++} — DSM hillshade. A synthetic structural render of the Google Solar API elevation raster, RESAMPLED to the SAME size as Image 1 so pixel coordinates correspond 1:1. THREE independent signals are packed into the RGB channels: RED = multi-azimuth hillshade (omni-directional illumination, ridges and hips appear as bright lines regardless of orientation); GREEN = Sobel edge magnitude on the height field (SHARP green lines where the surface curvature changes — primary cue for ridges, hips, and the inset of valleys); BLUE = above-ground height (brighter blue = higher above ground; near-zero where the surface is at lawn level). Use red+green together to localize lines; use blue to discriminate roof (bright blue) from yard or driveway (dark blue).`)
+  }
+  if (opts.hasWideContext) {
+    imageRoster.push(`Image ${imgN++} — WIDE CONTEXT: same property at one zoom level OUT. Use it to confirm property boundaries vs neighbouring buildings, and to see whether what you think is "the back of the house" is actually a separate detached structure across a driveway. DO NOT emit pixel coordinates from this image.`)
+  }
+  if (opts.hasGridOverlay) {
+    imageRoster.push(`Image ${imgN++} — GRID OVERLAY: a transparent 16×16 grid (columns A–P, rows 1–16) sized identically to Image 1. Use it as a coordinate reference — name the cell a corner falls in (e.g. "the NE corner is in cell K4") in your reasoning, but emit pixel coords for the actual segments. Grid is a thinking aid, not a feature to trace.`)
   }
   if (opts.hasViewport3d) {
-    imageRoster.push('Image 3 — Oblique 3D photorealistic view of the same property (Google Maps 3D tiles, super-admin\'s current camera angle). Use it for perspective — gables, dormers, ridge orientation that\'s ambiguous from above. Do NOT use it for pixel coordinates.')
+    imageRoster.push(`Image ${imgN++} — 3D OBLIQUE: photorealistic perspective view of the same property (Google Maps 3D tiles, super-admin's current camera angle). Use it for perspective — gables, dormers, ridge orientation that's ambiguous from above. DO NOT use it for pixel coordinates.`)
   }
+  const imageCount = imgN - 1
 
   return [
     `You are an expert roof measurement technician ${role}`,
@@ -654,17 +748,26 @@ function buildUserPrompt(args: {
   solarSummary: ReturnType<typeof summarizeSolar>
   examples: TrainingExample[]
   hillshade: DsmHillshadeResult | null
+  hasWideContext: boolean
+  hasGridOverlay: boolean
   hasViewport3d: boolean
   targetCenterPx: { x: number; y: number }
   targetBboxPx: { x1: number; y1: number; x2: number; y2: number } | null
 }): string {
   const lines: string[] = []
-  lines.push(`Image 1 (target satellite): ${args.imagePxW}x${args.imagePxH} pixels.`)
+  let img = 1
+  lines.push(`Image ${img++} (primary satellite): ${args.imagePxW}x${args.imagePxH} pixels.`)
   if (args.hillshade) {
-    lines.push(`Image 2 (DSM hillshade): ${args.hillshade.width}x${args.hillshade.height} pixels, same coordinate space as Image 1. Solar API quality=${args.hillshade.quality || 'unknown'}${args.hillshade.imageryDate ? `, imagery dated ${args.hillshade.imageryDate}` : ''}.`)
+    lines.push(`Image ${img++} (DSM hillshade): ${args.hillshade.width}x${args.hillshade.height} pixels, same coordinate space as Image 1. Solar API quality=${args.hillshade.quality || 'unknown'}${args.hillshade.imageryDate ? `, imagery dated ${args.hillshade.imageryDate}` : ''}.`)
+  }
+  if (args.hasWideContext) {
+    lines.push(`Image ${img++} (wide context): same property at zoom −1; for property-boundary confirmation only. Do NOT emit coords from this image.`)
+  }
+  if (args.hasGridOverlay) {
+    lines.push(`Image ${img++} (grid overlay): 16×16 grid (cols A–P, rows 1–16) at ${args.imagePxW}x${args.imagePxH}, transparent everywhere else. Reference by cell name in reasoning; emit pixel coords for output.`)
   }
   if (args.hasViewport3d) {
-    lines.push('Image 3 (3D oblique): perspective only — do not use for pixel coordinates.')
+    lines.push(`Image ${img++} (3D oblique): perspective only — do not use for pixel coordinates.`)
   }
   lines.push('')
   lines.push(`TARGET: building at pixel (${args.targetCenterPx.x}, ${args.targetCenterPx.y}).`)

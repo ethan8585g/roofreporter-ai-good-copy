@@ -107,10 +107,26 @@ export async function fetchDsmHillshade(
       heights[i] = Number.isFinite(v) ? Math.max(groundLevel, Math.min(ceiling, v)) : groundLevel
     }
 
-    // 4. Hillshade: simulated illumination from NW, 45° altitude
-    const hillshade = computeHillshade(heights, w, h)
-    // 5. Height-tint: above-ground bias so roof structures pop visually
-    const tinted = blendHeightTint(hillshade, heights, w, h, groundLevel, ceiling)
+    // 4. Multi-azimuth hillshade composite. A single NW sun (the prior
+    //    behaviour) shadows any ridge running NW-SE. Render from 4 cardinal
+    //    diagonals and take the per-pixel max — eliminates the directional
+    //    blind spot. Cost: 4× the hillshade math (still microseconds).
+    const hillshadeNW = computeHillshade(heights, w, h, 315)
+    const hillshadeNE = computeHillshade(heights, w, h, 45)
+    const hillshadeSE = computeHillshade(heights, w, h, 135)
+    const hillshadeSW = computeHillshade(heights, w, h, 225)
+    const hillshadeComposite = new Uint8ClampedArray(w * h)
+    for (let i = 0; i < hillshadeComposite.length; i++) {
+      hillshadeComposite[i] = Math.max(hillshadeNW[i], hillshadeNE[i], hillshadeSE[i], hillshadeSW[i])
+    }
+    // 5. Sobel edges on the height field. Ridges and hips become SHARP green
+    //    lines; valleys (concave) and eaves (vertical drop) also pop. Stored
+    //    in the G channel so the model gets 3 independent signals from one
+    //    image rather than three separate uploads.
+    const sobelEdges = computeSobelEdges(heights, w, h)
+    // 6. Pack channels: R = multi-az hillshade, G = Sobel edges, B = above-
+    //    ground height (warmer = higher).
+    const tinted = packRGBChannels(hillshadeComposite, sobelEdges, heights, w, h, groundLevel, ceiling)
 
     // 6. Resample to targetSizePx square
     const rgba = resampleRGBA(tinted, w, h, targetSizePx, targetSizePx)
@@ -146,13 +162,13 @@ function formatImageryDate(d: any): string | undefined {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Hillshade — illumination dot product
+// Hillshade — illumination dot product, parameterized azimuth
 // ─────────────────────────────────────────────────────────────
-function computeHillshade(heights: Float32Array, w: number, h: number): Uint8ClampedArray {
+function computeHillshade(heights: Float32Array, w: number, h: number, azimuthDeg = 315): Uint8ClampedArray {
   const out = new Uint8ClampedArray(w * h)
-  // Sun position: azimuth = 315° (NW), altitude = 45°. Light vector in
-  // x/y/z where +x is east, +y is north, +z is up.
-  const az = (315 * Math.PI) / 180
+  // Sun position: caller-supplied azimuth, altitude fixed at 45°.
+  // Light vector in x/y/z where +x is east, +y is north, +z is up.
+  const az = (azimuthDeg * Math.PI) / 180
   const alt = (45 * Math.PI) / 180
   const lx = Math.cos(alt) * Math.sin(az)
   const ly = Math.cos(alt) * Math.cos(az)
@@ -180,10 +196,53 @@ function computeHillshade(heights: Float32Array, w: number, h: number): Uint8Cla
 }
 
 // ─────────────────────────────────────────────────────────────
-// Height tint — bias the shading toward above-ground structures
+// Sobel edge magnitude on the height field
 // ─────────────────────────────────────────────────────────────
-function blendHeightTint(
+// Sobel kernels detect first-derivative edges — exactly the signal
+// roof ridges, hips, valleys, and eave drops emit on a DSM. Output
+// is scaled to 0..255 by p98 normalization so a single tall tree
+// doesn't compress all the roof edges to ~0.
+function computeSobelEdges(heights: Float32Array, w: number, h: number): Uint8ClampedArray {
+  const mag = new Float32Array(w * h)
+  let maxMag = 0
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const idx = y * w + x
+      const tl = heights[idx - w - 1], t = heights[idx - w], tr = heights[idx - w + 1]
+      const l  = heights[idx - 1],                          r  = heights[idx + 1]
+      const bl = heights[idx + w - 1], b = heights[idx + w], br = heights[idx + w + 1]
+      // Sobel-X: +1 0 -1 / +2 0 -2 / +1 0 -1
+      // Sobel-Y: +1 +2 +1 / 0 0 0 / -1 -2 -1
+      const gx = (tr + 2 * r + br) - (tl + 2 * l + bl)
+      const gy = (tl + 2 * t + tr) - (bl + 2 * b + br)
+      const m = Math.sqrt(gx * gx + gy * gy)
+      mag[idx] = m
+      if (m > maxMag) maxMag = m
+    }
+  }
+  // Robust normalization: clamp at the 98th percentile so a couple of
+  // sky-scraping spikes don't crush the roof gradient range.
+  const sorted = Array.from(mag).filter(v => v > 0).sort((a, b) => a - b)
+  const p98 = sorted.length > 0 ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.98))] : maxMag
+  const norm = p98 > 0 ? 255 / p98 : 0
+  const out = new Uint8ClampedArray(w * h)
+  for (let i = 0; i < mag.length; i++) {
+    out[i] = Math.min(255, Math.round(mag[i] * norm))
+  }
+  return out
+}
+
+// ─────────────────────────────────────────────────────────────
+// Pack three independent structural signals into one RGB image:
+//   R = multi-azimuth hillshade composite (omni-directional illumination)
+//   G = Sobel edge magnitude on the height field (sharp ridges/hips/valleys)
+//   B = above-ground height fraction (taller = brighter blue→yellow tint)
+// Trying to keep each channel discriminable in isolation while the
+// combined visual still reads as "shaded relief with edge accents."
+// ─────────────────────────────────────────────────────────────
+function packRGBChannels(
   hillshade: Uint8ClampedArray,
+  edges: Uint8ClampedArray,
   heights: Float32Array,
   w: number, h: number,
   groundLevel: number, ceiling: number,
@@ -192,15 +251,17 @@ function blendHeightTint(
   const range = Math.max(0.001, ceiling - groundLevel)
   for (let i = 0; i < w * h; i++) {
     const shade = hillshade[i]  // 0..255 illumination
+    const edge = edges[i]       // 0..255 Sobel gradient
     const heightFrac = Math.min(1, Math.max(0, (heights[i] - groundLevel) / range))
-    // Color ramp: ground = blue-grey, roof = warm yellow-white
-    // Lerp(grey -> warmwhite, heightFrac), then multiply by shade.
-    const baseR = 90 + heightFrac * 165   // 90..255
-    const baseG = 110 + heightFrac * 140  // 110..250
-    const baseB = 140 - heightFrac * 60   // 140..80
-    out[i * 4 + 0] = Math.round(baseR * (shade / 255))
-    out[i * 4 + 1] = Math.round(baseG * (shade / 255))
-    out[i * 4 + 2] = Math.round(baseB * (shade / 255))
+    // R = hillshade (illumination intensity)
+    out[i * 4 + 0] = shade
+    // G = Sobel edge magnitude — boost so even modest edges read on a
+    // dark satellite-style display. Capped so already-bright edges hold.
+    out[i * 4 + 1] = Math.min(255, Math.round(edge * 1.4))
+    // B = above-ground height — inverse-warmth so high pixels stay bluish,
+    // ground pixels stay near zero. Combined with the shade in the
+    // hillshade channel this still reads as familiar shaded relief.
+    out[i * 4 + 2] = Math.round(60 + heightFrac * 150)
     out[i * 4 + 3] = 255
   }
   return out

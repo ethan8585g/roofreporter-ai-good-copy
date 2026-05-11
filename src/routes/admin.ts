@@ -4758,6 +4758,9 @@ adminRoutes.post('/superadmin/orders/:id/auto-trace/:edge', async (c) => {
       includeDebugImages: debugImages,
       includeOutbuildings: body?.include_outbuildings === true,
       skipAngleSnapping: body?.skip_angle_snapping === true,
+      thinkingBudget: Number(body?.thinking_budget) || 0,
+      wideContext: body?.wide_context === true,
+      gridOverlay: body?.grid_overlay === true,
     })
 
     // Audit row so the super-admin activity feed shows who ran what when,
@@ -4777,6 +4780,7 @@ adminRoutes.post('/superadmin/orders/:id/auto-trace/:edge', async (c) => {
         reasoning: result.reasoning,
         model: result.diagnostics.model,
         elapsed_ms: result.diagnostics.elapsed_ms,
+        complexity_bucket: result.diagnostics.complexity_bucket,
       })).run()
     } catch { /* non-fatal */ }
 
@@ -4914,7 +4918,7 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
   const orderId = parseInt(c.req.param('id'))
   if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
   try {
-    const { roof_trace_json, force, extra_captures } = await c.req.json()
+    const { roof_trace_json, force, extra_captures, trace_telemetry } = await c.req.json()
     if (!roof_trace_json) return c.json({ error: 'roof_trace_json is required' }, 400)
 
     // Parse if string, then validate structure + geometry before anything hits the DB
@@ -4990,7 +4994,18 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
     // (next agent run reads its own past mistakes) + confidence calibration.
     // Non-fatal — never blocks report generation.
     const ctxLog = (c as any).executionCtx
-    const logP = logAutoTraceCorrections(c.env, orderId, traceObj)
+    // Normalize optional client-side telemetry. All fields nullable; the
+    // learner stores what it gets and falls back to legacy heuristics for
+    // anything missing.
+    const telemetry = trace_telemetry && typeof trace_telemetry === 'object' ? {
+      acceptedUnchanged: trace_telemetry.accepted_unchanged === true,
+      editDurationMs: Number(trace_telemetry.edit_duration_ms) || undefined,
+      vertexMoves: Number(trace_telemetry.vertex_moves) || undefined,
+      vertexAdds: Number(trace_telemetry.vertex_adds) || undefined,
+      vertexDeletes: Number(trace_telemetry.vertex_deletes) || undefined,
+      complexityBucket: typeof trace_telemetry.complexity_bucket === 'string' ? trace_telemetry.complexity_bucket : undefined,
+    } : undefined
+    const logP = logAutoTraceCorrections(c.env, orderId, traceObj, telemetry)
       .catch((e: any) => console.warn('[auto-trace-learning] log failed:', e?.message))
     if (ctxLog?.waitUntil) ctxLog.waitUntil(logP)
 

@@ -36,6 +36,9 @@ interface AutoTraceLogRecord {
   confidence: number
   reasoning: string
   model: string
+  /** Complexity bucket the agent computed at run-time. Carried back into
+   *  auto_trace_corrections so calibration can segment without re-deriving. */
+  complexityBucket?: string
 }
 
 /** Pull every auto-trace draft logged for this order in the last 2 hours. The
@@ -66,12 +69,32 @@ async function fetchRecentAutoTraces(env: Bindings, orderId: number): Promise<Au
           confidence: Number(d.confidence) || 0,
           reasoning: String(d.reasoning || ''),
           model: String(d.model || ''),
+          complexityBucket: typeof d.complexity_bucket === 'string' ? d.complexity_bucket : undefined,
         })
         seenEdges.add(d.edge)
       } catch { /* corrupt log row — skip */ }
     }
     return out
   } catch { return [] }
+}
+
+/** Optional client-side telemetry from the trace editor — distinguishes
+ *  "accepted in 4s" from "rebuilt over 6 minutes". Migration 0235 adds the
+ *  columns; missing fields are stored as NULL. */
+export interface SubmitTelemetry {
+  /** Set when the operator clicked an explicit "Accept Auto-Trace As-Is"
+   *  button. Ground-truth positive signal — overrides the noise-floor
+   *  edited heuristic. */
+  acceptedUnchanged?: boolean
+  /** Milliseconds the operator spent in the trace editor for this order. */
+  editDurationMs?: number
+  /** Counts of operator-level vertex operations. */
+  vertexMoves?: number
+  vertexAdds?: number
+  vertexDeletes?: number
+  /** Property's complexity class at log time (low/mid/hi). Snapshotted so
+   *  calibration can segment without re-deriving later. */
+  complexityBucket?: string
 }
 
 /** Hook called from POST /submit-trace. `finalTrace` is the validated UiTrace
@@ -81,21 +104,30 @@ async function fetchRecentAutoTraces(env: Bindings, orderId: number): Promise<Au
 export async function logCorrections(
   env: Bindings,
   orderId: number,
-  finalTrace: any
+  finalTrace: any,
+  telemetry?: SubmitTelemetry,
 ): Promise<void> {
   try {
     const drafts = await fetchRecentAutoTraces(env, orderId)
     if (drafts.length === 0) return  // admin didn't use the agent — nothing to learn from
 
+    const acceptedUnchanged = telemetry?.acceptedUnchanged === true ? 1 : 0
+
     for (const draft of drafts) {
       const finalSegments = extractFinalSegments(finalTrace, draft.edge)
       const metrics = diffSegments(draft.segments, finalSegments)
+      // If the operator explicitly accepted as-is, override the noise-floor
+      // `edited` boolean — they told us it was fine, trust that over the
+      // 2ft heuristic.
+      const editedFinal = acceptedUnchanged ? 0 : (metrics.edited ? 1 : 0)
       await env.DB.prepare(`
         INSERT INTO auto_trace_corrections (
           order_id, edge, auto_trace_json, final_trace_json,
           agent_confidence, point_count_delta, avg_vertex_offset_ft,
-          fully_replaced, edited, model, agent_reasoning
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          fully_replaced, edited, model, agent_reasoning,
+          complexity_bucket, accepted_unchanged,
+          edit_duration_ms, vertex_moves, vertex_adds, vertex_deletes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         orderId,
         draft.edge,
@@ -105,14 +137,22 @@ export async function logCorrections(
         metrics.point_count_delta,
         metrics.avg_vertex_offset_ft,
         metrics.fully_replaced ? 1 : 0,
-        metrics.edited ? 1 : 0,
+        editedFinal,
         draft.model,
         draft.reasoning.slice(0, 500),
+        // Prefer client telemetry when supplied; fall back to the bucket
+        // the agent stamped onto the audit row at run-time.
+        telemetry?.complexityBucket || draft.complexityBucket || null,
+        acceptedUnchanged,
+        Number.isFinite(telemetry?.editDurationMs as any) ? Math.round(telemetry!.editDurationMs as any) : null,
+        Number.isFinite(telemetry?.vertexMoves as any) ? Math.round(telemetry!.vertexMoves as any) : null,
+        Number.isFinite(telemetry?.vertexAdds as any) ? Math.round(telemetry!.vertexAdds as any) : null,
+        Number.isFinite(telemetry?.vertexDeletes as any) ? Math.round(telemetry!.vertexDeletes as any) : null,
       ).run()
     }
   } catch (e: any) {
-    // Most likely cause: migration 0234 hasn't run yet on this environment.
-    // Silent — the auto-trace agent itself still works without learning.
+    // Most likely cause: migration 0234/0235 hasn't run yet on this
+    // environment. Silent — the agent itself still works without learning.
     console.warn('[auto-trace-learning] logCorrections skipped:', e?.message)
   }
 }
@@ -204,7 +244,7 @@ function greatCircleFt(a: LatLng, b: LatLng): number {
 
 // ── 2. Lesson memo — fed into Claude's system prompt ───────────
 
-export async function buildLessonMemo(env: Bindings, edge: AutoTraceEdge): Promise<string> {
+export async function buildLessonMemo(env: Bindings, edge: AutoTraceEdge, complexityBucket?: string): Promise<string> {
   let rows: Array<{
     point_count_delta: number | null
     avg_vertex_offset_ft: number | null
@@ -213,18 +253,43 @@ export async function buildLessonMemo(env: Bindings, edge: AutoTraceEdge): Promi
     agent_confidence: number
     age_days: number | null
   }>
+  // Try bucket-filtered first; fall back to global when the bucket sample
+  // is thin (< 5 rows). Pure complexity is what predicts trace difficulty —
+  // a 4-segment ranch and a 12-segment dormer house drift differently.
   try {
-    // Pull submitted_at so we can recency-weight every aggregate. A trace
-    // edited 6 months ago shouldn't outvote one edited yesterday.
-    const res = await env.DB.prepare(`
-      SELECT point_count_delta, avg_vertex_offset_ft, fully_replaced, edited, agent_confidence,
-             CAST((julianday('now') - julianday(submitted_at)) AS REAL) AS age_days
-      FROM auto_trace_corrections
-      WHERE edge = ?
-      ORDER BY submitted_at DESC
-      LIMIT 50
-    `).bind(edge).all<any>()
-    rows = res.results || []
+    if (complexityBucket) {
+      const bucketRes = await env.DB.prepare(`
+        SELECT point_count_delta, avg_vertex_offset_ft, fully_replaced, edited, agent_confidence,
+               CAST((julianday('now') - julianday(submitted_at)) AS REAL) AS age_days
+        FROM auto_trace_corrections
+        WHERE edge = ? AND complexity_bucket = ?
+        ORDER BY submitted_at DESC
+        LIMIT 50
+      `).bind(edge, complexityBucket).all<any>()
+      rows = bucketRes.results || []
+      if (rows.length < 5) {
+        // Not enough bucket-specific samples — pull global instead.
+        const globalRes = await env.DB.prepare(`
+          SELECT point_count_delta, avg_vertex_offset_ft, fully_replaced, edited, agent_confidence,
+                 CAST((julianday('now') - julianday(submitted_at)) AS REAL) AS age_days
+          FROM auto_trace_corrections
+          WHERE edge = ?
+          ORDER BY submitted_at DESC
+          LIMIT 50
+        `).bind(edge).all<any>()
+        rows = globalRes.results || []
+      }
+    } else {
+      const res = await env.DB.prepare(`
+        SELECT point_count_delta, avg_vertex_offset_ft, fully_replaced, edited, agent_confidence,
+               CAST((julianday('now') - julianday(submitted_at)) AS REAL) AS age_days
+        FROM auto_trace_corrections
+        WHERE edge = ?
+        ORDER BY submitted_at DESC
+        LIMIT 50
+      `).bind(edge).all<any>()
+      rows = res.results || []
+    }
   } catch { return '' }
   if (rows.length === 0) return ''
 
@@ -284,8 +349,27 @@ export async function buildLessonMemo(env: Bindings, edge: AutoTraceEdge): Promi
  *      trace edited 6 months ago shouldn't outvote one edited yesterday.
  *    - Output: 1 - (editRate × 0.4), floored at 0.5. Matches the old shape
  *      so downstream consumers see no abrupt change. */
-export async function getCalibrationFactor(env: Bindings, edge: AutoTraceEdge): Promise<number> {
+export async function getCalibrationFactor(env: Bindings, edge: AutoTraceEdge, complexityBucket?: string): Promise<number> {
   try {
+    // Bucket-filtered query first when a bucket is supplied. Fall back to
+    // global when the bucket's effective N (recency-weighted) is < 3 — at
+    // that point the Beta(2,2) prior dominates and global gives a better
+    // signal anyway.
+    if (complexityBucket) {
+      const bRes = await env.DB.prepare(`
+        SELECT SUM(exp(-(julianday('now') - julianday(submitted_at)) / 30.0)) AS n_w,
+               SUM(CASE WHEN edited = 1 THEN exp(-(julianday('now') - julianday(submitted_at)) / 30.0) ELSE 0 END) AS edited_w
+        FROM auto_trace_corrections
+        WHERE edge = ? AND complexity_bucket = ?
+          AND submitted_at > datetime('now', '-90 days')
+      `).bind(edge, complexityBucket).first<{ n_w: number; edited_w: number }>()
+      const bN = Number(bRes?.n_w || 0)
+      if (bN >= 3) {
+        const bEdited = Number(bRes?.edited_w || 0)
+        const editRate = (bEdited + 2) / (bN + 4)
+        return Math.max(0.5, Math.min(1.0, 1.0 - editRate * 0.4))
+      }
+    }
     const res = await env.DB.prepare(`
       SELECT SUM(exp(-(julianday('now') - julianday(submitted_at)) / 30.0)) AS n_w,
              SUM(CASE WHEN edited = 1 THEN exp(-(julianday('now') - julianday(submitted_at)) / 30.0) ELSE 0 END) AS edited_w
