@@ -292,6 +292,68 @@ export default {
         .catch((e: any) => console.warn('[cron_worker_tick] heartbeat write failed:', e?.message || e))
     )
 
+    // ── Auto-trace training pool refresh — daily at 09:00 UTC ──
+    // Two-step: (1) backfill house_sqft on up to 30 orders with NULL
+    // sqft + valid lat/lng via Solar API, (2) rebuild the diverse few-
+    // shot pool the auto-trace agent reads. New orders auto-fill within
+    // 24h without per-order-creation wiring. Idempotent: each run
+    // produces the same cache from the same underlying data. Failure of
+    // either step is non-fatal (live D1 + bundled static pool back up
+    // the cache; backfill resumes next run).
+    if (hour === 9 && minute < 10) {
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        let backfillSummary = ''
+        try {
+          if (env.GOOGLE_SOLAR_API_KEY) {
+            const { fetchBuildingInsightsRaw } = await import('./services/solar-api')
+            const rows = await env.DB.prepare(
+              `SELECT id, latitude, longitude FROM orders
+               WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+                 AND (house_sqft IS NULL OR house_sqft = 0)
+               ORDER BY id DESC
+               LIMIT 30`
+            ).all<any>()
+            let updated = 0, skipped = 0, failed = 0
+            for (const row of rows.results || []) {
+              try {
+                const insights = await fetchBuildingInsightsRaw(Number(row.latitude), Number(row.longitude), env.GOOGLE_SOLAR_API_KEY)
+                let sqft: number | null = null
+                const wholeRoof = insights?.solarPotential?.wholeRoofStats?.areaMeters2
+                if (Number.isFinite(wholeRoof) && wholeRoof > 0) {
+                  sqft = Math.round(Number(wholeRoof) * 10.7639)
+                } else if (insights?.boundingBox) {
+                  const bb = insights.boundingBox
+                  const sw = bb.sw || bb.southWest
+                  const ne = bb.ne || bb.northEast
+                  if (sw?.latitude && ne?.latitude) {
+                    const lat = (sw.latitude + ne.latitude) / 2
+                    const latDiffM = Math.abs(ne.latitude - sw.latitude) * 111_320
+                    const lngDiffM = Math.abs(ne.longitude - sw.longitude) * 111_320 * Math.cos(lat * Math.PI / 180)
+                    sqft = Math.round(latDiffM * lngDiffM * 10.7639)
+                  }
+                }
+                if (!sqft || sqft < 200 || sqft > 50_000) { skipped++; continue }
+                await env.DB.prepare(`UPDATE orders SET house_sqft = ? WHERE id = ?`).bind(sqft, row.id).run()
+                updated++
+              } catch { failed++ }
+            }
+            backfillSummary = `Backfill: ${updated} updated, ${skipped} skipped, ${failed} failed (of ${rows.results?.length || 0})`
+          } else {
+            backfillSummary = 'Backfill: SKIPPED (GOOGLE_SOLAR_API_KEY not configured on cron worker)'
+          }
+          const { refreshTracedIndexCache } = await import('./services/trace-training-data')
+          const result = await refreshTracedIndexCache(env, 30)
+          const summary = `${backfillSummary} | Cache: ${result.inserted} inserted, ${result.skipped} skipped`
+          console.log(`[CRON:trace-pool-refresh] ${summary}`)
+          await logRun('trace_pool_refresh', 'success', summary, result, Date.now() - t0)
+        } catch (err: any) {
+          console.error('[CRON:trace-pool-refresh] Error:', err?.message)
+          await logRun('trace_pool_refresh', 'error', err?.message || 'unknown', { backfillSummary }, Date.now() - t0)
+        }
+      })())
+    }
+
     // ── Backlinks health sweep — Mondays at 13:00 UTC (one cron tick) ──
     // Checks ~50 oldest live/verified placements per week. Updates
     // last_check_status and stamps removed_at on rot. Manual run available

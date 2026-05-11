@@ -18,6 +18,7 @@ import { getReportViewEvents, getReportViewSummary } from '../repositories/repor
 import { runAutoTrace, type AutoTraceEdge } from '../services/auto-trace-agent'
 import { logCorrections as logAutoTraceCorrections } from '../services/auto-trace-learning'
 import { refreshTracedIndexCache } from '../services/trace-training-data'
+import { fetchBuildingInsightsRaw } from '../services/solar-api'
 import { sendSignupNurtureToCustomer, type NurtureStage } from '../services/signup-nurture'
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>()
@@ -4702,9 +4703,138 @@ adminRoutes.get('/superadmin/orders/needs-trace', async (c) => {
 // Manual trigger for now; the cron worker will fire this nightly once
 // wrangler-cron is updated.
 // ============================================================
+// BACKFILL HOUSE_SQFT — Solar API → orders.house_sqft for old rows
+// ============================================================
+// Most pre-2026-05 orders have house_sqft = NULL because the order-
+// creation flow never wrote it. That breaks the few-shot retriever's
+// sqftDelta scoring and the bucket-diversity logic in
+// refreshTracedIndexCache. This endpoint fixes it by calling
+// fetchBuildingInsightsRaw() against each order's lat/lng and writing
+// the Solar bbox area back in.
+//
+// Auth: Bearer token via FUNNEL_MONITOR_TOKEN (shared with other admin-
+// touchpoint monitors per CLAUDE.md). Lets the operator fire it from
+// curl without a browser session.
+//
+// Body: { limit? = 50, only_null? = true, order_ids? = [...] }
+// Returns { processed, updated, failed, skipped, elapsed_ms }.
+// Idempotent. Respects Solar API rate limits (50 calls/run default).
+// ============================================================
+adminRoutes.post('/superadmin/backfill-house-sqft', async (c) => {
+  // Dual-auth: super-admin session OR FUNNEL_MONITOR_TOKEN bearer.
+  // Either path is sufficient; the token path lets backfill run from
+  // CLI without a browser session.
+  const auth = c.req.header('Authorization') || ''
+  const presented = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  const expectedToken = c.env.FUNNEL_MONITOR_TOKEN
+  const tokenOk = !!(expectedToken && presented && presented === expectedToken)
+  if (!tokenOk) {
+    const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+    if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  }
+
+  if (!c.env.GOOGLE_SOLAR_API_KEY) {
+    return c.json({ error: 'GOOGLE_SOLAR_API_KEY not configured' }, 503)
+  }
+
+  let body: any = {}
+  try { body = await c.req.json() } catch { /* empty body fine */ }
+  const limit = Math.max(1, Math.min(200, Number(body?.limit) || 50))
+  const onlyNull = body?.only_null !== false  // default true
+  const specificIds: number[] = Array.isArray(body?.order_ids)
+    ? body.order_ids.map((v: any) => Number(v)).filter((n: number) => Number.isFinite(n) && n > 0)
+    : []
+
+  const started = Date.now()
+  let processed = 0, updated = 0, failed = 0, skipped = 0
+  try {
+    // Pull candidates: lat/lng present + (house_sqft null OR explicit
+    // override OR specific id list).
+    let rows: Array<{ id: number; latitude: number; longitude: number }>
+    if (specificIds.length > 0) {
+      const placeholders = specificIds.map(() => '?').join(',')
+      const r = await c.env.DB.prepare(
+        `SELECT id, latitude, longitude FROM orders WHERE id IN (${placeholders}) AND latitude IS NOT NULL AND longitude IS NOT NULL LIMIT ?`
+      ).bind(...specificIds, limit).all<any>()
+      rows = (r.results || []) as any
+    } else {
+      const r = await c.env.DB.prepare(
+        `SELECT id, latitude, longitude FROM orders
+         WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+           ${onlyNull ? "AND (house_sqft IS NULL OR house_sqft = 0)" : ''}
+         ORDER BY id DESC
+         LIMIT ?`
+      ).bind(limit).all<any>()
+      rows = (r.results || []) as any
+    }
+
+    // Process serially. Solar API can handle parallel calls but rate-
+    // limit headroom is finite; serial keeps the worker well under the
+    // CPU budget too.
+    for (const row of rows) {
+      processed++
+      try {
+        const insights = await fetchBuildingInsightsRaw(Number(row.latitude), Number(row.longitude), c.env.GOOGLE_SOLAR_API_KEY)
+        // Pull bbox area in sqft. Prefer wholeRoofStats when available
+        // (more accurate); fall back to boundingBox area.
+        let sqft: number | null = null
+        const wholeRoof = insights?.solarPotential?.wholeRoofStats?.areaMeters2
+        if (Number.isFinite(wholeRoof) && wholeRoof > 0) {
+          sqft = Math.round(Number(wholeRoof) * 10.7639)  // m² → ft²
+        } else if (insights?.boundingBox) {
+          const bb = insights.boundingBox
+          const sw = bb.sw || bb.southWest
+          const ne = bb.ne || bb.northEast
+          if (sw?.latitude && ne?.latitude) {
+            const lat = (sw.latitude + ne.latitude) / 2
+            const latDiffM = Math.abs(ne.latitude - sw.latitude) * 111_320
+            const lngDiffM = Math.abs(ne.longitude - sw.longitude) * 111_320 * Math.cos(lat * Math.PI / 180)
+            sqft = Math.round(latDiffM * lngDiffM * 10.7639)
+          }
+        }
+        if (!sqft || sqft < 200 || sqft > 50_000) {
+          // Out-of-band — almost certainly Solar returned a merged
+          // neighbour or rural ground polygon. Skip rather than
+          // pollute the data.
+          skipped++
+          continue
+        }
+        await c.env.DB.prepare(
+          `UPDATE orders SET house_sqft = ? WHERE id = ?`
+        ).bind(sqft, row.id).run()
+        updated++
+      } catch (e: any) {
+        failed++
+        console.warn(`[backfill-house-sqft] order ${row.id} failed:`, e?.message)
+      }
+    }
+
+    return c.json({
+      success: true,
+      processed,
+      updated,
+      failed,
+      skipped,
+      elapsed_ms: Date.now() - started,
+    })
+  } catch (err: any) {
+    console.warn('[backfill-house-sqft] fatal:', err?.message)
+    return c.json({ error: 'backfill_failed', message: err?.message, processed, updated, failed, skipped }, 500)
+  }
+})
+
 adminRoutes.post('/superadmin/refresh-traced-index', async (c) => {
-  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
-  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  // Same dual-auth as backfill-house-sqft: super-admin session OR
+  // FUNNEL_MONITOR_TOKEN bearer. Token path lets the cron worker +
+  // manual CLI both fire without a browser session.
+  const auth = c.req.header('Authorization') || ''
+  const presented = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  const expectedToken = c.env.FUNNEL_MONITOR_TOKEN
+  const tokenOk = !!(expectedToken && presented && presented === expectedToken)
+  if (!tokenOk) {
+    const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+    if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  }
   let body: any = {}
   try { body = await c.req.json() } catch { /* empty body is fine */ }
   const targetSize = Math.max(10, Math.min(100, Number(body?.target_size) || 30))
