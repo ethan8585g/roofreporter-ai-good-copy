@@ -11,6 +11,7 @@
 
 import type { RoofReport } from '../types'
 import { generateTraceBasedDiagramSVG } from './svg-diagrams'
+import { generateAllStructureSVGs } from './svg-3d-diagram'
 
 const escapeHtml = (s: string): string =>
   String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
@@ -28,36 +29,61 @@ export function generateCustomerReportHTML(report: RoofReport): string {
     report.imagery?.satellite_url ||
     null
 
-  // 2D — re-render from the raw trace with hideMeasurements:true so no
-  // dimension labels appear. The route stashes the parsed trace on
-  // reportData.customer_trace_input before calling this template.
-  let twoDSVG = ''
+  // Per-structure 3D + 2D diagrams. The 3D axo is rendered with
+  // showDimensions:false so no edge-length callouts appear, and the 2D
+  // plan view uses hideMeasurements:true. Customer sees the geometry,
+  // never the numbers.
+  type StructureSvgs = { label: string; axo: string; plan: string }
+  const perStructure: StructureSvgs[] = []
   try {
-    const trace = (report as any).customer_trace_input || null
-    if (trace) {
-      twoDSVG = generateTraceBasedDiagramSVG(
+    const structureDiagrams = generateAllStructureSVGs(report, { showDimensions: false })
+    for (const { partition, svg: axoSvg } of structureDiagrams) {
+      const planSvg = generateTraceBasedDiagramSVG(
         {
-          eaves: trace.eaves || [],
-          eaves_sections: trace.eaves_sections || undefined,
-          eaves_section_pitches: trace.eaves_section_pitches || undefined,
-          eaves_section_kinds: trace.eaves_section_kinds || undefined,
-          ridges: trace.ridges || [],
-          hips: trace.hips || [],
-          valleys: trace.valleys || [],
-          dormers: trace.dormers || undefined,
-          cutouts: trace.cutouts || undefined,
+          eaves: partition.eaves,
+          eaves_sections: [partition.eaves],
+          ridges: partition.ridges,
+          hips: partition.hips,
+          valleys: partition.valleys,
         },
         { total_ridge_ft: 0, total_hip_ft: 0, total_valley_ft: 0, total_eave_ft: 0, total_rake_ft: 0 },
-        0,
-        0,
-        '',
-        0,
-        0,
+        0, 0, '', 0, 0,
         { hideMeasurements: true },
       )
+      perStructure.push({ label: partition.label, axo: axoSvg, plan: planSvg })
     }
   } catch {
-    twoDSVG = ''
+    /* fall through to legacy single-2D below */
+  }
+
+  // Legacy single-2D fallback — only used when structure splitting fails
+  // (e.g. no roof_trace on the report). Re-renders from customer_trace_input
+  // with hideMeasurements:true so no dimension labels appear.
+  let fallback2DSVG = ''
+  if (perStructure.length === 0) {
+    try {
+      const trace = (report as any).customer_trace_input || null
+      if (trace) {
+        fallback2DSVG = generateTraceBasedDiagramSVG(
+          {
+            eaves: trace.eaves || [],
+            eaves_sections: trace.eaves_sections || undefined,
+            eaves_section_pitches: trace.eaves_section_pitches || undefined,
+            eaves_section_kinds: trace.eaves_section_kinds || undefined,
+            ridges: trace.ridges || [],
+            hips: trace.hips || [],
+            valleys: trace.valleys || [],
+            dormers: trace.dormers || undefined,
+            cutouts: trace.cutouts || undefined,
+          },
+          { total_ridge_ft: 0, total_hip_ft: 0, total_valley_ft: 0, total_eave_ft: 0, total_rake_ft: 0 },
+          0, 0, '', 0, 0,
+          { hideMeasurements: true },
+        )
+      }
+    } catch {
+      fallback2DSVG = ''
+    }
   }
 
   const css = `
@@ -89,11 +115,23 @@ export function generateCustomerReportHTML(report: RoofReport): string {
     </section>`
     : ''
 
-  const section2D = twoDSVG
+  const sectionsPerStructure = perStructure.length > 0
+    ? perStructure.map(s => `
+    <section class="page">
+      <h2>${escapeHtml(s.label)} &mdash; 3D View</h2>
+      <div class="frame">${s.axo}</div>
+      <p class="note">Three-dimensional view of the roof geometry with pitch-shaded facets.</p>
+      <h2 style="margin-top:24px">${escapeHtml(s.label)} &mdash; 2D Plan View</h2>
+      <div class="frame">${s.plan}</div>
+      <p class="note">Top-down outline showing ridge, hip and valley layout.</p>
+    </section>`).join('')
+    : ''
+
+  const sectionFallback2D = fallback2DSVG
     ? `
     <section class="page">
       <h2>2D Roof Diagram</h2>
-      <div class="frame">${twoDSVG}</div>
+      <div class="frame">${fallback2DSVG}</div>
       <p class="note">Top-down diagram of the roof outline and ridge / hip / valley layout.</p>
     </section>`
     : ''
@@ -120,7 +158,8 @@ export function generateCustomerReportHTML(report: RoofReport): string {
     <p class="note"><span class="stamp">CUSTOMER COPY</span> &nbsp; This summary shows the property aerial and the roof diagrams produced for this order. Detailed measurements, edge lengths and material take-off are provided to your roofing contractor in a separate document.</p>
   </section>
   ${sectionSatellite}
-  ${section2D}
+  ${sectionsPerStructure}
+  ${sectionFallback2D}
   <section class="page">
     <div class="footer">
       <div>Generated by Roof Manager &middot; roofmanager.ca</div>

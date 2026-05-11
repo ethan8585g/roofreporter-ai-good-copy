@@ -1016,16 +1016,21 @@ ${aerialTiles.length === 4 ? `
           ` : ''}
         </div>
         <div style="border-top:1px solid #e2e8f0;padding:6px 12px 0;background:#fafbfc">
+          <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">3D Axonometric View &mdash; Roof Geometry</div>
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:3px;overflow:hidden">${svg}</div>
+        </div>
+        <div style="padding:6px 12px 0;background:#fafbfc">
           <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">2D Plan View &mdash; Edge Dimensions</div>
           <div style="background:#fff;border:1px solid #e2e8f0;border-radius:3px;overflow:hidden">${flat2dSvg}</div>
         </div>
       </div>
     `}).join('')}
-    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">2D Plan View shows every traced edge with its haversine length. Each traced building rendered separately.</div>
+    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">3D view shows pitch-shaded facets with Lambert lighting. 2D view shows every traced edge with its haversine length. Each traced building rendered separately.</div>
   </div>` : `
   <div style="padding:0 28px;margin-bottom:8px">
     ${structureDiagrams.length === 1 ? (() => {
       const p = structureDiagrams[0].partition
+      const axoSvg = structureDiagrams[0].svg
       const flat = generateTraceBasedDiagramSVG(
         {
           eaves: p.eaves,
@@ -1043,8 +1048,11 @@ ${aerialTiles.length === 4 ? `
         p.true_area_sqft,
       )
       return `
+      <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">3D Axonometric View &mdash; Roof Geometry</div>
+      <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center;margin-bottom:6px">${axoSvg}</div>
+      <div style="font-size:8px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">2D Plan View &mdash; Edge Dimensions</div>
       <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center">${flat}</div>
-      <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">2D top-down plan with haversine edge lengths. All dimensions in feet.</div>
+      <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">3D view shows pitch-shaded facets with Lambert lighting. 2D view shows every traced edge with its haversine length.</div>
     `})() : `
       <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center">${architecturalDiagramSVG}</div>
       <div style="text-align:center;font-size:6.5px;color:#999;margin:2px 0 8px">AI-Generated Roof Diagram &mdash; All dimensions in feet. Pitch multiplier applied for true sloped area.</div>
