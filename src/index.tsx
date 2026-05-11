@@ -8169,11 +8169,11 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   <noscript><style>.scroll-animate { opacity: 1 !important; transform: none !important; }</style></noscript>
 </head>
 <body class="min-h-screen" style="background:var(--bg-page)">
-  <!-- Announcement Bar — free trial push -->
+  <!-- Announcement Bar — volume-pricing nudge (avoids duplicating the hero "4 free" message) -->
   <div id="announcement-bar">
-    <span id="ab-text-a">&#127881; <strong>4 FREE Roof Reports</strong> on every new account &mdash; register yourself, no credit card &mdash; </span>
+    <span id="ab-text-a">&#128176; <strong>$5.95 per report</strong> on the 100-pack &mdash; credits never expire &mdash; </span>
     <span id="ab-text-b" style="display:none">&#128197; <strong>Book a free 20-min demo</strong> &mdash; see it on your own address &mdash; </span>
-    <a id="ab-link" href="/register" onclick="rrTrack('cta_click',{location:'announcement_bar'})">Start for free &rarr;</a>
+    <a id="ab-link" href="/pricing" onclick="rrTrack('cta_click',{location:'announcement_bar'})">See volume pricing &rarr;</a>
     <button class="close-bar" onclick="document.getElementById('announcement-bar').style.display='none';document.getElementById('landing-nav').classList.add('bar-hidden');" aria-label="Dismiss">&times;</button>
   </div>
   <!-- Sticky Navigation — Dark premium, starts transparent -->
@@ -8272,16 +8272,13 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <span class="text-sm font-semibold text-[#00FF88] tracking-wide">North America&ndash;Wide Roof Measurements <span class="text-[10px] mx-1">&#127464;&#127462;</span><span class="text-[10px]">&#127482;&#127480;</span> &middot; 200+ Contractors</span>
             </div>
             <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] text-white mb-6 tracking-tight">Affordable Satellite Roof Measurement Reports <span class="neon-text">Roofers Actually Trust</span></h1>
-            <h2 class="text-lg lg:text-xl text-gray-300 mb-8 max-w-xl leading-relaxed font-normal">Enterprise / Xactimate / insurance-grade roof measurement reports — satellite-precise area, pitch, edges, and material BOM, with full CRM and 1&ndash;2 hour PDF delivery. Built for US &amp; Canadian roofing contractors. Contact us today to get started.</h2>
+            <p class="text-lg lg:text-xl text-gray-300 mb-8 max-w-xl leading-relaxed">Insurance-grade satellite reports with area, pitch, edges, and BOM — delivered in 1&ndash;2 hours for $8 per report.</p>
 
-            <!-- Primary CTA (ONE) -->
-            <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 mb-4">
+            <!-- Primary CTA (single, dominant — sample report demoted to inline text link; contact form relocated below the fold) -->
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 mb-3">
               <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_primary'});window.trackAdsConversion&amp;&amp;window.trackAdsConversion('lead',{value:5,currency:'CAD'})}catch(e){}" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px] whitespace-nowrap"><i class="fas fa-gift" aria-hidden="true"></i>Start free — 4 roof reports, no card<i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform" aria-hidden="true"></i></a>
-              <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_sample_report'})}catch(e){}" class="inline-flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-7 rounded-xl text-base border border-white/10 hover:border-white/20 min-h-[56px] transition-all whitespace-nowrap"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Report <span class="text-[10px] text-[#00FF88] font-bold ml-1 bg-[#00FF88]/10 border border-[#00FF88]/20 px-1.5 py-0.5 rounded-full">No email</span></a>
-              <a href="#hero-contact-form" onclick="try{rrTrack('cta_click',{location:'hero_secondary_contact'});var i=document.getElementById('hc-name');if(i){i.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(function(){i.focus()},400)}}catch(e){}" class="text-sm text-gray-300 hover:text-white inline-flex items-center gap-1.5 whitespace-nowrap">Or contact us directly <i class="fas fa-arrow-right text-[10px]" aria-hidden="true"></i></a>
             </div>
-            <p class="text-[11px] text-gray-500 -mt-1 mb-3 max-w-md leading-relaxed"><i class="fas fa-info-circle text-gray-600 mr-1"></i>Sample opens in your browser — no signup, no card, no gate. See exactly what every $8 report looks like.</p>
-            <a href="/contact" onclick="try{rrTrack('cta_click',{location:'hero_tertiary_contact'})}catch(e){}" class="text-xs text-gray-500 hover:text-gray-300 inline-block mb-5">Talk to sales</a>
+            <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_sample_report'})}catch(e){}" class="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white mb-6"><i class="fas fa-eye text-[#00FF88] text-xs"></i> See a sample report — no signup, no email <i class="fas fa-arrow-right text-[10px]" aria-hidden="true"></i></a>
 
             <!-- Trust bar (single-line on desktop, wraps on mobile) -->
             <p class="text-[13px] text-gray-500 leading-relaxed mb-3">
@@ -8311,68 +8308,76 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <i class="fas fa-external-link-alt text-gray-500 group-hover:text-[#00B67A] text-xs flex-shrink-0" aria-hidden="true"></i>
             </a>
 
-            <!-- Contact Us form (replaces the legacy address-preview form) -->
-            <div id="hero-contact-form" class="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4 max-w-xl">
-              <div class="text-[11px] uppercase tracking-wider text-[#00FF88] font-bold mb-1">Contact Us Today</div>
-              <p class="text-sm text-gray-400 mb-3">Tell us about your roofing business — we'll be in touch shortly.</p>
-              <form id="hero-contact-form-el" onsubmit="return submitHeroContact(event)">
-                <input id="hc-name" name="name" type="text" placeholder="Your name" autocomplete="name" required
-                  style="width:100%;padding:12px 14px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:8px"
-                  onfocus="this.style.borderColor='#00FF88'"
-                  onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
-                <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-                  <input id="hc-email" name="email" type="email" placeholder="Email" autocomplete="email" inputmode="email" required
-                    style="flex:1;min-width:180px;padding:12px 14px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box"
-                    onfocus="this.style.borderColor='#00FF88'"
-                    onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
-                  <input id="hc-company" name="company" type="text" placeholder="Company" autocomplete="organization"
-                    style="flex:1;min-width:180px;padding:12px 14px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box"
-                    onfocus="this.style.borderColor='#00FF88'"
-                    onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
-                </div>
-                <textarea id="hc-message" name="message" rows="3" placeholder="What can we help with?" required
-                  style="width:100%;padding:12px 14px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;resize:vertical;font-family:inherit;margin-bottom:10px"
-                  onfocus="this.style.borderColor='#00FF88'"
-                  onblur="this.style.borderColor='rgba(255,255,255,0.15)'"></textarea>
-                <input id="hc-website" name="website" type="text" tabindex="-1" autocomplete="off"
-                  style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" aria-hidden="true">
-                <button type="submit" id="hc-submit"
-                  style="width:100%;padding:14px 20px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:15px;cursor:pointer">
-                  <i class="fas fa-paper-plane" style="margin-right:8px"></i>Send message
-                </button>
-                <p id="hc-msg" style="margin:8px 0 0;font-size:11px;color:#9ca3af;text-align:center">We typically reply within one business day.</p>
-              </form>
-              <div id="hc-success" style="display:none;text-align:center;padding:24px 8px">
-                <div style="width:48px;height:48px;border-radius:50%;background:#00FF8820;display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><i class="fas fa-check" style="color:#00FF88;font-size:20px"></i></div>
-                <div style="color:#00FF88;font-weight:800;font-size:16px;margin-bottom:4px">Message received</div>
-                <div style="color:#9ca3af;font-size:13px">Thanks! We'll be in touch shortly.</div>
-              </div>
-            </div>
-
-            <!-- Subtle pricing poster — bulk-price reassurance, links to /pricing -->
-            <a href="/pricing" onclick="try{rrTrack('cta_click',{location:'hero_pricing_poster'})}catch(e){}"
-               class="group flex items-center gap-4 max-w-xl mt-6 mb-2 bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-[#00FF88]/30 rounded-2xl px-4 py-3 sm:px-5 sm:py-4 transition-all"
-               aria-label="See volume pricing — roof measurement reports from $5.95 CAD each">
-              <div class="flex-shrink-0 inline-flex flex-col items-center justify-center w-14 h-14 rounded-xl bg-[#00FF88]/10 border border-[#00FF88]/25">
-                <span class="text-[9px] font-bold text-[#00FF88] tracking-widest uppercase leading-none">From</span>
-                <span class="text-[#00FF88] font-black text-base leading-tight mt-0.5">$5.95</span>
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="text-white font-bold text-sm leading-snug">Roof measurement reports start at just $5.95 per report</div>
-                <div class="text-gray-500 text-[11px] mt-1">100-credit pack &middot; CAD &middot; volume pricing</div>
-              </div>
-              <i class="fas fa-arrow-right text-gray-500 group-hover:text-[#00FF88] group-hover:translate-x-0.5 transition-all text-xs flex-shrink-0" aria-hidden="true"></i>
-            </a>
-
-            <!-- Mobile-only primary CTA mirror (desktop has it above) -->
-            <div class="lg:hidden mt-8 flex flex-col gap-3">
+            <!-- Mobile-only primary CTA mirror (sample-report link demoted; lives in the talk-to-us section below) -->
+            <div class="lg:hidden mt-4 flex flex-col gap-3">
               <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_mobile_primary'});window.trackAdsConversion&amp;&amp;window.trackAdsConversion('lead',{value:5,currency:'CAD'})}catch(e){}" class="flex items-center justify-center gap-3 bg-[#00FF88] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px]"><i class="fas fa-gift" aria-hidden="true"></i>Start free — 4 roof reports, no card<i class="fas fa-arrow-right text-sm" aria-hidden="true"></i></a>
-              <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_mobile_sample_report'})}catch(e){}" class="flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-7 rounded-xl text-base border border-white/10 min-h-[56px] transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Report</a>
             </div>
           </div>
         </div>
       </div>
       <div class="absolute bottom-8 left-1/2 -translate-x-1/2 z-10"><div class="w-6 h-10 border-2 border-white/10 rounded-full flex justify-center pt-2"><div class="w-1 h-3 bg-[#00FF88]/40 rounded-full animate-bounce"></div></div></div>
+    </section>
+
+    <!-- TALK-TO-US / VOLUME PRICING — relocated out of the hero so the primary CTA dominates above the fold -->
+    <section class="relative z-20 py-12 lg:py-16" style="background:#0A0A0A">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 grid lg:grid-cols-2 gap-8 items-start">
+        <div id="hero-contact-form" class="bg-white/5 border border-white/10 rounded-2xl p-6 max-w-xl">
+          <div class="text-[11px] uppercase tracking-wider text-[#00FF88] font-bold mb-1">Talk to us first</div>
+          <p class="text-sm text-gray-400 mb-3">Prefer to chat before signing up? Tell us about your roofing business — we'll be in touch shortly.</p>
+          <form id="hero-contact-form-el" onsubmit="return submitHeroContact(event)">
+            <input id="hc-name" name="name" type="text" placeholder="Your name" autocomplete="name" required
+              style="width:100%;padding:12px 14px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:8px"
+              onfocus="this.style.borderColor='#00FF88'"
+              onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
+            <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+              <input id="hc-email" name="email" type="email" placeholder="Email" autocomplete="email" inputmode="email" required
+                style="flex:1;min-width:180px;padding:12px 14px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box"
+                onfocus="this.style.borderColor='#00FF88'"
+                onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
+              <input id="hc-company" name="company" type="text" placeholder="Company" autocomplete="organization"
+                style="flex:1;min-width:180px;padding:12px 14px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box"
+                onfocus="this.style.borderColor='#00FF88'"
+                onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
+            </div>
+            <textarea id="hc-message" name="message" rows="3" placeholder="What can we help with?" required
+              style="width:100%;padding:12px 14px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;resize:vertical;font-family:inherit;margin-bottom:10px"
+              onfocus="this.style.borderColor='#00FF88'"
+              onblur="this.style.borderColor='rgba(255,255,255,0.15)'"></textarea>
+            <input id="hc-website" name="website" type="text" tabindex="-1" autocomplete="off"
+              style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" aria-hidden="true">
+            <button type="submit" id="hc-submit"
+              style="width:100%;padding:14px 20px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:15px;cursor:pointer">
+              <i class="fas fa-paper-plane" style="margin-right:8px"></i>Send message
+            </button>
+            <p id="hc-msg" style="margin:8px 0 0;font-size:11px;color:#9ca3af;text-align:center">We typically reply within one business day.</p>
+          </form>
+          <div id="hc-success" style="display:none;text-align:center;padding:24px 8px">
+            <div style="width:48px;height:48px;border-radius:50%;background:#00FF8820;display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><i class="fas fa-check" style="color:#00FF88;font-size:20px"></i></div>
+            <div style="color:#00FF88;font-weight:800;font-size:16px;margin-bottom:4px">Message received</div>
+            <div style="color:#9ca3af;font-size:13px">Thanks! We'll be in touch shortly.</div>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-4">
+          <a href="/pricing" onclick="try{rrTrack('cta_click',{location:'hero_pricing_poster'})}catch(e){}"
+             class="group flex items-center gap-4 max-w-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-[#00FF88]/30 rounded-2xl px-4 py-3 sm:px-5 sm:py-4 transition-all"
+             aria-label="See volume pricing — roof measurement reports from $5.95 CAD each">
+            <div class="flex-shrink-0 inline-flex flex-col items-center justify-center w-14 h-14 rounded-xl bg-[#00FF88]/10 border border-[#00FF88]/25">
+              <span class="text-[9px] font-bold text-[#00FF88] tracking-widest uppercase leading-none">From</span>
+              <span class="text-[#00FF88] font-black text-base leading-tight mt-0.5">$5.95</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-white font-bold text-sm leading-snug">Roof measurement reports start at just $5.95 per report</div>
+              <div class="text-gray-500 text-[11px] mt-1">100-credit pack &middot; CAD &middot; volume pricing</div>
+            </div>
+            <i class="fas fa-arrow-right text-gray-500 group-hover:text-[#00FF88] group-hover:translate-x-0.5 transition-all text-xs flex-shrink-0" aria-hidden="true"></i>
+          </a>
+
+          <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_mobile_sample_report'})}catch(e){}" class="text-sm text-gray-400 hover:text-white inline-flex items-center gap-2 max-w-xl"><i class="fas fa-eye text-[#00FF88] text-xs"></i> View a sample report (no signup, no email) <i class="fas fa-arrow-right text-[10px]" aria-hidden="true"></i></a>
+
+          <a href="/contact" onclick="try{rrTrack('cta_click',{location:'hero_tertiary_contact'})}catch(e){}" class="text-sm text-gray-400 hover:text-white inline-flex items-center gap-1.5 max-w-xl">Or open the full contact form <i class="fas fa-arrow-right text-[10px]" aria-hidden="true"></i></a>
+        </div>
+      </div>
     </section>
 
     <!-- PRODUCT DEMO VIDEO -->
