@@ -5522,6 +5522,70 @@ adminRoutes.get('/api-stats', async (c) => {
 // those routes are roofer-scoped (customer session) with admin passthrough.
 // See src/routes/automations.ts.
 
+// ── GET /api/admin/customers/:id/journey ─────────────────────────────────────
+// Chronological combined feed of everything we know about one customer:
+// page-views (user_path_events) + logins + orders + activity_log. Designed
+// for super-admin signup-trace investigations (e.g. "what did customer #57
+// do before bouncing?"). Replaces the manual D1 queries we ran earlier today
+// trace customer #57.
+adminRoutes.get('/customers/:id/journey', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (!Number.isFinite(id) || id <= 0) return c.json({ error: 'Invalid customer id' }, 400)
+
+  const customer = await c.env.DB.prepare(
+    `SELECT id, email, name, company_name, phone, email_verified, free_trial_total,
+            free_trial_used, credits_used, gclid, google_id, last_login, created_at
+     FROM customers WHERE id = ?`
+  ).bind(id).first<any>()
+  if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+  const attribution = await c.env.DB.prepare(
+    `SELECT first_touch_path, first_touch_path_template, first_touch_referrer_domain,
+            first_touch_utm_source, first_touch_utm_medium, first_touch_utm_campaign,
+            first_touch_at, last_touch_path, last_touch_path_template, last_touch_at,
+            touch_count, first_paid_at, total_orders, total_paid_orders, revenue_cents
+     FROM analytics_attribution WHERE customer_id = ?`
+  ).bind(id).first<any>().catch(() => null)
+
+  const [pathEvents, orderEvents, activityEvents] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT path, module, occurred_at, ip_address, user_agent FROM user_path_events
+       WHERE user_type='customer' AND user_id = ? ORDER BY occurred_at DESC LIMIT 200`
+    ).bind(id).all<any>().catch(() => ({ results: [] })),
+    c.env.DB.prepare(
+      `SELECT id, order_number, status, payment_status, price, property_address, created_at
+       FROM orders WHERE customer_id = ? ORDER BY created_at DESC LIMIT 50`
+    ).bind(id).all<any>().catch(() => ({ results: [] })),
+    c.env.DB.prepare(
+      `SELECT action, details, created_at FROM user_activity_log
+       WHERE details LIKE ? ORDER BY created_at DESC LIMIT 100`
+    ).bind(`%customer_id":${id}%`).all<any>().catch(() => ({ results: [] })),
+  ])
+
+  const events: any[] = []
+  for (const r of ((pathEvents as any).results || [])) {
+    events.push({ kind: 'page_view', occurred_at: r.occurred_at, path: r.path, module: r.module, ip: r.ip_address, ua: r.user_agent })
+  }
+  for (const r of ((orderEvents as any).results || [])) {
+    events.push({ kind: 'order', occurred_at: r.created_at, order_id: r.id, order_number: r.order_number, status: r.status, payment_status: r.payment_status, price: r.price, address: r.property_address })
+  }
+  for (const r of ((activityEvents as any).results || [])) {
+    events.push({ kind: 'activity', occurred_at: r.created_at, action: r.action, details: r.details })
+  }
+  events.sort((a, b) => String(b.occurred_at || '').localeCompare(String(a.occurred_at || '')))
+
+  return c.json({
+    customer,
+    attribution,
+    events,
+    counts: {
+      page_views: ((pathEvents as any).results || []).length,
+      orders: ((orderEvents as any).results || []).length,
+      activity_log: ((activityEvents as any).results || []).length,
+    }
+  })
+})
+
 // ── GET /api/admin/ads/export-offline-conversions.csv ───────────────────────
 // Exports paid-customer conversions (gclid + value + time) in Google Ads CSV
 // upload format. Smart Bidding then learns which Ad clicks become paying

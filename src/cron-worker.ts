@@ -25,6 +25,7 @@ import { sendSignupHealthEmail } from './services/health-email'
 import { runMobileMonitor } from './services/mobile-monitor'
 import { sendMobileMonitorEmail } from './services/mobile-monitor-email'
 import { runDripCampaigns } from './services/drip-campaigns'
+import { runSignupNurture } from './services/signup-nurture'
 
 // ── Abandoned signup recovery ─────────────────────────────────────────────────
 async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number; skipped: number }> {
@@ -438,6 +439,29 @@ export default {
         }
       })())
     }
+
+    // ── Signup nurture +1h follow-up (every cron tick — every 10 min) ──
+    // Finds COMPLETED free signups 1–2h old who haven't ordered, and sends
+    // one personalized "want to try your first report?" email via Gmail
+    // OAuth2. Idempotent — de-duped via user_activity_log so each customer
+    // gets at most one nurture email. Different from runAbandonedSignupRecovery
+    // above which targets users who NEVER completed signup.
+    ctx.waitUntil((async () => {
+      const t0 = Date.now()
+      try {
+        const r = await runSignupNurture(env)
+        if (r.found > 0 || r.sent > 0) {
+          const summary = `Found ${r.found}, sent ${r.sent}, failed ${r.failed}, skipped ${r.skipped}`
+          console.log(`[CRON:signup-nurture] ${summary}`)
+          await logRun('signup_nurture_1h', r.failed > 0 ? 'partial' : 'success', summary, r, Date.now() - t0)
+            .catch((e: any) => console.warn('[logRun:signup_nurture_1h] failed:', e?.message || e))
+        }
+      } catch (err: any) {
+        console.error('[CRON:signup-nurture] Error:', err?.message)
+        await logRun('signup_nurture_1h', 'error', err?.message || String(err), {}, Date.now() - t0)
+          .catch((e: any) => console.warn('[logRun:signup_nurture_1h:error] failed:', e?.message || e))
+      }
+    })())
 
     // ── Rover chat session idle/ended sweep (every cron tick) ─
     // 30-min idle → 'idle', 24-hr stale → 'ended'. Cheap UPDATE, no LLM.
