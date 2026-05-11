@@ -953,6 +953,13 @@ analyticsRoutes.get('/ga4/status', async (c) => {
   const apiSecret = !!c.env.GA4_API_SECRET
   const hasSA = !!saKey
 
+  // client_email is the SA's public identifier — safe to expose. Users paste it into
+  // GA4 Admin → Property Access Management to grant Viewer. private_key never leaves the worker.
+  let saEmail: string | null = null
+  if (saKey) {
+    try { saEmail = JSON.parse(saKey).client_email || null } catch { saEmail = null }
+  }
+
   // Optional live probe — only when ?probe=1 — actually hits GA4 Data API to
   // surface why rows are empty (bad SA key, missing Viewer on property, wrong
   // property ID, GA4 Data API not enabled on GCP project, etc.)
@@ -1003,6 +1010,7 @@ analyticsRoutes.get('/ga4/status', async (c) => {
     ga4_api_secret: apiSecret,
     ga4_property_id: propertyId,
     gcp_service_account: hasSA,
+    gcp_service_account_email: saEmail,
     frontend_tracking: !!measurementId,
     server_side_events: !!(measurementId && apiSecret),
     data_api: !!(propertyId && hasSA),

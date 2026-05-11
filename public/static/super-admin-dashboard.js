@@ -15060,10 +15060,13 @@ function ga4ProbeBanner(status) {
   if (!status || !status.probe) return '';
   var p = status.probe;
   if (p.ok) return '';
+  var saEmail = status.gcp_service_account_email || '';
+  var isPermsError = false;
   var hint = '';
   var err = String(p.error || '').toLowerCase();
   if (err.indexOf('permission') >= 0 || err.indexOf('does not have sufficient') >= 0) {
-    hint = 'Add the service account (client_email from GCP_SERVICE_ACCOUNT_KEY) as a Viewer on your GA4 property: GA4 Admin → Property Access Management → Add user.';
+    isPermsError = true;
+    hint = 'Add the service account below as a Viewer on your GA4 property: GA4 Admin → Property Access Management → Add user. Uncheck "Notify by email" (service accounts can’t read mail).';
   } else if (err.indexOf('has not been used') >= 0 || err.indexOf('api is not enabled') >= 0 || err.indexOf('analyticsdata') >= 0) {
     hint = 'Enable the Google Analytics Data API in your GCP project: console.cloud.google.com → APIs & Services → Enable APIs → search "Google Analytics Data API".';
   } else if (err.indexOf('property') >= 0 && err.indexOf('not') >= 0) {
@@ -15073,6 +15076,29 @@ function ga4ProbeBanner(status) {
   } else if (err.indexOf('token') >= 0 || err.indexOf('invalid_grant') >= 0) {
     hint = 'GCP_SERVICE_ACCOUNT_KEY is malformed. Ensure it is the full JSON key (with "private_key" and "client_email") pasted as a single secret.';
   }
+
+  // When we know the SA email AND this is a permissions issue, show a copy-ready chip + GA4 link.
+  var emailBlock = '';
+  if (saEmail && isPermsError) {
+    var safeEmail = String(saEmail).replace(/"/g, '&quot;');
+    emailBlock =
+      '<div class="mt-2 flex flex-wrap items-center gap-2">' +
+        '<span class="text-[11px] uppercase tracking-wide text-red-900 font-semibold">Service account:</span>' +
+        '<code class="text-xs bg-white border border-red-300 px-2 py-1 rounded font-mono break-all">' + safeEmail + '</code>' +
+        '<button type="button" class="text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700" ' +
+          'onclick="navigator.clipboard.writeText(\'' + safeEmail + '\').then(function(){this.textContent=\'Copied✓\';}.bind(this));return false;">' +
+          '<i class="fas fa-copy mr-1"></i>Copy' +
+        '</button>' +
+        '<a href="https://analytics.google.com/analytics/web/" target="_blank" rel="noopener" ' +
+          'class="text-xs bg-white border border-red-300 text-red-700 px-2 py-1 rounded hover:bg-red-50">' +
+          'Open GA4 Admin <i class="fas fa-external-link-alt ml-1"></i>' +
+        '</a>' +
+      '</div>';
+  } else if (saEmail) {
+    // Non-perms failure but we still know the SA — show it small in case it helps diagnose.
+    emailBlock = '<p class="text-[11px] text-red-700 mt-1">SA: <code class="bg-red-100 px-1 rounded">' + saEmail + '</code></p>';
+  }
+
   return '<div class="mb-4 bg-red-50 border border-red-200 rounded-xl p-4">' +
     '<div class="flex items-start gap-3">' +
       '<i class="fas fa-exclamation-triangle text-red-500 text-lg mt-0.5"></i>' +
@@ -15082,6 +15108,7 @@ function ga4ProbeBanner(status) {
           (p.http_status ? ' · HTTP ' + p.http_status : '') + '</p>' +
         (p.error ? '<p class="text-xs text-red-700 mt-1 font-mono break-all">' + String(p.error).slice(0, 400) + '</p>' : '') +
         (hint ? '<p class="text-xs text-red-900 mt-2"><strong>Fix:</strong> ' + hint + '</p>' : '') +
+        emailBlock +
         '<p class="text-[11px] text-gray-500 mt-2">While GA4 is broken, tabs below display data from our own site_analytics as a fallback.</p>' +
       '</div>' +
     '</div>' +
