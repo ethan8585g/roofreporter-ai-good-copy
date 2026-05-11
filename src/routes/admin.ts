@@ -4741,6 +4741,12 @@ adminRoutes.post('/superadmin/orders/:id/auto-trace/:edge', async (c) => {
       }
     }
 
+    // ?debug=1 returns the base64-encoded satellite + DSM hillshade images
+    // alongside the normal response so engineers can inspect exactly what
+    // Claude saw. Never enabled by the UI — set explicitly when reproducing
+    // a bad trace via curl. Adds ~2MB to the response, so off by default.
+    const debugImages = c.req.query('debug') === '1'
+
     const result = await runAutoTrace(c.env, {
       orderId,
       edge,
@@ -4749,6 +4755,7 @@ adminRoutes.post('/superadmin/orders/:id/auto-trace/:edge', async (c) => {
       imageWidth: Number(body?.imageWidth) || 640,
       imageHeight: Number(body?.imageHeight) || 640,
       viewport3dB64,
+      includeDebugImages: debugImages,
     })
 
     // Audit row so the super-admin activity feed shows who ran what when,

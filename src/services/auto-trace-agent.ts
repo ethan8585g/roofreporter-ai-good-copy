@@ -53,6 +53,10 @@ export interface AutoTraceInput {
    *  visibility from an oblique perspective the satellite view can't
    *  show. Strip any `data:image/...;base64,` prefix client-side. */
   viewport3dB64?: string
+  /** Engineering-only flag: when true the result includes the base64-encoded
+   *  satellite + DSM hillshade images so the operator can verify what Claude
+   *  saw. Off by default — adds ~2MB to the response. */
+  includeDebugImages?: boolean
 }
 
 export interface AutoTraceResult {
@@ -66,6 +70,14 @@ export interface AutoTraceResult {
   confidence: number
   /** Human-readable explanation Claude returns alongside the geometry. */
   reasoning: string
+  /** Echoed-back base64 of the satellite + hillshade images when caller passes
+   *  `includeDebugImages: true`. Inspection-only — never returned to the UI. */
+  debug_images?: {
+    satellite: { mediaType: string; b64: string }
+    hillshade?: { mediaType: string; b64: string }
+    target_bbox_px?: { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean }
+    target_center_px?: { x: number; y: number }
+  }
   /** Diagnostic context — shown in the dev console only. */
   diagnostics: {
     image_url_redacted: string
@@ -101,22 +113,33 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     throw new Error('GOOGLE_MAPS_API_KEY not configured — auto-trace needs a satellite image')
   }
 
-  const imageUrl = buildSatelliteImageUrl(input.lat, input.lng, zoom, safeW, safeH, env.GOOGLE_MAPS_API_KEY)
+  // Solar API gives us the building's actual lat/lng bounding box. We need
+  // that BEFORE choosing the satellite image centre/zoom so we can frame
+  // the image tightly on the target — otherwise the user's pin (often
+  // landing on a lot boundary or in front of the actual building) puts a
+  // neighbour right next to the target and Claude tries to trace both.
+  const solarInsights = await safelyFetchSolar(env, input.lat, input.lng)
+  const solarSummary = summarizeSolar(solarInsights)
 
-  // Fetch all three vision inputs + Solar context concurrently. The agent
-  // gracefully degrades when any one fails — only the satellite image is
-  // mandatory.
-  const [satellite, solarInsights, hillshade] = await Promise.all([
+  // Pick the satellite image's centre + zoom. When Solar gives us a
+  // trusted (≤60ft per side) bbox, recentre on its centroid and bump zoom
+  // up one notch so the building fills the frame. Falls back to the
+  // user's pin + their map zoom otherwise.
+  const framing = chooseImageFraming(solarInsights, input.lat, input.lng, zoom)
+
+  const imageUrl = buildSatelliteImageUrl(framing.lat, framing.lng, framing.zoom, safeW, safeH, env.GOOGLE_MAPS_API_KEY)
+
+  // Fetch the two raster inputs in parallel. Both are now centred on
+  // `framing.lat/lng` at `framing.zoom` so their pixel grids align 1:1.
+  const [satellite, hillshade] = await Promise.all([
     fetchImageB64(imageUrl),
-    safelyFetchSolar(env, input.lat, input.lng),
-    fetchDsmHillshade(env, input.lat, input.lng, safeW * 2).catch((e: any) => {
+    fetchDsmHillshade(env, framing.lat, framing.lng, safeW * 2).catch((e: any) => {
       console.warn('[auto-trace] DSM hillshade fetch failed:', e?.message)
       return null
     }),
   ])
   const imageB64 = satellite.b64
   const imageMediaType = satellite.mediaType
-  const solarSummary = summarizeSolar(solarInsights)
 
   // Past human traces of similar properties + lesson memo from past
   // corrections + calibration factor — all three are how this agent
@@ -125,8 +148,8 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   const [examples, lessonMemo, calibrationFactor] = await Promise.all([
     fetchTrainingExamples(env, {
       edge: input.edge,
-      centroidLat: input.lat,
-      centroidLng: input.lng,
+      centroidLat: framing.lat,
+      centroidLng: framing.lng,
       targetSegments: solarSummary.segments_count,
       limit: 5,
     }),
@@ -136,16 +159,14 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
 
   const hasViewport3d = !!(input.viewport3dB64 && input.viewport3dB64.length > 1000)
   // Compute the target building's bounding box in PIXEL space on the satellite
-  // image. Static Maps centers the requested lat/lng so the centroid is always
-  // at (W/2, H/2). The Solar API bounding box (when available) gives us the
-  // building extent in lat/lng — projecting through the same Mercator math
-  // the agent already uses for px↔latlng yields the pixel rectangle. This is
-  // the strongest hint we can give Claude for "trace THIS building, not the
-  // neighbors": a sub-image bbox at known pixel coords.
+  // image — now using framing.lat/lng/zoom (which may have been recentred on
+  // the Solar bbox above). Static Maps always centres the request lat/lng at
+  // (W/2, H/2). When the framing is the Solar centroid, the bbox lands neatly
+  // in the centre of the image and Claude has no other building to chase.
   const imagePxW = safeW * 2
   const imagePxH = safeH * 2
   const targetCenterPx = { x: Math.round(imagePxW / 2), y: Math.round(imagePxH / 2) }
-  const targetBboxPx = computeTargetBboxPx(solarInsights, input.lat, input.lng, zoom, imagePxW, imagePxH)
+  const targetBboxPx = computeTargetBboxPx(solarInsights, framing.lat, framing.lng, framing.zoom, imagePxW, imagePxH)
   const systemPrompt = buildSystemPrompt(input.edge, lessonMemo, {
     hasHillshade: !!hillshade,
     hasViewport3d,
@@ -196,7 +217,10 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   const parsed = parseClaudeResponse(text)
   const pixelImgW = safeW * 2
   const pixelImgH = safeH * 2
-  const segments = parsed.segments.map(seg => seg.map(p => pxToLatLng(p.x, p.y, input.lat, input.lng, zoom, pixelImgW, pixelImgH)))
+  // Project Claude's pixel coords back to GPS using the SAME centre + zoom
+  // that produced the satellite image (which may be Solar-recentred, not
+  // the user's original pin).
+  const segments = parsed.segments.map(seg => seg.map(p => pxToLatLng(p.x, p.y, framing.lat, framing.lng, framing.zoom, pixelImgW, pixelImgH)))
   // Calibration: scale the model's self-reported confidence by the historical
   // edit rate for this edge type. 100% edit rate → 0.6×; 0% → 1.0×.
   // services/auto-trace-learning.ts maintains this factor on every submit.
@@ -207,6 +231,14 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     segments,
     confidence: calibratedConfidence,
     reasoning: parsed.reasoning,
+    ...(input.includeDebugImages ? {
+      debug_images: {
+        satellite: { mediaType: imageMediaType, b64: imageB64 },
+        hillshade: hillshade ? { mediaType: hillshade.mediaType, b64: hillshade.b64 } : undefined,
+        target_bbox_px: targetBboxPx || undefined,
+        target_center_px: targetCenterPx,
+      },
+    } : {}),
     diagnostics: {
       image_url_redacted: imageUrl.replace(/key=[^&]+/, 'key=REDACTED'),
       solar_segments_count: solarSummary.segments_count,
@@ -222,6 +254,41 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       elapsed_ms: Date.now() - started,
     },
   }
+}
+
+/** Decide where to centre the satellite image and at what zoom. When Google
+ *  Solar API returns a trusted bbox (each side ≤ 60ft per CLAUDE.md's merged-
+ *  neighbour heuristic), we centre on that bbox's geographic centroid so the
+ *  target building sits in the middle of the frame and bump zoom up one step
+ *  to crop neighbours out. Without a trusted bbox we keep the user's pin and
+ *  their map zoom so behaviour matches what they're looking at. */
+function chooseImageFraming(
+  insights: any,
+  pinLat: number, pinLng: number, userZoom: number,
+): { lat: number; lng: number; zoom: number; recentered: boolean } {
+  const bb = insights?.boundingBox
+  const sw = bb?.sw || bb?.southWest
+  const ne = bb?.ne || bb?.northEast
+  if (!sw?.latitude || !ne?.latitude) {
+    return { lat: pinLat, lng: pinLng, zoom: userZoom, recentered: false }
+  }
+  const latDiffM = Math.abs(ne.latitude - sw.latitude) * 111_320
+  const lngDiffM = Math.abs(ne.longitude - sw.longitude) * 111_320 * Math.cos((pinLat * Math.PI) / 180)
+  const widthFt = lngDiffM * 3.28084
+  const depthFt = latDiffM * 3.28084
+  const trusted = widthFt <= 60 && depthFt <= 60
+  if (!trusted) {
+    // Solar merged a neighbour — its bbox is unreliable, don't recentre on it.
+    return { lat: pinLat, lng: pinLng, zoom: userZoom, recentered: false }
+  }
+  const cLat = (sw.latitude + ne.latitude) / 2
+  const cLng = (sw.longitude + ne.longitude) / 2
+  // Zoom selection: at lat ~53°, residential lots are typically 60-100 ft
+  // wide. We want the building to fill 35-55% of the image (so eaves are
+  // resolvable but the lot edges aren't cropped). userZoom + 1 typically
+  // gets us there; cap at 21 (Static Maps' max).
+  const newZoom = Math.min(21, Math.max(userZoom, 21))
+  return { lat: cLat, lng: cLng, zoom: newZoom, recentered: true }
 }
 
 /** Project the Solar API buildingInsights bounding box (lat/lng corners) into
@@ -357,7 +424,7 @@ function buildSystemPrompt(
     'Coordinate origin for the target image is top-left (0,0). All coordinates you return must be in pixels of Image 1.',
     '',
     '⚠️ TARGET BUILDING — CRITICAL:',
-    `The property pin is at pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) on Image 1. Trace ONLY the building that contains this pixel.`,
+    `The target building is centred at pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) on Image 1 — the satellite image has been recentred and zoomed so the target sits in the middle of the frame. Trace ONLY this central building. Any other buildings visible at the edges of the image are NEIGHBOURS, not the target.`,
     opts.targetBboxPx
       ? (opts.targetBboxPx.trusted
           ? `Google Solar API's footprint for that building covers approximately the pixel rectangle (${opts.targetBboxPx.x1}, ${opts.targetBboxPx.y1}) to (${opts.targetBboxPx.x2}, ${opts.targetBboxPx.y2}) on Image 1 — ${opts.targetBboxPx.widthFt}ft wide × ${opts.targetBboxPx.depthFt}ft deep. Your output polygon for ${edge === 'eaves' ? 'each eave section' : 'each line'} should sit ENTIRELY within or immediately adjacent to that rectangle. Anything outside it is a neighbour's house, driveway, garden bed, or street — DO NOT TRACE THOSE.`
