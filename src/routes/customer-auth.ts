@@ -521,11 +521,23 @@ customerAuthRoutes.post('/verify-code', async (c) => {
 // ============================================================
 customerAuthRoutes.post('/google', async (c) => {
   try {
-    const { credential } = await c.req.json()
-    
+    const body = await c.req.json() as any
+    const { credential } = body
+
     if (!credential) {
       return c.json({ error: 'Google credential token required' }, 400)
     }
+
+    // Google Ads attribution — same sanitization as /register path (10–200 char A-Za-z0-9_-).
+    // Without this, ad-driven Google-SSO signups have null gclid and cannot be uploaded
+    // back to Google Ads as offline conversions.
+    const rawGclid = typeof body.gclid === 'string' ? body.gclid.trim() : ''
+    const gclid = /^[A-Za-z0-9_-]{10,200}$/.test(rawGclid) ? rawGclid : null
+    const utmSource = typeof body.utm_source === 'string' ? body.utm_source.slice(0, 100) : null
+    const utmMedium = typeof body.utm_medium === 'string' ? body.utm_medium.slice(0, 100) : null
+    const utmCampaign = typeof body.utm_campaign === 'string' ? body.utm_campaign.slice(0, 200) : null
+    const utmContent = typeof body.utm_content === 'string' ? body.utm_content.slice(0, 200) : null
+    const utmTerm = typeof body.utm_term === 'string' ? body.utm_term.slice(0, 200) : null
 
     // Decode Google ID token (JWT) — verify with Google's tokeninfo endpoint
     const verifyResp = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`)
@@ -590,9 +602,9 @@ customerAuthRoutes.post('/google', async (c) => {
       // The Google sign-in IS the first login — login_count is derived from
       // customer_login_events (insert below) so nothing extra to seed here.
       const result = await c.env.DB.prepare(`
-        INSERT INTO customers (email, name, google_id, google_avatar, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, auto_invoice_enabled, company_type, last_login)
-        VALUES (?, ?, ?, ?, 1, 1, 0, 0, ?, 0, 0, 'roofing', datetime('now'))
-      `).bind(email, name, googleId, avatar, FREE_TRIAL_REPORTS).run()
+        INSERT INTO customers (email, name, google_id, google_avatar, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, auto_invoice_enabled, company_type, last_login, gclid)
+        VALUES (?, ?, ?, ?, 1, 1, 0, 0, ?, 0, 0, 'roofing', datetime('now'), ?)
+      `).bind(email, name, googleId, avatar, FREE_TRIAL_REPORTS, gclid).run()
 
       customer = {
         id: result.meta.last_row_id,
@@ -614,6 +626,24 @@ customerAuthRoutes.post('/google', async (c) => {
 
       // Seed default material catalog so new account has context on the section (non-blocking)
       seedDefaultMaterials(c.env.DB, customer.id as number).catch((e) => console.warn('[customer-auth] seedDefaultMaterials failed (google):', e?.message || e))
+
+      // Persist UTM attribution to analytics_attribution for Google OAuth signups.
+      // Same pattern as the /register handler — closes the parity gap that left
+      // Google-SSO ad-driven signups with no UTM trail.
+      if (utmSource || utmMedium || utmCampaign || utmContent || utmTerm) {
+        try {
+          await c.env.DB.prepare(`
+            INSERT INTO analytics_attribution (customer_id, first_touch_utm_source, first_touch_utm_medium, first_touch_utm_campaign, first_touch_at, last_touch_utm_source, last_touch_at, touch_count)
+            VALUES (?, ?, ?, ?, datetime('now'), ?, datetime('now'), 1)
+            ON CONFLICT(customer_id) DO UPDATE SET
+              last_touch_utm_source = COALESCE(excluded.last_touch_utm_source, analytics_attribution.last_touch_utm_source),
+              last_touch_at = excluded.last_touch_at,
+              touch_count = analytics_attribution.touch_count + 1
+          `).bind(customer.id, utmSource, utmMedium, utmCampaign, utmSource).run()
+        } catch (e: any) {
+          console.warn('[google-oauth] analytics_attribution upsert failed:', e?.message || e)
+        }
+      }
 
       // Track Google signup in GA4 (non-blocking)
       trackUserSignup(c.env as any, String(customer.id), 'google', { email_domain: email.split('@')[1] || 'unknown' }).catch((e) => console.warn('[customer-auth] GA4 trackUserSignup failed (google):', e?.message || e))

@@ -11692,10 +11692,28 @@ function getCustomerLoginHTML(googleClientId = '') {
     async function handleGoogleCredential(response) {
       rrTrack('oauth_click', {provider: 'google'});
       const refCode = localStorage.getItem('rr_ref_code') || '';
+      // Pull persisted Google Ads click ID + UTMs so Google-SSO signups carry attribution.
+      // Without this, 15-20% of ad-driven signups (Google OAuth path) lose gclid → orders can't
+      // upload offline conversions back to Google Ads.
+      var _qpG = new URLSearchParams(window.location.search);
+      var _gclidG = null;
+      try { var _grG = localStorage.getItem('rm_ads_gclid'); if (_grG) { var _gpG = JSON.parse(_grG); _gclidG = _gpG && _gpG.gclid || null; } } catch(_) {}
+      if (!_gclidG) _gclidG = _qpG.get('gclid') || null;
+      var _utmG = {};
+      try { var _urG = localStorage.getItem('rm_ads_utm'); if (_urG) { _utmG = JSON.parse(_urG) || {}; } } catch(_) {}
       const res = await fetch('/api/customer-auth/google', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({credential: response.credential, referred_by_code: refCode})
+        body: JSON.stringify({
+          credential: response.credential,
+          referred_by_code: refCode,
+          gclid: _gclidG,
+          utm_source: _utmG.utm_source || _qpG.get('utm_source') || null,
+          utm_medium: _utmG.utm_medium || _qpG.get('utm_medium') || null,
+          utm_campaign: _utmG.utm_campaign || _qpG.get('utm_campaign') || null,
+          utm_content: _utmG.utm_content || _qpG.get('utm_content') || null,
+          utm_term: _utmG.utm_term || _qpG.get('utm_term') || null
+        })
       });
       const data = await res.json();
       if (data.success) {
