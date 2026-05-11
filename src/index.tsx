@@ -1576,7 +1576,6 @@ app.get('/3d-verify', async (c) => {
       infoBox: false,
       selectionIndicator: false
     });
-    viewer.scene.skyAtmosphere.show = false;
     viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#000');
 
     // Active-capture wiring: register a LEFT_CLICK handler that runs only
