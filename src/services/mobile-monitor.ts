@@ -29,6 +29,8 @@ const CUSTOMER_PAGES = [
   '/customer/reports',
   '/customer/jobs',
   '/customer/buy-reports',
+  '/customer/storm-scout',
+  '/customer/secretary',
 ]
 
 export type MobileSeverity = 'error' | 'warn'

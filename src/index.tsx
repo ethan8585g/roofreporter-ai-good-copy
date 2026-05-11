@@ -6837,13 +6837,65 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
     @keyframes slideIn { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
     .slide-in { animation: slideIn 0.4s ease-out; }
     .sa-kpi { background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.1); }
+    /* Mobile hamburger is hidden on desktop */
+    .sa-mobile-toggle { display: none; }
+    .sa-backdrop { display: none; }
+    @media (max-width: 768px) {
+      /* Tighter header so it doesn't wrap on 375px */
+      .sa-topbar-inner { padding-left: 12px !important; padding-right: 12px !important; gap: 8px; }
+      .sa-topbar-greeting { display: none !important; }
+      .sa-topbar-viewsite { display: none !important; }
+      .sa-topbar-settings { display: none !important; }
+      /* Slide-out drawer pattern — sidebar lives off-canvas, swings in on hamburger tap */
+      .sa-sidebar {
+        position: fixed;
+        top: 56px;
+        left: 0;
+        bottom: 0;
+        width: 240px;
+        max-width: 78vw;
+        z-index: 60;
+        transform: translateX(-105%);
+        transition: transform 0.25s ease;
+        box-shadow: 4px 0 16px rgba(0,0,0,0.4);
+      }
+      .sa-sidebar.sa-open { transform: translateX(0); }
+      .sa-backdrop {
+        display: block;
+        position: fixed;
+        top: 56px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.55);
+        z-index: 55;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+      }
+      .sa-backdrop.sa-open { opacity: 1; pointer-events: auto; }
+      /* Main fills the screen, sidebar floats over it */
+      .sa-main { padding: 12px !important; width: 100%; }
+      .sa-mobile-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.08);
+        color: #fff;
+        font-size: 16px;
+      }
+    }
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
   <!-- Super Admin Top Bar -->
   <header class="bg-slate-700 text-white shadow-xl sticky top-0 z-50">
-    <div class="max-w-full mx-auto px-6 h-14 flex items-center justify-between">
+    <div class="sa-topbar-inner max-w-full mx-auto px-6 h-14 flex items-center justify-between">
       <div class="flex items-center gap-3">
+        <button class="sa-mobile-toggle" onclick="saToggleSidebar()" aria-label="Open navigation menu"><i class="fas fa-bars"></i></button>
         <div class="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
           <i class="fas fa-crown text-white text-sm"></i>
         </div>
@@ -6853,7 +6905,7 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
         </div>
       </div>
       <div class="flex items-center gap-4">
-        <span id="saUserGreeting" class="text-gray-300 text-xs hidden">
+        <span id="saUserGreeting" class="sa-topbar-greeting text-gray-300 text-xs hidden">
           <i class="fas fa-crown mr-1 text-yellow-400"></i><span id="saUserName"></span>
           <span class="ml-1 px-1.5 py-0.5 bg-red-600/30 text-red-300 rounded text-[10px] font-bold">SUPER ADMIN</span>
         </span>
@@ -6863,14 +6915,15 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
             <span id="sa-inbox-badge" class="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center" style="display:none">0</span>
           </button>
         </div>
-        <a href="/" target="_blank" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-external-link-alt mr-1"></i>View Site</a>
+        <a href="/" target="_blank" class="sa-topbar-viewsite text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-external-link-alt mr-1"></i>View Site</a>
         <a href="/super-admin/loop-tracker" class="text-gray-400 hover:text-white text-xs transition-colors relative" id="sa-loop-tracker-link"><i class="fas fa-radar mr-1"></i>Loop Tracker<span id="sa-loop-tracker-badge" class="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] font-bold rounded-full px-1.5 h-4 flex items-center justify-center" style="display:none">0</span></a>
-        <a href="/settings" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-cog mr-1"></i>Settings</a>
+        <a href="/settings" class="sa-topbar-settings text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-cog mr-1"></i>Settings</a>
         <button onclick="saLogout()" class="text-gray-400 hover:text-red-400 text-xs transition-colors"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
       </div>
     </div>
   </header>
 
+  <div class="sa-backdrop" onclick="saToggleSidebar(false)"></div>
   <div class="flex min-h-[calc(100vh-56px)]">
     <!-- Sidebar Navigation — 6 Sections -->
     <aside class="sa-sidebar w-56 bg-slate-800 border-r border-slate-700 flex-shrink-0">
@@ -6915,7 +6968,7 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
     </aside>
 
     <!-- Main Content -->
-    <main class="flex-1 p-6 overflow-y-auto">
+    <main class="sa-main flex-1 p-6 overflow-y-auto">
       <div id="sa-root"></div>
     </main>
   </div>
@@ -6946,6 +6999,21 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
       localStorage.removeItem('rc_token');
       window.location.href = '/login';
     }
+    // Mobile drawer — slides the sidebar in/out at <=768px. Auto-closes
+    // when a nav item is tapped so the user sees the section they picked.
+    function saToggleSidebar(force) {
+      var sidebar = document.querySelector('.sa-sidebar');
+      var backdrop = document.querySelector('.sa-backdrop');
+      if (!sidebar || !backdrop) return;
+      var shouldOpen = (typeof force === 'boolean') ? force : !sidebar.classList.contains('sa-open');
+      sidebar.classList.toggle('sa-open', shouldOpen);
+      backdrop.classList.toggle('sa-open', shouldOpen);
+    }
+    document.addEventListener('click', function(e) {
+      if (window.innerWidth > 768) return;
+      var item = e.target && e.target.closest && e.target.closest('.sa-nav-item');
+      if (item) saToggleSidebar(false);
+    });
     // saSetView is defined in super-admin-dashboard.js — handles sidebar highlight + view loading
     // saSetSection is defined in super-admin-dashboard.js — handles section switching
 
