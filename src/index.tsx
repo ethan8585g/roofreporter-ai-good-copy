@@ -1603,9 +1603,9 @@ app.get('/3d-verify', async (c) => {
     }
 
     // Photorealistic 3D Tiles. Use Cesium's helper — it handles Google's
-    // per-session token (`?session=...`) automatically. Loading root.json
-    // directly via Cesium3DTileset.fromUrl leaves child tile/texture
-    // requests un-authenticated, so geometry shows as a wireframe and no
+    // per-session token automatically. Loading root.json directly via
+    // Cesium3DTileset.fromUrl leaves child tile/texture requests
+    // un-authenticated, so geometry shows as a wireframe and no
     // textures appear.
     const tilesetPromise = (typeof Cesium.createGooglePhotorealistic3DTileset === 'function')
       ? Cesium.createGooglePhotorealistic3DTileset(undefined, { apiKey: API_KEY, showCreditsOnScreen: true })
