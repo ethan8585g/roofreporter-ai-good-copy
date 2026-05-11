@@ -50,12 +50,18 @@ export interface FetchTrainingArgs {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Public entry — merge static + D1 pools, score, return top-N
+// Public entry — merge static + D1 cache + D1 live pools, score, return top-N
 // ─────────────────────────────────────────────────────────────
 export async function fetchTrainingExamples(env: Bindings, args: FetchTrainingArgs): Promise<TrainingExample[]> {
   const limit = args.limit ?? 5
-  const live = await fetchLiveExamples(env, args)
-  const merged = mergeUnique(live, TRACED_INDEX)
+  const [live, cached] = await Promise.all([
+    fetchLiveExamples(env, args),
+    fetchCachedExamples(env),
+  ])
+  // Priority order: live (freshest) > D1 cache (nightly diverse pool) > bundled static
+  // index (deploy-time floor). mergeUnique skips later entries when an order_id
+  // already appeared in an earlier pool.
+  const merged = mergeUnique(mergeUnique(live, cached), TRACED_INDEX)
 
   // Filter: must have at least one segment of the requested edge type.
   // Otherwise the example is useless to the agent — eaves examples
@@ -108,6 +114,143 @@ async function fetchLiveExamples(env: Bindings, args: FetchTrainingArgs): Promis
     console.warn('[trace-training] D1 query failed:', e?.message)
     return []
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// D1 cache — refreshed nightly by the cron worker. Acts as a
+// diverse-pool warm cache so the agent doesn't need to re-derive
+// bucketing on every request.
+// ─────────────────────────────────────────────────────────────
+async function fetchCachedExamples(env: Bindings): Promise<TracedIndexEntry[]> {
+  try {
+    const rows = await env.DB.prepare(`
+      SELECT order_id, latitude, longitude, house_sqft, roof_pitch_degrees,
+             complexity_class, segments_count, roof_trace_json
+      FROM traced_index_cache
+      ORDER BY refreshed_at DESC
+    `).all<any>()
+    return (rows.results || []).map(row => ({
+      order_id: Number(row.order_id),
+      latitude: row.latitude != null ? Number(row.latitude) : null,
+      longitude: row.longitude != null ? Number(row.longitude) : null,
+      house_sqft: row.house_sqft != null ? Number(row.house_sqft) : null,
+      roof_pitch_degrees: row.roof_pitch_degrees != null ? Number(row.roof_pitch_degrees) : null,
+      complexity_class: row.complexity_class || null,
+      segments_count: row.segments_count != null ? Number(row.segments_count) : null,
+      roof_trace_json: row.roof_trace_json,
+    }))
+  } catch {
+    // Table missing (migration 0234 not yet applied on this environment).
+    // Static + live pool still cover the agent's needs.
+    return []
+  }
+}
+
+/** Repopulate traced_index_cache from a curated, bucketed subset of recent
+ *  completed traces. Called by the nightly cron task in cron-worker.ts so the
+ *  cache stays fresh without a redeploy. Idempotent — wipes + re-inserts each
+ *  run. Returns the number of rows inserted. */
+export async function refreshTracedIndexCache(env: Bindings, targetSize = 30): Promise<{ inserted: number; skipped: number }> {
+  // Pull candidates ordered by recency. We re-rank in memory because D1
+  // can't bucket + dedupe in SQL.
+  const rows = await env.DB.prepare(`
+    SELECT o.id AS order_id, o.latitude, o.longitude, o.house_sqft,
+           o.roof_trace_json,
+           r.roof_pitch_degrees, r.complexity_class, r.roof_segments
+    FROM orders o
+    INNER JOIN reports r ON r.order_id = o.id
+    WHERE o.roof_trace_json IS NOT NULL
+      AND o.roof_trace_json != ''
+      AND r.status = 'completed'
+    ORDER BY o.id DESC
+    LIMIT 300
+  `).all<any>()
+
+  type Entry = TracedIndexEntry & { _completeness: number; _bucket: string }
+  const usable: Entry[] = []
+  for (const row of rows.results || []) {
+    let trace: any
+    try { trace = typeof row.roof_trace_json === 'string' ? JSON.parse(row.roof_trace_json) : row.roof_trace_json } catch { continue }
+    if (!trace) continue
+    const hasEaves  = (Array.isArray(trace.eaves_sections) && trace.eaves_sections.length > 0)
+                   || (Array.isArray(trace.eaves) && trace.eaves.length >= 3)
+    const hasRidges = Array.isArray(trace.ridges) && trace.ridges.length > 0
+    const hasHips   = Array.isArray(trace.hips) && trace.hips.length > 0
+    const completeness = (hasEaves ? 1 : 0) + (hasRidges ? 1 : 0) + (hasHips ? 1 : 0)
+    if (completeness === 0) continue
+
+    const sqft = row.house_sqft != null ? Number(row.house_sqft) : 0
+    const sqftBucket = sqft < 1500 ? 'sm' : sqft < 2500 ? 'md' : sqft < 3500 ? 'lg' : 'xl'
+    let segsCount: number | null = null
+    if (row.roof_segments) {
+      try {
+        const parsed = typeof row.roof_segments === 'string' ? JSON.parse(row.roof_segments) : row.roof_segments
+        if (Array.isArray(parsed)) segsCount = parsed.length
+        else if (parsed?.segments) segsCount = parsed.segments.length
+      } catch {}
+    }
+    const segBucket = segsCount == null ? 'u' : segsCount <= 2 ? 'low' : segsCount <= 4 ? 'mid' : 'hi'
+    usable.push({
+      order_id: Number(row.order_id),
+      latitude: row.latitude != null ? Number(row.latitude) : null,
+      longitude: row.longitude != null ? Number(row.longitude) : null,
+      house_sqft: sqft || null,
+      roof_pitch_degrees: row.roof_pitch_degrees != null ? Number(row.roof_pitch_degrees) : null,
+      complexity_class: row.complexity_class || null,
+      segments_count: segsCount,
+      roof_trace_json: typeof row.roof_trace_json === 'string' ? row.roof_trace_json : JSON.stringify(row.roof_trace_json),
+      _completeness: completeness,
+      _bucket: `${sqftBucket}/${segBucket}`,
+    })
+  }
+
+  // Diversity-aware round-robin selection across buckets, sorted by
+  // completeness within each bucket. Mirrors scripts/build-traced-index.mjs.
+  const buckets = new Map<string, Entry[]>()
+  for (const e of usable) {
+    const arr = buckets.get(e._bucket) || []
+    arr.push(e)
+    buckets.set(e._bucket, arr)
+  }
+  for (const arr of buckets.values()) arr.sort((a, b) => b._completeness - a._completeness)
+  const picked: Entry[] = []
+  const cursors = new Map(Array.from(buckets.keys()).map(k => [k, 0]))
+  let progressed = true
+  while (picked.length < targetSize && progressed) {
+    progressed = false
+    for (const key of buckets.keys()) {
+      if (picked.length >= targetSize) break
+      const i = cursors.get(key)!
+      const arr = buckets.get(key)!
+      if (i < arr.length) {
+        picked.push(arr[i])
+        cursors.set(key, i + 1)
+        progressed = true
+      }
+    }
+  }
+
+  // Wipe + re-insert. The cache table is small (~30 rows), so a full
+  // refresh is cheaper than UPSERT logic + delta tracking.
+  await env.DB.prepare(`DELETE FROM traced_index_cache`).run()
+  let inserted = 0
+  for (const p of picked) {
+    try {
+      await env.DB.prepare(`
+        INSERT INTO traced_index_cache (
+          order_id, bucket, latitude, longitude, house_sqft,
+          roof_pitch_degrees, complexity_class, segments_count, roof_trace_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        p.order_id, p._bucket, p.latitude, p.longitude, p.house_sqft,
+        p.roof_pitch_degrees, p.complexity_class, p.segments_count, p.roof_trace_json,
+      ).run()
+      inserted++
+    } catch (e: any) {
+      console.warn('[refreshTracedIndexCache] insert failed for order', p.order_id, e?.message)
+    }
+  }
+  return { inserted, skipped: usable.length - inserted }
 }
 
 // ─────────────────────────────────────────────────────────────

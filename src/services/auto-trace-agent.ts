@@ -24,6 +24,7 @@ import type { Bindings } from '../types'
 import type { LatLng } from '../utils/trace-validation'
 import { fetchBuildingInsightsRaw } from './solar-api'
 import { fetchTrainingExamples, type TrainingExample } from './trace-training-data'
+import { buildLessonMemo, getCalibrationFactor } from './auto-trace-learning'
 
 const CLAUDE_VISION_MODEL = 'claude-opus-4-7'
 
@@ -62,6 +63,9 @@ export interface AutoTraceResult {
     image_url_redacted: string
     solar_segments_count: number
     training_examples_used: number
+    raw_model_confidence?: number
+    calibration_factor?: number
+    lesson_memo_chars?: number
     model: string
     elapsed_ms: number
   }
@@ -99,17 +103,23 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   }
   const solarSummary = summarizeSolar(solarInsights)
 
-  // Past human traces of similar properties — Claude uses these as the
-  // ground-truth "how a real super-admin draws this kind of roof" reference.
-  const examples = await fetchTrainingExamples(env, {
-    edge: input.edge,
-    centroidLat: input.lat,
-    centroidLng: input.lng,
-    targetSegments: solarSummary.segments_count,
-    limit: 5,
-  })
+  // Past human traces of similar properties + lesson memo from past
+  // corrections + calibration factor — all three are how this agent
+  // adapts to super-admin edits over time. Each is tolerant of an
+  // empty data pool so first-day behavior matches steady-state behavior.
+  const [examples, lessonMemo, calibrationFactor] = await Promise.all([
+    fetchTrainingExamples(env, {
+      edge: input.edge,
+      centroidLat: input.lat,
+      centroidLng: input.lng,
+      targetSegments: solarSummary.segments_count,
+      limit: 5,
+    }),
+    buildLessonMemo(env, input.edge),
+    getCalibrationFactor(env, input.edge),
+  ])
 
-  const systemPrompt = buildSystemPrompt(input.edge)
+  const systemPrompt = buildSystemPrompt(input.edge, lessonMemo)
   const userPrompt = buildUserPrompt({
     edge: input.edge,
     imagePxW: safeW * 2,
@@ -143,16 +153,23 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   const pixelImgW = safeW * 2
   const pixelImgH = safeH * 2
   const segments = parsed.segments.map(seg => seg.map(p => pxToLatLng(p.x, p.y, input.lat, input.lng, zoom, pixelImgW, pixelImgH)))
+  // Calibration: scale the model's self-reported confidence by the historical
+  // edit rate for this edge type. 100% edit rate → 0.6×; 0% → 1.0×.
+  // services/auto-trace-learning.ts maintains this factor on every submit.
+  const calibratedConfidence = Math.round(parsed.confidence * calibrationFactor)
 
   return {
     edge: input.edge,
     segments,
-    confidence: parsed.confidence,
+    confidence: calibratedConfidence,
     reasoning: parsed.reasoning,
     diagnostics: {
       image_url_redacted: imageUrl.replace(/key=[^&]+/, 'key=REDACTED'),
       solar_segments_count: solarSummary.segments_count,
       training_examples_used: examples.length,
+      raw_model_confidence: parsed.confidence,
+      calibration_factor: calibrationFactor,
+      lesson_memo_chars: lessonMemo.length,
       model: CLAUDE_VISION_MODEL,
       elapsed_ms: Date.now() - started,
     },
@@ -162,7 +179,7 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
 // ─────────────────────────────────────────────────────────────
 // Prompts
 // ─────────────────────────────────────────────────────────────
-function buildSystemPrompt(edge: AutoTraceEdge): string {
+function buildSystemPrompt(edge: AutoTraceEdge, lessonMemo: string): string {
   const role = edge === 'eaves'
     ? 'detecting the OUTER PERIMETER of every building roof in the image — one closed polygon per structure (house + any detached garages/sheds visible). Trace at the EAVE LINE (drip edge), not the walls. Include all jogs, bump-outs, and lower-tier eaves. 8+ vertices per polygon; corners only — no points on straight edges.'
     : edge === 'ridges'
@@ -188,7 +205,8 @@ function buildSystemPrompt(edge: AutoTraceEdge): string {
     '- If you cannot see a roof of the requested edge type, return { "segments": [], "confidence": 0, "reasoning": "..." }.',
     '- Use the few-shot examples below as a tracing style reference (vertex density, where corners go) — they are real super-admin traces of similar properties.',
     '- Use the Google Solar API context (segment count, pitch, azimuths) as a structural hint — a 1-segment building has one big ridge; a 4-segment hip roof has 4 hips.',
-  ].join('\n')
+    lessonMemo ? '\n' + lessonMemo : '',
+  ].filter(Boolean).join('\n')
 }
 
 function buildUserPrompt(args: {

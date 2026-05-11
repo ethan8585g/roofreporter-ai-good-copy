@@ -16,6 +16,7 @@ import { encryptSecret, decryptSecret } from '../lib/secret-vault'
 import { trackActivity } from '../services/activity-tracker'
 import { getReportViewEvents, getReportViewSummary } from '../repositories/reports'
 import { runAutoTrace, type AutoTraceEdge } from '../services/auto-trace-agent'
+import { logCorrections as logAutoTraceCorrections } from '../services/auto-trace-learning'
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -4735,8 +4736,10 @@ adminRoutes.post('/superadmin/orders/:id/auto-trace/:edge', async (c) => {
       imageHeight: Number(body?.imageHeight) || 640,
     })
 
-    // Audit row so the super-admin activity feed shows who ran what when.
-    // Non-fatal — auto-trace works even when the audit table is missing.
+    // Audit row so the super-admin activity feed shows who ran what when,
+    // AND so the auto-trace learner (services/auto-trace-learning.ts) can
+    // recover the agent's draft segments when /submit-trace fires later
+    // and diff them against the admin's final geometry. Non-fatal.
     try {
       await c.env.DB.prepare(
         "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'admin_auto_trace', ?)"
@@ -4746,6 +4749,9 @@ adminRoutes.post('/superadmin/orders/:id/auto-trace/:edge', async (c) => {
         edge,
         confidence: result.confidence,
         segments_returned: result.segments.length,
+        segments: result.segments,
+        reasoning: result.reasoning,
+        model: result.diagnostics.model,
         elapsed_ms: result.diagnostics.elapsed_ms,
       })).run()
     } catch { /* non-fatal */ }
@@ -4953,6 +4959,16 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
     await c.env.DB.prepare(
       "UPDATE orders SET roof_trace_json = ?, needs_admin_trace = 0, trace_source = 'admin', updated_at = datetime('now') WHERE id = ?"
     ).bind(traceStr, orderId).run()
+
+    // Self-improvement hook: if the admin ran the auto-trace agent for any
+    // edge type before submitting, diff the agent's draft against this final
+    // trace and record one correction row per edge. Powers the lesson-memo
+    // (next agent run reads its own past mistakes) + confidence calibration.
+    // Non-fatal — never blocks report generation.
+    const ctxLog = (c as any).executionCtx
+    const logP = logAutoTraceCorrections(c.env, orderId, traceObj)
+      .catch((e: any) => console.warn('[auto-trace-learning] log failed:', e?.message))
+    if (ctxLog?.waitUntil) ctxLog.waitUntil(logP)
 
     // Generate the report (this is admin submitting so we call synchronously within worker timeout)
     const result = await generateReportForOrder(orderId, c.env, (c as any).executionCtx)
