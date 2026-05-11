@@ -437,14 +437,24 @@ export async function notifyTraceCompletedToCustomer(
     property_address: string
     customer_name?: string
     order_id?: number | string
+    customer_id?: number | null
   }
 ): Promise<void> {
-  const { to, order_number, property_address, customer_name, order_id } = args
+  const { to, order_number, property_address, customer_name, order_id, customer_id } = args
   if (!to) return
   const firstName = (customer_name || '').split(' ')[0]
   const greeting = firstName ? `Hi ${htmlEsc(firstName)},` : 'Hi,'
   const subject = `Your roof measurement report is ready — ${order_number}`
-  const html = `
+  // Log + tracking BEFORE send so we capture failures and embed the pixel.
+  const { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } = await import('./email-tracking')
+  const trackingToken = await logEmailSend(env, {
+    customerId: customer_id ?? null,
+    recipient: to,
+    kind: 'report_ready',
+    subject,
+  })
+  const pixel = buildTrackingPixel(trackingToken)
+  const rawHtml = `
 <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
   <h2 style="color:#111;margin-bottom:4px">Your report is ready</h2>
   <p style="color:#555;margin-top:0">${htmlEsc(order_number)}</p>
@@ -457,7 +467,8 @@ export async function notifyTraceCompletedToCustomer(
   <p style="color:#888;font-size:12px;margin-top:24px">
     Roof Manager · roofmanager.ca
   </p>
-</div>`
+${pixel}</div>`
+  const html = wrapEmailLinks(rawHtml, trackingToken)
 
   const clientId = env?.GMAIL_CLIENT_ID
   let clientSecret = env?.GMAIL_CLIENT_SECRET || ''
@@ -513,7 +524,11 @@ export async function notifyTraceCompletedToCustomer(
       return
     } catch (e: any) { lastErr = e }
   }
-  if (lastErr) throw lastErr
+  if (lastErr) {
+    await markEmailFailed(env, trackingToken, String(lastErr?.message || lastErr))
+    throw lastErr
+  }
+  await markEmailFailed(env, trackingToken, 'no email provider configured')
   throw new Error('no email provider configured')
 }
 

@@ -1,6 +1,7 @@
 import type { Bindings } from '../types'
 import { logAutoInvoiceStep } from './auto-invoice-audit'
 import { sendGmailOAuth2, loadGmailCreds } from './email'
+import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from './email-tracking'
 
 function escHtml(s: string): string {
   return String(s || '').replace(/[&<>"']/g, (c) =>
@@ -268,11 +269,20 @@ export async function createAutoInvoiceForOrder(
     } else if (measurementMissing) {
       emailError = 'measurement_missing_skipped_send'
     } else {
+      const subject = `Proposal ${proposalNumber} — $${total.toFixed(2)}`
+      // Log + tracking BEFORE send so we capture failures and embed the pixel.
+      const trackingToken = await logEmailSend(env, {
+        customerId: order.customer_id ?? null,
+        recipient: recipientEmail,
+        kind: 'proposal',
+        subject,
+      })
+      const pixel = buildTrackingPixel(trackingToken)
       try {
         const origin = (env as any).PUBLIC_ORIGIN || 'https://www.roofmanager.ca'
         const viewUrl = `${origin}/proposal/view/${shareToken}`
         const itemsHtml = `<table style="width:100%;border-collapse:collapse;margin:16px 0"><thead><tr style="background:#f8fafc"><th style="text-align:left;padding:8px;border-bottom:2px solid #e2e8f0;font-size:13px;color:#64748b">Item</th><th style="text-align:center;padding:8px;border-bottom:2px solid #e2e8f0;font-size:13px;color:#64748b">Qty</th><th style="text-align:right;padding:8px;border-bottom:2px solid #e2e8f0;font-size:13px;color:#64748b">Amount</th></tr></thead><tbody><tr><td style="padding:8px;border-bottom:1px solid #f1f5f9;font-size:13px">${escHtml(lineDescription)}</td><td style="text-align:center;padding:8px;border-bottom:1px solid #f1f5f9;font-size:13px">${quantity}</td><td style="text-align:right;padding:8px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600">$${subtotal.toFixed(2)}</td></tr></tbody></table>`
-        const emailHtml = `
+        const rawHtml = `
 <div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
   <div style="background:linear-gradient(135deg,#0ea5e9,#2563eb);padding:32px;border-radius:16px 16px 0 0;text-align:center">
     <h1 style="color:white;font-size:22px;margin:0">Roof Manager</h1>
@@ -292,17 +302,19 @@ export async function createAutoInvoiceForOrder(
   <div style="background:#f8fafc;padding:16px;border-radius:0 0 16px 16px;text-align:center;border:1px solid #e2e8f0;border-top:none">
     <p style="color:#94a3b8;font-size:11px;margin:0">Powered by Roof Manager — Canada's AI Roof Measurement Platform</p>
   </div>
-</div>`
+${pixel}</div>`
+        const emailHtml = wrapEmailLinks(rawHtml, trackingToken)
         await sendGmailOAuth2(
           clientId, clientSecret, refreshToken,
           recipientEmail,
-          `Proposal ${proposalNumber} — $${total.toFixed(2)}`,
+          subject,
           emailHtml,
           senderEmail
         )
         emailSent = true
       } catch (e: any) {
         emailError = (e?.message || String(e)).slice(0, 500)
+        await markEmailFailed(env, trackingToken, emailError)
         console.error('[auto-invoice] Gmail send failed:', emailError)
       }
     }
