@@ -5593,7 +5593,8 @@ adminRoutes.get('/customers/:id/journey.html', async (c) => {
        WHERE details LIKE ? ORDER BY created_at DESC LIMIT 100`
     ).bind(`%customer_id":${id}%`).all<any>().catch(() => ({ results: [] })) as any,
     c.env.DB.prepare(
-      `SELECT id, kind, subject, sent_at, opened_at, open_count, last_opened_at, send_error
+      `SELECT id, kind, subject, sent_at, opened_at, open_count, last_opened_at,
+              click_count, first_clicked_at, last_clicked_at, last_clicked_url, send_error
        FROM email_sends WHERE customer_id = ? ORDER BY sent_at DESC LIMIT 50`
     ).bind(id).all<any>().catch(() => ({ results: [] })) as any,
   ])
@@ -5609,9 +5610,19 @@ adminRoutes.get('/customers/:id/journey.html', async (c) => {
     events.push({ kind: 'activity', occurred_at: r.created_at, summary: r.action, detail: (r.details || '').slice(0, 140) })
   }
   for (const r of (emailSends.results || [])) {
-    const status = r.opened_at
-      ? `✓ opened ${r.open_count}× (last ${r.last_opened_at || r.opened_at})`
-      : (r.send_error ? `✗ failed: ${String(r.send_error).slice(0, 80)}` : '○ delivered (not opened yet — or images blocked)')
+    let status: string
+    if (r.send_error) {
+      status = `✗ failed: ${String(r.send_error).slice(0, 80)}`
+    } else if (r.click_count > 0) {
+      // Clicks > opens because some opens fail to register (Outlook image-block),
+      // and a click is unambiguous human action. Lead with the click signal.
+      status = `🎯 CLICKED ${r.click_count}× (last URL: ${String(r.last_clicked_url || '').slice(0, 60)})` +
+        (r.opened_at ? ` · opened ${r.open_count}×` : '')
+    } else if (r.opened_at) {
+      status = `✓ opened ${r.open_count}× (last ${r.last_opened_at || r.opened_at}) — no click yet`
+    } else {
+      status = '○ delivered (not opened yet — or images blocked)'
+    }
     events.push({ kind: 'email', occurred_at: r.sent_at, summary: `${r.kind}: ${r.subject || '(no subject)'}`, detail: status })
   }
   events.sort((a, b) => String(b.occurred_at || '').localeCompare(String(a.occurred_at || '')))

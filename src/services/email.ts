@@ -1259,10 +1259,11 @@ export async function sendWelcomeEmail(env: any, data: {
 
   const subject = 'Welcome to Roof Manager'
 
-  // Email-open tracking — log the send BEFORE we attempt transport so we
-  // capture even failed sends (with send_error). Pixel injected just before
-  // </body> in the HTML below.
-  const { logEmailSend, markEmailFailed, buildTrackingPixel } = await import('./email-tracking')
+  // Email-open + click tracking — log the send BEFORE we attempt transport
+  // so we capture even failed sends (with send_error). Pixel + wrapped CTA
+  // links share the same tracking_token so both opens and clicks roll up
+  // to the same email_sends row.
+  const { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } = await import('./email-tracking')
   const trackingToken = await logEmailSend(env, {
     customerId: data.customerId ?? null,
     recipient: data.email,
@@ -1301,6 +1302,10 @@ export async function sendWelcomeEmail(env: any, data: {
 </div>
 ${pixel}`
 
+  // Wrap all approved-host hrefs with click-tracking redirects. Done AFTER
+  // the HTML is built so the wrapping is the last transform on the body.
+  const trackedHtml = wrapEmailLinks(html, trackingToken)
+
   // Strategy 1: Gmail OAuth2
   let sent = false
   const clientId = env.GMAIL_CLIENT_ID
@@ -1319,7 +1324,7 @@ ${pixel}`
 
   if (clientId && clientSecret && refreshToken) {
     try {
-      await sendGmailOAuth2(clientId, clientSecret, refreshToken, data.email, subject, html, 'sales@roofmanager.ca')
+      await sendGmailOAuth2(clientId, clientSecret, refreshToken, data.email, subject, trackedHtml, 'sales@roofmanager.ca')
       sent = true
       console.log('[sendWelcomeEmail] sent via Gmail OAuth2 to', data.email)
     } catch (e: any) {
@@ -1330,7 +1335,7 @@ ${pixel}`
   // Strategy 2: Resend fallback
   if (!sent && env.RESEND_API_KEY) {
     try {
-      await sendViaResend(env.RESEND_API_KEY, data.email, subject, html)
+      await sendViaResend(env.RESEND_API_KEY, data.email, subject, trackedHtml)
       sent = true
       console.log('[sendWelcomeEmail] sent via Resend fallback to', data.email)
     } catch (e: any) {
@@ -1341,7 +1346,7 @@ ${pixel}`
   // Strategy 3: GCP Service Account fallback
   if (!sent && env.GCP_SERVICE_ACCOUNT_JSON) {
     try {
-      await sendGmailEmail(env.GCP_SERVICE_ACCOUNT_JSON, data.email, subject, html, 'sales@roofmanager.ca')
+      await sendGmailEmail(env.GCP_SERVICE_ACCOUNT_JSON, data.email, subject, trackedHtml, 'sales@roofmanager.ca')
       sent = true
       console.log('[sendWelcomeEmail] sent via GCP Service Account fallback to', data.email)
     } catch (e: any) {

@@ -805,6 +805,43 @@ app.get('/api/email-pixel/:token{.+\\.gif}', async (c) => {
   })
 })
 
+// Email click-tracking redirect — public, no auth. CTA links in our
+// outbound emails are wrapped at send time so clicking goes to
+// /api/email-link/<token>?u=<base64url-encoded-original>. We log the
+// click + 302 to the original URL.
+//
+// SECURITY: only redirect to hosts in ALLOWED_HOSTS_CLICK_REDIRECT to
+// prevent open-redirect abuse (attacker crafts a link sending users
+// to phishing site). Unknown hosts → silently redirect to homepage.
+const ALLOWED_HOSTS_CLICK_REDIRECT = new Set([
+  'www.roofmanager.ca', 'roofmanager.ca',
+  'calendar.app.google',
+])
+app.get('/api/email-link/:token', async (c) => {
+  const token = c.req.param('token') || ''
+  const encoded = c.req.query('u') || ''
+  const { decodeWrappedUrl, recordEmailClick } = await import('./services/email-tracking')
+  const rawUrl = decodeWrappedUrl(encoded)
+  let target = 'https://www.roofmanager.ca/'
+  if (rawUrl) {
+    try {
+      const u = new URL(rawUrl)
+      if (ALLOWED_HOSTS_CLICK_REDIRECT.has(u.hostname)) {
+        target = u.toString()
+      }
+    } catch { /* fall through to homepage */ }
+  }
+  // Record click in background — don't make user wait.
+  const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || null
+  const ua = c.req.header('User-Agent') || null
+  const promise = recordEmailClick(c.env as any, token, target, ip, ua).catch((e: any) => {
+    console.warn('[email-link] recordEmailClick failed:', e?.message || e)
+  })
+  // @ts-ignore — executionCtx is available in Workers runtime
+  if (c.executionCtx?.waitUntil) c.executionCtx.waitUntil(promise)
+  return c.redirect(target, 302)
+})
+
 // Health check
 app.get('/api/health', (c) => {
   // Report which env vars are configured (true/false only — never expose values)

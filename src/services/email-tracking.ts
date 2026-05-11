@@ -129,6 +129,96 @@ export async function recordEmailOpen(
 }
 
 /**
+ * Wrap every href in the email HTML with a tracked redirect URL.
+ * Only wraps links to hosts in ALLOWED_HOSTS — external links pass
+ * through untracked (avoids accidentally intercepting unknown 3rd
+ * party links, and avoids the open-redirect attack surface).
+ *
+ * Encoding: base64url so URLs survive email-client query-param mangling.
+ * Decoded + re-validated server-side at /api/email-link before redirect.
+ *
+ * The tracking_token is the SAME token used for the open-pixel — that's
+ * how the click endpoint ties a click back to a specific email send.
+ *
+ * Skips: mailto:, tel:, anchor #fragments, links that are already wrapped.
+ */
+export function wrapEmailLinks(html: string, token: string | null, baseUrl = 'https://www.roofmanager.ca'): string {
+  if (!token) return html
+  const ALLOWED_HOSTS = new Set([
+    'www.roofmanager.ca', 'roofmanager.ca',
+    'calendar.app.google', // demo booking
+  ])
+  // Match: href="https://..." or href='https://...'. Quote style preserved.
+  return html.replace(/href=(["'])(https?:\/\/[^"']+)\1/g, (match, quote, rawUrl) => {
+    let parsed: URL
+    try { parsed = new URL(rawUrl) } catch { return match }
+    if (!ALLOWED_HOSTS.has(parsed.hostname)) return match
+    // Skip if already wrapped (idempotent on re-runs).
+    if (parsed.pathname.startsWith('/api/email-link/')) return match
+    // Encode original URL as base64url.
+    let b64 = ''
+    try {
+      const bin = unescape(encodeURIComponent(rawUrl))
+      b64 = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    } catch { return match }
+    const tracked = `${baseUrl}/api/email-link/${encodeURIComponent(token)}?u=${b64}`
+    return `href=${quote}${tracked}${quote}`
+  })
+}
+
+/**
+ * Decode a base64url-encoded URL from the click endpoint's `?u=` param.
+ * Returns null if the encoding is malformed.
+ */
+export function decodeWrappedUrl(b64: string): string | null {
+  try {
+    // base64url → base64
+    let s = b64.replace(/-/g, '+').replace(/_/g, '/')
+    // Re-pad
+    while (s.length % 4) s += '='
+    const bin = atob(s)
+    return decodeURIComponent(escape(bin))
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Record an email click. Called by GET /api/email-link/:token. Updates
+ * click_count + first/last_clicked_at + last_clicked_url so the journey
+ * view can show "clicked X 3× (last <url> at <ts>)".
+ */
+export async function recordEmailClick(
+  env: any,
+  token: string,
+  url: string,
+  ip: string | null,
+  ua: string | null,
+): Promise<{ found: boolean }> {
+  try {
+    const result = await env.DB.prepare(
+      `UPDATE email_sends
+       SET click_count = click_count + 1,
+           first_clicked_at = COALESCE(first_clicked_at, datetime('now')),
+           last_clicked_at = datetime('now'),
+           last_clicked_url = ?,
+           last_clicked_ip = ?,
+           last_clicked_ua = ?
+       WHERE tracking_token = ?`
+    ).bind(
+      url.slice(0, 1000),
+      (ip || '').slice(0, 64) || null,
+      (ua || '').slice(0, 255) || null,
+      token,
+    ).run()
+    return { found: (result.meta?.changes || 0) > 0 }
+  } catch (e: any) {
+    console.warn('[email-tracking] recordEmailClick failed:', e?.message || e)
+    return { found: false }
+  }
+}
+
+/**
  * 1×1 transparent GIF as a raw Uint8Array. Returned by the pixel
  * endpoint. Smallest possible image file (43 bytes).
  */

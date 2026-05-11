@@ -18,7 +18,7 @@
 // ============================================================
 
 import { loadGmailCreds, sendGmailOAuth2 } from './email'
-import { logEmailSend, markEmailFailed, buildTrackingPixel } from './email-tracking'
+import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from './email-tracking'
 
 export type NurtureStage = '1h' | '24h' | '3d'
 
@@ -191,9 +191,12 @@ export async function runSignupNurtureStage(env: any, stage: NurtureStage): Prom
     })
     const pixel = buildTrackingPixel(trackingToken)
     // Inject pixel just before </body>. Fallback: append at end.
-    const html = rawHtml.includes('</body>')
+    const htmlWithPixel = rawHtml.includes('</body>')
       ? rawHtml.replace('</body>', `${pixel}</body>`)
       : rawHtml + pixel
+    // Wrap CTA links with click-tracking redirects so opens AND clicks
+    // both feed back to the same email_sends row.
+    const html = wrapEmailLinks(htmlWithPixel, trackingToken)
 
     try {
       await sendGmailOAuth2(
