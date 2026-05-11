@@ -7940,6 +7940,8 @@ function getOnboardingPageHTML(sessionToken = ''): string {
         if (!res.ok) { showErr('Could not save your details — please try again.'); return; }
       } catch(e) { showErr('Network error saving details — please try again.'); return; }
     }
+    // Google Ads "Subscribe (Form submission www.roofmanager.ca/onboarding)" — AW-18080319225/FfWCCOfOyagcEPmNr61D
+    try { if (typeof gtag === 'function') gtag('event', 'conversion', { send_to: 'AW-18080319225/FfWCCOfOyagcEPmNr61D' }); } catch(_) {}
     nextStep(2);
   }
 
@@ -10652,6 +10654,10 @@ function getCustomerRegisterPageHTML(prefillEmail = '', googleClientId = '', pre
     .strength-bar { height:4px;border-radius:2px;transition:width 0.3s,background-color 0.3s; }
   </style>
   ${googleClientId ? '<script src="https://accounts.google.com/gsi/client" async defer><\/script>' : ''}
+  <script>
+    // Google Ads "Sign-up (Page load www.roofmanager.ca/register)" — conversion ID AW-18080319225/sZRhCLjChKccEPmNr61D
+    try { if (typeof gtag === 'function') gtag('event', 'conversion', { send_to: 'AW-18080319225/sZRhCLjChKccEPmNr61D' }); } catch(_) {}
+  </script>
 </head>
 <body style="background:#f8fafc;margin:0;min-height:100vh">
 
@@ -11094,6 +11100,8 @@ ${previewId ? `
         if (typeof window.trackAdsConversion === 'function') {
           window.trackAdsConversion('signup', { value: 50.0, currency: 'CAD' });
         }
+        // Google Ads "Sign-up (Form submission www.roofmanager.ca/register)" — AW-18080319225/tIICIXluqscEPmNr61D
+        try { if (typeof gtag === 'function') gtag('event', 'conversion', { send_to: 'AW-18080319225/tIICIXluqscEPmNr61D', value: 50.0, currency: 'CAD' }); } catch(_) {}
         if (typeof fbq === 'function') {
           fbq('track', 'CompleteRegistration');
         }
@@ -11674,6 +11682,8 @@ function getCustomerLoginHTML(googleClientId = '') {
             try { await window.setAdsUserData(email, phone, name); } catch(_) {}
           }
           if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 50.0, currency: 'CAD' });
+          // Google Ads "Sign-up (Form submission www.roofmanager.ca/register)" — AW-18080319225/tIICIXluqscEPmNr61D
+          try { if (typeof gtag === 'function') gtag('event', 'conversion', { send_to: 'AW-18080319225/tIICIXluqscEPmNr61D', value: 50.0, currency: 'CAD' }); } catch(_) {}
           // P2: stop any dirty-form beforeunload warning before redirecting.
           try { window.onbeforeunload = null; } catch(_) {}
           window.location.href = '/customer/dashboard';
