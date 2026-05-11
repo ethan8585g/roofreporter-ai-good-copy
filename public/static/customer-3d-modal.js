@@ -118,6 +118,7 @@
     iframe.className = 'rm-3d-iframe';
     iframe.src = '/3d-verify?orderId=' + encodeURIComponent(orderId);
     iframe.allow = 'fullscreen';
+    iframe.referrerPolicy = 'no-referrer';
 
     var tryonToggle = document.createElement('button');
     tryonToggle.className = 'rm-3d-tryon-toggle';

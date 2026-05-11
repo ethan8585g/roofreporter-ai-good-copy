@@ -1181,7 +1181,13 @@ app.get('/sample-report', (c) => {
 // stored coordinates, show the "Save as Cover" button, and POST captures to
 // /api/reports/:orderId/3d-cover.
 app.get('/3d-verify', async (c) => {
-  const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
+  // Photorealistic 3D Tiles needs its own GCP key — the shared GOOGLE_MAPS_API_KEY
+  // is used by ~15 other features (geocoding, embed, autocomplete, Street View) and
+  // its restrictions don't include the Map Tiles API. Prefer a dedicated key when set,
+  // fall back to GOOGLE_MAPS_API_KEY so behaviour is unchanged until the secret is bound.
+  const mapsKey = (c.env as any).GOOGLE_MAP_TILES_API_KEY
+              || c.env.GOOGLE_MAPS_API_KEY
+              || ''
   let lat = parseFloat(c.req.query('lat') || '') || 53.5461
   let lng = parseFloat(c.req.query('lng') || '') || -113.4938
   const orderId = (c.req.query('orderId') || '').trim()
@@ -1681,7 +1687,12 @@ app.get('/3d-verify', async (c) => {
         }, 60000);
       }
     }).catch((err) => {
-      showErr('Could not load Photorealistic 3D Tiles. Verify the Map Tiles API is enabled for this key. (' + (err && err.message || err) + ')');
+      showErr(
+        'Photorealistic 3D Tiles request failed (' + (err && err.message || err) + ').\\n\\n' +
+        'Fix: in Google Cloud Console for the key behind GOOGLE_MAP_TILES_API_KEY ' +
+        '(or GOOGLE_MAPS_API_KEY if unset), enable the "Map Tiles API" and ensure ' +
+        'HTTP-referrer restrictions include www.roofmanager.ca/* (or remove restrictions).'
+      );
       if (AUTOCAPTURE && ORDER_ID) {
         try { window.parent && window.parent.postMessage({ type: 'rm-3d-cover-done', orderId: ORDER_ID, ok: false, error: String(err && err.message || err) }, '*'); } catch(_) {}
       }
