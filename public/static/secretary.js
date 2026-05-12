@@ -2157,11 +2157,18 @@
       }
 
       await loadStatus();
-      showToast('Agent deployed! Now turn on call forwarding to finish.', 'success');
+      var alreadyConnected = state.phoneSetup && state.phoneSetup.connection_status === 'connected';
+      showToast(
+        alreadyConnected
+          ? 'Agent deployed! Your changes are now live.'
+          : 'Agent deployed! Now turn on call forwarding to finish.',
+        'success'
+      );
 
-      // 4. Open the forwarding wizard so the only remaining step is obvious.
+      // 4. Open the forwarding wizard only when forwarding still needs to be set up.
+      //    Already-connected users tweaking their script shouldn't get re-onboarded.
       var aiNumber = (state.phoneSetup && state.phoneSetup.assigned_phone_number) || '';
-      if (aiNumber && typeof window.secShowForwardingWizard === 'function') {
+      if (aiNumber && !alreadyConnected && typeof window.secShowForwardingWizard === 'function') {
         try { window.secShowForwardingWizard(aiNumber, null); } catch (_) {}
       }
     } catch (e) {
