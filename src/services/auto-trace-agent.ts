@@ -25,7 +25,7 @@ import type { LatLng } from '../utils/trace-validation'
 import { fetchBuildingInsightsRaw } from './solar-api'
 import { fetchTrainingExamples, type TrainingExample } from './trace-training-data'
 import { buildLessonMemo, getCalibrationFactor } from './auto-trace-learning'
-import { fetchDsmHillshade, fetchSolarRgbOrtho, type DsmHillshadeResult, type SolarRgbResult } from './dsm-visualization'
+import { fetchDsmHillshade, type DsmHillshadeResult } from './dsm-visualization'
 import { renderGridOverlay } from './grid-overlay'
 import { fetchFootprintPriors, type FootprintPrior } from './footprint-priors'
 import { decodePNG, encodePNG, lanczosResize, applyVARITint } from './image-preprocess'
@@ -251,11 +251,6 @@ export interface AutoTraceResult {
     solar_overlay_applied?: boolean
     /** Number of Solar planes drawn (only when overlay applied). */
     solar_segments_overlaid?: number
-    /** True when Solar API's high-res RGB ortho was fetched + included as
-     *  a second image in the multimodal payload. */
-    solar_rgb_used?: boolean
-    /** Native dimensions + quality of the Solar RGB ortho image. */
-    solar_rgb_dim?: { width: number; height: number; quality?: 'HIGH' | 'MEDIUM' | 'BASE' }
     model: string
     elapsed_ms: number
   }
@@ -339,10 +334,7 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
 
   // Fetch the raster inputs in parallel. All centred on framing.lat/lng at
   // framing.zoom so pixel grids align 1:1 with the primary image.
-  // Solar RGB GeoTIFF runs in parallel too — when it returns, it gets
-  // sent to Claude as a second high-resolution reference image (10cm/px
-  // native, building-cropped) alongside the Google Static Maps primary.
-  const [satellite, hillshade, wideContext, gridOverlay, solarRgb] = await Promise.all([
+  const [satellite, hillshade, wideContext, gridOverlay] = await Promise.all([
     fetchImageB64(imageUrl),
     fetchDsmHillshade(env, framing.lat, framing.lng, safeW * 2).catch((e: any) => {
       console.warn('[auto-trace] DSM hillshade fetch failed:', e?.message)
@@ -355,10 +347,6 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
         })
       : Promise.resolve(null),
     gridP,
-    fetchSolarRgbOrtho(env, framing.lat, framing.lng).catch((e: any) => {
-      console.warn('[auto-trace] Solar RGB fetch failed:', e?.message)
-      return null
-    }),
   ])
   let imageB64 = satellite.b64
   let imageMediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' = satellite.mediaType
@@ -567,8 +555,6 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     hasViewport3d,
     hasWideContext: !!wideContext,
     hasGridOverlay: !!gridOverlay,
-    hasSolarRgb: !!solarRgb,
-    solarRgbInfo: solarRgb ? { width: solarRgb.width, height: solarRgb.height, quality: solarRgb.quality } : null,
     vegetationTintApplied,
     hintApplied,
     hintCenterPx,
@@ -599,15 +585,12 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   })
 
   // Build the multimodal content array. Order MUST match the system-
-  // prompt image roster: satellite → solar-rgb → hillshade → wide-context →
+  // prompt image roster: satellite → hillshade → wide-context →
   // grid-overlay → 3D-oblique → text. Anything that drifts out of order
   // means Claude reads about Image 2 while looking at Image 3.
   const content: any[] = [
     { type: 'image', source: { type: 'base64', media_type: imageMediaType, data: imageB64 } },
   ]
-  if (solarRgb) {
-    content.push({ type: 'image', source: { type: 'base64', media_type: solarRgb.mediaType, data: solarRgb.b64 } })
-  }
   if (hillshade) {
     content.push({ type: 'image', source: { type: 'base64', media_type: hillshade.mediaType, data: hillshade.b64 } })
   }
@@ -856,8 +839,6 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       hint_radius_px: hintRadiusPx ?? undefined,
       solar_overlay_applied: solarOverlayApplied || undefined,
       solar_segments_overlaid: solarSegmentsOverlaid || undefined,
-      solar_rgb_used: !!solarRgb || undefined,
-      solar_rgb_dim: solarRgb ? { width: solarRgb.width, height: solarRgb.height, quality: solarRgb.quality } : undefined,
       model: CLAUDE_VISION_MODEL,
       elapsed_ms: Date.now() - started,
     },
@@ -1058,8 +1039,6 @@ function buildSystemPrompt(
     hasViewport3d: boolean
     hasWideContext: boolean
     hasGridOverlay: boolean
-    hasSolarRgb: boolean
-    solarRgbInfo: { width: number; height: number; quality?: 'HIGH' | 'MEDIUM' | 'BASE' } | null
     vegetationTintApplied: boolean
     hintApplied: boolean
     hintCenterPx: { x: number; y: number } | null
@@ -1085,9 +1064,6 @@ function buildSystemPrompt(
   const imageRoster: string[] = []
   let imgN = 1
   imageRoster.push(`Image ${imgN++} — PRIMARY: Google satellite (top-down, target reference; ALL pixel coordinates you emit must be in THIS image's coordinate space, origin top-left).${opts.vegetationTintApplied ? ' ⚠️ TREE TINT APPLIED: vegetation pixels have been painted MAGENTA via the VARI vegetation index. Magenta = tree canopy (likely deciduous in summer imagery). The eave often passes UNDER the magenta zones — extrapolate the visible eave line through the canopy using the orthogonal-projection rule. Do NOT treat the edge of the magenta as a roof corner.' : ''}${opts.solarOverlayApplied ? ` 🧭 SOLAR PLANE OVERLAY APPLIED: ${opts.solarSegmentsOverlaid} colored translucent rectangles (red/green/blue/yellow/purple/sky/orange/teal) mark Solar API's detected roof PLANES — these are structural ground-truth from a SEPARATE SENSOR (DSM-derived from LiDAR-class height data, NOT from the satellite imagery you see). The colored rectangles are NOT the eave line — they are individual roof FACES. Your eaves polygon must be the OUTER PERIMETER enclosing all colored rectangles. Anything OUTSIDE the union of the colored rectangles is yard, neighbour, or driveway — do not trace there. Use the colors to count distinct roof planes if helpful for vertex placement.` : ''}${opts.hintApplied ? ' 🎯 USER HINT CIRCLE drawn in RED DASHED line with faint pink interior — see the HINT REGION section below.' : ''}`)
-  if (opts.hasSolarRgb && opts.solarRgbInfo) {
-    imageRoster.push(`Image ${imgN++} — HIGH-RES SOLAR RGB ORTHO: same building as Image 1 but inherently building-cropped at ~${opts.solarRgbInfo.quality === 'HIGH' ? '10' : opts.solarRgbInfo.quality === 'MEDIUM' ? '25' : '50'} cm/px native (${opts.solarRgbInfo.width}×${opts.solarRgbInfo.height} px) — Solar API's RGB ortho fetched from a SEPARATE source than the Google Static Maps primary. Use this image as your HIGH-RESOLUTION REFERENCE for fine eave-edge work and corner placement decisions — it's tightly cropped to the building (no wasted yard pixels) so edges are sharper. ⚠️ ALL pixel coordinates you emit must STILL be in Image 1's coordinate space, NOT this image's. Use this image's CONTENT (where edges fall, where corners are, where eaves drop to shadow) but emit Image 1 pixels.`)
-  }
   if (opts.hasHillshade) {
     imageRoster.push(`Image ${imgN++} — DSM hillshade. A synthetic structural render of the Google Solar API elevation raster, RESAMPLED to the SAME size as Image 1 so pixel coordinates correspond 1:1. THREE independent signals are packed into the RGB channels: RED = multi-azimuth hillshade (omni-directional illumination, ridges and hips appear as bright lines regardless of orientation); GREEN = Sobel edge magnitude on the height field (SHARP green lines where the surface curvature changes — primary cue for ridges, hips, and the inset of valleys); BLUE = above-ground height (brighter blue = higher above ground; near-zero where the surface is at lawn level). Use red+green together to localize lines; use blue to discriminate roof (bright blue) from yard or driveway (dark blue).`)
   }
