@@ -454,6 +454,34 @@ export async function notifyTraceCompletedToCustomer(
     subject,
   })
   const pixel = buildTrackingPixel(trackingToken)
+
+  // Mint or reuse a share_token so the email always carries an "open in
+  // browser" link, independent of whether the PDF/HTML attachment renders
+  // or whether the customer can navigate the dashboard. This is the path
+  // that recovered Heidi West (RM-20260512-5044) — her .html attachment
+  // wouldn't preview in Gmail, but the share link works on every device.
+  let shareUrl: string | null = null
+  if (env?.DB && order_id != null) {
+    try {
+      const row = await env.DB.prepare(
+        'SELECT share_token FROM reports WHERE order_id = ? ORDER BY id DESC LIMIT 1'
+      ).bind(order_id).first<{ share_token: string | null }>()
+      let token = row?.share_token || null
+      if (!token) {
+        token = crypto.randomUUID().replace(/-/g, '').substring(0, 20)
+        await env.DB.prepare(
+          "UPDATE reports SET share_token = ?, share_sent_at = datetime('now'), updated_at = datetime('now') WHERE order_id = ?"
+        ).bind(token, order_id).run()
+      }
+      shareUrl = `https://www.roofmanager.ca/report/share/${token}?v=c`
+    } catch {}
+  }
+
+  const viewOnlineCta = shareUrl
+    ? `<a href="${shareUrl}" style="display:inline-block;background:#0369a1;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700;margin:8px 0">View your report online →</a>
+  <p style="color:#888;font-size:12px;margin:6px 0 18px">Opens in any browser — no download needed.</p>`
+    : ''
+
   const rawHtml = `
 <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
   <h2 style="color:#111;margin-bottom:4px">Your report is ready</h2>
@@ -461,9 +489,9 @@ export async function notifyTraceCompletedToCustomer(
   <p style="color:#222;font-size:15px;line-height:1.5">${greeting}</p>
   <p style="color:#222;font-size:15px;line-height:1.5">
     Our team has finished tracing the roof at <strong>${htmlEsc(property_address)}</strong>.
-    Your measurement report is now available in your dashboard.
   </p>
-  <a href="https://www.roofmanager.ca/customer" style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:8px">Open my dashboard →</a>
+  ${viewOnlineCta}
+  <a href="https://www.roofmanager.ca/customer" style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:4px">Open my dashboard →</a>
   <p style="color:#888;font-size:12px;margin-top:24px">
     Roof Manager · roofmanager.ca
   </p>

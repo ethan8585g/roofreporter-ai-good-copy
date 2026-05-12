@@ -4240,8 +4240,14 @@ app.get('/customer/join-team', (c) => c.html(getJoinTeamPageHTML()))
 app.get('/report/share/:token', async (c) => {
   try {
     const token = c.req.param('token')
+    // v=c → homeowner-friendly customer copy (no measurements). Default is
+    // the professional report (contractor share semantic, used everywhere
+    // else). The "Your report is ready" email always passes ?v=c so the
+    // homeowner sees the same content that was attached, never the
+    // measurement-disclosing version.
+    const audience = (c.req.query('v') || '').toLowerCase() === 'c' ? 'customer' : 'pro'
     const row = await c.env.DB.prepare(`
-      SELECT r.professional_report_html, r.api_response_raw, r.share_view_count,
+      SELECT r.professional_report_html, r.customer_report_html, r.api_response_raw, r.share_view_count,
              o.id AS order_id, o.property_address, o.property_city, o.property_province
       FROM reports r JOIN orders o ON o.id = r.order_id
       WHERE r.share_token = ?
@@ -4275,7 +4281,9 @@ app.get('/report/share/:token', async (c) => {
     const escToken = String(token).replace(/[^A-Za-z0-9_\-]/g, '')
 
     // Resolve report HTML (use stored HTML only — avoids bundling template at edge)
-    const h = row.professional_report_html || ''
+    const h = (audience === 'customer'
+      ? (row.customer_report_html || row.professional_report_html)
+      : row.professional_report_html) || ''
     const reportHtml = (h.trimStart().startsWith('<!DOCTYPE') || h.trimStart().startsWith('<html')) ? h : ''
 
     if (!reportHtml) {
