@@ -400,19 +400,20 @@ export async function getCustomerReportAttachments(
   const row = await env.DB.prepare(
     'SELECT customer_report_html, professional_report_html FROM reports WHERE order_id = ? ORDER BY id DESC LIMIT 1'
   ).bind(orderId).first<any>()
-  // Render both PDFs in parallel rather than sequentially — independent
-  // Browser Rendering sessions, each gets its own headless Chrome, no
-  // shared state. Cuts the worker wall-time in roughly half and avoids
-  // the case where the first slow render starves the second.
-  const [pro, cust] = await Promise.all([
-    row?.professional_report_html
-      ? renderHtmlToPdf(env, row.professional_report_html, 'professional')
-      : Promise.resolve(null),
-    row?.customer_report_html
-      ? renderHtmlToPdf(env, row.customer_report_html, 'customer')
-      : Promise.resolve(null),
-  ])
+  // Sequential render — two parallel headless-Chrome instances exceeded
+  // the Worker memory budget on the 176KB pro report, returning Cloudflare
+  // 1102 and dropping the pro PDF attachment silently (id 24 went out
+  // with only the customer PDF). Sequential keeps memory low enough that
+  // both renders complete. Pro renders first because it's the primary
+  // deliverable; if the customer render later fails the recipient still
+  // has the full report.
+  const pro = row?.professional_report_html
+    ? await renderHtmlToPdf(env, row.professional_report_html, 'professional')
+    : null
   if (pro) out.push({ filename: `roof-report-${safe}-full.pdf`, mimeType: 'application/pdf', bytes: pro })
+  const cust = row?.customer_report_html
+    ? await renderHtmlToPdf(env, row.customer_report_html, 'customer')
+    : null
   if (cust) out.push({ filename: `roof-report-${safe}-customer.pdf`, mimeType: 'application/pdf', bytes: cust })
   return out
 }
