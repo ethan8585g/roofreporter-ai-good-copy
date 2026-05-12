@@ -1784,8 +1784,12 @@ app.get('/3d-verify', async (c) => {
     // Cesium3DTileset.fromUrl leaves child tile/texture requests
     // un-authenticated, so geometry shows as a wireframe and no
     // textures appear.
+    // createGooglePhotorealistic3DTileset(key, options) — key is POSITIONAL
+    // (first arg), not an options field. Passing it via options leaves key
+    // undefined, which makes Cesium fall back to a Cesium Ion asset fetch
+    // that 401s without an ion token (we have none — we use Google directly).
     const tilesetPromise = (typeof Cesium.createGooglePhotorealistic3DTileset === 'function')
-      ? Cesium.createGooglePhotorealistic3DTileset(undefined, { apiKey: API_KEY, showCreditsOnScreen: true })
+      ? Cesium.createGooglePhotorealistic3DTileset(API_KEY, { showCreditsOnScreen: true })
       : Cesium.Cesium3DTileset.fromUrl(
           'https://tile.googleapis.com/v1/3dtiles/root.json?key=' + encodeURIComponent(API_KEY),
           { showCreditsOnScreen: true }
@@ -1873,11 +1877,13 @@ app.get('/3d-verify', async (c) => {
         }, 60000);
       }
     }).catch((err) => {
+      const msg = String(err && err.message || err);
+      const isIon = /cesium\.com|ion|asset/i.test(msg);
       showErr(
-        'Photorealistic 3D Tiles request failed (' + (err && err.message || err) + ').\\n\\n' +
-        'Fix: in Google Cloud Console for the key behind GOOGLE_MAP_TILES_API_KEY ' +
-        '(or GOOGLE_MAPS_API_KEY if unset), enable the "Map Tiles API" and ensure ' +
-        'HTTP-referrer restrictions include www.roofmanager.ca/* (or remove restrictions).'
+        'Photorealistic 3D Tiles request failed (' + msg + ').\\n\\n' +
+        (isIon
+          ? 'This 401 is from Cesium Ion, not Google. The page tried to fall back to Ion because the API key was not passed correctly. Hard-refresh; if it persists, check the browser console for the failing URL.'
+          : 'Fix: in Google Cloud Console for the key behind GOOGLE_MAP_TILES_API_KEY (or GOOGLE_MAPS_API_KEY if unset), enable the "Map Tiles API" and ensure HTTP-referrer restrictions include www.roofmanager.ca/* (or remove restrictions).')
       );
       if (AUTOCAPTURE && ORDER_ID) {
         try { window.parent && window.parent.postMessage({ type: 'rm-3d-cover-done', orderId: ORDER_ID, ok: false, error: String(err && err.message || err) }, '*'); } catch(_) {}
