@@ -523,14 +523,17 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   // 4-corner aerial views (NE/SE/SW/NW) — captured automatically from
   // /3d-verify Cesium/Photorealistic 3D Tiles when the trace is saved or
   // on first report view. Renders an "Aerial Views" page only when all
-  // four are present; otherwise the section is omitted entirely.
+  // four are present AND an admin has approved them. Google's
+  // Photorealistic 3D Tiles produce broken-mesh blobs in some areas,
+  // so the approval gate keeps unreviewed captures off the customer report.
   const aerialViewsRaw = (report as any).imagery?.aerial_views
+  const aerialViewsApproved = (report as any).imagery?.aerial_views_approved === true
   const aerialViews: Array<{ heading: number; label: string; data_url: string }> =
     Array.isArray(aerialViewsRaw) && aerialViewsRaw.length === 4 ? aerialViewsRaw : []
   // Order tiles in display sequence: NE (top-left), NW (top-right),
   // SW (bottom-left), SE (bottom-right) — matches a top-down compass grid.
   const aerialOrder = ['NE', 'NW', 'SW', 'SE']
-  const aerialTiles = aerialViews.length === 4
+  const aerialTiles = (aerialViews.length === 4 && aerialViewsApproved)
     ? aerialOrder.map(label => aerialViews.find(v => String(v.label).toUpperCase() === label)).filter(Boolean) as typeof aerialViews
     : []
   const aerialLabelMap: Record<string, string> = {

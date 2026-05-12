@@ -363,11 +363,21 @@ reportsRoutes.get('/:orderId/html', async (c) => {
   // upgrades the cover with zero user action. One-shot per order.
   let hasOblique3d = false
   let hasAerialViews = false
+  let aerialViewsList: Array<{ heading: number; label: string; data_url: string }> = []
+  let aerialViewsApproved = false
   try {
     const parsed = row.api_response_raw ? JSON.parse(row.api_response_raw) : null
     hasOblique3d = !!(parsed?.imagery?.oblique_3d_url)
     hasAerialViews = Array.isArray(parsed?.imagery?.aerial_views) && parsed.imagery.aerial_views.length >= 4
+    if (hasAerialViews) aerialViewsList = parsed.imagery.aerial_views
+    aerialViewsApproved = parsed?.imagery?.aerial_views_approved === true
   } catch {}
+
+  // Admin-only: aerial-views preview + approval pill. Shows 4 captured
+  // thumbnails (NE/NW/SW/SE) and a "Show in customer report" toggle.
+  // Customers never see this UI.
+  const viewerUser = (c as any).get('user')
+  const isAdminViewer = viewerUser?.role === 'admin'
 
   const autoCaptureBlock = hasOblique3d ? '' : `
 <style>
@@ -473,7 +483,97 @@ reportsRoutes.get('/:orderId/html', async (c) => {
   })();
 </script>`
 
-  const tail = `${autoCaptureBlock}${aerialsCaptureBlock}${cover3dWidget}${proWidget}`
+  // Admin-only preview/approval pill for the 4-corner aerial views.
+  // Renders nothing for customers, nothing when no captures exist yet.
+  const aerialAdminWidget = (isAdminViewer && hasAerialViews) ? (() => {
+    const labelMap: Record<string, string> = { NE: 'Northeast', NW: 'Northwest', SW: 'Southwest', SE: 'Southeast' }
+    const order = ['NE', 'NW', 'SW', 'SE']
+    const tilesInOrder = order
+      .map(lbl => aerialViewsList.find(v => String(v.label).toUpperCase() === lbl))
+      .filter(Boolean) as typeof aerialViewsList
+    const thumbsHtml = tilesInOrder.map(t => `
+      <figure style="margin:0;display:flex;flex-direction:column;gap:4px">
+        <div style="position:relative;border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,0.15);background:#000;aspect-ratio:4/3">
+          <img src="${t.data_url}" alt="${labelMap[String(t.label).toUpperCase()] || t.label} aerial preview" style="width:100%;height:100%;object-fit:cover;display:block">
+          <span style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,0.7);color:#fff;font:700 9px -apple-system,Segoe UI,sans-serif;padding:2px 6px;border-radius:3px;letter-spacing:0.4px">${labelMap[String(t.label).toUpperCase()] || t.label}</span>
+        </div>
+      </figure>`).join('')
+    const stateLabel = aerialViewsApproved ? 'Visible in customer report' : 'Hidden from customer report'
+    const stateDotColor = aerialViewsApproved ? '#00FF88' : '#F59E0B'
+    return `
+<style>
+  .rm-aerial-fab{position:fixed;bottom:24px;right:470px;z-index:99997;background:#0A0A0A;color:#FFD600;border:1px solid #FFD600;border-radius:999px;padding:12px 18px;font:700 13px -apple-system,BlinkMacSystemFont,Segoe UI,Inter,sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(255,214,0,0.25);display:inline-flex;align-items:center;gap:8px;transition:transform .12s ease}
+  .rm-aerial-fab:hover{transform:translateY(-2px);background:#111}
+  .rm-aerial-fab .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:${stateDotColor};box-shadow:0 0 8px ${stateDotColor}}
+  @media (max-width: 1100px){.rm-aerial-fab{right:24px;bottom:152px}}
+  .rm-aerial-panel{position:fixed;right:24px;bottom:80px;width:520px;max-width:calc(100vw - 48px);max-height:78vh;overflow:auto;z-index:99998;background:#0A0A0A;color:#fff;border:1px solid rgba(255,214,0,0.35);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,0.6);padding:18px;display:none;font:13px -apple-system,Segoe UI,Inter,sans-serif}
+  .rm-aerial-panel.open{display:block}
+  .rm-aerial-panel h3{margin:0 0 6px;font:800 15px -apple-system,Segoe UI,sans-serif;color:#FFD600;letter-spacing:0.2px}
+  .rm-aerial-panel .sub{font-size:11.5px;color:#9CA3AF;margin-bottom:14px;line-height:1.4}
+  .rm-aerial-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+  .rm-aerial-state{display:flex;align-items:center;gap:8px;font-size:12px;color:#E5E7EB;margin-bottom:10px}
+  .rm-aerial-toggle{display:flex;align-items:center;gap:10px;background:#111;border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;cursor:pointer;user-select:none}
+  .rm-aerial-toggle:hover{background:#161616}
+  .rm-aerial-toggle input{margin:0;width:18px;height:18px;accent-color:#00FF88;cursor:pointer}
+  .rm-aerial-toggle .label{font-weight:700;font-size:13px}
+  .rm-aerial-toggle .hint{font-size:11px;color:#9CA3AF;margin-top:2px}
+  .rm-aerial-panel .close{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:999px;border:1px solid rgba(255,255,255,0.18);background:transparent;color:#fff;font:700 14px sans-serif;cursor:pointer}
+  .rm-aerial-panel .saving{display:none;color:#FFD600;font-size:11px;margin-left:8px}
+  .rm-aerial-panel.saving .saving{display:inline}
+</style>
+<button type="button" class="rm-aerial-fab" id="rmAerialFab" aria-label="Aerial views admin preview">🛰 Aerial Views <span class="dot" aria-hidden="true"></span></button>
+<div class="rm-aerial-panel" id="rmAerialPanel" role="dialog" aria-modal="false" aria-labelledby="rmAerialTitle">
+  <button type="button" class="close" id="rmAerialClose" aria-label="Close aerial preview">&times;</button>
+  <h3 id="rmAerialTitle">Aerial Views — Admin Preview</h3>
+  <div class="sub">Four corner captures from Google Photorealistic 3D Tiles. Some areas return broken mesh geometry — verify each tile looks like a real roof before showing in the customer report.</div>
+  <div class="rm-aerial-grid">${thumbsHtml}</div>
+  <div class="rm-aerial-state"><span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${stateDotColor}"></span><span id="rmAerialStateLabel">${stateLabel}</span><span class="saving">saving…</span></div>
+  <label class="rm-aerial-toggle">
+    <input type="checkbox" id="rmAerialApprove" ${aerialViewsApproved ? 'checked' : ''}>
+    <span>
+      <div class="label">Show in customer report</div>
+      <div class="hint">Toggling reloads the report. Captures stay saved either way.</div>
+    </span>
+  </label>
+</div>
+<script>
+  (function(){
+    var orderId = ${JSON.stringify(orderId)};
+    var fab = document.getElementById('rmAerialFab');
+    var panel = document.getElementById('rmAerialPanel');
+    var close = document.getElementById('rmAerialClose');
+    var approve = document.getElementById('rmAerialApprove');
+    var stateLabel = document.getElementById('rmAerialStateLabel');
+    function openPanel(){ panel.classList.add('open'); }
+    function closePanel(){ panel.classList.remove('open'); }
+    fab.addEventListener('click', function(){
+      if (panel.classList.contains('open')) closePanel(); else openPanel();
+    });
+    close.addEventListener('click', closePanel);
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closePanel(); });
+    approve.addEventListener('change', function(){
+      if (panel.classList.contains('saving')) return;
+      panel.classList.add('saving');
+      var approved = !!approve.checked;
+      stateLabel.textContent = approved ? 'Saving — will show in customer report…' : 'Saving — will hide from customer report…';
+      fetch('/api/reports/' + encodeURIComponent(orderId) + '/3d-aerials/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ approved: approved })
+      }).then(function(r){ return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+        .then(function(){ setTimeout(function(){ try { location.reload(); } catch(_){} }, 350); })
+        .catch(function(err){
+          panel.classList.remove('saving');
+          approve.checked = !approved;
+          stateLabel.textContent = 'Save failed — ' + (err && err.message ? err.message : 'try again');
+        });
+    });
+  })();
+</script>`
+  })() : ''
+
+  const tail = `${autoCaptureBlock}${aerialsCaptureBlock}${cover3dWidget}${aerialAdminWidget}${proWidget}`
   if (augmented.includes('</body>')) {
     augmented = augmented.replace('</body>', `${tail}</body>`)
   } else {
@@ -874,6 +974,40 @@ reportsRoutes.post('/:orderId/3d-aerials', async (c) => {
     .bind(JSON.stringify(parsed), orderId).run()
 
   return c.json({ success: true, count: cleaned.length, captured_at: capturedAt })
+})
+
+// ============================================================
+// POST /:orderId/3d-aerials/approve — Admin-only toggle that decides
+// whether the 4-corner Aerial Views page is included in the customer
+// report. Captures still get stored on the report regardless; this flag
+// gates rendering so we never ship broken Photorealistic 3D Tile meshes
+// to a customer without an admin eyeballing them first.
+// Body: { approved: boolean }. Writes imagery.aerial_views_approved.
+// ============================================================
+reportsRoutes.post('/:orderId/3d-aerials/approve', async (c) => {
+  const orderId = c.req.param('orderId')
+  const user = (c as any).get('user')
+  if (!user || user.role !== 'admin') return c.json({ error: 'Admin only' }, 403)
+
+  let body: any
+  try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON' }, 400) }
+  const approved = body?.approved === true
+
+  const row = await c.env.DB.prepare('SELECT api_response_raw FROM reports WHERE order_id = ?')
+    .bind(orderId).first<{ api_response_raw: string | null }>()
+  if (!row) return c.json({ error: 'Report not found' }, 404)
+
+  let parsed: any = {}
+  try { parsed = row.api_response_raw ? JSON.parse(row.api_response_raw) : {} } catch { parsed = {} }
+  parsed.imagery = parsed.imagery || {}
+  parsed.imagery.aerial_views_approved = approved
+  parsed.imagery.aerial_views_approved_at = new Date().toISOString()
+  parsed.imagery.aerial_views_approved_by = user.id || user.email || 'admin'
+
+  await c.env.DB.prepare('UPDATE reports SET api_response_raw = ? WHERE order_id = ?')
+    .bind(JSON.stringify(parsed), orderId).run()
+
+  return c.json({ success: true, approved })
 })
 
 // ============================================================
