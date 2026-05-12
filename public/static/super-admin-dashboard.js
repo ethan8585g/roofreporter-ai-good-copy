@@ -2024,11 +2024,46 @@ window.saCaptureView = function() {
   }
 
   function pickRenderCanvas() {
-    var all = findAllCanvases(host, []);
-    // The render target is the largest canvas. Filter out tiny/hidden ones.
-    all = all.filter(function(c) { return c.width > 100 && c.height > 100; });
-    all.sort(function(a, b) { return (b.width * b.height) - (a.width * a.height); });
-    return all[0] || null;
+    var inHost = findAllCanvases(host, []);
+    var inDoc = Array.prototype.slice.call(document.querySelectorAll('canvas'));
+    var seen = new Set();
+    var combined = inHost.concat(inDoc).filter(function(c) {
+      if (seen.has(c)) return false;
+      seen.add(c);
+      return true;
+    });
+    var hostRect = host.getBoundingClientRect();
+    function effW(c) { return c.width || c.clientWidth || 0; }
+    function effH(c) { return c.height || c.clientHeight || 0; }
+    function overlapsHost(c) {
+      var r = c.getBoundingClientRect();
+      return r.right > hostRect.left && r.left < hostRect.right
+          && r.bottom > hostRect.top && r.top < hostRect.bottom;
+    }
+    // Diagnostic: dump every candidate to the console so we can see what
+    // gmp-map-3d actually exposes when capture fails. Safe to leave in —
+    // only fires on the capture click path.
+    try {
+      console.log('[saCaptureView] candidates:', combined.map(function(c) {
+        return {
+          tag: c.tagName,
+          width: c.width, height: c.height,
+          clientW: c.clientWidth, clientH: c.clientHeight,
+          inHost: inHost.indexOf(c) >= 0,
+          overlapsHost: overlapsHost(c),
+          parent: c.parentNode && c.parentNode.host ? ('shadow:' + c.parentNode.host.tagName) : (c.parentNode && c.parentNode.tagName) || null
+        };
+      }));
+    } catch (_) {}
+    var usable = combined.filter(function(c) { return effW(c) > 100 && effH(c) > 100; });
+    // Prefer canvases inside the host's shadow DOM; fall back to any canvas
+    // that visually overlaps the 3D map's bounding box (catches cases where
+    // the canvas lives outside our shadow walk because a nested element
+    // uses a closed shadow root).
+    var inHostUsable = usable.filter(function(c) { return inHost.indexOf(c) >= 0; });
+    var pool = inHostUsable.length ? inHostUsable : usable.filter(overlapsHost);
+    pool.sort(function(a, b) { return (effW(b) * effH(b)) - (effW(a) * effH(a)); });
+    return pool[0] || null;
   }
 
   // Pixel-level blank check — toDataURL can produce a valid-looking JPEG
@@ -2098,7 +2133,13 @@ window.saCaptureView = function() {
   function doCapture() {
     var canvas = pickRenderCanvas();
     if (!canvas) {
-      saShowCaptureToast('Could not find the 3D map canvas. Pan/zoom the map and try again.');
+      var diag = '';
+      try {
+        var inHost = findAllCanvases(host, []).length;
+        var inDoc = document.querySelectorAll('canvas').length;
+        diag = ' (host:' + inHost + ' doc:' + inDoc + ')';
+      } catch (_) {}
+      saShowCaptureToast('Could not find the 3D map canvas' + diag + '. Pan/zoom the map and try again.');
       return;
     }
     var dataUrl = null;
