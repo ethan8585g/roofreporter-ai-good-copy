@@ -856,6 +856,16 @@ function renderTraceStep(root, progressBar) {
             <span id="traceModeDesc" class="text-xs text-gray-400">${m.desc}</span>
           </div>
           <div style="position:relative; flex: 1; display:flex; flex-direction:column;">
+            <style>
+              /* Force the crosshair (+) cursor across every Google-Maps-injected child
+                 element while tracing on desktop. Without this, Google's internal
+                 .gm-style div, marker hit-targets, and polyline overlays flip the
+                 cursor to grab/grabbing/pointer. Phones (no hover, coarse pointer)
+                 keep the default cursor. */
+              @media (hover: hover) and (pointer: fine) {
+                #traceMap, #traceMap * { cursor: crosshair !important; }
+              }
+            </style>
             <div id="traceMap" style="min-height: 360px; cursor: crosshair; flex: 1;"></div>
             <!-- Phone-only overlays: hidden by default, unhidden by enablePhoneTraceUI() after initTraceMap -->
             <div id="phoneTraceOverlay" style="display:none;">
@@ -1223,6 +1233,11 @@ function initTraceMap() {
     mapTypeControl: !isPhone,
     gestureHandling: isPhone ? 'greedy' : 'auto',  // One-finger pan on phones (no "use two fingers" overlay)
     clickableIcons: false,
+    // Desktop trace cursor stays `+` at all times — Google Maps would otherwise
+    // flip to grab/grabbing during pan and pointer over markers. Phones use the
+    // default cursor (enablePhoneTraceUI also re-asserts this on the div).
+    draggableCursor: isPhone ? undefined : 'crosshair',
+    draggingCursor: isPhone ? undefined : 'crosshair',
     styles: [
       { featureType: 'poi', stylers: [{ visibility: 'off' }] },
       { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
@@ -2376,7 +2391,10 @@ window.cancelAddPlane = function() {
   document.getElementById('cust-add-plane-hint').style.display = 'none';
   const addBtn = document.getElementById('cust-add-plane-btn');
   if (addBtn) { addBtn.style.opacity = 1; addBtn.disabled = false; }
-  if (orderState.traceMap) orderState.traceMap.setOptions({ draggableCursor: '' });
+  if (orderState.traceMap) {
+    // Restore to crosshair on desktop (the persistent trace cursor); leave default on phone.
+    orderState.traceMap.setOptions({ draggableCursor: orderState.traceIsPhone ? '' : 'crosshair' });
+  }
   for (const f of orderState.verifiedFaces) {
     if (f.polygon) f.polygon.setOptions({ clickable: true });
   }
