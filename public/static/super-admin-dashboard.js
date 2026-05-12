@@ -1710,7 +1710,10 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<div style="color:#f9fafb;font-size:15px;font-weight:700"><i class="fas fa-drafting-compass mr-2" style="color:#f59e0b"></i>Trace Roof — ' + orderNum + '</div>' +
           '<div style="color:#6b7280;font-size:12px;margin-top:2px">' + address + '</div>' +
         '</div>' +
-        '<button onclick="document.getElementById(\'sa-trace-modal\').remove()" style="color:#6b7280;background:none;border:none;font-size:20px;cursor:pointer;line-height:1">&times;</button>' +
+        '<div style="display:flex;align-items:center;gap:6px">' +
+          '<button onclick="saToggleTraceFullscreen()" id="sa-trace-fullscreen-btn" title="Toggle fullscreen (expand the trace modal to fill the viewport)" style="color:#9ca3af;background:#1f2937;border:1px solid #374151;border-radius:6px;width:30px;height:30px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;line-height:1"><i id="sa-trace-fullscreen-icon" class="fas fa-expand"></i></button>' +
+          '<button onclick="document.getElementById(\'sa-trace-modal\').remove()" style="color:#6b7280;background:none;border:none;font-size:20px;cursor:pointer;line-height:1">&times;</button>' +
+        '</div>' +
       '</div>' +
       '<div style="padding:10px 20px;background:#1f2937;border-bottom:1px solid #374151;font-size:12px;color:#9ca3af;flex-shrink:0">' +
         '<span style="margin-right:12px"><span style="display:inline-block;width:12px;height:12px;background:#22c55e;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Eaves</span>' +
@@ -1846,6 +1849,49 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
       '</style>' +
     '</div>';
   document.body.appendChild(overlay);
+
+  // Fullscreen toggle for the trace modal — expands the centered overlay
+  // (96vw × 90vh w/ padding + rounded corners) to fill the viewport
+  // (100vw × 100vh, no chrome) and back. 2D Google Map needs an explicit
+  // resize event after the bounds change; the 3D map, Street View, and
+  // pitch panel ride on flex and resize automatically.
+  window.saToggleTraceFullscreen = function() {
+    var overlay = document.getElementById('sa-trace-modal');
+    if (!overlay) return;
+    var inner = overlay.firstElementChild;
+    if (!inner) return;
+    var icon = document.getElementById('sa-trace-fullscreen-icon');
+    var isFull = overlay.getAttribute('data-fullscreen') === '1';
+    if (isFull) {
+      overlay.setAttribute('data-fullscreen', '0');
+      overlay.style.padding = '16px';
+      inner.style.width = '96vw';
+      inner.style.maxWidth = '1700px';
+      inner.style.height = '90vh';
+      inner.style.borderRadius = '16px';
+      inner.style.border = '1px solid #374151';
+      if (icon) { icon.className = 'fas fa-expand'; }
+    } else {
+      overlay.setAttribute('data-fullscreen', '1');
+      overlay.style.padding = '0';
+      inner.style.width = '100vw';
+      inner.style.maxWidth = 'none';
+      inner.style.height = '100vh';
+      inner.style.borderRadius = '0';
+      inner.style.border = 'none';
+      if (icon) { icon.className = 'fas fa-compress'; }
+    }
+    setTimeout(function() {
+      try {
+        var s = window._saTraceState;
+        if (s && s.map && window.google && google.maps && google.maps.event) {
+          var c = s.map.getCenter();
+          google.maps.event.trigger(s.map, 'resize');
+          if (c) s.map.setCenter(c);
+        }
+      } catch (e) {}
+    }, 50);
+  };
 
   // Initialize the trace map
   var _isPhoneUA = /Android|iPhone|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent || '') || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
