@@ -266,6 +266,13 @@ export interface AutoTraceResult {
     solar_overlay_applied?: boolean
     /** Number of Solar planes drawn (only when overlay applied). */
     solar_segments_overlaid?: number
+    /** True when the magenta target-pin reticle was rendered at the user's
+     *  click point on the satellite tile. Strongest "which house?" signal
+     *  the agent gets — falsy means the click fell outside the cropped
+     *  frame (extremely rare) or the preprocessing block threw. */
+    target_pin_applied?: boolean
+    /** Pin pixel coordinates in the sent-image frame (post-upscale). */
+    target_pin_px?: { x: number; y: number }
     model: string
     elapsed_ms: number
     /** Set when the polygon was sourced from an external building-footprint
@@ -427,6 +434,12 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
 
   // Fetch the raster inputs in parallel. All centred on framing.lat/lng at
   // framing.zoom so pixel grids align 1:1 with the primary image.
+  // NOTE: wide-context tile (when enabled) does NOT currently receive the
+  // magenta target-pin reticle — it would need its own PNG decode/encode
+  // round-trip since it's not part of the merged preprocessing pipeline.
+  // Wide-context is opt-in (off by default), so the primary tile's pin is
+  // sufficient for the standard flow. Revisit if wide-context becomes
+  // default-on.
   const [satellite, hillshade, wideContext, gridOverlay] = await Promise.all([
     fetchImageB64(imageUrl),
     fetchDsmHillshade(env, framing.lat, framing.lng, safeW * 2).catch((e: any) => {
@@ -465,6 +478,12 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   let hintApplied = false
   let hintCenterPx: { x: number; y: number } | null = null
   let hintRadiusPx: number | null = null
+  // Magenta target-pin reticle painted at input.lat/input.lng so Claude
+  // has an unambiguous visual signal of WHICH building to trace. Driven
+  // off the user's actual click point (not framing.lat/lng) since Solar
+  // may have recentred the frame on a wrong bbox.
+  let targetPinApplied = false
+  let targetPinCenterPx: { x: number; y: number } | null = null
   // Pre-derive whether the operator drew a Mark Region — used in the
   // merged pipeline AND in the bbox / framing branches below.
   const hintIsValid = !!(input.hintRegion && Number.isFinite(input.hintRegion.centerLat)
@@ -475,9 +494,12 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   // overlay. Previously each ran its own PNG round-trip (3 decodes + 3
   // encodes on a 1280×1280 RGBA buffer ≈ 1.5-2s of wasted CPU). Now
   // each operation is an in-place mutation on the same shared buffer.
+  // Target pin always renders when input.lat/lng are finite — it's the
+  // strongest "which house?" signal we have and costs ~0.5ms to draw.
+  const targetPinIsValid = Number.isFinite(input.lat) && Number.isFinite(input.lng)
   const needsAnyPreprocess = imageMediaType === 'image/png' && (
     input.vegetationTint || input.upscaleTo1568 ||
-    (input.solarSegmentOverlay !== false) || hintIsValid
+    (input.solarSegmentOverlay !== false) || hintIsValid || targetPinIsValid
   )
   if (needsAnyPreprocess) {
     const ppStart = Date.now()
@@ -531,7 +553,31 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
         hintApplied = true
       }
 
-      // 5. Single encode + base64 swap.
+      // 5. Target pin reticle at input.lat/input.lng. Drawn LAST so it
+      //    sits on top of all other overlays — solves the "which house?"
+      //    ambiguity that produces ~3x-too-large drafts in dense rows.
+      if (targetPinIsValid) {
+        const scaleP = 1 << framing.zoom
+        const cSinP = Math.sin(framing.lat * Math.PI / 180)
+        const centerWorldXP = (256 * (0.5 + framing.lng / 360)) * scaleP
+        const centerWorldYP = (256 * (0.5 - Math.log((1 + cSinP) / (1 - cSinP)) / (4 * Math.PI))) * scaleP
+        const pinSin = Math.sin(input.lat * Math.PI / 180)
+        const pinWorldX = (256 * (0.5 + input.lng / 360)) * scaleP
+        const pinWorldY = (256 * (0.5 - Math.log((1 + pinSin) / (1 - pinSin)) / (4 * Math.PI))) * scaleP
+        const worldUnitsPerImgPxP = safeW / img.width
+        const pinPxX = Math.round((pinWorldX - centerWorldXP) / worldUnitsPerImgPxP + img.width / 2)
+        const pinPxY = Math.round((pinWorldY - centerWorldYP) / worldUnitsPerImgPxP + img.height / 2)
+        // Only draw if the pin actually falls inside the image. If the
+        // user's click is way off the cropped tile we skip silently
+        // rather than draw a clipped half-reticle that's confusing.
+        if (pinPxX >= 0 && pinPxX < img.width && pinPxY >= 0 && pinPxY < img.height) {
+          drawTargetPin(img.rgba, img.width, img.height, pinPxX, pinPxY)
+          targetPinCenterPx = { x: pinPxX, y: pinPxY }
+          targetPinApplied = true
+        }
+      }
+
+      // 6. Single encode + base64 swap.
       const reencoded = await encodePNG(img)
       let bin = ''
       const chunk = 0x8000
@@ -549,6 +595,8 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       hintApplied = false
       hintCenterPx = null
       hintRadiusPx = null
+      targetPinApplied = false
+      targetPinCenterPx = null
     } finally {
       preprocessElapsedMs = Date.now() - ppStart
     }
@@ -657,6 +705,8 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     targetCenterPx,
     targetBboxPx,
     includeOutbuildings: !!input.includeOutbuildings,
+    targetPinApplied,
+    targetPinCenterPx,
   })
   const userPrompt = buildUserPrompt({
     edge: input.edge,
@@ -932,6 +982,8 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       hint_radius_px: hintRadiusPx ?? undefined,
       solar_overlay_applied: solarOverlayApplied || undefined,
       solar_segments_overlaid: solarSegmentsOverlaid || undefined,
+      target_pin_applied: targetPinApplied || undefined,
+      target_pin_px: targetPinCenterPx || undefined,
       model: CLAUDE_VISION_MODEL,
       elapsed_ms: Date.now() - started,
     },
@@ -1144,6 +1196,8 @@ function buildSystemPrompt(
     targetCenterPx: { x: number; y: number }
     targetBboxPx: { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean; source?: 'hint' | 'solar-trusted' | 'solar-untrusted' } | null
     includeOutbuildings: boolean
+    targetPinApplied: boolean
+    targetPinCenterPx: { x: number; y: number } | null
   },
 ): string {
   const role = edge === 'eaves'
@@ -1159,7 +1213,7 @@ function buildSystemPrompt(
   // having to infer from contents. Per Anthropic's multi-image docs.
   const imageRoster: string[] = []
   let imgN = 1
-  imageRoster.push(`Image ${imgN++} — PRIMARY: Google satellite (top-down, target reference; ALL pixel coordinates you emit must be in THIS image's coordinate space, origin top-left).${opts.vegetationTintApplied ? ' ⚠️ TREE TINT APPLIED: vegetation pixels have been painted MAGENTA via the VARI vegetation index. Magenta = tree canopy (likely deciduous in summer imagery). The eave often passes UNDER the magenta zones — extrapolate the visible eave line through the canopy using the orthogonal-projection rule. Do NOT treat the edge of the magenta as a roof corner.' : ''}${opts.solarOverlayApplied ? ` 🧭 SOLAR PLANE OVERLAY APPLIED: ${opts.solarSegmentsOverlaid} colored translucent rectangles (red/green/blue/yellow/purple/sky/orange/teal) mark Solar API's detected roof PLANES — these are structural ground-truth from a SEPARATE SENSOR (DSM-derived from LiDAR-class height data, NOT from the satellite imagery you see). The colored rectangles are NOT the eave line — they are individual roof FACES. Your eaves polygon must be the OUTER PERIMETER enclosing all colored rectangles. Anything OUTSIDE the union of the colored rectangles is yard, neighbour, or driveway — do not trace there. Use the colors to count distinct roof planes if helpful for vertex placement.` : ''}${opts.hintApplied ? ' 🎯 USER HINT CIRCLE drawn in RED DASHED line with faint pink interior — see the HINT REGION section below.' : ''}`)
+  imageRoster.push(`Image ${imgN++} — PRIMARY: Google satellite (top-down, target reference; ALL pixel coordinates you emit must be in THIS image's coordinate space, origin top-left).${opts.targetPinApplied && opts.targetPinCenterPx ? ` 🎯 TARGET PIN — AUTHORITATIVE: a bright MAGENTA RETICLE (open ring + N/S/E/W tick marks, white halo for contrast) has been painted at pixel (${opts.targetPinCenterPx.x}, ${opts.targetPinCenterPx.y}). The CENTRE of this reticle sits on the ROOF of the building you must trace. Magenta is synthetic — it never appears on real roofs, asphalt, vegetation, shadows, or solar panels — so the reticle is unambiguous. Trace the building UNDER the magenta reticle. Ignore the geometric centre of the image; the reticle SUPERSEDES it. If the reticle is on a roof plane belonging to a building, that is the target; do NOT trace any neighbour even if it looks similar.` : ''}${opts.vegetationTintApplied ? ' ⚠️ TREE TINT APPLIED: vegetation pixels have been painted MAGENTA via the VARI vegetation index — note: tree-tint magenta is a DIFFUSE WASH, while the TARGET RETICLE described above is a SHARP RING with tick marks. Don’t confuse them. Magenta wash = tree canopy (likely deciduous in summer imagery). The eave often passes UNDER the magenta zones — extrapolate the visible eave line through the canopy using the orthogonal-projection rule. Do NOT treat the edge of the magenta as a roof corner.' : ''}${opts.solarOverlayApplied ? ` 🧭 SOLAR PLANE OVERLAY APPLIED: ${opts.solarSegmentsOverlaid} colored translucent rectangles (red/green/blue/yellow/purple/sky/orange/teal) mark Solar API's detected roof PLANES — these are structural ground-truth from a SEPARATE SENSOR (DSM-derived from LiDAR-class height data, NOT from the satellite imagery you see). The colored rectangles are NOT the eave line — they are individual roof FACES. Your eaves polygon must be the OUTER PERIMETER enclosing all colored rectangles. Anything OUTSIDE the union of the colored rectangles is yard, neighbour, or driveway — do not trace there. Use the colors to count distinct roof planes if helpful for vertex placement.` : ''}${opts.hintApplied ? ' 🎯 USER HINT CIRCLE drawn in RED DASHED line with faint pink interior — see the HINT REGION section below.' : ''}`)
   if (opts.hasHillshade) {
     imageRoster.push(`Image ${imgN++} — DSM hillshade. A synthetic structural render of the Google Solar API elevation raster, RESAMPLED to the SAME size as Image 1 so pixel coordinates correspond 1:1. THREE independent signals are packed into the RGB channels: RED = multi-azimuth hillshade (omni-directional illumination, ridges and hips appear as bright lines regardless of orientation); GREEN = Sobel edge magnitude on the height field (SHARP green lines where the surface curvature changes — primary cue for ridges, hips, and the inset of valleys); BLUE = above-ground height (brighter blue = higher above ground; near-zero where the surface is at lawn level). Use red+green together to localize lines; use blue to discriminate roof (bright blue) from yard or driveway (dark blue).`)
   }
@@ -1186,9 +1240,13 @@ function buildSystemPrompt(
       ? `\n🎯 USER HINT REGION — STRONGEST SIGNAL:\nImage 1 has a RED DASHED CIRCLE drawn on it, centred at pixel (${opts.hintCenterPx.x}, ${opts.hintCenterPx.y}) with radius ~${opts.hintRadiusPx}px, and faint pink shading INSIDE the circle. This is the operator's hint indicating roughly where the target building is. The actual building lives INSIDE this circle. Use the hint to disambiguate from neighbours, garages, sheds — the building you want is the one (or ones, if a porch / lower-tier eave / detached structure was intentionally enclosed) inside the pink shading. The red dashed ring is APPROXIMATE; the real eave line is what you SEE in the satellite imagery, NOT the circle itself. Trace the actual roof edges, but only consider buildings inside or overlapping the hint region — anything entirely OUTSIDE the circle is a neighbour and should be ignored.\n`
       : '',
     '⚠️ TARGET BUILDING — CRITICAL:',
-    opts.includeOutbuildings
-      ? `The target property is centred at pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) on Image 1. Trace the MAIN HOUSE (centre) AND any DETACHED OUTBUILDINGS on the same lot — detached garage, shed, workshop, carport — as ADDITIONAL polygons in segments[]. Each outbuilding gets its own closed polygon. Do NOT trace neighbour houses on adjacent lots (separated by driveways, fences, or property lines).`
-      : `The target building is centred at pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) on Image 1 — the satellite image has been recentred and zoomed so the target sits in the middle of the frame. Trace ONLY this central building. Any other buildings visible at the edges of the image are NEIGHBOURS, not the target.`,
+    opts.targetPinApplied && opts.targetPinCenterPx
+      ? (opts.includeOutbuildings
+          ? `The target lot is identified by the MAGENTA RETICLE at pixel (${opts.targetPinCenterPx.x}, ${opts.targetPinCenterPx.y}) on Image 1. Trace the MAIN HOUSE whose roof the reticle sits on, AND any DETACHED OUTBUILDINGS on the SAME lot (detached garage, shed, workshop, carport) — each as its own closed polygon in segments[]. Do NOT trace neighbour houses on adjacent lots (separated by driveways, fences, or property lines). The reticle is the ground truth for which lot — anything beyond a clear gap from the reticle's building is a neighbour.`
+          : `The target building is identified by the MAGENTA RETICLE at pixel (${opts.targetPinCenterPx.x}, ${opts.targetPinCenterPx.y}) on Image 1. Trace ONLY the single building whose roof the reticle sits on — including all of its wings, additions, attached garages, and lower-tier extensions that share the same roof structure. The reticle's CENTRE is on the target's roof. Any building separated from the reticle's building by a visible gap (driveway, fence, lawn strip, breezeway clearly broken in plan) is a NEIGHBOUR — do not trace it. Do not rely on the geometric centre of the image; the magenta reticle SUPERSEDES it.`)
+      : (opts.includeOutbuildings
+          ? `The target property is centred at pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) on Image 1. Trace the MAIN HOUSE (centre) AND any DETACHED OUTBUILDINGS on the same lot — detached garage, shed, workshop, carport — as ADDITIONAL polygons in segments[]. Each outbuilding gets its own closed polygon. Do NOT trace neighbour houses on adjacent lots (separated by driveways, fences, or property lines).`
+          : `The target building is centred at pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) on Image 1 — the satellite image has been recentred and zoomed so the target sits in the middle of the frame. Trace ONLY this central building. Any other buildings visible at the edges of the image are NEIGHBOURS, not the target.`),
     opts.targetBboxPx
       ? (opts.targetBboxPx.source === 'hint'
           ? `🎯 OPERATOR MARK REGION — AUTHORITATIVE: the user has explicitly enclosed the target building inside the red dashed circle. The building you must trace fits inside the pixel rectangle (${opts.targetBboxPx.x1}, ${opts.targetBboxPx.y1}) → (${opts.targetBboxPx.x2}, ${opts.targetBboxPx.y2}) — approximately ${opts.targetBboxPx.widthFt}ft × ${opts.targetBboxPx.depthFt}ft. **Trace EVERY roof plane (main block + wings + extensions + porches) visible inside or touching this rectangle as ONE connected polygon** — do NOT stop at the central block. Multi-wing L/U/T-shape acreages need 20–32 vertices. This bbox SUPERSEDES Google Solar's; if Solar's segments overlay or 60ft-clamp hint disagrees with the operator's circle, IGNORE the Solar hints — the operator drew the ring around the whole building they want measured, wings included.`
@@ -1951,6 +2009,71 @@ function extractSolarSegmentBboxesPx(
 // region on the satellite tile so the vision model can see "the target
 // is inside this circle." Pure pixel math; no image library needed.
 // ─────────────────────────────────────────────────────────────
+// Bright magenta reticle drawn at the user's pin lat/lng. Solves the
+// "which house?" ambiguity in dense residential rows by giving Claude an
+// unambiguous visual signal of the target building. Magenta (#FF00E5) is
+// chosen because it never appears naturally on roofs, asphalt, vegetation,
+// shadows, or solar panels — any magenta pixel in the image is synthetic.
+// Design: 18px-radius open ring (clear centre so the pixel under the pin
+// stays visible), white halo for contrast on any background, plus 4 short
+// tick marks pointing N/S/E/W to make the centre even more obvious.
+function drawTargetPin(
+  rgba: Uint8ClampedArray,
+  w: number,
+  h: number,
+  cx: number,
+  cy: number,
+): void {
+  const R_OUT = 18
+  const R_IN = 13
+  const TICK_INNER = 22
+  const TICK_OUTER = 32
+  const xMin = Math.max(0, Math.floor(cx - TICK_OUTER - 2))
+  const xMax = Math.min(w - 1, Math.ceil(cx + TICK_OUTER + 2))
+  const yMin = Math.max(0, Math.floor(cy - TICK_OUTER - 2))
+  const yMax = Math.min(h - 1, Math.ceil(cy + TICK_OUTER + 2))
+  for (let y = yMin; y <= yMax; y++) {
+    for (let x = xMin; x <= xMax; x++) {
+      const dx = x - cx, dy = y - cy
+      const d2 = dx * dx + dy * dy
+      const d = Math.sqrt(d2)
+      const idx = (y * w + x) * 4
+      // Magenta core: between R_IN and R_OUT
+      if (d > R_IN && d < R_OUT) {
+        rgba[idx] = 255; rgba[idx + 1] = 0; rgba[idx + 2] = 229; rgba[idx + 3] = 255
+        continue
+      }
+      // White halo just outside the magenta ring
+      if (d >= R_OUT && d <= R_OUT + 2) {
+        rgba[idx] = 255; rgba[idx + 1] = 255; rgba[idx + 2] = 255; rgba[idx + 3] = 255
+        continue
+      }
+      // White halo just inside the magenta ring (so it pops on dark roofs too)
+      if (d >= R_IN - 2 && d <= R_IN) {
+        rgba[idx] = 255; rgba[idx + 1] = 255; rgba[idx + 2] = 255; rgba[idx + 3] = 255
+        continue
+      }
+      // 4 tick marks (N/S/E/W) from TICK_INNER to TICK_OUTER on the axes
+      const ax = Math.abs(dx), ay = Math.abs(dy)
+      const onHorizontalTick = ay <= 2 && ax >= TICK_INNER && ax <= TICK_OUTER
+      const onVerticalTick   = ax <= 2 && ay >= TICK_INNER && ay <= TICK_OUTER
+      if (onHorizontalTick || onVerticalTick) {
+        rgba[idx] = 255; rgba[idx + 1] = 0; rgba[idx + 2] = 229; rgba[idx + 3] = 255
+        continue
+      }
+      // White halo around the tick marks
+      const horizHalo = ay <= 4 && ax >= TICK_INNER - 1 && ax <= TICK_OUTER + 1
+      const vertHalo  = ax <= 4 && ay >= TICK_INNER - 1 && ay <= TICK_OUTER + 1
+      if (horizHalo || vertHalo) {
+        // Only paint white where we haven't already painted magenta
+        if (rgba[idx] !== 255 || rgba[idx + 1] !== 0 || rgba[idx + 2] !== 229) {
+          rgba[idx] = 255; rgba[idx + 1] = 255; rgba[idx + 2] = 255; rgba[idx + 3] = 255
+        }
+      }
+    }
+  }
+}
+
 function drawHintCircle(
   rgba: Uint8ClampedArray,
   w: number,
