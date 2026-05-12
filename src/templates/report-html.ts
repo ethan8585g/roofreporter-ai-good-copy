@@ -653,8 +653,10 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
    each card to a single 8.5×11 page. */
 .diag-cap-axo{display:flex;justify-content:center;align-items:center;height:3.0in;overflow:hidden}
 .diag-cap-axo svg{max-height:3.0in !important;width:auto !important;height:auto !important;display:block}
-.diag-cap-plan{display:flex;justify-content:center;align-items:center;height:3.3in;overflow:hidden}
-.diag-cap-plan svg{max-height:3.3in !important;width:auto !important;height:auto !important;display:block}
+/* 2D plan view is the primary contractor deliverable — render it ~2× so
+   edge dimensions are clearly readable on the printed page. */
+.diag-cap-plan{display:flex;justify-content:center;align-items:center;height:6.2in;overflow:hidden}
+.diag-cap-plan svg{max-height:6.2in !important;width:auto !important;height:auto !important;display:block}
 </style>
 </head>
 <body>
