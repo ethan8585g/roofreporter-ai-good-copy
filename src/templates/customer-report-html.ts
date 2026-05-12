@@ -154,6 +154,9 @@ export function generateCustomerReportHTML(report: RoofReport): string {
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Roof Report — ${escapeHtml(address)}</title>
+  <link rel="icon" type="image/svg+xml" href="https://www.roofmanager.ca/static/favicon.svg?v=20260512">
+  <link rel="icon" type="image/x-icon" href="https://www.roofmanager.ca/static/favicon.ico?v=20260512">
+  <link rel="apple-touch-icon" href="https://www.roofmanager.ca/static/icons/icon-192x192.png?v=20260512">
   <style>${css}</style>
 </head>
 <body>

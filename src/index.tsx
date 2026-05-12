@@ -4449,7 +4449,13 @@ app.get('/report/share/:token', async (c) => {
     }
 
     // Inject OG meta tags for social sharing — escape user-controlled address + token.
-    const ogTags = `<meta property="og:title" content="Roof Measurement Report — ${escAddr || 'Professional Analysis'}">
+    // Also inject favicon links — stored HTML blobs predate the RoofManager rebrand
+    // and have no <link rel="icon">, so browsers fall back to the stale cached
+    // RoofReporter AI favicon. Forcing the link here fixes old AND new reports.
+    const ogTags = `<link rel="icon" type="image/svg+xml" href="https://www.roofmanager.ca/static/favicon.svg?v=20260512">
+<link rel="icon" type="image/x-icon" href="https://www.roofmanager.ca/static/favicon.ico?v=20260512">
+<link rel="apple-touch-icon" href="https://www.roofmanager.ca/static/icons/icon-192x192.png?v=20260512">
+<meta property="og:title" content="Roof Measurement Report — ${escAddr || 'Professional Analysis'}">
 <meta property="og:description" content="Professional satellite roof measurement report with area, pitch, edges, and material estimate. Powered by Roof Manager.">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://www.roofmanager.ca/report/share/${escToken}">

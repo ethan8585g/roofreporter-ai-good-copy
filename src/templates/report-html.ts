@@ -430,6 +430,10 @@ function renderMultiStructureReport(report: RoofReport): string {
   return htmls[0].replace(bodyRe, `<body>${bodies.join('\n')}</body>`)
 }
 
+// Bump this whenever the template visibly changes so cached HTML in
+// reports.professional_report_html gets re-rendered on next view.
+export const TEMPLATE_VERSION = 'v6.1-multistructure-fix-2026-05-12'
+
 export function generateProfessionalReportHTML(report: RoofReport): string {
   // ── Multi-structure: render full report per traced building ──
   // (Skipped when called recursively; the flag is set on synth reports.)
@@ -440,10 +444,22 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
       : []
     if (sections.length >= 2) {
       try {
-        return renderMultiStructureReport(report)
+        const out = renderMultiStructureReport(report)
+        // Diagnostic marker — temporary, lets us confirm prod takes this path
+        // by reading the rendered HTML. Remove after confirming.
+        return `<!-- RENDER-PATH: multi-structure, ${sections.length} sections, ${TEMPLATE_VERSION} -->\n${out}`
       } catch (e) {
+        // Diagnostic marker exposes the actual exception so we can see in
+        // the rendered HTML why prod is falling back when local doesn't.
+        const reason = (e as any)?.message || String(e)
         console.warn('[multi-structure] falling back to combined render:', e)
+        // Stash for the combined render branch to pick up below.
+        ;(report as any).__multi_structure_fallback_reason = reason
       }
+    } else if (sections.length === 1) {
+      ;(report as any).__multi_structure_fallback_reason = `only 1 eaves_section with >=3 pts (rt.eaves_sections.length=${rt?.eaves_sections?.length || 0})`
+    } else if (Array.isArray(rt?.eaves_sections)) {
+      ;(report as any).__multi_structure_fallback_reason = `eaves_sections present but 0 with >=3 pts (raw length=${rt.eaves_sections.length})`
     }
   }
 
@@ -616,12 +632,26 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   const TEAL_LIGHT = '#E0F2F1'
   // (RED/AMBER removed — all pages now use TEAL theme)
 
-  return `<!DOCTYPE html>
+  // Diagnostic marker exposes which render path was taken so we can read
+  // it via view-source on prod and confirm whether multi-structure is
+  // actually firing. The fallback reason is captured in the multi-structure
+  // branch a few hundred lines above.
+  const renderPathMarker = (report as any).__per_structure_render
+    ? `<!-- RENDER-PATH: per-structure synth (inside multi-structure), ${TEMPLATE_VERSION} -->`
+    : (report as any).__multi_structure_fallback_reason
+      ? `<!-- RENDER-PATH: combined-fallback, reason: ${String((report as any).__multi_structure_fallback_reason).replace(/-->/g, '--&gt;').slice(0, 400)}, ${TEMPLATE_VERSION} -->`
+      : `<!-- RENDER-PATH: combined (single-structure), ${TEMPLATE_VERSION} -->`
+
+  return `${renderPathMarker}
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=900">
 <title>Roof Manager Roof Report | ${fullAddress}</title>
+<link rel="icon" type="image/svg+xml" href="https://www.roofmanager.ca/static/favicon.svg?v=20260512">
+<link rel="icon" type="image/x-icon" href="https://www.roofmanager.ca/static/favicon.ico?v=20260512">
+<link rel="apple-touch-icon" href="https://www.roofmanager.ca/static/icons/icon-192x192.png?v=20260512">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 *{margin:0;padding:0;box-sizing:border-box}
@@ -1385,6 +1415,9 @@ export function generateSimpleTwoPageReport(report: RoofReport): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=900">
 <title>Roof Measurement Report | ${fullAddress}</title>
+<link rel="icon" type="image/svg+xml" href="https://www.roofmanager.ca/static/favicon.svg?v=20260512">
+<link rel="icon" type="image/x-icon" href="https://www.roofmanager.ca/static/favicon.ico?v=20260512">
+<link rel="apple-touch-icon" href="https://www.roofmanager.ca/static/icons/icon-192x192.png?v=20260512">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 *{margin:0;padding:0;box-sizing:border-box}
@@ -1805,8 +1838,8 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
     ...iwbRows,
     { cat: 'Ridge Cap', desc: 'Hip &amp; ridge cap shingles', qty: m.ridge_cap_bundles, unit: 'bundles', note: `${m.ridge_cap_lf} LF total ridge + hip`, icon: '&#9650;', color: '#dc2626', code: 'RFG RIDGC' },
     { cat: 'Starter Strip', desc: 'Starter shingles (eave + rake perimeter)', qty: Math.ceil(m.starter_strip_lf / 100), unit: 'rolls', note: `${m.starter_strip_lf} LF perimeter`, icon: '&#9644;', color: '#16a34a', code: 'RFG STARTU' },
-    ...((m.drip_edge_eave_lf || 0) > 0 ? [{ cat: 'Eaves Flashing', desc: 'Eaves flashing / drip edge — eave profile (10.5ft sticks)', qty: Math.ceil(m.drip_edge_eave_lf / 10.5), unit: 'sticks', note: `${m.drip_edge_eave_lf} LF along eaves`, icon: '&#9472;', color: '#16a34a', code: 'RFG GUTAS' }] : []),
-    ...((m.drip_edge_rake_lf || 0) > 0 ? [{ cat: 'Drip Edge — Rake', desc: 'Metal drip edge, rake profile (10.5ft sticks)', qty: Math.ceil(m.drip_edge_rake_lf / 10.5), unit: 'sticks', note: `${m.drip_edge_rake_lf} LF`, icon: '&#9472;', color: '#7c3aed', code: 'RFG GUTRS' }] : []),
+    ...((m.drip_edge_eave_lf || 0) > 0 ? [{ cat: 'Eaves Flashing', desc: 'Eaves flashing / drip edge — eave profile', qty: m.drip_edge_eave_lf, unit: 'LF', note: '10.5 ft pre-cut sticks (≈' + Math.ceil(m.drip_edge_eave_lf / 10.5) + ' pcs)', icon: '&#9472;', color: '#16a34a', code: 'RFG GUTAS' }] : []),
+    ...((m.drip_edge_rake_lf || 0) > 0 ? [{ cat: 'Drip Edge — Rake', desc: 'Metal drip edge, rake profile', qty: m.drip_edge_rake_lf, unit: 'LF', note: '10.5 ft pre-cut sticks (≈' + Math.ceil(m.drip_edge_rake_lf / 10.5) + ' pcs)', icon: '&#9472;', color: '#7c3aed', code: 'RFG GUTRS' }] : []),
     { cat: 'Valley Flashing', desc: 'Pre-bent W-valley metal or roll valley', qty: Math.ceil(m.valley_flashing_lf / 10), unit: 'pcs', note: `${m.valley_flashing_lf} LF total valley`, icon: '&#9660;', color: '#2563eb', code: 'RFG VALLEYM' },
     ...(((m as any).step_flashing_lf || 0) > 0 ? [{ cat: 'Step Flashing', desc: 'Pre-bent step flashing pieces (5"×7", 1 per shingle course)', qty: Math.ceil((m as any).step_flashing_lf * 1.5), unit: 'pcs', note: `${(m as any).step_flashing_lf} LF along sloped wall lines`, icon: '&#9613;', color: '#F59E0B', code: 'RFG FLSTEP' }] : []),
     ...(((m as any).headwall_flashing_lf || 0) > 0 ? [{ cat: 'Headwall Flashing', desc: 'Continuous headwall / apron flashing (10ft sticks)', qty: Math.ceil((m as any).headwall_flashing_lf / 10), unit: 'sticks', note: `${(m as any).headwall_flashing_lf} LF horizontal wall junction`, icon: '&#9644;', color: '#F97316', code: 'RFG FLHEAD' }] : []),
@@ -2711,15 +2744,15 @@ function buildMeasurementSummaryPage(report: RoofReport, reportNum: string, repo
           </tr>
           ${(m.drip_edge_eave_lf || 0) > 0 ? `<tr>
             <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#16a34a;margin-right:3px">&#9472;</span>Eaves Flashing</td>
-            <td style="padding:4px 10px;text-align:center;font-weight:800;color:#16a34a;border-bottom:1px solid #eee">${Math.ceil(m.drip_edge_eave_lf / 10.5)}</td>
-            <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">sticks</td>
-            <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">${m.drip_edge_eave_lf} LF along eaves</td>
+            <td style="padding:4px 10px;text-align:center;font-weight:800;color:#16a34a;border-bottom:1px solid #eee">${m.drip_edge_eave_lf}</td>
+            <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">LF</td>
+            <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">≈ ${Math.ceil(m.drip_edge_eave_lf / 10.5)} pcs @ 10.5 ft</td>
           </tr>` : ''}
           ${(m.drip_edge_rake_lf || 0) > 0 ? `<tr style="background:#fafafa">
             <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#7c3aed;margin-right:3px">&#9472;</span>Drip Edge — Rake</td>
-            <td style="padding:4px 10px;text-align:center;font-weight:800;color:#7c3aed;border-bottom:1px solid #eee">${Math.ceil(m.drip_edge_rake_lf / 10.5)}</td>
-            <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">sticks</td>
-            <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">${m.drip_edge_rake_lf} LF along rakes</td>
+            <td style="padding:4px 10px;text-align:center;font-weight:800;color:#7c3aed;border-bottom:1px solid #eee">${m.drip_edge_rake_lf}</td>
+            <td style="padding:4px 10px;text-align:center;font-size:7.5px;color:#777;border-bottom:1px solid #eee">LF</td>
+            <td style="padding:4px 10px;font-size:7px;color:#666;border-bottom:1px solid #eee">≈ ${Math.ceil(m.drip_edge_rake_lf / 10.5)} pcs @ 10.5 ft</td>
           </tr>` : ''}
           <tr style="background:#fafafa">
             <td style="padding:4px 10px;border-bottom:1px solid #eee;font-weight:700"><span style="color:#2563eb;margin-right:3px">&#9660;</span>Valley Flashing</td>
