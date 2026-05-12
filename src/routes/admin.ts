@@ -106,6 +106,59 @@ adminRoutes.use('/*', async (c, next) => {
 })
 
 // Test notification email — superadmin only
+// ============================================================
+// GET /superadmin/orders/:id/preview-trace-email
+// Fires notifyTraceCompletedToCustomer for the given order, but with the
+// recipient overridden to the logged-in super-admin's own email. Lets us
+// verify in our own inbox exactly what a customer would receive — including
+// whether the new PDF binding actually attaches a PDF in production.
+// Returns JSON; just GET it from a browser while logged in.
+// ============================================================
+adminRoutes.get('/superadmin/orders/:id/preview-trace-email', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  // Recipient override via ?to=. Defaults to the logged-in admin's email
+  // (safer default). Super-admin is trusted to target any address they
+  // need to test against (e.g. sales@, support@, a personal gmail).
+  const overrideTo = (c.req.query('to') || '').trim().toLowerCase()
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+  if (overrideTo && !EMAIL_RE.test(overrideTo)) {
+    return c.json({ error: 'Invalid ?to= email address' }, 400)
+  }
+  const recipient = overrideTo || admin.email
+  if (!recipient) return c.json({ error: 'No recipient resolved (admin has no email and no ?to= provided)' }, 400)
+
+  const orderId = Number(c.req.param('id'))
+  if (!orderId) return c.json({ error: 'Invalid order id' }, 400)
+
+  const order = await c.env.DB.prepare(
+    'SELECT id, order_number, property_address, homeowner_name, customer_id FROM orders WHERE id = ?'
+  ).bind(orderId).first<any>()
+  if (!order) return c.json({ error: 'Order not found' }, 404)
+
+  try {
+    const { notifyTraceCompletedToCustomer } = await import('../services/email')
+    await notifyTraceCompletedToCustomer(c.env, {
+      to: recipient,
+      order_number: order.order_number,
+      property_address: order.property_address,
+      customer_name: order.homeowner_name || '',
+      order_id: order.id,
+      customer_id: order.customer_id ?? null,
+    })
+    return c.json({
+      success: true,
+      sent_to: recipient,
+      order_id: orderId,
+      order_number: order.order_number,
+      note: 'Check that inbox. The share link + attachment (if PDF render succeeded) reflect what the homeowner would receive.',
+    })
+  } catch (err: any) {
+    return c.json({ error: err?.message || String(err), stack: err?.stack || null }, 500)
+  }
+})
+
 adminRoutes.post('/superadmin/test-notification', async (c) => {
   try {
     const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
