@@ -129,7 +129,7 @@ squareRoutes.post('/promo/validate', async (c) => {
 // GEOCODING HELPER — Convert address to lat/lng
 // Uses Google Maps Geocoding API
 // ============================================================
-async function geocodeAddress(address: string, apiKey: string): Promise<{ lat: number; lng: number } | null> {
+export async function geocodeAddress(address: string, apiKey: string): Promise<{ lat: number; lng: number } | null> {
   try {
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
     const resp = await fetch(url)

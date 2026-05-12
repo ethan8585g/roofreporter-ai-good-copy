@@ -34,7 +34,7 @@ import { solarPermitsRoutes } from './routes/solar-permits'
 import { solarProposalsRoutes } from './routes/solar-proposals'
 import { invoiceRoutes } from './routes/invoices'
 import { automationsRoutes } from './routes/automations'
-import { squareRoutes } from './routes/square'
+import { squareRoutes, geocodeAddress } from './routes/square'
 import { crmRoutes } from './routes/crm'
 import { claimsRoutes } from './routes/claims'
 import { propertyImageryRoutes } from './routes/property-imagery'
@@ -1318,11 +1318,31 @@ app.get('/3d-verify', async (c) => {
   if (orderId) {
     try {
       const row = await c.env.DB.prepare(
-        'SELECT latitude, longitude FROM orders WHERE id = ?'
-      ).bind(orderId).first<{ latitude: number | null; longitude: number | null }>()
+        'SELECT latitude, longitude, property_address FROM orders WHERE id = ?'
+      ).bind(orderId).first<{ latitude: number | null; longitude: number | null; property_address: string | null }>()
       if (row?.latitude && row?.longitude) {
         lat = row.latitude
         lng = row.longitude
+      } else if (row?.property_address && mapsKey) {
+        // No stored coords (older orders / failed Square geocode) — fall back
+        // to Google Geocoding so the customer's 3D modal lands on their actual
+        // house instead of the Edmonton city-centre default below.
+        const geo = await geocodeAddress(row.property_address, mapsKey)
+        if (geo) {
+          lat = geo.lat
+          lng = geo.lng
+          // Persist so subsequent opens are instant and other features (cover
+          // capture, dispatch map) also benefit.
+          try {
+            await c.env.DB.prepare(
+              'UPDATE orders SET latitude = ?, longitude = ? WHERE id = ?'
+            ).bind(geo.lat, geo.lng, orderId).run()
+          } catch (e) {
+            console.warn('[3d-verify] geocode persist failed:', (e as any)?.message)
+          }
+        } else {
+          console.warn('[3d-verify] geocode returned null for', row.property_address)
+        }
       }
     } catch (e) {
       console.warn('[3d-verify] order lookup failed:', (e as any)?.message)
@@ -1427,10 +1447,25 @@ app.get('/3d-verify', async (c) => {
   // (or {error}). The native UI chrome is hidden so the iframe looks like a
   // bare 3D viewport that the parent surrounds with its own controls.
   const POSTMSG_MODE = new URLSearchParams(location.search).get('postmsg') === '1';
-  const INITIAL_HEIGHT = parseFloat(new URLSearchParams(location.search).get('range') || '') || 250; // meters above ground
+  // INITIAL_HEIGHT is the absolute-altitude (above WGS84 ellipsoid) used by the
+  // autocapture/postmsg paths that need a deterministic camera position before
+  // tiles have streamed in. Kept at the historical 250m default so existing
+  // cover-image composition doesn't shift.
+  const INITIAL_HEIGHT = parseFloat(new URLSearchParams(location.search).get('range') || '') || 250;
   const INITIAL_PITCH_DEG = parseFloat(new URLSearchParams(location.search).get('pitch') || '') || -45; // looking down 45°
   const INITIAL_HEADING_DEG = parseFloat(new URLSearchParams(location.search).get('heading') || '') || 0;
+  // Interactive (customer-facing) framing — applied only after we've sampled
+  // the actual rooftop height. INTERACTIVE_RANGE is the camera-to-house
+  // distance, INTERACTIVE_PITCH_DEG is the look-down angle. Picked to land the
+  // viewer on a tight oblique of the roof, like a real-estate aerial.
+  const INTERACTIVE_RANGE = parseFloat(new URLSearchParams(location.search).get('irange') || '') || 150;
+  const INTERACTIVE_PITCH_DEG = parseFloat(new URLSearchParams(location.search).get('ipitch') || '') || -55;
   let viewer = null;
+  // Sampled local ground/roof height at TARGET.lat/lng, in meters above the
+  // WGS84 ellipsoid. Set by refinePropertyPinAltitude once tiles stream in.
+  // While null, flyToInitial uses the old absolute-altitude path so the user
+  // never sees a black screen waiting for tiles.
+  let roofGroundHeight = null;
 
   // ── Active capture state (only meaningful when CAPTURE_ENABLED) ──
   // Mode: 'pan' (default, no clicks captured) | 'ridge' | 'hip' | 'valley'
@@ -1458,6 +1493,32 @@ app.get('/3d-verify', async (c) => {
 
   function flyToInitial(headingDeg){
     if (!viewer) return;
+    // Once the rooftop height has been sampled from the photorealistic mesh,
+    // frame the camera with a bounding-sphere offset anchored to the actual
+    // roof. This is what makes the page "land on the house": camera distance
+    // and pitch are expressed in the local frame, so they work the same way
+    // regardless of whether the city sits at 0m (Vancouver) or 1050m (Calgary).
+    if (roofGroundHeight !== null && Cesium.BoundingSphere && Cesium.HeadingPitchRange) {
+      viewer.camera.flyToBoundingSphere(
+        new Cesium.BoundingSphere(
+          Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, roofGroundHeight),
+          25 // ~radius of a typical single-family roof
+        ),
+        {
+          offset: new Cesium.HeadingPitchRange(
+            Cesium.Math.toRadians(headingDeg || 0),
+            Cesium.Math.toRadians(INTERACTIVE_PITCH_DEG),
+            INTERACTIVE_RANGE
+          ),
+          duration: 1.0
+        }
+      );
+      return;
+    }
+    // Pre-height-sample fallback (first arrival, or no-WebGL2 devices where
+    // sampleHeightMostDetailed is unsupported). Uses absolute-altitude — the
+    // historical behaviour. Lands ~250m above the ellipsoid which can be
+    // underground in inland cities, but at least gets the camera near the lat/lng.
     viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, INITIAL_HEIGHT),
       orientation: {
@@ -1870,6 +1931,13 @@ app.get('/3d-verify', async (c) => {
           const h = s && Number.isFinite(s.height) ? s.height : null;
           if (h === null) return; // tiles around target not detailed enough yet; another retry will try again
           pinSnapped = true;
+          // Cache the local rooftop height so flyToInitial / resetView / rotate
+          // can frame the camera relative to the actual house instead of the
+          // ellipsoid. First time we get this, re-fly to land the customer on
+          // the rooftop — the initial fly-to used the approximate fallback.
+          const firstHeightSample = (roofGroundHeight === null);
+          roofGroundHeight = h;
+          if (firstHeightSample) flyToInitial(INITIAL_HEADING_DEG);
           // Dot sits 6m above the surface; pole runs from the surface up to it.
           propertyPinEntity.position = Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, h + 6);
           if (!propertyPolePinEntity) {
