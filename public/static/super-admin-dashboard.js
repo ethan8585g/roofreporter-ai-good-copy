@@ -2351,6 +2351,10 @@ function saInitTraceMap(lat, lng, address) {
   var center = { lat: lat || 53.5, lng: lng || -113.5 };
   // 16px white-on-black crosshair — smaller than the browser default so it doesn't obscure roof features.
   var TRACE_CURSOR = 'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDE2IDE2Ij48ZyBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSI+PGxpbmUgeDE9IjgiIHkxPSIxIiB4Mj0iOCIgeTI9IjYiLz48bGluZSB4MT0iOCIgeTE9IjEwIiB4Mj0iOCIgeTI9IjE1Ii8+PGxpbmUgeDE9IjEiIHkxPSI4IiB4Mj0iNiIgeTI9IjgiLz48bGluZSB4MT0iMTAiIHkxPSI4IiB4Mj0iMTUiIHkyPSI4Ii8+PC9nPjxnIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIwLjgiIGZpbGw9Im5vbmUiPjxsaW5lIHgxPSI4IiB5MT0iMSIgeDI9IjgiIHkyPSI2Ii8+PGxpbmUgeDE9IjgiIHkxPSIxMCIgeDI9IjgiIHkyPSIxNSIvPjxsaW5lIHgxPSIxIiB5MT0iOCIgeDI9IjYiIHkyPSI4Ii8+PGxpbmUgeDE9IjEwIiB5MT0iOCIgeDI9IjE1IiB5Mj0iOCIvPjwvZz48Y2lyY2xlIGN4PSI4IiBjeT0iOCIgcj0iMSIgZmlsbD0iI2ZmZiIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjAuNSIvPjwvc3ZnPg==") 8 8, crosshair';
+  // Stash on state so Add-Plane and other modal sub-flows can re-apply this exact cursor
+  // when they restore the map — otherwise the custom crosshair gets replaced with the
+  // system arrow/pointer when hovering polygons, and a scroll is needed to "reset" it.
+  s._traceCursor = TRACE_CURSOR;
   var map = new google.maps.Map(mapEl, {
     center: center, zoom: 20,
     mapTypeId: 'satellite', tilt: 0, rotateControl: false,
@@ -2366,6 +2370,10 @@ function saInitTraceMap(lat, lng, address) {
     disableDoubleClickZoom: false,
     clickableIcons: false,
     draggableCursor: TRACE_CURSOR,
+    // Keep the custom crosshair even when hovering over markers / polylines / polygons.
+    // Without this, Google Maps falls back to the system pointer over clickable shapes
+    // and the only way to "unstick" it is to drag the map off and back on.
+    clickableCursor: TRACE_CURSOR,
     styles: [
       { elementType: 'labels', stylers: [{ visibility: 'off' }] },
       { featureType: 'poi', elementType: 'all', stylers: [{ visibility: 'off' }] },
@@ -2503,6 +2511,8 @@ function saInitTraceMap(lat, lng, address) {
 
   // Snap a tap to the nearest existing eaves vertex within tolM metres so adjacent
   // structures share exact corners on phones. Mirrors customer-order.js snapToNearbyVertex.
+  // Skips the most-recent vertex of the active eave draft so tight corners on the
+  // same outline aren't collapsed onto the previous click.
   function saSnapToNearbyVertex(latLng, tolM) {
     var bestLL = null;
     var bestD = tolM;
@@ -2517,7 +2527,9 @@ function saInitTraceMap(lat, lng, address) {
       if (d < bestD) { bestD = d; bestLL = new google.maps.LatLng(pLat, pLng); }
     }
     (s.eaveSections || []).forEach(function(sec) { (sec.points || []).forEach(consider); });
-    (s._eaveLatLngs || []).forEach(consider);
+    var draft = s._eaveLatLngs || [];
+    // Exclude the last placed vertex — adjacent tight corners must stay distinct.
+    for (var i = 0; i < draft.length - 1; i++) consider(draft[i]);
     return bestLL;
   }
 
@@ -3316,7 +3328,10 @@ window.saStartAddPlane = function saStartAddPlane() {
   document.getElementById('sa-add-plane-hint').style.display = 'block';
   document.getElementById('sa-add-plane-btn').style.opacity = 0.5;
   document.getElementById('sa-add-plane-btn').disabled = true;
-  s.map.setOptions({ draggableCursor: 'crosshair' });
+  s.map.setOptions({
+    draggableCursor: s._traceCursor || 'crosshair',
+    clickableCursor: s._traceCursor || 'crosshair',
+  });
   // Make verified plane polygons un-clickable while drawing so map clicks
   // hit the map listener instead of bubbling into existing polygons.
   for (var i = 0; i < s.verifiedFaces.length; i++) {
@@ -3451,7 +3466,11 @@ window.saCancelAddPlane = function saCancelAddPlane() {
   document.getElementById('sa-add-plane-hint').style.display = 'none';
   var addBtn = document.getElementById('sa-add-plane-btn');
   if (addBtn) { addBtn.style.opacity = 1; addBtn.disabled = false; }
-  if (s.map) s.map.setOptions({ draggableCursor: '' });
+  // Restore the custom trace crosshair (NOT '' which falls back to system pointer).
+  if (s.map) s.map.setOptions({
+    draggableCursor: s._traceCursor || '',
+    clickableCursor: s._traceCursor || '',
+  });
   // Restore clickability on existing planes
   for (var i = 0; i < s.verifiedFaces.length; i++) {
     if (s.verifiedFaces[i].polygon) {
@@ -17005,12 +17024,24 @@ window.saTraceV2 = (function() {
       var d = pixelDist(latLng, cand, mp);
       if (d < bestPx) { bestPx = d; best = cand; }
     }
+    // Drop the most-recent vertex of the *active* draft from the snap pool so
+    // tight corners (two clicks within SNAP_PX of each other on the same
+    // outline) can actually be placed — otherwise every adjacent point gets
+    // collapsed onto the previous one.
+    function sansLast(arr) {
+      if (!arr || arr.length === 0) return [];
+      return arr.slice(0, -1);
+    }
+    var activeDraft = null;
+    if (tool === 'eave')   activeDraft = st._eaveLatLngs;
+    else if (tool === 'dormer') activeDraft = st._dormerLatLngs;
+    else if (tool === 'cutout') activeDraft = st._cutoutLatLngs;
     (st.eaveSections || []).forEach(function(sec) { (sec.points || []).forEach(consider); });
-    (st._eaveLatLngs || []).forEach(consider);
+    (activeDraft === st._eaveLatLngs ? sansLast(st._eaveLatLngs) : (st._eaveLatLngs || [])).forEach(consider);
     (st.dormers || []).forEach(function(d) { (d.points || []).forEach(consider); });
-    (st._dormerLatLngs || []).forEach(consider);
+    (activeDraft === st._dormerLatLngs ? sansLast(st._dormerLatLngs) : (st._dormerLatLngs || [])).forEach(consider);
     (st.cutouts || []).forEach(function(c) { (c.points || []).forEach(consider); });
-    (st._cutoutLatLngs || []).forEach(consider);
+    (activeDraft === st._cutoutLatLngs ? sansLast(st._cutoutLatLngs) : (st._cutoutLatLngs || [])).forEach(consider);
     // Ridge/hip/valley endpoints — so a hip can terminate exactly on a
     // ridge endpoint or eave corner, not a few pixels off.
     [st._ridgeData || [], st._hipData || [], st._valleyData || []].forEach(function(arr) {
