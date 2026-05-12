@@ -48,6 +48,12 @@ export interface StructurePartition {
   hip_lf: number
   valley_lf: number
   rake_lf: number
+  /** Dormer polygons whose centroid sits inside this structure's eaves. */
+  dormers?: Array<{
+    polygon: LatLng[]
+    pitch_rise: number
+    label?: string
+  }>
 }
 
 // ───────────────────────── CONSTANTS ─────────────────────────
@@ -259,6 +265,27 @@ export function splitStructures(report: RoofReport): StructurePartition[] {
   ;(rt.valleys || []).forEach(assignLine(valleys))
   ;(rt.rakes || []).forEach(assignLine(rakes))
 
+  // Route each dormer polygon to whichever structure contains its centroid,
+  // so multi-structure traces don't end up rendering a dormer on the wrong
+  // building. Mirrors the 2D template's dormersForPartition logic.
+  const dormersPerStruct: Array<Array<{ polygon: LatLng[]; pitch_rise: number; label?: string }>> = cands.map(() => [])
+  const rtDormers: any[] = Array.isArray((rt as any).dormers) ? (rt as any).dormers : []
+  for (const d of rtDormers) {
+    if (!d || !Array.isArray(d.polygon) || d.polygon.length < 3) continue
+    const cx = d.polygon.reduce((s: number, p: LatLng) => s + p.lat, 0) / d.polygon.length
+    const cy = d.polygon.reduce((s: number, p: LatLng) => s + p.lng, 0) / d.polygon.length
+    const midXY = projectLatLngToMeters([{ lat: cx, lng: cy }], cosLat, refLat, refLng)[0]
+    let chosen = 0
+    for (let i = 0; i < cands.length; i++) {
+      if (pointInPolygon(midXY, cands[i].eavesXY)) { chosen = i; break }
+    }
+    dormersPerStruct[chosen].push({
+      polygon: d.polygon,
+      pitch_rise: typeof d.pitch_rise === 'number' ? d.pitch_rise : 0,
+      label: typeof d.label === 'string' ? d.label : undefined,
+    })
+  }
+
   const totalFootprint = cands.reduce((s, c) => s + c.footprint_sqft, 0) || 1
   const labels = ['Main House', 'Detached Garage', 'Detached Structure', 'Additional Structure', 'Additional Structure', 'Additional Structure']
 
@@ -312,6 +339,7 @@ export function splitStructures(report: RoofReport): StructurePartition[] {
       hip_lf: Math.round(polylineLF(hips[i]) * 10) / 10,
       valley_lf: Math.round(polylineLF(valleys[i]) * 10) / 10,
       rake_lf: Math.round(polylineLF(rakes[i]) * 10) / 10,
+      dormers: dormersPerStruct[i].length ? dormersPerStruct[i] : undefined,
     }
   })
 }
@@ -331,11 +359,28 @@ export function splitStructures(report: RoofReport): StructurePartition[] {
  */
 function simplifyEavesXY(
   pts: { x: number; y: number }[],
-  angleThreshDeg = 5,
-  minEdgeM = 0.4,
+  angleThreshDeg = 8,
+  minEdgeM = 0.6,
+  anchorXYs: { x: number; y: number }[] = [],
+  anchorTolM = 0.6,
 ): { x: number; y: number }[] {
   if (pts.length < 4) return pts
   let work = pts.slice()
+
+  // Anchors are ridge/hip/valley endpoints in the same local-meters frame as
+  // pts. We refuse to collapse any vertex within `anchorTolM` of one — the
+  // mesh builder needs those corners intact so internal lines attach
+  // correctly. Without this guard the upper-left of an L-shape gets eaten
+  // when a tiny digitization jog sits next to a hip endpoint, and the 3D
+  // axo renders that mass as visually detached (Foxhaven order 295).
+  const anchorTolSq = anchorTolM * anchorTolM
+  const isAnchored = (p: { x: number; y: number }) => {
+    for (const a of anchorXYs) {
+      const dx = a.x - p.x, dy = a.y - p.y
+      if (dx * dx + dy * dy <= anchorTolSq) return true
+    }
+    return false
+  }
 
   // Tiny-edge pass.
   for (let pass = 0; pass < 3; pass++) {
@@ -346,10 +391,56 @@ function simplifyEavesXY(
       const a = work[i]
       const b = work[(i + 1) % work.length]
       const len = Math.hypot(b.x - a.x, b.y - a.y)
-      if (len < minEdgeM && len < shortest) { shortest = len; dropIdx = i }
+      // Picking which endpoint to remove: the unanchored one. If both anchored,
+      // skip the pair entirely.
+      const removeIdx = (i + 1) % work.length
+      if (len < minEdgeM && len < shortest && !isAnchored(work[removeIdx])) {
+        shortest = len; dropIdx = i
+      }
     }
     if (dropIdx < 0) break
     work.splice((dropIdx + 1) % work.length, 1)
+  }
+
+  // Small-jog smoother — handles runs of 3+ consecutive short edges with
+  // alternating ~perpendicular bearings (a true staircase). Replaces the
+  // run with its chord when none of the run's interior vertices are
+  // anchored. Targets the south-eave staircase on 75 Foxhaven (3.5/6.4/
+  // 7.9/6.4/5.6 ft jogs) which the collinear-merge pass below can't touch
+  // (90° corners are by definition non-collinear).
+  const SHORT_EDGE_M = 2.5
+  const MIN_RUN = 3
+  for (let pass = 0; pass < 2; pass++) {
+    const n = work.length
+    if (n < 6) break
+    const edgeLen = (i: number) => Math.hypot(work[(i + 1) % n].x - work[i].x, work[(i + 1) % n].y - work[i].y)
+    let smoothed = false
+    let i = 0
+    while (i < n) {
+      if (edgeLen(i) >= SHORT_EDGE_M) { i++; continue }
+      // Walk forward while edges stay short.
+      let j = i
+      while (edgeLen(j) < SHORT_EDGE_M && (j - i) < n) j++
+      const runLen = j - i + 1   // inclusive of vertex j
+      if (runLen >= MIN_RUN + 1) {
+        // Vertices i .. j; collapse interior vertices (i+1 .. j-1) if unanchored.
+        const interior: number[] = []
+        let blocked = false
+        for (let k = i + 1; k < j; k++) {
+          const idx = k % n
+          if (isAnchored(work[idx])) { blocked = true; break }
+          interior.push(idx)
+        }
+        if (!blocked && interior.length > 0) {
+          const set = new Set(interior)
+          work = work.filter((_, idx) => !set.has(idx))
+          smoothed = true
+          break  // restart pass — indices shifted
+        }
+      }
+      i = j + 1
+    }
+    if (!smoothed) break
   }
 
   // Collinear-merge pass.
@@ -358,6 +449,7 @@ function simplifyEavesXY(
     if (n < 4) break
     const drop = new Set<number>()
     for (let i = 0; i < n; i++) {
+      if (isAnchored(work[i])) continue
       const prev = (i - 1 + n) % n
       const next = (i + 1) % n
       if (drop.has(prev) || drop.has(next)) continue
@@ -643,12 +735,18 @@ function buildRoofMesh(
   tracedHipsXY: { x: number; y: number }[][] = [],
   tracedValleysXY: { x: number; y: number }[][] = [],
 ): Face3[] {
-  // Defensive cleanup: collapse near-collinear vertices and drop sub-0.4 m
-  // jogs before the run-grouping pass runs. The server-side trace enhancer
-  // already does this on lat/lng input, but legacy traces stored on disk
-  // bypass it — without this pass those reports re-render with the same
-  // zigzag they had before.
-  const eavesXY = simplifyEavesXY(rawEavesXY, 5, 0.4)
+  // Defensive cleanup: collapse near-collinear vertices, drop tiny digitization
+  // jogs, and smooth small-jog staircases. Anchor-aware — vertices that
+  // anchor a traced ridge/hip/valley endpoint are preserved so the run-
+  // grouping pass in `buildRoofMesh` keeps facet connectivity intact.
+  // (Without anchor preservation, an L-shape with a tiny perpendicular
+  // jog next to a hip corner can render as a visually-detached mass —
+  // 75 Foxhaven order 295.)
+  const anchorEndpoints: { x: number; y: number }[] = []
+  for (const r of tracedRidgesXY) if (r && r.length) { anchorEndpoints.push(r[0], r[r.length - 1]) }
+  for (const h of tracedHipsXY)   if (h && h.length) { anchorEndpoints.push(h[0], h[h.length - 1]) }
+  for (const v of tracedValleysXY) if (v && v.length) { anchorEndpoints.push(v[0], v[v.length - 1]) }
+  const eavesXY = simplifyEavesXY(rawEavesXY, 8, 0.6, anchorEndpoints, 0.6)
   const n = eavesXY.length
   if (n < 3) return []
 
@@ -1421,6 +1519,177 @@ export function generateAxonometricRoofSVG(
     .map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`)
     .join(' ')
   svg += `<polygon points="${eavePts}" fill="none" stroke="${EDGE_COLOR.EAVE}" stroke-width="2.0" stroke-linejoin="round" stroke-opacity="0.95"/>`
+
+  // ── DORMER RAISED VOLUMES ──
+  // Each traced dormer becomes a small gabled mass sitting on top of the
+  // main roof. The base of the dormer is lifted to roughly the middle of
+  // the main slope so it reads as "poking out" of the parent roof; the
+  // dormer's own gable rises above that base by its pitch × shorter-span.
+  // PCA on the polygon gives the ridge axis, then a Sutherland-Hodgman-
+  // style split bisects the polygon into two slope faces. Same NW-key /
+  // SE-fill Lambert shading as the main mesh so the lighting is coherent.
+  if (structure.dormers && structure.dormers.length > 0) {
+    const mainRidgeHeightM = ridgeHeightFromMesh(eavesXY, pitchRise)
+    const baseZ = mainRidgeHeightM * 0.45
+    type DormerFace = { vertices: V3[]; projVerts: V3[]; centroidY: number; normal: V3; pitch_rise: number }
+    const dormerFaces: DormerFace[] = []
+    const dormerOverlayDraws: string[] = []
+    for (const d of structure.dormers) {
+      if (!d.polygon || d.polygon.length < 3) continue
+      const dXY = projectLatLngToMeters(d.polygon, cosLat, refLat, refLng)
+      if (dXY.length < 3) continue
+      // Polygon centroid in world metres.
+      const cxD = dXY.reduce((s, p) => s + p.x, 0) / dXY.length
+      const cyD = dXY.reduce((s, p) => s + p.y, 0) / dXY.length
+      // PCA principal axis = ridge direction.
+      let cxx = 0, cyy = 0, cxy = 0
+      for (const p of dXY) {
+        const dx = p.x - cxD, dy = p.y - cyD
+        cxx += dx * dx; cyy += dy * dy; cxy += dx * dy
+      }
+      const theta = 0.5 * Math.atan2(2 * cxy, cxx - cyy)
+      const ax = Math.cos(theta), ay = Math.sin(theta)
+      const px = -ay, py = ax  // perpendicular
+      // Shorter span (perpendicular extent) controls the dormer's own ridge height.
+      let pMin = Infinity, pMax = -Infinity
+      let tMin = Infinity, tMax = -Infinity
+      for (const p of dXY) {
+        const tProj = (p.x - cxD) * ax + (p.y - cyD) * ay
+        const pProj = (p.x - cxD) * px + (p.y - cyD) * py
+        if (tProj < tMin) tMin = tProj
+        if (tProj > tMax) tMax = tProj
+        if (pProj < pMin) pMin = pProj
+        if (pProj > pMax) pMax = pProj
+      }
+      const shorterSpanM = pMax - pMin
+      const dormerPitchRise = d.pitch_rise > 0 ? d.pitch_rise : pitchRise
+      const dormerOwnHeightM = (shorterSpanM / 2) * (dormerPitchRise / 12)
+      const apexZ = baseZ + dormerOwnHeightM
+      // Ridge endpoints inset 6% so the gable corners stay clear of the cheek edges.
+      const ridgeInset = (tMax - tMin) * 0.06
+      const r1: V3 = { x: cxD + (tMin + ridgeInset) * ax, y: cyD + (tMin + ridgeInset) * ay, z: apexZ }
+      const r2: V3 = { x: cxD + (tMax - ridgeInset) * ax, y: cyD + (tMax - ridgeInset) * ay, z: apexZ }
+      // Split polygon by the perpendicular-axis line (through centroid, perpendicular = ridge direction).
+      // perpDot > 0 → "left half"; < 0 → "right half".
+      const perpDot = (p: { x: number; y: number }) => (p.x - cxD) * px + (p.y - cyD) * py
+      const leftHalf: { x: number; y: number }[] = []
+      const rightHalf: { x: number; y: number }[] = []
+      let crossCount = 0
+      for (let i = 0; i < dXY.length; i++) {
+        const a = dXY[i], b = dXY[(i + 1) % dXY.length]
+        const pa = perpDot(a), pb = perpDot(b)
+        if (pa >= 0) leftHalf.push(a); else rightHalf.push(a)
+        if ((pa >= 0 && pb < 0) || (pa < 0 && pb >= 0)) {
+          const tt = pa / (pa - pb)
+          const ix = a.x + tt * (b.x - a.x)
+          const iy = a.y + tt * (b.y - a.y)
+          leftHalf.push({ x: ix, y: iy })
+          rightHalf.push({ x: ix, y: iy })
+          crossCount++
+        }
+      }
+      const canSplit = crossCount === 2 && leftHalf.length >= 2 && rightHalf.length >= 2
+      if (canSplit) {
+        // Each half becomes a slope face: half vertices at base_z + the two ridge points at apex_z.
+        const buildSlopeFace = (half: { x: number; y: number }[], ridgeFirst: V3, ridgeSecond: V3): DormerFace => {
+          // Order: half vertices in their polygon-walk order, then second ridge point,
+          // then first — closes the loop on the ridge spine.
+          const worldVerts: V3[] = half.map(p => ({ x: p.x, y: p.y, z: baseZ }))
+          worldVerts.push(ridgeSecond, ridgeFirst)
+          // Surface normal via face triangle (vertices 0,1,2 are enough for the plane).
+          const v0 = worldVerts[0], v1 = worldVerts[1], v2 = worldVerts[worldVerts.length - 1]
+          const u = { x: v1.x - v0.x, y: v1.y - v0.y, z: v1.z - v0.z }
+          const v = { x: v2.x - v0.x, y: v2.y - v0.y, z: v2.z - v0.z }
+          let nx = u.y * v.z - u.z * v.y
+          let ny = u.z * v.x - u.x * v.z
+          let nz = u.x * v.y - u.y * v.x
+          const nl = Math.hypot(nx, ny, nz) || 1
+          nx /= nl; ny /= nl; nz /= nl
+          if (nz < 0) { nx = -nx; ny = -ny; nz = -nz }
+          const projVerts: V3[] = worldVerts.map(wv => {
+            const proj = projectAxonometric(wv)
+            return { x: proj.x, y: proj.y, z: proj.depth }
+          })
+          const cyAvg = projVerts.reduce((s, p) => s + p.y, 0) / projVerts.length
+          return { vertices: worldVerts, projVerts, centroidY: cyAvg, normal: { x: nx, y: ny, z: nz }, pitch_rise: dormerPitchRise }
+        }
+        dormerFaces.push(buildSlopeFace(leftHalf, r1, r2))
+        dormerFaces.push(buildSlopeFace(rightHalf, r2, r1))
+      } else {
+        // Fallback: triangle dormer or non-convex — render as a single lifted flat patch.
+        // Still better than absorbing into the main mesh.
+        const worldVerts: V3[] = dXY.map(p => ({ x: p.x, y: p.y, z: baseZ + dormerOwnHeightM * 0.6 }))
+        const projVerts = worldVerts.map(wv => {
+          const proj = projectAxonometric(wv)
+          return { x: proj.x, y: proj.y, z: proj.depth }
+        })
+        const cyAvg = projVerts.reduce((s, p) => s + p.y, 0) / projVerts.length
+        dormerFaces.push({ vertices: worldVerts, projVerts, centroidY: cyAvg, normal: { x: 0, y: 0, z: 1 }, pitch_rise: dormerPitchRise })
+      }
+      // Pitch pill on top of the dormer ridge.
+      if (canSplit && showDimensions) {
+        const rMid: V3 = { x: (r1.x + r2.x) / 2, y: (r1.y + r2.y) / 2, z: apexZ }
+        const m = projectAxonometric(rMid)
+        const lbl = (d.label || 'Dormer').replace(/^Dormer\s+/, 'D-')
+        const pitchLbl = `${(dormerPitchRise % 1 === 0) ? dormerPitchRise.toFixed(0) : dormerPitchRise.toFixed(1)}:12`
+        const pillW = Math.max(44, lbl.length * 5.4 + 18)
+        dormerOverlayDraws.push(
+          `<g transform="translate(${tx(m.x).toFixed(1)},${ty(m.y).toFixed(1)})">` +
+          `<rect x="${(-pillW / 2).toFixed(1)}" y="-11" width="${pillW.toFixed(1)}" height="22" rx="11" fill="#6d28d9" stroke="#fff" stroke-width="0.9"/>` +
+          `<text x="0" y="-1.5" text-anchor="middle" font-size="8" font-weight="800" fill="#fff" ${FONT}>${lbl}</text>` +
+          `<text x="0" y="8" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff" fill-opacity="0.96" ${FONT}>${pitchLbl}</text>` +
+          `</g>`
+        )
+      }
+    }
+
+    // Painter's sort dormer faces back-to-front, then draw.
+    dormerFaces.sort((a, b) => a.centroidY - b.centroidY)
+    for (const face of dormerFaces) {
+      const pointsStr = face.projVerts.map(v => `${tx(v.x).toFixed(1)},${ty(v.y).toFixed(1)}`).join(' ')
+      const base = pitchBaseColor(face.pitch_rise)
+      const lit = lambertFactor(face.normal)
+      // Subtle lavender tint so dormers remain visually distinct from the main mesh.
+      const fill = shadeColor(base, lit, '#7C3AED')
+      svg += `<polygon points="${pointsStr}" fill="${fill}" stroke="#4C1D95" stroke-width="0.8" stroke-linejoin="round" stroke-opacity="0.55"/>`
+    }
+    // Ridge line per dormer (drawn after faces so it sits on top).
+    for (const d of structure.dormers) {
+      if (!d.polygon || d.polygon.length < 3) continue
+      const dXY = projectLatLngToMeters(d.polygon, cosLat, refLat, refLng)
+      if (dXY.length < 3) continue
+      const cxD = dXY.reduce((s, p) => s + p.x, 0) / dXY.length
+      const cyD = dXY.reduce((s, p) => s + p.y, 0) / dXY.length
+      let cxx = 0, cyy = 0, cxy = 0
+      for (const p of dXY) {
+        const dx = p.x - cxD, dy = p.y - cyD
+        cxx += dx * dx; cyy += dy * dy; cxy += dx * dy
+      }
+      const theta = 0.5 * Math.atan2(2 * cxy, cxx - cyy)
+      const ax = Math.cos(theta), ay = Math.sin(theta)
+      const px = -ay, py = ax
+      let pMin = Infinity, pMax = -Infinity, tMin = Infinity, tMax = -Infinity
+      for (const p of dXY) {
+        const tp = (p.x - cxD) * ax + (p.y - cyD) * ay
+        const pp = (p.x - cxD) * px + (p.y - cyD) * py
+        if (tp < tMin) tMin = tp
+        if (tp > tMax) tMax = tp
+        if (pp < pMin) pMin = pp
+        if (pp > pMax) pMax = pp
+      }
+      const shorterSpanM = pMax - pMin
+      const dormerPitchRise = d.pitch_rise > 0 ? d.pitch_rise : pitchRise
+      const dormerOwnHeightM = (shorterSpanM / 2) * (dormerPitchRise / 12)
+      const apexZ = baseZ + dormerOwnHeightM
+      const ridgeInset = (tMax - tMin) * 0.06
+      const r1: V3 = { x: cxD + (tMin + ridgeInset) * ax, y: cyD + (tMin + ridgeInset) * ay, z: apexZ }
+      const r2: V3 = { x: cxD + (tMax - ridgeInset) * ax, y: cyD + (tMax - ridgeInset) * ay, z: apexZ }
+      const p1 = projectAxonometric(r1), p2 = projectAxonometric(r2)
+      svg += `<line x1="${tx(p1.x).toFixed(1)}" y1="${ty(p1.y).toFixed(1)}" x2="${tx(p2.x).toFixed(1)}" y2="${ty(p2.y).toFixed(1)}" stroke="${EDGE_COLOR.RIDGE}" stroke-width="1.6" stroke-linecap="round" stroke-opacity="0.95"/>`
+    }
+    // Overlay pills last so they sit above everything.
+    for (const d of dormerOverlayDraws) svg += d
+  }
 
   // Compass (top-right)
   if (showCompass) {
