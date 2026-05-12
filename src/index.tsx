@@ -8435,6 +8435,15 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 </head>
 <body class="min-h-screen" style="background:var(--bg-page)">
   <!-- Announcement Bar — volume-pricing nudge (avoids duplicating the hero "4 free" message) -->
+  <!-- TEMP 2026-05-11: campaign-launch flash banner. Shows above the regular
+       announcement-bar with red urgency styling. Revert by removing this block
+       and resetting FREE_TRIAL_REPORTS in customer-auth.ts back to 4. -->
+  <div id="flash-promo-bar" style="position:fixed;top:0;left:0;right:0;z-index:56;background:linear-gradient(90deg,#dc2626 0%,#ea580c 50%,#dc2626 100%);background-size:200% auto;color:#fff;text-align:center;padding:9px 44px 9px 16px;font-size:13px;font-weight:800;line-height:1.4;animation:shimmer 6s linear infinite">
+    &#x1F525; <strong>TODAY ONLY:</strong> 5 free reports (normally 4) &mdash; <a href="/register" style="color:#fff;text-decoration:underline;font-weight:800" onclick="rrTrack('cta_click',{location:'flash_promo_bar'})">Claim now &rarr;</a>
+    <button onclick="document.getElementById('flash-promo-bar').style.display='none';document.getElementById('announcement-bar').style.top='0';document.getElementById('landing-nav').style.top='40px'" aria-label="Dismiss" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:#fff;opacity:0.7;padding:4px 6px;line-height:1">&times;</button>
+  </div>
+  <style>#flash-promo-bar ~ #announcement-bar { top: 40px; } #flash-promo-bar ~ #landing-nav { top: 80px; }</style>
+
   <div id="announcement-bar">
     <span id="ab-text-a">&#128176; <strong>$5.95 per report</strong> on the 100-pack &mdash; credits never expire &mdash; </span>
     <span id="ab-text-b" style="display:none">&#128197; <strong>Book a free 20-min demo</strong> &mdash; see it on your own address &mdash; </span>

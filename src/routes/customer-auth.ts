@@ -130,7 +130,9 @@ function generateSessionToken(): string {
 // Phase 3 #11: single source of truth for the free-trial grant size. Used by
 // both signup paths (Google + email/password) and the responses that surface
 // it to the client. To change the grant, edit only this constant.
-export const FREE_TRIAL_REPORTS = 4
+// TEMP 2026-05-11: bumped 4 -> 5 for the EagleView campaign launch promo.
+// Revert to 4 once Day-1/Day-2 numbers stabilize.
+export const FREE_TRIAL_REPORTS = 5
 
 // Phase 2 #8: validate the Google profile picture URL before we persist it.
 // Google sends `picture` as a URL string in the ID token; reject anything that
