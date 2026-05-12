@@ -515,13 +515,14 @@ ${pixel}</div>`
     } catch {}
   }
 
-  // Best-effort attachment: PDF if Browser Rendering is reachable, else
-  // a self-contained HTML file the customer can open + print-to-PDF. Any
-  // failure degrades to a plain (no-attachment) send so the email itself
-  // is never blocked.
-  const attachment = order_id != null
-    ? await getCustomerReportAttachment(env, order_id, order_number)
-    : null
+  // Render BOTH PDFs (customer-facing + full professional) when Browser
+  // Rendering is available, so the paying customer receives the complete
+  // deliverable in their email — not just the homeowner-facing copy. The
+  // share link in the email body remains the guaranteed access path; the
+  // attachments are a bonus when render succeeds.
+  const attachments = order_id != null
+    ? await getCustomerReportAttachments(env, order_id, order_number)
+    : []
 
   let lastErr: any = null
   if (env?.RESEND_API_KEY) {
@@ -533,12 +534,12 @@ ${pixel}</div>`
     } catch (e: any) { lastErr = e }
   }
   if (clientId && clientSecret && refreshToken) {
-    if (attachment) {
+    if (attachments.length > 0) {
       try {
         await sendGmailOAuth2WithAttachment(
           clientId, clientSecret, refreshToken,
           to, subject, html,
-          attachment,
+          attachments,
           senderEmail || null,
         )
         return
@@ -976,10 +977,18 @@ export async function sendGmailOAuth2(
 export async function sendGmailOAuth2WithAttachment(
   clientId: string, clientSecret: string, refreshToken: string,
   to: string, subject: string, htmlBody: string,
-  attachment: { filename: string; mimeType: string; bytes: Uint8Array },
+  attachmentOrAttachments:
+    | { filename: string; mimeType: string; bytes: Uint8Array }
+    | Array<{ filename: string; mimeType: string; bytes: Uint8Array }>,
   senderEmail?: string | null,
   replyTo?: string | null
 ): Promise<{ id: string }> {
+  // Normalize single → array so the rest of this function only has to
+  // deal with one shape. Caller passes either one attachment (legacy)
+  // or many (e.g. customer report email shipping both customer + full
+  // PDFs in one send).
+  const attachments = Array.isArray(attachmentOrAttachments) ? attachmentOrAttachments : [attachmentOrAttachments]
+  if (attachments.length === 0) throw new Error('sendGmailOAuth2WithAttachment called with zero attachments')
   const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -1016,8 +1025,12 @@ export async function sendGmailOAuth2WithAttachment(
   }
 
   const htmlBase64 = encChunked(new TextEncoder().encode(htmlBody))
-  const attachmentBase64 = encChunked(attachment.bytes)
-  const safeFilename = attachment.filename.replace(/[^\w.\-]/g, '_').slice(0, 200)
+  // Pre-encode every attachment so we can build the MIME body in one pass.
+  const encodedAttachments = attachments.map(a => ({
+    base64: encChunked(a.bytes),
+    safeFilename: a.filename.replace(/[^\w.\-]/g, '_').slice(0, 200),
+    mimeType: a.mimeType,
+  }))
 
   const subjectEnc = (() => {
     const b = new TextEncoder().encode(subject); let s = ''
@@ -1055,13 +1068,17 @@ export async function sendGmailOAuth2WithAttachment(
     '',
     `--${inner}--`,
     '',
-    `--${outer}`,
-    `Content-Type: ${attachment.mimeType}; name="${safeFilename}"`,
-    `Content-Disposition: attachment; filename="${safeFilename}"`,
-    'Content-Transfer-Encoding: base64',
-    '',
-    attachmentBase64,
-    '',
+    // One attachment block per file. Each block is its own outer-boundary
+    // part with its own Content-Type / Content-Disposition / base64 body.
+    ...encodedAttachments.flatMap(a => [
+      `--${outer}`,
+      `Content-Type: ${a.mimeType}; name="${a.safeFilename}"`,
+      `Content-Disposition: attachment; filename="${a.safeFilename}"`,
+      'Content-Transfer-Encoding: base64',
+      '',
+      a.base64,
+      '',
+    ]),
     `--${outer}--`
   ].filter((l) => l !== '' || true).join('\r\n')
 

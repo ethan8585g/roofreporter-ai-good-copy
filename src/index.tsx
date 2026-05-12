@@ -4392,7 +4392,7 @@ app.get('/report/share/:token', async (c) => {
     const wrappedHtml = htmlWithOg.replace(
       /<body[^>]*>/i,
       `$&<div style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#0f172a;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-between;font-family:Inter,system-ui,sans-serif;font-size:13px">
-  <div style="display:flex;align-items:center;gap:10px"><span style="font-weight:700;color:#38bdf8">Roof Manager</span><span style="color:#94a3b8">|</span><span style="color:#cbd5e1">${escAddr || 'Roof Report'}</span></div>
+  <div style="display:flex;align-items:center;gap:10px"><img src="https://www.roofmanager.ca/static/logo.png?v=20260512" alt="Roof Manager" style="height:22px;width:auto;display:block"/><span style="color:#94a3b8">|</span><span style="color:#cbd5e1">${escAddr || 'Roof Report'}</span></div>
   <div style="display:flex;gap:8px"><button onclick="window.print()" style="background:#1e40af;color:#fff;border:none;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">Print / Save PDF</button><a href="https://www.roofmanager.ca" target="_blank" style="background:#065f46;color:#fff;padding:6px 14px;border-radius:8px;text-decoration:none;font-size:12px;font-weight:600">Get Your Own Report</a></div>
 </div><div style="height:48px"></div>`
     )
