@@ -1403,6 +1403,9 @@ app.get('/3d-verify', async (c) => {
   body.postmsg .topbar .pill,
   body.postmsg .topbar .btn.capture { display: none !important; }
   body.postmsg .legend { font-size: 10px; padding: 4px 8px; bottom: 6px; left: 6px; }
+  /* Tilt ⬇ / Tilt ⬆ are customer-only — set on <body> when ?customer=1 */
+  .tilt-btn { display: none; }
+  body.customer .tilt-btn { display: inline-flex; }
 </style>
 </head>
 <body>
@@ -1413,6 +1416,8 @@ app.get('/3d-verify', async (c) => {
   <button class="btn" onclick="resetView()">Reset View</button>
   <button class="btn ghost" onclick="rotate(-30)">Rotate ⟲</button>
   <button class="btn ghost" onclick="rotate(30)">Rotate ⟳</button>
+  <button class="btn ghost tilt-btn" onclick="tilt(15)">Tilt ⬇</button>
+  <button class="btn ghost tilt-btn" onclick="tilt(-15)">Tilt ⬆</button>
   ${orderId ? `<button class="btn capture" id="captureBtn" onclick="captureForCover()">📸 Save as Cover</button>` : ''}
 </div>
 <div class="capturebar" id="captureBar" style="display:none">
@@ -1460,6 +1465,14 @@ app.get('/3d-verify', async (c) => {
   // viewer on a tight oblique of the roof, like a real-estate aerial.
   const INTERACTIVE_RANGE = parseFloat(new URLSearchParams(location.search).get('irange') || '') || 150;
   const INTERACTIVE_PITCH_DEG = parseFloat(new URLSearchParams(location.search).get('ipitch') || '') || -55;
+  // ?customer=1 — opened from the customer "View 3D Model" modal. Unlocks
+  // the Tilt ⬇ / Tilt ⬆ buttons so customers can drop the view toward
+  // street level without learning the right-drag tilt gesture.
+  const CUSTOMER_MODE = new URLSearchParams(location.search).get('customer') === '1';
+  // Live camera pitch (degrees) — initialized to the interactive default
+  // and adjusted by the Tilt buttons. Driven through flyToInitial so Reset
+  // / Rotate also use the latest value.
+  let currentPitchDeg = INTERACTIVE_PITCH_DEG;
   let viewer = null;
   // Sampled local ground/roof height at TARGET.lat/lng, in meters above the
   // WGS84 ellipsoid. Set by refinePropertyPinAltitude once tiles stream in.
@@ -1507,7 +1520,7 @@ app.get('/3d-verify', async (c) => {
         {
           offset: new Cesium.HeadingPitchRange(
             Cesium.Math.toRadians(headingDeg || 0),
-            Cesium.Math.toRadians(INTERACTIVE_PITCH_DEG),
+            Cesium.Math.toRadians(currentPitchDeg),
             INTERACTIVE_RANGE
           ),
           duration: 1.0
@@ -1523,17 +1536,30 @@ app.get('/3d-verify', async (c) => {
       destination: Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, INITIAL_HEIGHT),
       orientation: {
         heading: Cesium.Math.toRadians(headingDeg || 0),
-        pitch: Cesium.Math.toRadians(INITIAL_PITCH_DEG),
+        pitch: Cesium.Math.toRadians(currentPitchDeg),
         roll: 0
       },
       duration: 1.0
     });
   }
-  function resetView(){ flyToInitial(INITIAL_HEADING_DEG); }
+  function resetView(){
+    currentPitchDeg = INTERACTIVE_PITCH_DEG;
+    flyToInitial(INITIAL_HEADING_DEG);
+  }
   function rotate(deltaDeg){
     if (!viewer) return;
     const heading = Cesium.Math.toDegrees(viewer.camera.heading);
     flyToInitial((heading + deltaDeg + 360) % 360);
+  }
+  // Tilt ⬇ / Tilt ⬆ — customer-only buttons that adjust camera pitch
+  // toward street level (pitch → 0°) or overhead (pitch → -89°) while
+  // keeping the house centered. Clamped so the camera never goes fully
+  // vertical or below the horizon.
+  function tilt(deltaDeg){
+    if (!viewer) return;
+    currentPitchDeg = Math.max(-89, Math.min(-5, currentPitchDeg + deltaDeg));
+    const heading = Cesium.Math.toDegrees(viewer.camera.heading);
+    flyToInitial(heading);
   }
 
   // ── Active capture: mode bar + click-to-pick on the photorealistic mesh ──
@@ -1783,6 +1809,9 @@ app.get('/3d-verify', async (c) => {
   // Registered immediately (not after tileset load) so the parent can
   // queue requests as soon as the iframe loads; if Cesium isn't ready
   // yet we just reply with an error and the parent retries.
+  if (CUSTOMER_MODE) {
+    try { document.body.classList.add('customer'); } catch(_) {}
+  }
   if (POSTMSG_MODE) {
     try { document.body.classList.add('postmsg'); } catch(_) {}
     window.addEventListener('message', function(ev){
