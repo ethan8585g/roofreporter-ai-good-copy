@@ -400,22 +400,56 @@ export async function getCustomerReportAttachments(
   const row = await env.DB.prepare(
     'SELECT customer_report_html, professional_report_html FROM reports WHERE order_id = ? ORDER BY id DESC LIMIT 1'
   ).bind(orderId).first<any>()
-  // Sequential render — two parallel headless-Chrome instances exceeded
-  // the Worker memory budget on the 176KB pro report, returning Cloudflare
-  // 1102 and dropping the pro PDF attachment silently (id 24 went out
-  // with only the customer PDF). Sequential keeps memory low enough that
-  // both renders complete. Pro renders first because it's the primary
-  // deliverable; if the customer render later fails the recipient still
-  // has the full report.
-  const pro = row?.professional_report_html
-    ? await renderHtmlToPdf(env, row.professional_report_html, 'professional')
-    : null
-  if (pro) out.push({ filename: `roof-report-${safe}-full.pdf`, mimeType: 'application/pdf', bytes: pro })
-  const cust = row?.customer_report_html
-    ? await renderHtmlToPdf(env, row.customer_report_html, 'customer')
-    : null
-  if (cust) out.push({ filename: `roof-report-${safe}-customer.pdf`, mimeType: 'application/pdf', bytes: cust })
+  // Single shared browser for both renders. Earlier code launched two
+  // separate puppeteer sessions sequentially; the second launch after the
+  // heavy 176KB pro render hit the Worker CPU/memory budget and returned
+  // null, so the customer PDF silently dropped and the email shipped with
+  // only the pro attachment. Reusing one browser eliminates the second
+  // spin-up. Customer renders first because it's ~20KB and near-certain
+  // to succeed — if pro later fails the recipient at least has the
+  // customer-shareable copy plus the share link in the body.
+  let browser: any = null
+  try {
+    const puppeteer = await import('@cloudflare/puppeteer')
+    browser = await puppeteer.default.launch(env.BROWSER)
+    const cust = row?.customer_report_html
+      ? await renderHtmlOnBrowser(browser, row.customer_report_html, 'customer')
+      : null
+    if (cust) out.push({ filename: `roof-report-${safe}-customer.pdf`, mimeType: 'application/pdf', bytes: cust })
+    const pro = row?.professional_report_html
+      ? await renderHtmlOnBrowser(browser, row.professional_report_html, 'professional')
+      : null
+    if (pro) out.push({ filename: `roof-report-${safe}-full.pdf`, mimeType: 'application/pdf', bytes: pro })
+  } catch (e: any) {
+    console.error('[getCustomerReportAttachments] browser launch/render failed:', e?.message || e)
+  } finally {
+    if (browser) { try { await browser.close() } catch {} }
+  }
   return out
+}
+
+// Renders one HTML doc to a PDF on an already-launched puppeteer browser.
+// Used by getCustomerReportAttachments so both PDFs share one Chrome
+// instance — second-launch overhead was dropping the customer attachment.
+async function renderHtmlOnBrowser(browser: any, html: string, label: string): Promise<Uint8Array | null> {
+  let page: any = null
+  try {
+    page = await browser.newPage()
+    await page.setViewport({ width: 1200, height: 1600 })
+    await page.setContent(html, { waitUntil: 'load', timeout: 45000 })
+    const buf = await page.pdf({ format: 'Letter', printBackground: true, timeout: 45000 })
+    if (!buf || buf.byteLength === 0) {
+      console.warn(`[renderHtmlOnBrowser:${label}] empty PDF buffer`)
+      return null
+    }
+    console.log(`[renderHtmlOnBrowser:${label}] ok, ${buf.byteLength} bytes`)
+    return new Uint8Array(buf)
+  } catch (e: any) {
+    console.error(`[renderHtmlOnBrowser:${label}] failed:`, e?.message || e)
+    return null
+  } finally {
+    if (page) { try { await page.close() } catch {} }
+  }
 }
 
 // Back-compat shim for callers that still want a single attachment.
