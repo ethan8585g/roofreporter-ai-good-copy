@@ -1,5 +1,10 @@
-// RC#5: Bumped to v4 to force-refresh cached install banner script
-const CACHE_NAME = 'roofmanager-v4';
+// RC#6 (2026-05-11): Bumped to v5 to force-purge old static-asset cache.
+// The cache-first strategy for /static/* was holding super-admin-dashboard.js
+// across deploys — operators couldn't see new auto-trace UI buttons until
+// they manually cleared cache. With this bump every client purges the v4
+// cache on next activate(), and the dashboard JS is now network-first
+// below so this stops happening on every future ship.
+const CACHE_NAME = 'roofmanager-v5';
 
 // RC#4: Removed '/' from precache — always serve fresh HTML for navigation requests
 const PRECACHE_URLS = [
@@ -56,8 +61,34 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: cache-first
+  // Static assets: network-first for fast-iterating JS dashboards,
+  // cache-first for everything else (CSS, images, fonts — slower-moving
+  // and big enough that the cache hit matters).
+  //
+  // 2026-05-11: super-admin-dashboard.js was stuck in cache across deploys,
+  // breaking new-feature visibility until manual cache clear. The
+  // `?v=Date.now()` cache-buster on the script tag wasn't enough because
+  // the SW cache key includes the query string, so an HTML page loaded
+  // earlier with stale ?v=ABC kept resolving to cached content.
   if (url.pathname.startsWith('/static/')) {
+    const isHotJs = url.pathname.endsWith('super-admin-dashboard.js') ||
+                    url.pathname.endsWith('customer-dashboard.js') ||
+                    url.pathname.endsWith('customer-order.js')
+    if (isHotJs) {
+      // Network-first: always try fresh JS; fall back to cache only if offline.
+      event.respondWith(
+        fetch(request)
+          .then((response) => {
+            if (response.ok) {
+              const clone = response.clone()
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+            }
+            return response
+          })
+          .catch(() => caches.match(request))
+      )
+      return
+    }
     event.respondWith(
       caches.match(request)
         .then((cached) => {
