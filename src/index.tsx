@@ -8373,6 +8373,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   <div id="announcement-bar">
     <span id="ab-text-a">&#128176; <strong>$5.95 per report</strong> on the 100-pack &mdash; credits never expire &mdash; </span>
     <span id="ab-text-b" style="display:none">&#128197; <strong>Book a free 20-min demo</strong> &mdash; see it on your own address &mdash; </span>
+    <span id="ab-text-c" style="display:none">&#128176; <strong>Switching from EagleView?</strong> Reports from $5.95 vs $60+/report &mdash; </span>
     <a id="ab-link" href="/pricing" onclick="rrTrack('cta_click',{location:'announcement_bar'})">See volume pricing &rarr;</a>
     <button class="close-bar" onclick="document.getElementById('announcement-bar').style.display='none';document.getElementById('landing-nav').classList.add('bar-hidden');" aria-label="Dismiss">&times;</button>
   </div>
@@ -9799,6 +9800,33 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           if (textB) textB.style.display = 'inline';
           if (link) { link.href = '/demo'; link.textContent = 'Book demo \u2192'; }
         }
+      } catch(e){}
+    })();
+  </script>
+
+  <!-- EagleView competitor campaign override.
+       When utm_campaign contains 'eagleview', swap the announcement bar to the
+       EagleView-specific message and point the link at /register instead of
+       /pricing. UTM-gated only \u2014 direct/organic visitors never see it.
+       Persists via sessionStorage so banner stays during the visitor's session. -->
+  <script>
+    (function(){
+      try {
+        var qp = new URLSearchParams(location.search);
+        var camp = (qp.get('utm_campaign') || '').toLowerCase();
+        var firstHit = camp.indexOf('eagleview') !== -1;
+        if (firstHit) sessionStorage.setItem('rm_from_eagleview', '1');
+        if (sessionStorage.getItem('rm_from_eagleview') !== '1') return;
+
+        var textA = document.getElementById('ab-text-a');
+        var textB = document.getElementById('ab-text-b');
+        var textC = document.getElementById('ab-text-c');
+        var link = document.getElementById('ab-link');
+        if (textA) textA.style.display = 'none';
+        if (textB) textB.style.display = 'none';
+        if (textC) textC.style.display = 'inline';
+        if (link) { link.href = '/register'; link.textContent = 'Start free \u2192 4 reports'; }
+        try { rrTrack('eagleview_banner_shown', { first_hit: firstHit }); } catch(_){}
       } catch(e){}
     })();
   </script>
