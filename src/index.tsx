@@ -10728,7 +10728,7 @@ function getContactThanksPageHTML(prefillEmail = '', prefillName = '', prefillCo
           if (typeof window.setAdsUserData === 'function') {
             try { await window.setAdsUserData(email, '', name); } catch(_) {}
           }
-          if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 50.0, currency: 'CAD' });
+          if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 1.0, currency: 'CAD' });
           if (data.customer) localStorage.setItem('rc_customer', JSON.stringify(data.customer));
           if (data.token) localStorage.setItem('rc_customer_token', data.token);
           window.location.href = '/onboarding';
@@ -10755,7 +10755,7 @@ function getContactThanksPageHTML(prefillEmail = '', prefillName = '', prefillCo
             if (typeof window.setAdsUserData === 'function') {
               try { await window.setAdsUserData(data.customer.email||'', data.customer.phone||'', data.customer.name||''); } catch(_) {}
             }
-            if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 50.0, currency: 'CAD' });
+            if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 1.0, currency: 'CAD' });
           }
           if (data.customer) localStorage.setItem('rc_customer', JSON.stringify(data.customer));
           if (data.token) localStorage.setItem('rc_customer_token', data.token);
@@ -11230,7 +11230,7 @@ ${previewId ? `
           gtag('event', 'sign_up', { method: method, company_size: companySize || '', primary_use: primaryUse || '' });
         }
         if (typeof window.trackAdsConversion === 'function') {
-          window.trackAdsConversion('signup', { value: 50.0, currency: 'CAD' });
+          window.trackAdsConversion('signup', { value: 1.0, currency: 'CAD' });
         }
         if (typeof fbq === 'function') {
           fbq('track', 'CompleteRegistration');
@@ -11812,7 +11812,7 @@ function getCustomerLoginHTML(googleClientId = '') {
           if (typeof window.setAdsUserData === 'function') {
             try { await window.setAdsUserData(email, phone, name); } catch(_) {}
           }
-          if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 50.0, currency: 'CAD' });
+          if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 1.0, currency: 'CAD' });
           // P2: stop any dirty-form beforeunload warning before redirecting.
           try { window.onbeforeunload = null; } catch(_) {}
           window.location.href = '/customer/dashboard';
@@ -11861,7 +11861,7 @@ function getCustomerLoginHTML(googleClientId = '') {
           if (typeof window.setAdsUserData === 'function') {
             try { await window.setAdsUserData(data.customer.email||'', data.customer.phone||'', data.customer.name||''); } catch(_) {}
           }
-          if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 50.0, currency: 'CAD' });
+          if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 1.0, currency: 'CAD' });
         }
         window.location.href = '/customer/dashboard?welcome=1';
       } else {

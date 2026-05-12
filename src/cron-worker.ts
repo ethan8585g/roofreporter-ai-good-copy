@@ -26,6 +26,7 @@ import { runMobileMonitor } from './services/mobile-monitor'
 import { sendMobileMonitorEmail } from './services/mobile-monitor-email'
 import { runDripCampaigns } from './services/drip-campaigns'
 import { runSignupNurture } from './services/signup-nurture'
+import { loadGmailCreds, sendGmailOAuth2WithAttachment } from './services/email'
 
 // ── Abandoned signup recovery ─────────────────────────────────────────────────
 async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number; skipped: number }> {
@@ -248,6 +249,84 @@ async function runSecretaryTrialManagement(env: Bindings): Promise<{ remindersSe
   return { remindersSent, pastDueCancelled }
 }
 
+// ── Weekly Google Ads offline-conversions CSV email ──────────────────────────
+// Mirrors GET /api/admin/ads/export-offline-conversions.csv from admin.ts.
+// Mondays at 14:00 UTC (~8am Mountain) — delivers the prior 7d of paid
+// customers (gclid + value) as a CSV attachment so Christine can drag it into
+// Google Ads → Tools → Conversions → Uploads. Requires the matching "Import"
+// conversion action named "Roof Manager Paid Customer" in Google Ads UI.
+async function runWeeklyOfflineConversionsEmail(env: Bindings): Promise<{
+  sent: boolean
+  rowCount: number
+  error?: string
+}> {
+  const days = 7
+  const conversionName = 'Roof Manager Paid Customer'
+
+  const rows = await (env as any).DB.prepare(`
+    SELECT
+      c.gclid AS gclid,
+      sp.created_at AS conv_time,
+      sp.amount AS amount,
+      sp.square_order_id AS order_id
+    FROM square_payments sp
+    JOIN customers c ON c.id = sp.customer_id
+    WHERE sp.status = 'succeeded'
+      AND c.gclid IS NOT NULL
+      AND length(c.gclid) >= 10
+      AND sp.created_at >= datetime('now', '-' || ? || ' days')
+    ORDER BY sp.created_at DESC
+  `).bind(days).all<any>()
+
+  const csvLines: string[] = []
+  csvLines.push('Parameters:TimeZone=America/Edmonton')
+  csvLines.push('Google Click ID,Conversion Name,Conversion Time,Conversion Value,Conversion Currency,Order ID')
+  for (const row of (rows.results || [])) {
+    const gclid = String(row.gclid || '').replace(/[",\r\n]/g, '')
+    const rawTs = String(row.conv_time || '')
+    let convTime = rawTs
+    if (rawTs.includes('T')) {
+      convTime = rawTs.replace('T', ' ').replace(/\.\d+Z?$/, '').replace(/Z$/, '') + '+00:00'
+    } else if (!rawTs.includes('+')) {
+      convTime = rawTs + '+00:00'
+    }
+    const amountCents = Number(row.amount) || 0
+    const value = (amountCents >= 1000 ? amountCents / 100 : amountCents).toFixed(2)
+    const orderId = String(row.order_id || '').replace(/[",\r\n]/g, '')
+    csvLines.push(`${gclid},"${conversionName.replace(/"/g, '""')}",${convTime},${value},CAD,${orderId}`)
+  }
+  const rowCount = csvLines.length - 2
+
+  const creds = await loadGmailCreds(env)
+  if (!creds.clientSecret || !creds.refreshToken) {
+    return { sent: false, rowCount, error: 'Gmail credentials missing' }
+  }
+
+  const csvBytes = new TextEncoder().encode(csvLines.join('\n') + '\n')
+  const dateStr = new Date().toISOString().slice(0, 10)
+  const filename = `offline-conversions-${dateStr}.csv`
+
+  const htmlBody = `<p>Weekly Google Ads offline conversions export.</p>
+<p><strong>${rowCount}</strong> paid-customer conversion${rowCount === 1 ? '' : 's'} in the last ${days} days.</p>
+<p><strong>To upload:</strong> Google Ads → Tools → Conversions → Uploads → "Upload conversions from clicks (Google click ID)" → drag attached CSV.</p>
+<p>If this is the first upload, you must first create an "Import" conversion action named <code>${conversionName}</code> in Google Ads UI: Goals → Conversions → New → Import → "Other data sources or CRM" → "Track conversions from clicks".</p>
+<p style="color:#888;font-size:12px">Auto-sent every Monday at 14:00 UTC by the cron worker. Source: src/cron-worker.ts runWeeklyOfflineConversionsEmail.</p>`
+
+  try {
+    await sendGmailOAuth2WithAttachment(
+      creds.clientId, creds.clientSecret, creds.refreshToken,
+      'christinegourley04@gmail.com',
+      `[Roof Manager] Weekly Google Ads offline conversions — ${rowCount} row${rowCount === 1 ? '' : 's'}`,
+      htmlBody,
+      { filename, mimeType: 'text/csv', bytes: csvBytes },
+      creds.senderEmail || null,
+    )
+    return { sent: true, rowCount }
+  } catch (e: any) {
+    return { sent: false, rowCount, error: e?.message || 'send failed' }
+  }
+}
+
 export default {
   // No-op fetch handler — this worker only exists for cron
   async fetch(): Promise<Response> {
@@ -350,6 +429,28 @@ export default {
         } catch (err: any) {
           console.error('[CRON:trace-pool-refresh] Error:', err?.message)
           await logRun('trace_pool_refresh', 'error', err?.message || 'unknown', { backfillSummary }, Date.now() - t0)
+        }
+      })())
+    }
+
+    // ── Weekly Google Ads offline-conversions CSV — Mondays at 14:00 UTC ──
+    // Emails the prior 7d of paid customers (gclid + value) to christine for
+    // manual upload at Google Ads → Tools → Conversions → Uploads. Closes the
+    // free-trial → paid signal gap for Smart Bidding (est. 15-35% CAC win after
+    // 2-4 weeks of weekly uploads).
+    if (dayOfWeek === 1 && hour === 14 && minute < 10) {
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const result = await runWeeklyOfflineConversionsEmail(env)
+          const summary = result.sent
+            ? `Emailed CSV with ${result.rowCount} conversion(s)`
+            : `Skipped: ${result.error || 'unknown'} (rows=${result.rowCount})`
+          console.log(`[CRON:ads-offline-csv] ${summary}`)
+          await logRun('ads_offline_csv', result.sent ? 'success' : 'warning', summary, result, Date.now() - t0)
+        } catch (err: any) {
+          console.error('[CRON:ads-offline-csv] Error:', err?.message)
+          await logRun('ads_offline_csv', 'error', err?.message || 'failed', {}, Date.now() - t0)
         }
       })())
     }
