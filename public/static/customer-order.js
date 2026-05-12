@@ -1627,7 +1627,7 @@ async function autoDetectRoof() {
   if (!orderState.traceMap) return;
   const btn = document.getElementById('autoDetectBtn');
   const orig = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Detecting…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Detecting eaves, ridges, hips, valleys… (~15s)'; }
   try {
     const c = orderState.traceMap.getCenter();
     const lat = c.lat(), lng = c.lng();
@@ -1635,7 +1635,7 @@ async function autoDetectRoof() {
     const res = await fetch('/api/measure/auto-detect', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lat, lng, zoom, imageWidth: 640, imageHeight: 640 }),
+      body: JSON.stringify({ lat, lng, zoom, imageWidth: 640, imageHeight: 640, engine: 'claude' }),
     });
     const data = await res.json();
     if (!res.ok || !data || !Array.isArray(data.eaves) || data.eaves.length < 3) {
@@ -1654,10 +1654,48 @@ async function autoDetectRoof() {
     orderState.traceMarkers = [];
     orderState.tracePolylines.forEach(p => p.setMap(null));
     orderState.tracePolylines = [];
+    // Clear ridges / hips / valleys (data + parallel polyline overlays) so the
+    // AI result fully replaces any prior auto-detect or partial manual trace.
+    orderState.traceRidgePolylines.forEach(p => { if (p) p.setMap(null); });
+    orderState.traceHipPolylines.forEach(p => { if (p) p.setMap(null); });
+    orderState.traceValleyPolylines.forEach(p => { if (p) p.setMap(null); });
+    orderState.traceRidgePolylines = [];
+    orderState.traceHipPolylines = [];
+    orderState.traceValleyPolylines = [];
+    orderState.traceRidgeLines = [];
+    orderState.traceHipLines = [];
+    orderState.traceValleyLines = [];
     orderState.traceEavesPoints = data.eaves.map(p => ({ lat: p.lat, lng: p.lng }));
     orderState.traceEavesTags = orderState.traceEavesPoints.map(() => 'eave');
     closeEavesPolygon();
-    showMsg('success', '<i class="fas fa-check mr-1"></i>Roof detected — drag any vertex to refine, then continue.');
+    // Paint ridges (blue), hips (orange), valleys (red) — colors match the
+    // manual-trace defaults at the click handler so auto-detected lines look
+    // and behave identically to user-placed ones (draggable, undo-able).
+    const validLine = (line) => Array.isArray(line) && line.length >= 2
+      && line.every(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lng));
+    let ridgeCount = 0, hipCount = 0, valleyCount = 0;
+    (data.ridges || []).forEach(line => {
+      if (!validLine(line)) return;
+      const norm = line.map(p => ({ lat: p.lat, lng: p.lng }));
+      orderState.traceRidgeLines.push(norm);
+      drawEditableLine(norm, '#3b82f6', 'ridge');
+      ridgeCount++;
+    });
+    (data.hips || []).forEach(line => {
+      if (!validLine(line)) return;
+      const norm = line.map(p => ({ lat: p.lat, lng: p.lng }));
+      orderState.traceHipLines.push(norm);
+      drawEditableLine(norm, '#f59e0b', 'hip');
+      hipCount++;
+    });
+    (data.valleys || []).forEach(line => {
+      if (!validLine(line)) return;
+      const norm = line.map(p => ({ lat: p.lat, lng: p.lng }));
+      orderState.traceValleyLines.push(norm);
+      drawEditableLine(norm, '#ef4444', 'valley');
+      valleyCount++;
+    });
+    showMsg('success', '<i class="fas fa-check mr-1"></i>Detected: 1 outline, ' + ridgeCount + ' ridge' + (ridgeCount === 1 ? '' : 's') + ', ' + hipCount + ' hip' + (hipCount === 1 ? '' : 's') + ', ' + valleyCount + ' valley' + (valleyCount === 1 ? '' : 's') + ' — drag any vertex to refine, then continue.');
   } catch (err) {
     showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Auto-detect failed: ' + (err && err.message || 'network error'));
   } finally {

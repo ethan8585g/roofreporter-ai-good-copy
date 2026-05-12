@@ -93,35 +93,42 @@ measureRoutes.post('/auto-detect', async (c) => {
 
   // Opt-in bridge to the full auto-trace agent (Claude Opus + Solar +
   // DSM + few-shot + self-critique + snapping + verify-planes). When
-  // body.engine === 'claude' is set, route through runAutoTrace and
-  // return its eaves polygon in the same TracePayload shape this endpoint
-  // has always returned. Default (no engine field) keeps the existing
-  // Gemini-flash one-shot below, so no caller of /auto-detect changes
-  // behaviour unless they ask for it.
+  // body.engine === 'claude' is set, route through runAutoTrace for
+  // ALL FOUR edge types in parallel (eaves + ridges + hips + valleys)
+  // so the customer's "Auto Detect Roof" button pre-fills enough
+  // structure for the 3D diagram engine to take Path A (5-pass per-ridge
+  // anchoring) instead of the bounding-box hip-roof fallback.
+  // Default (no engine field) keeps the existing Gemini-flash one-shot
+  // below as the cheap eaves-only fallback.
   if (body?.engine === 'claude') {
     try {
       const { runAutoTrace } = await import('../services/auto-trace-agent')
-      const result = await runAutoTrace(c.env, {
-        orderId: Number(body?.order_id) || 0,
-        edge: 'eaves',
-        lat, lng, zoom,
-        imageWidth, imageHeight,
-      })
+      const orderId = Number(body?.order_id) || 0
+      const baseInput = { orderId, lat, lng, zoom, imageWidth, imageHeight }
+      const [eavesRes, ridgesRes, hipsRes, valleysRes] = await Promise.all([
+        runAutoTrace(c.env, { ...baseInput, edge: 'eaves' }),
+        runAutoTrace(c.env, { ...baseInput, edge: 'ridges' }),
+        runAutoTrace(c.env, { ...baseInput, edge: 'hips' }),
+        runAutoTrace(c.env, { ...baseInput, edge: 'valleys' }),
+      ])
       // /auto-detect's TracePayload shape: eaves is a SINGLE polygon (flat
       // LatLng[]). runAutoTrace returns LatLng[][] (one polygon per
       // structure). Pick the largest polygon as the eaves return; ignore
       // any lower_tier / outbuilding polygons for backward compatibility.
-      const primary = result.segments.length > 0
-        ? result.segments.reduce((a, b) => a.length >= b.length ? a : b)
+      const primaryEaves = eavesRes.segments.length > 0
+        ? eavesRes.segments.reduce((a, b) => a.length >= b.length ? a : b)
         : []
       return c.json({
-        eaves: primary,
-        ridges: [], hips: [], valleys: [],
+        eaves: primaryEaves,
+        ridges: ridgesRes.segments,
+        hips: hipsRes.segments,
+        valleys: valleysRes.segments,
         pitch_rise: null,
         agent: {
-          confidence: result.confidence,
-          reasoning: result.reasoning,
-          model: result.diagnostics.model,
+          eaves:   { confidence: eavesRes.confidence,   reasoning: eavesRes.reasoning },
+          ridges:  { confidence: ridgesRes.confidence,  reasoning: ridgesRes.reasoning },
+          hips:    { confidence: hipsRes.confidence,    reasoning: hipsRes.reasoning },
+          valleys: { confidence: valleysRes.confidence, reasoning: valleysRes.reasoning },
         },
       })
     } catch (err: any) {
