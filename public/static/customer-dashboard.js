@@ -796,9 +796,37 @@ function startEnhancementPolling() {
 }
 
 // ============================================================
+// Report-ready bell ping — synthesized via Web Audio API.
+// Two-note C5 → E5 sine chime, ~300ms, silent no-op if blocked.
+// ============================================================
+function playReportReadySound() {
+  try {
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    var ctx = window._rmAudioCtx || (window._rmAudioCtx = new Ctx());
+    if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
+    var now = ctx.currentTime;
+    [{ f: 523.25, t: 0 }, { f: 659.25, t: 0.12 }].forEach(function(n) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = n.f;
+      var start = now + n.t;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.25, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.35);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.4);
+    });
+  } catch (e) { /* silent — autoplay blocked or no Web Audio */ }
+}
+
+// ============================================================
 // CELEBRATION TOAST — Slides in when a report completes
 // ============================================================
 function showReportReadyToast(order) {
+  playReportReadySound();
   var address = (order && order.property_address) || 'Your property';
   var orderId = order ? order.id : '';
   var toast = document.createElement('div');
