@@ -362,12 +362,16 @@ reportsRoutes.get('/:orderId/html', async (c) => {
   // inject a hidden auto-capture iframe so the FIRST view of any report
   // upgrades the cover with zero user action. One-shot per order.
   let hasOblique3d = false
+  let oblique3dUrl = ''
+  let oblique3dApproved = false
   let hasAerialViews = false
   let aerialViewsList: Array<{ heading: number; label: string; data_url: string }> = []
   let aerialViewsApproved = false
   try {
     const parsed = row.api_response_raw ? JSON.parse(row.api_response_raw) : null
     hasOblique3d = !!(parsed?.imagery?.oblique_3d_url)
+    if (hasOblique3d) oblique3dUrl = parsed.imagery.oblique_3d_url
+    oblique3dApproved = parsed?.imagery?.oblique_3d_approved === true
     hasAerialViews = Array.isArray(parsed?.imagery?.aerial_views) && parsed.imagery.aerial_views.length >= 4
     if (hasAerialViews) aerialViewsList = parsed.imagery.aerial_views
     aerialViewsApproved = parsed?.imagery?.aerial_views_approved === true
@@ -573,7 +577,88 @@ reportsRoutes.get('/:orderId/html', async (c) => {
 </script>`
   })() : ''
 
-  const tail = `${autoCaptureBlock}${aerialsCaptureBlock}${cover3dWidget}${aerialAdminWidget}${proWidget}`
+  // Admin-only preview/approval pill for the page-1 3D cover image.
+  // Renders nothing for customers, nothing when no 3D capture exists yet.
+  // Same approval pattern as aerialAdminWidget — capture stays saved
+  // either way, only the toggle decides whether customers see it.
+  const coverAdminWidget = (isAdminViewer && hasOblique3d) ? (() => {
+    const stateLabel = oblique3dApproved ? 'Visible on customer report' : 'Hidden from customer report'
+    const stateDotColor = oblique3dApproved ? '#00FF88' : '#F59E0B'
+    return `
+<style>
+  .rm-cover-fab{position:fixed;bottom:24px;right:700px;z-index:99997;background:#0A0A0A;color:#7DD3FC;border:1px solid #7DD3FC;border-radius:999px;padding:12px 18px;font:700 13px -apple-system,BlinkMacSystemFont,Segoe UI,Inter,sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(125,211,252,0.25);display:inline-flex;align-items:center;gap:8px;transition:transform .12s ease}
+  .rm-cover-fab:hover{transform:translateY(-2px);background:#111}
+  .rm-cover-fab .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:${stateDotColor};box-shadow:0 0 8px ${stateDotColor}}
+  @media (max-width: 1400px){.rm-cover-fab{right:24px;bottom:216px}}
+  .rm-cover-panel{position:fixed;right:24px;bottom:80px;width:480px;max-width:calc(100vw - 48px);max-height:78vh;overflow:auto;z-index:99998;background:#0A0A0A;color:#fff;border:1px solid rgba(125,211,252,0.35);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,0.6);padding:18px;display:none;font:13px -apple-system,Segoe UI,Inter,sans-serif}
+  .rm-cover-panel.open{display:block}
+  .rm-cover-panel h3{margin:0 0 6px;font:800 15px -apple-system,Segoe UI,sans-serif;color:#7DD3FC;letter-spacing:0.2px}
+  .rm-cover-panel .sub{font-size:11.5px;color:#9CA3AF;margin-bottom:14px;line-height:1.4}
+  .rm-cover-preview{position:relative;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.15);background:#000;margin-bottom:14px}
+  .rm-cover-preview img{display:block;width:100%;height:auto;max-height:280px;object-fit:contain;background:#000}
+  .rm-cover-state{display:flex;align-items:center;gap:8px;font-size:12px;color:#E5E7EB;margin-bottom:10px}
+  .rm-cover-toggle{display:flex;align-items:center;gap:10px;background:#111;border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 14px;cursor:pointer;user-select:none}
+  .rm-cover-toggle:hover{background:#161616}
+  .rm-cover-toggle input{margin:0;width:18px;height:18px;accent-color:#00FF88;cursor:pointer}
+  .rm-cover-toggle .label{font-weight:700;font-size:13px}
+  .rm-cover-toggle .hint{font-size:11px;color:#9CA3AF;margin-top:2px}
+  .rm-cover-panel .close{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:999px;border:1px solid rgba(255,255,255,0.18);background:transparent;color:#fff;font:700 14px sans-serif;cursor:pointer}
+  .rm-cover-panel .saving{display:none;color:#7DD3FC;font-size:11px;margin-left:8px}
+  .rm-cover-panel.saving .saving{display:inline}
+</style>
+<button type="button" class="rm-cover-fab" id="rmCoverFab" aria-label="3D cover approval">🖼 3D Cover <span class="dot" aria-hidden="true"></span></button>
+<div class="rm-cover-panel" id="rmCoverPanel" role="dialog" aria-modal="false" aria-labelledby="rmCoverTitle">
+  <button type="button" class="close" id="rmCoverClose" aria-label="Close cover preview">&times;</button>
+  <h3 id="rmCoverTitle">3D Cover — Admin Preview</h3>
+  <div class="sub">Photorealistic 3D Tiles capture used as the page-1 cover image. Some areas return broken mesh blobs — verify this looks like a real roof before showing it to the customer. Until approved, the report uses the clean nadir Google satellite.</div>
+  <div class="rm-cover-preview"><img src="${oblique3dUrl}" alt="3D cover preview"></div>
+  <div class="rm-cover-state"><span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${stateDotColor}"></span><span id="rmCoverStateLabel">${stateLabel}</span><span class="saving">saving…</span></div>
+  <label class="rm-cover-toggle">
+    <input type="checkbox" id="rmCoverApprove" ${oblique3dApproved ? 'checked' : ''}>
+    <span>
+      <div class="label">Use as customer cover image</div>
+      <div class="hint">Toggling reloads the report. Capture stays saved either way.</div>
+    </span>
+  </label>
+</div>
+<script>
+  (function(){
+    var orderId = ${JSON.stringify(orderId)};
+    var fab = document.getElementById('rmCoverFab');
+    var panel = document.getElementById('rmCoverPanel');
+    var close = document.getElementById('rmCoverClose');
+    var approve = document.getElementById('rmCoverApprove');
+    var stateLabel = document.getElementById('rmCoverStateLabel');
+    function openPanel(){ panel.classList.add('open'); }
+    function closePanel(){ panel.classList.remove('open'); }
+    fab.addEventListener('click', function(){
+      if (panel.classList.contains('open')) closePanel(); else openPanel();
+    });
+    close.addEventListener('click', closePanel);
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closePanel(); });
+    approve.addEventListener('change', function(){
+      if (panel.classList.contains('saving')) return;
+      panel.classList.add('saving');
+      var approved = !!approve.checked;
+      stateLabel.textContent = approved ? 'Saving — will show on customer report…' : 'Saving — will hide from customer report…';
+      fetch('/api/reports/' + encodeURIComponent(orderId) + '/3d-cover/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ approved: approved })
+      }).then(function(r){ return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+        .then(function(){ setTimeout(function(){ try { location.reload(); } catch(_){} }, 350); })
+        .catch(function(err){
+          panel.classList.remove('saving');
+          approve.checked = !approved;
+          stateLabel.textContent = 'Save failed — ' + (err && err.message ? err.message : 'try again');
+        });
+    });
+  })();
+</script>`
+  })() : ''
+
+  const tail = `${autoCaptureBlock}${aerialsCaptureBlock}${cover3dWidget}${aerialAdminWidget}${coverAdminWidget}${proWidget}`
   if (augmented.includes('</body>')) {
     augmented = augmented.replace('</body>', `${tail}</body>`)
   } else {
@@ -918,6 +1003,42 @@ reportsRoutes.post('/:orderId/3d-cover', async (c) => {
     .bind(JSON.stringify(parsed), orderId).run()
 
   return c.json({ success: true, captured_at: parsed.imagery.oblique_3d_captured_at })
+})
+
+// ============================================================
+// POST /:orderId/3d-cover/approve — Admin-only toggle that decides
+// whether the captured Photorealistic 3D oblique image is used as the
+// page-1 cover. Mirrors /3d-aerials/approve: capture is always stored,
+// but the customer-facing report keeps the clean nadir satellite until
+// an admin eyeballs the 3D capture and approves it. Google's 3D Tiles
+// return broken-mesh blobs in some areas — this gate keeps those off
+// the customer report.
+// Body: { approved: boolean }. Writes imagery.oblique_3d_approved.
+// ============================================================
+reportsRoutes.post('/:orderId/3d-cover/approve', async (c) => {
+  const orderId = c.req.param('orderId')
+  const user = (c as any).get('user')
+  if (!user || user.role !== 'admin') return c.json({ error: 'Admin only' }, 403)
+
+  let body: any
+  try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON' }, 400) }
+  const approved = body?.approved === true
+
+  const row = await c.env.DB.prepare('SELECT api_response_raw FROM reports WHERE order_id = ?')
+    .bind(orderId).first<{ api_response_raw: string | null }>()
+  if (!row) return c.json({ error: 'Report not found' }, 404)
+
+  let parsed: any = {}
+  try { parsed = row.api_response_raw ? JSON.parse(row.api_response_raw) : {} } catch { parsed = {} }
+  parsed.imagery = parsed.imagery || {}
+  parsed.imagery.oblique_3d_approved = approved
+  parsed.imagery.oblique_3d_approved_at = new Date().toISOString()
+  parsed.imagery.oblique_3d_approved_by = user.id || user.email || 'admin'
+
+  await c.env.DB.prepare('UPDATE reports SET api_response_raw = ? WHERE order_id = ?')
+    .bind(JSON.stringify(parsed), orderId).run()
+
+  return c.json({ success: true, approved })
 })
 
 // ============================================================

@@ -506,9 +506,13 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
     ? Math.round(tmIwb * 10) / 10
     : Math.round((lowSlopeSqftPg1 + (es.total_eave_ft || 0) * 3 + (es.total_valley_ft || 0) * 3 * 2) * 10) / 10
 
-  // Satellite image — prefer user-captured Photorealistic 3D oblique, then
-  // eagle-view, then enhanced satellite, then standard nadir.
-  const oblique3dUrl = (report as any).imagery?.oblique_3d_url || ''
+  // Satellite image — prefer user-captured Photorealistic 3D oblique
+  // ONLY when an admin has approved it (same gate as aerial_views), then
+  // eagle-view, then enhanced satellite, then standard nadir. Google's
+  // Photorealistic 3D Tiles produce broken-mesh "blob" renders in some
+  // areas; without approval we always fall through to the clean nadir.
+  const oblique3dApproved = (report as any).imagery?.oblique_3d_approved === true
+  const oblique3dUrl = oblique3dApproved ? ((report as any).imagery?.oblique_3d_url || '') : ''
   const eagleViewUrl = (report as any).eagle_view_image?.data_url
     || (report as any).report_showcase_images?.enhanced_satellite
     || ''

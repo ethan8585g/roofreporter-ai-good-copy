@@ -23,8 +23,13 @@ export function generateCustomerReportHTML(report: RoofReport): string {
   const orderNumber = property.order_number || ''
   const reportDate = property.report_date || new Date().toISOString().slice(0, 10)
 
+  // Only use the Photorealistic 3D oblique capture when an admin has
+  // approved it — Google's 3D Tiles return broken-mesh blobs in some
+  // areas, so unapproved captures fall through to the clean nadir.
+  const oblique3dApproved = (report as any).imagery?.oblique_3d_approved === true
+  const oblique3dUrl = oblique3dApproved ? ((report as any).imagery?.oblique_3d_url || '') : ''
   const satUrl =
-    (report as any).imagery?.oblique_3d_url ||
+    oblique3dUrl ||
     report.imagery?.satellite_overhead_url ||
     report.imagery?.satellite_url ||
     null
