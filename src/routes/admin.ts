@@ -4766,6 +4766,7 @@ adminRoutes.post('/superadmin/harness/run', async (c) => {
       // this (they have no stored trace to leak), but harness eval must.
       excludeOrderIds: [orderId],
       hintRegion: parseHintRegion(overrides.hint_region),
+      solarSegmentOverlay: overrides.solar_segment_overlay !== false,
     })
   } catch (e: any) {
     return c.json({ error: 'agent_failed', message: e?.message, elapsed_ms: Date.now() - t0 }, 500)
@@ -5239,6 +5240,8 @@ adminRoutes.post('/superadmin/orders/:id/auto-trace/:edge', async (c) => {
       vegetationTint: body?.vegetation_tint === true,
       upscaleTo1568: body?.upscale_to_1568 === true,
       hintRegion: parseHintRegion(body?.hint_region),
+      // Default ON; pass false explicitly to disable for A/B testing.
+      solarSegmentOverlay: body?.solar_segment_overlay !== false,
     })
 
     // Audit row so the super-admin activity feed shows who ran what when,

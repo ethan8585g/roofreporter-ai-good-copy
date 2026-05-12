@@ -94,6 +94,16 @@ export interface AutoTraceInput {
    *  harness endpoint to prevent self-recall during accuracy evaluation;
    *  unused on production traces. */
   excludeOrderIds?: number[]
+  /** Render each Solar-detected roof plane as a colored translucent
+   *  rectangle on the satellite tile (R/G/B/Y...). Tells Claude
+   *  "here are N structural ground-truth planes; trace the OUTER
+   *  PERIMETER enclosing all of them." Strongest free signal in the
+   *  pipeline — Solar's segment detection is DSM-derived, independent
+   *  from the satellite imagery the model otherwise sees. **Default
+   *  ON** as of 2026-05-11 since it costs nothing extra (Solar bbox
+   *  already fetched) and addresses the wrong-shape failure mode.
+   *  Set to false to compare against unprompted baseline. */
+  solarSegmentOverlay?: boolean
   /** Optional user-drawn hint region — coarse circle/box indicating
    *  approximately where the target building is. This is the SAM-style
    *  interactive-segmentation prompt: the operator marks a rough region
@@ -237,6 +247,10 @@ export interface AutoTraceResult {
     /** Hint geometry in pixel space of the sent image — for debugging. */
     hint_center_px?: { x: number; y: number }
     hint_radius_px?: number
+    /** True when Solar segment overlay was rendered onto the satellite tile. */
+    solar_overlay_applied?: boolean
+    /** Number of Solar planes drawn (only when overlay applied). */
+    solar_segments_overlaid?: number
     model: string
     elapsed_ms: number
   }
@@ -413,6 +427,37 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     getCalibrationFactor(env, input.edge, complexityBucket),
   ])
 
+  // ── Solar segment overlay — structural ground-truth from a separate sensor ──
+  // Render each Solar-detected roof plane as a colored translucent
+  // rectangle on the satellite tile. Solar's segment detection is
+  // DSM-derived from LiDAR-class height data; it's independent from
+  // the visible imagery the model otherwise sees. Strongest free
+  // signal in the pipeline — eliminates the wrong-shape / missed-
+  // a-wing failure modes on multi-tier roofs. Default ON.
+  let solarOverlayApplied = false
+  let solarSegmentsOverlaid = 0
+  if (input.solarSegmentOverlay !== false && imageMediaType === 'image/png' && targetBboxPx?.trusted) {
+    try {
+      const segPx = extractSolarSegmentBboxesPx(solarInsights, framing, actualImageDim, actualImageDim, safeW)
+      if (segPx && segPx.length >= 2) {
+        const pngBytes = Uint8Array.from(atob(imageB64), c => c.charCodeAt(0))
+        const decoded = await decodePNG(pngBytes)
+        drawSolarSegmentOverlay(decoded.rgba, decoded.width, decoded.height, segPx)
+        const reencoded = await encodePNG(decoded)
+        let bin = ''
+        const chunk = 0x8000
+        for (let i = 0; i < reencoded.length; i += chunk) {
+          bin += String.fromCharCode(...reencoded.subarray(i, Math.min(i + chunk, reencoded.length)))
+        }
+        imageB64 = btoa(bin)
+        solarOverlayApplied = true
+        solarSegmentsOverlaid = segPx.length
+      }
+    } catch (e: any) {
+      console.warn('[auto-trace] solar overlay render failed (continuing without):', e?.message)
+    }
+  }
+
   // ── Hint region overlay (SAM-style interactive segmentation prompt) ──
   // Optional user-drawn coarse circle indicating roughly where the
   // target building is. We render it as a red dashed outline + faint
@@ -505,6 +550,8 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     hintApplied,
     hintCenterPx,
     hintRadiusPx,
+    solarOverlayApplied,
+    solarSegmentsOverlaid,
     targetCenterPx,
     targetBboxPx,
     includeOutbuildings: !!input.includeOutbuildings,
@@ -775,6 +822,8 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       hint_applied: hintApplied || undefined,
       hint_center_px: hintCenterPx || undefined,
       hint_radius_px: hintRadiusPx ?? undefined,
+      solar_overlay_applied: solarOverlayApplied || undefined,
+      solar_segments_overlaid: solarSegmentsOverlaid || undefined,
       model: CLAUDE_VISION_MODEL,
       elapsed_ms: Date.now() - started,
     },
@@ -933,6 +982,8 @@ function buildSystemPrompt(
     hintApplied: boolean
     hintCenterPx: { x: number; y: number } | null
     hintRadiusPx: number | null
+    solarOverlayApplied: boolean
+    solarSegmentsOverlaid: number
     targetCenterPx: { x: number; y: number }
     targetBboxPx: { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean } | null
     includeOutbuildings: boolean
@@ -951,7 +1002,7 @@ function buildSystemPrompt(
   // having to infer from contents. Per Anthropic's multi-image docs.
   const imageRoster: string[] = []
   let imgN = 1
-  imageRoster.push(`Image ${imgN++} — PRIMARY: Google satellite (top-down, target reference; ALL pixel coordinates you emit must be in THIS image's coordinate space, origin top-left).${opts.vegetationTintApplied ? ' ⚠️ TREE TINT APPLIED: vegetation pixels have been painted MAGENTA via the VARI vegetation index. Magenta = tree canopy (likely deciduous in summer imagery). The eave often passes UNDER the magenta zones — extrapolate the visible eave line through the canopy using the orthogonal-projection rule. Do NOT treat the edge of the magenta as a roof corner.' : ''}${opts.hintApplied ? ' 🎯 USER HINT CIRCLE drawn in RED DASHED line with faint pink interior — see the HINT REGION section below.' : ''}`)
+  imageRoster.push(`Image ${imgN++} — PRIMARY: Google satellite (top-down, target reference; ALL pixel coordinates you emit must be in THIS image's coordinate space, origin top-left).${opts.vegetationTintApplied ? ' ⚠️ TREE TINT APPLIED: vegetation pixels have been painted MAGENTA via the VARI vegetation index. Magenta = tree canopy (likely deciduous in summer imagery). The eave often passes UNDER the magenta zones — extrapolate the visible eave line through the canopy using the orthogonal-projection rule. Do NOT treat the edge of the magenta as a roof corner.' : ''}${opts.solarOverlayApplied ? ` 🧭 SOLAR PLANE OVERLAY APPLIED: ${opts.solarSegmentsOverlaid} colored translucent rectangles (red/green/blue/yellow/purple/sky/orange/teal) mark Solar API's detected roof PLANES — these are structural ground-truth from a SEPARATE SENSOR (DSM-derived from LiDAR-class height data, NOT from the satellite imagery you see). The colored rectangles are NOT the eave line — they are individual roof FACES. Your eaves polygon must be the OUTER PERIMETER enclosing all colored rectangles. Anything OUTSIDE the union of the colored rectangles is yard, neighbour, or driveway — do not trace there. Use the colors to count distinct roof planes if helpful for vertex placement.` : ''}${opts.hintApplied ? ' 🎯 USER HINT CIRCLE drawn in RED DASHED line with faint pink interior — see the HINT REGION section below.' : ''}`)
   if (opts.hasHillshade) {
     imageRoster.push(`Image ${imgN++} — DSM hillshade. A synthetic structural render of the Google Solar API elevation raster, RESAMPLED to the SAME size as Image 1 so pixel coordinates correspond 1:1. THREE independent signals are packed into the RGB channels: RED = multi-azimuth hillshade (omni-directional illumination, ridges and hips appear as bright lines regardless of orientation); GREEN = Sobel edge magnitude on the height field (SHARP green lines where the surface curvature changes — primary cue for ridges, hips, and the inset of valleys); BLUE = above-ground height (brighter blue = higher above ground; near-zero where the surface is at lawn level). Use red+green together to localize lines; use blue to discriminate roof (bright blue) from yard or driveway (dark blue).`)
   }
@@ -1394,6 +1445,130 @@ function parseClaudeResponse(text: string): {
     parsed = JSON.parse(m[0])
   }
   return normalizeParsedTrace(parsed)
+}
+
+// ─────────────────────────────────────────────────────────────
+// Solar segment overlay — draws each Solar-detected roof plane as a
+// colored translucent rectangle on the satellite tile. Tells Claude
+// "here are N structural ground-truth planes; your eaves polygon
+// must enclose all of them." Eliminates the "wrong shape / missed
+// a wing" failure mode on multi-tier roofs by giving the model an
+// explicit structural prior from a separate sensor (DSM-derived).
+// ─────────────────────────────────────────────────────────────
+const SOLAR_SEGMENT_COLORS: ReadonlyArray<[number, number, number]> = [
+  [239, 68, 68],   // red
+  [34, 197, 94],   // green
+  [59, 130, 246],  // blue
+  [234, 179, 8],   // yellow
+  [168, 85, 247],  // purple
+  [14, 165, 233],  // sky
+  [249, 115, 22],  // orange
+  [16, 185, 129],  // teal
+]
+
+function drawSolarSegmentOverlay(
+  rgba: Uint8ClampedArray,
+  imgW: number,
+  imgH: number,
+  segments: Array<{ x1: number; y1: number; x2: number; y2: number }>,
+): void {
+  for (let s = 0; s < segments.length; s++) {
+    const [r, g, b] = SOLAR_SEGMENT_COLORS[s % SOLAR_SEGMENT_COLORS.length]
+    const seg = segments[s]
+    const xMin = Math.max(0, Math.min(imgW - 1, Math.round(seg.x1)))
+    const xMax = Math.max(0, Math.min(imgW - 1, Math.round(seg.x2)))
+    const yMin = Math.max(0, Math.min(imgH - 1, Math.round(seg.y1)))
+    const yMax = Math.max(0, Math.min(imgH - 1, Math.round(seg.y2)))
+    // Fill: 18% alpha so the underlying satellite is still readable.
+    const a = 0.18
+    for (let y = yMin; y <= yMax; y++) {
+      for (let x = xMin; x <= xMax; x++) {
+        const idx = (y * imgW + x) * 4
+        rgba[idx]     = Math.round(rgba[idx] * (1 - a) + r * a)
+        rgba[idx + 1] = Math.round(rgba[idx + 1] * (1 - a) + g * a)
+        rgba[idx + 2] = Math.round(rgba[idx + 2] * (1 - a) + b * a)
+      }
+    }
+    // Solid 2px outline so the rectangle's edges are unambiguous.
+    for (let x = xMin; x <= xMax; x++) {
+      for (let dy = 0; dy < 2; dy++) {
+        if (yMin + dy <= imgH - 1) {
+          const idx1 = ((yMin + dy) * imgW + x) * 4
+          rgba[idx1] = r; rgba[idx1 + 1] = g; rgba[idx1 + 2] = b
+        }
+        if (yMax - dy >= 0) {
+          const idx2 = ((yMax - dy) * imgW + x) * 4
+          rgba[idx2] = r; rgba[idx2 + 1] = g; rgba[idx2 + 2] = b
+        }
+      }
+    }
+    for (let y = yMin; y <= yMax; y++) {
+      for (let dx = 0; dx < 2; dx++) {
+        if (xMin + dx <= imgW - 1) {
+          const idx1 = (y * imgW + (xMin + dx)) * 4
+          rgba[idx1] = r; rgba[idx1 + 1] = g; rgba[idx1 + 2] = b
+        }
+        if (xMax - dx >= 0) {
+          const idx2 = (y * imgW + (xMax - dx)) * 4
+          rgba[idx2] = r; rgba[idx2 + 1] = g; rgba[idx2 + 2] = b
+        }
+      }
+    }
+  }
+}
+
+/** Pull per-segment bounding boxes from solarInsights + project to pixel
+ *  space on the satellite tile. Filters to segments INSIDE the image
+ *  bounds + reasonably sized (skip tiny degenerate ones). */
+function extractSolarSegmentBboxesPx(
+  insights: any,
+  framing: { lat: number; lng: number; zoom: number },
+  imgW: number,
+  imgH: number,
+  safeW: number,
+): Array<{ x1: number; y1: number; x2: number; y2: number; pitchDeg: number; azimuthDeg: number; areaSqFt: number }> | null {
+  const segs: any[] = insights?.solarPotential?.roofSegmentStats || []
+  if (!Array.isArray(segs) || segs.length < 2) return null  // single-segment overlay adds no info
+
+  const scale = 1 << framing.zoom
+  const centerSin = Math.sin(framing.lat * Math.PI / 180)
+  const centerWorldX = (256 * (0.5 + framing.lng / 360)) * scale
+  const centerWorldY = (256 * (0.5 - Math.log((1 + centerSin) / (1 - centerSin)) / (4 * Math.PI))) * scale
+  // World-units → image-pixels factor.
+  const worldUnitsPerImgPx = safeW / imgW
+
+  const latLngToPx = (lat: number, lng: number) => {
+    const sin = Math.sin(lat * Math.PI / 180)
+    const worldX = (256 * (0.5 + lng / 360)) * scale
+    const worldY = (256 * (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI))) * scale
+    return {
+      x: Math.round((worldX - centerWorldX) / worldUnitsPerImgPx + imgW / 2),
+      y: Math.round((worldY - centerWorldY) / worldUnitsPerImgPx + imgH / 2),
+    }
+  }
+
+  const out: Array<{ x1: number; y1: number; x2: number; y2: number; pitchDeg: number; azimuthDeg: number; areaSqFt: number }> = []
+  for (const seg of segs) {
+    const bb = seg?.boundingBox
+    const sw = bb?.sw || bb?.southWest
+    const ne = bb?.ne || bb?.northEast
+    if (!sw?.latitude || !ne?.latitude) continue
+    const swPx = latLngToPx(sw.latitude, sw.longitude)
+    const nePx = latLngToPx(ne.latitude, ne.longitude)
+    const x1 = Math.min(swPx.x, nePx.x), x2 = Math.max(swPx.x, nePx.x)
+    const y1 = Math.min(swPx.y, nePx.y), y2 = Math.max(swPx.y, nePx.y)
+    // Skip degenerate segments (< 20px on a side ≈ smaller than a roof vent).
+    if (x2 - x1 < 20 || y2 - y1 < 20) continue
+    // Skip segments that lie entirely outside the image.
+    if (x2 < 0 || y2 < 0 || x1 >= imgW || y1 >= imgH) continue
+    out.push({
+      x1, y1, x2, y2,
+      pitchDeg: Number(seg.pitchDegrees) || 0,
+      azimuthDeg: Number(seg.azimuthDegrees) || 0,
+      areaSqFt: Math.round(Number(seg.stats?.areaMeters2 || 0) * 10.7639),
+    })
+  }
+  return out.length >= 2 ? out : null
 }
 
 // ─────────────────────────────────────────────────────────────
