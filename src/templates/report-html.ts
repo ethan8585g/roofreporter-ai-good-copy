@@ -2317,6 +2317,7 @@ function buildPitchBreakdownPage(report: RoofReport, reportNum: string, reportDa
     return `
   <div style="padding:14px 28px 0">
     <div style="font-size:10px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;border-bottom:2px solid ${TEAL};padding-bottom:3px">Pitch Class Distribution</div>
+    <div style="font-size:8px;color:#475569;margin-bottom:6px;line-height:1.45">Industry pitch buckets used for material &amp; labor pricing — this roof's actual pitch (<strong style="color:${TEAL_DARK}">${predominant.pitch_label}</strong>) falls in the highlighted class below.</div>
     <!-- Horizontal stacked bar -->
     <div style="display:flex;width:100%;height:24px;border-radius:4px;overflow:hidden;border:1px solid #e2e8f0;background:#f1f5f9">
       ${segs.filter(s => s.pctV > 0).map(s => `<div style="width:${s.pctV.toFixed(2)}%;background:${s.bar};display:flex;align-items:center;justify-content:center;color:#fff;font-size:8px;font-weight:800;text-shadow:0 1px 2px rgba(0,0,0,0.25)" title="${s.label}: ${pct(s.sf)}%">${s.pctV >= 8 ? `${pct(s.sf)}%` : ''}</div>`).join('')}
