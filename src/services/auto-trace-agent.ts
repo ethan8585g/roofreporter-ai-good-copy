@@ -71,19 +71,6 @@ export interface AutoTraceInput {
    *  skipAngleSnapping with the opposite default so route consumers can
    *  use either spelling. */
   enableAngleSnapping?: boolean
-  /** Skip the polygon collinear-vertex smoothing step. **Default false
-   *  (smoothing IS applied)** — eaves only. Removes 2-pixel-tolerance
-   *  near-collinear vertices that arise from Mercator round-trip jitter
-   *  on straight walls; never reduces below 3 vertices and never
-   *  changes shape. Operators get fewer phantom stair-step vertices to
-   *  clean up. Set true to debug raw model output. */
-  skipSmoothing?: boolean
-  /** Skip rendering past super-admin traces as VISUAL examples (satellite
-   *  tile + polygon overlay) and fall back to text-only metadata. Default
-   *  false — visuals are rendered when example coords are available.
-   *  Set true to debug whether visuals are helping or hurting on a given
-   *  property class. */
-  skipVisualExamples?: boolean
   /** Allow the auto-trace to return DETACHED garages, sheds, and outbuildings
    *  as additional polygons instead of clamping to the single central
    *  structure. Default false — the bbox clamp suppresses these by design
@@ -183,11 +170,6 @@ export interface AutoTraceResult {
     image_url_redacted: string
     solar_segments_count: number
     training_examples_used: number
-    /** Subset of `training_examples_used` that were rendered as VISUAL
-     *  overlay tiles (satellite + green polygon) and sent as multimodal
-     *  images, vs. text-only fallback. Lets us correlate accuracy
-     *  improvements with whether visuals fired. */
-    visual_examples_count?: number
     raw_model_confidence?: number
     calibration_factor?: number
     /** finalConfidence × calibration_factor — kept as a diagnostic only. The
@@ -218,11 +200,6 @@ export interface AutoTraceResult {
      *  vertex. False/undefined means either snapping was skipped (hips/ridges,
      *  or input.skipAngleSnapping) or the polygon was already orthogonal. */
     angle_snapping_applied?: boolean
-    /** True when collinear-vertex smoothing dropped any vertices. Surfaces
-     *  for diagnostic: a high-vertex-count polygon that got smoothed is
-     *  a different signal than one that wasn't (the smoothed one is
-     *  legitimately complex). */
-    smoothing_applied?: boolean
     /** Sanity-gate signal: how many polygons we returned vs how many roof
      *  segments Solar API detected for this address. Drift of |delta| > 1
      *  flags either a Claude collapse (merged segments) or a Solar miscount
@@ -583,26 +560,6 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   // for all four pixel-level transforms.)
 
   const hasViewport3d = !!(input.viewport3dB64 && input.viewport3dB64.length > 1000)
-
-  // ── Few-shot VISUAL examples ─────────────────────────────────
-  // Render each past super-admin trace as a satellite tile with its eaves
-  // polygon overlaid in green via Static Maps `path=`. Same server-side
-  // overlay technique used by `refineEavesViaSelfCritique`. Far better
-  // shape signal than dumping lat/lng JSON Claude was previously told to
-  // ignore. Cap at top-3 to keep the multimodal payload bounded
-  // (~1.5MB across 3 base64 tiles). Examples that fail rendering (no
-  // coords / URL overflow / fetch failure) fall back to text-only.
-  const VISUAL_EXAMPLE_CAP = 3
-  const renderedVisualExamples: RenderedExampleOverlay[] = []
-  if (!input.skipVisualExamples && examples.length > 0) {
-    const top = examples.slice(0, VISUAL_EXAMPLE_CAP)
-    const results = await Promise.all(top.map(ex => renderExampleOverlay(env, ex, input.edge)))
-    for (const r of results) {
-      if (r) renderedVisualExamples.push(r)
-    }
-  }
-  const visualExampleOrderIds = new Set(renderedVisualExamples.map(v => v.example.order_id))
-
   // (Projection-grid + targetBboxPx now computed earlier in the function,
   // before the Solar / hint overlays that read them.)
   const systemPrompt = buildSystemPrompt(input.edge, lessonMemo, {
@@ -621,7 +578,6 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     targetCenterPx,
     targetBboxPx,
     includeOutbuildings: !!input.includeOutbuildings,
-    visualExamples: renderedVisualExamples,
   })
   const userPrompt = buildUserPrompt({
     edge: input.edge,
@@ -640,8 +596,6 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     targetCenterPx,
     targetBboxPx,
     footprintPriors: footprintPriorsResult.priors,
-    visualExamples: renderedVisualExamples,
-    visualExampleOrderIds,
   })
 
   // Build the multimodal content array. Order MUST match the system-
@@ -653,14 +607,6 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   ]
   if (solarRgb) {
     content.push({ type: 'image', source: { type: 'base64', media_type: solarRgb.mediaType, data: solarRgb.b64 } })
-  }
-  // Visual few-shot examples — past super-admin traces of similar properties,
-  // rendered as satellite tiles with the operator's polygon overlaid. Placed
-  // between primary/solar imagery and structural overlays (hillshade etc.)
-  // so Claude reads them while the building is still visually anchored.
-  // Order MUST match the captions added in buildSystemPrompt's image roster.
-  for (const ex of renderedVisualExamples) {
-    content.push({ type: 'image', source: { type: 'base64', media_type: ex.mediaType, data: ex.b64 } })
   }
   if (hillshade) {
     content.push({ type: 'image', source: { type: 'base64', media_type: hillshade.mediaType, data: hillshade.b64 } })
@@ -812,20 +758,6 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     finalSegmentsPx = finalSegmentsPx.map(seg => seg.length >= 4 ? snapPolygonToDominantAngle(seg) : seg)
     snappingApplied = finalSegmentsPx.some((seg, i) => seg !== before[i])
   }
-
-  // Polygon smoothing — drop near-collinear vertices (sub-pixel stair-
-  // step jitter on what should be straight walls). Default ON for
-  // eaves: tolerance is 2px in the projection grid ≈ 6 inches at z=21,
-  // well below the underlying coord precision. Never reduces below 3
-  // vertices. Cuts operator cleanup time on every trace without
-  // changing real shape.
-  let smoothingApplied = false
-  if (input.edge === 'eaves' && input.skipSmoothing !== true) {
-    const before = finalSegmentsPx
-    finalSegmentsPx = finalSegmentsPx.map(seg => seg.length >= 5 ? smoothPolygonRemoveCollinear(seg, 2) : seg)
-    smoothingApplied = finalSegmentsPx.some((seg, i) => seg.length !== before[i].length)
-  }
-
   // Project Claude's pixel coords back to GPS using the SAME centre + zoom
   // that produced the satellite image (which may be Solar-recentred, not
   // the user's original pin).
@@ -885,7 +817,6 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       image_url_redacted: imageUrl.replace(/key=[^&]+/, 'key=REDACTED'),
       solar_segments_count: solarSummary.segments_count,
       training_examples_used: examples.length,
-      visual_examples_count: renderedVisualExamples.length || undefined,
       raw_model_confidence: parsed.confidence,
       calibration_factor: calibrationFactor,
       calibrated_confidence: calibratedConfidence,
@@ -900,7 +831,6 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       refinement_elapsed_ms: refinementElapsedMs,
       refinement_iou_gate: refinementIouGate,
       angle_snapping_applied: snappingApplied,
-      smoothing_applied: smoothingApplied || undefined,
       plane_count_drift: planeCountDrift,
       footprint_area_ratio: footprintAreaRatio,
       thinking_budget: thinkingBudget || undefined,
@@ -977,33 +907,12 @@ function chooseImageFraming(
   }
   const cLat = (sw.latitude + ne.latitude) / 2
   const cLng = (sw.longitude + ne.longitude) / 2
-  // Zoom selection: target 55-65% frame fill so the building dominates
-  // the image without cropping eaves. Compute the zoom level whose
-  // ground-sampling-distance puts the longest building side at ~700px
-  // (≈55% of the 1280px effective tile). Cap at 21 (Static Maps free
-  // tier max). Previously hard-coded to "userZoom + 1" which often
-  // gave 20 instead of 21 for small lots — leaving the building at
-  // 25-35% of the frame.
-  const longestSideFt = Math.max(widthFt, depthFt)
-  const newZoom = pickZoomForBuildingSize(longestSideFt, cLat, 700, 2)
+  // Zoom selection: at lat ~53°, residential lots are typically 60-100 ft
+  // wide. We want the building to fill 35-55% of the image (so eaves are
+  // resolvable but the lot edges aren't cropped). userZoom + 1 typically
+  // gets us there; cap at 21 (Static Maps' max).
+  const newZoom = Math.min(21, userZoom + 1)
   return { lat: cLat, lng: cLng, zoom: newZoom, recentered: true }
-}
-
-/** Pick a Google Static Maps zoom level that makes the building fill roughly
- *  `targetFillPx` pixels of the rendered tile. Web-Mercator GSD doubles per
- *  zoom step; we walk from z=21 (Static Maps max) down until the building
- *  no longer overflows, with z=18 as the floor for huge rural acreages.
- *  Shared by the primary-image framing (scale=2, 700px target on a 1280px
- *  tile) and the few-shot visual-example framing (scale=1, 350px target
- *  on a 640px tile). */
-function pickZoomForBuildingSize(longestSideFt: number, centerLat: number, targetFillPx: number, scale: 1 | 2): number {
-  if (longestSideFt <= 0) return 21
-  const targetGsdMeters = (longestSideFt * 0.3048) / targetFillPx
-  for (let z = 21; z >= 18; z--) {
-    const gsd = (40_075_016 * Math.cos((centerLat * Math.PI) / 180)) / (256 * (1 << z) * scale)
-    if (gsd <= targetGsdMeters || z === 18) return z
-  }
-  return 18
 }
 
 /** Project the Solar API buildingInsights bounding box (lat/lng corners) into
@@ -1160,7 +1069,6 @@ function buildSystemPrompt(
     targetCenterPx: { x: number; y: number }
     targetBboxPx: { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean; source?: 'hint' | 'solar-trusted' | 'solar-untrusted' } | null
     includeOutbuildings: boolean
-    visualExamples: RenderedExampleOverlay[]
   },
 ): string {
   const role = edge === 'eaves'
@@ -1180,19 +1088,6 @@ function buildSystemPrompt(
   if (opts.hasSolarRgb && opts.solarRgbInfo) {
     imageRoster.push(`Image ${imgN++} — HIGH-RES SOLAR RGB ORTHO: same building as Image 1 but inherently building-cropped at ~${opts.solarRgbInfo.quality === 'HIGH' ? '10' : opts.solarRgbInfo.quality === 'MEDIUM' ? '25' : '50'} cm/px native (${opts.solarRgbInfo.width}×${opts.solarRgbInfo.height} px) — Solar API's RGB ortho fetched from a SEPARATE source than the Google Static Maps primary. Use this image as your HIGH-RESOLUTION REFERENCE for fine eave-edge work and corner placement decisions — it's tightly cropped to the building (no wasted yard pixels) so edges are sharper. ⚠️ ALL pixel coordinates you emit must STILL be in Image 1's coordinate space, NOT this image's. Use this image's CONTENT (where edges fall, where corners are, where eaves drop to shadow) but emit Image 1 pixels.`)
   }
-  // VISUAL FEW-SHOT EXAMPLES — past super-admin traces of similar properties,
-  // rendered as a satellite tile of THAT property with the operator's polygon
-  // drawn in GREEN. These are style references for vertex density, corner
-  // placement, and bump-out handling — NOT coordinate sources.
-  opts.visualExamples.forEach((ex, i) => {
-    const sqft = ex.example.house_sqft ? `${ex.example.house_sqft.toLocaleString()} sqft` : 'unknown sqft'
-    const complexity = ex.example.complexity_class || 'unknown'
-    const pitch = ex.example.roof_pitch_degrees != null ? `${ex.example.roof_pitch_degrees.toFixed(1)}° pitch` : 'unknown pitch'
-    const polyDesc = edge === 'eaves'
-      ? `${ex.polygonCount > 1 ? `${ex.polygonCount} closed eaves polygons` : '1 closed eaves polygon'} (${ex.vertexCount} vertices total)`
-      : `${ex.polygonCount} ${edge} polyline${ex.polygonCount > 1 ? 's' : ''} (${ex.vertexCount} vertices total)`
-    imageRoster.push(`Image ${imgN++} — VISUAL EXAMPLE ${i + 1}: a satellite tile of a DIFFERENT past property (${sqft}, ${complexity} complexity, ${pitch}) with the operator's actual ${edge} trace drawn in GREEN (outline + 25% fill). This is a STYLE REFERENCE: the green polygon shows ${polyDesc} — note vertex density, where corners go, and how bump-outs / wings became vertices. ⚠️ DO NOT emit pixel coordinates from this image — coordinates come ONLY from Image 1. Use this for "what does a clean N-vertex eaves trace look like on a similar roof" pattern matching.`)
-  })
   if (opts.hasHillshade) {
     imageRoster.push(`Image ${imgN++} — DSM hillshade. A synthetic structural render of the Google Solar API elevation raster, RESAMPLED to the SAME size as Image 1 so pixel coordinates correspond 1:1. THREE independent signals are packed into the RGB channels: RED = multi-azimuth hillshade (omni-directional illumination, ridges and hips appear as bright lines regardless of orientation); GREEN = Sobel edge magnitude on the height field (SHARP green lines where the surface curvature changes — primary cue for ridges, hips, and the inset of valleys); BLUE = above-ground height (brighter blue = higher above ground; near-zero where the surface is at lawn level). Use red+green together to localize lines; use blue to discriminate roof (bright blue) from yard or driveway (dark blue).`)
   }
@@ -1293,8 +1188,6 @@ function buildUserPrompt(args: {
   targetCenterPx: { x: number; y: number }
   targetBboxPx: { x1: number; y1: number; x2: number; y2: number } | null
   footprintPriors: FootprintPrior[]
-  visualExamples: RenderedExampleOverlay[]
-  visualExampleOrderIds: Set<number>
 }): string {
   const lines: string[] = []
   let img = 1
@@ -1361,28 +1254,15 @@ function buildUserPrompt(args: {
   }
 
   if (args.examples.length > 0) {
-    // Reference rendered examples by their VISUAL EXAMPLE ordinal (which
-    // matches the system prompt's image-roster label), not by absolute Image#.
-    // Image numbering drifts based on solar-rgb / hillshade / wide-context
-    // presence; ordinals are stable.
     lines.push(`Few-shot examples — ${args.examples.length} past super-admin traces of similar properties:`)
-    let visualOrdinal = 0
     args.examples.forEach((ex, i) => {
-      const hasVisual = args.visualExampleOrderIds.has(ex.order_id)
-      const sqftStr = ex.house_sqft != null ? `${ex.house_sqft.toLocaleString()} sqft` : 'unknown sqft'
-      const complexity = ex.complexity_class || 'unknown'
-      const pitch = ex.roof_pitch_degrees?.toFixed?.(1) || '?'
-      if (hasVisual) {
-        visualOrdinal++
-        const rendered = args.visualExamples.find(v => v.example.order_id === ex.order_id)!
-        lines.push(`Example ${i + 1} (VISUAL EXAMPLE ${visualOrdinal} above — see the GREEN polygon overlay): ${sqftStr}, ${complexity} complexity, ${pitch}° pitch, ${rendered.vertexCount}-vertex ${args.edge} (${rendered.polygonCount} polygon${rendered.polygonCount > 1 ? 's' : ''}).`)
-        lines.push(`  → STYLE NOTES: count the vertices on the green outline; note whether wings/bump-outs get explicit corners; observe corner placement relative to building edges.`)
-      } else {
-        // Fallback — no visual rendering (no coords / fetch failure / disabled).
-        // Keep the text-only metadata; drop the lat/lng JSON dump that was
-        // previously noise (coords are from a different property, can't be used).
-        lines.push(`Example ${i + 1} (text-only — no visual available): ${sqftStr}, ${complexity} complexity, ${pitch}° pitch.`)
-      }
+      lines.push(`Example ${i + 1}: ${ex.house_sqft} sqft, ${ex.complexity_class || 'unknown'} complexity, ${ex.roof_pitch_degrees?.toFixed?.(1) || '?'}° pitch.`)
+      const edgePayload = sanitizeExamplePayload(pickEdgeFromExample(ex, args.edge), 18)
+      // Reference SHAPE only — the lat/lng numbers below are from a DIFFERENT
+      // property. You must emit PIXELS of Image 1, not lat/lng, and not these
+      // numbers. We pass them so you can read vertex count, aspect ratio, and
+      // jog pattern — that's the signal, not the coordinates themselves.
+      lines.push(`  ${args.edge} (reference SHAPE only — coords are lat/lng from a DIFFERENT property; emit pixels of Image 1): ${JSON.stringify(edgePayload)}`)
     })
     lines.push('')
   } else {
@@ -1436,119 +1316,6 @@ function pickEdgeFromExample(ex: TrainingExample, edge: AutoTraceEdge): unknown 
 // ─────────────────────────────────────────────────────────────
 function buildSatelliteImageUrl(lat: number, lng: number, zoom: number, w: number, h: number, key: string): string {
   return `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${zoom}&size=${w}x${h}&scale=2&maptype=satellite&key=${key}`
-}
-
-export interface RenderedExampleOverlay {
-  b64: string
-  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
-  example: TrainingExample
-  vertexCount: number
-  polygonCount: number
-}
-
-/** Render a past super-admin trace as a satellite tile with the operator's
- *  polygon overlaid via Google Static Maps `path=` params. Reuses the same
- *  server-side overlay technique as `refineEavesViaSelfCritique`; no canvas /
- *  WASM dependency. Returns null on any missing data / URL-length / fetch
- *  failure so the caller falls back to text-only metadata for that example. */
-async function renderExampleOverlay(
-  env: Bindings,
-  example: TrainingExample,
-  edge: AutoTraceEdge,
-): Promise<RenderedExampleOverlay | null> {
-  const raw = pickEdgeFromExample(example, edge)
-  const polygons = normalizeExamplePolygons(raw)
-  if (polygons.length === 0) return null
-
-  // Centroid + bbox across ALL polygons in the example (multi-section eaves,
-  // multi-segment ridges) so the tile frames the whole roof, not just polygon 0.
-  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity
-  let vertexCount = 0
-  for (const poly of polygons) {
-    for (const p of poly) {
-      if (p.lat < minLat) minLat = p.lat
-      if (p.lat > maxLat) maxLat = p.lat
-      if (p.lng < minLng) minLng = p.lng
-      if (p.lng > maxLng) maxLng = p.lng
-      vertexCount++
-    }
-  }
-  if (!isFinite(minLat) || vertexCount < 2) return null
-  const cLat = (minLat + maxLat) / 2
-  const cLng = (minLng + maxLng) / 2
-  const latDiffM = (maxLat - minLat) * 111_320
-  const lngDiffM = (maxLng - minLng) * 111_320 * Math.cos((cLat * Math.PI) / 180)
-  const longestSideFt = Math.max(latDiffM, lngDiffM) * 3.28084
-  // 350px target on a 640x640 scale=1 tile = ~55% frame fill, matching the
-  // primary-image framing strategy. Lower bound floors out at z=18 for
-  // huge acreages (handled by pickZoomForBuildingSize).
-  const zoom = pickZoomForBuildingSize(longestSideFt, cLat, 350, 1)
-
-  // Eaves: closed filled polygons. Ridges/hips/valleys: open polylines (no fill).
-  // Green color (0x00cc00) matches the in-app eaves stroke so Claude can
-  // pattern-match "green polygon = eaves trace" against the operator's mental
-  // model. Outline 100% alpha; fill 25% alpha so satellite imagery remains visible.
-  const isFilled = edge === 'eaves'
-  const outlineColor = '0x00cc00ff'
-  const fillColor = '0x00cc003f'
-  const pathParams = polygons
-    .filter(p => p.length >= (isFilled ? 3 : 2))
-    .map(p => {
-      const closed = isFilled ? [...p, p[0]] : p
-      const pts = closed.map(pt => `${pt.lat.toFixed(6)},${pt.lng.toFixed(6)}`).join('|')
-      const fill = isFilled ? `|fillcolor:${fillColor}` : ''
-      return `path=color:${outlineColor}|weight:4${fill}|${pts}`
-    })
-    .join('&')
-  if (!pathParams) return null
-
-  const url = `https://maps.googleapis.com/maps/api/staticmap?center=${cLat},${cLng}&zoom=${zoom}&size=640x640&scale=1&maptype=satellite&${pathParams}&key=${env.GOOGLE_MAPS_API_KEY}`
-  // Static Maps URL hard limit ~8192 chars. A 20-vertex polygon at 6-decimal
-  // precision is ~450 chars; multi-polygon examples can still overflow.
-  if (url.length > 8000) return null
-
-  try {
-    const img = await fetchImageB64(url)
-    return { ...img, example, vertexCount, polygonCount: polygons.length }
-  } catch (e: any) {
-    console.warn(`[auto-trace] example ${example.order_id} overlay fetch failed:`, e?.message)
-    return null
-  }
-}
-
-/** Normalize a raw polygon payload from `pickEdgeFromExample` into a uniform
- *  `[{lat, lng}, ...][]` shape. Handles both modern (objects with lat/lng) and
- *  legacy (tuple [lat, lng]) storage, plus the legacy flat-polygon `eaves`
- *  shape (one polygon, not wrapped in an outer array). */
-function normalizeExamplePolygons(raw: unknown): { lat: number; lng: number }[][] {
-  if (!Array.isArray(raw) || raw.length === 0) return []
-  const firstEl: any = raw[0]
-  // Detect flat-polygon (legacy `eaves: [{lat,lng}, ...]`) vs nested array-of-polygons.
-  // Flat: first element is a point (object with lat/lng OR a 2-number tuple).
-  // Nested: first element is itself an array.
-  const isFlatPolygon = !Array.isArray(firstEl) || (
-    Array.isArray(firstEl) && firstEl.length === 2 &&
-    typeof firstEl[0] === 'number' && typeof firstEl[1] === 'number'
-  )
-  const isPointObj = firstEl && typeof firstEl === 'object' && !Array.isArray(firstEl) &&
-    typeof firstEl.lat === 'number' && typeof firstEl.lng === 'number'
-  const polys = (isFlatPolygon && (isPointObj || (Array.isArray(firstEl) && firstEl.length === 2)))
-    ? [raw]
-    : raw
-  const out: { lat: number; lng: number }[][] = []
-  for (const poly of polys) {
-    if (!Array.isArray(poly)) continue
-    const pts: { lat: number; lng: number }[] = []
-    for (const v of poly) {
-      if (Array.isArray(v) && v.length >= 2 && typeof v[0] === 'number' && typeof v[1] === 'number') {
-        pts.push({ lat: v[0], lng: v[1] })
-      } else if (v && typeof v === 'object' && typeof (v as any).lat === 'number' && typeof (v as any).lng === 'number') {
-        pts.push({ lat: (v as any).lat, lng: (v as any).lng })
-      }
-    }
-    if (pts.length >= 2) out.push(pts)
-  }
-  return out
 }
 
 async function fetchImageB64(url: string): Promise<{ b64: string; mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' }> {
@@ -1958,42 +1725,6 @@ function drawHintCircle(
       }
     }
   }
-}
-
-// ─────────────────────────────────────────────────────────────
-// Polygon smoothing — remove near-collinear vertices
-// ─────────────────────────────────────────────────────────────
-// Claude vision returns polygons in integer pixel coordinates, and the
-// Mercator round-trip produces additional ~0.5-2 ft per-vertex jitter.
-// The result: 4-corner rectangles arrive with 6-9 vertices stuttering
-// along straight walls. Operators have to nudge each of those away.
-//
-// Smoothing removes vertices that lie within `tolerance` pixels of the
-// line between their two neighbours — pure geometric simplification,
-// no shape change. Douglas-Peucker would be more aggressive but risks
-// losing legitimate small jogs (bay windows, kitchen bump-outs);
-// per-vertex collinearity check is a safer floor.
-//
-// Tolerance ~2 px on a 1280-pixel projection grid = ~6 inches at z=21.
-// Below the noise floor of the underlying coord pipeline.
-function smoothPolygonRemoveCollinear(poly: { x: number; y: number }[], tolerancePx: number = 2): { x: number; y: number }[] {
-  if (poly.length <= 4) return poly  // Don't simplify simple rectangles further
-  const out: { x: number; y: number }[] = []
-  for (let i = 0; i < poly.length; i++) {
-    const prev = poly[(i - 1 + poly.length) % poly.length]
-    const curr = poly[i]
-    const next = poly[(i + 1) % poly.length]
-    // Perpendicular distance from `curr` to line (prev → next).
-    const dx = next.x - prev.x
-    const dy = next.y - prev.y
-    const len = Math.hypot(dx, dy)
-    if (len < 1) { out.push(curr); continue }
-    const dist = Math.abs((curr.x - prev.x) * dy - (curr.y - prev.y) * dx) / len
-    if (dist > tolerancePx) out.push(curr)
-    // else: drop curr (it's effectively collinear with neighbours)
-  }
-  // Guard: never reduce below 3 vertices (degenerate polygon).
-  return out.length >= 3 ? out : poly
 }
 
 // ─────────────────────────────────────────────────────────────
