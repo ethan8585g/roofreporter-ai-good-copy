@@ -77,6 +77,7 @@ import { superAdminBi } from './routes/super-admin-bi'
 import { superAdminLeads } from './routes/super-admin-leads'
 import { superAdminAttribution } from './routes/super-admin-attribution'
 import { superAdminLoopTracker } from './routes/super-admin-loop-tracker'
+import { superAdminModuleAnalytics } from './routes/super-admin-module-analytics'
 import { superAdminAi } from './routes/super-admin-ai'
 import { ga4GrantRoutes } from './routes/ga4-grant'
 // runLoopScan + pruneExpiredScanSessions are imported by src/cron-worker.ts
@@ -734,6 +735,11 @@ app.route('/api/super-admin/attribution', superAdminAttribution)
 // Surfaces results of the recurring site scanners (public, customer, admin, daily health).
 app.route('/super-admin/loop-tracker', superAdminLoopTracker)
 app.route('/api/super-admin/loop-tracker', superAdminLoopTracker)
+
+// Super-admin Module Analytics: per-customer module-open counts (today + lifetime).
+// HTML at /super-admin/module-analytics, JSON at /api/super-admin/module-analytics/*.
+app.route('/super-admin/module-analytics', superAdminModuleAnalytics)
+app.route('/api/super-admin/module-analytics', superAdminModuleAnalytics)
 
 // Super-admin AI Assistant: chat UI at /super-admin/ai-assistant + SSE chat at the same prefix
 app.route('/super-admin/ai-assistant', superAdminAi)
@@ -7420,6 +7426,10 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
           <i class="fas fa-radar w-5 text-center"></i>
           <span class="label text-sm font-semibold">Loops</span>
           <span id="sa-sidebar-loops-badge" style="margin-left:auto;background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none">0</span>
+        </a>
+        <a href="/super-admin/module-analytics" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" style="text-decoration:none">
+          <i class="fas fa-chart-line w-5 text-center"></i>
+          <span class="label text-sm font-semibold">Module Usage</span>
         </a>
         <a href="/super-admin/ai-assistant" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" style="text-decoration:none;background:linear-gradient(135deg,rgba(124,58,237,0.15),rgba(168,85,247,0.08));border:1px solid rgba(168,85,247,0.25)">
           <i class="fas fa-sparkles w-5 text-center" style="color:#a78bfa"></i>
