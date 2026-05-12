@@ -1372,10 +1372,14 @@ app.get('/3d-verify', async (c) => {
   .toast.show{opacity:1}
   .toast.ok{background:#15803D}
   .toast.warn{background:#9A3412}
-  /* postmsg mode: hide the floating top buttons — parent provides its own
-     capture button. Keep .legend visible so users see Cesium's mouse-control
-     hints (controls differ from the previous <gmp-map-3d>). */
-  body.postmsg .topbar, body.postmsg .capturebar { display: none !important; }
+  /* postmsg mode: hide decorative chrome (info pills + cover-capture button —
+     the parent's Capture View covers that) and the .capturebar (parent owns
+     ridge/hip/valley picking). Keep the Reset/Rotate adjustment buttons and
+     the legend so admins still have one-click movement controls inside the
+     iframe — the old <gmp-map-3d> had built-in nav buttons users relied on. */
+  body.postmsg .capturebar { display: none !important; }
+  body.postmsg .topbar .pill,
+  body.postmsg .topbar .btn.capture { display: none !important; }
   body.postmsg .legend { font-size: 10px; padding: 4px 8px; bottom: 6px; left: 6px; }
 </style>
 </head>
