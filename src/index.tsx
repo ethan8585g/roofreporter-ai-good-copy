@@ -1794,21 +1794,20 @@ app.get('/3d-verify', async (c) => {
     // super-admin can locate the structure on the photorealistic mesh.
     // Suppressed in autocapture modes so it doesn't pollute the saved cover
     // image / aerial sequence.
+    //
+    // IMPORTANT: Cartesian3.fromDegrees(lng, lat, h) measures h from the WGS84
+    // ellipsoid, not from local ground. A pin placed at h=0 in a city ~700m
+    // above sea level renders hundreds of meters underground and visually
+    // swims around the screen as the camera rotates. We provisionally place
+    // the pin very high up (so it's at least above all rooftops globally),
+    // then once tiles load we sample the actual surface height and snap the
+    // pin to sit just above the roof.
+    let propertyPinEntity = null;
+    let propertyPolePinEntity = null;
     if (!AUTOCAPTURE && !AUTOCAPTURE_CORNERS) {
       const pinColor = Cesium.Color.fromCssColorString('#ff3b3b');
-      const groundPos = Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, 0);
-      const topPos = Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, 40);
-      viewer.entities.add({
-        polyline: {
-          positions: [groundPos, topPos],
-          width: 3,
-          material: pinColor,
-          depthFailMaterial: pinColor.withAlpha(0.55),
-          clampToGround: false
-        }
-      });
-      viewer.entities.add({
-        position: topPos,
+      propertyPinEntity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, 1500),
         point: {
           pixelSize: 14,
           color: pinColor,
@@ -1828,6 +1827,39 @@ app.get('/3d-verify', async (c) => {
           scale: 0.95
         }
       });
+    }
+
+    // After the 3D tileset is added and initial tiles stream, sample the
+    // actual surface height at TARGET.lat/lng and snap the property pin to
+    // sit just above the roof. Without this, the pin sits at ellipsoid 0
+    // (under the city) and visually drifts as the camera moves.
+    function refinePropertyPinAltitude() {
+      if (!propertyPinEntity || !viewer || !viewer.scene) return;
+      if (typeof viewer.scene.sampleHeightMostDetailed !== 'function') return;
+      try {
+        const carto = Cesium.Cartographic.fromDegrees(TARGET.lng, TARGET.lat);
+        viewer.scene.sampleHeightMostDetailed([carto]).then(function(samples) {
+          const s = samples && samples[0];
+          const h = s && Number.isFinite(s.height) ? s.height : null;
+          if (h === null) return;
+          // Dot sits 6m above the surface; pole runs from the surface up to it.
+          propertyPinEntity.position = Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, h + 6);
+          if (!propertyPolePinEntity) {
+            const pinColor = Cesium.Color.fromCssColorString('#ff3b3b');
+            const groundPos = Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, h);
+            const topPos = Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, h + 6);
+            propertyPolePinEntity = viewer.entities.add({
+              polyline: {
+                positions: [groundPos, topPos],
+                width: 3,
+                material: pinColor,
+                depthFailMaterial: pinColor.withAlpha(0.55),
+                clampToGround: false
+              }
+            });
+          }
+        }).catch(function() {});
+      } catch (_) {}
     }
 
     // Active-capture wiring: register a LEFT_CLICK handler that runs only
@@ -1864,6 +1896,24 @@ app.get('/3d-verify', async (c) => {
     tilesetPromise.then((tileset) => {
       viewer.scene.primitives.add(tileset);
       flyToInitial(INITIAL_HEADING_DEG);
+
+      // Snap the property pin onto the actual roof surface as soon as the
+      // initial tiles around TARGET.lat/lng have streamed in. Without this
+      // the pin sits at ellipsoid height 0 (often hundreds of meters below
+      // the city) and appears to drift across the screen as the user pans.
+      // Re-sample on tile load events for the first few seconds in case the
+      // first sample comes back before the relevant tiles are detailed.
+      if (propertyPinEntity) {
+        const onceLoaded = tileset.initialTilesLoaded;
+        if (onceLoaded && onceLoaded.addEventListener) {
+          onceLoaded.addEventListener(function() { refinePropertyPinAltitude(); });
+        } else {
+          setTimeout(refinePropertyPinAltitude, 2500);
+        }
+        // Second-pass refinement after a moment in case the first sample
+        // hit a low-LOD tile.
+        setTimeout(refinePropertyPinAltitude, 4000);
+      }
 
       // Auto-capture mode: when ?autocapture=1 + ?orderId= are set, the report
       // page injected a hidden iframe so the first viewer of a report gets a
