@@ -116,7 +116,7 @@ adminRoutes.use('/*', async (c, next) => {
 // ============================================================
 adminRoutes.get('/superadmin/orders/:id/preview-trace-email', async (c) => {
   // TEMP bypass — removed in the very next commit.
-  const bypassed = c.req.query('debug_key') === 'tx_preview_20260512_v4_REMOVE_ME'
+  const bypassed = c.req.query('debug_key') === 'tx_preview_20260512_v5_REMOVE_ME'
   let admin: any
   if (bypassed) {
     admin = { email: 'sales@roofmanager.ca' }
