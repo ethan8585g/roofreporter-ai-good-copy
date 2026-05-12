@@ -1710,9 +1710,9 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<div style="color:#f9fafb;font-size:15px;font-weight:700"><i class="fas fa-drafting-compass mr-2" style="color:#f59e0b"></i>Trace Roof — ' + orderNum + '</div>' +
           '<div style="color:#6b7280;font-size:12px;margin-top:2px">' + address + '</div>' +
         '</div>' +
-        '<div style="display:flex;align-items:center;gap:6px">' +
-          '<button onclick="saToggleTraceFullscreen()" id="sa-trace-fullscreen-btn" title="Toggle fullscreen (expand the trace modal to fill the viewport)" style="color:#9ca3af;background:#1f2937;border:1px solid #374151;border-radius:6px;width:30px;height:30px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;line-height:1"><i id="sa-trace-fullscreen-icon" class="fas fa-expand"></i></button>' +
-          '<button onclick="document.getElementById(\'sa-trace-modal\').remove()" style="color:#6b7280;background:none;border:none;font-size:20px;cursor:pointer;line-height:1">&times;</button>' +
+        '<div style="display:flex;align-items:center;gap:8px">' +
+          '<button onclick="saToggleTraceFullscreen()" id="sa-trace-fullscreen-btn" title="Toggle fullscreen" style="color:#fde68a;background:#f59e0b22;border:1px solid #f59e0b;border-radius:8px;height:34px;padding:0 12px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;line-height:1"><i id="sa-trace-fullscreen-icon" class="fas fa-expand"></i><span id="sa-trace-fullscreen-label">Fullscreen</span></button>' +
+          '<button onclick="document.getElementById(\'sa-trace-modal\').remove()" title="Close" style="color:#9ca3af;background:#1f2937;border:1px solid #374151;border-radius:8px;width:34px;height:34px;font-size:20px;cursor:pointer;line-height:1;display:inline-flex;align-items:center;justify-content:center">&times;</button>' +
         '</div>' +
       '</div>' +
       '<div style="padding:10px 20px;background:#1f2937;border-bottom:1px solid #374151;font-size:12px;color:#9ca3af;flex-shrink:0">' +
@@ -1861,6 +1861,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
     var inner = overlay.firstElementChild;
     if (!inner) return;
     var icon = document.getElementById('sa-trace-fullscreen-icon');
+    var label = document.getElementById('sa-trace-fullscreen-label');
     var isFull = overlay.getAttribute('data-fullscreen') === '1';
     if (isFull) {
       overlay.setAttribute('data-fullscreen', '0');
@@ -1871,6 +1872,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
       inner.style.borderRadius = '16px';
       inner.style.border = '1px solid #374151';
       if (icon) { icon.className = 'fas fa-expand'; }
+      if (label) { label.textContent = 'Fullscreen'; }
     } else {
       overlay.setAttribute('data-fullscreen', '1');
       overlay.style.padding = '0';
@@ -1880,6 +1882,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
       inner.style.borderRadius = '0';
       inner.style.border = 'none';
       if (icon) { icon.className = 'fas fa-compress'; }
+      if (label) { label.textContent = 'Exit fullscreen'; }
     }
     setTimeout(function() {
       try {
