@@ -21,6 +21,7 @@ import { signupHealthRoutes } from './routes/signup-health'
 import { signupJourneyRoutes } from './routes/signup-journey'
 import { adsHealthRoutes } from './routes/ads-health'
 import { mobileMonitorRoutes } from './routes/mobile-monitor'
+import { cartRecoveryRoutes } from './routes/abandoned-checkout-recovery'
 import { adsSecretsRoutes } from './routes/ads-secrets'
 import { marketingBlastRoutes } from './routes/marketing-blast'
 import { aiAnalysisRoutes } from './routes/ai-analysis'
@@ -669,6 +670,7 @@ app.route('/api/signup-health', signupHealthRoutes)
 app.route('/api/signup-journey', signupJourneyRoutes)
 app.route('/api/ads-health', adsHealthRoutes)
 app.route('/api/mobile-monitor', mobileMonitorRoutes)
+app.route('/api/cart-recovery', cartRecoveryRoutes)
 app.route('/', adsSecretsRoutes)
 app.route('/api/marketing', marketingBlastRoutes)
 app.route('/api/ai', aiAnalysisRoutes)

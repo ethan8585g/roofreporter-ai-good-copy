@@ -26,6 +26,7 @@ import { runMobileMonitor } from './services/mobile-monitor'
 import { sendMobileMonitorEmail } from './services/mobile-monitor-email'
 import { runDripCampaigns } from './services/drip-campaigns'
 import { runSignupNurture } from './services/signup-nurture'
+import { runAbandonedCheckoutRecovery } from './services/abandoned-checkout-recovery'
 import { loadGmailCreds, sendGmailOAuth2WithAttachment } from './services/email'
 
 // ── Abandoned signup recovery ─────────────────────────────────────────────────
@@ -633,6 +634,37 @@ export default {
         console.error('[CRON:signup-nurture] Error:', err?.message)
         await logRun('signup_nurture', 'error', err?.message || String(err), {}, Date.now() - t0)
           .catch((e: any) => console.warn('[logRun:signup_nurture:error] failed:', e?.message || e))
+      }
+    })())
+
+    // ── Abandoned checkout recovery (every cron tick — every 10 min) ──
+    // 2-touch sequence for customers whose square_payments rows are stuck
+    // in 'pending' (hit Pay Now, never finished). Dedup'd via
+    // user_activity_log so each abandoned payment gets +2h + +24h at most.
+    //   +2h   — "Your roof report is one click away"
+    //   +24h  — "Still want that roof report?"
+    // Sender = support@roofmanager.ca (customer voice rule).
+    ctx.waitUntil((async () => {
+      const t0 = Date.now()
+      try {
+        const results = await runAbandonedCheckoutRecovery(env)
+        const totals = results.reduce((acc, r) => ({
+          found: acc.found + r.found,
+          sent: acc.sent + r.sent,
+          failed: acc.failed + r.failed,
+          skipped: acc.skipped + r.skipped,
+        }), { found: 0, sent: 0, failed: 0, skipped: 0 })
+        if (totals.found > 0 || totals.sent > 0) {
+          const summary = `Found ${totals.found}, sent ${totals.sent}, failed ${totals.failed}, skipped ${totals.skipped} ` +
+            `(by stage: ${results.map(r => `${r.stage}=${r.sent}`).join(' ')})`
+          console.log(`[CRON:cart-recovery] ${summary}`)
+          await logRun('cart_recovery', totals.failed > 0 ? 'partial' : 'success', summary, { stages: results, totals }, Date.now() - t0)
+            .catch((e: any) => console.warn('[logRun:cart_recovery] failed:', e?.message || e))
+        }
+      } catch (err: any) {
+        console.error('[CRON:cart-recovery] Error:', err?.message)
+        await logRun('cart_recovery', 'error', err?.message || String(err), {}, Date.now() - t0)
+          .catch((e: any) => console.warn('[logRun:cart_recovery:error] failed:', e?.message || e))
       }
     })())
 
