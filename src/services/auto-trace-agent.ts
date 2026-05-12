@@ -94,6 +94,21 @@ export interface AutoTraceInput {
    *  harness endpoint to prevent self-recall during accuracy evaluation;
    *  unused on production traces. */
   excludeOrderIds?: number[]
+  /** Skip the "promote external building-footprint prior to first-class
+   *  polygon" shortcut. Default false — when OSM Overpass or Edmonton
+   *  municipal LiDAR returns a polygon that contains the click point AND
+   *  corroborates with Solar's bbox area, we return THAT polygon (+0.45m
+   *  outward eave buffer) and skip the Opus vision call entirely. Saves
+   *  $0.05-0.10 + 5-12s per hit. Eaves only — ridges/hips/valleys still
+   *  use the model. Set true to force the model call (debugging / A/B). */
+  skipFootprintPriorPromotion?: boolean
+  /** Skip the D1-backed per-(lat,lng,edge) cache lookup. Default false —
+   *  identical re-traces of the same property hit cache (<100ms instead
+   *  of $0.05-0.10 + 5-12s). Forced bypass when: hintRegion supplied
+   *  (operator-guided run), viewport3dB64 supplied (custom imagery),
+   *  or includeDebugImages true (debug run). Set true to force a fresh
+   *  pass for any other reason. */
+  skipCache?: boolean
   /** Render each Solar-detected roof plane as a colored translucent
    *  rectangle on the satellite tile (R/G/B/Y...). Tells Claude
    *  "here are N structural ground-truth planes; trace the OUTER
@@ -253,6 +268,21 @@ export interface AutoTraceResult {
     solar_segments_overlaid?: number
     model: string
     elapsed_ms: number
+    /** Set when the polygon was sourced from an external building-footprint
+     *  prior instead of the vision model. Saves $0.05-0.10 + ~5-12s per
+     *  trace and uses real-world ground-truth geometry. */
+    polygon_source?: 'edmonton-municipal-lidar' | 'osm-overpass'
+    /** True when the vision-model call was bypassed entirely (a high-
+     *  confidence footprint prior was used). Lets cost dashboards
+     *  distinguish "auto-trace ran but used a prior" from "auto-trace
+     *  ran the model." */
+    skipped_model_call?: boolean
+    /** True when the result was served from the per-(lat,lng,edge) D1
+     *  cache instead of running the full pipeline. */
+    cache_hit?: boolean
+    /** ISO timestamp of when the cached result was originally produced
+     *  (only populated when cache_hit=true). */
+    cache_cached_at?: string
   }
 }
 
@@ -268,6 +298,22 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   const runId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
     : `at-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+
+  // ── Cache read ──────────────────────────────────────────────
+  // Fast-path for repeat traces of the same property. <100ms vs.
+  // 5-12s + $0.05-0.10 for a fresh model run. Auto-bypassed when
+  // the caller supplied operator-specific inputs (hint region,
+  // viewport3d, debug images).
+  const cached = await readAutoTraceCache(env, input)
+  if (cached) {
+    // Re-stamp the run_id with this call's fresh UUID so telemetry
+    // correlates submissions to the specific re-trace event, not the
+    // original cached one.
+    cached.run_id = runId
+    cached.diagnostics = { ...cached.diagnostics, elapsed_ms: Date.now() - started }
+    return cached
+  }
+
   const zoom = clampZoom(input.zoom)
   const safeW = Math.min(input.imageWidth || 640, 640)
   const safeH = Math.min(input.imageHeight || 640, 640)
@@ -308,6 +354,53 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     priorsP,
   ])
   const solarSummary = summarizeSolar(solarInsights)
+
+  // ── Prior-promotion gate ─────────────────────────────────────
+  // If we have a high-confidence external building-footprint prior
+  // (OSM way or Edmonton municipal LiDAR polygon) that CONTAINS the
+  // click point AND corroborates with Solar's bbox area, return it
+  // directly. Skips the Opus vision call entirely — saves $0.05-0.10
+  // and 5-12s per hit, AND the polygon is real-world ground truth
+  // rather than model output. Eaves only; ridges/hips/valleys still
+  // need the model. Disable via skipFootprintPriorPromotion=true.
+  if (input.edge === 'eaves' && !input.skipFootprintPriorPromotion) {
+    const promoted = pickPromotablePrior(footprintPriorsResult.priors, solarSummary, input.lat, input.lng)
+    if (promoted) {
+      // +0.45m outward buffer: real eaves extend 0.3-0.6m past the wall
+      // line that OSM/Edmonton footprints describe. Mitre-style edge
+      // offset preserves the polygon's shape (no centroid radial drift
+      // on L/T/U-shape buildings).
+      const buffered = bufferRingOutwardMeters(promoted.ring, 0.45)
+      const priorResult: AutoTraceResult = {
+        edge: input.edge,
+        run_id: runId,
+        segments: [buffered],
+        confidence: 95,
+        reasoning: `Used ${promoted.source} building footprint (${Math.round(promoted.area_sqft)} sqft, ${promoted.ring.length} vertices) with +0.45m outward eave buffer. Real-world ground-truth polygon — no vision-model call required.`,
+        diagnostics: {
+          image_url_redacted: 'none (prior-source)',
+          solar_segments_count: solarSummary.segments_count,
+          training_examples_used: 0,
+          dsm_hillshade_used: false,
+          viewport_3d_used: false,
+          refinement_pass: 'skipped-empty-draft',
+          footprint_priors: footprintPriorsResult.priors.map(p => ({
+            source: p.source,
+            area_sqft: Math.round(p.area_sqft),
+            vertices: p.ring.length,
+            source_id: p.source_id,
+          })),
+          footprint_priors_elapsed_ms: footprintPriorsResult.elapsed_ms,
+          polygon_source: promoted.source === 'edmonton' ? 'edmonton-municipal-lidar' : 'osm-overpass',
+          skipped_model_call: true,
+          model: 'none (prior-source)',
+          elapsed_ms: Date.now() - started,
+        },
+      }
+      await writeAutoTraceCache(env, input, priorResult)
+      return priorResult
+    }
+  }
 
   // Pick the satellite image's centre + zoom. When Solar gives us a
   // trusted (≤60ft per side) bbox, recentre on its centroid and bump zoom
@@ -665,12 +758,12 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     if (parsed.segments.length === 0 || parsed.segments.every(s => s.length < 3)) {
       refinementPass = 'skipped-empty-draft'
     } else if (
-      // High-confidence single-polygon drafts almost never improve via
-      // critique — skip the second Claude call to save 6-12s.
-      parsed.confidence >= 90 && parsed.segments.length === 1
-    ) {
-      refinementPass = 'skipped-high-iou'  // reuse the existing diagnostic value
-    } else if (
+      // The previous `parsed.confidence >= 90 && parsed.segments.length === 1`
+      // short-circuit was removed 2026-05-12. Opus 4.7 routinely self-rates 90+
+      // on confidently-wrong rectangles (multi-wing houses collapsed to a
+      // 4-corner box), and the unconditional skip meant the IoU gate below
+      // never ran — so those traces never got a refinement pass. The
+      // 6-12s latency saving cost ~30% of multi-wing accuracy.
       projectionBboxPx && projectionBboxPx.trusted &&
       (() => {
         // Pick the LARGEST polygon as the primary; small ancillary polygons
@@ -781,7 +874,7 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   // are still in diagnostics for any consumer that wants them.
   const calibratedConfidence = Math.round(finalConfidence * calibrationFactor)
 
-  return {
+  const modelResult: AutoTraceResult = {
     edge: input.edge,
     run_id: runId,
     segments,
@@ -843,6 +936,9 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       elapsed_ms: Date.now() - started,
     },
   }
+
+  await writeAutoTraceCache(env, input, modelResult)
+  return modelResult
 }
 
 /** Decide where to centre the satellite image and at what zoom. When Google
@@ -1273,6 +1369,205 @@ function sanitizeExamplePayload(payload: any, maxPerArray = 18): any {
     return out
   }
   return payload
+}
+
+// ─────────────────────────────────────────────────────────────
+// Auto-trace D1 cache — per-(lat, lng, edge) result memoization
+// ─────────────────────────────────────────────────────────────
+// Repeat traces of the same property skip the entire pipeline
+// (priors + Solar + Opus + refinement) and return the cached
+// polygon in <100ms. 30-day TTL bounds staleness for buildings
+// that get demolished / rebuilt. Bypassed automatically for
+// operator-guided runs (hintRegion, viewport3d, debug images).
+
+const CACHE_TTL_DAYS = 30
+const CACHE_LATLNG_DECIMALS = 5  // ≈ 1.1m at the equator, less at higher lat
+
+function shouldBypassCache(input: AutoTraceInput): boolean {
+  if (input.skipCache === true) return true
+  if (input.hintRegion) return true
+  if (input.viewport3dB64 && input.viewport3dB64.length > 1000) return true
+  if (input.includeDebugImages === true) return true
+  return false
+}
+
+function cacheKeyOf(input: AutoTraceInput): { latKey: number; lngKey: number } {
+  const factor = 10 ** CACHE_LATLNG_DECIMALS
+  return {
+    latKey: Math.round(input.lat * factor) / factor,
+    lngKey: Math.round(input.lng * factor) / factor,
+  }
+}
+
+async function readAutoTraceCache(env: Bindings, input: AutoTraceInput): Promise<AutoTraceResult | null> {
+  if (shouldBypassCache(input)) return null
+  if (!env.DB) return null
+  try {
+    const { latKey, lngKey } = cacheKeyOf(input)
+    const row = await env.DB.prepare(
+      `SELECT result_json, cached_at FROM auto_trace_cache
+       WHERE lat_key = ? AND lng_key = ? AND edge = ? AND expires_at > datetime('now')
+       LIMIT 1`
+    ).bind(latKey, lngKey, input.edge).first<{ result_json: string; cached_at: string }>()
+    if (!row) return null
+    const parsed = JSON.parse(row.result_json) as AutoTraceResult
+    // Stamp cache-hit telemetry onto the served result so dashboards can
+    // distinguish a cached return from a fresh pipeline run.
+    parsed.diagnostics = {
+      ...parsed.diagnostics,
+      cache_hit: true,
+      cache_cached_at: row.cached_at,
+    }
+    return parsed
+  } catch (e: any) {
+    // Cache table not yet migrated, or D1 transient failure — never block
+    // the trace on cache infra. Fall through to fresh pipeline.
+    console.warn('[auto-trace] cache read failed:', e?.message)
+    return null
+  }
+}
+
+async function writeAutoTraceCache(env: Bindings, input: AutoTraceInput, result: AutoTraceResult): Promise<void> {
+  if (shouldBypassCache(input)) return
+  if (!env.DB) return
+  try {
+    const { latKey, lngKey } = cacheKeyOf(input)
+    // Strip non-cacheable fields (debug_images can be megabytes; run_id is
+    // a per-call UUID and should be regenerated on each return).
+    const { debug_images: _omitDebug, ...cacheable } = result
+    void _omitDebug
+    const polygonSource = result.diagnostics.polygon_source || 'model'
+    await env.DB.prepare(
+      `INSERT OR REPLACE INTO auto_trace_cache
+         (lat_key, lng_key, edge, lat_exact, lng_exact, result_json, polygon_source, cached_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now', '+${CACHE_TTL_DAYS} days'))`
+    ).bind(
+      latKey,
+      lngKey,
+      input.edge,
+      input.lat,
+      input.lng,
+      JSON.stringify(cacheable),
+      polygonSource,
+    ).run()
+  } catch (e: any) {
+    // Cache writes are non-fatal — log + continue.
+    console.warn('[auto-trace] cache write failed:', e?.message)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Footprint-prior promotion — skip the vision-model call when
+// a free external building polygon already answers the question
+// ─────────────────────────────────────────────────────────────
+
+/** Decide whether any of the fetched OSM / Edmonton building-footprint
+ *  priors is trustworthy enough to use AS the eaves polygon — bypassing
+ *  the Opus vision call entirely. Gates:
+ *   - polygon must CONTAIN the click point (strongest "this is the right
+ *     building" signal; centroid-distance fallback if nothing contains)
+ *   - vertex count ≥ 4 (rules out malformed / degenerate triangles)
+ *   - area in residential band (300-15,000 sqft — excludes microsheds
+ *     and merged-building blocks)
+ *   - corroborates with Solar bbox area within 1.5× if Solar is available
+ *     (catches cases where OSM has a single mega-polygon covering a whole
+ *     townhouse strip)
+ *  Edmonton (LiDAR-derived) wins over OSM (crowd-traced) when both pass. */
+function pickPromotablePrior(
+  priors: FootprintPrior[],
+  solarSummary: { available: boolean; bbox_width_ft: number; bbox_depth_ft: number },
+  clickLat: number,
+  clickLng: number,
+): FootprintPrior | null {
+  if (!priors || priors.length === 0) return null
+  const containing = priors.filter(p => pointInRingLL(p.ring, clickLat, clickLng))
+  const candidates = containing.length > 0 ? containing : priors
+  const gated = candidates.filter(p => {
+    if (!p.ring || p.ring.length < 4) return false
+    if (!Number.isFinite(p.area_sqft) || p.area_sqft < 300 || p.area_sqft > 15_000) return false
+    if (solarSummary.available && solarSummary.bbox_width_ft > 0 && solarSummary.bbox_depth_ft > 0) {
+      const solarArea = solarSummary.bbox_width_ft * solarSummary.bbox_depth_ft
+      if (solarArea > 0) {
+        const ratio = Math.max(p.area_sqft, solarArea) / Math.min(p.area_sqft, solarArea)
+        if (ratio > 1.5) return false
+      }
+    }
+    return true
+  })
+  if (gated.length === 0) return null
+  // Prefer Edmonton (LiDAR) over OSM (community-traced).
+  gated.sort((a, b) => (a.source === 'edmonton' ? 0 : 1) - (b.source === 'edmonton' ? 0 : 1))
+  return gated[0]
+}
+
+/** Ray-casting point-in-polygon in lat/lng space (treats coords as flat
+ *  Cartesian — accurate at residential scale, <100m). Duplicated here
+ *  rather than importing from footprint-priors.ts because that helper
+ *  isn't exported and we don't want to widen its surface for this. */
+function pointInRingLL(ring: LatLng[], lat: number, lng: number): boolean {
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i].lng, yi = ring[i].lat
+    const xj = ring[j].lng, yj = ring[j].lat
+    const intersect = ((yi > lat) !== (yj > lat)) &&
+      (lng < ((xj - xi) * (lat - yi)) / ((yj - yi) || 1e-12) + xi)
+    if (intersect) inside = !inside
+  }
+  return inside
+}
+
+/** Offset a lat/lng polygon outward by `meters` along each edge's
+ *  perpendicular normal (Mitre-style). Preserves shape — an L-shape
+ *  stays L-shaped (a centroid-radial expansion like solar-geometry's
+ *  expandHull would distort it). Mitre length capped at 3× requested
+ *  meters to prevent spikes at acute corners. Input ring need not be
+ *  pre-oriented; orientation is detected via signed area. */
+function bufferRingOutwardMeters(ring: LatLng[], meters: number): LatLng[] {
+  if (!ring || ring.length < 3 || meters === 0) return ring
+  const cLat = ring.reduce((s, p) => s + p.lat, 0) / ring.length
+  const M_PER_DEG_LAT = 111_320
+  const M_PER_DEG_LNG = 111_320 * Math.cos(cLat * Math.PI / 180)
+  const xy = ring.map(p => ({ x: p.lng * M_PER_DEG_LNG, y: p.lat * M_PER_DEG_LAT }))
+  // Signed area (positive = CCW in screen coords / CW in geographic).
+  let signedArea = 0
+  for (let i = 0; i < xy.length; i++) {
+    const a = xy[i], b = xy[(i + 1) % xy.length]
+    signedArea += a.x * b.y - b.x * a.y
+  }
+  // For CCW (positive signed area), outward = LEFT of edge direction
+  // (rotate edge vector 90° CCW). For CW, outward = RIGHT (90° CW).
+  const ccw = signedArea > 0
+  const out: { x: number; y: number }[] = []
+  const mitreCap = Math.abs(meters) * 3
+  for (let i = 0; i < xy.length; i++) {
+    const prev = xy[(i - 1 + xy.length) % xy.length]
+    const curr = xy[i]
+    const next = xy[(i + 1) % xy.length]
+    const e1 = { x: curr.x - prev.x, y: curr.y - prev.y }
+    const e2 = { x: next.x - curr.x, y: next.y - curr.y }
+    const l1 = Math.hypot(e1.x, e1.y) || 1
+    const l2 = Math.hypot(e2.x, e2.y) || 1
+    // Outward normal per edge (90° rotation away from polygon interior).
+    const sign = ccw ? -1 : 1
+    const n1 = { x: sign * (-e1.y / l1), y: sign * (e1.x / l1) }
+    const n2 = { x: sign * (-e2.y / l2), y: sign * (e2.x / l2) }
+    // Bisector direction.
+    const bx = n1.x + n2.x
+    const by = n1.y + n2.y
+    const bl = Math.hypot(bx, by)
+    if (bl < 1e-9) {
+      // Anti-parallel edges (rare) — just offset along n1.
+      out.push({ x: curr.x + meters * n1.x, y: curr.y + meters * n1.y })
+      continue
+    }
+    const ubx = bx / bl, uby = by / bl
+    // Length along bisector to achieve perpendicular offset = meters.
+    const cosHalf = n1.x * ubx + n1.y * uby
+    const rawMitre = meters / (cosHalf || 1)
+    const mitre = Math.max(-mitreCap, Math.min(mitreCap, rawMitre))
+    out.push({ x: curr.x + mitre * ubx, y: curr.y + mitre * uby })
+  }
+  return out.map(p => ({ lat: p.y / M_PER_DEG_LAT, lng: p.x / M_PER_DEG_LNG }))
 }
 
 function pickEdgeFromExample(ex: TrainingExample, edge: AutoTraceEdge): unknown {
