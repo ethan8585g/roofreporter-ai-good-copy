@@ -434,6 +434,33 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   // the visible imagery the model otherwise sees. Strongest free
   // signal in the pipeline — eliminates the wrong-shape / missed-
   // a-wing failure modes on multi-tier roofs. Default ON.
+  // Projection grid (Mercator) is always safeW*2 × safeH*2 = 1280×1280
+  // regardless of whether the actual sent image is upscaled. Claude's
+  // returned coords are scaled back from `actualImageDim` to this grid
+  // immediately after parsing so pxToLatLng works unchanged.
+  // (Moved up from below the overlays — Solar overlay needs targetBboxPx,
+  // and the JS temporal-dead-zone bites when const is referenced before its
+  // declaration line. This block must precede any overlay that reads it.)
+  const imagePxW = safeW * 2
+  const imagePxH = safeH * 2
+  const projectionToSentScale = actualImageDim / imagePxW
+  const projectionBboxPx = computeTargetBboxPx(solarInsights, framing.lat, framing.lng, framing.zoom, imagePxW, imagePxH)
+  const targetCenterPx = {
+    x: Math.round((imagePxW / 2) * projectionToSentScale),
+    y: Math.round((imagePxH / 2) * projectionToSentScale),
+  }
+  const targetBboxPx = projectionBboxPx
+    ? {
+        x1: Math.round(projectionBboxPx.x1 * projectionToSentScale),
+        y1: Math.round(projectionBboxPx.y1 * projectionToSentScale),
+        x2: Math.round(projectionBboxPx.x2 * projectionToSentScale),
+        y2: Math.round(projectionBboxPx.y2 * projectionToSentScale),
+        widthFt: projectionBboxPx.widthFt,
+        depthFt: projectionBboxPx.depthFt,
+        trusted: projectionBboxPx.trusted,
+      }
+    : null
+
   let solarOverlayApplied = false
   let solarSegmentsOverlaid = 0
   if (input.solarSegmentOverlay !== false && imageMediaType === 'image/png' && targetBboxPx?.trusted) {
@@ -515,32 +542,8 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   }
 
   const hasViewport3d = !!(input.viewport3dB64 && input.viewport3dB64.length > 1000)
-  // Projection grid (Mercator) is always safeW*2 × safeH*2 = 1280×1280
-  // regardless of whether the actual sent image is upscaled. Claude's
-  // returned coords are scaled back from `actualImageDim` to this grid
-  // immediately after parsing so pxToLatLng works unchanged.
-  const imagePxW = safeW * 2
-  const imagePxH = safeH * 2
-  const projectionToSentScale = actualImageDim / imagePxW  // 1.0 default, 1.225 when upscaled
-  // What Claude sees: the target centre + bbox in the dimensions of the
-  // actual sent image. Computed in projection space then scaled up so the
-  // prompt's coordinate references line up with what Claude's eye reads.
-  const projectionBboxPx = computeTargetBboxPx(solarInsights, framing.lat, framing.lng, framing.zoom, imagePxW, imagePxH)
-  const targetCenterPx = {
-    x: Math.round((imagePxW / 2) * projectionToSentScale),
-    y: Math.round((imagePxH / 2) * projectionToSentScale),
-  }
-  const targetBboxPx = projectionBboxPx
-    ? {
-        x1: Math.round(projectionBboxPx.x1 * projectionToSentScale),
-        y1: Math.round(projectionBboxPx.y1 * projectionToSentScale),
-        x2: Math.round(projectionBboxPx.x2 * projectionToSentScale),
-        y2: Math.round(projectionBboxPx.y2 * projectionToSentScale),
-        widthFt: projectionBboxPx.widthFt,
-        depthFt: projectionBboxPx.depthFt,
-        trusted: projectionBboxPx.trusted,
-      }
-    : null
+  // (Projection-grid + targetBboxPx now computed earlier in the function,
+  // before the Solar / hint overlays that read them.)
   const systemPrompt = buildSystemPrompt(input.edge, lessonMemo, {
     hasHillshade: !!hillshade,
     hasViewport3d,
