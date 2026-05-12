@@ -26,6 +26,20 @@ import type { Bindings } from '../types'
 
 const SOLAR_DATALAYERS_URL = 'https://solar.googleapis.com/v1/dataLayers:get'
 
+/** High-resolution Solar API RGB ortho — same building as the satellite
+ *  tile but inherently building-cropped at ~10 cm/px native. Used as a
+ *  SECOND image alongside the Google Static Maps primary so Claude has a
+ *  tight reference for fine eave-edge precision. Pixel coords are still
+ *  emitted in the primary's frame (Image 1). */
+export interface SolarRgbResult {
+  b64: string
+  mediaType: 'image/png'
+  width: number
+  height: number
+  imageryDate?: string
+  quality?: 'HIGH' | 'MEDIUM' | 'BASE'
+}
+
 export interface DsmHillshadeResult {
   /** Base64-encoded PNG, ready for Claude's `image.source.data`. */
   b64: string
@@ -221,6 +235,84 @@ export async function fetchDsmHillshade(
     // Any failure (geotiff parse error, network, OOM) is non-fatal —
     // the agent still runs on the satellite image alone.
     console.warn('[dsm-visualization] failed:', e?.message)
+    return null
+  }
+}
+
+/**
+ * Fetch the Solar API's RGB ortho GeoTIFF for a property and re-encode
+ * as a PNG. Returns null when Solar coverage isn't available or any
+ * step fails — the caller falls back to the Google Static Maps tile.
+ *
+ * The returned image is at native Solar res (typically ~250×250 px for
+ * a residential lot, ~400×400 for acreages) and at native quality:
+ *   HIGH:   10 cm/px
+ *   MEDIUM: 25 cm/px
+ *   BASE:   50 cm/px
+ *
+ * No mask filtering, no dimming — full RGB so Claude can see the
+ * eave drip line, surrounding shadow, and roof material crisply.
+ */
+export async function fetchSolarRgbOrtho(env: Bindings, lat: number, lng: number, radiusMeters: number = 50): Promise<SolarRgbResult | null> {
+  if (!env.GOOGLE_SOLAR_API_KEY) return null
+  try {
+    const params = new URLSearchParams({
+      'location.latitude': lat.toFixed(6),
+      'location.longitude': lng.toFixed(6),
+      radiusMeters: String(radiusMeters),
+      view: 'FULL_LAYERS',
+      requiredQuality: 'HIGH',
+      pixelSizeMeters: '0.1',
+      key: env.GOOGLE_SOLAR_API_KEY,
+    })
+    const metaResp = await fetch(`${SOLAR_DATALAYERS_URL}?${params}`)
+    if (!metaResp.ok) return null
+    const meta = await metaResp.json() as { rgbUrl?: string; imageryDate?: any; imageryQuality?: 'HIGH' | 'MEDIUM' | 'BASE' }
+    if (!meta?.rgbUrl) return null
+
+    const rgbResp = await fetch(`${meta.rgbUrl}&key=${env.GOOGLE_SOLAR_API_KEY}`)
+    if (!rgbResp.ok) return null
+    const buf = await rgbResp.arrayBuffer()
+    const tiff = await geotiff.fromArrayBuffer(buf)
+    const image = await tiff.getImage()
+    const rasters = await image.readRasters()
+    const w = image.getWidth()
+    const h = image.getHeight()
+    if (!rasters || rasters.length < 3) return null
+    // Reject pathological sizes that would blow worker memory.
+    if (w < 50 || h < 50 || w > 1024 || h > 1024) {
+      console.warn(`[solar-rgb] image dim out of band (${w}x${h}), skipping`)
+      return null
+    }
+
+    const r = rasters[0] as any
+    const g = rasters[1] as any
+    const b = rasters[2] as any
+    const rgba = new Uint8ClampedArray(w * h * 4)
+    for (let i = 0; i < w * h; i++) {
+      // Solar RGB rasters are 8-bit unsigned.
+      rgba[i * 4 + 0] = Number(r[i]) | 0
+      rgba[i * 4 + 1] = Number(g[i]) | 0
+      rgba[i * 4 + 2] = Number(b[i]) | 0
+      rgba[i * 4 + 3] = 255
+    }
+
+    const pngBytes = await encodePNG(rgba, w, h)
+    let bin = ''
+    const chunk = 0x8000
+    for (let i = 0; i < pngBytes.length; i += chunk) {
+      bin += String.fromCharCode(...pngBytes.subarray(i, Math.min(i + chunk, pngBytes.length)))
+    }
+    return {
+      b64: btoa(bin),
+      mediaType: 'image/png',
+      width: w,
+      height: h,
+      imageryDate: meta?.imageryDate ? formatImageryDate(meta.imageryDate) : undefined,
+      quality: meta?.imageryQuality,
+    }
+  } catch (e: any) {
+    console.warn('[solar-rgb] fetch failed:', e?.message)
     return null
   }
 }
