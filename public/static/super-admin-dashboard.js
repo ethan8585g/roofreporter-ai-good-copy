@@ -1737,6 +1737,19 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<div style="flex:1;min-height:0;display:flex;flex-direction:column;position:relative">' +
             '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Trace</div>' +
             '<div id="sa-trace-map" style="flex:1;min-height:0;border-radius:8px;overflow:hidden"></div>' +
+            // Measure-as-you-go HUD — floating bottom-left of the map. Live
+            // length of the in-progress polyline, area of the in-progress
+            // polygon, and the running tally per edge type. Updated on every
+            // map click and pointer-move so admins never finalize blind.
+            '<div id="sa-trace-hud" style="position:absolute;bottom:10px;left:10px;z-index:6;background:rgba(15,23,42,0.92);border:1px solid #1e293b;border-radius:8px;padding:6px 10px;font-size:11px;color:#cbd5e1;line-height:1.5;font-family:ui-monospace,SFMono-Regular,monospace;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.4);min-width:170px"><div id="sa-trace-hud-body">—</div></div>' +
+            // Vertex loupe — circular zoomed-in view that follows the cursor
+            // for pixel-precise placement at high zoom levels. Hidden by
+            // default; toggled via the toolbar Loupe button.
+            '<div id="sa-trace-loupe" style="position:absolute;width:140px;height:140px;border-radius:50%;border:2px solid #f59e0b;box-shadow:0 4px 20px rgba(0,0,0,0.6);pointer-events:none;z-index:7;display:none;overflow:hidden;background:#000"></div>' +
+            // Trace-history side drawer — opens via toolbar History button.
+            // Lists prior traces at the same property so the admin can spot
+            // consistency drift between operators.
+            '<div id="sa-trace-history-panel" style="position:absolute;top:10px;left:10px;z-index:8;width:280px;max-height:80%;display:none;background:rgba(15,23,42,0.97);border:1px solid #334155;border-radius:10px;padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,0.5);overflow-y:auto"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;border-bottom:1px solid #1e293b;padding-bottom:6px"><span style="color:#fbbf24;font-size:11px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase"><i class="fas fa-clock-rotate-left mr-1"></i>Trace History</span><button onclick="saTraceV2.toggleHistoryPanel()" style="background:transparent;color:#94a3b8;border:none;font-size:14px;cursor:pointer;padding:2px 6px"><i class="fas fa-times"></i></button></div><div id="sa-trace-history-body" style="font-size:11px;color:#cbd5e1">Loading…</div></div>' +
             // Floating per-section pitch panel — overlays the trace map. Hidden
             // until the first eaves section closes; lets the admin set a
             // different rise:12 pitch per structure (dormers / additions).
@@ -1793,7 +1806,13 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<button onclick="saAutoTrace(\'ridges\')" id="sa-tool-auto-ridges" title="Auto-trace the ridge lines using Claude vision + Solar API + past traces. Preview only — review and tweak before Submit." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(59,130,246,0.15);color:#93c5fd;border:1px solid rgba(59,130,246,0.4)"><i class="fas fa-robot mr-1"></i>Auto-Trace Ridges</button>' +
           '<button onclick="saAddStructure()" id="sa-tool-add-structure" title="Trace another structure such as a detached garage" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.4)"><i class="fas fa-plus mr-1"></i>Add another building</button>' +
           '<button onclick="saAddLowerEave()" id="sa-tool-add-lower-eave" title="Add a visible lower-eave lip beneath an upper-story roof. Use the 3D Reference and Street View to gauge the lip\'s extent — click points on the satellite to outline only the visible lip below the upper-story face." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(37,99,235,0.15);color:#93c5fd;border:1px solid rgba(37,99,235,0.4)"><i class="fas fa-arrow-down-short-wide mr-1"></i>Add Lower Eave</button>' +
-          '<button onclick="saTraceUndo()" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">Undo</button>' +
+          '<button onclick="saTraceUndo()" title="Undo last action (Ctrl+Z)" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151"><i class="fas fa-rotate-left mr-1"></i>Undo</button>' +
+          '<button onclick="saTraceRedo()" id="sa-tool-redo" title="Redo last undone action (Ctrl+Shift+Z)" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151;opacity:0.55"><i class="fas fa-rotate-right mr-1"></i>Redo</button>' +
+          '<button onclick="saTraceV2.toggleSolarOverlay()" id="sa-tool-solar-overlay" title="Toggle Google Solar API roof-plane overlay. Each detected segment is shown as a translucent rectangle with pitch + azimuth." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151"><i class="fas fa-solar-panel mr-1"></i>Solar</button>' +
+          '<button onclick="saTraceV2.toggleDsmOverlay()" id="sa-tool-dsm-overlay" title="Toggle DSM hillshade overlay. Ridges show as bright lines, valleys as dark troughs — read structural topology without the satellite color noise." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151"><i class="fas fa-mountain-sun mr-1"></i>DSM</button>' +
+          '<button onclick="saTraceV2.toggleSnap()" id="sa-tool-snap-toggle" title="Toggle vertex snapping. When ON, new vertices snap to nearby eave corners and ridge/hip/valley endpoints (12px tolerance)." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#22c55e;color:#fff;border:1px solid #22c55e"><i class="fas fa-magnet mr-1"></i>Snap</button>' +
+          '<button onclick="saTraceV2.toggleLoupe()" id="sa-tool-loupe-toggle" title="Toggle vertex magnifier (loupe). Shows a zoomed-in circular view that follows your cursor for pixel-precise placement at high zoom levels." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151"><i class="fas fa-magnifying-glass-plus mr-1"></i>Loupe</button>' +
+          '<button onclick="saTraceV2.toggleHistoryPanel()" id="sa-tool-history" title="Show prior traces at this address — catches consistency drift between admins" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151"><i class="fas fa-clock-rotate-left mr-1"></i>History</button>' +
           '<button onclick="saTraceClear()" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#ef4444;border:1px solid #374151">Clear All</button>' +
         '</div>' +
         '<div style="display:flex;gap:8px;align-items:center">' +
@@ -2223,6 +2242,14 @@ window.saTraceClear = function() {
 
 window.saTraceUndo = function() {
   var s = window._saTraceState; if (!s) return;
+  // Trace v2 records a redo descriptor before the destructive op so the
+  // pop can be replayed via saTraceRedo. Captures the most-recent ridge/
+  // hip/valley line OR closed-section snapshot — the simpler cases (eave
+  // draft point pop, annotation pop) are already cheap enough to redo
+  // by re-clicking, so v2 only persists the higher-cost rollbacks.
+  if (window.saTraceV2 && typeof window.saTraceV2.snapshotForUndo === 'function') {
+    try { window.saTraceV2.snapshotForUndo(); } catch (_) {}
+  }
   // Priority: partial segment start → last draft eave pt → last annotation → last line → last closed eave section
   if (s._segStart) {
     if (s._segStartMarker) { s._segStartMarker.setMap(null); s._segStartMarker = null; }
@@ -2429,6 +2456,14 @@ function saInitTraceMap(lat, lng, address) {
     setTimeout(saMaybeRestoreVerifyState, 200);
   }
 
+  // ── Trace v2 enhancements — Solar overlay, DSM hillshade, snapping,
+  // measure-as-you-go HUD, vertex loupe, keyboard shortcuts, undo/redo,
+  // 3D↔2D camera sync, auto-save, and trace-history side panel. All
+  // self-contained in window.saTraceV2 (defined at the end of this file).
+  if (window.saTraceV2 && typeof window.saTraceV2.onMapInit === 'function') {
+    try { window.saTraceV2.onMapInit(s.orderId, lat, lng); } catch (e) { console.warn('[trace-v2] init failed', e); }
+  }
+
   // Render the user-placed pin so admin can see where the customer marked their house
   if (lat && lng) {
     s.userPinMarker = new google.maps.Marker({
@@ -2490,6 +2525,16 @@ function saInitTraceMap(lat, lng, address) {
     // Add-Plane mode short-circuits the normal toolbar — clicks build a new
     // verified-plane polygon instead of placing eaves/ridges/etc.
     if (s._addPlaneActive) { saAddPlaneClickHandler(e); return; }
+    // Trace v2 snap — if a nearby existing vertex is within snap tolerance
+    // (configurable; default 12px), substitute it. Snaps work across edge
+    // types so hips/valleys terminate cleanly on eave corners and the engine
+    // no longer has to infer T-junctions.
+    if (window.saTraceV2 && typeof window.saTraceV2.maybeSnap === 'function') {
+      try {
+        var snappedLL = window.saTraceV2.maybeSnap(e.latLng, s.tool);
+        if (snappedLL) e = { latLng: snappedLL };
+      } catch (_) {}
+    }
     var tool = s.tool;
     if (tool === 'eave') {
       // Phone-only: snap near-miss taps to existing vertices so structures share corners
@@ -16703,3 +16748,891 @@ async function uaOpenDrillIn(userType, userId) {
     panel.innerHTML = '<div class="bg-red-50 border border-red-200 text-red-700 rounded-xl p-5 mt-6 text-sm">' + (e.message || 'Error loading details') + '</div>';
   }
 }
+
+// ===============================================================
+// TRACE V2 — accuracy + ergonomics enhancements for the super-admin
+// roof-tracing modal. Each feature is self-contained inside saTraceV2:
+//   • Vertex snapping (eave corners + ridge/hip/valley endpoints)
+//   • Measure-as-you-go HUD (live polyline length, polygon area, tallies)
+//   • Vertex loupe (cursor-following magnifier, second mini Google Map)
+//   • Solar API roof-plane overlay (translucent rectangles + pitch labels)
+//   • DSM hillshade overlay (Google Solar Data Layers — ridges bright,
+//     valleys dark; surface topology readable while tracing)
+//   • Undo + Redo stack (extends the existing destructive undo)
+//   • Keyboard shortcuts (E/R/H/V/D/B, Esc, Backspace, Enter, Ctrl+Z)
+//   • localStorage auto-save of the in-progress trace, per orderId
+//   • Inline pitch picker on eave-section close (no more after-the-fact
+//     trip to the Verify Planes panel for the common case)
+//   • Trace history side panel — prior traces at the same address
+//
+// Activation: window.saTraceV2.onMapInit(orderId, lat, lng) is called
+// from saInitTraceMap() once the Google Map instance is ready. The
+// existing trace flow stays the dominant path; v2 hooks alongside it.
+// ===============================================================
+window.saTraceV2 = (function() {
+  var s = function() { return window._saTraceState; };
+  var map = function() { var st = s(); return st && st.map; };
+  var STORAGE_PREFIX = 'sa_trace_draft_v2:';
+  var SNAP_PX = 12;
+  var state = {
+    orderId: null,
+    lat: null, lng: null,
+    snapEnabled: true,
+    loupeEnabled: false,
+    solarVisible: false,
+    dsmVisible: false,
+    historyOpen: false,
+    pitchPickerShownFor: 0,    // index of last section we've prompted for
+    solarOverlays: [],         // [{rect:Polygon, label:Marker}]
+    solarData: null,
+    solarFetchAttempted: false,
+    dsmOverlay: null,          // GroundOverlay
+    dsmFetched: false,
+    historyData: null,
+    historyFetched: false,
+    redoStack: [],
+    hudTimer: null,
+    cursorLL: null,
+    loupeMap: null,
+    loupeContainer: null,
+    autosaveTimer: null,
+  };
+
+  // ── localStorage autosave ───────────────────────────────────
+  function key() { return STORAGE_PREFIX + (state.orderId || 'unknown'); }
+  function snapshotForStorage() {
+    var st = s(); if (!st) return null;
+    function ll(arr) { return (arr || []).map(function(p) { return { lat: p.lat, lng: p.lng }; }); }
+    return {
+      v: 2,
+      saved_at: Date.now(),
+      orderId: state.orderId,
+      eaveSections: (st.eaveSections || []).map(function(sec) {
+        return { points: ll(sec.points), pitch_rise: sec.pitch_rise || null, kind: sec.kind || 'main' };
+      }),
+      dormers: (st.dormers || []).map(function(d) {
+        return { points: ll(d.points), pitch_rise: d.pitch_rise || null, label: d.label || null };
+      }),
+      cutouts: (st.cutouts || []).map(function(c) {
+        return { points: ll(c.points), label: c.label || null };
+      }),
+      ridges: st._ridgeData || [],
+      hips: st._hipData || [],
+      valleys: st._valleyData || [],
+      vents: st.vents || [],
+      skylights: st.skylights || [],
+      chimneys: st.chimneys || [],
+      downspouts: st.downspouts || [],
+    };
+  }
+  function autosave() {
+    if (!state.orderId) return;
+    try {
+      var snap = snapshotForStorage();
+      if (!snap) return;
+      var hasContent =
+        snap.eaveSections.length || snap.dormers.length || snap.cutouts.length ||
+        snap.ridges.length || snap.hips.length || snap.valleys.length ||
+        snap.vents.length || snap.skylights.length || snap.chimneys.length || snap.downspouts.length;
+      if (!hasContent) {
+        localStorage.removeItem(key());
+        return;
+      }
+      localStorage.setItem(key(), JSON.stringify(snap));
+    } catch (_) { /* quota or private mode — silent */ }
+  }
+  function loadAutosave() {
+    if (!state.orderId) return null;
+    try {
+      var raw = localStorage.getItem(key());
+      if (!raw) return null;
+      var data = JSON.parse(raw);
+      if (!data || data.v !== 2) return null;
+      // 24h staleness cap so a long-abandoned draft doesn't haunt forever.
+      if (Date.now() - (data.saved_at || 0) > 86400000) {
+        localStorage.removeItem(key());
+        return null;
+      }
+      return data;
+    } catch (_) { return null; }
+  }
+  function clearAutosave() {
+    try { localStorage.removeItem(key()); } catch (_) {}
+  }
+  function maybeRestoreFromAutosave() {
+    var data = loadAutosave();
+    if (!data) return;
+    var st = s(); if (!st || !st.map) return;
+    // Skip the prompt entirely if the modal was just opened on an order
+    // that already has content (e.g. operator re-opened after an auto-trace).
+    var hasContent =
+      (st.eaveSections && st.eaveSections.length > 0) ||
+      (st._ridgeData && st._ridgeData.length > 0);
+    if (hasContent) return;
+    var sectionsCount = (data.eaveSections || []).length;
+    var minsAgo = Math.round((Date.now() - data.saved_at) / 60000);
+    var msg = 'Restore the auto-saved draft from ~' + minsAgo + 'min ago? '
+      + sectionsCount + ' building section' + (sectionsCount === 1 ? '' : 's') + ' + '
+      + (data.ridges || []).length + ' ridges + '
+      + (data.hips || []).length + ' hips + '
+      + (data.valleys || []).length + ' valleys.';
+    if (!confirm(msg)) { clearAutosave(); return; }
+    restoreFrom(data);
+  }
+  function restoreFrom(data) {
+    var st = s(); if (!st || !st.map) return;
+    var mp = st.map;
+    // Eaves sections
+    (data.eaveSections || []).forEach(function(sec) {
+      var latLngs = (sec.points || []).map(function(p) { return new google.maps.LatLng(p.lat, p.lng); });
+      if (latLngs.length < 3) return;
+      st._eaveLatLngs = latLngs.slice();
+      st.eavePoints = sec.points.slice();
+      st._nextSectionKind = sec.kind === 'lower_tier' ? 'lower_tier' : 'main';
+      if (typeof saCloseEaveSection === 'function') {
+        saCloseEaveSection();
+        var added = st.eaveSections[st.eaveSections.length - 1];
+        if (added) added.pitch_rise = sec.pitch_rise || null;
+      }
+    });
+    // Ridges, hips, valleys
+    function restoreLines(srcArr, color, dataKey, lineKey) {
+      (srcArr || []).forEach(function(seg) {
+        if (!seg || seg.length < 2) return;
+        var path = seg.map(function(p) { return new google.maps.LatLng(p.lat, p.lng); });
+        var line = new google.maps.Polyline({ path: path, strokeColor: color, strokeWeight: 2, map: mp });
+        st[lineKey].push(line);
+        st[dataKey].push(seg.map(function(p) { return { lat: p.lat, lng: p.lng }; }));
+      });
+    }
+    restoreLines(data.ridges, '#dc2626', '_ridgeData', 'ridges');
+    restoreLines(data.hips, '#ea580c', '_hipData', 'hips');
+    restoreLines(data.valleys, '#2563eb', '_valleyData', 'valleys');
+    // Annotations
+    ['vent', 'skylight', 'chimney', 'downspout'].forEach(function(t) {
+      var arr = data[t + 's'] || [];
+      arr.forEach(function(p) {
+        st[t + 's'].push({ lat: p.lat, lng: p.lng });
+        var colors = { vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626', downspout: '#475569' };
+        var mk = new google.maps.Marker({
+          position: { lat: p.lat, lng: p.lng }, map: mp, clickable: false,
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: colors[t], fillOpacity: 0.9, strokeColor: '#fff', strokeWeight: 2 },
+          title: t,
+        });
+        st['_' + t + 'Markers'].push(mk);
+      });
+    });
+    if (typeof saRenderSectionPitches === 'function') saRenderSectionPitches();
+  }
+
+  // ── Snapping ────────────────────────────────────────────────
+  function pixelDist(a, b, mp) {
+    var proj = mp.getProjection();
+    if (!proj) return Infinity;
+    var scale = Math.pow(2, mp.getZoom());
+    var pa = proj.fromLatLngToPoint(a);
+    var pb = proj.fromLatLngToPoint(b);
+    var dx = (pa.x - pb.x) * scale;
+    var dy = (pa.y - pb.y) * scale;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+  function maybeSnap(latLng, tool) {
+    if (!state.snapEnabled) return null;
+    var st = s(); if (!st || !st.map) return null;
+    var mp = st.map;
+    var best = null;
+    var bestPx = SNAP_PX;
+    function consider(p) {
+      var pLat = (typeof p.lat === 'function') ? p.lat() : p.lat;
+      var pLng = (typeof p.lng === 'function') ? p.lng() : p.lng;
+      var cand = new google.maps.LatLng(pLat, pLng);
+      var d = pixelDist(latLng, cand, mp);
+      if (d < bestPx) { bestPx = d; best = cand; }
+    }
+    (st.eaveSections || []).forEach(function(sec) { (sec.points || []).forEach(consider); });
+    (st._eaveLatLngs || []).forEach(consider);
+    (st.dormers || []).forEach(function(d) { (d.points || []).forEach(consider); });
+    (st._dormerLatLngs || []).forEach(consider);
+    (st.cutouts || []).forEach(function(c) { (c.points || []).forEach(consider); });
+    (st._cutoutLatLngs || []).forEach(consider);
+    // Ridge/hip/valley endpoints — so a hip can terminate exactly on a
+    // ridge endpoint or eave corner, not a few pixels off.
+    [st._ridgeData || [], st._hipData || [], st._valleyData || []].forEach(function(arr) {
+      arr.forEach(function(seg) { (seg || []).forEach(consider); });
+    });
+    return best;
+  }
+
+  // ── Measure-as-you-go HUD ───────────────────────────────────
+  function metersBetween(a, b) {
+    if (!(window.google && google.maps && google.maps.geometry && google.maps.geometry.spherical)) {
+      var dLat = (b.lat - a.lat) * 111320;
+      var dLng = (b.lng - a.lng) * 111320 * Math.cos(a.lat * Math.PI / 180);
+      return Math.sqrt(dLat * dLat + dLng * dLng);
+    }
+    return google.maps.geometry.spherical.computeDistanceBetween(
+      new google.maps.LatLng(a.lat, a.lng),
+      new google.maps.LatLng(b.lat, b.lng)
+    );
+  }
+  function pathLengthMeters(pts) {
+    var m = 0;
+    for (var i = 1; i < pts.length; i++) m += metersBetween(pts[i - 1], pts[i]);
+    return m;
+  }
+  function polygonAreaM2(pts) {
+    if (!pts || pts.length < 3) return 0;
+    if (window.google && google.maps && google.maps.geometry && google.maps.geometry.spherical) {
+      try {
+        return google.maps.geometry.spherical.computeArea(
+          pts.map(function(p) { return new google.maps.LatLng(p.lat, p.lng); })
+        );
+      } catch (_) { /* fall through */ }
+    }
+    // Shoelace fallback (planar approximation — good enough for HUD)
+    var area = 0;
+    var cosLat = Math.cos(pts[0].lat * Math.PI / 180);
+    for (var i = 0; i < pts.length; i++) {
+      var j = (i + 1) % pts.length;
+      area += pts[i].lat * pts[j].lng * cosLat - pts[j].lat * pts[i].lng * cosLat;
+    }
+    return Math.abs(area) * 111320 * 111320 / 2;
+  }
+  function fmtFt(m) { return (m * 3.2808399).toFixed(1) + ' ft'; }
+  function fmtFt2(m2) { return Math.round(m2 * 10.7639104).toLocaleString() + ' ft²'; }
+  function updateHud() {
+    var st = s(); if (!st) return;
+    var el = document.getElementById('sa-trace-hud-body');
+    if (!el) return;
+    var lines = [];
+    // In-progress draft
+    var draftPts = (st._eaveLatLngs || []).map(function(ll) { return { lat: ll.lat(), lng: ll.lng() }; });
+    if (st.tool === 'eave' && draftPts.length > 0) {
+      var len = pathLengthMeters(draftPts);
+      lines.push('<b style="color:#22c55e">Eave draft</b>: ' + draftPts.length + ' pt · ' + fmtFt(len));
+      if (draftPts.length >= 3) lines.push('  area ≈ ' + fmtFt2(polygonAreaM2(draftPts)));
+    }
+    if (st._segStart && (st.tool === 'ridge' || st.tool === 'hip' || st.tool === 'valley') && state.cursorLL) {
+      var seg = pathLengthMeters([
+        { lat: st._segStart.lat(), lng: st._segStart.lng() },
+        { lat: state.cursorLL.lat, lng: state.cursorLL.lng },
+      ]);
+      var col = st.tool === 'ridge' ? '#dc2626' : st.tool === 'hip' ? '#ea580c' : '#2563eb';
+      lines.push('<b style="color:' + col + '">' + st.tool + '</b>: ' + fmtFt(seg) + ' (drag)');
+    }
+    // Closed tallies
+    var sections = st.eaveSections || [];
+    if (sections.length > 0) {
+      var total = 0;
+      sections.forEach(function(sec) { total += polygonAreaM2(sec.points || []); });
+      lines.push('<b style="color:#22c55e">Sections</b>: ' + sections.length + ' · ' + fmtFt2(total) + ' projected');
+    }
+    var rc = (st._ridgeData || []).length;
+    var hc = (st._hipData || []).length;
+    var vc = (st._valleyData || []).length;
+    if (rc || hc || vc) lines.push('R:' + rc + ' H:' + hc + ' V:' + vc);
+    var ann = (st.vents || []).length + (st.skylights || []).length + (st.chimneys || []).length + (st.downspouts || []).length;
+    if (ann) lines.push('Vent:' + (st.vents || []).length + ' Sky:' + (st.skylights || []).length + ' Chim:' + (st.chimneys || []).length + ' DS:' + (st.downspouts || []).length);
+    if (lines.length === 0) lines.push('<span style="color:#64748b">Click to start tracing…</span>');
+    el.innerHTML = lines.join('<br>');
+  }
+
+  // ── Vertex loupe ───────────────────────────────────────────
+  function ensureLoupe() {
+    if (state.loupeMap) return;
+    var container = document.getElementById('sa-trace-loupe');
+    if (!container) return;
+    container.style.display = 'block';
+    state.loupeContainer = container;
+    var st = s(); if (!st || !st.map) return;
+    state.loupeMap = new google.maps.Map(container, {
+      center: st.map.getCenter(),
+      zoom: Math.min(22, (st.map.getZoom() || 20) + 2),
+      mapTypeId: st.map.getMapTypeId(),
+      disableDefaultUI: true,
+      gestureHandling: 'none',
+      clickableIcons: false,
+      keyboardShortcuts: false,
+      tilt: 0,
+    });
+    // Cross-hair on the loupe so the cursor pixel is unambiguous
+    var crosshair = document.createElement('div');
+    crosshair.style.cssText = 'position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center';
+    crosshair.innerHTML = '<div style="width:2px;height:14px;background:#f59e0b;position:absolute"></div><div style="width:14px;height:2px;background:#f59e0b;position:absolute"></div><div style="width:30px;height:30px;border:1.5px solid rgba(245,158,11,0.7);border-radius:50%;position:absolute"></div>';
+    container.appendChild(crosshair);
+  }
+  function tearDownLoupe() {
+    if (state.loupeContainer) {
+      state.loupeContainer.style.display = 'none';
+      state.loupeContainer.innerHTML = '';
+    }
+    state.loupeMap = null;
+    state.loupeContainer = null;
+  }
+  function moveLoupe(evX, evY, latLng) {
+    if (!state.loupeEnabled || !state.loupeContainer) return;
+    // Position the loupe next to the cursor (avoid covering it)
+    var container = state.loupeContainer;
+    var mapEl = document.getElementById('sa-trace-map');
+    if (!mapEl) return;
+    var rect = mapEl.getBoundingClientRect();
+    var x = evX - rect.left + 18;
+    var y = evY - rect.top + 18;
+    // Flip to the other side if loupe would clip
+    if (x + 150 > rect.width) x = evX - rect.left - 158;
+    if (y + 150 > rect.height) y = evY - rect.top - 158;
+    container.style.left = Math.max(4, x) + 'px';
+    container.style.top = Math.max(4, y) + 'px';
+    if (state.loupeMap && latLng) {
+      state.loupeMap.setCenter(latLng);
+      var st = s(); if (st && st.map) {
+        var tgtZoom = Math.min(22, (st.map.getZoom() || 20) + 2);
+        if (state.loupeMap.getZoom() !== tgtZoom) state.loupeMap.setZoom(tgtZoom);
+        var tgtType = st.map.getMapTypeId();
+        if (state.loupeMap.getMapTypeId() !== tgtType) state.loupeMap.setMapTypeId(tgtType);
+      }
+    }
+  }
+
+  // ── Solar overlay ──────────────────────────────────────────
+  function fetchSolar() {
+    if (state.solarFetchAttempted) return Promise.resolve(state.solarData);
+    state.solarFetchAttempted = true;
+    return saFetch('/api/admin/superadmin/orders/' + state.orderId + '/solar-segments')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(d) { state.solarData = d; return d; })
+      .catch(function() { state.solarData = null; return null; });
+  }
+  function renderSolarOverlay() {
+    clearSolarOverlay();
+    var d = state.solarData;
+    var mp = map();
+    if (!d || !d.available || !mp) return;
+    var palette = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#a855f7', '#ec4899', '#14b8a6', '#f97316'];
+    (d.segments || []).forEach(function(seg, i) {
+      if (!seg.bbox) return;
+      var col = palette[i % palette.length];
+      var rect = new google.maps.Polygon({
+        paths: [
+          { lat: seg.bbox.sw.lat, lng: seg.bbox.sw.lng },
+          { lat: seg.bbox.ne.lat, lng: seg.bbox.sw.lng },
+          { lat: seg.bbox.ne.lat, lng: seg.bbox.ne.lng },
+          { lat: seg.bbox.sw.lat, lng: seg.bbox.ne.lng },
+        ],
+        strokeColor: col, strokeOpacity: 0.85, strokeWeight: 2,
+        fillColor: col, fillOpacity: 0.10,
+        clickable: false, map: mp, zIndex: 0,
+      });
+      var pitchTxt = seg.pitch_degrees != null ? Math.round(seg.pitch_degrees) + '°' : '?';
+      var lbl = seg.center ? new google.maps.Marker({
+        position: seg.center, map: mp, clickable: false, zIndex: 0,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0, fillOpacity: 0, strokeOpacity: 0 },
+        label: { text: seg.label + ' ' + pitchTxt, color: col, fontSize: '11px', fontWeight: '700' },
+      }) : null;
+      state.solarOverlays.push({ rect: rect, lbl: lbl });
+    });
+  }
+  function clearSolarOverlay() {
+    state.solarOverlays.forEach(function(o) {
+      if (o.rect) o.rect.setMap(null);
+      if (o.lbl) o.lbl.setMap(null);
+    });
+    state.solarOverlays = [];
+  }
+
+  // ── DSM overlay ────────────────────────────────────────────
+  function fetchDsm() {
+    if (state.dsmFetched) return Promise.resolve(true);
+    state.dsmFetched = true;
+    return saFetch('/api/admin/superadmin/orders/' + state.orderId + '/dsm-overlay')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(d) {
+        if (!d || !d.available || !d.image_b64 || !d.bounds) return false;
+        var mp = map(); if (!mp) return false;
+        var imgUrl = 'data:' + (d.media_type || 'image/png') + ';base64,' + d.image_b64;
+        var bounds = new google.maps.LatLngBounds(
+          new google.maps.LatLng(d.bounds.sw.lat, d.bounds.sw.lng),
+          new google.maps.LatLng(d.bounds.ne.lat, d.bounds.ne.lng)
+        );
+        state.dsmOverlay = new google.maps.GroundOverlay(imgUrl, bounds, { opacity: 0.62, clickable: false });
+        return true;
+      })
+      .catch(function() { return false; });
+  }
+  function showDsm() {
+    if (state.dsmOverlay) state.dsmOverlay.setMap(map());
+  }
+  function hideDsm() {
+    if (state.dsmOverlay) state.dsmOverlay.setMap(null);
+  }
+
+  // ── History panel ──────────────────────────────────────────
+  function fetchHistory() {
+    if (state.historyFetched) return Promise.resolve(state.historyData);
+    state.historyFetched = true;
+    return saFetch('/api/admin/superadmin/orders/' + state.orderId + '/trace-history')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(d) { state.historyData = d; return d; })
+      .catch(function() { state.historyData = null; return null; });
+  }
+  function renderHistory() {
+    var body = document.getElementById('sa-trace-history-body');
+    if (!body) return;
+    var d = state.historyData;
+    if (!d || !d.available) { body.innerHTML = '<div style="color:#94a3b8">Lookup failed or no Solar coverage.</div>'; return; }
+    var rows = d.history || [];
+    if (rows.length === 0) {
+      body.innerHTML = '<div style="color:#94a3b8;font-style:italic">No prior traces at this address.</div>';
+      return;
+    }
+    body.innerHTML = rows.map(function(r) {
+      var sections = (r.trace && Array.isArray(r.trace.eaves_sections)) ? r.trace.eaves_sections.length : 0;
+      var ridges = (r.trace && Array.isArray(r.trace.ridges)) ? r.trace.ridges.length : 0;
+      var hips = (r.trace && Array.isArray(r.trace.hips)) ? r.trace.hips.length : 0;
+      var valleys = (r.trace && Array.isArray(r.trace.valleys)) ? r.trace.valleys.length : 0;
+      var dt = (r.created_at || '').replace('T', ' ').slice(0, 16);
+      return '<div style="border-bottom:1px solid #1e293b;padding:6px 0;cursor:pointer" onclick="saTraceV2.loadFromHistory(' + r.order_id + ')">' +
+        '<div style="color:#fbbf24;font-weight:700;font-size:11px">' + (r.order_number || '#' + r.order_id) + '</div>' +
+        '<div style="color:#94a3b8;font-size:10px">' + dt + ' · ' + (r.trace_source || 'unknown') + '</div>' +
+        '<div style="color:#cbd5e1;font-size:10px;margin-top:2px">S:' + sections + ' R:' + ridges + ' H:' + hips + ' V:' + valleys + '</div>' +
+        '<div style="color:#22c55e;font-size:10px;margin-top:2px"><i class="fas fa-arrow-up-right-from-square mr-1"></i>Click to load as draft</div>' +
+        '</div>';
+    }).join('');
+  }
+  function loadFromHistory(orderId) {
+    var rows = (state.historyData && state.historyData.history) || [];
+    var row = rows.filter(function(r) { return r.order_id === orderId; })[0];
+    if (!row || !row.trace) { alert('Trace not loadable for that prior order.'); return; }
+    if (!confirm('Load prior trace into the current draft? This adds to (not replaces) your current trace — Clear All first if you want a fresh start.')) return;
+    var t = row.trace;
+    var data = {
+      v: 2, saved_at: Date.now(), orderId: state.orderId,
+      eaveSections: (t.eaves_sections || []).map(function(pts, i) {
+        return {
+          points: (pts || []).map(function(p) { return { lat: p.lat, lng: p.lng }; }),
+          pitch_rise: t.eaves_section_pitches ? (t.eaves_section_pitches[i] || null) : null,
+          kind: t.eaves_section_kinds ? (t.eaves_section_kinds[i] || 'main') : 'main',
+        };
+      }),
+      dormers: (t.dormers || []).map(function(d) {
+        return { points: (d.polygon || d.points || []).map(function(p) { return { lat: p.lat, lng: p.lng }; }), pitch_rise: d.pitch_rise, label: d.label };
+      }),
+      cutouts: (t.cutouts || []).map(function(c) {
+        return { points: (c.polygon || c.points || []).map(function(p) { return { lat: p.lat, lng: p.lng }; }), label: c.label };
+      }),
+      ridges: t.ridges || [],
+      hips: t.hips || [],
+      valleys: t.valleys || [],
+      vents: (t.annotations && t.annotations.vents) || [],
+      skylights: (t.annotations && t.annotations.skylights) || [],
+      chimneys: (t.annotations && t.annotations.chimneys) || [],
+      downspouts: (t.annotations && t.annotations.downspouts) || [],
+    };
+    restoreFrom(data);
+    toggleHistoryPanel();
+  }
+
+  // ── Inline pitch picker on eave-section close ──────────────
+  function maybeShowPitchPicker() {
+    var st = s(); if (!st) return;
+    var sections = st.eaveSections || [];
+    if (sections.length <= state.pitchPickerShownFor) return;
+    var idx = sections.length - 1;
+    var sec = sections[idx];
+    if (!sec || sec.pitch_rise) { state.pitchPickerShownFor = sections.length; return; }
+    state.pitchPickerShownFor = sections.length;
+    showPitchPopover(idx, sec);
+  }
+  function showPitchPopover(idx, sec) {
+    var prev = document.getElementById('sa-trace-pitch-popover');
+    if (prev) prev.remove();
+    var mp = map(); if (!mp) return;
+    // Centroid in pixel space — anchor the popover near the closed polygon
+    var cx = 0, cy = 0;
+    (sec.points || []).forEach(function(p) { cx += p.lat; cy += p.lng; });
+    cx /= sec.points.length; cy /= sec.points.length;
+    var pop = document.createElement('div');
+    pop.id = 'sa-trace-pitch-popover';
+    pop.style.cssText = 'position:absolute;z-index:9;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(15,23,42,0.98);border:1px solid #f59e0b;border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.5);min-width:230px;color:#f9fafb';
+    pop.innerHTML =
+      '<div style="font-size:11px;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px"><i class="fas fa-mountain mr-1"></i>Pitch for Section ' + (idx + 1) + '</div>' +
+      '<div style="font-size:11px;color:#cbd5e1;margin-bottom:8px;line-height:1.4">Enter rise:12 for this section. Common: 4 (low), 6 (typical), 8, 10, 12 (steep dormer). Skip to use roof default.</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' +
+        [4, 6, 8, 10, 12].map(function(v) {
+          return '<button type="button" data-pp-val="' + v + '" style="flex:1;min-width:36px;padding:6px 4px;background:#1e293b;color:#cbd5e1;border:1px solid #334155;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">' + v + ':12</button>';
+        }).join('') +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">' +
+        '<input id="sa-pitch-pop-input" type="number" min="0" max="24" step="0.5" placeholder="Custom" style="flex:1;padding:6px 8px;background:#0f172a;color:#fbbf24;border:1px solid #374151;border-radius:6px;font-size:13px;font-weight:700" />' +
+        '<span style="color:#6b7280;font-size:11px">:12</span>' +
+      '</div>' +
+      '<div style="display:flex;gap:6px">' +
+        '<button id="sa-pitch-pop-skip" style="flex:1;padding:6px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">Skip</button>' +
+        '<button id="sa-pitch-pop-save" style="flex:2;padding:6px;background:#f59e0b;color:#111;border:none;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer">Save</button>' +
+      '</div>';
+    var mapEl = document.getElementById('sa-trace-map');
+    if (mapEl) {
+      mapEl.style.position = 'relative';
+      mapEl.appendChild(pop);
+    }
+    function save(v) {
+      if (typeof v === 'number' && isFinite(v) && v > 0 && v <= 24) {
+        sec.pitch_rise = v;
+        if (typeof saRenderSectionPitches === 'function') saRenderSectionPitches();
+      }
+      pop.remove();
+    }
+    pop.querySelectorAll('[data-pp-val]').forEach(function(b) {
+      b.addEventListener('click', function() { save(parseFloat(b.getAttribute('data-pp-val'))); });
+    });
+    pop.querySelector('#sa-pitch-pop-skip').addEventListener('click', function() { pop.remove(); });
+    pop.querySelector('#sa-pitch-pop-save').addEventListener('click', function() {
+      var v = parseFloat(pop.querySelector('#sa-pitch-pop-input').value);
+      save(v);
+    });
+    var input = pop.querySelector('#sa-pitch-pop-input');
+    if (input) setTimeout(function() { try { input.focus(); } catch (_) {} }, 50);
+  }
+
+  // ── Undo / Redo ────────────────────────────────────────────
+  function snapshotForUndo() {
+    var st = s(); if (!st) return;
+    // Capture what the existing saTraceUndo is ABOUT to pop. We replay
+    // the popped item in saTraceRedo by re-injecting its data and calling
+    // the same code path a manual placement would.
+    if (st._segStart) {
+      state.redoStack.push({ kind: 'segStart', tool: st.tool, latLng: { lat: st._segStart.lat(), lng: st._segStart.lng() } });
+      return;
+    }
+    if (st.tool === 'eave' && st._eaveLatLngs && st._eaveLatLngs.length > 0) {
+      var last = st._eaveLatLngs[st._eaveLatLngs.length - 1];
+      state.redoStack.push({ kind: 'eaveVertex', latLng: { lat: last.lat(), lng: last.lng() } });
+      return;
+    }
+    if ((st.tool === 'vent' || st.tool === 'skylight' || st.tool === 'chimney' || st.tool === 'downspout')) {
+      var arr = st[st.tool + 's'];
+      if (arr && arr.length > 0) {
+        state.redoStack.push({ kind: 'annotation', tool: st.tool, point: arr[arr.length - 1] });
+        return;
+      }
+    }
+    if (st.tool === 'ridge' || st.tool === 'hip' || st.tool === 'valley') {
+      var key = st.tool + 's';
+      var dataKey = '_' + st.tool + 'Data';
+      if (st[key] && st[key].length > 0) {
+        state.redoStack.push({ kind: 'line', tool: st.tool, segment: st[dataKey][st[dataKey].length - 1] });
+        return;
+      }
+    }
+    if (st.eaveSections && st.eaveSections.length > 0) {
+      var sec = st.eaveSections[st.eaveSections.length - 1];
+      state.redoStack.push({
+        kind: 'section',
+        points: (sec.points || []).slice(),
+        pitch_rise: sec.pitch_rise || null,
+        sectionKind: sec.kind || 'main',
+      });
+      return;
+    }
+  }
+  function saTraceRedo() {
+    var st = s(); if (!st || !st.map) return;
+    var op = state.redoStack.pop();
+    if (!op) return;
+    var mp = st.map;
+    if (op.kind === 'segStart') {
+      st.tool = op.tool;
+      st._segStart = new google.maps.LatLng(op.latLng.lat, op.latLng.lng);
+      var colorMap = { ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb' };
+      st._segStartMarker = new google.maps.Marker({
+        position: st._segStart, map: mp, clickable: false,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 4, fillColor: colorMap[op.tool] || '#fff', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1 },
+      });
+    } else if (op.kind === 'eaveVertex') {
+      var ll = new google.maps.LatLng(op.latLng.lat, op.latLng.lng);
+      st._eaveLatLngs = st._eaveLatLngs || [];
+      st._eaveLatLngs.push(ll);
+      st.eavePoints = st._eaveLatLngs.map(function(p) { return { lat: p.lat(), lng: p.lng() }; });
+      var mk = new google.maps.Marker({
+        position: ll, map: mp, clickable: false,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 5, fillColor: '#22c55e', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1.5 },
+        label: { text: String(st._eaveLatLngs.length), color: '#fff', fontSize: '10px', fontWeight: '700' },
+      });
+      st._eaveMarkers.push(mk);
+      if (st.eavePoly) st.eavePoly.setMap(null);
+      st.eavePoly = new google.maps.Polyline({
+        path: st._eaveLatLngs.concat([st._eaveLatLngs[0]]),
+        strokeColor: '#22c55e', strokeWeight: 2.5, map: mp,
+      });
+    } else if (op.kind === 'annotation') {
+      st[op.tool + 's'].push(op.point);
+      var colors = { vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626', downspout: '#475569' };
+      var amk = new google.maps.Marker({
+        position: op.point, map: mp, clickable: false,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: colors[op.tool], fillOpacity: 0.9, strokeColor: '#fff', strokeWeight: 2 },
+        title: op.tool,
+      });
+      st['_' + op.tool + 'Markers'].push(amk);
+    } else if (op.kind === 'line') {
+      var color = op.tool === 'ridge' ? '#dc2626' : op.tool === 'hip' ? '#ea580c' : '#2563eb';
+      var line = new google.maps.Polyline({
+        path: op.segment.map(function(p) { return new google.maps.LatLng(p.lat, p.lng); }),
+        strokeColor: color, strokeWeight: 2, map: mp,
+      });
+      st[op.tool + 's'].push(line);
+      st['_' + op.tool + 'Data'].push(op.segment);
+    } else if (op.kind === 'section') {
+      st._eaveLatLngs = op.points.map(function(p) { return new google.maps.LatLng(p.lat, p.lng); });
+      st.eavePoints = op.points.slice();
+      st._nextSectionKind = op.sectionKind;
+      if (typeof saCloseEaveSection === 'function') {
+        // Suppress the inline pitch popover for redo — operator already had it.
+        var prevShown = state.pitchPickerShownFor;
+        saCloseEaveSection();
+        state.pitchPickerShownFor = prevShown + 1;
+        var newSec = st.eaveSections[st.eaveSections.length - 1];
+        if (newSec) newSec.pitch_rise = op.pitch_rise || null;
+        if (typeof saRenderSectionPitches === 'function') saRenderSectionPitches();
+      }
+    }
+    refreshRedoBtn();
+  }
+  function refreshRedoBtn() {
+    var btn = document.getElementById('sa-tool-redo');
+    if (!btn) return;
+    btn.style.opacity = state.redoStack.length > 0 ? '1' : '0.55';
+    btn.disabled = state.redoStack.length === 0;
+  }
+
+  // ── Keyboard shortcuts ─────────────────────────────────────
+  function isTypingTarget(el) {
+    if (!el) return false;
+    var tag = (el.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+    if (el.isContentEditable) return true;
+    return false;
+  }
+  function onKeydown(ev) {
+    var modal = document.getElementById('sa-trace-modal');
+    if (!modal) return;
+    if (isTypingTarget(ev.target)) return;
+    var st = s(); if (!st) return;
+    var k = ev.key;
+    // Ctrl+Z / Ctrl+Shift+Z
+    if ((ev.ctrlKey || ev.metaKey) && (k === 'z' || k === 'Z')) {
+      ev.preventDefault();
+      if (ev.shiftKey) {
+        saTraceRedo();
+      } else if (typeof saTraceUndo === 'function') {
+        saTraceUndo();
+      }
+      return;
+    }
+    if (k === 'Backspace') { ev.preventDefault(); if (typeof saTraceUndo === 'function') saTraceUndo(); return; }
+    if (k === 'Escape') {
+      // Cancel current draft segment or in-progress polygon
+      if (st._segStart && st._segStartMarker) {
+        st._segStartMarker.setMap(null); st._segStartMarker = null; st._segStart = null;
+      } else if (st.tool === 'eave' && st._eaveLatLngs && st._eaveLatLngs.length > 0) {
+        (st._eaveMarkers || []).forEach(function(m) { m.setMap(null); });
+        st._eaveMarkers = []; st._eaveLatLngs = []; st.eavePoints = [];
+        if (st.eavePoly) { st.eavePoly.setMap(null); st.eavePoly = null; }
+      } else if (st.tool === 'dormer' && st._dormerLatLngs && st._dormerLatLngs.length > 0) {
+        (st._dormerMarkers || []).forEach(function(m) { m.setMap(null); });
+        st._dormerMarkers = []; st._dormerLatLngs = [];
+        if (st._dormerPoly) { st._dormerPoly.setMap(null); st._dormerPoly = null; }
+      } else if (st.tool === 'cutout' && st._cutoutLatLngs && st._cutoutLatLngs.length > 0) {
+        (st._cutoutMarkers || []).forEach(function(m) { m.setMap(null); });
+        st._cutoutMarkers = []; st._cutoutLatLngs = [];
+        if (st._cutoutPoly) { st._cutoutPoly.setMap(null); st._cutoutPoly = null; }
+      }
+      ev.preventDefault();
+      return;
+    }
+    if (k === 'Enter') {
+      if (st.tool === 'eave' && st._eaveLatLngs && st._eaveLatLngs.length >= 3) {
+        if (typeof saCloseEaveSection === 'function') saCloseEaveSection();
+        ev.preventDefault();
+      } else if (st.tool === 'dormer' && st._dormerLatLngs && st._dormerLatLngs.length >= 3) {
+        if (typeof saCompleteDormer === 'function') saCompleteDormer();
+        ev.preventDefault();
+      } else if (st.tool === 'cutout' && st._cutoutLatLngs && st._cutoutLatLngs.length >= 3) {
+        if (typeof saCompleteCutout === 'function') saCompleteCutout();
+        ev.preventDefault();
+      }
+      return;
+    }
+    // Tool switching shortcuts
+    var lower = (k || '').toLowerCase();
+    var map = { e: 'eave', r: 'ridge', h: 'hip', v: 'valley', d: 'dormer', n: 'cutout' };
+    if (map[lower] && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+      if (typeof saTraceSetTool === 'function') {
+        saTraceSetTool(map[lower]);
+        ev.preventDefault();
+      }
+    }
+  }
+
+  // ── Public toggles ─────────────────────────────────────────
+  function toggleSnap() {
+    state.snapEnabled = !state.snapEnabled;
+    var btn = document.getElementById('sa-tool-snap-toggle');
+    if (btn) {
+      btn.style.background = state.snapEnabled ? '#22c55e' : '#1f2937';
+      btn.style.color = state.snapEnabled ? '#fff' : '#9ca3af';
+      btn.style.borderColor = state.snapEnabled ? '#22c55e' : '#374151';
+    }
+  }
+  function toggleLoupe() {
+    state.loupeEnabled = !state.loupeEnabled;
+    var btn = document.getElementById('sa-tool-loupe-toggle');
+    if (btn) {
+      btn.style.background = state.loupeEnabled ? '#f59e0b' : '#1f2937';
+      btn.style.color = state.loupeEnabled ? '#111' : '#9ca3af';
+      btn.style.borderColor = state.loupeEnabled ? '#f59e0b' : '#374151';
+    }
+    if (state.loupeEnabled) { ensureLoupe(); } else { tearDownLoupe(); }
+  }
+  function toggleSolarOverlay() {
+    var btn = document.getElementById('sa-tool-solar-overlay');
+    if (!state.solarFetchAttempted) {
+      if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Solar';
+      fetchSolar().then(function(d) {
+        if (btn) btn.innerHTML = '<i class="fas fa-solar-panel mr-1"></i>Solar';
+        if (!d || !d.available) { alert('No Google Solar data available for this property (rural or low-coverage area).'); return; }
+        state.solarVisible = true;
+        renderSolarOverlay();
+        if (btn) { btn.style.background = '#f59e0b'; btn.style.color = '#111'; btn.style.borderColor = '#f59e0b'; }
+      });
+      return;
+    }
+    state.solarVisible = !state.solarVisible;
+    if (state.solarVisible) renderSolarOverlay(); else clearSolarOverlay();
+    if (btn) {
+      btn.style.background = state.solarVisible ? '#f59e0b' : '#1f2937';
+      btn.style.color = state.solarVisible ? '#111' : '#9ca3af';
+      btn.style.borderColor = state.solarVisible ? '#f59e0b' : '#374151';
+    }
+  }
+  function toggleDsmOverlay() {
+    var btn = document.getElementById('sa-tool-dsm-overlay');
+    if (!state.dsmFetched) {
+      if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>DSM';
+      fetchDsm().then(function(ok) {
+        if (btn) btn.innerHTML = '<i class="fas fa-mountain-sun mr-1"></i>DSM';
+        if (!ok) { alert('No DSM data for this property (Solar API has no coverage here).'); return; }
+        state.dsmVisible = true;
+        showDsm();
+        if (btn) { btn.style.background = '#0ea5e9'; btn.style.color = '#fff'; btn.style.borderColor = '#0ea5e9'; }
+      });
+      return;
+    }
+    state.dsmVisible = !state.dsmVisible;
+    if (state.dsmVisible) showDsm(); else hideDsm();
+    if (btn) {
+      btn.style.background = state.dsmVisible ? '#0ea5e9' : '#1f2937';
+      btn.style.color = state.dsmVisible ? '#fff' : '#9ca3af';
+      btn.style.borderColor = state.dsmVisible ? '#0ea5e9' : '#374151';
+    }
+  }
+  function toggleHistoryPanel() {
+    var panel = document.getElementById('sa-trace-history-panel');
+    if (!panel) return;
+    state.historyOpen = !state.historyOpen;
+    panel.style.display = state.historyOpen ? 'block' : 'none';
+    if (state.historyOpen) {
+      fetchHistory().then(renderHistory);
+    }
+  }
+
+  // ── Periodic state diffing for HUD + autosave + redo refresh ──
+  // Polling avoids having to instrument every action-creating function.
+  function tick() {
+    try { updateHud(); maybeShowPitchPicker(); refreshRedoBtn(); } catch (_) {}
+  }
+
+  // ── Init ───────────────────────────────────────────────────
+  function onMapInit(orderId, lat, lng) {
+    state.orderId = orderId;
+    state.lat = lat; state.lng = lng;
+    state.redoStack = [];
+    state.pitchPickerShownFor = (s().eaveSections || []).length;
+    // Periodic HUD refresh (light — just text DOM updates)
+    if (state.hudTimer) clearInterval(state.hudTimer);
+    state.hudTimer = setInterval(tick, 350);
+    // Autosave debounced — fires every 8s if state changed since last save.
+    if (state.autosaveTimer) clearInterval(state.autosaveTimer);
+    state.autosaveTimer = setInterval(autosave, 8000);
+    // Keyboard shortcuts — single global listener; gated to the modal.
+    document.removeEventListener('keydown', onKeydown);
+    document.addEventListener('keydown', onKeydown);
+    // Mouse-move on the map → drive HUD cursor preview + loupe positioning.
+    var st = s();
+    if (st && st.map) {
+      google.maps.event.addListener(st.map, 'mousemove', function(e) {
+        if (e && e.latLng) state.cursorLL = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+      });
+      // Loupe needs raw clientX/Y — listen on the map container, throttled.
+      var mapEl = document.getElementById('sa-trace-map');
+      if (mapEl) {
+        var lastMove = 0;
+        mapEl.addEventListener('mousemove', function(ev) {
+          if (!state.loupeEnabled) return;
+          var now = Date.now();
+          if (now - lastMove < 30) return;
+          lastMove = now;
+          var latLng = state.cursorLL ? new google.maps.LatLng(state.cursorLL.lat, state.cursorLL.lng) : null;
+          moveLoupe(ev.clientX, ev.clientY, latLng);
+        });
+      }
+      // Clean up timers when modal is removed
+      var observer = new MutationObserver(function() {
+        if (!document.getElementById('sa-trace-modal')) {
+          if (state.hudTimer) { clearInterval(state.hudTimer); state.hudTimer = null; }
+          if (state.autosaveTimer) { clearInterval(state.autosaveTimer); state.autosaveTimer = null; }
+          document.removeEventListener('keydown', onKeydown);
+          observer.disconnect();
+        }
+      });
+      observer.observe(document.body, { childList: true });
+    }
+    // Restore prior autosave draft if present
+    setTimeout(maybeRestoreFromAutosave, 600);
+    // Prefetch solar + history in the background so the toggle is instant
+    setTimeout(function() { fetchSolar(); fetchHistory(); }, 1500);
+    // First HUD render
+    setTimeout(updateHud, 100);
+  }
+
+  // Hook submit to clear the autosave draft on successful submit.
+  var origSubmit = window.saSubmitTrace;
+  if (typeof origSubmit === 'function' && !origSubmit._v2Wrapped) {
+    window.saSubmitTrace = async function() {
+      var args = arguments;
+      try {
+        var result = await origSubmit.apply(this, args);
+        clearAutosave();
+        return result;
+      } catch (e) { throw e; }
+    };
+    window.saSubmitTrace._v2Wrapped = true;
+  }
+
+  // Expose saTraceRedo at window scope so the Redo toolbar button + the
+  // Ctrl+Shift+Z keyboard handler can both invoke it.
+  window.saTraceRedo = saTraceRedo;
+
+  // Public surface
+  return {
+    onMapInit: onMapInit,
+    maybeSnap: maybeSnap,
+    snapshotForUndo: snapshotForUndo,
+    toggleSnap: toggleSnap,
+    toggleLoupe: toggleLoupe,
+    toggleSolarOverlay: toggleSolarOverlay,
+    toggleDsmOverlay: toggleDsmOverlay,
+    toggleHistoryPanel: toggleHistoryPanel,
+    loadFromHistory: loadFromHistory,
+    refreshHud: updateHud,
+  };
+})();

@@ -19,6 +19,7 @@ import { runAutoTrace, type AutoTraceEdge } from '../services/auto-trace-agent'
 import { logCorrections as logAutoTraceCorrections } from '../services/auto-trace-learning'
 import { refreshTracedIndexCache } from '../services/trace-training-data'
 import { fetchBuildingInsightsRaw } from '../services/solar-api'
+import { fetchDsmHillshade } from '../services/dsm-visualization'
 import { sendSignupNurtureToCustomer, type NurtureStage } from '../services/signup-nurture'
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>()
@@ -5644,6 +5645,182 @@ adminRoutes.post('/superadmin/orders/:id/regenerate-report', async (c) => {
     return c.json({ success: true, result })
   } catch (err: any) {
     return c.json({ error: 'Failed to regenerate report: ' + err.message }, 500)
+  }
+})
+
+// ============================================================
+// TRACE ACCURACY OVERLAYS — Solar segments, DSM hillshade, and
+// prior-trace history for the super-admin tracing modal. Read-only
+// endpoints; pure context for the operator while they trace.
+// ============================================================
+
+// Solar API segments — surface the 4–8 roof planes Google Solar
+// detected (boundingBox + pitch + azimuth + area) so the trace UI
+// can render them as translucent overlays under the trace layer.
+adminRoutes.get('/superadmin/orders/:id/solar-segments', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const orderId = parseInt(c.req.param('id'))
+  if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
+  try {
+    const order = await c.env.DB.prepare(
+      'SELECT id, latitude, longitude FROM orders WHERE id = ?'
+    ).bind(orderId).first<any>()
+    if (!order) return c.json({ error: 'Order not found' }, 404)
+    const lat = Number(order.latitude)
+    const lng = Number(order.longitude)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return c.json({ segments: [], building_bbox: null, available: false })
+    }
+    const insights = await fetchBuildingInsightsRaw(lat, lng, c.env.GOOGLE_SOLAR_API_KEY)
+    if (!insights || !insights.solarPotential?.roofSegmentStats?.length) {
+      return c.json({ segments: [], building_bbox: null, available: false })
+    }
+    const segments = insights.solarPotential.roofSegmentStats.map((seg: any, i: number) => ({
+      label: String.fromCharCode(65 + i),
+      pitch_degrees: seg.pitchDegrees ?? null,
+      azimuth_degrees: seg.azimuthDegrees ?? null,
+      area_m2: seg.stats?.areaMeters2 ?? null,
+      center: seg.center
+        ? { lat: seg.center.latitude, lng: seg.center.longitude }
+        : null,
+      bbox: seg.boundingBox
+        ? {
+            sw: { lat: seg.boundingBox.sw.latitude, lng: seg.boundingBox.sw.longitude },
+            ne: { lat: seg.boundingBox.ne.latitude, lng: seg.boundingBox.ne.longitude },
+          }
+        : null,
+    }))
+    return c.json({
+      available: true,
+      segments,
+      building_bbox: insights.boundingBox
+        ? {
+            sw: { lat: insights.boundingBox.sw.latitude, lng: insights.boundingBox.sw.longitude },
+            ne: { lat: insights.boundingBox.ne.latitude, lng: insights.boundingBox.ne.longitude },
+          }
+        : null,
+      imagery_quality: insights.imageryQuality || null,
+    })
+  } catch (err: any) {
+    console.warn('[solar-segments] failed:', err?.message)
+    return c.json({ error: 'solar_segments_failed', message: err?.message || String(err) }, 500)
+  }
+})
+
+// DSM hillshade overlay — render the Google Solar DSM as a square
+// hillshade PNG centered on the property. The trace UI overlays it as
+// a Google Maps GroundOverlay so ridges/valleys read as bright/dark
+// inflections while the admin traces. Returns null when Solar has no
+// coverage (most rural lots).
+adminRoutes.get('/superadmin/orders/:id/dsm-overlay', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const orderId = parseInt(c.req.param('id'))
+  if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
+  try {
+    const order = await c.env.DB.prepare(
+      'SELECT id, latitude, longitude FROM orders WHERE id = ?'
+    ).bind(orderId).first<any>()
+    if (!order) return c.json({ error: 'Order not found' }, 404)
+    const lat = Number(order.latitude)
+    const lng = Number(order.longitude)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return c.json({ available: false })
+    }
+    const radiusMeters = 60
+    const hill = await fetchDsmHillshade(c.env, lat, lng, 1024, radiusMeters)
+    if (!hill) return c.json({ available: false })
+    // Solar DSM is centered on (lat, lng) with half-side = radiusMeters.
+    // Convert to lat/lng bounds for a Google Maps GroundOverlay.
+    const dLat = radiusMeters / 111320
+    const dLng = radiusMeters / (111320 * Math.cos((lat * Math.PI) / 180))
+    return c.json({
+      available: true,
+      image_b64: hill.b64,
+      media_type: hill.mediaType,
+      width: hill.width,
+      height: hill.height,
+      bounds: {
+        sw: { lat: lat - dLat, lng: lng - dLng },
+        ne: { lat: lat + dLat, lng: lng + dLng },
+      },
+      quality: hill.quality || null,
+      imagery_date: hill.imageryDate || null,
+    })
+  } catch (err: any) {
+    console.warn('[dsm-overlay] failed:', err?.message)
+    return c.json({ error: 'dsm_overlay_failed', message: err?.message || String(err) }, 500)
+  }
+})
+
+// Trace history — return prior submitted traces at the same property
+// (by address or by lat/lng within ~30m). Surfaces in the trace modal
+// as a side panel so the admin can see what was traced before for the
+// same building and catch consistency drift.
+adminRoutes.get('/superadmin/orders/:id/trace-history', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const orderId = parseInt(c.req.param('id'))
+  if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
+  try {
+    const order = await c.env.DB.prepare(
+      'SELECT id, property_address, latitude, longitude FROM orders WHERE id = ?'
+    ).bind(orderId).first<any>()
+    if (!order) return c.json({ error: 'Order not found' }, 404)
+    const lat = Number(order.latitude)
+    const lng = Number(order.longitude)
+    // Tolerance ~30m. 30/111320 ≈ 0.00027 deg lat; lng widens with cos(lat).
+    const dLat = 30 / 111320
+    const dLng = Number.isFinite(lat)
+      ? 30 / (111320 * Math.cos((lat * Math.PI) / 180))
+      : dLat
+    const addr = (order.property_address || '').toString().trim().toLowerCase()
+    const sql = `
+      SELECT id, order_number, property_address, latitude, longitude,
+             roof_trace_json, trace_source, created_at, updated_at
+      FROM orders
+      WHERE id != ?
+        AND roof_trace_json IS NOT NULL
+        AND length(roof_trace_json) > 20
+        AND (
+          (? != '' AND lower(property_address) = ?)
+          OR (latitude IS NOT NULL AND longitude IS NOT NULL
+              AND latitude BETWEEN ? AND ?
+              AND longitude BETWEEN ? AND ?)
+        )
+      ORDER BY created_at DESC
+      LIMIT 8
+    `
+    const rows = await c.env.DB.prepare(sql).bind(
+      orderId,
+      addr, addr,
+      Number.isFinite(lat) ? lat - dLat : -90,
+      Number.isFinite(lat) ? lat + dLat : 90,
+      Number.isFinite(lng) ? lng - dLng : -180,
+      Number.isFinite(lng) ? lng + dLng : 180,
+    ).all<any>()
+    const history = (rows.results || []).map((r: any) => {
+      let parsed: any = null
+      try {
+        parsed = r.roof_trace_json ? JSON.parse(r.roof_trace_json) : null
+      } catch { /* ignore malformed historical row */ }
+      return {
+        order_id: r.id,
+        order_number: r.order_number,
+        property_address: r.property_address,
+        latitude: r.latitude,
+        longitude: r.longitude,
+        trace_source: r.trace_source,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        trace: parsed,
+      }
+    })
+    return c.json({ available: true, history })
+  } catch (err: any) {
+    console.warn('[trace-history] failed:', err?.message)
+    return c.json({ error: 'trace_history_failed', message: err?.message || String(err) }, 500)
   }
 })
 
