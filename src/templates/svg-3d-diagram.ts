@@ -94,15 +94,28 @@ const EDGE_COLOR: Record<string, string> = {
   RAKE:   '#6D28D9',
 }
 
-// Per-pitch base color ramp; gets shaded by Lambert. Warm architectural
-// roof tones (warm-grey → charcoal) instead of the old cool slate, which
-// was reading bluish on print and screen.
+// Per-pitch base color ramp; gets shaded by Lambert. Lighter mid-tones
+// than the prior palette so the widened Lambert range (see lambertFactor
+// below) has actual headroom to read — the old palette landed every
+// residential roof in dark-grey territory where face shading vanished
+// and adjacent structures looked identical (RM-20260512-5044 reproducer).
 const PITCH_BAND_COLOR: Array<[number, string]> = [
-  [2, '#9CA3A0'],    // flat → warm slate
-  [4, '#6B7271'],    // low-slope
-  [7, '#4B5152'],    // mid
-  [10, '#363B3D'],   // standard
-  [99, '#22272A'],   // steep → charcoal
+  [2, '#D1D5D7'],    // flat → light warm slate
+  [4, '#A8AEB1'],    // low-slope
+  [7, '#878F93'],    // mid (typical residential 4-7/12 lands here)
+  [10, '#6A7174'],   // standard
+  [99, '#4A5053'],   // steep → dark charcoal
+]
+
+// Per-structure tint colors — blended at ~12% over each face so the two
+// structures in a multi-building trace READ as distinct at a glance,
+// even when their geometry is similar. Cycles through warm/cool/green/
+// terracotta so up to 4 structures get visually-different palettes.
+const STRUCTURE_TINT: string[] = [
+  '#6B8FA8',  // cool slate-blue (default — main house)
+  '#A88660',  // warm tan (garage / second structure)
+  '#7B9472',  // muted green (third)
+  '#A56B6B',  // muted terracotta (fourth)
 ]
 
 // ───────────────────────── GEOM HELPERS ─────────────────────────
@@ -1134,33 +1147,42 @@ function pitchBaseColor(pitchRise: number): string {
   return PITCH_BAND_COLOR[PITCH_BAND_COLOR.length - 1][1]
 }
 
-function shadeColor(hex: string, factor: number): string {
-  // factor 0..1.5 (1.0 = unchanged, <1 = darker, >1 = lighter)
-  // Adds a subtle hue shift — sunlit faces drift warm (boosted R/G), shadowed
-  // faces drift cool (boosted B). Real roof shingles photograph this way under
-  // sun + sky, and the chromatic separation makes adjacent faces distinguish
-  // each other without needing heavier outline strokes.
+function shadeColor(hex: string, factor: number, tintHex?: string): string {
+  // factor 0..1.7 (1.0 = unchanged, <1 = darker, >1 = lighter)
+  // Optional tintHex blends a structure-specific color over the result at
+  // ~12% strength so multiple buildings on the same report read distinct
+  // even when their geometry is similar.
   const c = hex.replace('#', '')
   const r = parseInt(c.slice(0, 2), 16)
   const g = parseInt(c.slice(2, 4), 16)
   const b = parseInt(c.slice(4, 6), 16)
-  const f = Math.max(0.3, Math.min(1.6, factor))
-  // tint: -1 (cool/shadow) … 0 (neutral) … +1 (warm/highlight)
+  const f = Math.max(0.3, Math.min(1.7, factor))
   const tint = Math.max(-1, Math.min(1, (factor - 1.0) * 1.4))
   const warmR = tint > 0 ? 1 + tint * 0.06 : 1 + tint * 0.02
   const warmG = tint > 0 ? 1 + tint * 0.03 : 1 + tint * 0.01
   const warmB = tint > 0 ? 1 - tint * 0.04 : 1 - tint * 0.06
+  let rr = r * f * warmR, gg = g * f * warmG, bb = b * f * warmB
+  if (tintHex) {
+    const t = tintHex.replace('#', '')
+    const tr = parseInt(t.slice(0, 2), 16)
+    const tg = parseInt(t.slice(2, 4), 16)
+    const tb = parseInt(t.slice(4, 6), 16)
+    const mix = 0.12
+    rr = rr * (1 - mix) + tr * mix
+    gg = gg * (1 - mix) + tg * mix
+    bb = bb * (1 - mix) + tb * mix
+  }
   const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n)))
-  return `rgb(${clamp(r * f * warmR)},${clamp(g * f * warmG)},${clamp(b * f * warmB)})`
+  return `rgb(${clamp(rr)},${clamp(gg)},${clamp(bb)})`
 }
 
 function lambertFactor(normal: V3): number {
   const dotKey  = normal.x * SUN_KEY.x  + normal.y * SUN_KEY.y  + normal.z * SUN_KEY.z
   const dotFill = normal.x * SUN_FILL.x + normal.y * SUN_FILL.y + normal.z * SUN_FILL.z
-  // Ambient + clamped key + clamped fill. Ambient floor (0.78) prevents the
-  // backlit side from collapsing to pure shadow (which read as dead-flat in
-  // the old single-sun model).
-  return 0.78 + Math.max(0, dotKey) * 0.45 + Math.max(0, dotFill) * 0.18
+  // Wider range (0.55 floor, ~1.65 ceiling) than the prior 0.78/1.41 so
+  // face orientation actually reads — the old curve compressed everything
+  // into a narrow band of dark grey, hiding ridge/hip/valley geometry.
+  return 0.55 + Math.max(0, dotKey) * 0.85 + Math.max(0, dotFill) * 0.25
 }
 
 // ───────────────────────── MAIN GENERATOR ─────────────────────────
@@ -1171,7 +1193,7 @@ function lambertFactor(normal: V3): number {
  */
 export function generateAxonometricRoofSVG(
   structure: StructurePartition,
-  opts: { width?: number; height?: number; showShadow?: boolean; showCompass?: boolean; showDimensions?: boolean } = {},
+  opts: { width?: number; height?: number; showShadow?: boolean; showCompass?: boolean; showDimensions?: boolean; structureIndex?: number } = {},
 ): string {
   const W = opts.width ?? 1200
   const H = opts.height ?? 750
@@ -1179,6 +1201,14 @@ export function generateAxonometricRoofSVG(
   const showShadow = opts.showShadow !== false
   const showCompass = opts.showCompass !== false
   const showDimensions = opts.showDimensions !== false
+  // Per-structure tint cycles through STRUCTURE_TINT so adjacent
+  // buildings on the same report don't render as visual duplicates.
+  // structureIndex is passed by generateAllStructureSVGs (and omitted
+  // for single-structure callers like the visualizer page, which gets
+  // the neutral default).
+  const tintHex = typeof opts.structureIndex === 'number'
+    ? STRUCTURE_TINT[opts.structureIndex % STRUCTURE_TINT.length]
+    : undefined
 
   if (!structure.eaves || structure.eaves.length < 3) {
     return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#fff"><text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#999" font-size="14" font-family="Inter,sans-serif">Insufficient geometry</text></svg>`
@@ -1327,7 +1357,7 @@ export function generateAxonometricRoofSVG(
   // regions render as bare background white. With this, an unclassified
   // region just reads as a uniform pitched plane, which is honest given we
   // don't have a face polygon for it.
-  const baseShade = shadeColor(pitchBaseColor(pitchRise), lambertFactor({ x: 0, y: 0, z: 1 }))
+  const baseShade = shadeColor(pitchBaseColor(pitchRise), lambertFactor({ x: 0, y: 0, z: 1 }), tintHex)
   const basePts = eavesXY
     .map(p => projectAxonometric({ x: p.x, y: p.y, z: ridgeHeightFromMesh(eavesXY, pitchRise) }))
     .map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`)
@@ -1336,18 +1366,20 @@ export function generateAxonometricRoofSVG(
 
   // Ambient-occlusion underlay: dark blurred strokes that accumulate where
   // adjacent faces share an edge, producing soft creases at hips, ridges and
-  // valleys without any per-edge logic.
+  // valleys without any per-edge logic. Dialed down from width=4/op=0.45 to
+  // width=2/op=0.22 — the previous values were overpowering the face colors,
+  // collapsing everything to the same dark silhouette.
   svg += `<g filter="url(#face-ao)">`
   for (const f of sortedFaces) {
     const pts = f.vertices.map(v => `${tx(v.x).toFixed(1)},${ty(v.y).toFixed(1)}`).join(' ')
-    svg += `<polygon points="${pts}" fill="none" stroke="#0F172A" stroke-width="4.0" stroke-linejoin="round" stroke-opacity="0.45"/>`
+    svg += `<polygon points="${pts}" fill="none" stroke="#0F172A" stroke-width="2.0" stroke-linejoin="round" stroke-opacity="0.22"/>`
   }
   svg += `</g>`
 
   // Roof faces (back-to-front).
   for (const f of sortedFaces) {
     const base = pitchBaseColor(f.pitch_rise)
-    const shade = shadeColor(base, lambertFactor(f.normal))
+    const shade = shadeColor(base, lambertFactor(f.normal), tintHex)
     const pts = f.vertices.map(v => `${tx(v.x).toFixed(1)},${ty(v.y).toFixed(1)}`).join(' ')
     svg += `<polygon points="${pts}" fill="${shade}" stroke="#0F172A" stroke-width="1.0" stroke-linejoin="round" stroke-opacity="0.7"/>`
   }
@@ -1485,7 +1517,10 @@ export function generateAllStructureSVGs(
   opts: { width?: number; height?: number; showShadow?: boolean; showCompass?: boolean; showDimensions?: boolean } = {},
 ): { partition: StructurePartition; svg: string }[] {
   const partitions = splitStructures(report)
-  return partitions.map(p => ({ partition: p, svg: generateAxonometricRoofSVG(p, opts) }))
+  return partitions.map((p, i) => ({
+    partition: p,
+    svg: generateAxonometricRoofSVG(p, { ...opts, structureIndex: i }),
+  }))
 }
 
 /**

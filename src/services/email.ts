@@ -322,62 +322,59 @@ export async function sendViaResend(
 }
 
 // ============================================================
-// PDF RENDERING — Cloudflare Browser Rendering REST /pdf endpoint.
-// Used to attach the customer-facing report HTML as a PDF on the
-// trace-completed email. Returns null on any failure (missing tokens,
-// missing report row, render error) so callers degrade to a no-attachment
-// send rather than blocking the whole email.
+// PDF RENDERING — Cloudflare Browser Rendering Workers binding.
+// Uses env.BROWSER (puppeteer binding) so authentication is the worker's
+// own identity, not a token scope on CLOUDFLARE_API_TOKEN. Previous REST
+// path silently 401'd whenever the token wasn't scoped for Browser
+// Rendering, which caused customer emails to ship .html attachments that
+// Gmail wouldn't preview inline (Heidi West, RM-20260512-5044).
+// Returns null on any failure — caller ships the email without an
+// attachment (the share link in the email body is the primary access
+// path now, so a missing PDF is annoying, not blocking).
 // ============================================================
 export async function renderCustomerReportPdf(
   env: any,
   orderId: number | string,
 ): Promise<Uint8Array | null> {
+  if (!env?.BROWSER || !env?.DB) {
+    console.warn('[renderCustomerReportPdf] missing BROWSER binding or DB — PDF skipped')
+    return null
+  }
+  let browser: any = null
   try {
-    const accountId = env?.CLOUDFLARE_ACCOUNT_ID
-    const apiToken = env?.CLOUDFLARE_API_TOKEN
-    if (!accountId || !apiToken || !env?.DB) return null
     const row = await env.DB.prepare(
       'SELECT customer_report_html, professional_report_html FROM reports WHERE order_id = ? ORDER BY id DESC LIMIT 1'
     ).bind(orderId).first<any>()
     const html = row?.customer_report_html || row?.professional_report_html
     if (!html) return null
-    const resp = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${accountId}/browser-rendering/pdf`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          html,
-          viewport: { width: 1200, height: 1600 },
-          gotoOptions: { waitUntil: 'networkidle0', timeout: 30000 },
-        }),
-        signal: AbortSignal.timeout(45000),
-      },
-    )
-    if (!resp.ok) {
-      const detail = await resp.text().catch(() => '')
-      console.warn(`[renderCustomerReportPdf] CF Browser Rendering ${resp.status}: ${detail.slice(0, 200)}`)
-      return null
-    }
-    const buf = await resp.arrayBuffer()
+
+    const puppeteer = await import('@cloudflare/puppeteer')
+    browser = await puppeteer.default.launch(env.BROWSER)
+    const page = await browser.newPage()
+    await page.setViewport({ width: 1200, height: 1600 })
+    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 30000 })
+    const buf = await page.pdf({ format: 'Letter', printBackground: true })
     if (!buf || buf.byteLength === 0) return null
     return new Uint8Array(buf)
   } catch (e: any) {
-    console.warn('[renderCustomerReportPdf] error:', e?.message || e)
+    // Loud failure — the previous version's silent fallback to .html
+    // hid this bug for weeks. Log the full error so any account-level
+    // misconfiguration (Browser Rendering not enabled on the plan,
+    // binding not provisioned, etc.) surfaces in logs.
+    console.error('[renderCustomerReportPdf] failed:', e?.message || e, e?.stack || '')
     return null
+  } finally {
+    if (browser) {
+      try { await browser.close() } catch {}
+    }
   }
 }
 
 // ============================================================
-// REPORT ATTACHMENT — Resolves the best-available attachment for a
-// trace-completed email. Tries PDF (Cloudflare Browser Rendering) first;
-// falls back to attaching the customer_report_html as a self-contained
-// .html file when the PDF path is unavailable (token missing scope, BR
-// not enabled, or render failed). Returns null only when there is no
-// report row at all — in which case the caller sends a plain email.
+// REPORT ATTACHMENT — Wraps PDF render with a safe nullable return.
+// No more silent .html fallback: if the PDF can't render, the email
+// ships without an attachment. The share link in the email body is the
+// customer's guaranteed access path; the PDF is a bonus when it works.
 // ============================================================
 export async function getCustomerReportAttachment(
   env: any,
@@ -385,32 +382,11 @@ export async function getCustomerReportAttachment(
   orderNumber: string,
 ): Promise<{ filename: string; mimeType: string; bytes: Uint8Array } | null> {
   const safe = String(orderNumber).replace(/[^\w.\-]/g, '_')
-
   const pdf = await renderCustomerReportPdf(env, orderId)
   if (pdf) {
     return { filename: `roof-report-${safe}.pdf`, mimeType: 'application/pdf', bytes: pdf }
   }
-
-  // HTML fallback — the customer can open it in any browser and print/save
-  // as PDF themselves. The stored markup is already self-contained
-  // (inline styles, embedded SVG, no external scripts).
-  if (!env?.DB) return null
-  try {
-    const row = await env.DB.prepare(
-      'SELECT customer_report_html, professional_report_html FROM reports WHERE order_id = ? ORDER BY id DESC LIMIT 1'
-    ).bind(orderId).first<any>()
-    const html = row?.customer_report_html || row?.professional_report_html
-    if (!html) return null
-    const wrapped = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Roof Report ${safe}</title></head><body style="margin:0;padding:0;background:#fff">${html}</body></html>`
-    return {
-      filename: `roof-report-${safe}.html`,
-      mimeType: 'text/html; charset=utf-8',
-      bytes: new TextEncoder().encode(wrapped),
-    }
-  } catch (e: any) {
-    console.warn('[getCustomerReportAttachment] HTML fallback error:', e?.message || e)
-    return null
-  }
+  return null
 }
 
 // ============================================================

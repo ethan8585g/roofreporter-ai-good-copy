@@ -1833,15 +1833,25 @@ app.get('/3d-verify', async (c) => {
     // actual surface height at TARGET.lat/lng and snap the property pin to
     // sit just above the roof. Without this, the pin sits at ellipsoid 0
     // (under the city) and visually drifts as the camera moves.
+    let pinSnapped = false;
+    let pinSnapInflight = false;
     function refinePropertyPinAltitude() {
+      if (pinSnapped || pinSnapInflight) return;
       if (!propertyPinEntity || !viewer || !viewer.scene) return;
       if (typeof viewer.scene.sampleHeightMostDetailed !== 'function') return;
+      if (viewer.scene.sampleHeightSupported === false) {
+        console.warn('[3d-verify] sampleHeight not supported (no WebGL2); property pin will drift');
+        return;
+      }
       try {
+        pinSnapInflight = true;
         const carto = Cesium.Cartographic.fromDegrees(TARGET.lng, TARGET.lat);
         viewer.scene.sampleHeightMostDetailed([carto]).then(function(samples) {
+          pinSnapInflight = false;
           const s = samples && samples[0];
           const h = s && Number.isFinite(s.height) ? s.height : null;
-          if (h === null) return;
+          if (h === null) return; // tiles around target not detailed enough yet; another retry will try again
+          pinSnapped = true;
           // Dot sits 6m above the surface; pole runs from the surface up to it.
           propertyPinEntity.position = Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, h + 6);
           if (!propertyPolePinEntity) {
@@ -1858,8 +1868,14 @@ app.get('/3d-verify', async (c) => {
               }
             });
           }
-        }).catch(function() {});
-      } catch (_) {}
+        }).catch(function(e) {
+          pinSnapInflight = false;
+          console.warn('[3d-verify] sampleHeightMostDetailed rejected:', (e && e.message) || e);
+        });
+      } catch (e) {
+        pinSnapInflight = false;
+        console.warn('[3d-verify] sampleHeightMostDetailed threw:', (e && e.message) || e);
+      }
     }
 
     // Active-capture wiring: register a LEFT_CLICK handler that runs only
@@ -1897,22 +1913,25 @@ app.get('/3d-verify', async (c) => {
       viewer.scene.primitives.add(tileset);
       flyToInitial(INITIAL_HEADING_DEG);
 
-      // Snap the property pin onto the actual roof surface as soon as the
-      // initial tiles around TARGET.lat/lng have streamed in. Without this
-      // the pin sits at ellipsoid height 0 (often hundreds of meters below
-      // the city) and appears to drift across the screen as the user pans.
-      // Re-sample on tile load events for the first few seconds in case the
-      // first sample comes back before the relevant tiles are detailed.
+      // Snap the property pin onto the actual roof surface. The previous
+      // two-shot approach (initialTilesLoaded + one 4s timeout) silently
+      // no-op'd when tiles around the target hadn't streamed in at
+      // sufficient LOD yet, leaving the pin at its provisional ellipsoid
+      // altitude — visibly drifting under camera rotation. Now we retry
+      // on every tile-load event (most reliable signal that more detail
+      // is now available at TARGET.lat/lng) plus a 1.5s interval as a
+      // backstop, until one sample returns a finite height or 30s elapses.
       if (propertyPinEntity) {
-        const onceLoaded = tileset.initialTilesLoaded;
-        if (onceLoaded && onceLoaded.addEventListener) {
-          onceLoaded.addEventListener(function() { refinePropertyPinAltitude(); });
-        } else {
-          setTimeout(refinePropertyPinAltitude, 2500);
+        if (tileset.tileLoad && tileset.tileLoad.addEventListener) {
+          tileset.tileLoad.addEventListener(function() {
+            if (!pinSnapped) refinePropertyPinAltitude();
+          });
         }
-        // Second-pass refinement after a moment in case the first sample
-        // hit a low-LOD tile.
-        setTimeout(refinePropertyPinAltitude, 4000);
+        const pinRetry = setInterval(function() {
+          if (pinSnapped) { clearInterval(pinRetry); return; }
+          refinePropertyPinAltitude();
+        }, 1500);
+        setTimeout(function() { clearInterval(pinRetry); }, 30000);
       }
 
       // Auto-capture mode: when ?autocapture=1 + ?orderId= are set, the report

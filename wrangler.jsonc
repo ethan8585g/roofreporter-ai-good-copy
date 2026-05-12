@@ -16,6 +16,14 @@
   "ai": {
     "binding": "AI"
   },
+  // Cloudflare Browser Rendering — used by renderCustomerReportPdf to turn
+  // the stored report HTML into a real PDF for the customer email. Uses
+  // the binding pattern (not REST + token-scope) so the capability is
+  // gated by the project's Browser Rendering enablement, not by whether
+  // CLOUDFLARE_API_TOKEN happens to have the right scope.
+  "browser": {
+    "binding": "BROWSER"
+  },
   // Non-secret env vars
   "vars": {
     // TODO(Ethan): Sign up at https://clarity.microsoft.com (free), create a project, paste the ID here.
