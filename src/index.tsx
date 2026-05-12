@@ -1767,6 +1767,69 @@ app.get('/3d-verify', async (c) => {
     if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = false;
     viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#000');
 
+    // ── Trackpad-friendly wheel zoom ──
+    // Cesium's default wheel handler is sluggish on Mac trackpads: pinch
+    // gestures fire wheel events with ctrlKey=true and deltaY ≈ ±1-5, which
+    // Cesium barely registers, while two-finger scrolls feel inconsistent.
+    // Worse, the browser tries to page-zoom on ctrl+wheel unless we
+    // preventDefault. We install our own wheel listener in the capture
+    // phase, stop Cesium from also handling it (stopImmediatePropagation),
+    // and translate deltaY into a camera zoom scaled to current altitude.
+    viewer.canvas.addEventListener('wheel', function(ev) {
+      if (!viewer || !viewer.camera) return;
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      const carto = viewer.camera.positionCartographic;
+      const heightM = carto ? Math.max(carto.height, 5) : 250;
+      const isPinch = ev.ctrlKey; // Mac trackpad pinch
+      const perUnit = isPinch ? 0.04 : 0.0015;
+      const frac = Math.min(Math.abs(ev.deltaY) * perUnit, 0.35);
+      const amount = heightM * frac;
+      if (ev.deltaY > 0) viewer.camera.zoomOut(amount);
+      else if (ev.deltaY < 0) viewer.camera.zoomIn(amount);
+    }, { passive: false, capture: true });
+
+    // ── Property pin ──
+    // Marks the exact lat/lng the customer placed when ordering so the
+    // super-admin can locate the structure on the photorealistic mesh.
+    // Suppressed in autocapture modes so it doesn't pollute the saved cover
+    // image / aerial sequence.
+    if (!AUTOCAPTURE && !AUTOCAPTURE_CORNERS) {
+      const pinColor = Cesium.Color.fromCssColorString('#ff3b3b');
+      const groundPos = Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, 0);
+      const topPos = Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, 40);
+      viewer.entities.add({
+        polyline: {
+          positions: [groundPos, topPos],
+          width: 3,
+          material: pinColor,
+          depthFailMaterial: pinColor.withAlpha(0.55),
+          clampToGround: false
+        }
+      });
+      viewer.entities.add({
+        position: topPos,
+        point: {
+          pixelSize: 14,
+          color: pinColor,
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 2,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY
+        },
+        label: {
+          text: 'Property',
+          font: '600 12px -apple-system,Segoe UI,sans-serif',
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          fillColor: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 3,
+          pixelOffset: new Cesium.Cartesian2(0, -20),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scale: 0.95
+        }
+      });
+    }
+
     // Active-capture wiring: register a LEFT_CLICK handler that runs only
     // when ?capture=1 and the user has selected a Ridge/Hip/Valley mode.
     // Cesium uses LEFT_DRAG for camera rotation, so adding a LEFT_CLICK
