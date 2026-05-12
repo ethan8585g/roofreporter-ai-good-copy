@@ -332,7 +332,7 @@ export async function sendViaResend(
 // attachment (the share link in the email body is the primary access
 // path now, so a missing PDF is annoying, not blocking).
 // ============================================================
-async function renderHtmlToPdf(env: any, html: string): Promise<Uint8Array | null> {
+async function renderHtmlToPdf(env: any, html: string, label = 'unknown'): Promise<Uint8Array | null> {
   if (!env?.BROWSER || !html) return null
   let browser: any = null
   try {
@@ -340,12 +340,22 @@ async function renderHtmlToPdf(env: any, html: string): Promise<Uint8Array | nul
     browser = await puppeteer.default.launch(env.BROWSER)
     const page = await browser.newPage()
     await page.setViewport({ width: 1200, height: 1600 })
-    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 30000 })
-    const buf = await page.pdf({ format: 'Letter', printBackground: true })
-    if (!buf || buf.byteLength === 0) return null
+    // 'networkidle0' (zero in-flight requests for 500ms) can hang on slow
+    // external resources — e.g. the Google Static Maps tile that the pro
+    // report embeds. 'load' fires when all resources have either loaded
+    // or errored, which is the right semantic for "render the page as
+    // the user would see it" without indefinite waits. 45s timeout gives
+    // headroom for the 176KB pro report with its embedded SVGs.
+    await page.setContent(html, { waitUntil: 'load', timeout: 45000 })
+    const buf = await page.pdf({ format: 'Letter', printBackground: true, timeout: 45000 })
+    if (!buf || buf.byteLength === 0) {
+      console.warn(`[renderHtmlToPdf:${label}] empty PDF buffer`)
+      return null
+    }
+    console.log(`[renderHtmlToPdf:${label}] ok, ${buf.byteLength} bytes`)
     return new Uint8Array(buf)
   } catch (e: any) {
-    console.error('[renderHtmlToPdf] failed:', e?.message || e, e?.stack || '')
+    console.error(`[renderHtmlToPdf:${label}] failed:`, e?.message || e, e?.stack || '')
     return null
   } finally {
     if (browser) { try { await browser.close() } catch {} }
@@ -390,16 +400,20 @@ export async function getCustomerReportAttachments(
   const row = await env.DB.prepare(
     'SELECT customer_report_html, professional_report_html FROM reports WHERE order_id = ? ORDER BY id DESC LIMIT 1'
   ).bind(orderId).first<any>()
-  // Professional first (it's the "main" deliverable for the paying customer);
-  // customer version second (the "share with homeowner" copy).
-  if (row?.professional_report_html) {
-    const pro = await renderHtmlToPdf(env, row.professional_report_html)
-    if (pro) out.push({ filename: `roof-report-${safe}-full.pdf`, mimeType: 'application/pdf', bytes: pro })
-  }
-  if (row?.customer_report_html) {
-    const cust = await renderHtmlToPdf(env, row.customer_report_html)
-    if (cust) out.push({ filename: `roof-report-${safe}-customer.pdf`, mimeType: 'application/pdf', bytes: cust })
-  }
+  // Render both PDFs in parallel rather than sequentially — independent
+  // Browser Rendering sessions, each gets its own headless Chrome, no
+  // shared state. Cuts the worker wall-time in roughly half and avoids
+  // the case where the first slow render starves the second.
+  const [pro, cust] = await Promise.all([
+    row?.professional_report_html
+      ? renderHtmlToPdf(env, row.professional_report_html, 'professional')
+      : Promise.resolve(null),
+    row?.customer_report_html
+      ? renderHtmlToPdf(env, row.customer_report_html, 'customer')
+      : Promise.resolve(null),
+  ])
+  if (pro) out.push({ filename: `roof-report-${safe}-full.pdf`, mimeType: 'application/pdf', bytes: pro })
+  if (cust) out.push({ filename: `roof-report-${safe}-customer.pdf`, mimeType: 'application/pdf', bytes: cust })
   return out
 }
 
@@ -473,13 +487,22 @@ export async function notifyTraceCompletedToCustomer(
           "UPDATE reports SET share_token = ?, share_sent_at = datetime('now'), updated_at = datetime('now') WHERE order_id = ?"
         ).bind(token, order_id).run()
       }
-      shareUrl = `https://www.roofmanager.ca/report/share/${token}?v=c`
+      shareUrl = `https://www.roofmanager.ca/report/share/${token}`  // no ?v=c → defaults to professional/full view
     } catch {}
   }
 
+  // Two links when share_token resolved:
+  //   - Full measurement report (default share URL — pro view with
+  //     measurements, edges, materials). The "main" report for the
+  //     paying customer.
+  //   - Customer/share copy (?v=c — homeowner-friendly, no
+  //     measurements). For forwarding to the property owner.
+  const fullReportUrl = shareUrl
+  const customerShareUrl = shareUrl ? `${shareUrl}?v=c` : null
   const viewOnlineCta = shareUrl
-    ? `<a href="${shareUrl}" style="display:inline-block;background:#0369a1;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700;margin:8px 0">View your report online →</a>
-  <p style="color:#888;font-size:12px;margin:6px 0 18px">Opens in any browser — no download needed.</p>`
+    ? `<a href="${fullReportUrl}" style="display:inline-block;background:#0369a1;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700;margin:8px 4px 0 0">View full measurement report →</a>
+  <a href="${customerShareUrl}" style="display:inline-block;background:#475569;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700;margin:8px 0">Customer-shareable copy →</a>
+  <p style="color:#888;font-size:12px;margin:6px 0 18px">Both open in any browser. The customer copy hides measurements so it's safe to forward to the homeowner. Full PDFs of each are also attached to this email.</p>`
     : ''
 
   const rawHtml = `
