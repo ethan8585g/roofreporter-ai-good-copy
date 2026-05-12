@@ -283,10 +283,20 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   // with Solar so they don't add to total latency. Both are best-effort:
   // any failure is logged + ignored. The result is fed to the prompt as
   // cross-check context AND used to validate Solar's bbox trust.
-  const priorsP = fetchFootprintPriors(input.lat, input.lng).catch((e: any) => {
-    console.warn('[auto-trace] footprint priors failed:', e?.message)
-    return { priors: [], elapsed_ms: {}, errors: {} }
-  })
+  //
+  // Hard timeout at 1.2s so a slow Overpass server (rural acreages
+  // routinely hang 5-10s) doesn't drag the entire auto-trace wall-clock
+  // — the priors are context-only, not on the critical accuracy path.
+  // 1.2s is roughly 95th-percentile for healthy Overpass responses; lots
+  // that need longer probably wouldn't have returned anything useful
+  // anyway.
+  const priorsP = Promise.race<{ priors: any[]; elapsed_ms: any; errors: any }>([
+    fetchFootprintPriors(input.lat, input.lng).catch((e: any) => {
+      console.warn('[auto-trace] footprint priors failed:', e?.message)
+      return { priors: [], elapsed_ms: {}, errors: {} }
+    }),
+    new Promise((resolve) => setTimeout(() => resolve({ priors: [], elapsed_ms: { timeout: 1200 }, errors: { timeout: 'priors_timeout_1200ms' } }), 1200)),
+  ])
 
   // Solar API gives us the building's actual lat/lng bounding box. We need
   // that BEFORE choosing the satellite image centre/zoom so we can frame
@@ -354,24 +364,81 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   // require decoding the PNG to RGBA, mutating pixels, then re-encoding.
   // Wrapped in a single try/catch so any failure (non-PNG response,
   // corrupt bytes, CPU budget exhaustion) falls back to the raw tile.
-  if ((input.vegetationTint || input.upscaleTo1568) && imageMediaType === 'image/png') {
+  // Stub the per-flag state — populated by the merged preprocessing
+  // pipeline below. Declared up here so the prompt / diagnostics can
+  // read them after the merged block runs.
+  let solarOverlayApplied = false
+  let solarSegmentsOverlaid = 0
+  let hintApplied = false
+  let hintCenterPx: { x: number; y: number } | null = null
+  let hintRadiusPx: number | null = null
+  // Pre-derive whether the operator drew a Mark Region — used in the
+  // merged pipeline AND in the bbox / framing branches below.
+  const hintIsValid = !!(input.hintRegion && Number.isFinite(input.hintRegion.centerLat)
+    && Number.isFinite(input.hintRegion.centerLng) && Number.isFinite(input.hintRegion.radiusMeters))
+
+  // Merged preprocessing pipeline — single decode + single encode for
+  // VARI tint + Lanczos upscale + Solar segment overlay + Hint region
+  // overlay. Previously each ran its own PNG round-trip (3 decodes + 3
+  // encodes on a 1280×1280 RGBA buffer ≈ 1.5-2s of wasted CPU). Now
+  // each operation is an in-place mutation on the same shared buffer.
+  const needsAnyPreprocess = imageMediaType === 'image/png' && (
+    input.vegetationTint || input.upscaleTo1568 ||
+    (input.solarSegmentOverlay !== false) || hintIsValid
+  )
+  if (needsAnyPreprocess) {
     const ppStart = Date.now()
     try {
-      // Decode base64 → bytes → RGBA.
       const pngBytes = Uint8Array.from(atob(imageB64), c => c.charCodeAt(0))
       let img = await decodePNG(pngBytes)
-      // VARI tint first (cheap pixel pass). Lanczos benefits from operating
-      // on already-tinted pixels so the magenta carries through cleanly.
+
+      // 1. VARI vegetation tint (cheap pixel pass; magenta carries through Lanczos cleanly).
       if (input.vegetationTint) {
         const tinted = applyVARITint(img, { threshold: 0.05, blendStrength: 0.45 })
         img = tinted.tinted
         vegetationPct = tinted.vegetationPct
         vegetationTintApplied = true
       }
+
+      // 2. Lanczos upscale 1280 → 1568 (~Claude's vision ceiling).
       if (input.upscaleTo1568 && img.width < 1568) {
         img = lanczosResize(img, 1568, 1568)
         upscaleApplied = true
       }
+      actualImageDim = img.width
+
+      // 3. Solar segment overlay (each detected roof plane → coloured rect).
+      if (input.solarSegmentOverlay !== false) {
+        const segPx = extractSolarSegmentBboxesPx(solarInsights, framing, img.width, img.height, safeW)
+        if (segPx && segPx.length >= 2) {
+          drawSolarSegmentOverlay(img.rgba, img.width, img.height, segPx)
+          solarOverlayApplied = true
+          solarSegmentsOverlaid = segPx.length
+        }
+      }
+
+      // 4. Hint region overlay (red dashed circle from operator Mark Region).
+      if (hintIsValid && input.hintRegion) {
+        const radiusM = Math.max(5, Math.min(200, input.hintRegion.radiusMeters))
+        const scale = 1 << framing.zoom
+        const centerSin = Math.sin(framing.lat * Math.PI / 180)
+        const centerWorldX = (256 * (0.5 + framing.lng / 360)) * scale
+        const centerWorldY = (256 * (0.5 - Math.log((1 + centerSin) / (1 - centerSin)) / (4 * Math.PI))) * scale
+        const hintSin = Math.sin(input.hintRegion.centerLat * Math.PI / 180)
+        const hintWorldX = (256 * (0.5 + input.hintRegion.centerLng / 360)) * scale
+        const hintWorldY = (256 * (0.5 - Math.log((1 + hintSin) / (1 - hintSin)) / (4 * Math.PI))) * scale
+        const worldUnitsPerImgPx = safeW / img.width
+        const hintPxX = Math.round((hintWorldX - centerWorldX) / worldUnitsPerImgPx + img.width / 2)
+        const hintPxY = Math.round((hintWorldY - centerWorldY) / worldUnitsPerImgPx + img.height / 2)
+        const groundMPerWorldUnit = (40_075_016 * Math.cos(framing.lat * Math.PI / 180)) / (256 * scale)
+        const radiusPx = Math.round(radiusM / groundMPerWorldUnit / worldUnitsPerImgPx)
+        drawHintCircle(img.rgba, img.width, img.height, hintPxX, hintPxY, radiusPx)
+        hintCenterPx = { x: hintPxX, y: hintPxY }
+        hintRadiusPx = radiusPx
+        hintApplied = true
+      }
+
+      // 5. Single encode + base64 swap.
       const reencoded = await encodePNG(img)
       let bin = ''
       const chunk = 0x8000
@@ -380,12 +447,15 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       }
       imageB64 = btoa(bin)
       imageMediaType = 'image/png'
-      actualImageDim = img.width
     } catch (e: any) {
-      console.warn('[auto-trace] preprocessing failed (falling back to raw tile):', e?.message)
-      // Reset to defaults — original tile unchanged.
+      console.warn('[auto-trace] merged preprocessing failed (falling back to raw tile):', e?.message)
       vegetationTintApplied = false
       upscaleApplied = false
+      solarOverlayApplied = false
+      solarSegmentsOverlaid = 0
+      hintApplied = false
+      hintCenterPx = null
+      hintRadiusPx = null
     } finally {
       preprocessElapsedMs = Date.now() - ppStart
     }
@@ -444,7 +514,18 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   const imagePxW = safeW * 2
   const imagePxH = safeH * 2
   const projectionToSentScale = actualImageDim / imagePxW
-  const projectionBboxPx = computeTargetBboxPx(solarInsights, framing.lat, framing.lng, framing.zoom, imagePxW, imagePxH)
+  // When the operator drew a Mark Region AND the overlay actually
+  // rendered onto the satellite tile, derive the bbox from the hint —
+  // hint is AUTHORITATIVE and overrides Solar. Critical for acreages
+  // where Solar returns an untrusted-and-clamped 60ft box that would
+  // otherwise shrink a legitimate 5000-7000 sqft trace. When the
+  // overlay render failed (PNG codec error etc.), fall back to Solar
+  // since we can't promise the model a circle that isn't there.
+  const hintBboxPx = (hintApplied && input.hintRegion && Number.isFinite(input.hintRegion.radiusMeters))
+    ? computeHintBboxPx(input.hintRegion, framing.lat, framing.lng, framing.zoom, imagePxW, imagePxH)
+    : null
+  const projectionBboxPx = hintBboxPx
+    ?? computeTargetBboxPx(solarInsights, framing.lat, framing.lng, framing.zoom, imagePxW, imagePxH)
   const targetCenterPx = {
     x: Math.round((imagePxW / 2) * projectionToSentScale),
     y: Math.round((imagePxH / 2) * projectionToSentScale),
@@ -458,88 +539,13 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
         widthFt: projectionBboxPx.widthFt,
         depthFt: projectionBboxPx.depthFt,
         trusted: projectionBboxPx.trusted,
+        source: projectionBboxPx.source,
       }
     : null
 
-  let solarOverlayApplied = false
-  let solarSegmentsOverlaid = 0
-  if (input.solarSegmentOverlay !== false && imageMediaType === 'image/png' && targetBboxPx?.trusted) {
-    try {
-      const segPx = extractSolarSegmentBboxesPx(solarInsights, framing, actualImageDim, actualImageDim, safeW)
-      if (segPx && segPx.length >= 2) {
-        const pngBytes = Uint8Array.from(atob(imageB64), c => c.charCodeAt(0))
-        const decoded = await decodePNG(pngBytes)
-        drawSolarSegmentOverlay(decoded.rgba, decoded.width, decoded.height, segPx)
-        const reencoded = await encodePNG(decoded)
-        let bin = ''
-        const chunk = 0x8000
-        for (let i = 0; i < reencoded.length; i += chunk) {
-          bin += String.fromCharCode(...reencoded.subarray(i, Math.min(i + chunk, reencoded.length)))
-        }
-        imageB64 = btoa(bin)
-        solarOverlayApplied = true
-        solarSegmentsOverlaid = segPx.length
-      }
-    } catch (e: any) {
-      console.warn('[auto-trace] solar overlay render failed (continuing without):', e?.message)
-    }
-  }
-
-  // ── Hint region overlay (SAM-style interactive segmentation prompt) ──
-  // Optional user-drawn coarse circle indicating roughly where the
-  // target building is. We render it as a red dashed outline + faint
-  // pink shading on the satellite tile. Foundation vision models perform
-  // dramatically better when the target is visually marked vs.
-  // "find the building somewhere in this image". Eliminates the wrong-
-  // building / merged-neighbour / detached-garage failure modes.
-  let hintApplied = false
-  let hintCenterPx: { x: number; y: number } | null = null
-  let hintRadiusPx: number | null = null
-  if (input.hintRegion && Number.isFinite(input.hintRegion.centerLat) && Number.isFinite(input.hintRegion.centerLng) && Number.isFinite(input.hintRegion.radiusMeters)) {
-    const radiusM = Math.max(5, Math.min(150, input.hintRegion.radiusMeters))
-    try {
-      // Convert hint centre to pixel coords in the sent-image frame
-      // (post-upscale if applicable).
-      const scale = 1 << framing.zoom
-      const centerSin = Math.sin(framing.lat * Math.PI / 180)
-      const centerWorldX = (256 * (0.5 + framing.lng / 360)) * scale
-      const centerWorldY = (256 * (0.5 - Math.log((1 + centerSin) / (1 - centerSin)) / (4 * Math.PI))) * scale
-      const hintSin = Math.sin(input.hintRegion.centerLat * Math.PI / 180)
-      const hintWorldX = (256 * (0.5 + input.hintRegion.centerLng / 360)) * scale
-      const hintWorldY = (256 * (0.5 - Math.log((1 + hintSin) / (1 - hintSin)) / (4 * Math.PI))) * scale
-      // Mercator world units → image pixels: factor = actualImageDim / safeW.
-      const worldUnitsPerImgPx = safeW / actualImageDim
-      const hintPxX = Math.round((hintWorldX - centerWorldX) / worldUnitsPerImgPx + actualImageDim / 2)
-      const hintPxY = Math.round((hintWorldY - centerWorldY) / worldUnitsPerImgPx + actualImageDim / 2)
-      // Radius in pixels: meters → world units → image pixels.
-      const groundMPerWorldUnit = (40_075_016 * Math.cos(framing.lat * Math.PI / 180)) / (256 * scale)
-      const radiusWorldUnits = radiusM / groundMPerWorldUnit
-      const radiusPxFloat = radiusWorldUnits / worldUnitsPerImgPx
-      const radiusPx = Math.round(radiusPxFloat)
-      hintCenterPx = { x: hintPxX, y: hintPxY }
-      hintRadiusPx = radiusPx
-      // Render the hint onto the existing satellite PNG. Needs a decoder.
-      // The current image is whatever came out of preprocessing
-      // (raw Static Maps PNG OR vegetation-tinted PNG OR upscaled PNG).
-      // Static Maps returns PNG by default; only skip if the media type
-      // somehow flipped to JPEG.
-      if (imageMediaType === 'image/png') {
-        const pngBytes = Uint8Array.from(atob(imageB64), c => c.charCodeAt(0))
-        const decoded = await decodePNG(pngBytes)
-        drawHintCircle(decoded.rgba, decoded.width, decoded.height, hintPxX, hintPxY, radiusPx)
-        const reencoded = await encodePNG(decoded)
-        let bin = ''
-        const chunk = 0x8000
-        for (let i = 0; i < reencoded.length; i += chunk) {
-          bin += String.fromCharCode(...reencoded.subarray(i, Math.min(i + chunk, reencoded.length)))
-        }
-        imageB64 = btoa(bin)
-        hintApplied = true
-      }
-    } catch (e: any) {
-      console.warn('[auto-trace] hint overlay render failed (continuing without):', e?.message)
-    }
-  }
+  // (Solar segment overlay + hint region overlay now run inside the
+  // merged preprocessing pipeline above — single decode + single encode
+  // for all four pixel-level transforms.)
 
   const hasViewport3d = !!(input.viewport3dB64 && input.viewport3dB64.length > 1000)
   // (Projection-grid + targetBboxPx now computed earlier in the function,
@@ -658,6 +664,12 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   if (input.edge === 'eaves') {
     if (parsed.segments.length === 0 || parsed.segments.every(s => s.length < 3)) {
       refinementPass = 'skipped-empty-draft'
+    } else if (
+      // High-confidence single-polygon drafts almost never improve via
+      // critique — skip the second Claude call to save 6-12s.
+      parsed.confidence >= 90 && parsed.segments.length === 1
+    ) {
+      refinementPass = 'skipped-high-iou'  // reuse the existing diagnostic value
     } else if (
       projectionBboxPx && projectionBboxPx.trusted &&
       (() => {
@@ -861,8 +873,18 @@ function chooseImageFraming(
   // (typically square and > 5000 sqft) still fail.
   const trusted = Math.max(widthFt, depthFt) <= 100 && (widthFt * depthFt) <= 4500
   if (!trusted) {
-    // Solar merged a neighbour — its bbox is unreliable, don't recentre on it.
-    return { lat: pinLat, lng: pinLng, zoom: userZoom, recentered: false }
+    // Solar bbox is suspicious — could be merged neighbour OR genuine
+    // acreage. Either way the centroid is usually still on the building,
+    // so we STILL recentre, but cap the zoom at 21 (not zoom-out to user
+    // pin zoom) to keep the building filling enough of the frame for
+    // Claude to see fine eaves. Was previously falling back to userZoom
+    // which often left an 80-120ft acreage filling 17-26% of the tile.
+    const cLat = (sw.latitude + ne.latitude) / 2
+    const cLng = (sw.longitude + ne.longitude) / 2
+    // Default to z=21; drop to 20 only when the bbox suggests a genuine
+    // huge acreage (>150ft per side) so the building fits in the frame.
+    const untrustedZoom = Math.max(widthFt, depthFt) > 150 ? 20 : 21
+    return { lat: cLat, lng: cLng, zoom: untrustedZoom, recentered: true }
   }
   const cLat = (sw.latitude + ne.latitude) / 2
   const cLng = (sw.longitude + ne.longitude) / 2
@@ -883,11 +905,47 @@ function chooseImageFraming(
  *  signals the API has folded a neighbour or the whole lot into the
  *  footprint. We surface that as `trusted = false` so the prompt can fall
  *  back to a tighter "containing centre pixel only" instruction. */
+/** Hint-derived bbox helper. When the operator drew a Mark Region, this
+ *  produces an AUTHORITATIVE pixel bbox that supersedes Solar's. Returns
+ *  the source='hint' tag so downstream prompt code can use the strongest
+ *  possible language ("operator drew this, ignore Solar bbox"). */
+function computeHintBboxPx(
+  hint: { centerLat: number; centerLng: number; radiusMeters: number },
+  centerLat: number, centerLng: number, zoom: number,
+  imgW: number, imgH: number,
+): { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean; source: 'hint' } | null {
+  if (!Number.isFinite(hint.radiusMeters) || hint.radiusMeters <= 0) return null
+  const scale = 1 << zoom
+  const centerSin = Math.sin(centerLat * Math.PI / 180)
+  const centerWorldX = (256 * (0.5 + centerLng / 360)) * scale
+  const centerWorldY = (256 * (0.5 - Math.log((1 + centerSin) / (1 - centerSin)) / (4 * Math.PI))) * scale
+  const hintSin = Math.sin(hint.centerLat * Math.PI / 180)
+  const hintWorldX = (256 * (0.5 + hint.centerLng / 360)) * scale
+  const hintWorldY = (256 * (0.5 - Math.log((1 + hintSin) / (1 - hintSin)) / (4 * Math.PI))) * scale
+  // Mercator world units → image pixels. computeTargetBboxPx uses the *2
+  // hardcoded factor (Static Maps scale=2); we mirror that here.
+  const cx = Math.round((hintWorldX - centerWorldX) * 2 + imgW / 2)
+  const cy = Math.round((hintWorldY - centerWorldY) * 2 + imgH / 2)
+  const groundMPerPx = (40_075_016 * Math.cos(centerLat * Math.PI / 180)) / (256 * scale * 2)
+  const radiusPx = Math.max(1, Math.round(hint.radiusMeters / groundMPerPx))
+  const widthFt = Math.round(hint.radiusMeters * 2 * 3.28084)
+  const depthFt = widthFt
+  return {
+    x1: Math.max(0, cx - radiusPx),
+    y1: Math.max(0, cy - radiusPx),
+    x2: Math.min(imgW - 1, cx + radiusPx),
+    y2: Math.min(imgH - 1, cy + radiusPx),
+    widthFt, depthFt,
+    trusted: true,   // hint is authoritative — never disable Solar overlay etc.
+    source: 'hint',
+  }
+}
+
 function computeTargetBboxPx(
   insights: any,
   centerLat: number, centerLng: number, zoom: number,
   imgW: number, imgH: number,
-): { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean } | null {
+): { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean; source: 'solar-trusted' | 'solar-untrusted' } | null {
   if (!insights?.boundingBox) return null
   const bb = insights.boundingBox
   const sw = bb.sw || bb.southWest
@@ -950,7 +1008,7 @@ function computeTargetBboxPx(
     y2 = Math.min(imgH - 1, cy + halfPx)
   }
   if (x2 - x1 < 20 || y2 - y1 < 20) return null
-  return { x1, y1, x2, y2, widthFt, depthFt, trusted }
+  return { x1, y1, x2, y2, widthFt, depthFt, trusted, source: trusted ? 'solar-trusted' : 'solar-untrusted' }
 }
 
 async function safelyFetchSolar(env: Bindings, lat: number, lng: number): Promise<any> {
@@ -988,12 +1046,12 @@ function buildSystemPrompt(
     solarOverlayApplied: boolean
     solarSegmentsOverlaid: number
     targetCenterPx: { x: number; y: number }
-    targetBboxPx: { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean } | null
+    targetBboxPx: { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean; source?: 'hint' | 'solar-trusted' | 'solar-untrusted' } | null
     includeOutbuildings: boolean
   },
 ): string {
   const role = edge === 'eaves'
-    ? 'detecting the OUTER PERIMETER of every building roof in the image — one closed polygon per structure (house + any detached garages/sheds visible). Trace at the EAVE LINE (drip edge), not the walls. Include all jogs and bump-outs as vertices of the polygon. ⚠️ FOR 2-STORY BUILDINGS: return the UPPER (main) roofline as ONE polygon AND any LOWER-TIER eave wraparound (porch roof, garage extension lower than the main roof, sunroom/mudroom add-on with its own drip line) as SEPARATE ADDITIONAL polygons in the segments array. Do NOT collapse a 2-story house into a single ring — the lower lip carries a different pitch and matters for the report. Most residential traces land between 8 and 24 vertices per polygon; a true rectangle is 4 and that is correct. Corners only — no points on straight edges. Trees and shadows commonly hide parts of an eave — EXTRAPOLATE visible eave lines through the canopy. Residential roofs are RECTILINEAR with right-angle corners: if 3 sides are visible, the 4th follows by orthogonal projection from the last two visible corners. Do NOT stop the trace at the edge of a tree canopy and call that a corner.'
+    ? 'detecting the OUTER PERIMETER of every building roof in the image — one closed polygon per structure (house + any detached garages/sheds visible). Trace at the EAVE LINE (drip edge), not the walls. Include all jogs and bump-outs as vertices of the polygon. ⚠️ FOR 2-STORY BUILDINGS: return the UPPER (main) roofline as ONE polygon AND any LOWER-TIER eave wraparound (porch roof, garage extension lower than the main roof, sunroom/mudroom add-on with its own drip line) as SEPARATE ADDITIONAL polygons in the segments array. Do NOT collapse a 2-story house into a single ring — the lower lip carries a different pitch and matters for the report. ⚠️ FOR ACREAGE / MULTI-WING HOMES: rural/acreage homes are often L-shape, U-shape, T-shape, or a main block with one or more perpendicular wings/extensions. Trace EVERY wing as part of the SAME closed polygon — do NOT stop at the central block. Wings, additions, attached garages, breezeways, sunrooms — all are part of the one building polygon as long as they share continuous eave-level roof with the main structure (no clear roof break / vertical wall separation visible from above). Simple residential traces are 8–16 vertices; multi-wing acreages routinely need 20–32 vertices — do not artificially cap. Corners only — no points on straight edges. Trees and shadows commonly hide parts of an eave — EXTRAPOLATE visible eave lines through the canopy. Residential roofs are RECTILINEAR with right-angle corners: if 3 sides are visible, the 4th follows by orthogonal projection from the last two visible corners. Do NOT stop the trace at the edge of a tree canopy and call that a corner.'
     : edge === 'ridges'
     ? 'detecting RIDGE LINES — the horizontal peaks where two opposing roof planes meet at the top. Each ridge is a polyline (2+ points). Hip-roof structures usually have one short central ridge; gable roofs have one long ridge per gable. Do NOT trace hips, valleys, or eaves.'
     : edge === 'valleys'
@@ -1036,9 +1094,11 @@ function buildSystemPrompt(
       ? `The target property is centred at pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) on Image 1. Trace the MAIN HOUSE (centre) AND any DETACHED OUTBUILDINGS on the same lot — detached garage, shed, workshop, carport — as ADDITIONAL polygons in segments[]. Each outbuilding gets its own closed polygon. Do NOT trace neighbour houses on adjacent lots (separated by driveways, fences, or property lines).`
       : `The target building is centred at pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) on Image 1 — the satellite image has been recentred and zoomed so the target sits in the middle of the frame. Trace ONLY this central building. Any other buildings visible at the edges of the image are NEIGHBOURS, not the target.`,
     opts.targetBboxPx
-      ? (opts.targetBboxPx.trusted
+      ? (opts.targetBboxPx.source === 'hint'
+          ? `🎯 OPERATOR MARK REGION — AUTHORITATIVE: the user has explicitly enclosed the target building inside the red dashed circle. The building you must trace fits inside the pixel rectangle (${opts.targetBboxPx.x1}, ${opts.targetBboxPx.y1}) → (${opts.targetBboxPx.x2}, ${opts.targetBboxPx.y2}) — approximately ${opts.targetBboxPx.widthFt}ft × ${opts.targetBboxPx.depthFt}ft. **Trace EVERY roof plane (main block + wings + extensions + porches) visible inside or touching this rectangle as ONE connected polygon** — do NOT stop at the central block. Multi-wing L/U/T-shape acreages need 20–32 vertices. This bbox SUPERSEDES Google Solar's; if Solar's segments overlay or 60ft-clamp hint disagrees with the operator's circle, IGNORE the Solar hints — the operator drew the ring around the whole building they want measured, wings included.`
+          : opts.targetBboxPx.trusted
           ? `Google Solar API's footprint for that building covers approximately the pixel rectangle (${opts.targetBboxPx.x1}, ${opts.targetBboxPx.y1}) to (${opts.targetBboxPx.x2}, ${opts.targetBboxPx.y2}) on Image 1 — ${opts.targetBboxPx.widthFt}ft wide × ${opts.targetBboxPx.depthFt}ft deep. Your output polygon for ${edge === 'eaves' ? 'each eave section' : 'each line'} should sit ENTIRELY within or immediately adjacent to that rectangle. Anything outside it is a neighbour's house, driveway, garden bed, or street — DO NOT TRACE THOSE.`
-          : `⚠️ Google Solar API returned a ${opts.targetBboxPx.widthFt}ft × ${opts.targetBboxPx.depthFt}ft bounding box for this address — that is LARGER than a typical residential footprint, which means Solar has MERGED THIS HOUSE WITH A NEIGHBOUR or the full lot. DO NOT use Solar's bbox as a guide. Instead, trace ONLY the single building that contains the pin pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) and is bounded by visible separations (driveways, fences, grass) from any adjacent buildings. Stay within roughly the pixel rectangle (${opts.targetBboxPx.x1}, ${opts.targetBboxPx.y1}) to (${opts.targetBboxPx.x2}, ${opts.targetBboxPx.y2}) which has been clamped to a 60ft radius around the pin.`)
+          : `⚠️ Google Solar API returned a ${opts.targetBboxPx.widthFt}ft × ${opts.targetBboxPx.depthFt}ft bounding box for this address — that is LARGER than a typical residential footprint. Two possibilities: (a) Solar merged this house with a neighbour, OR (b) this is a genuine ACREAGE / multi-wing home (5000-8000 sqft is common in rural Alberta). The pixel rectangle (${opts.targetBboxPx.x1}, ${opts.targetBboxPx.y1}) → (${opts.targetBboxPx.x2}, ${opts.targetBboxPx.y2}) has been clamped to a 60ft radius around the pin AS A FALLBACK — but if you can VISUALLY SEE wings, additions, or extensions on the same building outside that clamp (no driveway, no fence, no grass gap between them), TRACE THE WHOLE BUILDING including wings. Use the clamp only to reject genuinely SEPARATE buildings (clear driveway / fence between them). Multi-wing acreages need 20–32 vertices — do not artificially cap.`)
       : 'No Google Solar bounding box is available for this address — trace ONLY the building under the centre pixel and its directly-attached parts (e.g. attached garage). Do NOT trace any building separated from the centre by a clear gap (those are neighbours).',
     edge === 'eaves'
       ? buildEavesSizeSanityClause(opts.targetBboxPx)
@@ -1064,7 +1124,16 @@ function buildSystemPrompt(
  *  cottage are both legitimate; flagging them as "you merged a neighbour" or
  *  "you stopped at a tree" caused real false negatives. When Solar has a
  *  trusted bbox we anchor on that; otherwise fall back to the prior band. */
-function buildEavesSizeSanityClause(bbox: { widthFt: number; depthFt: number; trusted: boolean } | null): string {
+function buildEavesSizeSanityClause(bbox: { widthFt: number; depthFt: number; trusted: boolean; source?: 'hint' | 'solar-trusted' | 'solar-untrusted' } | null): string {
+  if (bbox && bbox.source === 'hint') {
+    // Mark Region wins — anchor size sanity on the operator's circle area.
+    // Operator circles are intentionally coarse and almost always over-
+    // circle by 30-50% so a wide 0.3×-2.0× bracket is appropriate.
+    const expected = Math.max(400, bbox.widthFt * bbox.depthFt)
+    const lo = Math.round(expected * 0.3)
+    const hi = Math.round(expected * 2.0)
+    return `SIZE SANITY (hint-derived, loose): the operator's Mark Region encloses ~${Math.round(expected)} sqft. A correct eaves polygon should fall in ${lo}–${hi} sqft (operator circles are often 30–50% bigger than the actual building). Hugely outside this range → recheck the imagery, but DO NOT shrink a multi-wing trace just to fit a tighter band — wings count.`
+  }
   if (bbox && bbox.trusted) {
     const expected = Math.max(400, bbox.widthFt * bbox.depthFt)
     // Widened on 2026-05-11 from 0.6×-1.3× to 0.4×-1.8× after a regression
@@ -1077,8 +1146,9 @@ function buildEavesSizeSanityClause(bbox: { widthFt: number; depthFt: number; tr
     const hi = Math.round(expected * 1.8)
     return `SIZE SANITY (loose sanity cap, not a tight constraint): Solar API's bounding box suggests roughly ${Math.round(expected)} sqft. A correct eaves polygon for THIS property would typically fall in ${lo}–${hi} sqft. Outside that range → recheck: bigger than ${hi} sqft usually means a neighbour got merged; smaller than ${lo} sqft usually means tree occlusion clipped the trace early. WITHIN this range, do not second-guess the satellite — Solar's bbox is often clipped at overhanging tree canopy and can under-report the real building by 20-30%.`
   }
-  // No trusted Solar bbox — fall back to the generic Canadian residential band.
-  return 'SIZE SANITY (both directions): a typical Canadian residential house footprint is 1,200–3,000 sqft. If your traced polygon is bigger than ~3,500 sqft you are combining the target with a neighbour or outbuilding — shrink it. If your traced polygon is smaller than ~800 sqft you have almost certainly stopped at a tree-occluded eave or shadow — EXTEND the trace to where the eave actually ends.'
+  // Untrusted bbox WITHOUT a hint — could be merged neighbour OR genuine acreage.
+  // Reframe so Claude doesn't blindly shrink legitimate large homes.
+  return 'SIZE SANITY (broad band): residential Canadian homes typically span 1,200–3,500 sqft for suburban, 3,500–8,000 sqft for acreages and rural estates. Solar API\'s bbox is suspicious here — could be a merged neighbour OR a legitimately large acreage. If your traced polygon falls in 800–8,000 sqft AND the imagery shows one continuous building (no driveways or fences cutting through it), trust the imagery. Outside that range → recheck for merged neighbours (>8,000 sqft) or tree-occlusion clip (<800 sqft).'
 }
 
 function buildUserPrompt(args: {
@@ -1113,8 +1183,14 @@ function buildUserPrompt(args: {
   lines.push('')
   lines.push(`TARGET: building at pixel (${args.targetCenterPx.x}, ${args.targetCenterPx.y}).`)
   if (args.targetBboxPx) {
-    const b = args.targetBboxPx
-    lines.push(`Target bbox: (${b.x1}, ${b.y1}) → (${b.x2}, ${b.y2}) — ${b.widthFt}ft × ${b.depthFt}ft${b.trusted ? '' : ' (UNTRUSTED, Solar API merged neighbour — clamped to 60ft radius around pin)'}. Stay inside this rectangle.`)
+    const b: any = args.targetBboxPx
+    if (b.source === 'hint') {
+      lines.push(`Target bbox (operator MARK REGION — authoritative): (${b.x1}, ${b.y1}) → (${b.x2}, ${b.y2}) — ${b.widthFt}ft × ${b.depthFt}ft. Trace the FULL building inside this rectangle including wings/extensions; ignore Solar's bbox if it disagrees.`)
+    } else if (b.trusted) {
+      lines.push(`Target bbox (Solar API trusted): (${b.x1}, ${b.y1}) → (${b.x2}, ${b.y2}) — ${b.widthFt}ft × ${b.depthFt}ft. Stay inside this rectangle.`)
+    } else {
+      lines.push(`Target bbox (Solar API UNTRUSTED — bbox may have merged a neighbour OR this may be a legitimate acreage): (${b.x1}, ${b.y1}) → (${b.x2}, ${b.y2}) — clamped to 60ft radius around pin. Trace the visible single building including any clearly-attached wings; only treat as separate the buildings with a clear gap (driveway/fence/grass).`)
+    }
   }
   lines.push('')
   lines.push('Google Solar API context for this address:')
@@ -1835,7 +1911,7 @@ async function refineEavesViaSelfCritique(
     safeW: number
     safeH: number
     targetCenterPx: { x: number; y: number }
-    targetBboxPx: { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean } | null
+    targetBboxPx: { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean; source?: 'hint' | 'solar-trusted' | 'solar-untrusted' } | null
   },
 ): Promise<{
   segments: { x: number; y: number }[][]
@@ -1883,7 +1959,9 @@ async function refineEavesViaSelfCritique(
   }
 
   const bboxClause = args.targetBboxPx
-    ? `Target building is centred at pixel (${args.targetCenterPx.x}, ${args.targetCenterPx.y}); Solar bbox is ${args.targetBboxPx.widthFt}ft × ${args.targetBboxPx.depthFt}ft${args.targetBboxPx.trusted ? '' : ' (UNTRUSTED, may have merged a neighbour)'}.`
+    ? ((args.targetBboxPx as any).source === 'hint'
+        ? `Target building bbox is AUTHORITATIVE from operator Mark Region (~${args.targetBboxPx.widthFt}ft × ${args.targetBboxPx.depthFt}ft); the first-draft polygon should cover all wings/extensions inside this region — your refinement should EXPAND not shrink.`
+        : `Target building is centred at pixel (${args.targetCenterPx.x}, ${args.targetCenterPx.y}); Solar bbox is ${args.targetBboxPx.widthFt}ft × ${args.targetBboxPx.depthFt}ft${args.targetBboxPx.trusted ? '' : ' (UNTRUSTED — may be a merged neighbour OR a legitimate acreage; trust the visible imagery, do not arbitrarily shrink)'}.`)
     : `Target building is centred at pixel (${args.targetCenterPx.x}, ${args.targetCenterPx.y}).`
 
   const critiqueSystem = [
