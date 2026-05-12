@@ -1753,7 +1753,13 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
                 '<i class="fas fa-camera mr-1"></i><span id="sa-capture-view-label">Capture View</span>' +
               '</button>' +
             '</div>' +
-            '<gmp-map-3d id="sa-trace-map-3d" mode="HYBRID" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;width:100%;height:100%"></gmp-map-3d>' +
+            // Cesium-backed 3D viewer in an iframe. The Google <gmp-map-3d>
+            // web component encapsulates its WebGL canvas behind a closed
+            // shadow root, which makes canvas.toDataURL() unreachable — so
+            // we render the same Photorealistic 3D Tiles via our own /3d-verify
+            // page (preserveDrawingBuffer:true) and capture via postMessage.
+            // src is set in saInitTraceMap once we know lat/lng.
+            '<iframe id="sa-trace-map-3d-iframe" src="about:blank" allow="fullscreen" style="flex:1;min-height:0;border:none;border-radius:8px;overflow:hidden;width:100%;height:100%;background:#000"></iframe>' +
             '<div id="sa-extra-captures-strip" style="display:none;padding:6px 0 0;gap:6px;flex-wrap:wrap"></div>' +
           '</div>' +
         '</div>' +
@@ -1982,16 +1988,16 @@ function saInitTraceStreetView(lat, lng) {
 
 // ──────────────────────────────────────────────────────────────────────────
 // Capture View — Admin-driven screenshots of the right-side 3D Reference
-// panel. Each click grabs the gmp-map-3d's internal WebGL canvas, encodes
-// it as a JPEG data URL (quality 0.8 to keep payload small), and pushes it
-// onto _saTraceState.extra_captures. Up to 4 captures get bundled into
-// the submit-trace POST and embedded in the customer report. Empty array
-// means the report renders unchanged from today (zero behavior change).
-// WebGL canvases are non-preserving by default, so we capture inside a
-// requestAnimationFrame to grab a fresh-painted frame before the buffer
-// clears. If the cross-origin tile data taints the canvas, toDataURL
-// throws SecurityError and we surface the error inline instead of
-// silently substituting a different image.
+// panel. The 3D panel is an iframe pointing at /3d-verify?postmsg=1 (Cesium
+// viewer with preserveDrawingBuffer:true). We postMessage a capture request
+// to the iframe and await the JPEG data URL response, then push it onto
+// _saTraceState.extra_captures. Up to 4 captures get bundled into the
+// submit-trace POST and embedded in the customer report.
+//
+// Why the iframe: the Google <gmp-map-3d> web component encapsulates its
+// WebGL canvas behind a closed shadow root, so canvas.toDataURL() cannot
+// reach it. The Cesium-rendered /3d-verify page solves this by exposing
+// the canvas directly with preserveDrawingBuffer.
 // ──────────────────────────────────────────────────────────────────────────
 window.saCaptureView = function() {
   var s = window._saTraceState; if (!s) return;
@@ -2000,181 +2006,44 @@ window.saCaptureView = function() {
     saShowCaptureToast('Max 4 captures reached. Remove one to add another.');
     return;
   }
-  var host = document.getElementById('sa-trace-map-3d');
-  if (!host) {
+  var iframe = document.getElementById('sa-trace-map-3d-iframe');
+  if (!iframe || !iframe.contentWindow) {
     saShowCaptureToast('3D map is not ready yet.');
     return;
   }
-
-  // Walk every open shadow boundary under the host and collect canvases.
-  // Maps3DElement nests its WebGL <canvas> several shadow layers deep in
-  // current builds; a single-level shadowRoot query misses it entirely.
-  function findAllCanvases(root, out) {
-    out = out || [];
-    if (!root) return out;
-    if (root.tagName === 'CANVAS') out.push(root);
-    var kids = root.querySelectorAll ? root.querySelectorAll('*') : [];
-    for (var i = 0; i < kids.length; i++) {
-      var el = kids[i];
-      if (el.tagName === 'CANVAS') out.push(el);
-      if (el.shadowRoot) findAllCanvases(el.shadowRoot, out);
-    }
-    if (root.shadowRoot) findAllCanvases(root.shadowRoot, out);
-    return out;
-  }
-
-  function pickRenderCanvas() {
-    var inHost = findAllCanvases(host, []);
-    var inDoc = Array.prototype.slice.call(document.querySelectorAll('canvas'));
-    var seen = new Set();
-    var combined = inHost.concat(inDoc).filter(function(c) {
-      if (seen.has(c)) return false;
-      seen.add(c);
-      return true;
-    });
-    var hostRect = host.getBoundingClientRect();
-    function effW(c) { return c.width || c.clientWidth || 0; }
-    function effH(c) { return c.height || c.clientHeight || 0; }
-    function overlapsHost(c) {
-      var r = c.getBoundingClientRect();
-      return r.right > hostRect.left && r.left < hostRect.right
-          && r.bottom > hostRect.top && r.top < hostRect.bottom;
-    }
-    // Diagnostic: dump every candidate to the console so we can see what
-    // gmp-map-3d actually exposes when capture fails. Safe to leave in —
-    // only fires on the capture click path.
-    try {
-      console.log('[saCaptureView] candidates:', combined.map(function(c) {
-        return {
-          tag: c.tagName,
-          width: c.width, height: c.height,
-          clientW: c.clientWidth, clientH: c.clientHeight,
-          inHost: inHost.indexOf(c) >= 0,
-          overlapsHost: overlapsHost(c),
-          parent: c.parentNode && c.parentNode.host ? ('shadow:' + c.parentNode.host.tagName) : (c.parentNode && c.parentNode.tagName) || null
-        };
-      }));
-    } catch (_) {}
-    var usable = combined.filter(function(c) { return effW(c) > 100 && effH(c) > 100; });
-    // Prefer canvases inside the host's shadow DOM; fall back to any canvas
-    // that visually overlaps the 3D map's bounding box (catches cases where
-    // the canvas lives outside our shadow walk because a nested element
-    // uses a closed shadow root).
-    var inHostUsable = usable.filter(function(c) { return inHost.indexOf(c) >= 0; });
-    var pool = inHostUsable.length ? inHostUsable : usable.filter(overlapsHost);
-    pool.sort(function(a, b) { return (effW(b) * effH(b)) - (effW(a) * effH(a)); });
-    return pool[0] || null;
-  }
-
-  // Pixel-level blank check — toDataURL can produce a valid-looking JPEG
-  // header on a fully-black frame, so length alone isn't sufficient.
-  function looksBlank(canvas) {
-    try {
-      var test = document.createElement('canvas');
-      test.width = 32; test.height = 32;
-      var ctx = test.getContext('2d');
-      ctx.drawImage(canvas, 0, 0, 32, 32);
-      var data = ctx.getImageData(0, 0, 32, 32).data;
-      for (var i = 0; i < data.length; i += 4) {
-        if (data[i] > 12 || data[i+1] > 12 || data[i+2] > 12) return false;
-      }
-      return true;
-    } catch (_) { return false; }
-  }
-
-  // Fallback for non-preserving WebGL: readPixels straight from the back
-  // buffer. Works even when toDataURL on the same canvas returns black,
-  // as long as we run inside the same frame as the engine's draw call.
-  function captureViaReadPixels(canvas) {
-    try {
-      var gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-      if (!gl) return null;
-      var w = canvas.width, h = canvas.height;
-      var pixels = new Uint8Array(w * h * 4);
-      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-      var nonBlack = 0;
-      for (var i = 0; i < pixels.length; i += 4 * 256) {
-        if (pixels[i] > 12 || pixels[i+1] > 12 || pixels[i+2] > 12) { nonBlack++; if (nonBlack > 5) break; }
-      }
-      if (nonBlack === 0) return null;
-      var c2 = document.createElement('canvas');
-      c2.width = w; c2.height = h;
-      var ctx = c2.getContext('2d');
-      var img = ctx.createImageData(w, h);
-      // WebGL has y-axis flipped relative to 2D canvas — flip while copying.
-      var rowBytes = w * 4;
-      for (var y = 0; y < h; y++) {
-        var src = (h - 1 - y) * rowBytes;
-        var dst = y * rowBytes;
-        img.data.set(pixels.subarray(src, src + rowBytes), dst);
-      }
-      ctx.putImageData(img, 0, 0);
-      return c2.toDataURL('image/jpeg', 0.82);
-    } catch (_) { return null; }
-  }
-
-  // Nudge the camera by a sub-pixel amount so the engine schedules a fresh
-  // draw — guarantees the back buffer holds a current frame when we capture.
-  try {
-    if (typeof host.flyCameraTo === 'function' && host.center) {
-      host.flyCameraTo({
-        endCamera: {
-          center: host.center,
-          range: (typeof host.range === 'number' ? host.range : 250) + 0.01,
-          tilt: host.tilt,
-          heading: host.heading,
-          roll: host.roll
-        },
-        durationMillis: 0
-      });
-    }
-  } catch (_) { /* best-effort nudge */ }
-
-  function doCapture() {
-    var canvas = pickRenderCanvas();
-    if (!canvas) {
-      var diag = '';
-      try {
-        var inHost = findAllCanvases(host, []).length;
-        var inDoc = document.querySelectorAll('canvas').length;
-        diag = ' (host:' + inHost + ' doc:' + inDoc + ')';
-      } catch (_) {}
-      saShowCaptureToast('Could not find the 3D map canvas' + diag + '. Pan/zoom the map and try again.');
+  var requestId = 'cap-' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
+  var done = false;
+  function onMsg(ev) {
+    var d = ev && ev.data;
+    if (!d || d.type !== 'rm-3d-capture-result' || d.requestId !== requestId) return;
+    if (done) return;
+    done = true;
+    window.removeEventListener('message', onMsg);
+    if (d.error || !d.data_url) {
+      saShowCaptureToast('Capture failed: ' + (d.error || 'no image returned'));
       return;
     }
-    var dataUrl = null;
-    var taintErr = null;
-    try {
-      var u = canvas.toDataURL('image/jpeg', 0.82);
-      if (u && u.startsWith('data:image/') && u.length >= 5000 && !looksBlank(canvas)) {
-        dataUrl = u;
-      }
-    } catch (e) {
-      taintErr = e;
-    }
-    if (!dataUrl) {
-      var fb = captureViaReadPixels(canvas);
-      if (fb && fb.length >= 5000) dataUrl = fb;
-    }
-    if (!dataUrl) {
-      if (taintErr) {
-        saShowCaptureToast('Browser blocked screenshot (cross-origin canvas). Refresh the page and try again.');
-      } else {
-        saShowCaptureToast('Captured an empty frame. Pan or zoom the 3D map, then try again.');
-      }
-      return;
-    }
-    if (dataUrl.length > 4400000) {
+    if (d.data_url.length > 4400000) {
       saShowCaptureToast('Capture is too large (>3MB). Try zooming out a bit.');
       return;
     }
-    s.extra_captures.push({ data_url: dataUrl, captured_at: new Date().toISOString() });
+    s.extra_captures.push({ data_url: d.data_url, captured_at: new Date().toISOString() });
     saRenderExtraCapturesStrip();
   }
-
-  // Two rAFs: first one lets the engine paint the nudged camera, second
-  // runs in the same frame as that draw so the buffer is still populated.
-  requestAnimationFrame(function() { requestAnimationFrame(doCapture); });
+  window.addEventListener('message', onMsg);
+  setTimeout(function() {
+    if (done) return;
+    done = true;
+    window.removeEventListener('message', onMsg);
+    saShowCaptureToast('Capture timed out. Wait a moment for the 3D tiles to load and try again.');
+  }, 8000);
+  try {
+    iframe.contentWindow.postMessage({ type: 'rm-3d-capture-request', requestId: requestId, quality: 0.82 }, '*');
+  } catch (e) {
+    done = true;
+    window.removeEventListener('message', onMsg);
+    saShowCaptureToast('Could not reach the 3D iframe: ' + (e && e.message || e));
+  }
 };
 
 window.saRemoveCapture = function(idx) {
@@ -2456,15 +2325,17 @@ function saInitTraceMap(lat, lng, address) {
 
   // ── Photorealistic 3D reference map (right pane) ─────────────
   // Centered on the property when the modal opens, then fully independent —
-  // panning/zooming the 2D trace map no longer moves it.
-  var map3d = document.getElementById('sa-trace-map-3d');
-  if (map3d) {
-    try {
-      map3d.center = { lat: center.lat, lng: center.lng, altitude: 0 };
-      if (map3d.range == null) map3d.range = 180;
-      if (map3d.tilt == null) map3d.tilt = 67.5;
-      if (map3d.heading == null) map3d.heading = 25;
-    } catch (e) { /* maps3d library not ready or unsupported — skip silently */ }
+  // panning/zooming the 2D trace map no longer moves it. Rendered via the
+  // /3d-verify Cesium page in an iframe so we control preserveDrawingBuffer
+  // for capture (the Google <gmp-map-3d> web component hides its canvas
+  // behind a closed shadow root, making screenshots impossible).
+  var map3dIframe = document.getElementById('sa-trace-map-3d-iframe');
+  if (map3dIframe) {
+    var src3d = '/3d-verify?postmsg=1'
+      + '&lat=' + encodeURIComponent(center.lat)
+      + '&lng=' + encodeURIComponent(center.lng)
+      + '&heading=25&pitch=-22&range=180';
+    map3dIframe.src = src3d;
   }
 
   // Register higher-resolution basemaps (Esri / Mapbox / Nearmap) as
@@ -2550,26 +2421,10 @@ function saInitTraceMap(lat, lng, address) {
       }
     });
 
-    // Mirror the pin onto the photorealistic 3D map so admin can identify the
-    // exact property among neighbouring rooftops.
-    if (map3d) {
-      (function add3dPin() {
-        var ready = window.customElements && window.customElements.whenDefined
-          ? window.customElements.whenDefined('gmp-marker-3d')
-          : Promise.resolve();
-        ready.then(function() {
-          try {
-            var marker3d = document.createElement('gmp-marker-3d');
-            marker3d.position = { lat: lat, lng: lng, altitude: 25 };
-            marker3d.altitudeMode = 'RELATIVE_TO_GROUND';
-            marker3d.extruded = true;
-            marker3d.label = 'User pin';
-            map3d.appendChild(marker3d);
-            s.userPinMarker3d = marker3d;
-          } catch (e) { /* maps3d marker not supported — silently skip */ }
-        }).catch(function() { /* element never registered — skip */ });
-      })();
-    }
+    // Note: the photorealistic 3D panel no longer renders a per-property
+    // pin — it's now an iframe Cesium viewer (see saInitTraceMap above)
+    // and Cesium doesn't have <gmp-marker-3d>. The 2D map's red pin
+    // still identifies the property.
   }
 
   // Geocode address to ensure map is centered on the right property
@@ -4218,104 +4073,39 @@ window.saAutoTrace = async function(edge) {
 // (no _saTraceState push, no toast, no UI render). Returns a base64
 // data URL string or null when the 3D map isn't capturable.
 async function saCapture3dForAgent() {
-  var host = document.getElementById('sa-trace-map-3d');
-  if (!host) return null;
-
-  function findAllCanvases(root, out) {
-    out = out || [];
-    if (!root) return out;
-    if (root.tagName === 'CANVAS') out.push(root);
-    var kids = root.querySelectorAll ? root.querySelectorAll('*') : [];
-    for (var i = 0; i < kids.length; i++) {
-      var el = kids[i];
-      if (el.tagName === 'CANVAS') out.push(el);
-      if (el.shadowRoot) findAllCanvases(el.shadowRoot, out);
-    }
-    if (root.shadowRoot) findAllCanvases(root.shadowRoot, out);
-    return out;
-  }
-
-  function pickRenderCanvas() {
-    var all = findAllCanvases(host, []).filter(function(c) { return c.width > 100 && c.height > 100; });
-    all.sort(function(a, b) { return (b.width * b.height) - (a.width * a.height); });
-    return all[0] || null;
-  }
-
-  function looksBlank(canvas) {
-    try {
-      var t = document.createElement('canvas');
-      t.width = 32; t.height = 32;
-      var ctx = t.getContext('2d');
-      ctx.drawImage(canvas, 0, 0, 32, 32);
-      var d = ctx.getImageData(0, 0, 32, 32).data;
-      for (var i = 0; i < d.length; i += 4) {
-        if (d[i] > 12 || d[i+1] > 12 || d[i+2] > 12) return false;
-      }
-      return true;
-    } catch (_) { return false; }
-  }
-
-  function captureViaReadPixels(canvas) {
-    try {
-      var gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-      if (!gl) return null;
-      var w = canvas.width, h = canvas.height;
-      var pixels = new Uint8Array(w * h * 4);
-      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-      var any = false;
-      for (var i = 0; i < pixels.length; i += 4 * 256) {
-        if (pixels[i] > 12 || pixels[i+1] > 12 || pixels[i+2] > 12) { any = true; break; }
-      }
-      if (!any) return null;
-      var c2 = document.createElement('canvas');
-      c2.width = w; c2.height = h;
-      var ctx = c2.getContext('2d');
-      var img = ctx.createImageData(w, h);
-      var rowBytes = w * 4;
-      for (var y = 0; y < h; y++) {
-        var src = (h - 1 - y) * rowBytes;
-        var dst = y * rowBytes;
-        img.data.set(pixels.subarray(src, src + rowBytes), dst);
-      }
-      ctx.putImageData(img, 0, 0);
-      return c2.toDataURL('image/jpeg', 0.82);
-    } catch (_) { return null; }
-  }
-
-  // Nudge the camera so the WebGL engine schedules a fresh draw, then
-  // wait two animation frames before reading.
-  try {
-    if (typeof host.flyCameraTo === 'function' && host.center) {
-      host.flyCameraTo({
-        endCamera: {
-          center: host.center,
-          range: (typeof host.range === 'number' ? host.range : 250) + 0.01,
-          tilt: host.tilt, heading: host.heading, roll: host.roll
-        },
-        durationMillis: 0
-      });
-    }
-  } catch (_) {}
-
+  var iframe = document.getElementById('sa-trace-map-3d-iframe');
+  if (!iframe || !iframe.contentWindow) return null;
+  // Mirror saCaptureView's postMessage protocol — the iframe (Cesium at
+  // /3d-verify?postmsg=1) responds with a JPEG data URL we can ship to
+  // the auto-trace agent as a second perspective alongside the 2D map.
   return new Promise(function(resolve) {
-    requestAnimationFrame(function() {
-      requestAnimationFrame(function() {
-        var canvas = pickRenderCanvas();
-        if (!canvas) { resolve(null); return; }
-        var dataUrl = null;
-        try {
-          var u = canvas.toDataURL('image/jpeg', 0.82);
-          if (u && u.startsWith('data:image/') && u.length >= 5000 && !looksBlank(canvas)) dataUrl = u;
-        } catch (_) {}
-        if (!dataUrl) {
-          var fb = captureViaReadPixels(canvas);
-          if (fb && fb.length >= 5000) dataUrl = fb;
-        }
-        // Reject monster captures — backend caps at ~5.5MB base64 chars.
-        if (dataUrl && dataUrl.length > 5_400_000) dataUrl = null;
-        resolve(dataUrl);
-      });
-    });
+    var requestId = 'agent-cap-' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
+    var done = false;
+    function onMsg(ev) {
+      var d = ev && ev.data;
+      if (!d || d.type !== 'rm-3d-capture-result' || d.requestId !== requestId) return;
+      if (done) return;
+      done = true;
+      window.removeEventListener('message', onMsg);
+      if (d.error || !d.data_url) { resolve(null); return; }
+      // Reject monster captures — backend caps at ~5.5MB base64 chars.
+      if (d.data_url.length > 5_400_000) { resolve(null); return; }
+      resolve(d.data_url);
+    }
+    window.addEventListener('message', onMsg);
+    setTimeout(function() {
+      if (done) return;
+      done = true;
+      window.removeEventListener('message', onMsg);
+      resolve(null);
+    }, 4000);
+    try {
+      iframe.contentWindow.postMessage({ type: 'rm-3d-capture-request', requestId: requestId, quality: 0.82 }, '*');
+    } catch (_) {
+      done = true;
+      window.removeEventListener('message', onMsg);
+      resolve(null);
+    }
   });
 }
 
