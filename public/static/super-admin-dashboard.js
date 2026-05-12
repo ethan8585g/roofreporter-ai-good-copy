@@ -1704,8 +1704,8 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
   overlay.id = 'sa-trace-modal';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:16px';
   overlay.innerHTML =
-    '<div style="background:#111827;border:1px solid #374151;border-radius:16px;width:96vw;max-width:1700px;height:90vh;display:flex;flex-direction:column">' +
-      '<div style="padding:16px 20px;border-bottom:1px solid #374151;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">' +
+    '<div id="sa-trace-inner" style="background:#111827;border:1px solid #374151;border-radius:16px;width:96vw;max-width:1700px;height:90vh;display:flex;flex-direction:column">' +
+      '<div id="sa-trace-header" style="padding:16px 20px;border-bottom:1px solid #374151;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">' +
         '<div>' +
           '<div style="color:#f9fafb;font-size:15px;font-weight:700"><i class="fas fa-drafting-compass mr-2" style="color:#f59e0b"></i>Trace Roof — ' + orderNum + '</div>' +
           '<div style="color:#6b7280;font-size:12px;margin-top:2px">' + address + '</div>' +
@@ -1715,7 +1715,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<button onclick="document.getElementById(\'sa-trace-modal\').remove()" title="Close" style="color:#9ca3af;background:#1f2937;border:1px solid #374151;border-radius:8px;width:34px;height:34px;font-size:20px;cursor:pointer;line-height:1;display:inline-flex;align-items:center;justify-content:center">&times;</button>' +
         '</div>' +
       '</div>' +
-      '<div style="padding:10px 20px;background:#1f2937;border-bottom:1px solid #374151;font-size:12px;color:#9ca3af;flex-shrink:0">' +
+      '<div id="sa-trace-legend" style="padding:10px 20px;background:#1f2937;border-bottom:1px solid #374151;font-size:12px;color:#9ca3af;flex-shrink:0">' +
         '<span style="margin-right:12px"><span style="display:inline-block;width:12px;height:12px;background:#22c55e;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Eaves</span>' +
         '<span style="margin-right:12px"><span style="display:inline-block;width:12px;height:3px;background:#dc2626;margin-right:4px;vertical-align:middle"></span>Ridge</span>' +
         '<span style="margin-right:12px"><span style="display:inline-block;width:12px;height:3px;background:#ea580c;margin-right:4px;vertical-align:middle"></span>Hip</span>' +
@@ -1746,7 +1746,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
               '<div style="font-size:9px;color:#6b7280;font-style:italic;margin-top:6px;line-height:1.3">Steeper for A-frame dormers (e.g. 12). Leave blank to use roof default.</div>' +
             '</div>' +
           '</div>' +
-          '<div style="flex:1;min-height:0;display:flex;flex-direction:column">' +
+          '<div id="sa-trace-3d-col" style="flex:1;min-height:0;display:flex;flex-direction:column">' +
             '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:8px">' +
               '<span>3D Reference</span>' +
               '<button onclick="saCaptureView()" id="sa-capture-view-btn" title="Take a screenshot of whatever the 3D map is currently showing. Up to 4 captures get embedded in the customer report; if you skip this, the report renders as-is." style="padding:4px 9px;background:rgba(245,158,11,0.18);color:#fbbf24;border:1px solid rgba(245,158,11,0.45);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none;letter-spacing:0">' +
@@ -1763,7 +1763,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
             '<div id="sa-extra-captures-strip" style="display:none;padding:6px 0 0;gap:6px;flex-wrap:wrap"></div>' +
           '</div>' +
         '</div>' +
-        '<div style="flex:1;min-height:0;display:flex;flex-direction:column">' +
+        '<div id="sa-trace-streetview-row" style="flex:1;min-height:0;display:flex;flex-direction:column">' +
           '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Street View</div>' +
           '<div id="sa-trace-streetview" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;background:#0b1220"></div>' +
         '</div>' +
@@ -1843,6 +1843,14 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
         '</div>' +
       '</div>' +
       '<style>' +
+        // Fullscreen mode hides the modal chrome so the 2D trace map fills
+        // the viewport. Toolbar stays visible at the bottom so the operator
+        // can still switch tools, undo, and submit. Triggered by the
+        // [data-fullscreen="1"] attribute set by saToggleTraceFullscreen.
+        '#sa-trace-modal[data-fullscreen="1"] #sa-trace-header,' +
+        '#sa-trace-modal[data-fullscreen="1"] #sa-trace-legend,' +
+        '#sa-trace-modal[data-fullscreen="1"] #sa-trace-3d-col,' +
+        '#sa-trace-modal[data-fullscreen="1"] #sa-trace-streetview-row{display:none !important}' +
         '.sa-verify-planes-panel{position:fixed;top:54px;right:14px;width:300px;max-height:78vh;overflow-y:auto;z-index:10001;background:rgba(15,23,42,0.97);border:1px solid #4f46e5;border-radius:12px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,0.5)}' +
         '.sa-verify-handle{display:none}' +
         // Mobile: bottom sheet — covers the lower half of the screen so the
@@ -1856,20 +1864,27 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
     '</div>';
   document.body.appendChild(overlay);
 
-  // Fullscreen toggle for the trace modal — expands the centered overlay
-  // (96vw × 90vh w/ padding + rounded corners) to fill the viewport
-  // (100vw × 100vh, no chrome) and back. 2D Google Map needs an explicit
-  // resize event after the bounds change; the 3D map, Street View, and
-  // pitch panel ride on flex and resize automatically.
+  // Fullscreen toggle for the trace map — hides the modal chrome (header,
+  // legend, 3D Reference column, Street View row) so the 2D trace map fills
+  // the entire viewport. Toolbar stays visible at the bottom so the operator
+  // can still switch tools, undo, and submit. A floating "Exit Fullscreen"
+  // pill is appended over the map so the user can return without the header
+  // button being visible. The 2D Google Map needs an explicit `resize` event
+  // after layout changes; everything else (street view, 3D iframe) rides on
+  // flex and recovers automatically when restored.
   window.saToggleTraceFullscreen = function() {
     var overlay = document.getElementById('sa-trace-modal');
     if (!overlay) return;
-    var inner = overlay.firstElementChild;
+    var inner = document.getElementById('sa-trace-inner');
     if (!inner) return;
     var icon = document.getElementById('sa-trace-fullscreen-icon');
     var label = document.getElementById('sa-trace-fullscreen-label');
+    var existingExit = document.getElementById('sa-trace-fullscreen-exit');
     var isFull = overlay.getAttribute('data-fullscreen') === '1';
     if (isFull) {
+      // The CSS rule below (keyed off [data-fullscreen="1"]) restores the
+      // hidden chrome when we flip the attribute back; we only need to
+      // reset the inner-panel sizing here.
       overlay.setAttribute('data-fullscreen', '0');
       overlay.style.padding = '16px';
       inner.style.width = '96vw';
@@ -1877,6 +1892,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
       inner.style.height = '90vh';
       inner.style.borderRadius = '16px';
       inner.style.border = '1px solid #374151';
+      if (existingExit) existingExit.remove();
       if (icon) { icon.className = 'fas fa-expand'; }
       if (label) { label.textContent = 'Fullscreen'; }
     } else {
@@ -1887,6 +1903,17 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
       inner.style.height = '100vh';
       inner.style.borderRadius = '0';
       inner.style.border = 'none';
+      // Floating exit button — the header button is hidden in fullscreen,
+      // so we overlay a small amber pill at the viewport's top-right.
+      if (!existingExit) {
+        var exitBtn = document.createElement('button');
+        exitBtn.id = 'sa-trace-fullscreen-exit';
+        exitBtn.onclick = window.saToggleTraceFullscreen;
+        exitBtn.title = 'Exit fullscreen';
+        exitBtn.innerHTML = '<i class="fas fa-compress mr-1"></i>Exit Fullscreen';
+        exitBtn.style.cssText = 'position:fixed;top:12px;right:12px;z-index:10003;color:#111;background:rgba(245,158,11,0.92);border:1px solid #b45309;border-radius:8px;height:34px;padding:0 12px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;line-height:1;box-shadow:0 2px 8px rgba(0,0,0,0.4)';
+        overlay.appendChild(exitBtn);
+      }
       if (icon) { icon.className = 'fas fa-compress'; }
       if (label) { label.textContent = 'Exit fullscreen'; }
     }
