@@ -130,9 +130,7 @@ function generateSessionToken(): string {
 // Phase 3 #11: single source of truth for the free-trial grant size. Used by
 // both signup paths (Google + email/password) and the responses that surface
 // it to the client. To change the grant, edit only this constant.
-// 2026-05-11: bumped 4 -> 5 as a permanent offer improvement (more generous
-// trial drives CVR; not a time-limited promo).
-export const FREE_TRIAL_REPORTS = 5
+export const FREE_TRIAL_REPORTS = 4
 
 // Phase 2 #8: validate the Google profile picture URL before we persist it.
 // Google sends `picture` as a URL string in the ID token; reject anything that
