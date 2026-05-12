@@ -351,14 +351,17 @@ function placeMarker(lat, lng) {
   if (lngInput) lngInput.value = lng;
 
   if (orderState.marker) orderState.marker.setMap(null);
+  // Touch devices can't reliably grab a draggable Maps marker — the pan gesture wins.
+  // Disable drag on touch; the map's click listener already moves the pin on tap.
+  const isTouch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
   orderState.marker = new google.maps.Marker({
     position: { lat, lng },
     map: orderState.map,
-    draggable: true,
+    draggable: !isTouch,
     animation: google.maps.Animation.DROP,
     icon: {
       path: google.maps.SymbolPath.CIRCLE,
-      scale: 10,
+      scale: isTouch ? 14 : 10,
       fillColor: '#EF4444',
       fillOpacity: 1,
       strokeColor: '#FFFFFF',
@@ -366,9 +369,11 @@ function placeMarker(lat, lng) {
     }
   });
 
-  orderState.marker.addListener('dragend', (e) => {
-    placeMarker(e.latLng.lat(), e.latLng.lng());
-  });
+  if (!isTouch) {
+    orderState.marker.addListener('dragend', (e) => {
+      placeMarker(e.latLng.lat(), e.latLng.lng());
+    });
+  }
 
   orderState.map.panTo({ lat, lng });
   if (orderState.map.getZoom() < 17) orderState.map.setZoom(18);
@@ -581,7 +586,7 @@ function renderPinStep(root, progressBar) {
           <div>
             <label class="block text-sm font-semibold text-gray-300 mb-2"><i class="fas fa-map mr-1"></i>Click Map to Place Roof Pin *</label>
             <div id="orderMap" class="w-full h-64 rounded-xl border-2 border-white/15 overflow-hidden" style="min-height: 256px;"></div>
-            <p class="text-xs text-gray-400 mt-1"><i class="fas fa-info-circle mr-1"></i>Click directly on the roof. Drag the pin to adjust.</p>
+            <p class="text-xs text-gray-400 mt-1"><i class="fas fa-info-circle mr-1"></i>Tap (or click) directly on the roof. Tap again anywhere to move the pin.</p>
           </div>
 
           <div id="coordDisplay" class="hidden bg-[#0A0A0A] border border-white/10 rounded-xl px-4 py-3"></div>
