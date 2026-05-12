@@ -1372,6 +1372,11 @@ app.get('/3d-verify', async (c) => {
   .toast.show{opacity:1}
   .toast.ok{background:#15803D}
   .toast.warn{background:#9A3412}
+  /* postmsg mode: hide the floating top buttons — parent provides its own
+     capture button. Keep .legend visible so users see Cesium's mouse-control
+     hints (controls differ from the previous <gmp-map-3d>). */
+  body.postmsg .topbar, body.postmsg .capturebar { display: none !important; }
+  body.postmsg .legend { font-size: 10px; padding: 4px 8px; bottom: 6px; left: 6px; }
 </style>
 </head>
 <body>
@@ -1409,8 +1414,16 @@ app.get('/3d-verify', async (c) => {
   // the parent trace UI: clicks become ridge/hip/valley line endpoints which
   // are postMessage'd back to the parent and pushed onto the 2D trace.
   const CAPTURE_ENABLED = new URLSearchParams(location.search).get('capture') === '1' && !AUTOCAPTURE && !AUTOCAPTURE_CORNERS;
-  const INITIAL_HEIGHT = 250; // meters above ground
-  const INITIAL_PITCH_DEG = -45; // looking down 45°
+  // ?postmsg=1 — parent-controlled capture mode. Used when this page is
+  // embedded as an iframe (e.g. the super-admin trace modal's 3D panel).
+  // Parent posts {type:'rm-3d-capture-request', requestId} → we capture the
+  // canvas and post back {type:'rm-3d-capture-result', requestId, data_url}
+  // (or {error}). The native UI chrome is hidden so the iframe looks like a
+  // bare 3D viewport that the parent surrounds with its own controls.
+  const POSTMSG_MODE = new URLSearchParams(location.search).get('postmsg') === '1';
+  const INITIAL_HEIGHT = parseFloat(new URLSearchParams(location.search).get('range') || '') || 250; // meters above ground
+  const INITIAL_PITCH_DEG = parseFloat(new URLSearchParams(location.search).get('pitch') || '') || -45; // looking down 45°
+  const INITIAL_HEADING_DEG = parseFloat(new URLSearchParams(location.search).get('heading') || '') || 0;
   let viewer = null;
 
   // ── Active capture state (only meaningful when CAPTURE_ENABLED) ──
@@ -1449,7 +1462,7 @@ app.get('/3d-verify', async (c) => {
       duration: 1.0
     });
   }
-  function resetView(){ flyToInitial(0); }
+  function resetView(){ flyToInitial(INITIAL_HEADING_DEG); }
   function rotate(deltaDeg){
     if (!viewer) return;
     const heading = Cesium.Math.toDegrees(viewer.camera.heading);
@@ -1685,6 +1698,42 @@ app.get('/3d-verify', async (c) => {
     return data;
   }
 
+  // Capture the current frame as a JPEG data URL. Used by both the
+  // postMessage capture mode (parent-driven) and the existing on-page
+  // "Save as Cover" button. Returns null if the viewer isn't ready.
+  function captureCurrentFrame(quality){
+    if (!viewer) return null;
+    try {
+      viewer.render();
+      const canvas = viewer.scene.canvas;
+      const url = canvas.toDataURL('image/jpeg', typeof quality === 'number' ? quality : 0.85);
+      if (!url || url.length < 5000) return null;
+      return url;
+    } catch (_) { return null; }
+  }
+
+  // Listen for parent capture requests when running in postmsg mode.
+  // Registered immediately (not after tileset load) so the parent can
+  // queue requests as soon as the iframe loads; if Cesium isn't ready
+  // yet we just reply with an error and the parent retries.
+  if (POSTMSG_MODE) {
+    try { document.body.classList.add('postmsg'); } catch(_) {}
+    window.addEventListener('message', function(ev){
+      const d = ev && ev.data;
+      if (!d || d.type !== 'rm-3d-capture-request') return;
+      const requestId = d.requestId || null;
+      const reply = (msg) => {
+        try { window.parent && window.parent.postMessage(msg, '*'); } catch(_) {}
+      };
+      const url = captureCurrentFrame(typeof d.quality === 'number' ? d.quality : 0.85);
+      if (!url) {
+        reply({ type: 'rm-3d-capture-result', requestId, error: 'viewer not ready' });
+        return;
+      }
+      reply({ type: 'rm-3d-capture-result', requestId, data_url: url });
+    });
+  }
+
   try {
     // Suppress the Ion access-token nag overlay — we use Google Photorealistic
     // 3D Tiles, not Ion assets.
@@ -1743,7 +1792,7 @@ app.get('/3d-verify', async (c) => {
         );
     tilesetPromise.then((tileset) => {
       viewer.scene.primitives.add(tileset);
-      flyToInitial(0);
+      flyToInitial(INITIAL_HEADING_DEG);
 
       // Auto-capture mode: when ?autocapture=1 + ?orderId= are set, the report
       // page injected a hidden iframe so the first viewer of a report gets a
@@ -1781,6 +1830,22 @@ app.get('/3d-verify', async (c) => {
         setTimeout(() => {
           try { window.parent && window.parent.postMessage({ type: 'rm-3d-cover-done', orderId: ORDER_ID, ok: false, error: 'timeout' }, '*'); } catch(_) {}
         }, 30000);
+      }
+
+      // Parent-controlled capture mode (?postmsg=1) — used by the super-admin
+      // trace modal's 3D panel. Once the first tile batch is loaded, signal
+      // ready so the parent knows captures will return real frames; then
+      // respond to capture requests on demand.
+      if (POSTMSG_MODE) {
+        const onceLoaded = tileset.initialTilesLoaded;
+        const signalReady = () => {
+          try { window.parent && window.parent.postMessage({ type: 'rm-3d-ready' }, '*'); } catch(_) {}
+        };
+        if (onceLoaded && onceLoaded.addEventListener) {
+          onceLoaded.addEventListener(signalReady);
+        } else {
+          setTimeout(signalReady, 4000);
+        }
       }
 
       // Auto-capture-corners mode: ?autocapture=corners + ?orderId= triggers
@@ -10849,27 +10914,33 @@ function getCustomerRegisterPageHTML(prefillEmail = '', googleClientId = '', pre
         </div>
 
         ${googleClientId ? `
-<!-- conv-v5: Google SSO as PRIMARY option above email/password -->
+<!-- conv-v5: Google SSO as PRIMARY — visually dominant over email/password.
+     1-click signups have ~3x higher CVR than email/password forms. -->
 <div id="g_id_onload"
   data-client_id="${googleClientId}"
   data-callback="handleGoogleCredential"
   data-auto_prompt="true">
 </div>
-<div style="display:flex;justify-content:center;margin-bottom:6px" onclick="rrTrack('oauth_click',{provider:'google'})">
-  <div class="g_id_signin"
-    data-type="standard"
-    data-shape="pill"
-    data-theme="filled_black"
-    data-text="continue_with"
-    data-size="large"
-    data-width="280"
-    data-logo_alignment="left">
+<div style="background:linear-gradient(180deg,#f0fdf4 0%,#ffffff 100%);border:1px solid #bbf7d0;border-radius:14px;padding:16px 16px 14px;margin-bottom:16px;text-align:center">
+  <div style="display:inline-flex;align-items:center;gap:6px;background:#00FF8820;border:1px solid #00FF8840;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700;color:#00997A;margin-bottom:10px;letter-spacing:0.04em">
+    <i class="fas fa-bolt"></i> RECOMMENDED &mdash; 1 CLICK
   </div>
+  <div style="display:flex;justify-content:center" onclick="rrTrack('oauth_click',{provider:'google'})">
+    <div class="g_id_signin"
+      data-type="standard"
+      data-shape="pill"
+      data-theme="filled_black"
+      data-text="continue_with"
+      data-size="large"
+      data-width="400"
+      data-logo_alignment="left">
+    </div>
+  </div>
+  <p style="margin:8px 0 0;font-size:12px;color:#6b7280">No password to remember &middot; 5 seconds</p>
 </div>
-<p style="text-align:center;margin:0 0 14px;font-size:12px;color:#6b7280">Fastest &#8211; 1-click, no password</p>
-<div style="display:flex;align-items:center;gap:12px;margin:12px 0 18px">
+<div style="display:flex;align-items:center;gap:12px;margin:0 0 16px">
   <div style="flex:1;height:1px;background:#e5e7eb"></div>
-  <span style="font-size:13px;color:#6b7280;white-space:nowrap">or sign up with email</span>
+  <span style="font-size:12px;color:#9ca3af;white-space:nowrap">or use email</span>
   <div style="flex:1;height:1px;background:#e5e7eb"></div>
 </div>
 ` : ''}
@@ -10997,6 +11068,10 @@ ${previewId ? `
                 style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:16px;cursor:pointer">
                 Create Account &#x2192;
               </button>
+              <!-- Reassurance line directly under CTA — moment-of-decision trust signal -->
+              <p style="text-align:center;margin:10px 0 0;font-size:13px;color:#374151;font-weight:600">
+                &#x1F381; 4 free reports &middot; No credit card &middot; Cancel anytime
+              </p>
               <p id="reg-submit-hint" style="display:none;margin:8px 0 0;font-size:13px;color:#b91c1c;text-align:center">Verify your email above to enable account creation.</p>
             </div>
           </div>
