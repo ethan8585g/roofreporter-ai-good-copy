@@ -3762,6 +3762,44 @@ function saTearDownVerifyPlaneOverlays() {
   }
 }
 
+// Convert Google Solar API pitch (degrees) into roofer rise:12 notation,
+// snapped to 0.5 to match the Section Pitches input step="0.5". Clamped
+// to the 0–24 input range. Returns null on invalid / zero / negative input.
+function saDegToRiseOver12(deg) {
+  if (typeof deg !== 'number' || !isFinite(deg) || deg <= 0) return null;
+  var rise = 12 * Math.tan(deg * Math.PI / 180);
+  if (!isFinite(rise) || rise <= 0) return null;
+  if (rise > 24) rise = 24;
+  return Math.round(rise * 2) / 2;
+}
+
+// Pick the Solar API roof segment whose center is closest to the given
+// section's polygon centroid. Squared-Euclidean distance on lat/lng is
+// fine at single-property scale (the segments and section are within a
+// few tens of metres of each other). Returns the matching segment or
+// null when no usable segment exists.
+function saPickNearestSolarSegment(sectionPoints, solarData) {
+  if (!solarData || !solarData.available || !Array.isArray(solarData.segments)) return null;
+  if (!Array.isArray(sectionPoints) || sectionPoints.length < 3) return null;
+  var cx = 0, cy = 0;
+  for (var i = 0; i < sectionPoints.length; i++) {
+    cx += sectionPoints[i].lat;
+    cy += sectionPoints[i].lng;
+  }
+  cx /= sectionPoints.length;
+  cy /= sectionPoints.length;
+  var best = null, bestD = Infinity;
+  for (var j = 0; j < solarData.segments.length; j++) {
+    var seg = solarData.segments[j];
+    if (!seg || !seg.center || seg.pitch_degrees == null) continue;
+    var dLat = seg.center.lat - cx;
+    var dLng = seg.center.lng - cy;
+    var d = dLat * dLat + dLng * dLng;
+    if (d < bestD) { bestD = d; best = seg; }
+  }
+  return best;
+}
+
 function saCloseEaveSection() {
   var s = window._saTraceState; if (!s || !s.map) return;
   var pts = s._eaveLatLngs || [];
@@ -3830,6 +3868,24 @@ function saCloseEaveSection() {
 
   s._eaveLatLngs = [];
   s.eavePoints = [];
+
+  // Auto-populate pitch from Google Solar API segments when available.
+  // Match the section's centroid to the closest segment center and
+  // convert pitchDegrees → rise:12 to match the Section Pitches input.
+  // Manual edits always win — see the input change handler in
+  // saRenderSectionPitches, which writes to sec.pitch_rise on edit.
+  if (section.pitch_rise == null) {
+    try {
+      var solar = (window.saTraceV2 && typeof window.saTraceV2.getSolarData === 'function')
+        ? window.saTraceV2.getSolarData() : null;
+      var match = saPickNearestSolarSegment(section.points, solar);
+      if (match && match.pitch_degrees != null) {
+        var rise = saDegToRiseOver12(match.pitch_degrees);
+        if (rise != null) section.pitch_rise = rise;
+      }
+    } catch (_) { /* solar lookup is best-effort; manual entry still works */ }
+  }
+
   saRenderSectionPitches();
 }
 
@@ -17634,5 +17690,8 @@ window.saTraceV2 = (function() {
     toggleHistoryPanel: toggleHistoryPanel,
     loadFromHistory: loadFromHistory,
     refreshHud: updateHud,
+    // Read-only accessor so the section-close handler can auto-populate
+    // pitch from the cached Solar segments without touching closure state.
+    getSolarData: function() { return state.solarData; },
   };
 })();
