@@ -8652,7 +8652,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           Log In
         </a>
         <a href="/register" onclick="rrTrack('cta_click',{location:'nav_mobile_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2 px-4 rounded-xl text-sm shadow-lg shadow-[#00FF88]/20 min-h-[48px] inline-flex items-center whitespace-nowrap">
-          <i class="fas fa-gift mr-1"></i>Free
+          <i class="fas fa-gift mr-1"></i>Register
         </a>
         <button id="mobile-menu-btn" class="text-white text-xl p-3 min-h-[48px] min-w-[48px] flex items-center justify-center" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
           <i class="fas fa-bars"></i>
@@ -11052,6 +11052,12 @@ function getCustomerRegisterPageHTML(prefillEmail = '', googleClientId = '', pre
     .reg-input { width:100%;padding:11px 14px;border:1px solid #d1d5db;border-radius:10px;font-size:14px;box-sizing:border-box;outline:none;transition:border-color 0.2s,box-shadow 0.2s;background:#fff;color:#111; }
     .reg-input:focus { border-color:#00CC70;box-shadow:0 0 0 3px rgba(0,204,112,0.12); }
     .strength-bar { height:4px;border-radius:2px;transition:width 0.3s,background-color 0.3s; }
+    .reg-card { padding:36px; }
+    .reg-oauth-card { padding:16px 16px 14px; }
+    @media (max-width: 640px) {
+      .reg-card { padding:20px 16px; }
+      .reg-oauth-card { padding:14px 10px 12px; }
+    }
   </style>
   ${googleClientId ? '<script src="https://accounts.google.com/gsi/client" async defer><\/script>' : ''}
 </head>
@@ -11070,7 +11076,7 @@ function getCustomerRegisterPageHTML(prefillEmail = '', googleClientId = '', pre
     <div class="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-10" style="max-width:1100px;margin:0 auto;padding:40px 24px 80px" id="reg-grid">
 
       <!-- LEFT: Registration form -->
-      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:36px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+      <div class="reg-card" style="background:#fff;border:1px solid #e5e7eb;border-radius:20px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
         <div style="margin-bottom:28px">
           <div style="display:inline-flex;align-items:center;gap:8px;background:#00FF8820;border:1px solid #00FF8840;border-radius:999px;padding:4px 14px;font-size:12px;font-weight:700;color:#00997A;margin-bottom:14px;letter-spacing:0.03em">
             <i class="fas fa-gift"></i> 4 FREE Reports — No Card Required
@@ -11087,18 +11093,18 @@ function getCustomerRegisterPageHTML(prefillEmail = '', googleClientId = '', pre
   data-callback="handleGoogleCredential"
   data-auto_prompt="true">
 </div>
-<div style="background:linear-gradient(180deg,#f0fdf4 0%,#ffffff 100%);border:1px solid #bbf7d0;border-radius:14px;padding:16px 16px 14px;margin-bottom:16px;text-align:center">
+<div class="reg-oauth-card" style="background:linear-gradient(180deg,#f0fdf4 0%,#ffffff 100%);border:1px solid #bbf7d0;border-radius:14px;margin-bottom:16px;text-align:center">
   <div style="display:inline-flex;align-items:center;gap:6px;background:#00FF8820;border:1px solid #00FF8840;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700;color:#00997A;margin-bottom:10px;letter-spacing:0.04em">
     <i class="fas fa-bolt"></i> RECOMMENDED &mdash; 1 CLICK
   </div>
-  <div style="display:flex;justify-content:center" onclick="rrTrack('oauth_click',{provider:'google'})">
+  <div style="display:flex;justify-content:center;overflow:hidden" onclick="rrTrack('oauth_click',{provider:'google'})">
     <div class="g_id_signin"
       data-type="standard"
       data-shape="pill"
       data-theme="filled_black"
       data-text="continue_with"
       data-size="large"
-      data-width="400"
+      data-width="240"
       data-logo_alignment="left">
     </div>
   </div>
@@ -11670,14 +11676,16 @@ function getCustomerLoginHTML(googleClientId = '') {
   data-callback="handleGoogleCredential"
   data-auto_prompt="false">
 </div>
+<div style="display:flex;justify-content:center;overflow:hidden">
 <div class="g_id_signin"
   data-type="standard"
   data-shape="rectangular"
   data-theme="outline"
   data-text="continue_with"
   data-size="large"
-  data-width="100%"
+  data-width="320"
   onclick="rrTrack('oauth_click',{provider:'google'})">
+</div>
 </div>
 <div style="display:flex;align-items:center;gap:12px;margin:16px 0">
   <div style="flex:1;height:1px;background:#e5e7eb"></div>

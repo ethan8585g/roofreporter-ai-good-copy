@@ -878,16 +878,22 @@ export async function sendGmailOAuth2(
   const boundary = 'boundary_' + Date.now()
   const fromAddr = senderEmail || 'me'
 
-  // Base64 encode the HTML body in chunks
+  // Base64 encode the HTML body in chunks, then wrap to 76 chars per
+  // RFC 2045. The previous version emitted one giant unbroken base64
+  // string which some mail clients (notably some Gmail rendering paths)
+  // refused to decode — recipients saw a wall of raw base64 text instead
+  // of the rendered HTML. The attachment-bearing variant of this function
+  // has always wrapped; this brings the plain variant into parity.
   const htmlBodyBytes = new TextEncoder().encode(htmlBody)
-  let htmlBase64 = ''
+  let htmlBase64Raw = ''
   const chunk = 3 * 1024
   for (let i = 0; i < htmlBodyBytes.length; i += chunk) {
     const slice = htmlBodyBytes.slice(i, i + chunk)
     let binary = ''
     for (let j = 0; j < slice.length; j++) binary += String.fromCharCode(slice[j])
-    htmlBase64 += btoa(binary)
+    htmlBase64Raw += btoa(binary)
   }
+  const htmlBase64 = htmlBase64Raw.match(/.{1,76}/g)?.join('\r\n') || htmlBase64Raw
 
   const rawMessage = [
     `From: Roof Manager Reports <${fromAddr}>`,
@@ -998,7 +1004,12 @@ export async function sendGmailOAuth2WithAttachment(
   const rawMessage = [
     `From: Roof Manager <${fromAddr}>`,
     `To: ${to}`,
-    replyTo ? `Reply-To: ${replyTo}` : '',
+    // Critical: only append Reply-To when set. An empty array entry here
+    // joins as an empty line, which RFC 5322 treats as end-of-headers —
+    // every header after (including Subject + Content-Type) gets shoved
+    // into the body, and the recipient sees raw MIME instead of the
+    // rendered HTML. This was Heidi's "massive raw code" email.
+    ...(replyTo ? [`Reply-To: ${replyTo}`] : []),
     `Subject: =?UTF-8?B?${subjectEnc}?=`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/mixed; boundary="${outer}"`,

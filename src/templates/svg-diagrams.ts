@@ -2658,6 +2658,54 @@ export function generateTraceBasedDiagramSVG(
   hipsXY.forEach(line => allPts.push(...line))
   valleysXY.forEach(line => allPts.push(...line))
 
+  // ── DISPLAY-ONLY EAVE COLLAPSE ──
+  // The trace can include short bay/jog segments (e.g. 3.5 / 6.4 / 7.9 ft along
+  // a south eave). They're mathematically real, but visually they read as a
+  // staircase and clutter the diagram. We compute a *display-only* eave outline
+  // that collapses near-collinear vertices — keeping any vertex that anchors a
+  // ridge/hip/valley endpoint so facet boundaries stay coherent. Underlying
+  // `eaves`/`eavesXY`/`n` are NOT changed, so the engine, per-eave-run table,
+  // and facet partitioning still use the full segmentation.
+  const collapseCollinearForDisplay = (
+    pts: { lat: number; lng: number }[],
+    ptsXY: { x: number; y: number }[],
+    anchorsXY: { x: number; y: number }[],
+    bearingThresholdDeg = 8,
+    anchorTolM = 0.6,
+  ): { lat: number; lng: number }[] => {
+    const nn = pts.length
+    if (nn < 4) return pts.slice()
+    const keep = new Array(nn).fill(true)
+    const bearing = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+      Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI
+    const anchorTolSq = anchorTolM * anchorTolM
+    for (let i = 0; i < nn; i++) {
+      const prev = (i - 1 + nn) % nn, next = (i + 1) % nn
+      // Skip if a neighbour was already dropped — we only collapse one pass.
+      if (!keep[prev] || !keep[next]) continue
+      const b1 = bearing(ptsXY[prev], ptsXY[i])
+      const b2 = bearing(ptsXY[i], ptsXY[next])
+      let diff = Math.abs(b2 - b1)
+      if (diff > 180) diff = 360 - diff
+      if (diff >= bearingThresholdDeg) continue
+      // Preserve vertices that anchor a roof line (ridge/hip/valley endpoint).
+      let nearAnchor = false
+      for (const a of anchorsXY) {
+        const dx = a.x - ptsXY[i].x, dy = a.y - ptsXY[i].y
+        if (dx * dx + dy * dy <= anchorTolSq) { nearAnchor = true; break }
+      }
+      if (!nearAnchor) keep[i] = false
+    }
+    return pts.filter((_, i) => keep[i])
+  }
+  const anchorEndpointsXY: { x: number; y: number }[] = []
+  ridgesXY.forEach(l => { if (l.length) { anchorEndpointsXY.push(l[0], l[l.length - 1]) } })
+  hipsXY.forEach(l => { if (l.length) { anchorEndpointsXY.push(l[0], l[l.length - 1]) } })
+  valleysXY.forEach(l => { if (l.length) { anchorEndpointsXY.push(l[0], l[l.length - 1]) } })
+  const displayEaves = collapseCollinearForDisplay(eaves, eavesXY, anchorEndpointsXY)
+  const displayEavesXY = displayEaves.map(toXY)
+  const nDisplay = displayEaves.length
+
   // Dormers — projected polygon + pitch label. Included in bounding box so a
   // dormer that sticks past the main eaves doesn't get clipped.
   const dormersXY = (roofTrace.dormers || [])
@@ -3109,7 +3157,10 @@ export function generateTraceBasedDiagramSVG(
   }
 
   // ── EAVE PERIMETER (clean black outline — primary section) ──
-  const eavePts = eavesXY.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
+  // Draw the *display* outline (near-collinear bay/jogs collapsed) so the
+  // perimeter reads as straight clean lines. Engine measurements stay on the
+  // full segmentation.
+  const eavePts = displayEavesXY.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
   if (L.perimeter) {
     // Offset shadow underneath the perimeter to lift the roof off the page.
     svg += `<g transform="translate(1.6,2.2)"><polygon points="${eavePts}" fill="none" stroke="rgba(15,23,42,0.22)" stroke-width="2.6" stroke-linejoin="round"/></g>`
@@ -3313,11 +3364,14 @@ export function generateTraceBasedDiagramSVG(
   // ── EAVE EDGE DIMENSION LABELS (collision-aware architectural style) ──
   // `placedLabels` + `labelCollides` are declared earlier (above the eave
   // perimeter block) so the extra-sections loop can use them without TDZ.
-  for (let i = 0; i < n; i++) {
+  // Walk the *display* eave outline (near-collinear bay/jogs collapsed) so
+  // labels match the visible polygon: one clean dimension per straight run
+  // instead of a "wall of numbers" along the staircase.
+  for (let i = 0; i < nDisplay; i++) {
     if (HIDE) break
     if (!L.edgeDimensions) break
-    const a = eaves[i], b = eaves[(i + 1) % n]
-    const p1 = eavesXY[i], p2 = eavesXY[(i + 1) % n]
+    const a = displayEaves[i], b = displayEaves[(i + 1) % nDisplay]
+    const p1 = displayEavesXY[i], p2 = displayEavesXY[(i + 1) % nDisplay]
     const sx = tx(p1.x), sy = ty(p1.y), ex = tx(p2.x), ey = ty(p2.y)
     const segPx = Math.sqrt((ex - sx) ** 2 + (ey - sy) ** 2)
     // Raised from 20px → 28px to reduce the "wall of numbers" clutter on short segments

@@ -21,7 +21,7 @@ import {
   generateAllStructureSVGs, splitStructures, allocateMaterialsToStructures,
   type StructurePartition,
 } from './svg-3d-diagram'
-import { estimateShingleAgeYears, regionalReplacementBandCad } from '../services/report-pro'
+import { estimateShingleAgeYears } from '../services/report-pro'
 
 function htmlEsc(v: any): string {
   return String(v ?? '').replace(/[&<>"']/g, (m) => (
@@ -138,18 +138,11 @@ function renderConfidenceBreakdown(report: RoofReport): string {
   </div>`
 }
 
-/** Imagery date / shingle age / regional replacement-cost band. */
+/** Imagery date / shingle age strip. Pricing intentionally omitted — roofer
+ *  pricing varies and the report stays cost-agnostic. */
 function renderInsuranceExtras(report: RoofReport): string {
-  const imgDate = report.quality?.imagery_date || null
-  const wr = (report as any).weather_risk
-  const shingleAge = estimateShingleAgeYears(imgDate || undefined)
-  const band = regionalReplacementBandCad(report)
-
-  const sloped = Number(report.total_true_area_sqft || 0)
-  const squares = sloped > 0 ? sloped / 100 : 0
-  const costLow  = band ? Math.round(squares * band.low)  : null
-  const costMid  = band ? Math.round(squares * band.mid)  : null
-  const costHigh = band ? Math.round(squares * band.high) : null
+  const _imgDate = report.quality?.imagery_date || null
+  const _shingleAge = estimateShingleAgeYears(_imgDate || undefined)
 
   const tile = (label: string, value: string, sub?: string) => `
     <div style="flex:1;padding:8px 10px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;text-align:center">
@@ -159,7 +152,9 @@ function renderInsuranceExtras(report: RoofReport): string {
     </div>`
 
   const tiles: string[] = []
-  if (band && costMid != null) tiles.push(tile('Replacement (CAD)', `$${costMid.toLocaleString()}`, `range $${costLow!.toLocaleString()}–$${costHigh!.toLocaleString()}`))
+  // (No pricing tiles — section currently a no-op. Function kept so future
+  // non-cost insurance tiles (e.g. hail-zone, age class) can plug in here.)
+  void tile
 
   if (tiles.length === 0) return ''
   return `
@@ -1206,8 +1201,6 @@ ${extraCapturesPage.length > 0 ? `
 
 <!-- Pitch Analysis data consolidated into Page 2 Area by Pitch table -->
 
-${report.customer_price_per_bundle ? buildCustomerPricingHTML(report) : ''}
-
 ${buildMaterialTakeoffPage(report, reportNum, reportDate, fullAddress)}
 
 ${buildPitchBreakdownPage(report, reportNum, reportDate, fullAddress)}
@@ -2232,40 +2225,37 @@ function buildPitchBreakdownPage(report: RoofReport, reportNum: string, reportDa
     </div>
   </div>
 
-  <!-- Per-Face Pitch Table -->
+  <!-- Per-Face Pitch Table — 6 cols. Degrees + slope factor live in Notes block. -->
   <div style="padding:0 28px">
     <div style="font-size:10px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.8px;margin-bottom:5px;border-bottom:2px solid ${TEAL};padding-bottom:3px">Per-Face Pitch &amp; Area</div>
-    <table style="width:100%;border-collapse:collapse;font-size:8.5px">
+    <table style="width:100%;border-collapse:collapse;font-size:9px">
       <thead>
         <tr style="background:#1a1a2e;color:#fff">
-          <th style="padding:5px 8px;text-align:left;font-size:7.5px;font-weight:700">Face</th>
-          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700">Pitch</th>
-          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700">Pitch (°)</th>
-          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700">Slope Factor</th>
-          <th style="padding:5px 8px;text-align:right;font-size:7.5px;font-weight:700">Projected Area</th>
-          <th style="padding:5px 8px;text-align:right;font-size:7.5px;font-weight:700">Sloped Area</th>
-          <th style="padding:5px 8px;text-align:right;font-size:7.5px;font-weight:700">Squares</th>
-          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700">Direction</th>
+          <th style="padding:6px 10px;text-align:left;font-size:7.5px;font-weight:700">Face</th>
+          <th style="padding:6px 10px;text-align:center;font-size:7.5px;font-weight:700">Pitch</th>
+          <th style="padding:6px 10px;text-align:center;font-size:7.5px;font-weight:700">Direction</th>
+          <th style="padding:6px 10px;text-align:right;font-size:7.5px;font-weight:700">Footprint</th>
+          <th style="padding:6px 10px;text-align:right;font-size:7.5px;font-weight:700">Sloped Area</th>
+          <th style="padding:6px 10px;text-align:right;font-size:7.5px;font-weight:700">% of Total</th>
         </tr>
       </thead>
       <tbody>
-        ${rows.map((r, i) => `
+        ${rows.map((r, i) => {
+          const sharePct = totalSlopedFaces > 0 ? (r.sloped_area_ft2 / totalSlopedFaces) * 100 : 0
+          return `
         <tr style="${i % 2 === 0 ? '' : 'background:#f8fafc'};border-bottom:1px solid #f1f5f9">
-          <td style="padding:4px 8px;font-weight:700">${r.face_id}</td>
-          <td style="padding:4px 8px;text-align:center;font-weight:700;color:${TEAL_DARK}">${r.pitch_label}</td>
-          <td style="padding:4px 8px;text-align:center;font-size:8px;color:#555">${r.pitch_angle_deg.toFixed(1)}°</td>
-          <td style="padding:4px 8px;text-align:center;font-size:8px;color:#555">×${r.slope_factor.toFixed(4)}</td>
-          <td style="padding:4px 8px;text-align:right">${Math.round(r.projected_area_ft2).toLocaleString()} SF</td>
-          <td style="padding:4px 8px;text-align:right;font-weight:700">${Math.round(r.sloped_area_ft2).toLocaleString()} SF</td>
-          <td style="padding:4px 8px;text-align:right">${r.squares.toFixed(1)}</td>
-          <td style="padding:4px 8px;text-align:center;font-weight:700;color:${TEAL_DARK}">${cardinal(r.azimuth_deg)}${r.azimuth_deg != null ? ` <span style="font-size:7px;color:#888;font-weight:400">${Math.round(r.azimuth_deg)}°</span>` : ''}</td>
-        </tr>`).join('')}
+          <td style="padding:5px 10px;font-weight:700">${r.face_id}</td>
+          <td style="padding:5px 10px;text-align:center;font-weight:700;color:${TEAL_DARK}">${r.pitch_label}</td>
+          <td style="padding:5px 10px;text-align:center;font-weight:700;color:${TEAL_DARK}">${cardinal(r.azimuth_deg)}${r.azimuth_deg != null ? ` <span style="font-size:7px;color:#888;font-weight:400">${Math.round(r.azimuth_deg)}°</span>` : ''}</td>
+          <td style="padding:5px 10px;text-align:right">${Math.round(r.projected_area_ft2).toLocaleString()} SF</td>
+          <td style="padding:5px 10px;text-align:right;font-weight:700">${Math.round(r.sloped_area_ft2).toLocaleString()} SF</td>
+          <td style="padding:5px 10px;text-align:right;color:#555">${sharePct.toFixed(1)}%</td>
+        </tr>`}).join('')}
         <tr style="background:#f1f5f9;font-weight:800;border-top:2px solid #1a1a2e">
-          <td colspan="4" style="padding:5px 8px;font-size:9px">TOTAL</td>
-          <td style="padding:5px 8px;text-align:right;font-size:9px">${Math.round(rows.reduce((s, r) => s + r.projected_area_ft2, 0)).toLocaleString()} SF</td>
-          <td style="padding:5px 8px;text-align:right;font-size:9px;color:${TEAL_DARK}">${Math.round(totalSlopedFaces).toLocaleString()} SF</td>
-          <td style="padding:5px 8px;text-align:right;font-size:9px">${(totalSlopedFaces / 100).toFixed(1)}</td>
-          <td></td>
+          <td colspan="3" style="padding:6px 10px;font-size:9px">TOTAL</td>
+          <td style="padding:6px 10px;text-align:right;font-size:9px">${Math.round(rows.reduce((s, r) => s + r.projected_area_ft2, 0)).toLocaleString()} SF</td>
+          <td style="padding:6px 10px;text-align:right;font-size:9px;color:${TEAL_DARK}">${Math.round(totalSlopedFaces).toLocaleString()} SF</td>
+          <td style="padding:6px 10px;text-align:right;font-size:9px">100%</td>
         </tr>
       </tbody>
     </table>
@@ -2277,89 +2267,69 @@ function buildPitchBreakdownPage(report: RoofReport, reportNum: string, reportDa
        total (footprint already counted under the main face). -->
   <div style="padding:12px 28px 0">
     <div style="font-size:10px;font-weight:800;color:#7c3aed;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:5px;border-bottom:2px solid #a855f7;padding-bottom:3px">Dormer Pitches <span style="font-size:7.5px;color:#888;font-weight:600;text-transform:none;letter-spacing:0">(steeper accents on top of the main roof)</span></div>
-    <table style="width:100%;border-collapse:collapse;font-size:8.5px">
+    <table style="width:100%;border-collapse:collapse;font-size:9px">
       <thead>
         <tr style="background:#1a1a2e;color:#fff">
-          <th style="padding:5px 8px;text-align:left;font-size:7.5px;font-weight:700">Dormer</th>
-          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700">Pitch</th>
-          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700">Pitch (°)</th>
-          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700">Slope Factor</th>
-          <th style="padding:5px 8px;text-align:center;font-size:7.5px;font-weight:700">On Main</th>
-          <th style="padding:5px 8px;text-align:right;font-size:7.5px;font-weight:700">Footprint</th>
-          <th style="padding:5px 8px;text-align:right;font-size:7.5px;font-weight:700">+ Sloped Added</th>
+          <th style="padding:6px 10px;text-align:left;font-size:7.5px;font-weight:700">Dormer</th>
+          <th style="padding:6px 10px;text-align:center;font-size:7.5px;font-weight:700">Pitch</th>
+          <th style="padding:6px 10px;text-align:center;font-size:7.5px;font-weight:700">On Main</th>
+          <th style="padding:6px 10px;text-align:right;font-size:7.5px;font-weight:700">Footprint</th>
+          <th style="padding:6px 10px;text-align:right;font-size:7.5px;font-weight:700">+ Sloped Added</th>
         </tr>
       </thead>
       <tbody>
         ${dormerRows.map((d, i) => `
         <tr style="${i % 2 === 0 ? '' : 'background:#faf5ff'};border-bottom:1px solid #f1f5f9">
-          <td style="padding:4px 8px;font-weight:700;color:#7c3aed">${d.label}</td>
-          <td style="padding:4px 8px;text-align:center;font-weight:700;color:#7c3aed">${d.pitch_label}</td>
-          <td style="padding:4px 8px;text-align:center;font-size:8px;color:#555">${d.pitch_angle_deg.toFixed(1)}°</td>
-          <td style="padding:4px 8px;text-align:center;font-size:8px;color:#555">×${d.slope_factor.toFixed(4)}</td>
-          <td style="padding:4px 8px;text-align:center;font-size:8px;color:#555">${d.main_pitch_label}</td>
-          <td style="padding:4px 8px;text-align:right">${Math.round(d.footprint_ft2).toLocaleString()} SF</td>
-          <td style="padding:4px 8px;text-align:right;font-weight:700;color:#7c3aed">+${Math.round(d.extra_sloped_ft2).toLocaleString()} SF</td>
+          <td style="padding:5px 10px;font-weight:700;color:#7c3aed">${d.label}</td>
+          <td style="padding:5px 10px;text-align:center;font-weight:700;color:#7c3aed">${d.pitch_label}</td>
+          <td style="padding:5px 10px;text-align:center;font-size:8px;color:#555">${d.main_pitch_label}</td>
+          <td style="padding:5px 10px;text-align:right">${Math.round(d.footprint_ft2).toLocaleString()} SF</td>
+          <td style="padding:5px 10px;text-align:right;font-weight:700;color:#7c3aed">+${Math.round(d.extra_sloped_ft2).toLocaleString()} SF</td>
         </tr>`).join('')}
         <tr style="background:#f5f3ff;font-weight:800;border-top:2px solid #7c3aed">
-          <td colspan="5" style="padding:5px 8px;font-size:9px">DORMER TOTAL</td>
-          <td style="padding:5px 8px;text-align:right;font-size:9px">${Math.round(dormerRows.reduce((s, d) => s + d.footprint_ft2, 0)).toLocaleString()} SF</td>
-          <td style="padding:5px 8px;text-align:right;font-size:9px;color:#7c3aed">+${Math.round(dormerRows.reduce((s, d) => s + d.extra_sloped_ft2, 0)).toLocaleString()} SF</td>
+          <td colspan="3" style="padding:6px 10px;font-size:9px">DORMER TOTAL</td>
+          <td style="padding:6px 10px;text-align:right;font-size:9px">${Math.round(dormerRows.reduce((s, d) => s + d.footprint_ft2, 0)).toLocaleString()} SF</td>
+          <td style="padding:6px 10px;text-align:right;font-size:9px;color:#7c3aed">+${Math.round(dormerRows.reduce((s, d) => s + d.extra_sloped_ft2, 0)).toLocaleString()} SF</td>
         </tr>
       </tbody>
     </table>
-    <div style="margin-top:4px;font-size:7px;color:#666;line-height:1.5">Footprint sits inside the main roof and is already counted in the per-face table above. <strong>+ Sloped Added</strong> is the differential area beyond what the main pitch alone would have produced for the same footprint — that's what gets added to the property's true 3D total.</div>
+    <div style="margin-top:4px;font-size:7px;color:#666;line-height:1.5"><strong>+ Sloped Added</strong> is the differential beyond what the main pitch alone would produce for the same footprint — that's the extra area that lands in the property total.</div>
   </div>` : ''}
 
-  <!-- Pitch Class Distribution -->
+  <!-- Pitch Class Distribution — stacked bar + tile legend instead of a table -->
+  ${(() => {
+    const classes = [
+      { key: 'flat',     label: 'Flat',     range: '0:12 – 2:12', sf: buckets.flat,     bar: '#facc15', fg: '#854d0e', tileBg: '#fefce8', tileBorder: '#fde68a', note: 'IWB full-coverage' },
+      { key: 'low',      label: 'Low',      range: '2:12 – 4:12', sf: buckets.low,      bar: '#f59e0b', fg: '#92400e', tileBg: '#fffbeb', tileBorder: '#fde68a', note: 'Reduced wind rating' },
+      { key: 'standard', label: 'Standard', range: '4:12 – 9:12', sf: buckets.standard, bar: '#16a34a', fg: '#166534', tileBg: '#f0fdf4', tileBorder: '#bbf7d0', note: 'Standard residential' },
+      { key: 'steep',    label: 'Steep',    range: '9:12 +',      sf: buckets.steep,    bar: '#dc2626', fg: '#991b1b', tileBg: '#fef2f2', tileBorder: '#fecaca', note: 'Steep-charge / fall-protection' },
+    ]
+    const totalForBar = classes.reduce((s, c) => s + c.sf, 0) || 1
+    const segs = classes.map(c => ({ ...c, pctV: (c.sf / totalForBar) * 100 }))
+    return `
   <div style="padding:14px 28px 0">
-    <div style="font-size:10px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.8px;margin-bottom:5px;border-bottom:2px solid ${TEAL};padding-bottom:3px">Pitch Class Distribution</div>
-    <table style="width:100%;border-collapse:collapse;font-size:8.5px">
-      <thead>
-        <tr style="background:${TEAL_LIGHT};border-bottom:1.5px solid ${TEAL}">
-          <th style="padding:4px 8px;text-align:left;font-weight:700;color:${TEAL_DARK}">Pitch Class</th>
-          <th style="padding:4px 8px;text-align:left;font-weight:700;color:${TEAL_DARK}">Range</th>
-          <th style="padding:4px 8px;text-align:right;font-weight:700;color:${TEAL_DARK}">Roof Area (SF)</th>
-          <th style="padding:4px 8px;text-align:right;font-weight:700;color:${TEAL_DARK}">% of Total</th>
-          <th style="padding:4px 8px;text-align:left;font-weight:700;color:${TEAL_DARK}">Notes</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr style="border-bottom:1px solid #eee;${buckets.flat > 0 ? 'background:#fef9c3' : 'opacity:0.5'}">
-          <td style="padding:4px 8px;font-weight:700">Flat</td>
-          <td style="padding:4px 8px">0:12 – 2:12</td>
-          <td style="padding:4px 8px;text-align:right;font-weight:700">${Math.round(buckets.flat).toLocaleString()}</td>
-          <td style="padding:4px 8px;text-align:right">${pct(buckets.flat)}%</td>
-          <td style="padding:4px 8px;font-size:7.5px;color:#666">IWB full-coverage required</td>
-        </tr>
-        <tr style="border-bottom:1px solid #eee;${buckets.low > 0 ? 'background:#fef3c7' : 'opacity:0.5'}">
-          <td style="padding:4px 8px;font-weight:700">Low</td>
-          <td style="padding:4px 8px">2:12 – 4:12</td>
-          <td style="padding:4px 8px;text-align:right;font-weight:700">${Math.round(buckets.low).toLocaleString()}</td>
-          <td style="padding:4px 8px;text-align:right">${pct(buckets.low)}%</td>
-          <td style="padding:4px 8px;font-size:7.5px;color:#666">Walkable; reduced shingle wind rating</td>
-        </tr>
-        <tr style="border-bottom:1px solid #eee;${buckets.standard > 0 ? 'background:#f0fdf4' : 'opacity:0.5'}">
-          <td style="padding:4px 8px;font-weight:700;color:#166534">Standard</td>
-          <td style="padding:4px 8px">4:12 – 9:12</td>
-          <td style="padding:4px 8px;text-align:right;font-weight:700;color:#166534">${Math.round(buckets.standard).toLocaleString()}</td>
-          <td style="padding:4px 8px;text-align:right;color:#166534;font-weight:600">${pct(buckets.standard)}%</td>
-          <td style="padding:4px 8px;font-size:7.5px;color:#166534">Standard residential — no extras</td>
-        </tr>
-        <tr style="border-bottom:1px solid #eee;${buckets.steep > 0 ? 'background:#fef2f2' : 'opacity:0.5'}">
-          <td style="padding:4px 8px;font-weight:700;color:#991b1b">Steep</td>
-          <td style="padding:4px 8px">9:12 +</td>
-          <td style="padding:4px 8px;text-align:right;font-weight:700;color:#991b1b">${Math.round(buckets.steep).toLocaleString()}</td>
-          <td style="padding:4px 8px;text-align:right;color:#991b1b;font-weight:600">${pct(buckets.steep)}%</td>
-          <td style="padding:4px 8px;font-size:7.5px;color:#991b1b">Steep-charge / fall-protection labor uplift</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+    <div style="font-size:10px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;border-bottom:2px solid ${TEAL};padding-bottom:3px">Pitch Class Distribution</div>
+    <!-- Horizontal stacked bar -->
+    <div style="display:flex;width:100%;height:24px;border-radius:4px;overflow:hidden;border:1px solid #e2e8f0;background:#f1f5f9">
+      ${segs.filter(s => s.pctV > 0).map(s => `<div style="width:${s.pctV.toFixed(2)}%;background:${s.bar};display:flex;align-items:center;justify-content:center;color:#fff;font-size:8px;font-weight:800;text-shadow:0 1px 2px rgba(0,0,0,0.25)" title="${s.label}: ${pct(s.sf)}%">${s.pctV >= 8 ? `${pct(s.sf)}%` : ''}</div>`).join('')}
+    </div>
+    <!-- Tile legend -->
+    <div style="display:flex;gap:6px;margin-top:6px">
+      ${segs.map(s => `
+      <div style="flex:1;background:${s.tileBg};border:1px solid ${s.tileBorder};border-radius:5px;padding:6px 8px;${s.sf > 0 ? '' : 'opacity:0.45'}">
+        <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:${s.bar};border-radius:2px;display:inline-block"></span><span style="font-size:8px;font-weight:800;color:${s.fg};text-transform:uppercase;letter-spacing:0.4px">${s.label}</span></div>
+        <div style="font-size:6.5px;color:#94a3b8;margin-top:1px">${s.range}</div>
+        <div style="font-size:13px;font-weight:900;color:${s.fg};margin-top:2px">${Math.round(s.sf).toLocaleString()} <span style="font-size:7px;font-weight:700">SF</span></div>
+        <div style="font-size:7.5px;color:${s.fg};font-weight:700">${pct(s.sf)}% &middot; ${s.note}</div>
+      </div>`).join('')}
+    </div>
+  </div>`
+  })()}
 
-  <!-- Notes -->
+  <!-- Notes — absorbs slope-factor formula + degree references that moved out of the table. -->
   <div style="padding:12px 28px 0">
-    <div style="padding:6px 10px;background:${TEAL_LIGHT};border:1px solid ${TEAL};border-radius:4px;font-size:7px;color:${TEAL_DARK};line-height:1.5">
-      <strong>Notes:</strong> Pitch ratio expressed as rise per 12&Prime; of horizontal run. Slope factor = &radic;(rise&sup2; + 12&sup2;) / 12 — applied to projected (footprint) area to derive sloped (true 3D) area. Direction is the compass bearing of the downslope normal (where rainwater flows). ${rowsFromFaces.length ? 'Per-face data sourced from traced GPS coordinates.' : 'Per-face data sourced from Solar API roof segments.'}${dormerRows.length ? ' Dormer pitches surfaced separately above; their differential sloped area is folded into the Pitch Class Distribution.' : ''}
+    <div style="padding:7px 10px;background:${TEAL_LIGHT};border:1px solid ${TEAL};border-radius:4px;font-size:7.2px;color:${TEAL_DARK};line-height:1.55">
+      <strong>How to read this page:</strong> <em>Pitch</em> is rise per 12&Prime; of horizontal run (e.g. ${predominant.pitch_label} = ${predominant.pitch_angle_deg.toFixed(1)}°). <em>Direction</em> is the compass bearing of the downslope normal (where rainwater flows). <em>Footprint</em> is the projected (overhead) area; <em>Sloped Area</em> applies the slope multiplier &radic;(rise&sup2; + 12&sup2;)/12 to convert to true 3D area used for material take-off. ${rowsFromFaces.length ? 'Per-face data sourced from traced GPS coordinates.' : 'Per-face data sourced from Solar API roof segments.'}${dormerRows.length ? ' Dormer footprints sit inside the main roof and are already counted under the main face above — only the <strong>+ Sloped Added</strong> differential is included in the property total.' : ''}
     </div>
   </div>
 
@@ -2382,9 +2352,7 @@ function buildPitchBreakdownPage(report: RoofReport, reportNum: string, reportDa
 
     const gutterLine = ((report.materials as any)?.line_items || [])
       .find((i: any) => i?.category === 'gutters') || null
-    const unitPrice = Number(gutterLine?.unit_price_cad) || 0
     const orderQty  = Number(gutterLine?.order_quantity) || Math.ceil(gutterLf * 1.05)
-    const lineTotal = Number(gutterLine?.line_total_cad) || 0
 
     const sectionLabel = (idx: any) => {
       const n = Number(idx)
@@ -2486,15 +2454,11 @@ function buildPitchBreakdownPage(report: RoofReport, reportNum: string, reportDa
         <div>Order qty includes 5% waste</div>
       </div>
       <div style="flex:1;padding:6px 10px;background:#fff;border:1px solid #e2e8f0;border-radius:4px;font-size:7px;color:#334155;line-height:1.55">
-        <div style="font-weight:800;text-transform:uppercase;letter-spacing:0.5px;font-size:7px;margin-bottom:2px;color:${TEAL_DARK}">Cost Summary</div>
-        ${gutterLine ? `
-        <div style="display:flex;justify-content:space-between"><span>Unit price</span><span style="font-weight:700">$${unitPrice.toFixed(2)} / LF</span></div>
-        <div style="display:flex;justify-content:space-between"><span>Order quantity (w/ waste)</span><span style="font-weight:700">${orderQty.toLocaleString()} LF</span></div>
-        <div style="display:flex;justify-content:space-between;border-top:1px solid #e2e8f0;margin-top:2px;padding-top:2px"><span style="font-weight:700">Line total</span><span style="font-weight:800;color:${TEAL_DARK}">$${lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CAD</span></div>
-        <div style="font-size:6.5px;color:#94a3b8;margin-top:2px">Pulled from Material Take-Off — gutters line.</div>
-        ` : `
-        <div style="color:#94a3b8;font-style:italic">Gutter pricing not yet attached to this report. See Material Take-Off page once enrichment runs.</div>
-        `}
+        <div style="font-weight:800;text-transform:uppercase;letter-spacing:0.5px;font-size:7px;margin-bottom:2px;color:${TEAL_DARK}">Recommended Order</div>
+        <div style="display:flex;justify-content:space-between"><span>Gutter run (with 5% waste)</span><span style="font-weight:700">${orderQty.toLocaleString()} LF</span></div>
+        <div style="display:flex;justify-content:space-between"><span>Downspouts</span><span style="font-weight:700">${recommendedDs} <span style="color:#94a3b8;font-weight:500">(1 per &le;35 LF)</span></span></div>
+        <div style="display:flex;justify-content:space-between"><span>Eave sections</span><span style="font-weight:700">${eaveSectionCount > 0 ? eaveSectionCount : '—'}</span></div>
+        <div style="font-size:6.5px;color:#94a3b8;margin-top:2px">Pricing varies by roofer — verify with your supplier.</div>
       </div>
     </div>
 
@@ -2903,113 +2867,6 @@ function buildMeasurementSummaryPage(report: RoofReport, reportNum: string, repo
 </div>`
 }
 
-// ============================================================
-// Customer Pricing Estimate — Page Section
-// Shows cost estimate based on customer-provided price per bundle
-// ============================================================
-function buildCustomerPricingHTML(report: RoofReport): string {
-  const TEAL = '#00897B', TEAL_DARK = '#00695C', TEAL_LIGHT = '#E0F2F1'
-  const pricePerBundle = report.customer_price_per_bundle || 0
-  const grossSquares = report.customer_gross_squares || 0
-  const totalCost = report.customer_total_cost_estimate || 0
-  const trueArea = report.total_true_area_sqft || 0
-  const netSquares = Math.round(trueArea / 100 * 10) / 10
-  const wasteArea = Math.round(trueArea * 0.15)
-
-  return `
-<div style="page-break-before:always;max-width:1050px;margin:0 auto;padding:35px 40px;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#fff">
-  <!-- Header -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid ${TEAL}">
-    <div>
-      <div style="font-size:18px;font-weight:900;color:${TEAL_DARK};letter-spacing:0.3px">
-        <span style="display:inline-block;width:28px;height:28px;background:${TEAL};color:white;text-align:center;line-height:28px;border-radius:4px;font-size:14px;margin-right:8px">$</span>
-        CUSTOMER COST ESTIMATE
-      </div>
-      <div style="font-size:10px;color:${TEAL_DARK};margin-top:4px;font-weight:500">Roof Replacement Pricing — Based on Client-Provided Rate</div>
-    </div>
-    <div style="text-align:right">
-      <div style="font-size:9px;color:#6b7a8d;text-transform:uppercase;letter-spacing:0.5px">Property</div>
-      <div style="font-size:11px;font-weight:700;color:#003366">${report.property?.address || ''}</div>
-    </div>
-  </div>
-
-  <!-- Summary Cards -->
-  <div style="display:flex;gap:16px;margin-bottom:24px">
-    <!-- Net Roof Area -->
-    <div style="flex:1;background:linear-gradient(135deg,${TEAL_LIGHT},#b2dfdb);border-radius:10px;padding:18px;text-align:center;border:1px solid ${TEAL}30">
-      <div style="font-size:9px;color:${TEAL_DARK};font-weight:700;text-transform:uppercase;letter-spacing:0.8px">Net Roof Area</div>
-      <div style="font-size:26px;font-weight:900;color:${TEAL_DARK};margin:6px 0">${trueArea.toLocaleString()}</div>
-      <div style="font-size:10px;color:${TEAL}">sq ft</div>
-    </div>
-    <!-- Waste Allowance -->
-    <div style="flex:1;background:linear-gradient(135deg,#e0f7fa,#b2ebf2);border-radius:10px;padding:18px;text-align:center;border:1px solid ${TEAL}30">
-      <div style="font-size:9px;color:${TEAL_DARK};font-weight:700;text-transform:uppercase;letter-spacing:0.8px">15% Waste Allowance</div>
-      <div style="font-size:26px;font-weight:900;color:#00796b;margin:6px 0">+${wasteArea.toLocaleString()}</div>
-      <div style="font-size:10px;color:${TEAL}">sq ft</div>
-    </div>
-    <!-- Gross Squares -->
-    <div style="flex:1;background:linear-gradient(135deg,${TEAL},${TEAL_DARK});border-radius:10px;padding:18px;text-align:center;color:white">
-      <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;opacity:0.85">Total Squares</div>
-      <div style="font-size:26px;font-weight:900;margin:6px 0">${grossSquares}</div>
-      <div style="font-size:10px;opacity:0.85">(with 15% waste)</div>
-    </div>
-    <!-- Price Per Square -->
-    <div style="flex:1;background:linear-gradient(135deg,#eef2ff,#c7d2fe);border-radius:10px;padding:18px;text-align:center;border:1px solid #818cf830">
-      <div style="font-size:9px;color:#3730a3;font-weight:700;text-transform:uppercase;letter-spacing:0.8px">Rate Per Square</div>
-      <div style="font-size:26px;font-weight:900;color:#4338ca;margin:6px 0">$${pricePerBundle.toLocaleString()}</div>
-      <div style="font-size:10px;color:#6366f1">CAD</div>
-    </div>
-  </div>
-
-  <!-- Total Cost Estimate -->
-  <div style="background:linear-gradient(135deg,#1e3a5f,#0f172a);border-radius:12px;padding:28px 32px;color:white;text-align:center;margin-bottom:24px;position:relative;overflow:hidden">
-    <div style="position:absolute;top:-20px;right:-20px;width:120px;height:120px;background:rgba(0,137,123,0.15);border-radius:50%"></div>
-    <div style="position:absolute;bottom:-30px;left:-10px;width:80px;height:80px;background:rgba(0,137,123,0.1);border-radius:50%"></div>
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;opacity:0.7;margin-bottom:8px">Estimated Roof Replacement Cost</div>
-    <div style="font-size:48px;font-weight:900;color:#80cbc4;text-shadow:0 2px 8px rgba(0,0,0,0.3)">$${totalCost.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-    <div style="font-size:12px;margin-top:6px;opacity:0.6">Canadian Dollars (CAD)</div>
-  </div>
-
-  <!-- Calculation Breakdown -->
-  <div style="background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;padding:20px;margin-bottom:20px">
-    <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:12px">
-      <span style="display:inline-block;width:18px;height:18px;background:${TEAL};color:white;text-align:center;line-height:18px;border-radius:3px;font-size:10px;margin-right:6px">&#8614;</span>
-      Calculation Breakdown
-    </div>
-    <table style="width:100%;font-size:11px;border-collapse:collapse">
-      <tr style="border-bottom:1px solid #e2e8f0">
-        <td style="padding:8px 0;color:#64748b">Net Roof Area (3D true area)</td>
-        <td style="padding:8px 0;text-align:right;font-weight:700;color:#334155">${trueArea.toLocaleString()} sq ft</td>
-      </tr>
-      <tr style="border-bottom:1px solid #e2e8f0">
-        <td style="padding:8px 0;color:#64748b">Net Squares (area \u00F7 100)</td>
-        <td style="padding:8px 0;text-align:right;font-weight:700;color:#334155">${netSquares}</td>
-      </tr>
-      <tr style="border-bottom:1px solid #e2e8f0">
-        <td style="padding:8px 0;color:#64748b">Waste Factor</td>
-        <td style="padding:8px 0;text-align:right;font-weight:700;color:#ea580c">+15%</td>
-      </tr>
-      <tr style="border-bottom:1px solid #e2e8f0">
-        <td style="padding:8px 0;color:#64748b">Gross Squares (with waste)</td>
-        <td style="padding:8px 0;text-align:right;font-weight:700;color:#334155">${grossSquares}</td>
-      </tr>
-      <tr style="border-bottom:1px solid #e2e8f0">
-        <td style="padding:8px 0;color:#64748b">Price Per Square (client rate)</td>
-        <td style="padding:8px 0;text-align:right;font-weight:700;color:#4338ca">$${pricePerBundle.toLocaleString()} CAD</td>
-      </tr>
-      <tr style="background:#f1f5f9">
-        <td style="padding:10px 0;font-weight:800;color:#0f172a;font-size:12px">TOTAL ESTIMATED COST</td>
-        <td style="padding:10px 0;text-align:right;font-weight:900;color:${TEAL_DARK};font-size:14px">$${totalCost.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CAD</td>
-      </tr>
-    </table>
-  </div>
-
-  <!-- Disclaimer -->
-  <div style="background:${TEAL_LIGHT};border:1px solid #b2dfdb;border-radius:8px;padding:14px 16px;font-size:9px;color:${TEAL_DARK};line-height:1.6">
-    <strong style="font-size:10px">ESTIMATE DISCLAIMER:</strong> This cost estimate is based on the client-provided rate of $${pricePerBundle}/square and AI-measured roof area with 15% waste factor. Actual costs may vary depending on: roof complexity, existing material removal, structural repairs, flashing details, code requirements, and regional pricing. This estimate does not include additional materials (underlayment, flashing, vents, etc.). A professional on-site assessment is recommended for a final quote.
-  </div>
-</div>`
-}
 
 // ============================================================
 // SOLAR PROPOSAL PAGE — Renders user-edited (or suggested) panel layout
