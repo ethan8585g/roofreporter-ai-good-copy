@@ -116,7 +116,10 @@
 
     var iframe = document.createElement('iframe');
     iframe.className = 'rm-3d-iframe';
-    iframe.src = '/3d-verify?orderId=' + encodeURIComponent(orderId);
+    // customer=1 enables the customer-only Tilt ⬇ / Tilt ⬆ controls in
+    // /3d-verify — kept out of the super-admin trace iframe so the admin
+    // chrome stays unchanged.
+    iframe.src = '/3d-verify?orderId=' + encodeURIComponent(orderId) + '&customer=1';
     iframe.allow = 'fullscreen';
     // Match the working trace-tool pattern (customer-order.js:4430). The GCP
     // GOOGLE_MAPS_API_KEY has HTTP-referrer restrictions that REQUIRE a Referer

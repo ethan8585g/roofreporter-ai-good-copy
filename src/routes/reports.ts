@@ -188,8 +188,28 @@ function tryRegenHtml(jsonStr: string): string | null {
   return null
 }
 
+// Marker we embed in cached HTML to know it was rendered by the current
+// template version. Has to match the marker in report-html.ts. When the
+// stored HTML's marker doesn't match, we re-render and overwrite the cache.
+const CACHED_HTML_TEMPLATE_MARKER = 'v6.1-multistructure-fix-2026-05-12'
+
+function isCachedHtmlFresh(stored: string | null): boolean {
+  if (!stored) return false
+  // Cached HTML must not be the broken fallback page and must carry the
+  // current template version marker (emitted by generateProfessionalReportHTML).
+  if (stored.includes('HTML rendering failed')) return false
+  if (!stored.includes(CACHED_HTML_TEMPLATE_MARKER)) return false
+  // Sanity-check it's an actual report and not some empty stub.
+  if (stored.length < 5000) return false
+  return true
+}
+
 function resolveHtml(stored: string | null, raw: string | null): string | null {
-  // Always prefer regenerating from JSON so the latest template is used
+  // Prefer fresh cached HTML — multi-structure renders are CPU-heavy and
+  // Cloudflare Workers' per-request budget can silently push them into the
+  // catch-fallback. Caching the first successful render and serving that
+  // sidesteps the CPU pressure on every subsequent view.
+  if (isCachedHtmlFresh(stored)) return stored
   if (raw) {
     const h = tryRegenHtml(raw)
     if (h) return h
@@ -321,7 +341,21 @@ reportsRoutes.get('/:orderId/html', async (c) => {
   const row = await repo.getReportHtml(c.env.DB, orderId)
   if (!row) return c.json({ error: 'Report not found' }, 404)
   trackReportView(c, { orderId, viewType: 'portal' })
+  const cacheWasFresh = isCachedHtmlFresh(row.professional_report_html)
   const html = resolveHtml(row.professional_report_html, row.api_response_raw)
+  // Write-through cache: when we had to regenerate (cache was missing or
+  // stale), persist the fresh render so subsequent views serve from D1
+  // instead of re-running the heavy multi-structure pipeline. Fire-and-
+  // forget; never blocks the response.
+  if (!cacheWasFresh && html && html.includes('RENDER-PATH:') && html.length > 5000) {
+    const persistPromise = c.env.DB
+      .prepare('UPDATE reports SET professional_report_html = ? WHERE order_id = ?')
+      .bind(html, orderId).run()
+      .catch((e: any) => console.warn(`[html-cache] persist failed for ${orderId}:`, e?.message || e))
+    if ((c as any).executionCtx?.waitUntil) {
+      ;(c as any).executionCtx.waitUntil(persistPromise)
+    }
+  }
   if (!html) {
     const fallback = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Report Regeneration Required &mdash; Roof Manager</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;background:#f8fafc;color:#1e293b;margin:0;padding:48px 24px;display:flex;justify-content:center}.box{max-width:560px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,0.05)}h1{margin:0 0 12px;font-size:20px;color:#0f172a}p{line-height:1.55;color:#475569}.code{font-family:SF Mono,Menlo,monospace;font-size:13px;background:#f1f5f9;padding:2px 8px;border-radius:4px;color:#334155}.btn{display:inline-block;margin-top:16px;padding:10px 18px;background:#0f766e;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;font-size:14px}.btn:hover{background:#115e59}.muted{font-size:12px;color:#64748b;margin-top:24px;border-top:1px solid #e2e8f0;padding-top:16px}</style></head><body><div class="box"><h1>Report regeneration required</h1><p>Order <span class="code">#${orderId}</span> finished without measurement data. This usually means the AI pipeline timed out or the satellite imagery returned an empty footprint. Your order is preserved &mdash; nothing was lost.</p><p>Re-run the generator from your dashboard, or contact support and we will regenerate it for you.</p><a class="btn" href="/customer/dashboard">Open dashboard</a> <a class="btn" style="background:#475569" href="mailto:support@roofmanager.ca?subject=Regenerate%20order%20${orderId}">Email support</a><div class="muted">Order ${orderId} &middot; Roof Manager &middot; roofmanager.ca</div></div></body></html>`
     return c.html(fallback, 404)
