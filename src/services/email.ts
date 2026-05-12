@@ -332,22 +332,10 @@ export async function sendViaResend(
 // attachment (the share link in the email body is the primary access
 // path now, so a missing PDF is annoying, not blocking).
 // ============================================================
-export async function renderCustomerReportPdf(
-  env: any,
-  orderId: number | string,
-): Promise<Uint8Array | null> {
-  if (!env?.BROWSER || !env?.DB) {
-    console.warn('[renderCustomerReportPdf] missing BROWSER binding or DB — PDF skipped')
-    return null
-  }
+async function renderHtmlToPdf(env: any, html: string): Promise<Uint8Array | null> {
+  if (!env?.BROWSER || !html) return null
   let browser: any = null
   try {
-    const row = await env.DB.prepare(
-      'SELECT customer_report_html, professional_report_html FROM reports WHERE order_id = ? ORDER BY id DESC LIMIT 1'
-    ).bind(orderId).first<any>()
-    const html = row?.customer_report_html || row?.professional_report_html
-    if (!html) return null
-
     const puppeteer = await import('@cloudflare/puppeteer')
     browser = await puppeteer.default.launch(env.BROWSER)
     const page = await browser.newPage()
@@ -357,36 +345,72 @@ export async function renderCustomerReportPdf(
     if (!buf || buf.byteLength === 0) return null
     return new Uint8Array(buf)
   } catch (e: any) {
-    // Loud failure — the previous version's silent fallback to .html
-    // hid this bug for weeks. Log the full error so any account-level
-    // misconfiguration (Browser Rendering not enabled on the plan,
-    // binding not provisioned, etc.) surfaces in logs.
-    console.error('[renderCustomerReportPdf] failed:', e?.message || e, e?.stack || '')
+    console.error('[renderHtmlToPdf] failed:', e?.message || e, e?.stack || '')
     return null
   } finally {
-    if (browser) {
-      try { await browser.close() } catch {}
-    }
+    if (browser) { try { await browser.close() } catch {} }
   }
 }
 
+export async function renderCustomerReportPdf(
+  env: any,
+  orderId: number | string,
+): Promise<Uint8Array | null> {
+  if (!env?.BROWSER || !env?.DB) {
+    console.warn('[renderCustomerReportPdf] missing BROWSER binding or DB — PDF skipped')
+    return null
+  }
+  const row = await env.DB.prepare(
+    'SELECT customer_report_html, professional_report_html FROM reports WHERE order_id = ? ORDER BY id DESC LIMIT 1'
+  ).bind(orderId).first<any>()
+  const html = row?.customer_report_html || row?.professional_report_html
+  return renderHtmlToPdf(env, html)
+}
+
 // ============================================================
-// REPORT ATTACHMENT — Wraps PDF render with a safe nullable return.
-// No more silent .html fallback: if the PDF can't render, the email
-// ships without an attachment. The share link in the email body is the
-// customer's guaranteed access path; the PDF is a bonus when it works.
+// REPORT ATTACHMENTS — Returns BOTH the customer-facing PDF (no
+// measurements) AND the full professional PDF (with measurements,
+// edge totals, material take-off) so the recipient — who paid for
+// the report — gets the complete deliverable. The customer PDF is
+// the "share-with-the-homeowner" copy; the professional PDF is the
+// one that goes to a roofer. Each renders independently; if one
+// fails the other still ships.
 // ============================================================
+export async function getCustomerReportAttachments(
+  env: any,
+  orderId: number | string,
+  orderNumber: string,
+): Promise<Array<{ filename: string; mimeType: string; bytes: Uint8Array }>> {
+  const safe = String(orderNumber).replace(/[^\w.\-]/g, '_')
+  const out: Array<{ filename: string; mimeType: string; bytes: Uint8Array }> = []
+  if (!env?.BROWSER || !env?.DB) {
+    console.warn('[getCustomerReportAttachments] missing BROWSER binding or DB — PDFs skipped')
+    return out
+  }
+  const row = await env.DB.prepare(
+    'SELECT customer_report_html, professional_report_html FROM reports WHERE order_id = ? ORDER BY id DESC LIMIT 1'
+  ).bind(orderId).first<any>()
+  // Professional first (it's the "main" deliverable for the paying customer);
+  // customer version second (the "share with homeowner" copy).
+  if (row?.professional_report_html) {
+    const pro = await renderHtmlToPdf(env, row.professional_report_html)
+    if (pro) out.push({ filename: `roof-report-${safe}-full.pdf`, mimeType: 'application/pdf', bytes: pro })
+  }
+  if (row?.customer_report_html) {
+    const cust = await renderHtmlToPdf(env, row.customer_report_html)
+    if (cust) out.push({ filename: `roof-report-${safe}-customer.pdf`, mimeType: 'application/pdf', bytes: cust })
+  }
+  return out
+}
+
+// Back-compat shim for callers that still want a single attachment.
 export async function getCustomerReportAttachment(
   env: any,
   orderId: number | string,
   orderNumber: string,
 ): Promise<{ filename: string; mimeType: string; bytes: Uint8Array } | null> {
-  const safe = String(orderNumber).replace(/[^\w.\-]/g, '_')
-  const pdf = await renderCustomerReportPdf(env, orderId)
-  if (pdf) {
-    return { filename: `roof-report-${safe}.pdf`, mimeType: 'application/pdf', bytes: pdf }
-  }
-  return null
+  const all = await getCustomerReportAttachments(env, orderId, orderNumber)
+  return all[0] || null
 }
 
 // ============================================================
