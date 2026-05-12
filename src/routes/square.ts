@@ -1308,15 +1308,20 @@ squareRoutes.post('/webhook', async (c) => {
             const buyer = await c.env.DB.prepare(
               'SELECT email, phone FROM customers WHERE id = ?'
             ).bind(customerId).first<any>().catch(() => null)
+            // Stable eventId = square_order_id so Meta dedupes against the
+            // client-side fbq('track','Purchase',...) fire on /?payment=success.
+            // Without this, every paid customer counts twice on Meta.
+            const purchaseEventId = pendingPayment.square_order_id || `square_${payment.id}`
             const capiPromise = sendMetaConversion(c.env as any, {
               eventName: 'Purchase',
+              eventId: purchaseEventId,
               email: buyer?.email || undefined,
               phone: buyer?.phone || undefined,
               sourcePage: 'square_webhook',
               customData: {
                 value: Number(pendingPayment.amount || 0),
                 currency: 'CAD',
-                content_ids: [pendingPayment.square_order_id || `square_${payment.id}`],
+                content_ids: [purchaseEventId],
                 payment_type: pendingPayment.payment_type || 'unknown',
               },
             }).catch((e: any) => console.warn('[meta-capi] purchase fire failed:', (e && e.message) || e))

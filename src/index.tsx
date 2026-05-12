@@ -456,7 +456,12 @@ window.trackAdsConversion = function(kind, params) {
       var oid = p.get('order_id') || undefined;
       window.trackAdsConversion('purchase', { value: v, currency: 'CAD', transaction_id: oid });
       if (typeof fbq === 'function') {
-        try { fbq('track', 'Purchase', { value: v, currency: 'CAD', content_ids: oid ? [oid] : undefined }); } catch(_){}
+        try {
+          // eventID must match the server-side CAPI Purchase fire (square_order_id)
+          // so Meta dedupes — otherwise every paid customer counts twice on Meta.
+          if (oid) fbq('track', 'Purchase', { value: v, currency: 'CAD', content_ids: [oid] }, { eventID: oid });
+          else     fbq('track', 'Purchase', { value: v, currency: 'CAD' });
+        } catch(_){}
       }
     }
   } catch(e) {}
