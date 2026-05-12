@@ -413,14 +413,20 @@ function simplifyEavesXY(
   for (let pass = 0; pass < 2; pass++) {
     const n = work.length
     if (n < 6) break
-    const edgeLen = (i: number) => Math.hypot(work[(i + 1) % n].x - work[i].x, work[(i + 1) % n].y - work[i].y)
+    // Both indices wrap (% n). Without the wrap on `work[i % n]` below, a
+     // run of short edges that reaches index n crashes with
+     // "Cannot read properties of undefined (reading 'x')" — every edge
+     // on a tightly-traced lower-tier eave is short, so j marches to n.
+    const edgeLen = (i: number) => Math.hypot(work[(i + 1) % n].x - work[i % n].x, work[(i + 1) % n].y - work[i % n].y)
     let smoothed = false
     let i = 0
     while (i < n) {
       if (edgeLen(i) >= SHORT_EDGE_M) { i++; continue }
-      // Walk forward while edges stay short.
+      // Walk forward while edges stay short. Cap at n-1 steps so a fully
+      // short-edged polygon (lower-tier lip drawn with many tight clicks)
+      // can't run j past the end of `work`.
       let j = i
-      while (edgeLen(j) < SHORT_EDGE_M && (j - i) < n) j++
+      while (edgeLen(j) < SHORT_EDGE_M && (j - i) < n - 1) j++
       const runLen = j - i + 1   // inclusive of vertex j
       if (runLen >= MIN_RUN + 1) {
         // Vertices i .. j; collapse interior vertices (i+1 .. j-1) if unanchored.

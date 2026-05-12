@@ -416,14 +416,16 @@ function renderMultiStructureReport(report: RoofReport): string {
     const m = htmls[i].match(bodyRe)
     const inner = m ? m[1] : htmls[i]
     const label = (synthReports[i] as any).__structure_label || `Structure ${i + 1}`
-    bodies.push(`
-<div class="page" style="${i > 0 ? 'page-break-before:always;' : ''}padding:0;min-height:auto">
-  <div style="background:linear-gradient(90deg,#00897B,#00695C);color:#fff;padding:18px 28px;text-align:center">
-    <div style="font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;opacity:0.85">Multi-Structure Report &mdash; ${i + 1} of ${synthReports.length}</div>
-    <div style="font-size:22px;font-weight:900;margin-top:4px;letter-spacing:0.5px">${label}</div>
-  </div>
-</div>
-${inner}`)
+    // The structure banner used to live in its own `<div class="page">`,
+    // but `.page` has page-break-after:always — that put a near-empty
+    // page in front of every structure cover. Inject the banner into
+    // the FIRST .page of `inner` instead so the cover starts at the
+    // very top with the green title bar above the existing teal bar.
+    const innerWithBanner = inner.replace(
+      /<div([^>]*class="[^"]*\bpage\b[^"]*"[^>]*)>/i,
+      `<div$1><div style="background:linear-gradient(90deg,#00897B,#00695C);color:#fff;padding:10px 28px;text-align:center"><div style="font-size:9px;font-weight:600;letter-spacing:2px;text-transform:uppercase;opacity:0.85">Multi-Structure Report &mdash; ${i + 1} of ${synthReports.length}</div><div style="font-size:18px;font-weight:900;margin-top:2px;letter-spacing:0.5px">${label}</div></div>`,
+    )
+    bodies.push(innerWithBanner)
   }
   return htmls[0].replace(bodyRe, `<body>${bodies.join('\n')}</body>`)
 }
