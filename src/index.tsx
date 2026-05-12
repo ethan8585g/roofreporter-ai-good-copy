@@ -1767,6 +1767,22 @@ app.get('/3d-verify', async (c) => {
     if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = false;
     viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#000');
 
+    // ── Trackpad sensitivity tuning ──
+    // Cesium's defaults are too aggressive on Mac trackpads: orbit drags
+    // overshoot and pinch-zoom blows past the target altitude. Reduce
+    // inertia so the camera stops coasting almost immediately after the
+    // gesture ends, and cut the per-pixel rotate factor in half. The
+    // _rotateFactor is a private property — Cesium has no public knob for
+    // rotate speed — so we guard the assignment in case a future upgrade
+    // renames it.
+    const ssc = viewer.scene.screenSpaceCameraController;
+    if (ssc) {
+      ssc.inertiaSpin = 0.5;
+      ssc.inertiaTranslate = 0.5;
+      ssc.inertiaZoom = 0.5;
+      if (typeof ssc._rotateFactor === 'number') ssc._rotateFactor *= 0.5;
+    }
+
     // ── Trackpad-friendly wheel zoom ──
     // Cesium's default wheel handler is sluggish on Mac trackpads: pinch
     // gestures fire wheel events with ctrlKey=true and deltaY ≈ ±1-5, which
@@ -1782,8 +1798,8 @@ app.get('/3d-verify', async (c) => {
       const carto = viewer.camera.positionCartographic;
       const heightM = carto ? Math.max(carto.height, 5) : 250;
       const isPinch = ev.ctrlKey; // Mac trackpad pinch
-      const perUnit = isPinch ? 0.04 : 0.0015;
-      const frac = Math.min(Math.abs(ev.deltaY) * perUnit, 0.35);
+      const perUnit = isPinch ? 0.022 : 0.0008;
+      const frac = Math.min(Math.abs(ev.deltaY) * perUnit, 0.22);
       const amount = heightM * frac;
       if (ev.deltaY > 0) viewer.camera.zoomOut(amount);
       else if (ev.deltaY < 0) viewer.camera.zoomIn(amount);
