@@ -1778,6 +1778,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           // 3D tiles + past human traces as few-shot examples. Three buttons —
           // one per edge type. Each fires only on click (no background runs)
           // and previews the result on the map; admin reviews + submits.
+          '<button onclick="saToggleHintRegion()" id="sa-hint-region-btn" title="Optional: draw a rough circle around the target building before Auto-Trace. ~2 sec; dramatically improves accuracy on tree-occluded, multi-building, or townhouse lots. Click to arm, then click on the map at the building centre and drag to set radius." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(236,72,153,0.15);color:#f9a8d4;border:1px solid rgba(236,72,153,0.4)"><i class="fas fa-bullseye mr-1"></i>Mark Region</button>' +
           '<button onclick="saAutoTrace(\'eaves\')" id="sa-tool-auto-eaves" title="Auto-trace the eave outline using Claude vision + Solar API + past traces. Preview only — review and tweak before Submit." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(34,197,94,0.15);color:#86efac;border:1px solid rgba(34,197,94,0.4)"><i class="fas fa-robot mr-1"></i>Auto-Trace Eaves</button>' +
           '<button onclick="saAutoTrace(\'hips\')" id="sa-tool-auto-hips" title="Auto-trace the hip lines using Claude vision + Solar API + past traces. Preview only — review and tweak before Submit." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(245,158,11,0.15);color:#fbbf24;border:1px solid rgba(245,158,11,0.4)"><i class="fas fa-robot mr-1"></i>Auto-Trace Hips</button>' +
           '<button onclick="saAutoTrace(\'ridges\')" id="sa-tool-auto-ridges" title="Auto-trace the ridge lines using Claude vision + Solar API + past traces. Preview only — review and tweak before Submit." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(59,130,246,0.15);color:#93c5fd;border:1px solid rgba(59,130,246,0.4)"><i class="fas fa-robot mr-1"></i>Auto-Trace Ridges</button>' +
@@ -3879,6 +3880,126 @@ window.saAutoDetectOutline = async function() {
 //    { segments:[[{lat,lng}...]], confidence, reasoning, diagnostics }. The
 //    super-admin reviews + tweaks the result; nothing persists until Submit.
 //    Fires ONLY on explicit button click — no background polling.
+// ─────────────────────────────────────────────────────────────
+// Hint Region — interactive segmentation prompt (SAM-style)
+// ─────────────────────────────────────────────────────────────
+// Click "Mark Region" to arm. The next click on the map becomes the
+// circle centre; drag to set the radius; release to lock. The hint
+// flows into the next Auto-Trace POST and is rendered onto the
+// satellite tile server-side so Claude sees a red dashed circle +
+// faint pink shading marking the target building.
+//
+// Eliminates the wrong-building / merged-neighbour / detached-garage
+// failure modes — foundation vision models like Claude perform
+// dramatically better when the target is visually marked.
+window.saToggleHintRegion = function() {
+  if (window._saHintArmed) {
+    // Already armed — clicking the button again disarms + clears.
+    saClearHintRegion();
+    saHintBtnSetState('idle');
+    return;
+  }
+  if (!(window._saTraceState && window._saTraceState.map)) {
+    alert('Map not ready yet — wait a moment and try again.');
+    return;
+  }
+  window._saHintArmed = true;
+  saHintBtnSetState('armed');
+  // Show a transient toast so the operator knows what to do.
+  saAutoTraceToast('Click + drag on the map to mark the target region', '#be185d');
+  // Attach a one-shot mousedown listener to the map. Click → start
+  // drawing; drag → adjust radius; release → finalize.
+  var map = window._saTraceState.map;
+  // Disable map drag while drawing to prevent map-pan from fighting us.
+  map.setOptions({ draggable: false });
+  var listener = google.maps.event.addListener(map, 'mousedown', function(e) {
+    google.maps.event.removeListener(listener);
+    saHintBeginDraw(e.latLng);
+  });
+  window._saHintArmListener = listener;
+}
+
+function saHintBtnSetState(state) {
+  var btn = document.getElementById('sa-hint-region-btn');
+  if (!btn) return;
+  if (state === 'armed') {
+    btn.innerHTML = '<i class="fas fa-times mr-1"></i>Cancel Mark';
+    btn.style.background = 'rgba(236,72,153,0.4)';
+    btn.style.color = '#fff';
+  } else if (state === 'drawn') {
+    btn.innerHTML = '<i class="fas fa-bullseye mr-1"></i>Clear Mark';
+    btn.style.background = 'rgba(34,197,94,0.25)';
+    btn.style.color = '#86efac';
+  } else {
+    btn.innerHTML = '<i class="fas fa-bullseye mr-1"></i>Mark Region';
+    btn.style.background = 'rgba(236,72,153,0.15)';
+    btn.style.color = '#f9a8d4';
+  }
+}
+
+function saHintBeginDraw(centerLatLng) {
+  var map = window._saTraceState.map;
+  // Visual circle in pink. Radius starts at 1m (effectively a dot) and
+  // grows as the operator drags.
+  var circle = new google.maps.Circle({
+    map: map,
+    center: centerLatLng,
+    radius: 1,
+    strokeColor: '#dc2626',
+    strokeOpacity: 0.85,
+    strokeWeight: 2.5,
+    fillColor: '#ec4899',
+    fillOpacity: 0.18,
+    clickable: false,
+  });
+  window._saHintCircle = circle;
+
+  var moveListener = google.maps.event.addListener(map, 'mousemove', function(e) {
+    var r = google.maps.geometry.spherical.computeDistanceBetween(centerLatLng, e.latLng);
+    circle.setRadius(Math.max(5, Math.min(200, r)));
+  });
+  var upListener = google.maps.event.addListener(map, 'mouseup', function() {
+    google.maps.event.removeListener(moveListener);
+    google.maps.event.removeListener(upListener);
+    map.setOptions({ draggable: true });
+    var r = circle.getRadius();
+    if (r < 5) {
+      // Treat sub-5m as accidental click; abort.
+      circle.setMap(null);
+      window._saHintCircle = null;
+      window._saHintArmed = false;
+      saHintBtnSetState('idle');
+      saAutoTraceToast('Region too small — try again', '#92400e');
+      return;
+    }
+    // Lock in the hint as a payload the next Auto-Trace POST will pick up.
+    window._saHintRegion = {
+      center_lat: centerLatLng.lat(),
+      center_lng: centerLatLng.lng(),
+      radius_meters: Math.round(r * 10) / 10,
+    };
+    window._saHintArmed = false;
+    saHintBtnSetState('drawn');
+    saAutoTraceToast('Region marked — now press Auto-Trace', '#15803d');
+  });
+}
+
+function saClearHintRegion() {
+  if (window._saHintCircle) {
+    try { window._saHintCircle.setMap(null); } catch (_) {}
+    window._saHintCircle = null;
+  }
+  if (window._saHintArmListener) {
+    try { google.maps.event.removeListener(window._saHintArmListener); } catch (_) {}
+    window._saHintArmListener = null;
+  }
+  if ((window._saTraceState && window._saTraceState.map)) {
+    try { (window._saTraceState && window._saTraceState.map).setOptions({ draggable: true }); } catch (_) {}
+  }
+  window._saHintRegion = null;
+  window._saHintArmed = false;
+}
+
 window.saAutoTrace = async function(edge) {
   var s = window._saTraceState;
   if (!s || !s.map) { alert('Trace map not ready.'); return; }
@@ -3911,6 +4032,10 @@ window.saAutoTrace = async function(edge) {
     } catch (e) {
       console.warn('[auto-trace] 3D capture failed, continuing without:', e && e.message);
     }
+    // Pull in any user-drawn hint region. Optional — if the operator
+    // marked one before pressing Auto-Trace, it dramatically improves
+    // wrong-building disambiguation. Cleared on map reset / new order.
+    var hintRegionPayload = window._saHintRegion || null;
     var resp = await saFetch('/api/admin/superadmin/orders/' + s.orderId + '/auto-trace/' + edge, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3921,6 +4046,7 @@ window.saAutoTrace = async function(edge) {
         imageWidth: w,
         imageHeight: h,
         viewport_3d_b64: viewport3dB64 || undefined,
+        hint_region: hintRegionPayload || undefined,
       }),
     });
     var data = null;
@@ -4368,6 +4494,10 @@ window.saSubmitTrace = async function(orderId, force) {
     });
     var data = await res.json();
     if (data.success) {
+      // Reset the hint-region state so the next trace session starts
+      // fresh. Leaving a stale hint around would silently apply it to
+      // a different order.
+      try { saClearHintRegion(); saHintBtnSetState('idle'); } catch (_) {}
       // Verified planes are now baked into the saved trace — drop the
       // localStorage cache so a re-open doesn't restore stale work on top
       // of what's already on the order.

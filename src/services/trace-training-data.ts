@@ -47,6 +47,12 @@ export interface FetchTrainingArgs {
   /** Optional sqft hint from the order. When unset we lean on
    *  geographic proximity + segment-count match. */
   targetSqft?: number
+  /** Order IDs to exclude from the few-shot pool (e.g. the current order
+   *  being traced, to prevent self-recall, or eval-set orders during a
+   *  harness run, to prevent memorization). Default empty — production
+   *  auto-trace calls don't need this. The harness endpoint passes the
+   *  current eval-set order_id. */
+  excludeOrderIds?: number[]
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -54,14 +60,23 @@ export interface FetchTrainingArgs {
 // ─────────────────────────────────────────────────────────────
 export async function fetchTrainingExamples(env: Bindings, args: FetchTrainingArgs): Promise<TrainingExample[]> {
   const limit = args.limit ?? 5
+  const excludeIds = new Set((args.excludeOrderIds || []).filter(n => Number.isFinite(n) && n > 0))
   const [live, cached] = await Promise.all([
-    fetchLiveExamples(env, args),
+    fetchLiveExamples(env, args, excludeIds),
     fetchCachedExamples(env),
   ])
+  // Filter cached pool too — it doesn't query D1 with a NOT IN clause, so
+  // we filter in-memory. Cheap (cache caps at ~30 rows).
+  const cachedFiltered = excludeIds.size > 0
+    ? cached.filter(c => !excludeIds.has(c.order_id))
+    : cached
   // Priority order: live (freshest) > D1 cache (nightly diverse pool) > bundled static
   // index (deploy-time floor). mergeUnique skips later entries when an order_id
   // already appeared in an earlier pool.
-  const merged = mergeUnique(mergeUnique(live, cached), TRACED_INDEX)
+  const staticFiltered = excludeIds.size > 0
+    ? TRACED_INDEX.filter(t => !excludeIds.has(t.order_id))
+    : TRACED_INDEX
+  const merged = mergeUnique(mergeUnique(live, cachedFiltered), staticFiltered)
 
   // Filter: must have at least one segment of the requested edge type.
   // Otherwise the example is useless to the agent — eaves examples
@@ -82,12 +97,18 @@ export async function fetchTrainingExamples(env: Bindings, args: FetchTrainingAr
 // ─────────────────────────────────────────────────────────────
 // D1 live query
 // ─────────────────────────────────────────────────────────────
-async function fetchLiveExamples(env: Bindings, args: FetchTrainingArgs): Promise<TrainingExample[]> {
+async function fetchLiveExamples(env: Bindings, args: FetchTrainingArgs, excludeIds: Set<number>): Promise<TrainingExample[]> {
   // Pull a candidate pool (top 30) ordered by recency. We re-rank in
   // memory because D1 doesn't support trig functions for great-circle
   // distance. 30 is plenty — the final filter shrinks this back to N.
+  // The eval_seed_set exclusion was REMOVED on 2026-05-11 after a
+  // regression: stripping those 29 high-quality orders from every
+  // production trace's few-shot pool measurably hurt accuracy. The
+  // harness endpoint now passes the SPECIFIC eval order_id it's running
+  // via excludeIds instead — narrow exclusion just for the order being
+  // measured, not the whole set.
   try {
-    const rows = await env.DB.prepare(`
+    const baseSql = `
       SELECT o.id AS order_id, o.latitude, o.longitude, o.house_sqft,
              o.roof_trace_json,
              r.roof_pitch_degrees, r.complexity_class,
@@ -98,7 +119,11 @@ async function fetchLiveExamples(env: Bindings, args: FetchTrainingArgs): Promis
         AND o.roof_trace_json != ''
         AND r.status = 'completed'
         AND (o.trace_source IN ('admin','self') OR o.trace_source IS NULL)
-        AND o.id NOT IN (SELECT order_id FROM eval_seed_set)
+    `
+    const excludeSql = excludeIds.size > 0
+      ? ` AND o.id NOT IN (${[...excludeIds].join(',')})`
+      : ''
+    const rows = await env.DB.prepare(`${baseSql}${excludeSql}
       ORDER BY o.id DESC
       LIMIT 30
     `).all<any>()

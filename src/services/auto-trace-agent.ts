@@ -90,6 +90,26 @@ export interface AutoTraceInput {
    *  include it as a parallel image. Helps Claude anchor pixel
    *  references. Off by default — adds ~1MB to the request payload. */
   gridOverlay?: boolean
+  /** Order IDs to exclude from the few-shot retrieval pool. Used by the
+   *  harness endpoint to prevent self-recall during accuracy evaluation;
+   *  unused on production traces. */
+  excludeOrderIds?: number[]
+  /** Optional user-drawn hint region — coarse circle/box indicating
+   *  approximately where the target building is. This is the SAM-style
+   *  interactive-segmentation prompt: the operator marks a rough region
+   *  in ~2 seconds, the agent uses it to disambiguate "which thing is
+   *  the target." Eliminates the wrong-building / merged-neighbour /
+   *  detached-garage failure modes. Foundation vision models perform
+   *  dramatically better when the target is visually marked vs. "find
+   *  the building somewhere in this image." */
+  hintRegion?: {
+    /** Centre of the user's hint, in geographic coordinates. */
+    centerLat: number
+    centerLng: number
+    /** Radius in meters — half the largest dimension of the user's
+     *  drawn circle/box. Sane bounds: 8m (small shed) to 80m (acreage). */
+    radiusMeters: number
+  }
   /** Decode the satellite PNG, paint vegetation pixels magenta via VARI
    *  index, and send the tinted version as the primary image. Tells
    *  Claude "the pink stuff is trees; the eave passes through them but
@@ -210,6 +230,13 @@ export interface AutoTraceResult {
     /** Dimensions of the image Claude actually saw (vs the projection grid,
      *  always safeW*2 = 1280). */
     sent_image_dim?: number
+    /** True when the user-drawn hint region was successfully rendered onto
+     *  the satellite tile. False/undefined when no hint was provided or
+     *  rendering failed (the run still proceeds, just without the hint). */
+    hint_applied?: boolean
+    /** Hint geometry in pixel space of the sent image — for debugging. */
+    hint_center_px?: { x: number; y: number }
+    hint_radius_px?: number
     model: string
     elapsed_ms: number
   }
@@ -380,10 +407,67 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       targetSegments: solarSummary.segments_count,
       targetSqft: targetSqftFromSolar,
       limit: 5,
+      excludeOrderIds: input.excludeOrderIds,
     }),
     buildLessonMemo(env, input.edge, complexityBucket),
     getCalibrationFactor(env, input.edge, complexityBucket),
   ])
+
+  // ── Hint region overlay (SAM-style interactive segmentation prompt) ──
+  // Optional user-drawn coarse circle indicating roughly where the
+  // target building is. We render it as a red dashed outline + faint
+  // pink shading on the satellite tile. Foundation vision models perform
+  // dramatically better when the target is visually marked vs.
+  // "find the building somewhere in this image". Eliminates the wrong-
+  // building / merged-neighbour / detached-garage failure modes.
+  let hintApplied = false
+  let hintCenterPx: { x: number; y: number } | null = null
+  let hintRadiusPx: number | null = null
+  if (input.hintRegion && Number.isFinite(input.hintRegion.centerLat) && Number.isFinite(input.hintRegion.centerLng) && Number.isFinite(input.hintRegion.radiusMeters)) {
+    const radiusM = Math.max(5, Math.min(150, input.hintRegion.radiusMeters))
+    try {
+      // Convert hint centre to pixel coords in the sent-image frame
+      // (post-upscale if applicable).
+      const scale = 1 << framing.zoom
+      const centerSin = Math.sin(framing.lat * Math.PI / 180)
+      const centerWorldX = (256 * (0.5 + framing.lng / 360)) * scale
+      const centerWorldY = (256 * (0.5 - Math.log((1 + centerSin) / (1 - centerSin)) / (4 * Math.PI))) * scale
+      const hintSin = Math.sin(input.hintRegion.centerLat * Math.PI / 180)
+      const hintWorldX = (256 * (0.5 + input.hintRegion.centerLng / 360)) * scale
+      const hintWorldY = (256 * (0.5 - Math.log((1 + hintSin) / (1 - hintSin)) / (4 * Math.PI))) * scale
+      // Mercator world units → image pixels: factor = actualImageDim / safeW.
+      const worldUnitsPerImgPx = safeW / actualImageDim
+      const hintPxX = Math.round((hintWorldX - centerWorldX) / worldUnitsPerImgPx + actualImageDim / 2)
+      const hintPxY = Math.round((hintWorldY - centerWorldY) / worldUnitsPerImgPx + actualImageDim / 2)
+      // Radius in pixels: meters → world units → image pixels.
+      const groundMPerWorldUnit = (40_075_016 * Math.cos(framing.lat * Math.PI / 180)) / (256 * scale)
+      const radiusWorldUnits = radiusM / groundMPerWorldUnit
+      const radiusPxFloat = radiusWorldUnits / worldUnitsPerImgPx
+      const radiusPx = Math.round(radiusPxFloat)
+      hintCenterPx = { x: hintPxX, y: hintPxY }
+      hintRadiusPx = radiusPx
+      // Render the hint onto the existing satellite PNG. Needs a decoder.
+      // The current image is whatever came out of preprocessing
+      // (raw Static Maps PNG OR vegetation-tinted PNG OR upscaled PNG).
+      // Static Maps returns PNG by default; only skip if the media type
+      // somehow flipped to JPEG.
+      if (imageMediaType === 'image/png') {
+        const pngBytes = Uint8Array.from(atob(imageB64), c => c.charCodeAt(0))
+        const decoded = await decodePNG(pngBytes)
+        drawHintCircle(decoded.rgba, decoded.width, decoded.height, hintPxX, hintPxY, radiusPx)
+        const reencoded = await encodePNG(decoded)
+        let bin = ''
+        const chunk = 0x8000
+        for (let i = 0; i < reencoded.length; i += chunk) {
+          bin += String.fromCharCode(...reencoded.subarray(i, Math.min(i + chunk, reencoded.length)))
+        }
+        imageB64 = btoa(bin)
+        hintApplied = true
+      }
+    } catch (e: any) {
+      console.warn('[auto-trace] hint overlay render failed (continuing without):', e?.message)
+    }
+  }
 
   const hasViewport3d = !!(input.viewport3dB64 && input.viewport3dB64.length > 1000)
   // Projection grid (Mercator) is always safeW*2 × safeH*2 = 1280×1280
@@ -418,6 +502,9 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     hasWideContext: !!wideContext,
     hasGridOverlay: !!gridOverlay,
     vegetationTintApplied,
+    hintApplied,
+    hintCenterPx,
+    hintRadiusPx,
     targetCenterPx,
     targetBboxPx,
     includeOutbuildings: !!input.includeOutbuildings,
@@ -685,6 +772,9 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       upscale_applied: upscaleApplied || undefined,
       preprocess_elapsed_ms: preprocessElapsedMs || undefined,
       sent_image_dim: actualImageDim,
+      hint_applied: hintApplied || undefined,
+      hint_center_px: hintCenterPx || undefined,
+      hint_radius_px: hintRadiusPx ?? undefined,
       model: CLAUDE_VISION_MODEL,
       elapsed_ms: Date.now() - started,
     },
@@ -840,6 +930,9 @@ function buildSystemPrompt(
     hasWideContext: boolean
     hasGridOverlay: boolean
     vegetationTintApplied: boolean
+    hintApplied: boolean
+    hintCenterPx: { x: number; y: number } | null
+    hintRadiusPx: number | null
     targetCenterPx: { x: number; y: number }
     targetBboxPx: { x1: number; y1: number; x2: number; y2: number; widthFt: number; depthFt: number; trusted: boolean } | null
     includeOutbuildings: boolean
@@ -858,7 +951,7 @@ function buildSystemPrompt(
   // having to infer from contents. Per Anthropic's multi-image docs.
   const imageRoster: string[] = []
   let imgN = 1
-  imageRoster.push(`Image ${imgN++} — PRIMARY: Google satellite (top-down, target reference; ALL pixel coordinates you emit must be in THIS image's coordinate space, origin top-left).${opts.vegetationTintApplied ? ' ⚠️ TREE TINT APPLIED: vegetation pixels have been painted MAGENTA via the VARI vegetation index. Magenta = tree canopy (likely deciduous in summer imagery). The eave often passes UNDER the magenta zones — extrapolate the visible eave line through the canopy using the orthogonal-projection rule. Do NOT treat the edge of the magenta as a roof corner.' : ''}`)
+  imageRoster.push(`Image ${imgN++} — PRIMARY: Google satellite (top-down, target reference; ALL pixel coordinates you emit must be in THIS image's coordinate space, origin top-left).${opts.vegetationTintApplied ? ' ⚠️ TREE TINT APPLIED: vegetation pixels have been painted MAGENTA via the VARI vegetation index. Magenta = tree canopy (likely deciduous in summer imagery). The eave often passes UNDER the magenta zones — extrapolate the visible eave line through the canopy using the orthogonal-projection rule. Do NOT treat the edge of the magenta as a roof corner.' : ''}${opts.hintApplied ? ' 🎯 USER HINT CIRCLE drawn in RED DASHED line with faint pink interior — see the HINT REGION section below.' : ''}`)
   if (opts.hasHillshade) {
     imageRoster.push(`Image ${imgN++} — DSM hillshade. A synthetic structural render of the Google Solar API elevation raster, RESAMPLED to the SAME size as Image 1 so pixel coordinates correspond 1:1. THREE independent signals are packed into the RGB channels: RED = multi-azimuth hillshade (omni-directional illumination, ridges and hips appear as bright lines regardless of orientation); GREEN = Sobel edge magnitude on the height field (SHARP green lines where the surface curvature changes — primary cue for ridges, hips, and the inset of valleys); BLUE = above-ground height (brighter blue = higher above ground; near-zero where the surface is at lawn level). Use red+green together to localize lines; use blue to discriminate roof (bright blue) from yard or driveway (dark blue).`)
   }
@@ -881,6 +974,9 @@ function buildSystemPrompt(
     '',
     'Coordinate origin for the target image is top-left (0,0). All coordinates you return must be in pixels of Image 1.',
     '',
+    opts.hintApplied && opts.hintCenterPx && opts.hintRadiusPx
+      ? `\n🎯 USER HINT REGION — STRONGEST SIGNAL:\nImage 1 has a RED DASHED CIRCLE drawn on it, centred at pixel (${opts.hintCenterPx.x}, ${opts.hintCenterPx.y}) with radius ~${opts.hintRadiusPx}px, and faint pink shading INSIDE the circle. This is the operator's hint indicating roughly where the target building is. The actual building lives INSIDE this circle. Use the hint to disambiguate from neighbours, garages, sheds — the building you want is the one (or ones, if a porch / lower-tier eave / detached structure was intentionally enclosed) inside the pink shading. The red dashed ring is APPROXIMATE; the real eave line is what you SEE in the satellite imagery, NOT the circle itself. Trace the actual roof edges, but only consider buildings inside or overlapping the hint region — anything entirely OUTSIDE the circle is a neighbour and should be ignored.\n`
+      : '',
     '⚠️ TARGET BUILDING — CRITICAL:',
     opts.includeOutbuildings
       ? `The target property is centred at pixel (${opts.targetCenterPx.x}, ${opts.targetCenterPx.y}) on Image 1. Trace the MAIN HOUSE (centre) AND any DETACHED OUTBUILDINGS on the same lot — detached garage, shed, workshop, carport — as ADDITIONAL polygons in segments[]. Each outbuilding gets its own closed polygon. Do NOT trace neighbour houses on adjacent lots (separated by driveways, fences, or property lines).`
@@ -1298,6 +1394,59 @@ function parseClaudeResponse(text: string): {
     parsed = JSON.parse(m[0])
   }
   return normalizeParsedTrace(parsed)
+}
+
+// ─────────────────────────────────────────────────────────────
+// Hint-region overlay — draws a red dashed circle + faint pink interior
+// onto an RGBA buffer in-place. Used to mark the user's coarse hint
+// region on the satellite tile so the vision model can see "the target
+// is inside this circle." Pure pixel math; no image library needed.
+// ─────────────────────────────────────────────────────────────
+function drawHintCircle(
+  rgba: Uint8ClampedArray,
+  w: number,
+  h: number,
+  cx: number,
+  cy: number,
+  r: number,
+): void {
+  if (r <= 0) return
+  const r2_inner = (r - 3) * (r - 3)
+  const r2_outer_dashed = (r + 4) * (r + 4)
+  const r2_inner_dashed = (r - 4) * (r - 4)
+  // Faint pink fill INSIDE the circle (alpha ~15%) so the model can see
+  // a soft shaded zone without losing the underlying texture.
+  const xMin = Math.max(0, Math.floor(cx - r - 5))
+  const xMax = Math.min(w - 1, Math.ceil(cx + r + 5))
+  const yMin = Math.max(0, Math.floor(cy - r - 5))
+  const yMax = Math.min(h - 1, Math.ceil(cy + r + 5))
+  for (let y = yMin; y <= yMax; y++) {
+    for (let x = xMin; x <= xMax; x++) {
+      const dx = x - cx, dy = y - cy
+      const d2 = dx * dx + dy * dy
+      const idx = (y * w + x) * 4
+      // Dashed ring: pixels in the [r-4, r+4] annulus get drawn red,
+      // but only on dashes. Dash modulus: 12 degrees per dash, 50% duty.
+      if (d2 <= r2_outer_dashed && d2 >= r2_inner_dashed) {
+        const theta = Math.atan2(dy, dx)
+        const dashPhase = ((theta + Math.PI) * 180 / Math.PI) % 24
+        if (dashPhase < 14) {
+          rgba[idx]     = 235
+          rgba[idx + 1] = 38
+          rgba[idx + 2] = 56
+          rgba[idx + 3] = 255
+        }
+        continue
+      }
+      // Inside the circle (but not the ring): blend faint pink.
+      if (d2 < r2_inner) {
+        const a = 0.15
+        rgba[idx]     = Math.round(rgba[idx] * (1 - a) + 255 * a)
+        rgba[idx + 1] = Math.round(rgba[idx + 1] * (1 - a) + 180 * a)
+        rgba[idx + 2] = Math.round(rgba[idx + 2] * (1 - a) + 200 * a)
+      }
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────

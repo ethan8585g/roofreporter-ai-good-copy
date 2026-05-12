@@ -4761,6 +4761,11 @@ adminRoutes.post('/superadmin/harness/run', async (c) => {
       thinkingBudget: Number(overrides.thinking_budget) || 0,
       includeOutbuildings: overrides.include_outbuildings === true,
       enableAngleSnapping: overrides.enable_angle_snapping === true,
+      // Prevent self-recall during harness eval: exclude THIS order_id
+      // from the few-shot retrieval pool. Production traces don't need
+      // this (they have no stored trace to leak), but harness eval must.
+      excludeOrderIds: [orderId],
+      hintRegion: parseHintRegion(overrides.hint_region),
     })
   } catch (e: any) {
     return c.json({ error: 'agent_failed', message: e?.message, elapsed_ms: Date.now() - t0 }, 500)
@@ -4797,6 +4802,20 @@ adminRoutes.post('/superadmin/harness/run', async (c) => {
     diagnostics: agentResult.diagnostics,
   })
 })
+
+/** Parse + sanity-clamp a hint_region body field. Returns undefined if
+ *  the shape is wrong or the radius is out-of-band, so the agent runs
+ *  without the hint rather than failing the whole request. */
+function parseHintRegion(raw: any): { centerLat: number; centerLng: number; radiusMeters: number } | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const centerLat = Number(raw.center_lat ?? raw.centerLat)
+  const centerLng = Number(raw.center_lng ?? raw.centerLng)
+  const radiusMeters = Number(raw.radius_meters ?? raw.radiusMeters)
+  if (!Number.isFinite(centerLat) || !Number.isFinite(centerLng) || !Number.isFinite(radiusMeters)) return undefined
+  if (Math.abs(centerLat) > 90 || Math.abs(centerLng) > 180) return undefined
+  if (radiusMeters < 5 || radiusMeters > 200) return undefined
+  return { centerLat, centerLng, radiusMeters }
+}
 
 /** Pull the eaves polygons out of a stored UiTrace. Refuses non-eaves
  *  edge types explicitly: the data shapes for ridges/hips/valleys are
@@ -5219,6 +5238,7 @@ adminRoutes.post('/superadmin/orders/:id/auto-trace/:edge', async (c) => {
       gridOverlay: body?.grid_overlay === true,
       vegetationTint: body?.vegetation_tint === true,
       upscaleTo1568: body?.upscale_to_1568 === true,
+      hintRegion: parseHintRegion(body?.hint_region),
     })
 
     // Audit row so the super-admin activity feed shows who ran what when,
