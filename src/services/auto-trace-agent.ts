@@ -273,6 +273,12 @@ export interface AutoTraceResult {
     target_pin_applied?: boolean
     /** Pin pixel coordinates in the sent-image frame (post-upscale). */
     target_pin_px?: { x: number; y: number }
+    /** True when the SAME magenta reticle was also painted on the
+     *  wide-context tile (only possible when wide_context_used = true
+     *  and the wide tile decoded as PNG). */
+    wide_context_pin_applied?: boolean
+    /** Pin pixel coords in the wide-context image (zoom-1 frame). */
+    wide_context_pin_px?: { x: number; y: number }
     model: string
     elapsed_ms: number
     /** Set when the polygon was sourced from an external building-footprint
@@ -484,6 +490,12 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   // may have recentred the frame on a wrong bbox.
   let targetPinApplied = false
   let targetPinCenterPx: { x: number; y: number } | null = null
+  // Same magenta reticle painted on the wide-context tile (when wide-context
+  // is enabled). At framing.zoom-1 the pin is exactly half the pixel offset
+  // from frame centre vs the primary tile, so the math mirrors the primary
+  // pin block. Stays falsy when wide-context isn't fetched or isn't a PNG.
+  let widePinApplied = false
+  let widePinCenterPx: { x: number; y: number } | null = null
   // Pre-derive whether the operator drew a Mark Region — used in the
   // merged pipeline AND in the bbox / framing branches below.
   const hintIsValid = !!(input.hintRegion && Number.isFinite(input.hintRegion.centerLat)
@@ -602,6 +614,59 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     }
   }
 
+  // ── Wide-context pin pass — standalone PNG round-trip ──
+  // The merged pipeline above only mutates the PRIMARY tile. Wide-context
+  // is a separate fetch at framing.zoom-1 and isn't in that buffer. When
+  // wide-context is enabled, we need its own decode → drawTargetPin →
+  // encode so the SAME magenta reticle marks the target building on the
+  // zoomed-out view (where more neighbours are visible → ambiguity is
+  // strictly WORSE without a pin). Costs ~150-300ms when wide-context is
+  // on; wide-context is opt-in so users who don't need it pay nothing.
+  // The pin lat/lng is identical to the primary tile (input.lat/lng),
+  // only the projection zoom differs.
+  let wideContextB64 = wideContext?.b64
+  let wideContextMediaType = wideContext?.mediaType
+  if (wideContext && wideContext.mediaType === 'image/png' && targetPinIsValid) {
+    const wideStart = Date.now()
+    try {
+      const widePngBytes = Uint8Array.from(atob(wideContext.b64), c => c.charCodeAt(0))
+      const wideImg = await decodePNG(widePngBytes)
+      const wideZoom = framing.zoom - 1
+      const wideScale = 1 << wideZoom
+      const wideCenterSin = Math.sin(framing.lat * Math.PI / 180)
+      const wideCenterWorldX = (256 * (0.5 + framing.lng / 360)) * wideScale
+      const wideCenterWorldY = (256 * (0.5 - Math.log((1 + wideCenterSin) / (1 - wideCenterSin)) / (4 * Math.PI))) * wideScale
+      const widePinSin = Math.sin(input.lat * Math.PI / 180)
+      const widePinWorldX = (256 * (0.5 + input.lng / 360)) * wideScale
+      const widePinWorldY = (256 * (0.5 - Math.log((1 + widePinSin) / (1 - widePinSin)) / (4 * Math.PI))) * wideScale
+      const wideWorldUnitsPerImgPx = safeW / wideImg.width
+      const widePinPxX = Math.round((widePinWorldX - wideCenterWorldX) / wideWorldUnitsPerImgPx + wideImg.width / 2)
+      const widePinPxY = Math.round((widePinWorldY - wideCenterWorldY) / wideWorldUnitsPerImgPx + wideImg.height / 2)
+      if (widePinPxX >= 0 && widePinPxX < wideImg.width && widePinPxY >= 0 && widePinPxY < wideImg.height) {
+        drawTargetPin(wideImg.rgba, wideImg.width, wideImg.height, widePinPxX, widePinPxY)
+        widePinCenterPx = { x: widePinPxX, y: widePinPxY }
+        widePinApplied = true
+        const wideReencoded = await encodePNG(wideImg)
+        let wideBin = ''
+        const wideChunk = 0x8000
+        for (let i = 0; i < wideReencoded.length; i += wideChunk) {
+          wideBin += String.fromCharCode(...wideReencoded.subarray(i, Math.min(i + wideChunk, wideReencoded.length)))
+        }
+        wideContextB64 = btoa(wideBin)
+        wideContextMediaType = 'image/png'
+      }
+      // Tracked in preprocess_elapsed_ms — keeps the diagnostic single-sourced.
+      preprocessElapsedMs += Date.now() - wideStart
+    } catch (e: any) {
+      console.warn('[auto-trace] wide-context pin failed (falling back to raw wide tile):', e?.message)
+      widePinApplied = false
+      widePinCenterPx = null
+      // wideContextB64 / wideContextMediaType keep their original values —
+      // Claude still gets the un-pinned wide-context tile, just without the
+      // reticle.
+    }
+  }
+
   // Derive a complexity bucket from Solar's segment count so lessonMemo +
   // calibration can segment their stats. Same bucketing that
   // refreshTracedIndexCache uses for diversity selection. Stored on the
@@ -707,6 +772,8 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     includeOutbuildings: !!input.includeOutbuildings,
     targetPinApplied,
     targetPinCenterPx,
+    widePinApplied,
+    widePinCenterPx,
   })
   const userPrompt = buildUserPrompt({
     edge: input.edge,
@@ -737,8 +804,8 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   if (hillshade) {
     content.push({ type: 'image', source: { type: 'base64', media_type: hillshade.mediaType, data: hillshade.b64 } })
   }
-  if (wideContext) {
-    content.push({ type: 'image', source: { type: 'base64', media_type: wideContext.mediaType, data: wideContext.b64 } })
+  if (wideContext && wideContextB64 && wideContextMediaType) {
+    content.push({ type: 'image', source: { type: 'base64', media_type: wideContextMediaType, data: wideContextB64 } })
   }
   if (gridOverlay) {
     content.push({ type: 'image', source: { type: 'base64', media_type: gridOverlay.mediaType, data: gridOverlay.b64 } })
@@ -984,6 +1051,8 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       solar_segments_overlaid: solarSegmentsOverlaid || undefined,
       target_pin_applied: targetPinApplied || undefined,
       target_pin_px: targetPinCenterPx || undefined,
+      wide_context_pin_applied: widePinApplied || undefined,
+      wide_context_pin_px: widePinCenterPx || undefined,
       model: CLAUDE_VISION_MODEL,
       elapsed_ms: Date.now() - started,
     },
@@ -1198,6 +1267,8 @@ function buildSystemPrompt(
     includeOutbuildings: boolean
     targetPinApplied: boolean
     targetPinCenterPx: { x: number; y: number } | null
+    widePinApplied: boolean
+    widePinCenterPx: { x: number; y: number } | null
   },
 ): string {
   const role = edge === 'eaves'
@@ -1218,7 +1289,7 @@ function buildSystemPrompt(
     imageRoster.push(`Image ${imgN++} — DSM hillshade. A synthetic structural render of the Google Solar API elevation raster, RESAMPLED to the SAME size as Image 1 so pixel coordinates correspond 1:1. THREE independent signals are packed into the RGB channels: RED = multi-azimuth hillshade (omni-directional illumination, ridges and hips appear as bright lines regardless of orientation); GREEN = Sobel edge magnitude on the height field (SHARP green lines where the surface curvature changes — primary cue for ridges, hips, and the inset of valleys); BLUE = above-ground height (brighter blue = higher above ground; near-zero where the surface is at lawn level). Use red+green together to localize lines; use blue to discriminate roof (bright blue) from yard or driveway (dark blue).`)
   }
   if (opts.hasWideContext) {
-    imageRoster.push(`Image ${imgN++} — WIDE CONTEXT: same property at one zoom level OUT. Use it to confirm property boundaries vs neighbouring buildings, and to see whether what you think is "the back of the house" is actually a separate detached structure across a driveway. DO NOT emit pixel coordinates from this image.`)
+    imageRoster.push(`Image ${imgN++} — WIDE CONTEXT: same property at one zoom level OUT. Use it to confirm property boundaries vs neighbouring buildings, and to see whether what you think is "the back of the house" is actually a separate detached structure across a driveway.${opts.widePinApplied && opts.widePinCenterPx ? ` 🎯 The SAME MAGENTA RETICLE (open ring + N/S/E/W tick marks, white halo) is painted at pixel (${opts.widePinCenterPx.x}, ${opts.widePinCenterPx.y}) of this image, marking the SAME target building. Use it to confirm that the building you're tracing in Image 1 is correctly isolated from its neighbours — if the reticle sits on a building in this wider view that's clearly separated from what you traced in Image 1, you may have traced the wrong building.` : ''} DO NOT emit pixel coordinates from this image.`)
   }
   if (opts.hasGridOverlay) {
     imageRoster.push(`Image ${imgN++} — GRID OVERLAY: a transparent 16×16 grid (columns A–P, rows 1–16) sized identically to Image 1. Use it as a coordinate reference — name the cell a corner falls in (e.g. "the NE corner is in cell K4") in your reasoning, but emit pixel coords for the actual segments. Grid is a thinking aid, not a feature to trace.`)
