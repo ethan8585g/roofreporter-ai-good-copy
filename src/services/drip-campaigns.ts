@@ -169,6 +169,49 @@ function renderTrialEnds(c: { name: string | null; first_name: string; days_unti
   }
 }
 
+/**
+ * Pure render for one drip template — used by the sequence-engine when
+ * an admin manually enrolls a recipient in a drip chain. Falls back to
+ * reasonable defaults if the customer is missing or sparse.
+ */
+export async function renderDripTemplate(
+  env: any,
+  templateKey: string,
+  customer: { id?: number; name?: string | null; email?: string | null } | null,
+): Promise<RenderedEmail | null> {
+  const name = customer?.name || null
+  const first = (name || '').trim().split(/\s+/)[0] || ''
+  if (templateKey === 'stuck_signup_60d') {
+    let creditsRemaining = 3
+    if (customer?.id) {
+      try {
+        const c = await env.DB.prepare(
+          `SELECT COALESCE(free_trial_total, 3) - COALESCE(free_trial_used, 0) AS r FROM customers WHERE id = ?`
+        ).bind(customer.id).first<{ r: number }>()
+        if (c && typeof c.r === 'number') creditsRemaining = Math.max(0, c.r)
+      } catch {}
+    }
+    return renderStuckSignup({ name, first_name: first, credits_remaining: creditsRemaining })
+  }
+  if (templateKey === 'at_risk_churn_30d') {
+    let daysSince = 30
+    if (customer?.id) {
+      try {
+        const c = await env.DB.prepare(
+          `SELECT CAST(julianday('now') - julianday(MAX(created_at)) AS INTEGER) AS d
+           FROM orders WHERE customer_id = ?`
+        ).bind(customer.id).first<{ d: number }>()
+        if (c && c.d) daysSince = c.d
+      } catch {}
+    }
+    return renderAtRiskChurn({ name, first_name: first, days_since_order: daysSince })
+  }
+  if (templateKey === 'trial_ends_3d') {
+    return renderTrialEnds({ name, first_name: first, days_until_end: 3 })
+  }
+  return null
+}
+
 // ── ELIGIBILITY QUERIES ──────────────────────────────────────
 // Each campaign returns up to `limit` candidates that haven't received
 // THIS template within `cooldownDays`. Drips are paused entirely if

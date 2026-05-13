@@ -475,6 +475,29 @@ export default {
       })())
     }
 
+    // ── Email-sequence engine — every cron tick (every 10 min) ──
+    // Drives manual super-admin enrollments in any sequence (built-in
+    // or custom). Picks rows with status='active' and next_send_at<=now,
+    // fires the current step through logAndSendEmail, advances cursor.
+    // Built-in auto-fired sequences (signup_nurture / cart_recovery
+    // sweeping cron) keep running independently — this is a parallel
+    // path for admin-driven enrollments.
+    ctx.waitUntil((async () => {
+      const t0 = Date.now()
+      try {
+        const { processDueEnrollments } = await import('./services/sequence-engine')
+        const r = await processDueEnrollments(env, 25)
+        const summary = r.processed === 0
+          ? 'No enrollments due'
+          : `Sent ${r.sent}, failed ${r.failed} of ${r.processed} due`
+        if (r.processed > 0) console.log(`[CRON:sequence-engine] ${summary}`)
+        if (r.processed > 0) await logRun('sequence_engine', r.failed > 0 ? 'warning' : 'success', summary, r, Date.now() - t0)
+      } catch (err: any) {
+        console.error('[CRON:sequence-engine] Error:', err?.message)
+        await logRun('sequence_engine', 'error', err?.message || 'unknown', {}, Date.now() - t0)
+      }
+    })())
+
     // ── Gmail Sent-folder mirror — every 30 min (minute 0 or 30) ──
     // Pulls the last 25 messages from the platform's Gmail Sent folder
     // into email_sends so the Email Tracker dashboard shows manual

@@ -136,6 +136,17 @@ function firstNameFromCustomer(name: string | null, email: string): string {
  * Run one nurture stage's sweep. Public so cron-worker can run all three
  * stages on the same tick.
  */
+/**
+ * Pure render — returns subject+html for one stage given a first name.
+ * Used by the manual sequence-engine so admin enrollments produce the
+ * same body the auto-fired cron would have produced.
+ */
+export function renderNurtureStep(stage: NurtureStage, firstName: string): { subject: string; html: string } | null {
+  const cfg = STAGE_CONFIG[stage]
+  if (!cfg) return null
+  return { subject: cfg.subject(firstName), html: cfg.body(firstName) }
+}
+
 export async function runSignupNurtureStage(env: any, stage: NurtureStage): Promise<NurtureResult> {
   const cfg = STAGE_CONFIG[stage]
   const result: NurtureResult = { stage, found: 0, sent: 0, failed: 0, skipped: 0, errors: [] }

@@ -134,6 +134,16 @@ function packageLineFromCandidate(c: CartCandidate): string {
   return 'your roof report'
 }
 
+/**
+ * Pure render — returns subject+html for one stage given first name + package line.
+ * Used by the manual sequence-engine.
+ */
+export function renderCartRecoveryStep(stage: CartRecoveryStage, firstName: string, packageLine: string): { subject: string; html: string } | null {
+  const cfg = STAGE_CONFIG[stage]
+  if (!cfg) return null
+  return { subject: cfg.subject(firstName), html: cfg.body({ firstName, packageLine }) }
+}
+
 export async function runAbandonedCheckoutRecoveryStage(
   env: any,
   stage: CartRecoveryStage,
