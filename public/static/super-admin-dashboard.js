@@ -2224,6 +2224,16 @@ window.saTraceSetTool = function(tool) {
   });
   if (typeof saUpdateDormerCompleteBtn === 'function') saUpdateDormerCompleteBtn();
   if (typeof saUpdateCutoutCompleteBtn === 'function') saUpdateCutoutCompleteBtn();
+  // Mirror the tool switch into the 3D iframe so clicks on the photorealistic
+  // mesh land in the same trace state. The iframe only acts on eave / ridge /
+  // hip / valley (annotation tools like vent/skylight stay 2D-only — they're
+  // point-on-roof markers, not edges).
+  try {
+    var iframe = document.getElementById('sa-trace-map-3d-iframe');
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.postMessage({ type: 'rm-3d-set-mode', mode: tool }, '*');
+    }
+  } catch (_) { /* iframe still loading — load handler will sync */ }
 };
 
 window.saTraceClear = function() {
@@ -2430,11 +2440,26 @@ function saInitTraceMap(lat, lng, address) {
   // behind a closed shadow root, making screenshots impossible).
   var map3dIframe = document.getElementById('sa-trace-map-3d-iframe');
   if (map3dIframe) {
-    var src3d = '/3d-verify?postmsg=1'
+    // capture=1 turns the 3D iframe into a parallel input surface — clicking
+    // a ridge endpoint on the photorealistic mesh postMessages a feature back
+    // to this parent, which then appends to the same _ridgeData/_hipData/etc
+    // arrays the 2D map writes to. postmsg=1 keeps the screenshot capture
+    // path working alongside it.
+    var src3d = '/3d-verify?capture=1&postmsg=1'
       + '&lat=' + encodeURIComponent(center.lat)
       + '&lng=' + encodeURIComponent(center.lng)
       + '&heading=25&pitch=-22&range=180';
     map3dIframe.src = src3d;
+    // Sync the iframe's capture mode whenever the iframe finishes loading
+    // (we don't yet know whether onload fires before or after Cesium signals
+    // 'rm-3d-ready', so the iframe re-applies whatever message it gets).
+    map3dIframe.addEventListener('load', function() {
+      try {
+        var s = window._saTraceState;
+        var mode = (s && s.tool) || 'eave';
+        map3dIframe.contentWindow.postMessage({ type: 'rm-3d-set-mode', mode: mode }, '*');
+      } catch (_) {}
+    });
   }
 
   // Register higher-resolution basemaps (Esri / Mapbox / Nearmap) as
@@ -2494,6 +2519,70 @@ function saInitTraceMap(lat, lng, address) {
   }).catch(function(err) {
     console.warn('[SA Trace] basemaps load failed', err);
   });
+
+  // Install (once per page) the message listener that consumes feature
+  // captures from the 3D iframe. The iframe emits one of:
+  //   {type:'rm-3d-feature-captured', kind:'ridge'|'hip'|'valley',
+  //    pts:[{lat,lng},{lat,lng}]}    — committed 2-point line
+  //   {type:'rm-3d-feature-captured', kind:'eave',
+  //    pts:[{lat,lng}]}              — single eave vertex
+  //   {type:'rm-3d-eave-close'}      — admin tapped first vertex on 3D
+  // We marshal these into the same trace state the 2D map writes to so the
+  // submit-trace payload is structurally identical regardless of input source.
+  if (!window._sa3dFeatureListenerInstalled) {
+    window._sa3dFeatureListenerInstalled = true;
+    window.addEventListener('message', function(ev) {
+      var d = ev && ev.data; if (!d || typeof d !== 'object') return;
+      var st = window._saTraceState; if (!st || !st.map) return;
+      if (d.type === 'rm-3d-feature-captured') {
+        if (d.kind === 'eave' && Array.isArray(d.pts) && d.pts.length === 1) {
+          // Append a vertex to the in-progress eave outline. Mirror the same
+          // bookkeeping the 2D click handler does so the existing close logic
+          // (saCloseEaveSection / saTraceUndo) "just works."
+          var p = d.pts[0];
+          var ll = new google.maps.LatLng(p.lat, p.lng);
+          if (!Array.isArray(st._eaveLatLngs)) st._eaveLatLngs = [];
+          if (!Array.isArray(st.eavePoints)) st.eavePoints = [];
+          if (!Array.isArray(st._eaveMarkers)) st._eaveMarkers = [];
+          st._eaveLatLngs.push(ll);
+          st.eavePoints.push({ lat: p.lat, lng: p.lng });
+          var mk = new google.maps.Marker({
+            position: ll, map: st.map, clickable: false, zIndex: 9,
+            icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: '#22c55e', fillOpacity: 0.95, strokeColor: '#fff', strokeWeight: 2 },
+          });
+          st._eaveMarkers.push(mk);
+          // Refresh the in-progress polyline so the 2D view shows the same
+          // partial outline the admin is drawing on 3D.
+          if (st.eavePoly) { st.eavePoly.setMap(null); }
+          if (st._eaveLatLngs.length >= 2) {
+            st.eavePoly = new google.maps.Polyline({
+              path: st._eaveLatLngs.slice(),
+              strokeColor: '#22c55e', strokeWeight: 3, strokeOpacity: 0.9,
+              map: st.map, zIndex: 1
+            });
+          }
+        } else if ((d.kind === 'ridge' || d.kind === 'hip' || d.kind === 'valley') && Array.isArray(d.pts) && d.pts.length === 2) {
+          // Commit a 2-point line segment exactly the way the 2D click path does:
+          // push a Polyline onto the map AND record the lat/lng pair in
+          // _ridgeData/_hipData/_valleyData so submit-trace ships it.
+          var colors = { ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb' };
+          var color = colors[d.kind] || '#fff';
+          var path = d.pts.map(function(pp) { return new google.maps.LatLng(pp.lat, pp.lng); });
+          var poly = new google.maps.Polyline({ path: path, strokeColor: color, strokeWeight: 2, map: st.map });
+          var pair = d.pts.map(function(pp) { return { lat: pp.lat, lng: pp.lng }; });
+          if (d.kind === 'ridge') { (st.ridges = st.ridges || []).push(poly); (st._ridgeData = st._ridgeData || []).push(pair); }
+          else if (d.kind === 'hip') { (st.hips = st.hips || []).push(poly); (st._hipData = st._hipData || []).push(pair); }
+          else if (d.kind === 'valley') { (st.valleys = st.valleys || []).push(poly); (st._valleyData = st._valleyData || []).push(pair); }
+        }
+      } else if (d.type === 'rm-3d-eave-close') {
+        // Admin closed the eave polygon by clicking back near the first
+        // vertex on 3D. Delegate to the existing close routine so the
+        // section enters eaveSections + the pitch auto-fill + heat ramp
+        // happen the same way as the 2D path.
+        if (typeof saCloseEaveSection === 'function') saCloseEaveSection();
+      }
+    });
+  }
 
   // Hydrate any previously-confirmed verified planes for this order. Runs
   // after the map is bound so polygons + listeners attach to the right map.

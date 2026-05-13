@@ -1391,6 +1391,7 @@ app.get('/3d-verify', async (c) => {
   .btn.capture{background:#22d3ee;color:#0A0A0A}
   .btn.mode{background:rgba(0,0,0,.65);color:#fff;border:1px solid rgba(255,255,255,.18)}
   .btn.mode.active{background:#fff;color:#0A0A0A;border-color:#fff}
+  .btn.mode.eave.active{background:#22c55e;color:#0A0A0A;border-color:#22c55e}
   .btn.mode.ridge.active{background:#3b82f6;color:#fff;border-color:#3b82f6}
   .btn.mode.hip.active{background:#f59e0b;color:#0A0A0A;border-color:#f59e0b}
   .btn.mode.valley.active{background:#ef4444;color:#fff;border-color:#ef4444}
@@ -1407,11 +1408,11 @@ app.get('/3d-verify', async (c) => {
   .toast.ok{background:#15803D}
   .toast.warn{background:#9A3412}
   /* postmsg mode: hide decorative chrome (info pills + cover-capture button —
-     the parent's Capture View covers that) and the .capturebar (parent owns
-     ridge/hip/valley picking). Keep the Reset/Rotate adjustment buttons and
-     the legend so admins still have one-click movement controls inside the
-     iframe — the old <gmp-map-3d> had built-in nav buttons users relied on. */
-  body.postmsg .capturebar { display: none !important; }
+     the parent's Capture View covers that). When capture=1 is ALSO on (the
+     super-admin trace modal), keep the .capturebar visible so the operator
+     can switch eave/ridge/hip/valley right inside the 3D view. Without
+     capture, the parent owns picking and the bar would be noise. */
+  body.postmsg:not(.capture) .capturebar { display: none !important; }
   body.postmsg .topbar .pill,
   body.postmsg .topbar .btn.capture { display: none !important; }
   body.postmsg .legend { font-size: 10px; padding: 4px 8px; bottom: 6px; left: 6px; }
@@ -1434,11 +1435,12 @@ app.get('/3d-verify', async (c) => {
 </div>
 <div class="capturebar" id="captureBar" style="display:none">
   <button class="btn mode active" id="modePan"    onclick="setCaptureMode('pan')">✋ Pan</button>
+  <button class="btn mode eave"   id="modeEave"   onclick="setCaptureMode('eave')">▢ Eave</button>
   <button class="btn mode ridge"  id="modeRidge"  onclick="setCaptureMode('ridge')">— Ridge</button>
   <button class="btn mode hip"    id="modeHip"    onclick="setCaptureMode('hip')">⟋ Hip</button>
   <button class="btn mode valley" id="modeValley" onclick="setCaptureMode('valley')">⟍ Valley</button>
   <button class="btn ghost" id="undoPickBtn" onclick="undoLastPick()">Undo last point</button>
-  <span class="capture-hint" id="captureHint">Click two points to draw a line. Lines also appear on the 2D map.</span>
+  <span class="capture-hint" id="captureHint">Tool selected in the toolbar drives 3D clicks too. Eaves: tap each corner; first vertex closes.</span>
 </div>
 <div class="legend">
   Left-drag to rotate · Right-drag to tilt · Scroll to zoom
@@ -1493,16 +1495,26 @@ app.get('/3d-verify', async (c) => {
   let roofGroundHeight = null;
 
   // ── Active capture state (only meaningful when CAPTURE_ENABLED) ──
-  // Mode: 'pan' (default, no clicks captured) | 'ridge' | 'hip' | 'valley'
+  // Mode: 'pan' (default) | 'eave' | 'ridge' | 'hip' | 'valley'
+  //   eave             — single-point commit per click; close on first-vertex tap.
+  //   ridge/hip/valley — 2-point commit per pair; each pair posts one line segment.
+  // Annotation tools (vent/skylight/chimney/downspout/dormer/cutout) are 2D-only
+  // and are mapped to 'pan' here so 3D clicks become camera moves, not points.
   let captureMode = 'pan';
-  // In-progress line: array of { lat, lng, cartesian } for the current segment.
-  // Once it reaches 2 points, the segment is committed (postMessage + clear draft).
+  // In-progress draft for ridge/hip/valley (2-point lines). Eaves are tracked
+  // in eaveDraftPicks below so the two flows don't trample each other when the
+  // user switches tools mid-trace.
   const draftPicks = [];
-  // Cesium entities for the current draft (cleared when segment commits/cancels)
   const draftEntities = [];
-  // All committed segment entities (kept visible until modal closes)
+  // In-progress eave polygon — survives mode switches so the admin can flip
+  // to a ridge to add an interior detail and then back to eave without losing
+  // the partial outline.
+  const eaveDraftPicks = [];     // [{ lat, lng, height }]
+  const eaveDraftEntities = [];  // points + dashed polyline
+  let eaveDraftPolyline = null;
   const committedEntities = [];
-  const MODE_COLORS = { ridge: '#3b82f6', hip: '#f59e0b', valley: '#ef4444' };
+  const MODE_COLORS = { eave: '#22c55e', ridge: '#3b82f6', hip: '#f59e0b', valley: '#ef4444' };
+  const EAVE_CLOSE_PX = 14; // pixel radius from first vertex that counts as "close"
 
   function showErr(msg){
     const el = document.getElementById('err');
@@ -1575,19 +1587,31 @@ app.get('/3d-verify', async (c) => {
   }
 
   // ── Active capture: mode bar + click-to-pick on the photorealistic mesh ──
+  // Annotation tools coming from the parent's saTraceSetTool ('vent', 'skylight',
+  // 'chimney', 'downspout', 'dormer', 'cutout') are not eave/ridge/hip/valley
+  // edges and aren't useful to capture on the 3D view — collapse them to 'pan'
+  // so 3D clicks become camera moves, not stray feature commits.
+  const EDGE_MODES = ['eave','ridge','hip','valley'];
+  function normalizeMode(mode){
+    return EDGE_MODES.indexOf(mode) >= 0 ? mode : 'pan';
+  }
   function setCaptureMode(mode){
+    mode = normalizeMode(mode);
     captureMode = mode;
-    ['Pan','Ridge','Hip','Valley'].forEach((label) => {
+    ['Pan','Eave','Ridge','Hip','Valley'].forEach((label) => {
       const el = document.getElementById('mode' + label);
       if (!el) return;
       el.classList.toggle('active', mode === label.toLowerCase());
     });
-    // Switching modes mid-segment cancels the in-progress segment so the user
-    // doesn't accidentally connect a hip's first point to a ridge's second.
+    // Switching modes mid-segment cancels the in-progress ridge/hip/valley
+    // draft so the user doesn't accidentally connect a hip's first point to a
+    // ridge's second. Eave drafts SURVIVE mode flips — useful when the admin
+    // wants to drop a quick ridge mid-eave-outline and resume.
     if (draftPicks.length) clearDraft();
     const hint = document.getElementById('captureHint');
     if (hint) {
-      if (mode === 'pan') hint.textContent = 'Pan/zoom freely. Switch to Ridge/Hip/Valley to capture lines.';
+      if (mode === 'pan') hint.textContent = 'Pan/zoom freely. Tool selected on the toolbar drives 3D clicks too.';
+      else if (mode === 'eave') hint.textContent = 'Click each eave corner. Tap the first vertex to close the section.';
       else hint.textContent = 'Click two points on the roof to draw a ' + mode + '. Lines sync to the 2D map.';
     }
   }
@@ -1600,6 +1624,19 @@ app.get('/3d-verify', async (c) => {
 
   function undoLastPick(){
     if (!CAPTURE_ENABLED) return;
+    // Eave drafts get popped one vertex at a time and the in-progress
+    // polyline + parent's 2D map are kept in sync by re-emitting an undo
+    // message (parent peels the last point off _eaveLatLngs).
+    if (captureMode === 'eave' && eaveDraftPicks.length > 0) {
+      eaveDraftPicks.pop();
+      const last = eaveDraftEntities.pop();
+      if (last) { try { viewer.entities.remove(last); } catch(_){} }
+      redrawEaveDraftPolyline();
+      try {
+        window.parent && window.parent.postMessage({ type: 'rm-3d-feature-undo', kind: 'eave' }, '*');
+      } catch(_){}
+      return;
+    }
     if (draftPicks.length > 0) {
       draftPicks.pop();
       const last = draftEntities.pop();
@@ -1686,11 +1723,100 @@ app.get('/3d-verify', async (c) => {
     return samples[Math.floor(samples.length / 2)];
   }
 
+  // Window-pixel distance between two Cesium ground points; used by the eave
+  // close-detection so "tap near first vertex" works at any zoom.
+  function windowDistPx(latA, lngA, latB, lngB){
+    try {
+      const a = Cesium.Cartesian3.fromDegrees(lngA, latA);
+      const b = Cesium.Cartesian3.fromDegrees(lngB, latB);
+      const wa = viewer.scene.cartesianToCanvasCoordinates(a);
+      const wb = viewer.scene.cartesianToCanvasCoordinates(b);
+      if (!wa || !wb) return Infinity;
+      const dx = wa.x - wb.x, dy = wa.y - wb.y;
+      return Math.sqrt(dx*dx + dy*dy);
+    } catch(_) { return Infinity; }
+  }
+
+  function redrawEaveDraftPolyline(){
+    if (eaveDraftPolyline) { try { viewer.entities.remove(eaveDraftPolyline); } catch(_){} eaveDraftPolyline = null; }
+    if (eaveDraftPicks.length < 2) return;
+    const eaveColor = Cesium.Color.fromCssColorString(MODE_COLORS.eave);
+    const cartesians = eaveDraftPicks.map(p => Cesium.Cartesian3.fromDegrees(p.lng, p.lat, p.height));
+    eaveDraftPolyline = viewer.entities.add({
+      polyline: {
+        positions: cartesians,
+        width: 3,
+        material: eaveColor,
+        depthFailMaterial: eaveColor.withAlpha(0.6),
+        clampToGround: false
+      }
+    });
+  }
+
+  function commitEavePoint(robust){
+    const cartesian = Cesium.Cartesian3.fromDegrees(robust.lng, robust.lat, robust.height);
+    const eaveColor = Cesium.Color.fromCssColorString(MODE_COLORS.eave);
+    const markerEntity = viewer.entities.add({
+      position: cartesian,
+      point: {
+        pixelSize: 10,
+        color: eaveColor,
+        outlineColor: Cesium.Color.WHITE,
+        outlineWidth: 2,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY
+      }
+    });
+    eaveDraftPicks.push({ lat: robust.lat, lng: robust.lng, height: robust.height });
+    eaveDraftEntities.push(markerEntity);
+    redrawEaveDraftPolyline();
+    try {
+      window.parent && window.parent.postMessage({
+        type: 'rm-3d-feature-captured',
+        kind: 'eave',
+        pts: [{ lat: robust.lat, lng: robust.lng }]
+      }, '*');
+    } catch (_){}
+  }
+
+  function closeEaveDraft(){
+    // Promote the in-progress eave entities into the committed bucket so undo
+    // can wipe them, then tell the parent to finalize the section. The parent
+    // calls saCloseEaveSection which handles pitch auto-fill + heat ramp on
+    // the 2D side; the 3D-side polyline turns into a "ghost" outline.
+    if (eaveDraftPicks.length < 3) {
+      toast('Need at least 3 eave points before closing.', 'warn');
+      return;
+    }
+    const segEntities = eaveDraftEntities.slice();
+    if (eaveDraftPolyline) segEntities.push(eaveDraftPolyline);
+    segEntities._kind = 'eave';
+    committedEntities.push(segEntities);
+    eaveDraftEntities.length = 0;
+    eaveDraftPicks.length = 0;
+    eaveDraftPolyline = null;
+    try { window.parent && window.parent.postMessage({ type: 'rm-3d-eave-close' }, '*'); } catch(_){}
+    toast('Eave section closed.', 'ok');
+  }
+
   function handleCanvasClick(clickEvent){
     if (!CAPTURE_ENABLED || captureMode === 'pan' || !viewer) return;
     const robust = pickPositionRobust(clickEvent.position);
     if (!robust) {
       toast('No surface there — click directly on the roof.', 'warn');
+      return;
+    }
+    if (captureMode === 'eave') {
+      // Close-on-first-vertex: if we already have 3+ points and the click is
+      // within EAVE_CLOSE_PX of the first one, finalize the section.
+      if (eaveDraftPicks.length >= 3) {
+        const first = eaveDraftPicks[0];
+        const dpx = windowDistPx(first.lat, first.lng, robust.lat, robust.lng);
+        if (dpx <= EAVE_CLOSE_PX) {
+          closeEaveDraft();
+          return;
+        }
+      }
+      commitEavePoint(robust);
       return;
     }
     const lat = robust.lat;
@@ -1714,6 +1840,14 @@ app.get('/3d-verify', async (c) => {
       commitSegment(captureMode, draftPicks.slice());
     }
   }
+
+  // Parent-controlled mode switch — fires when the operator clicks Eave /
+  // Ridge / Hip / Valley on the parent's toolbar so the iframe stays in sync.
+  window.addEventListener('message', function(ev) {
+    const d = ev && ev.data;
+    if (!d || d.type !== 'rm-3d-set-mode') return;
+    setCaptureMode(d.mode);
+  });
 
   async function captureForCover(){
     if (!viewer || !ORDER_ID) return;
@@ -2015,6 +2149,8 @@ app.get('/3d-verify', async (c) => {
     // false + infoBox: false above so the default action was already a no-op.
     // If Cesium is upgraded, re-verify this assumption.
     if (CAPTURE_ENABLED) {
+      // Tag body so the postmsg CSS knows to keep the .capturebar visible.
+      try { document.body.classList.add('capture'); } catch(_) {}
       const bar = document.getElementById('captureBar');
       if (bar) bar.style.display = 'flex';
       const captureHandler = new Cesium.ScreenSpaceEventHandler(viewer.canvas);
