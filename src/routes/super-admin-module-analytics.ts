@@ -7,9 +7,11 @@
 // the existing user activity pipeline (active_visits + user_module_visits
 // + user_activity_daily — wired in migration 0194 + src/services/activity-tracker.ts).
 //
-// "Owner rollup": team members (customers.team_owner_id IS NOT NULL) are
-// aggregated under their owner customer row so the table shows one row
-// per paying account.
+// "Owner rollup": team members are aggregated under their owner customer
+// row so the table shows one row per paying account. The owner ↔ member
+// relationship lives in the `team_members` table (owner_id ↔
+// member_customer_id) — there is no `customers.team_owner_id` column, so
+// every owner-rollup query resolves it via OWNER_ID_EXPR below.
 // ============================================================
 
 import { Hono } from 'hono'
@@ -19,6 +21,14 @@ type Bindings = {
   DB: D1Database
   [k: string]: any
 }
+
+// Resolves a customer.id (aliased `c`) to their account-owner id. Team
+// members roll up to the team owner; standalone customers map to themselves.
+const OWNER_ID_EXPR = `COALESCE(
+  (SELECT tm.owner_id FROM team_members tm
+   WHERE tm.member_customer_id = c.id AND tm.status = 'active' LIMIT 1),
+  c.id
+)`
 
 export const superAdminModuleAnalytics = new Hono<{ Bindings: Bindings }>()
 
@@ -53,7 +63,7 @@ superAdminModuleAnalytics.get('/api/summary', async (c) => {
 
   // Today's unique customers (rolled-up owner_id)
   const todayUnique = await DB.prepare(
-    `SELECT COUNT(DISTINCT COALESCE(c.team_owner_id, c.id)) AS n
+    `SELECT COUNT(DISTINCT ${OWNER_ID_EXPR}) AS n
      FROM user_module_visits umv
      JOIN customers c ON c.id = umv.user_id
      WHERE umv.user_type = 'customer'
@@ -63,12 +73,12 @@ superAdminModuleAnalytics.get('/api/summary', async (c) => {
   // Lifetime unique customers (owner rollup)
   const lifetimeUnique = await DB.prepare(
     `SELECT COUNT(*) AS n FROM (
-       SELECT DISTINCT COALESCE(c.team_owner_id, c.id) AS owner_id
+       SELECT DISTINCT ${OWNER_ID_EXPR} AS owner_id
        FROM user_activity_daily uad
        JOIN customers c ON c.id = uad.user_id
        WHERE uad.user_type = 'customer'
        UNION
-       SELECT DISTINCT COALESCE(c.team_owner_id, c.id) AS owner_id
+       SELECT DISTINCT ${OWNER_ID_EXPR} AS owner_id
        FROM user_module_visits umv
        JOIN customers c ON c.id = umv.user_id
        WHERE umv.user_type = 'customer'
@@ -91,7 +101,7 @@ superAdminModuleAnalytics.get('/api/summary', async (c) => {
      )
      SELECT today.module,
             COUNT(*) AS visits,
-            COUNT(DISTINCT COALESCE(c.team_owner_id, c.id)) AS unique_customers,
+            COUNT(DISTINCT ${OWNER_ID_EXPR}) AS unique_customers,
             COALESCE(SUM(today.total_seconds), 0) AS total_seconds
      FROM today
      JOIN customers c ON c.id = today.user_id
@@ -117,7 +127,7 @@ superAdminModuleAnalytics.get('/api/summary', async (c) => {
      )
      SELECT combined.module,
             SUM(combined.visits) AS visits,
-            COUNT(DISTINCT COALESCE(c.team_owner_id, c.id)) AS unique_customers,
+            COUNT(DISTINCT ${OWNER_ID_EXPR}) AS unique_customers,
             SUM(combined.total_seconds) AS total_seconds
      FROM combined
      JOIN customers c ON c.id = combined.user_id
@@ -195,7 +205,7 @@ superAdminModuleAnalytics.get('/api/customers', async (c) => {
   const sql = `
     ${baseCte},
     by_owner_module AS (
-      SELECT COALESCE(c.team_owner_id, c.id) AS owner_id,
+      SELECT ${OWNER_ID_EXPR} AS owner_id,
              base.module,
              SUM(base.visits) AS visits,
              SUM(base.total_seconds) AS total_seconds
@@ -257,16 +267,23 @@ superAdminModuleAnalytics.get('/api/customer/:id', async (c) => {
     return c.json({ error: 'invalid customer id' }, 400)
   }
 
-  // Owner + team members (any customer where id = ownerId OR team_owner_id = ownerId)
+  // Owner + team members. Membership resolved via the team_members table
+  // (no team_owner_id column on customers).
   const owner = await DB.prepare(
-    `SELECT id, email, name, company_name, team_owner_id
-     FROM customers WHERE id = ?`
+    `SELECT c.id, c.email, c.name, c.company_name,
+            (SELECT tm.owner_id FROM team_members tm
+             WHERE tm.member_customer_id = c.id AND tm.status = 'active'
+             LIMIT 1) AS team_owner_id
+     FROM customers c WHERE c.id = ?`
   ).bind(ownerId).first<any>()
   if (!owner) return c.json({ error: 'customer not found' }, 404)
 
   const members = await DB.prepare(
     `SELECT id, email, name FROM customers
-     WHERE id = ? OR team_owner_id = ?
+     WHERE id = ?
+        OR id IN (SELECT member_customer_id FROM team_members
+                  WHERE owner_id = ? AND status = 'active'
+                    AND member_customer_id IS NOT NULL)
      ORDER BY (id = ?) DESC, email`
   ).bind(ownerId, ownerId, ownerId).all<any>()
   const memberIds: number[] = (members?.results || []).map((m: any) => Number(m.id))
