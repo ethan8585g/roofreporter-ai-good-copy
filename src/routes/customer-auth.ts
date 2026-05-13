@@ -168,7 +168,7 @@ async function sendVerificationEmail(env: any, toEmail: string, code: string, db
   // signal tells us mail reached the user even before they type the code.
   const { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } = await import('../services/email-tracking')
   const trackingToken = await logEmailSend(env, { customerId: null, recipient: toEmail, kind: 'email_verification', subject: emailSubject })
-  const rawHtml = getVerificationEmailHTML(code)
+  const rawHtml = getVerificationEmailHTML(code, toEmail)
   const pixel = buildTrackingPixel(trackingToken)
   const htmlWithPixel = rawHtml.includes('</body>') ? rawHtml.replace('</body>', `${pixel}</body>`) : rawHtml + pixel
   const emailHtml = wrapEmailLinks(htmlWithPixel, trackingToken)
@@ -356,7 +356,8 @@ async function sendVerificationEmail(env: any, toEmail: string, code: string, db
   return false
 }
 
-function getVerificationEmailHTML(code: string): string {
+function getVerificationEmailHTML(code: string, email: string): string {
+  const resumeUrl = `https://www.roofmanager.ca/customer/login?mode=signup&email=${encodeURIComponent(email)}`
   return `
   <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
     <div style="text-align: center; margin-bottom: 32px;">
@@ -371,6 +372,8 @@ function getVerificationEmailHTML(code: string): string {
       <div style="background: white; border: 2px solid #0ea5e9; border-radius: 12px; padding: 16px; display: inline-block; min-width: 200px;">
         <span style="font-family: 'Courier New', monospace; font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #1e3a5f;">${code}</span>
       </div>
+      <p style="color: #6b7280; font-size: 14px; margin: 24px 0 12px;">Closed the signup tab? Click here to come back:</p>
+      <a href="${resumeUrl}" style="display:inline-block;background:#00CC70;color:#0A0A0A;font-weight:700;padding:12px 28px;border-radius:10px;text-decoration:none;font-size:15px">Continue verification &rarr;</a>
       <p style="color: #9ca3af; font-size: 13px; margin: 24px 0 0;">This code expires in 30 minutes.<br>If you didn't request this, please ignore this email.</p>
     </div>
     <p style="color: #d1d5db; font-size: 11px; text-align: center; margin-top: 24px;">&copy; 2026 Roof Manager &middot; Alberta, Canada</p>
