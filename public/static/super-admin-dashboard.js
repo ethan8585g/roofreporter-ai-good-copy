@@ -2406,16 +2406,11 @@ window.saTraceSetTool = function(tool) {
   });
   if (typeof saUpdateDormerCompleteBtn === 'function') saUpdateDormerCompleteBtn();
   if (typeof saUpdateCutoutCompleteBtn === 'function') saUpdateCutoutCompleteBtn();
-  // Mirror the tool switch into the 3D iframe so clicks on the photorealistic
-  // mesh land in the same trace state. The iframe only acts on eave / ridge /
-  // hip / valley (annotation tools like vent/skylight stay 2D-only — they're
-  // point-on-roof markers, not edges).
-  try {
-    var iframe = document.getElementById('sa-trace-map-3d-iframe');
-    if (iframe && iframe.contentWindow) {
-      iframe.contentWindow.postMessage({ type: 'rm-3d-set-mode', mode: tool }, '*');
-    }
-  } catch (_) { /* iframe still loading — load handler will sync */ }
+  // The 3D iframe is opt-in for click-to-trace: it stays in 'pan' mode unless
+  // the operator explicitly switches it via the iframe's own toolbar
+  // (Pan/Eave/Ridge/Hip/Valley buttons inside /3d-verify). Selecting a 2D tool
+  // no longer hijacks the 3D cursor — you can still pan/orbit the 3D map
+  // freely while tracing on 2D.
 };
 
 window.saTraceClear = function() {
@@ -2632,16 +2627,10 @@ function saInitTraceMap(lat, lng, address) {
       + '&lng=' + encodeURIComponent(center.lng)
       + '&heading=25&pitch=-22&range=180';
     map3dIframe.src = src3d;
-    // Sync the iframe's capture mode whenever the iframe finishes loading
-    // (we don't yet know whether onload fires before or after Cesium signals
-    // 'rm-3d-ready', so the iframe re-applies whatever message it gets).
-    map3dIframe.addEventListener('load', function() {
-      try {
-        var s = window._saTraceState;
-        var mode = (s && s.tool) || 'eave';
-        map3dIframe.contentWindow.postMessage({ type: 'rm-3d-set-mode', mode: mode }, '*');
-      } catch (_) {}
-    });
+    // 3D iframe loads in its own default 'pan' mode. We do NOT push the 2D
+    // toolbar's tool — clicking on the 3D map should only commit trace points
+    // if the operator opts in via the iframe's own Eave/Ridge/Hip/Valley
+    // buttons. Keeps the 3D panel usable as a pure reference view.
   }
 
   // Register higher-resolution basemaps (Esri / Mapbox / Nearmap) as
