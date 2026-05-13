@@ -4082,7 +4082,92 @@ function saCloseEaveSection() {
   // no pitch yet.
   saApplyPitchHeatRamp(section);
 
+  // DSM step detection — for non-lower-tier sections, ask the server to
+  // sample the Solar DSM perpendicular to each edge and flag candidate
+  // wall-step locations (where a 2-story siding wall drops to a lower
+  // garage roof). Markers paint asynchronously; cleanup is per-section.
+  if (section.kind !== 'lower_tier') {
+    saDetectStepsForSection(section);
+  }
+
   saRenderSectionPitches();
+}
+
+// Fire-and-forget DSM step probe for a just-closed eave section. On
+// success, paints small yellow "↧ STEP" markers along the edges where
+// a significant height drop was detected; clicking a marker arms
+// lower-tier mode with that lat/lng as the first vertex. Failures
+// (rural lot, no Solar coverage, network) are silent — the operator
+// still has the existing Add Lower Eave button.
+function saDetectStepsForSection(section) {
+  if (!section || !Array.isArray(section.points) || section.points.length < 3) return;
+  var s = window._saTraceState; if (!s || !s.orderId) return;
+  section._stepMarkers = section._stepMarkers || [];
+  saFetch('/api/admin/superadmin/orders/' + s.orderId + '/dsm-steps', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ polyline: section.points })
+  }).then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data || !data.available || !Array.isArray(data.steps) || data.steps.length === 0) return;
+      var mp = (window._saTraceState && window._saTraceState.map) ? window._saTraceState.map : null;
+      if (!mp) return;
+      data.steps.forEach(function(step) {
+        var mk = new google.maps.Marker({
+          position: { lat: step.mid_lat, lng: step.mid_lng },
+          map: mp,
+          clickable: true,
+          zIndex: 8,
+          icon: {
+            path: 'M -10 -6 L 10 -6 L 10 6 L -10 6 Z',
+            fillColor: '#facc15',
+            fillOpacity: 0.95,
+            strokeColor: '#0f172a',
+            strokeWeight: 1.5,
+            scale: 1,
+          },
+          label: { text: '↧ ' + step.drop_m + 'm', color: '#0f172a', fontSize: '10px', fontWeight: '700' },
+          title: 'DSM detected a ' + step.drop_m + 'm step here — click to start a lower-roof section.',
+        });
+        mk.addListener('click', function() {
+          saStartLowerTierFromStep(step);
+        });
+        section._stepMarkers.push(mk);
+      });
+    }).catch(function() { /* silent — Solar DSM rural-coverage gap is normal */ });
+}
+
+// Click handler for the yellow "↧ STEP" markers. Behaves like the Add
+// Lower Eave button but pre-seeds the first vertex at the click point so
+// the operator only has to outline the remaining shape of the lower lip.
+function saStartLowerTierFromStep(step) {
+  var s = window._saTraceState; if (!s || !s.map) return;
+  if (s.eaveSections.length >= 5) {
+    alert('Maximum of 5 sections per report.');
+    return;
+  }
+  // Wipe step markers across all sections so a stale set doesn't survive
+  // into the next trace cycle — they're advisory only and re-fetched on
+  // the next close.
+  (s.eaveSections || []).forEach(function(sec) {
+    (sec._stepMarkers || []).forEach(function(m) { try { m.setMap(null); } catch(_){} });
+    sec._stepMarkers = [];
+  });
+  // Arm lower-tier mode and seed the first vertex. saTraceSetTool('eave')
+  // routes future clicks (on 2D or 3D) into the same _eaveLatLngs array.
+  s._nextSectionKind = 'lower_tier';
+  s._eaveLatLngs = [new google.maps.LatLng(step.mid_lat, step.mid_lng)];
+  s.eavePoints = [{ lat: step.mid_lat, lng: step.mid_lng }];
+  if (s.eavePoly) { s.eavePoly.setMap(null); s.eavePoly = null; }
+  (s._eaveMarkers || []).forEach(function(m) { try { m.setMap(null); } catch(_){} });
+  s._eaveMarkers = [];
+  var firstMk = new google.maps.Marker({
+    position: { lat: step.mid_lat, lng: step.mid_lng },
+    map: s.map, clickable: false, zIndex: 9,
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: '#2563eb', fillOpacity: 0.95, strokeColor: '#fff', strokeWeight: 2 },
+  });
+  s._eaveMarkers.push(firstMk);
+  if (typeof saTraceSetTool === 'function') saTraceSetTool('eave');
 }
 
 // AI Outline — POSTs the current map view to /api/measure/auto-detect, which

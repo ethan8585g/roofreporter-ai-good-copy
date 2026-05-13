@@ -20,6 +20,7 @@ import { logCorrections as logAutoTraceCorrections } from '../services/auto-trac
 import { refreshTracedIndexCache } from '../services/trace-training-data'
 import { fetchBuildingInsightsRaw } from '../services/solar-api'
 import { fetchDsmHillshade } from '../services/dsm-visualization'
+import { detectStepsAlongPolyline } from '../services/dsm-step-detection'
 import { sendSignupNurtureToCustomer, type NurtureStage } from '../services/signup-nurture'
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>()
@@ -5842,6 +5843,55 @@ adminRoutes.get('/superadmin/orders/:id/dsm-overlay', async (c) => {
     return c.json({ error: 'dsm_overlay_failed', message: err?.message || String(err) }, 500)
   }
 })
+
+// DSM step detection — given a freshly-closed eave polyline, sample the
+// Solar DSM perpendicular to each edge and flag candidate step locations
+// (likely walls between an upper-floor roof and a lower garage roof).
+// The trace UI paints these as clickable "↧ STEP" markers; clicking one
+// spawns a new lower_tier section anchored at that point.
+//
+// Body: { polyline: [{lat,lng}], threshold_m?: 1.5, perp_distance_m?: 2 }
+// Returns: { available, steps: [{edge_index, mid_lat, mid_lng, drop_m, perp_bearing_deg}] }
+adminRoutes.post('/superadmin/orders/:id/dsm-steps', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const orderId = parseInt(c.req.param('id'))
+  if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
+  try {
+    const order = await c.env.DB.prepare(
+      'SELECT id, latitude, longitude FROM orders WHERE id = ?'
+    ).bind(orderId).first<any>()
+    if (!order) return c.json({ error: 'Order not found' }, 404)
+    const lat = Number(order.latitude)
+    const lng = Number(order.longitude)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return c.json({ available: false, steps: [] })
+    }
+    const body = await c.req.json().catch(() => ({})) as any
+    const polyline = Array.isArray(body?.polyline) ? body.polyline : null
+    if (!polyline || polyline.length < 3) {
+      return c.json({ error: 'polyline must be an array of at least 3 {lat,lng} points' }, 400)
+    }
+    // Clamp threshold + perp to sane ranges so a bad client can't make us
+    // sample 100m off the edge.
+    const threshold_m = clampNum(body?.threshold_m, 1.5, 0.5, 5)
+    const perp_distance_m = clampNum(body?.perp_distance_m, 2.0, 0.5, 6)
+    const result = await detectStepsAlongPolyline(c.env, lat, lng, polyline, {
+      threshold_m,
+      perp_distance_m,
+    })
+    return c.json(result)
+  } catch (err: any) {
+    console.warn('[dsm-steps] failed:', err?.message)
+    return c.json({ error: 'dsm_steps_failed', message: err?.message || String(err) }, 500)
+  }
+})
+
+function clampNum(v: any, dflt: number, min: number, max: number): number {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return dflt
+  return Math.max(min, Math.min(max, n))
+}
 
 // Trace history — return prior submitted traces at the same property
 // (by address or by lat/lng within ~30m). Surfaces in the trace modal
