@@ -3829,6 +3829,37 @@ function saDegToRiseOver12(deg) {
   return Math.round(rise * 2) / 2;
 }
 
+// Roofer pitch heat ramp — colors a section's polygon by its slope so the
+// admin can see at a glance which pitches were assigned (and where Solar
+// didn't auto-fill anything). Used only for 'main' sections; lower-tier
+// lips keep their blue outline as a semantic flag (NOT a pitch indicator).
+//   <= 6/12  blue   — low-slope, walkable
+//   <= 9/12  green  — typical residential
+//   <= 13/12 amber  — steep
+//   >  13/12 red    — very steep (12/12 gable accent, etc.)
+function saPitchColor(pitchRise) {
+  if (!pitchRise || pitchRise <= 0) return null;   // null = no override (use base color)
+  if (pitchRise <= 6)  return '#2563eb';
+  if (pitchRise <= 9)  return '#22c55e';
+  if (pitchRise <= 13) return '#f59e0b';
+  return '#dc2626';
+}
+
+// Recolor a section's polygon to match its current pitch_rise. No-op for
+// lower_tier sections (those keep the blue lip flag) and for sections with
+// no pitch (those keep the default green so they're still visible).
+function saApplyPitchHeatRamp(section) {
+  if (!section || !section.polygon) return;
+  if (section.kind === 'lower_tier') return;
+  var color = saPitchColor(section.pitch_rise);
+  if (!color) {
+    // No pitch yet — restore default green so unmeasured sections stand out.
+    section.polygon.setOptions({ strokeColor: '#22c55e', fillColor: '#22c55e' });
+    return;
+  }
+  section.polygon.setOptions({ strokeColor: color, fillColor: color });
+}
+
 // Pick the Solar API roof segment whose center is closest to the given
 // section's polygon centroid. Squared-Euclidean distance on lat/lng is
 // fine at single-property scale (the segments and section are within a
@@ -3937,10 +3968,21 @@ function saCloseEaveSection() {
       var match = saPickNearestSolarSegment(section.points, solar);
       if (match && match.pitch_degrees != null) {
         var rise = saDegToRiseOver12(match.pitch_degrees);
-        if (rise != null) section.pitch_rise = rise;
+        if (rise != null) {
+          section.pitch_rise = rise;
+          // Mark how we got this pitch so the Section Pitches panel can show
+          // a subtle "auto" pill + so a manual edit flips the source flag.
+          section.pitch_source = 'solar_auto';
+          section.pitch_source_label = match.label || null;
+        }
       }
     } catch (_) { /* solar lookup is best-effort; manual entry still works */ }
   }
+
+  // Recolor the section by its (just-resolved) pitch so the heat ramp is
+  // visible immediately. No-op for lower_tier lips and for sections with
+  // no pitch yet.
+  saApplyPitchHeatRamp(section);
 
   saRenderSectionPitches();
 }
@@ -4372,11 +4414,23 @@ function saRenderSectionPitches() {
     var isLower = sec.kind === 'lower_tier';
     var prefix = isLower ? ('L' + (++lCount)) : ('S' + (++sCount));
     var color  = isLower ? '#60a5fa' : '#22c55e';
-    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">' +
+    // "auto" pill shown when the pitch was auto-filled from Google Solar
+    // and hasn't been manually edited since. Clicking the ↻ button
+    // re-runs the nearest-segment match (useful if the section was
+    // reshaped after closing).
+    var autoPill = sec.pitch_source === 'solar_auto'
+      ? '<span title="Auto-filled from Google Solar segment ' + (sec.pitch_source_label || '?') + '. Click ↻ to re-match." ' +
+        'style="font-size:9px;font-weight:700;color:#86efac;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);padding:1px 5px;border-radius:99px;letter-spacing:0.03em">SOLAR</span>'
+      : '';
+    var refreshBtn = '<button data-sa-section-pitch-refresh="' + i + '" title="Refresh pitch from nearest Google Solar segment" ' +
+      'style="background:transparent;border:none;color:#94a3b8;cursor:pointer;font-size:11px;padding:2px 4px">↻</button>';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:4px;flex-wrap:wrap">' +
       '<span style="color:' + color + ';font-size:11px;font-weight:700;width:24px">' + prefix + '</span>' +
+      autoPill +
       '<input type="number" min="0" max="24" step="0.5" value="' + val + '" data-sa-section-pitch="' + i + '" placeholder="—" ' +
       'style="width:55px;padding:3px 6px;font-size:12px;font-weight:700;color:#fbbf24;background:#0f172a;border:1px solid #374151;border-radius:5px;text-align:right" />' +
       '<span style="color:#6b7280;font-size:11px">:12</span>' +
+      refreshBtn +
       '</div>';
   }).join('');
   body.innerHTML = html;
@@ -4395,6 +4449,34 @@ function saRenderSectionPitches() {
       } else {
         sec.pitch_rise = raw;
       }
+      // Manual edit always overrides — flip the source flag so the auto
+      // pill goes away and a future Solar refresh becomes opt-in.
+      sec.pitch_source = 'manual';
+      sec.pitch_source_label = null;
+      saApplyPitchHeatRamp(sec);
+      // Re-render so the SOLAR pill drops off the just-edited row.
+      saRenderSectionPitches();
+    });
+  });
+  body.querySelectorAll('[data-sa-section-pitch-refresh]').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      var idx = parseInt(e.target.getAttribute('data-sa-section-pitch-refresh'), 10);
+      var sec = (window._saTraceState && window._saTraceState.eaveSections) ? window._saTraceState.eaveSections[idx] : null;
+      if (!sec) return;
+      var solar = (window.saTraceV2 && typeof window.saTraceV2.getSolarData === 'function')
+        ? window.saTraceV2.getSolarData() : null;
+      var match = saPickNearestSolarSegment(sec.points, solar);
+      if (!match || match.pitch_degrees == null) {
+        alert('No Google Solar segment near this section to match against.');
+        return;
+      }
+      var rise = saDegToRiseOver12(match.pitch_degrees);
+      if (rise == null) { alert('Matched segment has no usable pitch.'); return; }
+      sec.pitch_rise = rise;
+      sec.pitch_source = 'solar_auto';
+      sec.pitch_source_label = match.label || null;
+      saApplyPitchHeatRamp(sec);
+      saRenderSectionPitches();
     });
   });
 }
@@ -16926,7 +17008,13 @@ window.saTraceV2 = (function() {
       saved_at: Date.now(),
       orderId: state.orderId,
       eaveSections: (st.eaveSections || []).map(function(sec) {
-        return { points: ll(sec.points), pitch_rise: sec.pitch_rise || null, kind: sec.kind || 'main' };
+        return {
+          points: ll(sec.points),
+          pitch_rise: sec.pitch_rise || null,
+          kind: sec.kind || 'main',
+          pitch_source: sec.pitch_source || null,
+          pitch_source_label: sec.pitch_source_label || null,
+        };
       }),
       dormers: (st.dormers || []).map(function(d) {
         return { points: ll(d.points), pitch_rise: d.pitch_rise || null, label: d.label || null };
@@ -17010,7 +17098,19 @@ window.saTraceV2 = (function() {
       if (typeof saCloseEaveSection === 'function') {
         saCloseEaveSection();
         var added = st.eaveSections[st.eaveSections.length - 1];
-        if (added) added.pitch_rise = sec.pitch_rise || null;
+        if (added) {
+          // Restore the saved pitch (overrides any Solar auto-fill that
+          // saCloseEaveSection just did) and re-color the polygon to match.
+          added.pitch_rise = sec.pitch_rise || null;
+          // Preserve the persisted source flag when present (so SOLAR
+          // pills survive a reload). Older drafts saved before pitch_source
+          // existed fall back to 'manual' to avoid a misleading badge.
+          if (added.pitch_rise != null) {
+            added.pitch_source = sec.pitch_source || 'manual';
+            added.pitch_source_label = sec.pitch_source_label || null;
+          }
+          if (typeof saApplyPitchHeatRamp === 'function') saApplyPitchHeatRamp(added);
+        }
       }
     });
     // Ridges, hips, valleys
