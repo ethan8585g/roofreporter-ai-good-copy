@@ -1774,6 +1774,14 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<div style="flex:1;min-height:0;display:flex;flex-direction:column;position:relative">' +
             '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Trace</div>' +
             '<div id="sa-trace-map" style="flex:1;min-height:0;border-radius:8px;overflow:hidden"></div>' +
+            // Footprint-first workflow step instructions. Hidden unless the
+            // operator selected Footprint-first mode. Phase H state machine
+            // (saWorkflowStep / saAdvanceWorkflow) writes the text + dismiss.
+            '<div id="sa-trace-wf-instructions" style="display:none;position:absolute;top:10px;left:10px;right:10px;z-index:9;background:rgba(99,102,241,0.96);color:#fff;border:1px solid #4f46e5;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.4);display:flex;align-items:center;gap:10px">' +
+              '<i class="fas fa-list-ol" style="color:#c7d2fe"></i>' +
+              '<span id="sa-trace-wf-instructions-text">Step 1 of 2: trace the upper roof outline first.</span>' +
+              '<button id="sa-trace-wf-skip-btn" onclick="saWorkflowSkipStep()" style="display:none;background:#0f172a;color:#c7d2fe;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">Skip — single story</button>' +
+            '</div>' +
             // One-time 3D-first nudge — yellow banner reminding the operator
             // that two-story setbacks are easier to spot from the right-side
             // 3D panel than the straight-down satellite. Dismissed forever
@@ -1826,6 +1834,16 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Street View</div>' +
           '<div id="sa-trace-streetview" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;background:#0b1220"></div>' +
         '</div>' +
+      '</div>' +
+      // Workflow selector — Classic (free-form, today's default) vs.
+      // Footprint-first (two-step wizard for 2-story-with-setback houses).
+      // Persists across modal opens via localStorage. Super-admin only;
+      // customer trace tool lives on a separate code path.
+      '<div id="sa-trace-workflow-row" style="padding:8px 20px 0;display:flex;align-items:center;gap:10px;flex-shrink:0">' +
+        '<span style="color:#94a3b8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">Workflow</span>' +
+        '<button onclick="saSetWorkflow(\'classic\')" id="sa-wf-classic" title="Trace whatever you see, in any order. Today\'s default." style="padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;background:#22c55e;color:#fff;border:1px solid #22c55e">Classic</button>' +
+        '<button onclick="saSetWorkflow(\'footprint-first\')" id="sa-wf-fpf" title="Step-by-step for 2-story houses with a setback: trace upper roof first, then visible lower-roof lip. Auto-tags each section." style="padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">Footprint-first <span style="font-weight:600;opacity:0.8">(2-story)</span></button>' +
+        '<span id="sa-wf-step-badge" style="display:none;margin-left:auto;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.5);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700">Step 1 of 2</span>' +
       '</div>' +
       '<div style="padding:14px 20px;border-top:1px solid #374151;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;flex-shrink:0">' +
         '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
@@ -2041,6 +2059,11 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
     // One-time 3D-first nudge for two-story setbacks. Cheap idempotent
     // check; the show function itself reads the dismiss flag.
     if (typeof saMaybeShow3DHint === 'function') saMaybeShow3DHint();
+    // Apply saved workflow preference + render chrome. If footprint-first
+    // is the operator's default and the trace is empty, kicks off step 1.
+    if (typeof saSetWorkflow === 'function') {
+      saSetWorkflow(saWorkflowMode());
+    }
   }, 100);
 };
 
@@ -2065,6 +2088,131 @@ window.saDismiss3DHint = function() {
   var el = document.getElementById('sa-trace-3d-hint');
   if (el) el.style.display = 'none';
 };
+
+// ── Footprint-first workflow (Phase H, super-admin only) ───────────
+// State machine for the optional 2-step trace wizard.
+//   step 0 = inactive (Classic mode, or wizard not started/finished)
+//   step 1 = "trace UPPER roof outline first" — armed with _nextSectionKind='main'
+//   step 2 = "trace LOWER-roof lip beyond the upper outline" — armed with 'lower_tier'
+// Phase F's DSM step markers integrate automatically: when step 1 closes,
+// the existing saCloseEaveSection → saDetectStepsForSection path paints
+// the yellow ↧ markers, and clicking one short-circuits step 2 with the
+// first vertex pre-seeded.
+window._saTraceWorkflow = { mode: 'classic', step: 0 };
+
+function saWorkflowMode() {
+  try {
+    var m = localStorage.getItem('sa-trace-workflow');
+    return m === 'footprint-first' ? 'footprint-first' : 'classic';
+  } catch (_) { return 'classic'; }
+}
+
+window.saSetWorkflow = function(mode) {
+  var m = (mode === 'footprint-first') ? 'footprint-first' : 'classic';
+  try { localStorage.setItem('sa-trace-workflow', m); } catch (_) {}
+  window._saTraceWorkflow.mode = m;
+  saRenderWorkflowChrome();
+  if (m === 'footprint-first') {
+    // If no sections yet, start the wizard at step 1; otherwise leave the
+    // existing trace alone and just enable the chrome.
+    var s = window._saTraceState;
+    if (s && (!s.eaveSections || s.eaveSections.length === 0)) {
+      saStartFootprintFirstWizard();
+    }
+  } else {
+    window._saTraceWorkflow.step = 0;
+    var s2 = window._saTraceState;
+    if (s2) s2._nextSectionKind = null;
+    saRenderWorkflowChrome();
+  }
+};
+
+function saStartFootprintFirstWizard() {
+  var s = window._saTraceState; if (!s) return;
+  window._saTraceWorkflow.step = 1;
+  s._nextSectionKind = 'main';
+  if (typeof saTraceSetTool === 'function') saTraceSetTool('eave');
+  saRenderWorkflowChrome();
+}
+
+// Called by saCloseEaveSection (Classic flow) AFTER the section is in
+// eaveSections. In footprint-first mode this advances the wizard.
+function saWorkflowOnSectionClosed(section) {
+  var wf = window._saTraceWorkflow;
+  if (!wf || wf.mode !== 'footprint-first' || !wf.step) return;
+  if (wf.step === 1) {
+    wf.step = 2;
+    var s = window._saTraceState;
+    if (s) s._nextSectionKind = 'lower_tier';
+  } else if (wf.step === 2) {
+    wf.step = 0;
+    var s = window._saTraceState;
+    if (s) s._nextSectionKind = null;
+  }
+  saRenderWorkflowChrome();
+}
+
+window.saWorkflowSkipStep = function() {
+  var wf = window._saTraceWorkflow;
+  if (!wf || wf.mode !== 'footprint-first') return;
+  if (wf.step === 2) {
+    wf.step = 0;
+    var s = window._saTraceState;
+    if (s) s._nextSectionKind = null;
+    saRenderWorkflowChrome();
+  }
+};
+
+function saRenderWorkflowChrome() {
+  var wf = window._saTraceWorkflow;
+  if (!wf) return;
+  // Toggle button visual state
+  var btnC = document.getElementById('sa-wf-classic');
+  var btnF = document.getElementById('sa-wf-fpf');
+  if (btnC) {
+    var activeC = wf.mode !== 'footprint-first';
+    btnC.style.background = activeC ? '#22c55e' : '#1f2937';
+    btnC.style.color = activeC ? '#fff' : '#9ca3af';
+    btnC.style.borderColor = activeC ? '#22c55e' : '#374151';
+  }
+  if (btnF) {
+    var activeF = wf.mode === 'footprint-first';
+    btnF.style.background = activeF ? '#6366f1' : '#1f2937';
+    btnF.style.color = activeF ? '#fff' : '#9ca3af';
+    btnF.style.borderColor = activeF ? '#6366f1' : '#374151';
+  }
+  // Step badge in toolbar row
+  var badge = document.getElementById('sa-wf-step-badge');
+  if (badge) {
+    if (wf.mode === 'footprint-first' && wf.step > 0) {
+      badge.style.display = 'inline-block';
+      badge.textContent = 'Step ' + wf.step + ' of 2';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+  // Instructions banner over the map
+  var banner = document.getElementById('sa-trace-wf-instructions');
+  var bannerTxt = document.getElementById('sa-trace-wf-instructions-text');
+  var skip = document.getElementById('sa-trace-wf-skip-btn');
+  if (!banner || !bannerTxt) return;
+  if (wf.mode !== 'footprint-first' || wf.step === 0) {
+    banner.style.display = 'none';
+    return;
+  }
+  banner.style.display = 'flex';
+  if (wf.step === 1) {
+    bannerTxt.innerHTML = '<b>Step 1 of 2:</b> trace the <b>UPPER roof outline</b> first (the higher gable / hip — use the 3D panel to spot the upper-story limit).';
+    if (skip) skip.style.display = 'none';
+  } else if (wf.step === 2) {
+    // If the just-closed section produced DSM step candidates, the
+    // saStartLowerTierFromStep click handler already armed the new
+    // section — so we just nudge the operator to either click a yellow
+    // marker or trace the lip manually.
+    bannerTxt.innerHTML = '<b>Step 2 of 2:</b> trace any visible <b>LOWER-roof lip</b> that extends beyond the upper outline. Click a yellow <b>↧ STEP</b> marker to start there, or click corners manually.';
+    if (skip) skip.style.display = 'inline-block';
+  }
+}
 
 // Street View panel under the 2D + 3D maps. Auto-points at the property
 // using a heading computed from the nearest panorama → house lat/lng.
@@ -4122,6 +4270,11 @@ function saCloseEaveSection() {
   // garage roof). Markers paint asynchronously; cleanup is per-section.
   if (section.kind !== 'lower_tier') {
     saDetectStepsForSection(section);
+  }
+
+  // Phase H: advance the footprint-first workflow state machine if active.
+  if (typeof saWorkflowOnSectionClosed === 'function') {
+    saWorkflowOnSectionClosed(section);
   }
 
   saRenderSectionPitches();

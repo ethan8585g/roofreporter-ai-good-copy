@@ -40,11 +40,24 @@ type Bindings = { DB: D1Database; [k: string]: any }
 export const superAdminEmailTracker = new Hono<{ Bindings: Bindings }>()
 
 // ── Session gate (superadmin only) ───────────────────────────
+// This router is mounted at app.route('/', ...) so use('*') would intercept
+// EVERY request site-wide — including /login itself — and redirect
+// unauthenticated visitors into an infinite /login?next=/login loop.
+// Scope the gate to only the paths this router actually owns. Other paths
+// (/, /login, /customer/*, /api/customer/*) fall straight through.
 superAdminEmailTracker.use('*', async (c, next) => {
+  const path = c.req.path
+  const ownsThisPath = path === '/super-admin/email-tracker'
+    || path.startsWith('/super-admin/email-tracker/')
+    || path.startsWith('/api/super-admin/email-tracker/')
+  if (!ownsThisPath) {
+    await next()
+    return
+  }
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) {
-    if (c.req.path.includes('/api/')) return c.json({ error: 'superadmin required' }, 403)
-    return c.redirect('/login?next=' + encodeURIComponent(c.req.path), 302)
+    if (path.includes('/api/')) return c.json({ error: 'superadmin required' }, 403)
+    return c.redirect('/login?next=' + encodeURIComponent(path), 302)
   }
   ;(c as any).set('admin', admin)
   await next()
