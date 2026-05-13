@@ -1774,6 +1774,15 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<div style="flex:1;min-height:0;display:flex;flex-direction:column;position:relative">' +
             '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Trace</div>' +
             '<div id="sa-trace-map" style="flex:1;min-height:0;border-radius:8px;overflow:hidden"></div>' +
+            // One-time 3D-first nudge — yellow banner reminding the operator
+            // that two-story setbacks are easier to spot from the right-side
+            // 3D panel than the straight-down satellite. Dismissed forever
+            // via localStorage key sa-trace-3d-hint-dismissed.
+            '<div id="sa-trace-3d-hint" style="display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:9;background:rgba(252,211,77,0.96);color:#0f172a;border:1px solid #ca8a04;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.4);max-width:520px;display:flex;align-items:center;gap:10px">' +
+              '<i class="fas fa-lightbulb" style="color:#a16207"></i>' +
+              '<span><b>Two-story house?</b> The right-side 3D panel shows wall setbacks the satellite hides. Drag to orbit — the height step between roofs is obvious from oblique angles.</span>' +
+              '<button onclick="saDismiss3DHint()" title="Got it — don\'t show again" style="background:#0f172a;color:#fde68a;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">Got it</button>' +
+            '</div>' +
             // Measure-as-you-go HUD — floating bottom-left of the map. Live
             // length of the in-progress polyline, area of the in-progress
             // polygon, and the running tally per edge type. Updated on every
@@ -2029,7 +2038,32 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
   setTimeout(function() {
     saInitTraceMap(lat, lng, address);
     saInitTraceStreetView(lat, lng);
+    // One-time 3D-first nudge for two-story setbacks. Cheap idempotent
+    // check; the show function itself reads the dismiss flag.
+    if (typeof saMaybeShow3DHint === 'function') saMaybeShow3DHint();
   }, 100);
+};
+
+// ── 3D-first hint banner (Phase G) ───────────────────────────────────
+// Shown once per browser to nudge operators to use the right-side 3D
+// panel for two-tier houses. The setback wall that hides in straight-
+// down satellite imagery is obvious from any oblique angle. Operator
+// dismissal persists in localStorage so it never re-appears.
+function saMaybeShow3DHint() {
+  var el = document.getElementById('sa-trace-3d-hint');
+  if (!el) return;
+  try {
+    if (localStorage.getItem('sa-trace-3d-hint-dismissed') === '1') {
+      el.style.display = 'none';
+      return;
+    }
+  } catch (_) { /* private mode → always show, which is fine */ }
+  el.style.display = 'flex';
+}
+window.saDismiss3DHint = function() {
+  try { localStorage.setItem('sa-trace-3d-hint-dismissed', '1'); } catch (_) {}
+  var el = document.getElementById('sa-trace-3d-hint');
+  if (el) el.style.display = 'none';
 };
 
 // Street View panel under the 2D + 3D maps. Auto-points at the property
@@ -17547,13 +17581,46 @@ window.saTraceV2 = (function() {
         icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0, fillOpacity: 0, strokeOpacity: 0 },
         label: { text: seg.label + ' ' + pitchTxt, color: col, fontSize: '11px', fontWeight: '700' },
       }) : null;
-      state.solarOverlays.push({ rect: rect, lbl: lbl });
+      // ↗ fly-to button. Tiny clickable marker offset slightly NE of the
+      // pitch label so it doesn't visually clobber the text. Clicking
+      // posts a rm-3d-fly-to message to the Cesium iframe which orbits
+      // the camera to a tight oblique shot of this segment — invaluable
+      // for confirming setbacks the satellite hides.
+      var flyBtn = null;
+      if (seg.center) {
+        var iframe = document.getElementById('sa-trace-map-3d-iframe');
+        flyBtn = new google.maps.Marker({
+          position: seg.center,
+          map: mp,
+          clickable: true,
+          zIndex: 1,
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: '#0f172a', fillOpacity: 0.85, strokeColor: col, strokeWeight: 2 },
+          label: { text: '↗', color: col, fontSize: '11px', fontWeight: '800' },
+          title: 'Fly the 3D panel to plane ' + seg.label,
+        });
+        flyBtn.addListener('click', function() {
+          try {
+            var ifr = document.getElementById('sa-trace-map-3d-iframe');
+            if (!ifr || !ifr.contentWindow) return;
+            ifr.contentWindow.postMessage({
+              type: 'rm-3d-fly-to',
+              lat: seg.center.lat,
+              lng: seg.center.lng,
+              radiusMeters: 18,
+              headingDeg: 35,
+              pitchDeg: -45,
+            }, '*');
+          } catch (_) { /* iframe still booting */ }
+        });
+      }
+      state.solarOverlays.push({ rect: rect, lbl: lbl, flyBtn: flyBtn });
     });
   }
   function clearSolarOverlay() {
     state.solarOverlays.forEach(function(o) {
       if (o.rect) o.rect.setMap(null);
       if (o.lbl) o.lbl.setMap(null);
+      if (o.flyBtn) o.flyBtn.setMap(null);
     });
     state.solarOverlays = [];
   }

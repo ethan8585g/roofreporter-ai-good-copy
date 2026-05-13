@@ -1930,7 +1930,7 @@ app.get('/3d-verify', async (c) => {
     });
   }
 
-  // Parent message router — mode switch + solar overlay push/clear.
+  // Parent message router — mode switch + solar overlay push/clear + fly-to.
   window.addEventListener('message', function(ev) {
     const d = ev && ev.data; if (!d || typeof d !== 'object') return;
     if (d.type === 'rm-3d-set-mode') {
@@ -1939,6 +1939,31 @@ app.get('/3d-verify', async (c) => {
       drawSolarOverlay3D(d.segments || []);
     } else if (d.type === 'rm-3d-solar-clear') {
       clearSolarOverlay3D();
+    } else if (d.type === 'rm-3d-fly-to') {
+      // Orbit the camera to a tight oblique shot of (lat, lng). Parent
+      // sends this from the ↗ button next to each Solar segment label
+      // and (Phase F+G follow-on) from the yellow STEP markers.
+      if (!viewer || !Number.isFinite(d.lat) || !Number.isFinite(d.lng)) return;
+      const radius = Number.isFinite(d.radiusMeters) ? d.radiusMeters : 20;
+      const heading = Number.isFinite(d.headingDeg) ? d.headingDeg : 35;
+      const pitchDeg = Number.isFinite(d.pitchDeg) ? d.pitchDeg : -45;
+      // Use sampled rooftop height when known so the orbit frames the
+      // actual roof; fall back to the ellipsoid 0m which still lands on
+      // the right pixel column even if altitude is wrong.
+      const h = (roofGroundHeight !== null) ? roofGroundHeight : 0;
+      try {
+        viewer.camera.flyToBoundingSphere(
+          new Cesium.BoundingSphere(Cesium.Cartesian3.fromDegrees(d.lng, d.lat, h), radius),
+          {
+            offset: new Cesium.HeadingPitchRange(
+              Cesium.Math.toRadians(heading),
+              Cesium.Math.toRadians(pitchDeg),
+              radius * 4
+            ),
+            duration: 1.2,
+          }
+        );
+      } catch (e) { console.warn('[3d-fly-to]', e); }
     }
   });
 
