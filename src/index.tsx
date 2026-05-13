@@ -205,12 +205,40 @@ app.use('*', async (c, next) => {
   }
 })
 
+// Server-side ad-attribution capture. When a request lands with ?gclid=, ?gbraid=,
+// or ?wbraid= in the URL, drop a 90-day cookie so the gclid/gbraid/wbraid survives
+// every downstream client-side hazard: localStorage blocked (Brave private mode,
+// Safari ITP), Google SSO popup wiping window state, third-party cookie blockers.
+// The register handlers read these as a last-resort fallback when the body field
+// is null. Without this, ad-driven signups had ~100% null gclid in customers.
+app.use('*', async (c, next) => {
+  try {
+    const url = new URL(c.req.url)
+    const isHtmlPath = !url.pathname.startsWith('/api/') && !url.pathname.startsWith('/static/')
+    if (isHtmlPath) {
+      const validClickId = /^[A-Za-z0-9_-]{10,200}$/
+      const cookies: string[] = []
+      const params = ['gclid', 'gbraid', 'wbraid'] as const
+      for (const k of params) {
+        const v = url.searchParams.get(k)
+        if (v && validClickId.test(v)) {
+          cookies.push(`rm_${k}=${encodeURIComponent(v)}; Max-Age=7776000; Path=/; SameSite=Lax; Secure`)
+        }
+      }
+      if (cookies.length > 0) {
+        for (const ck of cookies) c.header('Set-Cookie', ck, { append: true })
+      }
+    }
+  } catch (_) { /* never block requests on attribution capture */ }
+  await next()
+})
+
 // Analytics tracker injection middleware — auto-injects tracker.js + GA4 gtag.js into HTML pages
 // Skips API routes, static files, and the tracker itself
 // Enhanced for maximum tracking accuracy: consent mode, enhanced measurement, cross-domain, user ID linking
 app.use('*', async (c, next) => {
   await next()
-  
+
   // Only inject into HTML responses for non-API, non-static paths
   const contentType = c.res.headers.get('content-type') || ''
   if (!contentType.includes('text/html')) return
@@ -6243,6 +6271,36 @@ function getHeadTags(canonicalPath?: string) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="google-site-verification" content="CvzH14V1vTrop4cCx2z90ZUFnt4GJJNr1KkgiywoO2g" />
   <meta name="theme-color" content="#00FF88">
+  <script>
+  // Ad-attribution capture — runs as early as possible in <head> so the gclid
+  // is persisted before the user can click anything. Writes localStorage AND a
+  // first-party cookie. Server-side middleware also sets the cookie, so this
+  // is belt-and-suspenders for clients where the server cookie is blocked but
+  // localStorage works (or vice versa). Captures gbraid/wbraid for iOS-restricted
+  // and web-restricted Google Ads clicks too — those are the click IDs Google
+  // emits when gclid is suppressed for privacy.
+  (function captureAdsAttribution(){
+    try {
+      var p = new URLSearchParams(location.search);
+      ['gclid','gbraid','wbraid'].forEach(function(k){
+        var v = p.get(k);
+        if (v && /^[A-Za-z0-9_-]{10,200}$/.test(v)) {
+          var rec = { captured_at: new Date().toISOString() };
+          rec[k] = v;
+          try { localStorage.setItem('rm_ads_' + k, JSON.stringify(rec)); } catch(_) {}
+          try { document.cookie = 'rm_' + k + '=' + encodeURIComponent(v) + '; Max-Age=7776000; Path=/; SameSite=Lax; Secure'; } catch(_) {}
+        }
+      });
+      var utms = ['utm_source','utm_medium','utm_campaign','utm_content','utm_term'];
+      var utmRecord = {}, anyUtm = false;
+      utms.forEach(function(k){ var v = p.get(k); if (v) { utmRecord[k] = String(v).slice(0,200); anyUtm = true; } });
+      if (anyUtm) {
+        utmRecord.captured_at = new Date().toISOString();
+        try { localStorage.setItem('rm_ads_utm', JSON.stringify(utmRecord)); } catch(_) {}
+      }
+    } catch(_) {}
+  })();
+  </script>
   ${hreflangBlock}
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://maps.googleapis.com">

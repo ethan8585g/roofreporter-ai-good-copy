@@ -16,6 +16,27 @@ function mimeHeader(v: string | undefined | null): string {
   return String(v ?? '').replace(/[\r\n\u0000-\u001F\u007F]/g, '').slice(0, 1000)
 }
 
+// gclid recovery — body field is primary, rm_gclid first-party cookie is the
+// fallback (set by the lander middleware in src/index.tsx). Returns sanitized
+// gclid or null. The cookie path covers Brave/Safari ITP, third-party cookie
+// blockers, and Google SSO popups that wipe localStorage.
+function readGclidWithCookieFallback(bodyVal: unknown, cookieHeader: string | undefined): string | null {
+  const VALID = /^[A-Za-z0-9_-]{10,200}$/
+  const fromBody = typeof bodyVal === 'string' ? bodyVal.trim() : ''
+  if (fromBody && VALID.test(fromBody)) return fromBody
+  if (!cookieHeader) return null
+  for (const part of cookieHeader.split(/;\s*/)) {
+    if (part.startsWith('rm_gclid=')) {
+      try {
+        const v = decodeURIComponent(part.slice('rm_gclid='.length))
+        if (v && VALID.test(v)) return v
+      } catch (_) { /* malformed cookie */ }
+      break
+    }
+  }
+  return null
+}
+
 // P0-05: HttpOnly cookie name for customer sessions.
 const CUSTOMER_SESSION_COOKIE = 'rm_customer_session'
 function setCustomerSessionCookie(c: any, token: string, maxAgeSeconds: number) {
@@ -542,8 +563,10 @@ customerAuthRoutes.post('/google', async (c) => {
     // Google Ads attribution — same sanitization as /register path (10–200 char A-Za-z0-9_-).
     // Without this, ad-driven Google-SSO signups have null gclid and cannot be uploaded
     // back to Google Ads as offline conversions.
-    const rawGclid = typeof body.gclid === 'string' ? body.gclid.trim() : ''
-    const gclid = /^[A-Za-z0-9_-]{10,200}$/.test(rawGclid) ? rawGclid : null
+    // Falls back to the rm_gclid first-party cookie set by the lander middleware
+    // when the body field is missing — handles cases where the Google SSO popup
+    // wipes localStorage or the user lost the URL gclid in transit.
+    const gclid = readGclidWithCookieFallback(body.gclid, c.req.header('Cookie'))
     const utmSource = typeof body.utm_source === 'string' ? body.utm_source.slice(0, 100) : null
     const utmMedium = typeof body.utm_medium === 'string' ? body.utm_medium.slice(0, 100) : null
     const utmCampaign = typeof body.utm_campaign === 'string' ? body.utm_campaign.slice(0, 200) : null
@@ -771,9 +794,11 @@ customerAuthRoutes.post('/register', async (c) => {
       utm_content?: string; utm_term?: string;
     }
     // Sanitize gclid — keep only the URL-safe character set Google emits.
-    const cleanGclid = (gclid && /^[A-Za-z0-9_-]{10,200}$/.test(String(gclid).trim()))
-      ? String(gclid).trim()
-      : null
+    // Cookie fallback covers the case where the form lost gclid in transit
+    // (localStorage blocked, popup-stripped URL) — middleware on /lander
+    // sets rm_gclid as a first-party cookie so the backend always has a path
+    // to recover the click ID.
+    const cleanGclid = readGclidWithCookieFallback(gclid, c.req.header('Cookie'))
     // UTM sanitization: cap at 200 chars, strip control chars. customers.lead_utm_source
     // gets the source; full set is upserted to analytics_attribution further down.
     const cleanUtm = (s: string | undefined): string | null => {
