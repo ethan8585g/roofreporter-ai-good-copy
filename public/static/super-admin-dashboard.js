@@ -2580,6 +2580,15 @@ function saInitTraceMap(lat, lng, address) {
         // section enters eaveSections + the pitch auto-fill + heat ramp
         // happen the same way as the 2D path.
         if (typeof saCloseEaveSection === 'function') saCloseEaveSection();
+      } else if (d.type === 'rm-3d-ready') {
+        // Iframe just finished its initial tile load. If the parent's
+        // Solar overlay is currently visible, push the segments now so
+        // labels paint on the 3D view without a manual re-toggle.
+        try {
+          if (window.saTraceV2 && typeof window.saTraceV2.relaySolar === 'function') {
+            window.saTraceV2.relaySolar();
+          }
+        } catch (_) {}
       }
     });
   }
@@ -17817,6 +17826,25 @@ window.saTraceV2 = (function() {
     }
     if (state.loupeEnabled) { ensureLoupe(); } else { tearDownLoupe(); }
   }
+  // Push the current Solar segments (or a clear signal) into the 3D iframe so
+  // pitch labels show at the same physical points on the photorealistic mesh.
+  // No-op when the iframe isn't loaded yet — the iframe will re-request via
+  // 'rm-3d-ready' once Cesium is up.
+  function relaySolarToIframe(visible) {
+    try {
+      var iframe = document.getElementById('sa-trace-map-3d-iframe');
+      if (!iframe || !iframe.contentWindow) return;
+      if (visible && state.solarData && state.solarData.available) {
+        iframe.contentWindow.postMessage({
+          type: 'rm-3d-solar-segments',
+          segments: state.solarData.segments || [],
+        }, '*');
+      } else {
+        iframe.contentWindow.postMessage({ type: 'rm-3d-solar-clear' }, '*');
+      }
+    } catch (_) { /* iframe still booting — re-fire on rm-3d-ready */ }
+  }
+
   function toggleSolarOverlay() {
     var btn = document.getElementById('sa-tool-solar-overlay');
     if (!state.solarFetchAttempted) {
@@ -17826,12 +17854,14 @@ window.saTraceV2 = (function() {
         if (!d || !d.available) { alert('No Google Solar data available for this property (rural or low-coverage area).'); return; }
         state.solarVisible = true;
         renderSolarOverlay();
+        relaySolarToIframe(true);
         if (btn) { btn.style.background = '#f59e0b'; btn.style.color = '#111'; btn.style.borderColor = '#f59e0b'; }
       });
       return;
     }
     state.solarVisible = !state.solarVisible;
     if (state.solarVisible) renderSolarOverlay(); else clearSolarOverlay();
+    relaySolarToIframe(state.solarVisible);
     if (btn) {
       btn.style.background = state.solarVisible ? '#f59e0b' : '#1f2937';
       btn.style.color = state.solarVisible ? '#111' : '#9ca3af';
@@ -17961,5 +17991,9 @@ window.saTraceV2 = (function() {
     // Read-only accessor so the section-close handler can auto-populate
     // pitch from the cached Solar segments without touching closure state.
     getSolarData: function() { return state.solarData; },
+    // Re-pushes the current Solar overlay state into the 3D iframe. Called
+    // from the global 'rm-3d-ready' listener so the iframe gets the segments
+    // even if Solar was toggled on before the tiles finished loading.
+    relaySolar: function() { relaySolarToIframe(state.solarVisible); },
   };
 })();

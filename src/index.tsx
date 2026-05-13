@@ -1841,12 +1841,77 @@ app.get('/3d-verify', async (c) => {
     }
   }
 
-  // Parent-controlled mode switch — fires when the operator clicks Eave /
-  // Ridge / Hip / Valley on the parent's toolbar so the iframe stays in sync.
+  // ── Solar plane overlay (parent-driven) ──
+  // Parent pushes {type:'rm-3d-solar-segments', segments:[...]} when the
+  // operator toggles the Solar overlay on. We render each segment as a
+  // translucent Cesium rectangle clamped to the 3D mesh + a billboard label
+  // showing the pitch as roofer-native rise/12 (e.g. '8/12'). Cleared via
+  // {type:'rm-3d-solar-clear'} when the overlay is toggled off.
+  const solarOverlayEntities = [];
+  const SOLAR_PALETTE = ['#ef4444','#f59e0b','#10b981','#3b82f6','#a855f7','#ec4899','#14b8a6','#f97316'];
+  function clearSolarOverlay3D(){
+    solarOverlayEntities.forEach((e) => { try { viewer.entities.remove(e); } catch(_){} });
+    solarOverlayEntities.length = 0;
+  }
+  function drawSolarOverlay3D(segments){
+    clearSolarOverlay3D();
+    if (!viewer || !Array.isArray(segments)) return;
+    segments.forEach((seg, i) => {
+      const colorHex = SOLAR_PALETTE[i % SOLAR_PALETTE.length];
+      const color = Cesium.Color.fromCssColorString(colorHex);
+      // Bbox → Cesium.Rectangle. Clamped to ground (the photorealistic mesh)
+      // so the rectangle drapes over the roof rather than floating mid-air.
+      if (seg && seg.bbox && seg.bbox.sw && seg.bbox.ne) {
+        const rectEnt = viewer.entities.add({
+          rectangle: {
+            coordinates: Cesium.Rectangle.fromDegrees(
+              seg.bbox.sw.lng, seg.bbox.sw.lat,
+              seg.bbox.ne.lng, seg.bbox.ne.lat
+            ),
+            material: color.withAlpha(0.18),
+            outline: true,
+            outlineColor: color,
+            outlineWidth: 2,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            classificationType: Cesium.ClassificationType.CESIUM_3D_TILE,
+          }
+        });
+        solarOverlayEntities.push(rectEnt);
+      }
+      // Pitch label at center. Convert pitchDegrees → rise/12 to match the
+      // 2D overlay's roofer notation. Disable depth test so labels never
+      // get hidden behind the mesh at oblique angles.
+      if (seg && seg.center && seg.pitch_degrees != null) {
+        const rise = Math.round(12 * Math.tan(seg.pitch_degrees * Math.PI / 180) * 10) / 10;
+        const txt = (seg.label || '?') + ' ' + rise + '/12';
+        const lblEnt = viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(seg.center.lng, seg.center.lat, (roofGroundHeight || 0) + 4),
+          label: {
+            text: txt,
+            font: '700 13px -apple-system,Segoe UI,sans-serif',
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            fillColor: color,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 3,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            scale: 0.95,
+          }
+        });
+        solarOverlayEntities.push(lblEnt);
+      }
+    });
+  }
+
+  // Parent message router — mode switch + solar overlay push/clear.
   window.addEventListener('message', function(ev) {
-    const d = ev && ev.data;
-    if (!d || d.type !== 'rm-3d-set-mode') return;
-    setCaptureMode(d.mode);
+    const d = ev && ev.data; if (!d || typeof d !== 'object') return;
+    if (d.type === 'rm-3d-set-mode') {
+      setCaptureMode(d.mode);
+    } else if (d.type === 'rm-3d-solar-segments') {
+      drawSolarOverlay3D(d.segments || []);
+    } else if (d.type === 'rm-3d-solar-clear') {
+      clearSolarOverlay3D();
+    }
   });
 
   async function captureForCover(){
