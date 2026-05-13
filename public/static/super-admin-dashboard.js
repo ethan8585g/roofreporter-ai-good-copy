@@ -1451,6 +1451,43 @@ window.saConfirmRetrace = async function(orderId, orderNumber) {
   }
 };
 
+// ── Deny report (mark un-completable + email customer) ──────
+window.saDenyReport = async function(orderId, orderNumber) {
+  var label = orderNumber || ('#' + orderId);
+  var reason = window.prompt(
+    'Deny report ' + label + '?\n\n' +
+    'This marks the order un-completable and emails the customer "sorry — we are unable to complete this report".\n\n' +
+    'Enter the reason (will be included in the email):',
+    ''
+  );
+  if (reason === null) return;
+  reason = (reason || '').trim();
+  if (reason.length < 3) {
+    saToast('A denial reason is required (at least 3 characters).');
+    return;
+  }
+  try {
+    var res = await saFetch('/api/admin/superadmin/orders/' + orderId + '/deny-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason })
+    });
+    if (!res) return;
+    var data = await res.json();
+    if (!res.ok || !data.success) {
+      saToast('Deny failed: ' + ((data && data.error) || 'unknown error'));
+      return;
+    }
+    var emailNote = data.email_status === 'sent' ? ' Customer notified.'
+      : data.email_status === 'failed' ? ' Customer email FAILED — follow up manually.'
+      : ' No customer email on file.';
+    saToast('Order ' + label + ' denied.' + emailNote);
+    loadView('orders');
+  } catch (err) {
+    saToast('Deny failed: ' + ((err && err.message) || 'network error'));
+  }
+};
+
 // ── Per-report view activity modal (last 20 opens) ──────────
 function saEscape(s) {
   return String(s == null ? '' : s).replace(/[&<>"'`]/g, function(ch) {
@@ -4681,10 +4718,11 @@ function renderOrdersView() {
               <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500">Confidence</th>
               <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500">Complexity</th>
               <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500">Processing Time</th>
+              <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500">Actions</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-50">
-            ${orders.length === 0 ? '<tr><td colspan="11" class="px-4 py-8 text-center text-gray-400">No orders found</td></tr>' : ''}
+            ${orders.length === 0 ? '<tr><td colspan="12" class="px-4 py-8 text-center text-gray-400">No orders found</td></tr>' : ''}
             ${orders.map(o => {
               const procTime = o.processing_seconds;
               return `
@@ -4711,6 +4749,11 @@ function renderOrdersView() {
                 </td>
                 <td class="px-3 py-2 text-center">
                   ${procTime ? `<span class="text-xs font-medium ${procTime < 30 ? 'text-green-600' : procTime < 120 ? 'text-yellow-600' : 'text-red-600'}">${fmtSeconds(procTime)}</span>` : '<span class="text-gray-300">-</span>'}
+                </td>
+                <td class="px-3 py-2 text-center">
+                  ${o.denied_at
+                    ? `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700" title="${(o.denied_reason || '').replace(/"/g, '&quot;')}">Denied</span>`
+                    : `<button onclick="window.saDenyReport(${o.id}, '${(o.order_number || '').replace(/'/g, "\\'")}')" class="px-2 py-1 bg-red-600 text-white rounded text-[10px] font-semibold hover:bg-red-700" title="Mark report un-completable and email the customer">Deny</button>`}
                 </td>
               </tr>`;
             }).join('')}
@@ -17210,7 +17253,12 @@ window.saTraceV2 = (function() {
         fillColor: col, fillOpacity: 0.10,
         clickable: false, map: mp, zIndex: 0,
       });
-      var pitchTxt = seg.pitch_degrees != null ? Math.round(seg.pitch_degrees) + '°' : '?';
+      // Show pitch as rise/12 (roofer-native), not degrees. 27° = 6/12, 45° = 12/12.
+      var pitchTxt = '?';
+      if (seg.pitch_degrees != null) {
+        var rise = Math.round(12 * Math.tan(seg.pitch_degrees * Math.PI / 180) * 10) / 10;
+        pitchTxt = rise + '/12';
+      }
       var lbl = seg.center ? new google.maps.Marker({
         position: seg.center, map: mp, clickable: false, zIndex: 0,
         icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0, fillOpacity: 0, strokeOpacity: 0 },

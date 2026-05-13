@@ -475,6 +475,33 @@ export default {
       })())
     }
 
+    // ── Gmail Sent-folder mirror — every 30 min (minute 0 or 30) ──
+    // Pulls the last 25 messages from the platform's Gmail Sent folder
+    // into email_sends so the Email Tracker dashboard shows manual
+    // sends typed from gmail.com / phone alongside platform-emitted
+    // mail. Open/click tracking not available on mirrored rows (no
+    // pixel could be injected post-hoc); dashboard shows '—' for those.
+    if (minute < 10 || (minute >= 30 && minute < 40)) {
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const { mirrorAllConfiguredMailboxes } = await import('./services/gmail-sent-mirror')
+          const results = await mirrorAllConfiguredMailboxes(env)
+          const totalInserted = results.reduce((s, r) => s + r.inserted, 0)
+          const totalFetched = results.reduce((s, r) => s + r.fetched, 0)
+          const errored = results.filter(r => r.error)
+          const summary = errored.length
+            ? `Mirrored ${totalInserted}/${totalFetched}; errors: ${errored.map(e => `${e.mailbox}: ${e.error}`).join(' | ')}`
+            : `Mirrored ${totalInserted} new of ${totalFetched} recent`
+          console.log(`[CRON:gmail-sent-mirror] ${summary}`)
+          await logRun('gmail_sent_mirror', errored.length ? 'warning' : 'success', summary, results, Date.now() - t0)
+        } catch (err: any) {
+          console.error('[CRON:gmail-sent-mirror] Error:', err?.message)
+          await logRun('gmail_sent_mirror', 'error', err?.message || 'unknown', {}, Date.now() - t0)
+        }
+      })())
+    }
+
     // ── Tracing Agent (every cron tick — every 10 min) ────────
     if (await isAgentEnabled('tracing')) {
       ctx.waitUntil((async () => {

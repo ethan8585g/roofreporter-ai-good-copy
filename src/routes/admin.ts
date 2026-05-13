@@ -5717,24 +5717,49 @@ adminRoutes.post('/superadmin/orders/:id/regenerate-report', async (c) => {
 // Solar API segments — surface the 4–8 roof planes Google Solar
 // detected (boundingBox + pitch + azimuth + area) so the trace UI
 // can render them as translucent overlays under the trace layer.
+//
+// Cached per-order on orders.solar_segments_json. Pass ?refresh=1
+// to force a re-fetch (e.g. when the building footprint has changed
+// and the cached planes look stale).
 adminRoutes.get('/superadmin/orders/:id/solar-segments', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const orderId = parseInt(c.req.param('id'))
   if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
+  const refresh = c.req.query('refresh') === '1'
   try {
     const order = await c.env.DB.prepare(
-      'SELECT id, latitude, longitude FROM orders WHERE id = ?'
+      'SELECT id, latitude, longitude, solar_segments_json, solar_segments_fetched_at FROM orders WHERE id = ?'
     ).bind(orderId).first<any>()
     if (!order) return c.json({ error: 'Order not found' }, 404)
+
+    // Cache hit — parse the stored payload and return it without
+    // touching the Solar API. We treat both "real coverage" (segments.length>0)
+    // and "no coverage at this address" ('available:false') as cacheable.
+    if (!refresh && order.solar_segments_json) {
+      try {
+        const cached = JSON.parse(order.solar_segments_json)
+        return c.json({ ...cached, cached: true, fetched_at: order.solar_segments_fetched_at || null })
+      } catch { /* fall through and re-fetch if cache is corrupt */ }
+    }
+
     const lat = Number(order.latitude)
     const lng = Number(order.longitude)
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      return c.json({ segments: [], building_bbox: null, available: false })
+      const payload = { segments: [], building_bbox: null, available: false }
+      // Cache the negative result so we don't re-call Solar for orders without lat/lng.
+      await c.env.DB.prepare(
+        "UPDATE orders SET solar_segments_json = ?, solar_segments_fetched_at = datetime('now') WHERE id = ?"
+      ).bind(JSON.stringify(payload), orderId).run()
+      return c.json({ ...payload, cached: false })
     }
     const insights = await fetchBuildingInsightsRaw(lat, lng, c.env.GOOGLE_SOLAR_API_KEY)
     if (!insights || !insights.solarPotential?.roofSegmentStats?.length) {
-      return c.json({ segments: [], building_bbox: null, available: false })
+      const payload = { segments: [], building_bbox: null, available: false }
+      await c.env.DB.prepare(
+        "UPDATE orders SET solar_segments_json = ?, solar_segments_fetched_at = datetime('now') WHERE id = ?"
+      ).bind(JSON.stringify(payload), orderId).run()
+      return c.json({ ...payload, cached: false })
     }
     const segments = insights.solarPotential.roofSegmentStats.map((seg: any, i: number) => ({
       label: String.fromCharCode(65 + i),
@@ -5751,7 +5776,7 @@ adminRoutes.get('/superadmin/orders/:id/solar-segments', async (c) => {
           }
         : null,
     }))
-    return c.json({
+    const payload = {
       available: true,
       segments,
       building_bbox: insights.boundingBox
@@ -5761,7 +5786,11 @@ adminRoutes.get('/superadmin/orders/:id/solar-segments', async (c) => {
           }
         : null,
       imagery_quality: insights.imageryQuality || null,
-    })
+    }
+    await c.env.DB.prepare(
+      "UPDATE orders SET solar_segments_json = ?, solar_segments_fetched_at = datetime('now') WHERE id = ?"
+    ).bind(JSON.stringify(payload), orderId).run()
+    return c.json({ ...payload, cached: false })
   } catch (err: any) {
     console.warn('[solar-segments] failed:', err?.message)
     return c.json({ error: 'solar_segments_failed', message: err?.message || String(err) }, 500)
@@ -5980,6 +6009,112 @@ adminRoutes.post('/superadmin/orders/:id/cancel-and-retrace', async (c) => {
     })
   } catch (err: any) {
     return c.json({ error: 'Failed to cancel and re-trace: ' + err.message }, 500)
+  }
+})
+
+// ============================================================
+// DENY REPORT — Super admin marks an order as un-completable.
+// Sets orders.denied_at + denied_reason + denied_by_admin_id, then emails
+// the customer "we're unable to complete this report". No refund logic
+// here — refunds happen in Square out-of-band.
+// ============================================================
+adminRoutes.post('/superadmin/orders/:id/deny-report', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const orderId = parseInt(c.req.param('id'))
+  if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
+
+  try {
+    const body = await c.req.json().catch(() => ({}))
+    const reason = (body?.reason || '').toString().trim().slice(0, 1000)
+    if (!reason || reason.length < 3) {
+      return c.json({ error: 'A denial reason is required.' }, 400)
+    }
+
+    const order = await c.env.DB.prepare(`
+      SELECT o.id, o.order_number, o.property_address, o.denied_at,
+        o.customer_id, c.email as customer_email, c.name as customer_name
+      FROM orders o
+      LEFT JOIN customers c ON c.id = o.customer_id
+      WHERE o.id = ?
+    `).bind(orderId).first<any>()
+    if (!order) return c.json({ error: 'Order not found' }, 404)
+    if (order.denied_at) return c.json({ error: 'Order is already denied.', denied_at: order.denied_at }, 409)
+
+    const deniedAt = new Date().toISOString().replace('T', ' ').slice(0, 19)
+    await c.env.DB.prepare(`
+      UPDATE orders SET
+        denied_at = ?,
+        denied_reason = ?,
+        denied_by_admin_id = ?,
+        updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(deniedAt, reason, admin.id, orderId).run()
+
+    try {
+      await c.env.DB.prepare(
+        "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'admin_deny_report', ?)"
+      ).bind(JSON.stringify({
+        order_id: orderId,
+        admin_id: admin.id,
+        admin_email: admin.email,
+        reason,
+        order_number: order.order_number,
+        property_address: order.property_address,
+      })).run()
+    } catch { /* non-fatal audit */ }
+
+    let emailStatus: 'sent' | 'failed' | 'skipped' = 'skipped'
+    let emailDetail = ''
+    if (order.customer_email) {
+      try {
+        const { notifyReportDenied } = await import('../services/email')
+        await notifyReportDenied(c.env, {
+          to: order.customer_email,
+          order_number: order.order_number,
+          property_address: order.property_address || '',
+          customer_name: order.customer_name || '',
+          customer_id: order.customer_id ?? null,
+          denial_reason: reason,
+        })
+        emailStatus = 'sent'
+      } catch (e: any) {
+        emailStatus = 'failed'
+        emailDetail = String(e?.message || e).slice(0, 480)
+        console.warn(`[deny-report] customer email failed for order ${order.order_number}:`, emailDetail)
+      }
+    } else {
+      emailDetail = 'no customer email on file'
+    }
+
+    try {
+      const { recordAndNotify } = await import('../services/admin-notifications')
+      await recordAndNotify(c.env, {
+        kind: 'report_denied',
+        order: {
+          order_id: orderId,
+          order_number: order.order_number,
+          customer_id: order.customer_id ?? null,
+          customer_email: order.customer_email || null,
+          customer_name: order.customer_name || null,
+          property_address: order.property_address || '',
+          payload: { reason, admin_id: admin.id, admin_email: admin.email },
+        },
+      })
+    } catch (e: any) {
+      console.warn('[deny-report] audit notification failed:', e?.message || e)
+    }
+
+    return c.json({
+      success: true,
+      order_id: orderId,
+      order_number: order.order_number,
+      denied_at: deniedAt,
+      email_status: emailStatus,
+      email_detail: emailDetail,
+    })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to deny report: ' + err.message }, 500)
   }
 })
 

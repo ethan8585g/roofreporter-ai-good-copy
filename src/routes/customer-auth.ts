@@ -2252,6 +2252,87 @@ customerAuthRoutes.get('/reports-list', async (c) => {
 })
 
 // ============================================================
+// POST /api/customer/reports/:orderId/request-retrace
+// Customer-initiated request to re-trace a completed report. Creates a
+// row in retrace_requests, fires a super_admin_notifications entry, and
+// emails sales@. Caps one open request per order.
+// ============================================================
+customerAuthRoutes.post('/reports/:orderId/request-retrace', async (c) => {
+  try {
+    const token = getCustomerSessionToken(c)
+    if (!token) return c.json({ error: 'Unauthorized' }, 401)
+    const session = await c.env.DB.prepare(
+      "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+    ).bind(token).first<any>()
+    if (!session) return c.json({ error: 'Session expired' }, 401)
+    const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
+
+    const orderId = parseInt(c.req.param('orderId'))
+    if (!Number.isFinite(orderId) || orderId <= 0) {
+      return c.json({ error: 'Invalid order id' }, 400)
+    }
+
+    const body = await c.req.json().catch(() => ({}))
+    const reason = (body?.reason || '').toString().trim().slice(0, 2000)
+    if (reason.length < 10) {
+      return c.json({ ok: false, error: 'reason_too_short', message: 'Please describe the issue (at least 10 characters).' }, 400)
+    }
+
+    // Verify the order belongs to this customer (or their team owner) AND has a completed report.
+    const row = await c.env.DB.prepare(`
+      SELECT o.id as order_id, o.order_number, o.property_address, o.denied_at,
+        c.email as customer_email, c.name as customer_name,
+        r.id as report_id, r.status as report_status
+      FROM orders o
+      LEFT JOIN customers c ON c.id = o.customer_id
+      LEFT JOIN reports r ON r.order_id = o.id
+      WHERE o.id = ? AND o.customer_id = ?
+    `).bind(orderId, ownerId).first<any>()
+
+    if (!row) return c.json({ ok: false, error: 'not_found' }, 404)
+    if (row.denied_at) return c.json({ ok: false, error: 'order_denied' }, 409)
+    if (row.report_status !== 'completed') {
+      return c.json({ ok: false, error: 'not_completed', message: 'Re-trace can only be requested for completed reports.' }, 409)
+    }
+
+    const existing = await c.env.DB.prepare(
+      "SELECT id FROM retrace_requests WHERE order_id = ? AND status = 'pending' LIMIT 1"
+    ).bind(orderId).first<any>()
+    if (existing) {
+      return c.json({ ok: false, error: 'already_requested', request_id: existing.id })
+    }
+
+    const inserted = await c.env.DB.prepare(`
+      INSERT INTO retrace_requests (order_id, customer_id, report_id, reason_text, status)
+      VALUES (?, ?, ?, ?, 'pending')
+    `).bind(orderId, ownerId, row.report_id ?? null, reason).run()
+    const requestId = (inserted?.meta?.last_row_id as number) || null
+
+    try {
+      const { recordAndNotify } = await import('../services/admin-notifications')
+      await recordAndNotify(c.env, {
+        kind: 'customer_retrace_request',
+        order: {
+          order_id: orderId,
+          order_number: row.order_number,
+          customer_id: ownerId,
+          customer_email: row.customer_email || null,
+          customer_name: row.customer_name || null,
+          property_address: row.property_address || '',
+          payload: { reason_text: reason, request_id: requestId },
+        },
+      })
+    } catch (e: any) {
+      console.warn('[request-retrace] notification failed:', e?.message || e)
+    }
+
+    return c.json({ ok: true, request_id: requestId })
+  } catch (err: any) {
+    return c.json({ ok: false, error: 'server_error', details: err.message }, 500)
+  }
+})
+
+// ============================================================
 // Item Library CRUD — Reusable line items for proposals/invoices
 // ============================================================
 customerAuthRoutes.get('/item-library', async (c) => {

@@ -77,6 +77,7 @@ import { superAdminBi } from './routes/super-admin-bi'
 import { superAdminLeads } from './routes/super-admin-leads'
 import { superAdminAttribution } from './routes/super-admin-attribution'
 import { superAdminLoopTracker } from './routes/super-admin-loop-tracker'
+import { superAdminEmailTracker } from './routes/super-admin-email-tracker'
 import { superAdminModuleAnalytics } from './routes/super-admin-module-analytics'
 import { superAdminAi } from './routes/super-admin-ai'
 import { ga4GrantRoutes } from './routes/ga4-grant'
@@ -735,6 +736,11 @@ app.route('/api/super-admin/attribution', superAdminAttribution)
 // Surfaces results of the recurring site scanners (public, customer, admin, daily health).
 app.route('/super-admin/loop-tracker', superAdminLoopTracker)
 app.route('/api/super-admin/loop-tracker', superAdminLoopTracker)
+
+// Super-admin Email Tracker: unified view of every outbound email (reports,
+// invoices, cart-recovery, lead/health alerts, manual sales@ composer
+// messages) + inbound website leads + Resend webhooks + suppressions.
+app.route('/', superAdminEmailTracker)
 
 // Super-admin Module Analytics: per-customer module-open counts (today + lifetime).
 // HTML at /super-admin/module-analytics, JSON at /api/super-admin/module-analytics/*.
@@ -7426,6 +7432,10 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
           <i class="fas fa-radar w-5 text-center"></i>
           <span class="label text-sm font-semibold">Loops</span>
           <span id="sa-sidebar-loops-badge" style="margin-left:auto;background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none">0</span>
+        </a>
+        <a href="/super-admin/email-tracker" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" style="text-decoration:none">
+          <i class="fas fa-envelope-open-text w-5 text-center"></i>
+          <span class="label text-sm font-semibold">Email Tracker</span>
         </a>
         <a href="/super-admin/module-analytics" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" style="text-decoration:none">
           <i class="fas fa-chart-line w-5 text-center"></i>

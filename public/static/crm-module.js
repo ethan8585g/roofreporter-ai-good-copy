@@ -218,7 +218,7 @@
       var buttons = '';
       if (isCompleted) {
         var addrAttr = (o.property_address || '').replace(/'/g, "\\'");
-        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a><button onclick="window.openHouse3D(' + o.id + ", '" + addrAttr + "')\"" + ' class="px-4 py-2 bg-gradient-to-r from-cyan-500 to-emerald-500 text-white rounded-lg text-xs font-medium hover:from-cyan-400 hover:to-emerald-400" title="View this house in interactive 3D"><i class="fas fa-cube mr-1"></i>View 3D Model</button><a href="/api/reports/' + o.id + '/pdf" target="_blank" title="Opens print dialog in new tab" class="px-4 py-2 bg-white/5 text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-print mr-1"></i>Print PDF</a><a href="/api/reports/' + o.id + '/customer-html" target="_blank" title="Aerial &amp; diagrams only, no measurements" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700"><i class="fas fa-user mr-1"></i>Customer Copy</a><a href="/api/reports/' + o.id + '/customer-pdf" target="_blank" title="Print the customer copy" class="px-4 py-2 bg-white/5 text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-print mr-1"></i>Customer PDF</a><a href="/api/reports/' + o.id + '/pdf?save=1" target="_blank" title="Download full measurement report as PDF" class="px-4 py-2 bg-emerald-700 text-white rounded-lg text-xs font-medium hover:bg-emerald-800"><i class="fas fa-download mr-1"></i>Save PDF</a><a href="/api/reports/' + o.id + '/customer-pdf?save=1" target="_blank" title="Download customer copy as PDF (no measurements)" class="px-4 py-2 bg-white/5 text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-download mr-1"></i>Save Customer PDF</a><button onclick="window._crmShareReport(' + o.id + ')" class="px-4 py-2 bg-sky-600 text-white rounded-lg text-xs font-medium hover:bg-sky-700"><i class="fas fa-share-alt mr-1"></i>Share</button><button onclick="window._crmCreateProposalFromReport(' + o.id + ')" class="px-4 py-2 bg-blue-500/15 text-white rounded-lg text-xs font-medium hover:bg-blue-500/15"><i class="fas fa-file-invoice mr-1"></i>Create Proposal</button>';
+        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a><button onclick="window.openHouse3D(' + o.id + ", '" + addrAttr + "')\"" + ' class="px-4 py-2 bg-gradient-to-r from-cyan-500 to-emerald-500 text-white rounded-lg text-xs font-medium hover:from-cyan-400 hover:to-emerald-400" title="View this house in interactive 3D"><i class="fas fa-cube mr-1"></i>View 3D Model</button><a href="/api/reports/' + o.id + '/pdf" target="_blank" title="Opens print dialog in new tab" class="px-4 py-2 bg-white/5 text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-print mr-1"></i>Print PDF</a><a href="/api/reports/' + o.id + '/customer-html" target="_blank" title="Aerial &amp; diagrams only, no measurements" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700"><i class="fas fa-user mr-1"></i>Customer Copy</a><a href="/api/reports/' + o.id + '/customer-pdf" target="_blank" title="Print the customer copy" class="px-4 py-2 bg-white/5 text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-print mr-1"></i>Customer PDF</a><a href="/api/reports/' + o.id + '/pdf?save=1" target="_blank" title="Download full measurement report as PDF" class="px-4 py-2 bg-emerald-700 text-white rounded-lg text-xs font-medium hover:bg-emerald-800"><i class="fas fa-download mr-1"></i>Save PDF</a><a href="/api/reports/' + o.id + '/customer-pdf?save=1" target="_blank" title="Download customer copy as PDF (no measurements)" class="px-4 py-2 bg-white/5 text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-download mr-1"></i>Save Customer PDF</a><button onclick="window._crmShareReport(' + o.id + ')" class="px-4 py-2 bg-sky-600 text-white rounded-lg text-xs font-medium hover:bg-sky-700"><i class="fas fa-share-alt mr-1"></i>Share</button><button onclick="window._crmCreateProposalFromReport(' + o.id + ')" class="px-4 py-2 bg-blue-500/15 text-white rounded-lg text-xs font-medium hover:bg-blue-500/15"><i class="fas fa-file-invoice mr-1"></i>Create Proposal</button><button onclick="window._crmRequestRetrace(' + o.id + ",'" + addrAttr + "')\"" + ' class="px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-medium hover:bg-amber-700" title="Tell us the trace is wrong and we will redo it"><i class="fas fa-redo mr-1"></i>Request Re-trace</button>';
         if (isSolar) {
           buttons += '<a href="/customer/material-calculator?order_id=' + o.id + '" class="px-4 py-2 bg-white/10 text-white rounded-lg text-xs font-medium hover:bg-white/10"><i class="fas fa-calculator mr-1"></i>Material Calculator</a>';
         }
@@ -4817,6 +4817,50 @@
         }
       })
       .catch(function() { toast('Network error', 'error'); });
+  };
+
+  // ---- Request Re-trace (tell us the trace is wrong) ----
+  window._crmRequestRetrace = function(orderId, address) {
+    var safeAddr = (address || '').replace(/</g, '&lt;');
+    var body = '<div class="space-y-3">' +
+      '<p class="text-sm" style="color:var(--text-secondary)">If this report\'s roof trace is wrong, tell us what to fix and we\'ll re-trace it.</p>' +
+      (safeAddr ? '<p class="text-xs" style="color:var(--text-muted)"><i class="fas fa-map-marker-alt mr-1"></i>' + safeAddr + '</p>' : '') +
+      '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-secondary)">What\'s wrong with the trace? <span style="color:#dc2626">*</span></label>' +
+      '<textarea id="retraceReason" rows="5" placeholder="Be specific — which edges, missing structures, wrong shape, eaves vs. ridges mixed up, etc." class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:#0A0A0A;color:#fff"></textarea>' +
+      '<p class="text-[11px] mt-1" style="color:var(--text-muted)">Minimum 10 characters. Our team reviews every request and follows up by email.</p></div>' +
+      '</div>';
+    showModal('Request Re-trace', body, function() {
+      var reason = (document.getElementById('retraceReason') || {}).value || '';
+      reason = reason.trim();
+      if (reason.length < 10) { toast('Please describe the issue (at least 10 characters).', 'error'); return; }
+      var btn = document.getElementById('modalSaveBtn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+      fetch('/api/customer/reports/' + orderId + '/request-retrace', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ reason: reason })
+      })
+        .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); })
+        .then(function(res) {
+          if (res.body && res.body.ok) {
+            closeModal();
+            toast('Re-trace requested. We\'ll review and follow up by email.');
+          } else if (res.body && res.body.error === 'already_requested') {
+            closeModal();
+            toast('A re-trace is already pending for this report.', 'error');
+          } else if (res.body && res.body.error === 'reason_too_short') {
+            toast(res.body.message || 'Please describe the issue.', 'error');
+            if (btn) { btn.disabled = false; btn.textContent = 'Submit Request'; }
+          } else {
+            toast((res.body && (res.body.message || res.body.error)) || 'Failed to submit re-trace request.', 'error');
+            if (btn) { btn.disabled = false; btn.textContent = 'Submit Request'; }
+          }
+        })
+        .catch(function() {
+          toast('Network error. Please try again.', 'error');
+          if (btn) { btn.disabled = false; btn.textContent = 'Submit Request'; }
+        });
+    }, 'Submit Request');
   };
 
   // ---- Create Proposal from Report ----

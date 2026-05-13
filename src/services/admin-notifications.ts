@@ -8,7 +8,7 @@
 // before the row lands would leave admin blind to an order, which is
 // exactly the bug this module fixes.
 
-import { notifyNewReportRequest, notifyTraceCompletedToCustomer } from './email'
+import { notifyNewReportRequest, notifyTraceCompletedToCustomer, notifyCustomerRetraceRequest } from './email'
 
 export type NotificationKind =
   | 'new_order'
@@ -17,6 +17,8 @@ export type NotificationKind =
   | 'payment_unmatched'
   | 'funnel_regression'
   | 'email_health'
+  | 'customer_retrace_request'
+  | 'report_denied'
 
 export type NotificationSeverity = 'info' | 'warn' | 'urgent'
 
@@ -47,6 +49,7 @@ function defaultSeverity(kind: NotificationKind): NotificationSeverity {
   if (kind === 'email_health') return 'urgent'
   if (kind === 'needs_trace') return 'warn'
   if (kind === 'funnel_regression') return 'warn'
+  if (kind === 'customer_retrace_request') return 'warn'
   return 'info'
 }
 
@@ -120,6 +123,24 @@ export async function recordAndNotify(
       } else {
         emailDetail = 'no customer email on file'
       }
+    } else if (kind === 'customer_retrace_request') {
+      // Customer-initiated re-trace request — alert sales@. The DB row
+      // is the source of truth; this email is a convenience layer.
+      const reasonText = (order.payload?.reason_text as string) || ''
+      await notifyCustomerRetraceRequest(env, {
+        order_number: order.order_number,
+        property_address: order.property_address || '',
+        customer_name: order.customer_name || '',
+        customer_email: order.customer_email || '',
+        reason_text: reasonText,
+        order_id: order.order_id ?? undefined,
+      })
+      emailStatus = 'sent'
+    } else if (kind === 'report_denied') {
+      // Customer email is fired by the deny-report route itself.
+      // This branch only records the admin-side audit row.
+      emailStatus = 'skipped'
+      emailDetail = 'customer email sent directly by deny-report route'
     } else if (kind === 'payment_unmatched') {
       // Reuse the new-report email so admin sees an URGENT alert in inbox.
       // Subject prefixing happens inside the function via order_number.

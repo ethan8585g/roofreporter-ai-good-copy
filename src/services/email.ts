@@ -771,44 +771,16 @@ export async function notifyFunnelRegression(
     } catch {}
   }
 
-  const clientId = env?.GMAIL_CLIENT_ID
-  let clientSecret = env?.GMAIL_CLIENT_SECRET || ''
-  let refreshToken = env?.GMAIL_REFRESH_TOKEN || ''
-  let senderEmail = env?.GMAIL_SENDER_EMAIL || ''
-  if (env?.DB && (!clientSecret || !refreshToken || !senderEmail)) {
-    try {
-      const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
-      if (r?.setting_value) refreshToken = r.setting_value
-      const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
-      if (s?.setting_value) clientSecret = s.setting_value
-      if (!senderEmail) {
-        const se = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_sender_email' AND master_company_id=1").first<any>()
-        if (se?.setting_value) senderEmail = se.setting_value
-      }
-    } catch {}
-  }
-
+  const { logAndSendEmail } = await import('./email-wrapper')
   const errors: string[] = []
   let delivered = 0
   for (const to of recipients) {
-    let sent = false
-    if (env?.RESEND_API_KEY) {
-      try {
-        await sendViaResend(env.RESEND_API_KEY, to, subject, html)
-        sent = true
-      } catch (e: any) {
-        errors.push(`resend→${to}: ${e?.message || e}`)
-      }
-    }
-    if (!sent && clientId && clientSecret && refreshToken) {
-      try {
-        await sendGmailOAuth2(clientId, clientSecret, refreshToken, to, subject, html, senderEmail || null)
-        sent = true
-      } catch (e: any) {
-        errors.push(`gmail→${to}: ${e?.message || e}`)
-      }
-    }
-    if (sent) delivered++
+    const r = await logAndSendEmail({
+      env, to, subject, html,
+      kind: 'funnel_regression', category: 'alert', track: false,
+    })
+    if (r.ok) delivered++
+    else if (r.error) errors.push(`${to}: ${r.error}`)
   }
 
   if (delivered === 0) {
@@ -862,46 +834,16 @@ export async function notifyEmailHealthFailure(
     } catch {}
   }
 
-  // Try Resend first — Gmail is the suspect transport. If Resend isn't
-  // configured, fall back to Gmail anyway (probe failures can be transient).
-  const clientId = env?.GMAIL_CLIENT_ID
-  let clientSecret = env?.GMAIL_CLIENT_SECRET || ''
-  let refreshToken = env?.GMAIL_REFRESH_TOKEN || ''
-  let senderEmail = env?.GMAIL_SENDER_EMAIL || ''
-  if (env?.DB && (!clientSecret || !refreshToken || !senderEmail)) {
-    try {
-      const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
-      if (r?.setting_value) refreshToken = r.setting_value
-      const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
-      if (s?.setting_value) clientSecret = s.setting_value
-      if (!senderEmail) {
-        const se = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_sender_email' AND master_company_id=1").first<any>()
-        if (se?.setting_value) senderEmail = se.setting_value
-      }
-    } catch {}
-  }
-
+  const { logAndSendEmail } = await import('./email-wrapper')
   const errors: string[] = []
   let delivered = 0
   for (const to of recipients) {
-    let sent = false
-    if (env?.RESEND_API_KEY) {
-      try {
-        await sendViaResend(env.RESEND_API_KEY, to, subject, html)
-        sent = true
-      } catch (e: any) {
-        errors.push(`resend→${to}: ${e?.message || e}`)
-      }
-    }
-    if (!sent && clientId && clientSecret && refreshToken) {
-      try {
-        await sendGmailOAuth2(clientId, clientSecret, refreshToken, to, subject, html, senderEmail || null)
-        sent = true
-      } catch (e: any) {
-        errors.push(`gmail→${to}: ${e?.message || e}`)
-      }
-    }
-    if (sent) delivered++
+    const r = await logAndSendEmail({
+      env, to, subject, html,
+      kind: 'gmail_health_alert', category: 'alert', track: false,
+    })
+    if (r.ok) delivered++
+    else if (r.error) errors.push(`${to}: ${r.error}`)
   }
 
   if (delivered === 0) {
@@ -1205,58 +1147,20 @@ export async function notifySalesNewLead(env: any, data: {
 </div>`
   const subject = `🔔 New Lead: ${data.name || data.email || 'anonymous'} — ${data.source}`
 
-  // Strategy 1: Try Gmail OAuth2
-  let sent = false
-  const clientId = env.GMAIL_CLIENT_ID
-  let clientSecret = env.GMAIL_CLIENT_SECRET || ''
-  let refreshToken = env.GMAIL_REFRESH_TOKEN || ''
-  if (!refreshToken || !clientSecret) {
-    try {
-      const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
-      if (r?.setting_value) refreshToken = r.setting_value
-      const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
-      if (s?.setting_value) clientSecret = s.setting_value
-    } catch (e: any) {
-      console.warn('[notifySalesNewLead] DB credential lookup failed:', e?.message)
-    }
-  }
-
-  if (clientId && clientSecret && refreshToken) {
-    try {
-      await sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofmanager.ca', subject, html, 'sales@roofmanager.ca')
-      sent = true
-      console.log('[notifySalesNewLead] sent via Gmail OAuth2')
-    } catch (e: any) {
-      console.error('[notifySalesNewLead] Gmail OAuth2 failed:', e?.message || e)
-    }
-  } else {
-    console.warn('[notifySalesNewLead] Gmail OAuth2 credentials missing — clientId:', !!clientId, 'clientSecret:', !!clientSecret, 'refreshToken:', !!refreshToken)
-  }
-
-  // Strategy 2: Fallback to Resend if Gmail failed or unavailable
-  if (!sent && env.RESEND_API_KEY) {
-    try {
-      await sendViaResend(env.RESEND_API_KEY, 'sales@roofmanager.ca', subject, html)
-      sent = true
-      console.log('[notifySalesNewLead] sent via Resend fallback')
-    } catch (e: any) {
-      console.error('[notifySalesNewLead] Resend fallback also failed:', e?.message || e)
-    }
-  }
-
-  // Strategy 3: GCP Service Account Gmail API fallback
-  if (!sent && env.GCP_SERVICE_ACCOUNT_JSON) {
-    try {
-      await sendGmailEmail(env.GCP_SERVICE_ACCOUNT_JSON, 'sales@roofmanager.ca', subject, html, 'sales@roofmanager.ca')
-      sent = true
-      console.log('[notifySalesNewLead] sent via GCP Service Account fallback')
-    } catch (e: any) {
-      console.error('[notifySalesNewLead] GCP Service Account also failed:', e?.message || e)
-    }
-  }
-
-  if (!sent) {
-    console.error('[notifySalesNewLead] ALL email methods failed — lead notification for', data.email, 'was NOT delivered to sales@roofmanager.ca')
+  const { logAndSendEmail } = await import('./email-wrapper')
+  const r = await logAndSendEmail({
+    env,
+    to: 'sales@roofmanager.ca',
+    from: 'sales@roofmanager.ca',
+    subject,
+    html,
+    kind: 'lead_notification',
+    category: 'lead',
+    track: false,
+    replyTo: data.email || undefined,
+  })
+  if (!r.ok) {
+    console.error('[notifySalesNewLead] failed:', r.error)
   }
 }
 
@@ -1311,56 +1215,21 @@ export async function notifyNewUserSignup(env: any, data: {
 </div>`
   const subject = `🎉 New Signup: ${data.name || data.email || 'unknown'}${data.company_name ? ' (' + data.company_name + ')' : ''}`
 
-  // Strategy 1: Gmail OAuth2
-  let sent = false
-  const clientId = env.GMAIL_CLIENT_ID
-  let clientSecret = env.GMAIL_CLIENT_SECRET || ''
-  let refreshToken = env.GMAIL_REFRESH_TOKEN || ''
-  if (!refreshToken || !clientSecret) {
-    try {
-      const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
-      if (r?.setting_value) refreshToken = r.setting_value
-      const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
-      if (s?.setting_value) clientSecret = s.setting_value
-    } catch (e: any) {
-      console.warn('[notifyNewUserSignup] DB credential lookup failed:', e?.message)
-    }
-  }
-
-  if (clientId && clientSecret && refreshToken) {
-    try {
-      await sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofmanager.ca', subject, html, 'sales@roofmanager.ca')
-      sent = true
-      console.log('[notifyNewUserSignup] sent via Gmail OAuth2')
-    } catch (e: any) {
-      console.error('[notifyNewUserSignup] Gmail OAuth2 failed:', e?.message || e)
-    }
-  }
-
-  // Strategy 2: Resend fallback
-  if (!sent && env.RESEND_API_KEY) {
-    try {
-      await sendViaResend(env.RESEND_API_KEY, 'sales@roofmanager.ca', subject, html)
-      sent = true
-      console.log('[notifyNewUserSignup] sent via Resend fallback')
-    } catch (e: any) {
-      console.error('[notifyNewUserSignup] Resend fallback failed:', e?.message || e)
-    }
-  }
-
-  // Strategy 3: GCP Service Account fallback
-  if (!sent && env.GCP_SERVICE_ACCOUNT_JSON) {
-    try {
-      await sendGmailEmail(env.GCP_SERVICE_ACCOUNT_JSON, 'sales@roofmanager.ca', subject, html, 'sales@roofmanager.ca')
-      sent = true
-      console.log('[notifyNewUserSignup] sent via GCP Service Account fallback')
-    } catch (e: any) {
-      console.error('[notifyNewUserSignup] GCP Service Account failed:', e?.message || e)
-    }
-  }
-
-  if (!sent) {
-    console.error('[notifyNewUserSignup] ALL email methods failed — signup notification for', data.email, 'was NOT delivered to sales@roofmanager.ca')
+  const { logAndSendEmail } = await import('./email-wrapper')
+  const r = await logAndSendEmail({
+    env,
+    to: 'sales@roofmanager.ca',
+    from: 'sales@roofmanager.ca',
+    subject,
+    html,
+    kind: 'signup_notification',
+    category: 'alert',
+    track: false,
+    customerId: data.customer_id ? Number(data.customer_id) || null : null,
+    replyTo: data.email || undefined,
+  })
+  if (!r.ok) {
+    console.error('[notifyNewUserSignup] failed:', r.error)
   }
 }
 
@@ -1480,5 +1349,179 @@ ${pixel}`
   if (!sent) {
     console.error('[sendWelcomeEmail] ALL email methods failed — welcome email for', data.email, 'was NOT delivered')
     await markEmailFailed(env, trackingToken, 'All transports failed (Gmail OAuth2 / Resend / GCP SA)')
+  }
+}
+
+// ============================================================
+// CUSTOMER NOTIFICATION — "Sorry, we're unable to complete this report"
+// Sent when super admin denies a report request. The customer is told the
+// report cannot be completed and invited to reply for next steps. No
+// refund logic here — super admin handles refunds out-of-band.
+// ============================================================
+export async function notifyReportDenied(
+  env: any,
+  args: {
+    to: string
+    order_number: string
+    property_address: string
+    customer_name?: string
+    customer_id?: number | null
+    denial_reason?: string
+  }
+): Promise<void> {
+  const { to, order_number, property_address, customer_name, customer_id, denial_reason } = args
+  if (!to) return
+  const firstName = (customer_name || '').split(' ')[0]
+  const greeting = firstName ? `Hi ${htmlEsc(firstName)},` : 'Hi,'
+  const subject = `Update on your roof report — ${order_number}`
+
+  const { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } = await import('./email-tracking')
+  const trackingToken = await logEmailSend(env, {
+    customerId: customer_id ?? null,
+    recipient: to,
+    kind: 'report_denied',
+    subject,
+  })
+  const pixel = buildTrackingPixel(trackingToken)
+
+  const reasonBlock = denial_reason
+    ? `<p style="color:#222;font-size:15px;line-height:1.5;background:#fef2f2;border-left:3px solid #b91c1c;padding:10px 14px;margin:14px 0">${htmlEsc(denial_reason)}</p>`
+    : ''
+
+  const rawHtml = `
+<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+  <h2 style="color:#111;margin-bottom:4px">We're unable to complete this report</h2>
+  <p style="color:#555;margin-top:0">${htmlEsc(order_number)}</p>
+  <p style="color:#222;font-size:15px;line-height:1.5">${greeting}</p>
+  <p style="color:#222;font-size:15px;line-height:1.5">
+    We're sorry — after reviewing the property at <strong>${htmlEsc(property_address)}</strong>, we're not able to complete this roof report.
+  </p>
+  ${reasonBlock}
+  <p style="color:#222;font-size:15px;line-height:1.5">
+    If you'd like to discuss next steps or have any questions, just reply to this email or reach us at <a href="mailto:sales@roofmanager.ca" style="color:#0369a1">sales@roofmanager.ca</a>.
+  </p>
+  <p style="color:#222;font-size:15px;line-height:1.5">— The Roof Manager team</p>
+  <p style="color:#888;font-size:12px;margin-top:24px">
+    Roof Manager · roofmanager.ca
+  </p>
+${pixel}</div>`
+  const html = wrapEmailLinks(rawHtml, trackingToken)
+
+  const clientId = env?.GMAIL_CLIENT_ID
+  let clientSecret = env?.GMAIL_CLIENT_SECRET || ''
+  let refreshToken = env?.GMAIL_REFRESH_TOKEN || ''
+  let senderEmail = env?.GMAIL_SENDER_EMAIL || ''
+  if (env?.DB && (!clientSecret || !refreshToken || !senderEmail)) {
+    try {
+      const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
+      if (r?.setting_value) refreshToken = r.setting_value
+      const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
+      if (s?.setting_value) clientSecret = s.setting_value
+      if (!senderEmail) {
+        const se = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_sender_email' AND master_company_id=1").first<any>()
+        if (se?.setting_value) senderEmail = se.setting_value
+      }
+    } catch {}
+  }
+
+  let lastErr: any = null
+  if (env?.RESEND_API_KEY) {
+    try {
+      await sendViaResend(env.RESEND_API_KEY, to, subject, html)
+      return
+    } catch (e: any) { lastErr = e }
+  }
+  if (clientId && clientSecret && refreshToken) {
+    try {
+      await sendGmailOAuth2(clientId, clientSecret, refreshToken, to, subject, html, senderEmail || 'sales@roofmanager.ca')
+      return
+    } catch (e: any) { lastErr = e }
+  }
+  if (lastErr) {
+    await markEmailFailed(env, trackingToken, String(lastErr?.message || lastErr))
+    throw lastErr
+  }
+  await markEmailFailed(env, trackingToken, 'no email provider configured')
+  throw new Error('no email provider configured')
+}
+
+// ============================================================
+// SALES NOTIFICATION — Customer requested a re-trace
+// Sent to sales@roofmanager.ca when a customer submits a re-trace request
+// via the customer dashboard. Mirrors notifyNewReportRequest pattern: single
+// canonical recipient; admin forwarding handled at the inbox layer.
+// ============================================================
+export async function notifyCustomerRetraceRequest(
+  env: any,
+  args: {
+    order_number: string
+    property_address: string
+    customer_name?: string
+    customer_email?: string
+    reason_text: string
+    order_id?: number | string
+  }
+): Promise<void> {
+  const { order_number, property_address, customer_name, customer_email, reason_text } = args
+  const subject = `Re-trace requested — ${order_number}`
+  const html = `
+<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
+  <h2 style="color:#b45309;margin-bottom:4px"><i style="margin-right:6px">↻</i>Re-trace requested</h2>
+  <p style="color:#555;margin-top:0">${htmlEsc(order_number)}</p>
+  <table style="width:100%;border-collapse:collapse;margin:16px 0">
+    <tr><td style="padding:8px 0;color:#888;width:140px">Property</td><td style="padding:8px 0;font-weight:600">${htmlEsc(property_address)}</td></tr>
+    <tr><td style="padding:8px 0;color:#888">Customer</td><td style="padding:8px 0">${htmlEsc(customer_name || '')} &lt;${htmlEsc(customer_email || '')}&gt;</td></tr>
+  </table>
+  <p style="color:#555;font-size:13px;margin:8px 0 4px">Customer's reason:</p>
+  <p style="color:#222;font-size:14px;line-height:1.5;background:#fffbeb;border-left:3px solid #b45309;padding:12px 14px;margin:4px 0 18px;white-space:pre-wrap">${htmlEsc(reason_text)}</p>
+  <a href="https://www.roofmanager.ca/admin/superadmin" style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">View in Super Admin →</a>
+</div>`
+
+  const recipients = new Set<string>(['sales@roofmanager.ca'])
+
+  const clientId = env?.GMAIL_CLIENT_ID
+  let clientSecret = env?.GMAIL_CLIENT_SECRET || ''
+  let refreshToken = env?.GMAIL_REFRESH_TOKEN || ''
+  let senderEmail = env?.GMAIL_SENDER_EMAIL || ''
+  if (env?.DB && (!clientSecret || !refreshToken || !senderEmail)) {
+    try {
+      const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
+      if (r?.setting_value) refreshToken = r.setting_value
+      const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
+      if (s?.setting_value) clientSecret = s.setting_value
+      if (!senderEmail) {
+        const se = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_sender_email' AND master_company_id=1").first<any>()
+        if (se?.setting_value) senderEmail = se.setting_value
+      }
+    } catch {}
+  }
+
+  let delivered = 0
+  const errors: string[] = []
+
+  for (const to of recipients) {
+    let sent = false
+    if (env?.RESEND_API_KEY) {
+      try {
+        await sendViaResend(env.RESEND_API_KEY, to, subject, html)
+        sent = true
+      } catch (e: any) {
+        errors.push(`resend→${to}: ${e?.message || e}`)
+      }
+    }
+    if (!sent && clientId && clientSecret && refreshToken) {
+      try {
+        await sendGmailOAuth2(clientId, clientSecret, refreshToken, to, subject, html, senderEmail || 'sales@roofmanager.ca')
+        sent = true
+      } catch (e: any) {
+        errors.push(`gmail→${to}: ${e?.message || e}`)
+      }
+    }
+    if (sent) delivered++
+  }
+
+  if (delivered === 0) {
+    const reason = errors.length ? errors.join(' | ') : 'no email provider configured'
+    console.warn('[notifyCustomerRetraceRequest] Failed to send notification:', reason)
   }
 }

@@ -16,8 +16,7 @@
 // flipped paid/failed/refunded between query and send.
 // ============================================================
 
-import { loadGmailCreds, sendGmailOAuth2 } from './email'
-import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from './email-tracking'
+import { loadGmailCreds } from './email'
 
 export type CartRecoveryStage = '2h' | '24h'
 
@@ -200,22 +199,17 @@ export async function runAbandonedCheckoutRecoveryStage(
     const firstName = firstNameFromCustomer(row.name, row.email)
     const packageLine = packageLineFromCandidate(row)
     const subject = cfg.subject(firstName)
-    const rawHtml = cfg.body({ firstName, packageLine })
+    const html = cfg.body({ firstName, packageLine })
 
-    const trackingToken = await logEmailSend(env, {
-      customerId: row.customer_id, recipient: row.email, kind: `cart_recovery_${stage}`, subject,
+    const { logAndSendEmail } = await import('./email-wrapper')
+    const r = await logAndSendEmail({
+      env, to: row.email, from: sender,
+      subject, html,
+      kind: `cart_recovery_${stage}`, category: 'cart',
+      customerId: row.customer_id,
     })
-    const pixel = buildTrackingPixel(trackingToken)
-    const htmlWithPixel = rawHtml.includes('</body>')
-      ? rawHtml.replace('</body>', `${pixel}</body>`)
-      : rawHtml + pixel
-    const html = wrapEmailLinks(htmlWithPixel, trackingToken)
 
-    try {
-      await sendGmailOAuth2(
-        creds.clientId, creds.clientSecret, creds.refreshToken,
-        row.email, subject, html, sender, env,
-      )
+    if (r.ok) {
       await env.DB.prepare(
         `INSERT INTO user_activity_log (company_id, action, details) VALUES (1, ?, ?)`
       ).bind(cfg.actionKey, JSON.stringify({
@@ -223,17 +217,15 @@ export async function runAbandonedCheckoutRecoveryStage(
         stage, sent_at: new Date().toISOString(),
       })).run()
       result.sent++
-    } catch (e: any) {
+    } else {
       result.failed++
-      result.errors.push(`[${stage}] payment #${row.payment_id} ${row.email}: ${e?.message || e}`)
-      console.warn(`[cart-recovery:${stage}] send failed for payment ${row.payment_id}:`, e?.message || e)
-      await markEmailFailed(env, trackingToken, String(e?.message || e))
+      result.errors.push(`[${stage}] payment #${row.payment_id} ${row.email}: ${r.error}`)
       try {
         await env.DB.prepare(
           `INSERT INTO user_activity_log (company_id, action, details) VALUES (1, ?, ?)`
         ).bind(cfg.failedActionKey, JSON.stringify({
           payment_id: row.payment_id, customer_id: row.customer_id, email: row.email,
-          error: String(e?.message || e).slice(0, 500),
+          error: String(r.error || '').slice(0, 500),
         })).run()
       } catch {}
     }
