@@ -1765,7 +1765,7 @@ const ROVER_KNOWLEDGE_ROOFING_BIZ = `## ROOFING BUSINESS GROWTH (US/CANADA)
 ### 3. SALES PROCESS
 - Speed-to-lead: 5-min response = ~21× contact rate vs 30-min. Hour 1 vs hour 24 = ~10×.
 - 1-call close works on retail when AOV <$15k and homeowner has authority; 25-40% close. 2-call close (measure → proposal) 35-50%.
-- Demo kit non-negotiables: shingle sample board (3-tab + arch + designer + Class-4), hail-damage shingle, RoofReporter measurement on tablet, drone (DJI Mini 4 / Mavic 3), ladder + chalk.
+- Demo kit non-negotiables: shingle sample board (3-tab + arch + designer + Class-4), hail-damage shingle, Roof Manager measurement on tablet, drone (DJI Mini 4 / Mavic 3), ladder + chalk.
 - Pre-call discovery: both decision-makers present, age of roof, prior claims, insurance carrier, financing interest, timeline. Single-spouse pitches close ~50% less.
 - Retail close rates: 20-35% average, 40-55% trained closers.
 - Insurance restoration close: 50-70% once claim approved; 30-50% pre-approval. Win is being at the adjuster meeting.
