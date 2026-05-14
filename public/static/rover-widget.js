@@ -71,45 +71,62 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
-    /* Floating button */
+    /* Tiny pill launcher — collapsed state */
     #rover-fab {
-      width: 64px;
-      height: 64px;
-      border-radius: 50%;
+      height: 28px;
+      padding: 0 10px 0 8px;
+      border-radius: 14px;
       background: linear-gradient(135deg, #00FF88, #00cc6a);
       border: none;
       cursor: pointer;
-      display: flex;
+      display: inline-flex;
       align-items: center;
-      justify-content: center;
-      box-shadow: 0 8px 30px rgba(0, 255, 136, 0.35);
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      gap: 5px;
+      color: #052e19;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      box-shadow: 0 4px 14px rgba(0, 204, 106, 0.30);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative;
+      line-height: 1;
     }
     #rover-fab:hover {
-      transform: scale(1.08);
-      box-shadow: 0 12px 40px rgba(0, 255, 136, 0.45);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(0, 204, 106, 0.40);
     }
     #rover-fab .rover-icon {
-      font-size: 28px;
-      transition: transform 0.3s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
-    #rover-fab.open .rover-icon { transform: rotate(90deg); }
+    #rover-fab .rover-icon img {
+      width: 16px !important;
+      height: 16px !important;
+    }
+    #rover-fab .rover-label {
+      white-space: nowrap;
+    }
+    #rover-fab.open {
+      background: #475569;
+      color: white;
+    }
     #rover-fab .rover-badge {
       position: absolute;
-      top: -4px;
-      right: -4px;
+      top: -5px;
+      right: -5px;
       background: #ef4444;
       color: white;
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      font-size: 11px;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 8px;
+      font-size: 9px;
       font-weight: 800;
       display: flex;
       align-items: center;
       justify-content: center;
-      border: 2px solid white;
+      border: 1.5px solid white;
       opacity: 0;
       transform: scale(0);
       transition: all 0.3s;
@@ -158,7 +175,7 @@
     /* Chat window */
     #rover-chat {
       position: absolute;
-      bottom: 80px;
+      bottom: 44px;
       right: 0;
       width: 380px;
       max-width: calc(100vw - 32px);
@@ -556,13 +573,9 @@
       #rover-chat {
         width: calc(100vw - 16px);
         right: -16px;
-        bottom: 72px;
-        height: calc(100vh - 100px);
+        bottom: 40px;
+        height: calc(100vh - 80px);
         border-radius: 16px;
-      }
-      #rover-fab {
-        width: 56px;
-        height: 56px;
       }
       #rover-greeting { max-width: 240px; }
       .rover-contact-form .rover-form-row {
@@ -610,9 +623,10 @@
       </div>
     </div>
 
-    <!-- FAB Button -->
-    <button id="rover-fab" onclick="window.__roverToggle()">
-      <span class="rover-icon"><img src="/static/logo.png" alt="Roof Manager" style="width:34px;height:34px;object-fit:contain;display:block"></span>
+    <!-- FAB Button — tiny pill, expands on click -->
+    <button id="rover-fab" onclick="window.__roverToggle()" aria-label="Open help chat">
+      <span class="rover-icon"><img src="/static/logo.png" alt=""></span>
+      <span class="rover-label">Help Chat</span>
       <span class="rover-badge" id="rover-badge">0</span>
     </button>
   `;
@@ -1067,37 +1081,8 @@
     if (p === '/' || p === '') return "Hey! Want to see how Roof Manager saves you 20+ min per report? 🐕";
     return "Hey! Got a roofing question? I can help 🐕";
   }
-  var greetingDismissed = sessionStorage.getItem('rover_greeting_dismissed');
-  if (!greetingDismissed && greetingEl) {
-    try {
-      var textEl = greetingEl.querySelector('.rover-greeting-text');
-      if (textEl) textEl.textContent = pageHook();
-    } catch (e) {}
-    // Click the bubble body (not the X) to open the chat
-    greetingEl.addEventListener('click', function(e) {
-      if (e.target && e.target.classList && e.target.classList.contains('rover-g-close')) return;
-      if (!state.open) window.__roverToggle();
-    });
-    setTimeout(function() {
-      if (!state.open) {
-        greetingEl.classList.add('show');
-        setTimeout(function() {
-          if (!state.open) greetingEl.classList.remove('show');
-        }, 12000);
-      }
-    }, 8000);
-  }
-
-  // Exit-intent (desktop) — open widget when the cursor darts toward top.
-  // Fires at most once per session.
-  document.addEventListener('mouseout', function(e) {
-    if (state.open) return;
-    if (sessionStorage.getItem('rover_exit_intent_fired')) return;
-    if (e.clientY > 10) return;
-    if (e.relatedTarget || e.toElement) return;
-    sessionStorage.setItem('rover_exit_intent_fired', '1');
-    window.__roverToggle();
-  });
+  // Greeting bubble + exit-intent auto-open intentionally disabled —
+  // the launcher stays a tiny pill until the user clicks it.
 
   // ============================================================
   // END CONVERSATION ON PAGE UNLOAD
