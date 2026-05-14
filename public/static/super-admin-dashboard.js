@@ -1309,6 +1309,33 @@ function renderReportRequestsView() {
   });
   html += '</div>';
 
+  // Awaiting Customer Approval queue — reports traced but not yet delivered.
+  // Surfaces the two-step trace flow (Generate Report Preview => Submit to
+  // Customer) so the operator can see what's still sitting in admin review.
+  var awaitingApproval = orders.filter(function(o) { return o.admin_review_status === 'awaiting_review'; });
+  if (awaitingApproval.length > 0) {
+    html += '<div style="background:#0c1a3a;border:2px solid #3b82f6;border-radius:14px;padding:16px;margin-bottom:20px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">' +
+        '<div>' +
+          '<div style="color:#93c5fd;font-size:14px;font-weight:800"><i class="fas fa-paper-plane mr-2"></i>Awaiting Customer Approval (' + awaitingApproval.length + ')</div>' +
+          '<div style="color:#64748b;font-size:11px;margin-top:2px">Reports traced but NOT yet delivered &mdash; customer sees these as still &ldquo;generating&rdquo;</div>' +
+        '</div>' +
+        '<button onclick="saBulkApprovePending()" style="padding:8px 16px;background:#16a34a;color:#fff;font-size:12px;font-weight:800;border:none;border-radius:8px;cursor:pointer;white-space:nowrap"><i class="fas fa-paper-plane mr-1.5"></i>Submit All ' + awaitingApproval.length + ' to Customers</button>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto">' +
+        awaitingApproval.map(function(o) {
+          return '<div style="background:#111;border:1px solid #1e3a8a;border-radius:8px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">' +
+            '<div style="flex:1;min-width:0">' +
+              '<div style="color:#dbeafe;font-size:12px;font-weight:600">' + (o.property_address || 'Unknown address') + '</div>' +
+              '<div style="color:#64748b;font-size:11px;margin-top:1px">' + (o.customer_name || o.customer_email || '') + ' &middot; ' + (o.order_number || '#' + o.id) + '</div>' +
+            '</div>' +
+            '<button onclick="saApproveSingle(' + o.id + ')" style="padding:5px 12px;background:rgba(34,197,94,0.18);color:#86efac;font-size:11px;font-weight:700;border:1px solid rgba(34,197,94,0.4);border-radius:6px;cursor:pointer;white-space:nowrap"><i class="fas fa-paper-plane mr-1"></i>Submit</button>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+    '</div>';
+  }
+
   // Needs Trace queue
   if (needsTrace.length > 0) {
     html += '<div style="background:#1a1200;border:2px solid #f59e0b;border-radius:14px;padding:16px;margin-bottom:20px">' +
