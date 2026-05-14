@@ -86,6 +86,19 @@ export const BASEMAP_PROVIDERS: Record<string, BasemapProvider> = {
     attribution: '© Nearmap',
     urlTemplate: 'https://api.nearmap.com/tiles/v3/Vert/{z}/{x}/{y}.jpg?apikey={token}',
     requiresToken: true
+  },
+  vexcel: {
+    // Placeholder for Vexcel Data Program / Bluesky aerial — better US small-town +
+    // rural Midwest coverage than Nearmap. Verify the exact tile URL with the
+    // Vexcel sales rep at contract signing; the GIC streaming endpoint below is
+    // their documented public pattern but the {layer} and auth scheme may differ
+    // depending on the SKU you sign for (Vert ortho vs Bluesky stock).
+    id: 'vexcel',
+    name: 'Vexcel Aerial (7.5 cm)',
+    maxZoom: 22,
+    attribution: '© Vexcel Imaging',
+    urlTemplate: 'https://api.gic.org/maps/Vert/EPSG3857/{z}/{x}/{y}.jpeg?subscription-key={token}',
+    requiresToken: true
   }
 }
 

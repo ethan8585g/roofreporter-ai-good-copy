@@ -117,6 +117,7 @@ stormScoutRoutes.get('/basemaps', async (c) => {
     let token: string | undefined
     if (p.id === 'mapbox_satellite') token = env.MAPBOX_ACCESS_TOKEN
     if (p.id === 'nearmap') token = env.NEARMAP_API_KEY
+    if (p.id === 'vexcel') token = env.VEXCEL_API_KEY
     if (!token) continue
     out.push({
       id: p.id, name: p.name, maxZoom: p.maxZoom, attribution: p.attribution,

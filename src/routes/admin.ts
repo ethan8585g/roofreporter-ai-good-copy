@@ -1160,16 +1160,51 @@ adminRoutes.get('/superadmin/people', async (c) => {
       : `, 0 as login_count`
 
     // 1. Platform users (customers table)
-    if (!typeFilter || typeFilter === 'platform_user') {
-      const q = search
-        ? `SELECT id, name, email, phone, company_name, 'platform_user' as person_type, created_at, is_active, last_login${loginCountSql}
-           FROM customers WHERE name LIKE ? OR email LIKE ? OR phone LIKE ? OR company_name LIKE ?
-           ORDER BY created_at DESC LIMIT ?`
-        : `SELECT id, name, email, phone, company_name, 'platform_user' as person_type, created_at, is_active, last_login${loginCountSql}
-           FROM customers ORDER BY created_at DESC LIMIT ?`
-      const res = search
-        ? await c.env.DB.prepare(q).bind(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, limit).all()
-        : await c.env.DB.prepare(q).bind(limit).all()
+    // Team members invited via /api/team/invite live in `customers` too, but
+    // are linked to their owner via `team_members.member_customer_id`. Tag
+    // those rows as person_type='team_member' so the directory shows the
+    // parent account instead of treating them as fresh standalone signups.
+    if (!typeFilter || typeFilter === 'platform_user' || typeFilter === 'team_member') {
+      // Probe team_members; older local DBs may not have migration 0027 applied yet.
+      let hasTeamMembers = true
+      try { await c.env.DB.prepare(`SELECT 1 FROM team_members LIMIT 1`).first() }
+      catch { hasTeamMembers = false }
+      const tmJoin = hasTeamMembers
+        ? `LEFT JOIN team_members tm ON tm.member_customer_id = customers.id AND tm.status = 'active'
+           LEFT JOIN customers owner ON owner.id = tm.owner_id`
+        : ``
+      const personTypeExpr = hasTeamMembers
+        ? `CASE WHEN tm.id IS NOT NULL THEN 'team_member' ELSE 'platform_user' END as person_type`
+        : `'platform_user' as person_type`
+      const ownerCols = hasTeamMembers
+        ? `, tm.owner_id as team_owner_id, tm.role as team_role,
+             owner.name as team_owner_name, owner.email as team_owner_email,
+             owner.company_name as team_owner_company,
+             COALESCE(NULLIF(customers.company_name, ''), owner.company_name) as effective_company`
+        : `, NULL as team_owner_id, NULL as team_role,
+             NULL as team_owner_name, NULL as team_owner_email,
+             NULL as team_owner_company, customers.company_name as effective_company`
+      // When the caller asked specifically for team_member, restrict the result set.
+      const restrictTeam = (typeFilter === 'team_member' && hasTeamMembers) ? `AND tm.id IS NOT NULL` : ``
+      // When the caller asked specifically for platform_user, exclude team members
+      // so the chip filter feels right; the unfiltered "All" view still shows both.
+      const restrictPlatform = (typeFilter === 'platform_user' && hasTeamMembers) ? `AND tm.id IS NULL` : ``
+      const whereParts: string[] = []
+      const params: any[] = []
+      if (search) {
+        whereParts.push(`(customers.name LIKE ? OR customers.email LIKE ? OR customers.phone LIKE ? OR customers.company_name LIKE ?)`)
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`)
+      }
+      if (restrictTeam) whereParts.push(restrictTeam)
+      if (restrictPlatform) whereParts.push(restrictPlatform)
+      const whereSql = whereParts.length ? (`WHERE ` + whereParts.join(' AND ')) : ``
+      const q = `SELECT customers.id, customers.name, customers.email, customers.phone, customers.company_name,
+                        ${personTypeExpr}, customers.created_at, customers.is_active, customers.last_login
+                        ${ownerCols}${loginCountSql}
+                 FROM customers ${tmJoin} ${whereSql}
+                 ORDER BY customers.created_at DESC LIMIT ?`
+      params.push(limit)
+      const res = await c.env.DB.prepare(q).bind(...params).all()
       for (const r of (res.results || [])) people.push(r)
     }
 
@@ -1228,7 +1263,7 @@ adminRoutes.get('/superadmin/person/:type/:id', async (c) => {
   const id = parseInt(c.req.param('id'), 10)
   if (!id || id <= 0) return c.json({ error: 'Invalid id' }, 400)
   try {
-    if (type === 'platform_user') {
+    if (type === 'platform_user' || type === 'team_member') {
       const cust = await c.env.DB.prepare(
         `SELECT id, name, email, phone, company_name, company_size, primary_use,
                 address, city, province, postal_code,
@@ -1238,6 +1273,20 @@ adminRoutes.get('/superadmin/person/:type/:id', async (c) => {
            FROM customers WHERE id = ?`
       ).bind(id).first<any>()
       if (!cust) return c.json({ error: 'Not found' }, 404)
+      // Attach the owner block when this customer is an active team member so
+      // the slide-over panel can render "Member of …" instead of a blank parent.
+      try {
+        const tm = await c.env.DB.prepare(
+          `SELECT tm.owner_id, tm.role as team_role,
+                  owner.name as team_owner_name, owner.email as team_owner_email,
+                  owner.company_name as team_owner_company
+             FROM team_members tm
+             LEFT JOIN customers owner ON owner.id = tm.owner_id
+            WHERE tm.member_customer_id = ? AND tm.status = 'active'
+            LIMIT 1`
+        ).bind(id).first<any>()
+        if (tm) Object.assign(cust, tm)
+      } catch { /* team_members table may not exist on older local DBs */ }
       const stats = await c.env.DB.prepare(
         `SELECT
             (SELECT COUNT(*) FROM orders WHERE customer_id = ?) as order_count,
@@ -4717,6 +4766,7 @@ adminRoutes.get('/superadmin/basemaps', async (c) => {
     let token: string | undefined
     if (p.id === 'mapbox_satellite') token = env.MAPBOX_ACCESS_TOKEN
     if (p.id === 'nearmap') token = env.NEARMAP_API_KEY
+    if (p.id === 'vexcel') token = env.VEXCEL_API_KEY
     if (!token) continue
     out.push({
       id: p.id, name: p.name, maxZoom: p.maxZoom, attribution: p.attribution,
