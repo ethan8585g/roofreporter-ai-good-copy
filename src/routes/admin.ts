@@ -5515,6 +5515,17 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
         'SELECT roof_trace_json FROM orders WHERE id = ?'
       ).bind(orderId).first<any>()
       const prevJson = prev?.roof_trace_json || null
+      // Capture a structural snapshot of the submitted trace so we can
+      // diagnose "missing structure" bugs without needing the full
+      // roof_trace_json (which gets wiped on cancel-and-retrace).
+      const sectionsRaw = Array.isArray(traceObj?.eaves_sections) ? traceObj.eaves_sections : []
+      const kindsRaw = Array.isArray(traceObj?.eaves_section_kinds) ? traceObj.eaves_section_kinds : []
+      const sectionsSummary = sectionsRaw.map((s: any, i: number) => ({
+        i,
+        pts: Array.isArray(s) ? s.length : 0,
+        kind: kindsRaw[i] || null,
+      }))
+      const warningCodes = validation.warnings.map(w => w.code).slice(0, 12)
       await c.env.DB.prepare(
         "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'admin_trace_override', ?)"
       ).bind(JSON.stringify({
@@ -5524,6 +5535,12 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
         validation_errors: validation.errors.length,
         forced: !!force,
         previous_trace_existed: !!prevJson,
+        sections: sectionsSummary,
+        ridges: Array.isArray(traceObj?.ridges) ? traceObj.ridges.length : 0,
+        hips: Array.isArray(traceObj?.hips) ? traceObj.hips.length : 0,
+        valleys: Array.isArray(traceObj?.valleys) ? traceObj.valleys.length : 0,
+        dormers: Array.isArray(traceObj?.dormers) ? traceObj.dormers.length : 0,
+        warning_codes: warningCodes,
       })).run()
     } catch (e) { /* non-fatal audit */ }
 
