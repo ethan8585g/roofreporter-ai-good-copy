@@ -181,21 +181,27 @@ function generateVerificationCode(): string {
   return n.toString()
 }
 
-// Send email using best available provider
+// Generic transport cascade for transactional customer emails.
 // Priority: 1) Resend API  2) Gmail OAuth2 (env or DB token)  3) GCP service account
-async function sendVerificationEmail(env: Bindings, toEmail: string, code: string, db?: D1Database): Promise<boolean> {
+// Wraps the body with the email-tracking pixel + click-tracking links and
+// records send/failure in email_sends. Used by sendVerificationEmail and
+// sendAccountExistsEmail; keep behavior identical so the existing
+// verification-code path remains bit-compatible.
+async function sendCustomerTransactionalEmail(
+  env: Bindings,
+  params: { toEmail: string; subject: string; rawHtml: string; kind: string; db?: D1Database }
+): Promise<boolean> {
+  const { toEmail, subject, rawHtml, kind, db } = params
   const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca'
-  const emailSubject = `Your Roof Manager Verification Code: ${code}`
-  // Tracking: pre-signup so customerId is null. Pixel still useful — open
-  // signal tells us mail reached the user even before they type the code.
+  const logTag = `[${kind}]`
+
   const { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } = await import('../services/email-tracking')
-  const trackingToken = await logEmailSend(env, { customerId: null, recipient: toEmail, kind: 'email_verification', subject: emailSubject })
-  const rawHtml = getVerificationEmailHTML(code, toEmail)
+  const trackingToken = await logEmailSend(env, { customerId: null, recipient: toEmail, kind, subject })
   const pixel = buildTrackingPixel(trackingToken)
   const htmlWithPixel = rawHtml.includes('</body>') ? rawHtml.replace('</body>', `${pixel}</body>`) : rawHtml + pixel
   const emailHtml = wrapEmailLinks(htmlWithPixel, trackingToken)
 
-  // ---- METHOD 1: Resend API (simplest) ----
+  // ---- METHOD 1: Resend API ----
   const resendKey = (env as any).RESEND_API_KEY
   if (resendKey) {
     try {
@@ -205,26 +211,25 @@ async function sendVerificationEmail(env: Bindings, toEmail: string, code: strin
         body: JSON.stringify({
           from: `Roof Manager <onboarding@resend.dev>`,
           to: [toEmail],
-          subject: emailSubject,
+          subject,
           html: emailHtml
         })
       })
       if (resp.ok) {
-        console.log(`[Verification Email] Sent to ${toEmail} via Resend`)
+        console.log(`${logTag} Sent to ${toEmail} via Resend`)
         return true
       }
-      console.error('[Verification Email] Resend failed:', await resp.text())
+      console.error(`${logTag} Resend failed:`, await resp.text())
     } catch (e: any) {
-      console.error('[Verification Email] Resend error:', e.message)
+      console.error(`${logTag} Resend error:`, e.message)
     }
   }
 
-  // ---- METHOD 2: Gmail OAuth2 (check env vars first, then DB for stored credentials) ----
+  // ---- METHOD 2: Gmail OAuth2 (env vars first, then DB) ----
   let gmailRefreshToken = (env as any).GMAIL_REFRESH_TOKEN || ''
   const gmailClientId = (env as any).GMAIL_CLIENT_ID || ''
   let gmailClientSecret = (env as any).GMAIL_CLIENT_SECRET || ''
 
-  // Check DB for stored credentials (from /api/auth/gmail/callback and /api/auth/gmail/setup)
   if (db) {
     if (!gmailRefreshToken) {
       try {
@@ -233,7 +238,7 @@ async function sendVerificationEmail(env: Bindings, toEmail: string, code: strin
         ).first()
         if (row?.setting_value) {
           gmailRefreshToken = row.setting_value
-          console.log('[Verification Email] Using Gmail refresh token from database')
+          console.log(`${logTag} Using Gmail refresh token from database`)
         }
       } catch (e) { /* settings table might not exist yet */ }
     }
@@ -244,7 +249,7 @@ async function sendVerificationEmail(env: Bindings, toEmail: string, code: strin
         ).first()
         if (row?.setting_value) {
           gmailClientSecret = row.setting_value
-          console.log('[Verification Email] Using Gmail client secret from database')
+          console.log(`${logTag} Using Gmail client secret from database`)
         }
       } catch (e) { /* ignore */ }
     }
@@ -252,7 +257,6 @@ async function sendVerificationEmail(env: Bindings, toEmail: string, code: strin
 
   if (gmailRefreshToken && gmailClientId && gmailClientSecret) {
     try {
-      // Get fresh access token
       const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -265,17 +269,15 @@ async function sendVerificationEmail(env: Bindings, toEmail: string, code: strin
       })
       const tokenData: any = await tokenResp.json()
       if (tokenData.access_token) {
-        // P1-11: strip CR/LF from every splice to block header injection.
         const rawEmail = [
           `From: Roof Manager <${mimeHeader(senderEmail)}>`,
           `To: ${mimeHeader(toEmail)}`,
-          `Subject: ${mimeHeader(emailSubject)}`,
+          `Subject: ${mimeHeader(subject)}`,
           'Content-Type: text/html; charset=UTF-8',
           '',
           emailHtml
         ].join('\r\n')
 
-        // Base64url encode
         const encoded = btoa(unescape(encodeURIComponent(rawEmail)))
           .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 
@@ -285,19 +287,19 @@ async function sendVerificationEmail(env: Bindings, toEmail: string, code: strin
           body: JSON.stringify({ raw: encoded })
         })
         if (sendResp.ok) {
-          console.log(`[Verification Email] Sent to ${toEmail} via Gmail OAuth2`)
+          console.log(`${logTag} Sent to ${toEmail} via Gmail OAuth2`)
           return true
         }
-        console.error('[Verification Email] Gmail send failed:', await sendResp.text())
+        console.error(`${logTag} Gmail send failed:`, await sendResp.text())
       } else {
-        console.error('[Verification Email] Gmail token exchange failed:', JSON.stringify(tokenData))
+        console.error(`${logTag} Gmail token exchange failed:`, JSON.stringify(tokenData))
       }
     } catch (e: any) {
-      console.error('[Verification Email] Gmail error:', e.message)
+      console.error(`${logTag} Gmail error:`, e.message)
     }
   }
 
-  // ---- METHOD 3: Gmail via GCP service account (requires Workspace domain-wide delegation) ----
+  // ---- METHOD 3: GCP service account ----
   try {
     const gcpKeyStr = (env as any).GCP_SERVICE_ACCOUNT_KEY
     if (gcpKeyStr) {
@@ -305,7 +307,6 @@ async function sendVerificationEmail(env: Bindings, toEmail: string, code: strin
       const saEmail = gcpKey.client_email
       const impersonateEmail = senderEmail
 
-      // Create JWT for service account
       const header = { alg: 'RS256', typ: 'JWT' }
       const now = Math.floor(Date.now() / 1000)
       const claim = {
@@ -317,7 +318,6 @@ async function sendVerificationEmail(env: Bindings, toEmail: string, code: strin
         exp: now + 3600
       }
 
-      // Import private key
       const pemContents = gcpKey.private_key
         .replace('-----BEGIN PRIVATE KEY-----', '')
         .replace('-----END PRIVATE KEY-----', '')
@@ -333,7 +333,6 @@ async function sendVerificationEmail(env: Bindings, toEmail: string, code: strin
       const sigB64 = btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
       const jwt = `${signInput}.${sigB64}`
 
-      // Exchange JWT for access token
       const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -342,11 +341,10 @@ async function sendVerificationEmail(env: Bindings, toEmail: string, code: strin
       const tokenData: any = await tokenResp.json()
 
       if (tokenData.access_token) {
-        // P1-11: strip CR/LF from every splice to block header injection.
         const rawEmail = [
           `From: Roof Manager <${mimeHeader(impersonateEmail)}>`,
           `To: ${mimeHeader(toEmail)}`,
-          `Subject: ${mimeHeader(emailSubject)}`,
+          `Subject: ${mimeHeader(subject)}`,
           'Content-Type: text/html; charset=UTF-8',
           '',
           emailHtml
@@ -361,21 +359,71 @@ async function sendVerificationEmail(env: Bindings, toEmail: string, code: strin
           body: JSON.stringify({ raw: encoded })
         })
         if (sendResp.ok) {
-          console.log(`[Verification Email] Sent to ${toEmail} via GCP service account`)
+          console.log(`${logTag} Sent to ${toEmail} via GCP service account`)
           return true
         }
-        console.error('[Verification Email] GCP Gmail send failed:', await sendResp.text())
+        console.error(`${logTag} GCP Gmail send failed:`, await sendResp.text())
       } else {
-        console.error('[Verification Email] GCP token exchange failed:', JSON.stringify(tokenData))
+        console.error(`${logTag} GCP token exchange failed:`, JSON.stringify(tokenData))
       }
     }
   } catch (e: any) {
-    console.error('[Verification Email] GCP service account error:', e.message)
+    console.error(`${logTag} GCP service account error:`, e.message)
   }
 
-  console.error('[Verification Email] ALL methods failed for:', toEmail, '| Resend:', !!resendKey, '| Gmail OAuth2:', !!(gmailRefreshToken && gmailClientId), '| GCP:', !!(env as any).GCP_SERVICE_ACCOUNT_KEY)
+  console.error(`${logTag} ALL methods failed for:`, toEmail, '| Resend:', !!resendKey, '| Gmail OAuth2:', !!(gmailRefreshToken && gmailClientId), '| GCP:', !!(env as any).GCP_SERVICE_ACCOUNT_KEY)
   await markEmailFailed(env, trackingToken, 'all transports failed')
   return false
+}
+
+async function sendVerificationEmail(env: Bindings, toEmail: string, code: string, db?: D1Database): Promise<boolean> {
+  return sendCustomerTransactionalEmail(env, {
+    toEmail,
+    subject: `Your Roof Manager Verification Code: ${code}`,
+    rawHtml: getVerificationEmailHTML(code, toEmail),
+    kind: 'email_verification',
+    db
+  })
+}
+
+// Sent when /send-verification is hit for an email that already has a customer
+// row. Anti-enumeration keeps the API response identical to a fresh send, but
+// we still want to give the real owner of that mailbox an actionable email
+// (login + password-reset links) instead of dead silence.
+async function sendAccountExistsEmail(env: Bindings, toEmail: string, db?: D1Database): Promise<boolean> {
+  return sendCustomerTransactionalEmail(env, {
+    toEmail,
+    subject: `You already have a Roof Manager account`,
+    rawHtml: getAccountExistsEmailHTML(toEmail),
+    kind: 'account_exists_nudge',
+    db
+  })
+}
+
+function getAccountExistsEmailHTML(email: string): string {
+  const loginUrl = `https://www.roofmanager.ca/customer/login?email=${encodeURIComponent(email)}`
+  const resetUrl = `https://www.roofmanager.ca/customer/login?mode=forgot&email=${encodeURIComponent(email)}`
+  return `
+  <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+    <div style="text-align: center; margin-bottom: 32px;">
+      <div style="background:#000;padding:24px;border-radius:16px;display:inline-block">
+        <img src="https://www.roofmanager.ca/static/logo.png?v=20260504" alt="Roof Manager" width="180" style="max-width:180px;height:auto;display:block"/>
+      </div>
+      <p style="color: #6b7280; font-size: 14px; margin: 16px 0 0;">Account already exists</p>
+    </div>
+    <div style="background: #f8fafc; border-radius: 16px; padding: 32px;">
+      <p style="color: #111827; font-size: 17px; margin: 0 0 16px; font-weight: 600;">Looks like you tried to sign up again.</p>
+      <p style="color: #374151; font-size: 15px; line-height: 1.55; margin: 0 0 20px;">There's already a Roof Manager account using <strong>${email}</strong>. You don't need to register again — just sign in below. If you've forgotten your password, you can reset it in one click.</p>
+      <div style="text-align:center;margin:24px 0 12px">
+        <a href="${loginUrl}" style="display:inline-block;background:#00CC70;color:#0A0A0A;font-weight:700;padding:12px 28px;border-radius:10px;text-decoration:none;font-size:15px;margin:0 6px 8px">Sign in &rarr;</a>
+        <a href="${resetUrl}" style="display:inline-block;background:#fff;color:#1e3a5f;border:2px solid #1e3a5f;font-weight:700;padding:10px 24px;border-radius:10px;text-decoration:none;font-size:15px;margin:0 6px 8px">Reset password</a>
+      </div>
+      <p style="color: #9ca3af; font-size: 13px; margin: 18px 0 0; line-height: 1.5;">If you didn't try to sign up, you can safely ignore this email — your account hasn't changed.</p>
+    </div>
+    <p style="color: #6b7280; font-size: 13px; text-align: center; margin: 24px 0 6px;">Need a hand? Reply to this email and the team will help.</p>
+    <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0 0 4px;">— The Roof Manager team</p>
+    <p style="color: #d1d5db; font-size: 11px; text-align: center; margin-top: 18px;">&copy; 2026 Roof Manager &middot; Alberta, Canada</p>
+  </div>`
 }
 
 function getVerificationEmailHTML(code: string, email: string): string {
@@ -427,7 +475,17 @@ customerAuthRoutes.post('/send-verification', async (c) => {
       'SELECT id FROM customers WHERE email = ?'
     ).bind(cleanEmail).first()
     if (existing) {
-      // Pretend the verification email was sent. No DB write, no email send.
+      // Anti-enumeration: API response stays identical to a fresh send so
+      // /send-verification can't be used as a user-existence oracle. But the
+      // real owner of that mailbox should still get something actionable —
+      // fire an "account exists" nudge with login + reset links via waitUntil
+      // so timing also stays constant. Why: silent-success caused the
+      // "verification is broken" perception in 2026-05 because the only
+      // people testing with their own (already-registered) email got no mail.
+      const ctx = (c as any).executionCtx
+      const sendPromise = sendAccountExistsEmail(c.env, cleanEmail, c.env.DB)
+        .catch((e) => console.warn('[send-verification] account-exists nudge failed:', e?.message || e))
+      if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(sendPromise)
       return c.json({ success: true, message: 'If that email is available, a verification code has been sent.' })
     }
 
