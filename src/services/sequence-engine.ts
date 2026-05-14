@@ -19,6 +19,7 @@
 // sendCurrentStepNow — invoked from the dashboard.
 // ============================================================
 
+import type { Bindings } from '../types'
 import { logAndSendEmail, type EmailCategory } from './email-wrapper'
 
 export interface SequenceStepBuiltin {
@@ -72,7 +73,7 @@ export interface EnrollmentRow {
 
 // ── Definition load + step parse ──────────────────────────────────
 
-export async function loadDefinition(env: any, sequenceType: string): Promise<SequenceDefinition | null> {
+export async function loadDefinition(env: Bindings, sequenceType: string): Promise<SequenceDefinition | null> {
   const row: any = await env.DB.prepare(
     `SELECT * FROM sequence_definitions WHERE sequence_type = ? AND archived_at IS NULL`
   ).bind(sequenceType).first()
@@ -91,7 +92,7 @@ export async function loadDefinition(env: any, sequenceType: string): Promise<Se
   }
 }
 
-export async function listDefinitions(env: any, includeArchived = false): Promise<SequenceDefinition[]> {
+export async function listDefinitions(env: Bindings, includeArchived = false): Promise<SequenceDefinition[]> {
   const rows = await env.DB.prepare(
     `SELECT * FROM sequence_definitions
      ${includeArchived ? '' : 'WHERE archived_at IS NULL'}
@@ -125,7 +126,7 @@ export interface EnrollOpts {
 }
 
 export async function enrollRecipient(
-  env: any,
+  env: Bindings,
   sequenceType: string,
   recipientEmail: string,
   opts: EnrollOpts = {},
@@ -164,14 +165,14 @@ export async function enrollRecipient(
   }
 }
 
-export async function pauseEnrollment(env: any, id: number): Promise<{ ok: boolean }> {
+export async function pauseEnrollment(env: Bindings, id: number): Promise<{ ok: boolean }> {
   await env.DB.prepare(
     `UPDATE sequence_enrollments SET status='paused', next_send_at=NULL, updated_at=datetime('now') WHERE id=? AND status='active'`
   ).bind(id).run()
   return { ok: true }
 }
 
-export async function resumeEnrollment(env: any, id: number, sendInSeconds = 0): Promise<{ ok: boolean }> {
+export async function resumeEnrollment(env: Bindings, id: number, sendInSeconds = 0): Promise<{ ok: boolean }> {
   const delay = Math.max(0, sendInSeconds)
   const sql = delay > 0 ? `datetime('now', '+${delay} seconds')` : `datetime('now')`
   await env.DB.prepare(
@@ -180,7 +181,7 @@ export async function resumeEnrollment(env: any, id: number, sendInSeconds = 0):
   return { ok: true }
 }
 
-export async function cancelEnrollment(env: any, id: number): Promise<{ ok: boolean }> {
+export async function cancelEnrollment(env: Bindings, id: number): Promise<{ ok: boolean }> {
   await env.DB.prepare(
     `UPDATE sequence_enrollments
      SET status='cancelled', next_send_at=NULL, cancelled_at=datetime('now'), updated_at=datetime('now')
@@ -189,7 +190,7 @@ export async function cancelEnrollment(env: any, id: number): Promise<{ ok: bool
   return { ok: true }
 }
 
-export async function skipToNextStep(env: any, id: number): Promise<{ ok: boolean; error?: string }> {
+export async function skipToNextStep(env: Bindings, id: number): Promise<{ ok: boolean; error?: string }> {
   const row = await env.DB.prepare(
     `SELECT * FROM sequence_enrollments WHERE id=?`
   ).bind(id).first<any>()
@@ -211,7 +212,7 @@ export async function skipToNextStep(env: any, id: number): Promise<{ ok: boolea
   return { ok: true }
 }
 
-export async function sendCurrentStepNow(env: any, id: number): Promise<{ ok: boolean; error?: string; emailSendId?: number }> {
+export async function sendCurrentStepNow(env: Bindings, id: number): Promise<{ ok: boolean; error?: string; emailSendId?: number }> {
   const row = await env.DB.prepare(
     `SELECT * FROM sequence_enrollments WHERE id=? AND status IN ('active','paused')`
   ).bind(id).first<any>()
@@ -221,7 +222,7 @@ export async function sendCurrentStepNow(env: any, id: number): Promise<{ ok: bo
 
 // ── Cron driver ───────────────────────────────────────────────────
 
-export async function processDueEnrollments(env: any, batchLimit = 25): Promise<{
+export async function processDueEnrollments(env: Bindings, batchLimit = 25): Promise<{
   processed: number
   sent: number
   failed: number
@@ -249,7 +250,7 @@ export async function processDueEnrollments(env: any, batchLimit = 25): Promise<
 
 // ── Step fire (the workhorse) ─────────────────────────────────────
 
-async function fireStep(env: any, enrollment: EnrollmentRow): Promise<{
+async function fireStep(env: Bindings, enrollment: EnrollmentRow): Promise<{
   ok: boolean; error?: string; emailSendId?: number
 }> {
   const def = await loadDefinition(env, enrollment.sequence_type)
@@ -343,7 +344,7 @@ async function fireStep(env: any, enrollment: EnrollmentRow): Promise<{
   return { ok: true, emailSendId: sendResult.emailSendId ?? undefined }
 }
 
-async function markFailed(env: any, id: number, error: string): Promise<void> {
+async function markFailed(env: Bindings, id: number, error: string): Promise<void> {
   try {
     await env.DB.prepare(
       `UPDATE sequence_enrollments
@@ -364,7 +365,7 @@ interface RenderedStep {
 }
 
 async function renderBuiltinStep(
-  env: any,
+  env: Bindings,
   handler: string,
   enrollment: EnrollmentRow,
 ): Promise<RenderedStep | null> {
@@ -423,7 +424,7 @@ function firstNameFrom(name: string | null | undefined, email: string): string {
   return 'there'
 }
 
-async function buildContext(env: any, enrollment: EnrollmentRow): Promise<Record<string, string>> {
+async function buildContext(env: Bindings, enrollment: EnrollmentRow): Promise<Record<string, string>> {
   const ctx: Record<string, string> = {
     email: enrollment.recipient_email,
     recipient_email: enrollment.recipient_email,
@@ -459,7 +460,7 @@ export function interpolate(template: string, ctx: Record<string, string>): stri
 
 // ── Custom-sequence CRUD helpers ─────────────────────────────────
 
-export async function createCustomSequence(env: any, args: {
+export async function createCustomSequence(env: Bindings, args: {
   sequenceType: string  // e.g. 'custom_winter_promo'
   name: string
   description?: string
@@ -504,7 +505,7 @@ export async function createCustomSequence(env: any, args: {
   }
 }
 
-export async function archiveCustomSequence(env: any, sequenceType: string): Promise<{ ok: boolean }> {
+export async function archiveCustomSequence(env: Bindings, sequenceType: string): Promise<{ ok: boolean }> {
   await env.DB.prepare(
     `UPDATE sequence_definitions
      SET archived_at = datetime('now'), enabled = 0, updated_at = datetime('now')
@@ -519,7 +520,7 @@ export async function archiveCustomSequence(env: any, sequenceType: string): Pro
   return { ok: true }
 }
 
-export async function testSendStep(env: any, args: {
+export async function testSendStep(env: Bindings, args: {
   sequenceType: string
   stepIndex: number
   toEmail: string

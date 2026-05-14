@@ -22,7 +22,7 @@ interface SecretEntry {
   redacted: string  // length-only summary, e.g. "set (38 chars)"
 }
 
-function entry(env: any, name: string, requiredFor: string): SecretEntry {
+function entry(env: Bindings, name: string, requiredFor: string): SecretEntry {
   const v = (env as any)[name]
   const isSet = !!(v && String(v).trim())
   return {

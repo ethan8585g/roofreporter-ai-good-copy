@@ -14,7 +14,7 @@ import {
   VALID_STATUSES, VALID_OUTCOMES,
 } from '../repositories/cold-call'
 
-type Bindings = { DB: D1Database; [k: string]: any }
+import type { Bindings } from '../types'
 
 export const superAdminColdCall = new Hono<{ Bindings: Bindings }>()
 

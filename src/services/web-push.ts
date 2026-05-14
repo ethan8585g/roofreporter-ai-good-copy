@@ -1,3 +1,4 @@
+import type { Bindings } from '../types'
 // ============================================================
 // Web Push — VAPID (RFC 8292) + payload encryption (RFC 8291, aes128gcm).
 // Self-contained, Workers-compatible. No Node-only APIs.
@@ -165,7 +166,7 @@ export async function sendWebPush(
   return { ok: false, status: res.status, body: text.slice(0, 300) }
 }
 
-export function getVapidFromEnv(env: any): VapidKeys | null {
+export function getVapidFromEnv(env: Bindings): VapidKeys | null {
   if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return null
   return {
     publicKey: env.VAPID_PUBLIC_KEY,

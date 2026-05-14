@@ -4,6 +4,7 @@
 // tick. Recipient hardcoded to christinegourley04@gmail.com.
 // ============================================================
 
+import type { Bindings } from '../types'
 import { loadGmailCreds, sendGmailOAuth2 } from './email'
 import type { JourneyResult, DeadEnd } from './signup-journey'
 
@@ -11,7 +12,7 @@ const RECIPIENT = 'christinegourley04@gmail.com'
 const SENDER_DEFAULT = 'sales@roofmanager.ca'
 
 export async function sendJourneyEmail(
-  env: any,
+  env: Bindings,
   result: JourneyResult,
   opts: { onlyOnIssues?: boolean } = {},
 ): Promise<{ ok: boolean; skipped?: boolean; error?: string }> {

@@ -2,6 +2,7 @@
 // an in-memory fake of D1. We don't spin up wrangler here — the goal is
 // to verify the handler contract + snapshot discipline + stage auto-advance.
 
+import type { Bindings } from '../types'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { solarProposalsRoutes } from './solar-proposals'
 

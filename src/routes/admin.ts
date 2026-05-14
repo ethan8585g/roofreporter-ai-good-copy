@@ -195,7 +195,7 @@ adminRoutes.get('/superadmin/email-diagnostic', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
 
-  const env: any = c.env
+  const env = c.env
   const recipient = c.req.query('to') || 'sales@roofmanager.ca'
 
   // Resolve credentials with same DB-fallback logic as notifyNewReportRequest
@@ -2210,7 +2210,7 @@ adminRoutes.post('/superadmin/customer-recovery-email', async (c) => {
     if (subject.length > 300) return c.json({ error: 'Subject too long' }, 400)
     if (html_body.length > 200_000) return c.json({ error: 'Body too long' }, 400)
 
-    const env: any = c.env
+    const env = c.env
     // Production uses Gmail OAuth2 (client_id/secret in env, refresh_token in
     // D1 settings) per memory_email_credentials_split. Service account is the
     // fallback for legacy environments.
@@ -2845,7 +2845,7 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
 
 // ── LiveKit deployment helper — creates SIP trunk + dispatch rule ──
 async function deployLiveKitForCustomer(
-  env: any,
+  env: Bindings,
   customerId: number,
   phoneNumber: string,
   opts: { sip_username?: string; sip_password?: string; reuse_existing?: boolean } = {}
@@ -2937,7 +2937,7 @@ async function hashCustomerPassword(password: string): Promise<string> {
 }
 
 // Square payment-link helper. Returns { url, id } or null on failure.
-async function createSquarePaymentLink(env: any, invoiceId: number, invoiceNumber: string, totalDollars: number): Promise<{ url: string; id: string } | null> {
+async function createSquarePaymentLink(env: Bindings, invoiceId: number, invoiceNumber: string, totalDollars: number): Promise<{ url: string; id: string } | null> {
   const sqToken = env.SQUARE_ACCESS_TOKEN
   const sqLocation = env.SQUARE_LOCATION_ID
   if (!sqToken || !sqLocation) return null
@@ -4706,7 +4706,7 @@ adminRoutes.get('/superadmin/onboarding/config', async (c) => {
 adminRoutes.get('/superadmin/basemaps', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
-  const env: any = c.env
+  const env = c.env
   const out: any[] = []
   for (const p of Object.values(BASEMAP_PROVIDERS)) {
     if (!p.requiresToken) {

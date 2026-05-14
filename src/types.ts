@@ -209,6 +209,12 @@ export type Bindings = {
   // warning and exits — the rest of the scan still runs.
   CLOUDFLARE_ACCOUNT_ID?: string
   CLOUDFLARE_API_TOKEN?: string
+
+  // Escape hatch for ad-hoc secrets / fields read with bracket access from
+  // helpers that don't bother to declare them here. Keeps Bindings usable
+  // as the canonical `env` shape without dropping back to `as any` in
+  // every helper.
+  [key: string]: any
 }
 
 // ============================================================

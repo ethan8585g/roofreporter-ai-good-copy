@@ -21,7 +21,7 @@ import { validateAdminSession, requireSuperadmin } from './auth'
 import { runScan, recordExternalRun, type ScanType, type RunSource } from '../services/loop-scanner'
 import { pruneExpiredScanSessions } from '../services/synthetic-auth'
 
-type Bindings = { DB: D1Database; [k: string]: any }
+import type { Bindings } from '../types'
 
 export const superAdminLoopTracker = new Hono<{ Bindings: Bindings }>()
 

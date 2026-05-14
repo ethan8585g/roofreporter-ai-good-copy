@@ -48,7 +48,7 @@ function generateTrackingToken(): string {
  * so the caller can embed the pixel in the email body. Never throws —
  * if the DB write fails, returns null and email still sends untracked.
  */
-export async function logEmailSend(env: any, p: LogEmailSendParams): Promise<string | null> {
+export async function logEmailSend(env: Bindings, p: LogEmailSendParams): Promise<string | null> {
   try {
     const token = generateTrackingToken()
     await env.DB.prepare(
@@ -72,7 +72,7 @@ export async function logEmailSend(env: any, p: LogEmailSendParams): Promise<str
  * Mark an existing log row as failed-to-send. Use when sendGmailOAuth2
  * throws after the row has been created. Keeps the audit trail honest.
  */
-export async function markEmailFailed(env: any, token: string | null, error: string): Promise<void> {
+export async function markEmailFailed(env: Bindings, token: string | null, error: string): Promise<void> {
   if (!token) return
   try {
     await env.DB.prepare(
@@ -102,7 +102,7 @@ export function buildTrackingPixel(token: string | null, baseUrl = 'https://www.
  * opened_at (first open only) + increments open_count + last_opened_*.
  */
 export async function recordEmailOpen(
-  env: any,
+  env: Bindings,
   token: string,
   ip: string | null,
   ua: string | null,
@@ -189,7 +189,7 @@ export function decodeWrappedUrl(b64: string): string | null {
  * view can show "clicked X 3× (last <url> at <ts>)".
  */
 export async function recordEmailClick(
-  env: any,
+  env: Bindings,
   token: string,
   url: string,
   ip: string | null,

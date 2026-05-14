@@ -36,7 +36,7 @@ geminiRoutes.use('/*', async (c, next) => {
 // ── Gemini API helper ─────────────────────────────────────────────
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
-async function callGemini(env: any, prompt: string, opts?: {
+async function callGemini(env: Bindings, prompt: string, opts?: {
   model?: string
   systemInstruction?: string
   temperature?: number
@@ -106,7 +106,7 @@ async function callGemini(env: any, prompt: string, opts?: {
 
 // ── Multi-turn conversation helper ────────────────────────────────
 // OpenAI-compatible fallback when Gemini key is unavailable
-async function callOpenAIFallback(env: any, prompt: string, opts?: any): Promise<{ text: string; usage?: any; error?: string }> {
+async function callOpenAIFallback(env: Bindings, prompt: string, opts?: any): Promise<{ text: string; usage?: any; error?: string }> {
   try {
     const openaiBase = env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
     const resp = await fetch(`${openaiBase}/chat/completions`, {
@@ -131,7 +131,7 @@ async function callOpenAIFallback(env: any, prompt: string, opts?: any): Promise
   } catch (err: any) { return { text: '', error: `AI request failed: ${err.message}` } }
 }
 
-async function callOpenAIMultiTurnFallback(env: any, messages: Array<{ role: string; content: string }>, opts?: any): Promise<{ text: string; usage?: any; error?: string }> {
+async function callOpenAIMultiTurnFallback(env: Bindings, messages: Array<{ role: string; content: string }>, opts?: any): Promise<{ text: string; usage?: any; error?: string }> {
   try {
     const apiMessages = messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }))
     if (opts?.systemInstruction) apiMessages.unshift({ role: 'system', content: opts.systemInstruction })
@@ -150,7 +150,7 @@ async function callOpenAIMultiTurnFallback(env: any, messages: Array<{ role: str
   } catch (err: any) { return { text: '', error: `AI request failed: ${err.message}` } }
 }
 
-async function callGeminiMultiTurn(env: any, messages: Array<{ role: string; content: string }>, opts?: {
+async function callGeminiMultiTurn(env: Bindings, messages: Array<{ role: string; content: string }>, opts?: {
   model?: string
   systemInstruction?: string
   temperature?: number

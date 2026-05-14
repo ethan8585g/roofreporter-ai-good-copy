@@ -91,7 +91,7 @@ export function requireSuperadmin(admin: any): boolean {
 // or Cloudflare secrets. Used ONLY for initial setup.
 // After first login, change password and remove env vars.
 // ============================================================
-async function ensureBootstrapAdmin(db: D1Database, env: any): Promise<void> {
+async function ensureBootstrapAdmin(db: D1Database, env: Bindings): Promise<void> {
   // Check if admin_sessions table exists (part of the migration)
   try {
     await db.prepare('SELECT 1 FROM admin_sessions LIMIT 0').run()

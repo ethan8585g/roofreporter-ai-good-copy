@@ -17,7 +17,7 @@ import {
   sendGmailOAuth2, sendGmailOAuth2WithAttachment, sendViaResend, sendGmailEmail, buildEmailWrapper
 } from '../services/email'
 
-type Bindings = { DB: D1Database; [key: string]: any }
+import type { Bindings } from '../types'
 const superAdminLeads = new Hono<{ Bindings: Bindings }>()
 
 const ALLOWED_STATUS = ['new', 'contacted', 'report_sent', 'converted', 'closed_lost']

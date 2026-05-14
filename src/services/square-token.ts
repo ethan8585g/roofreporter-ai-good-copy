@@ -1,3 +1,4 @@
+import type { Bindings } from '../types'
 // ============================================================
 // Roof Manager — Square Merchant Token Resolver
 // Returns a valid per-user Square OAuth access token + location,
@@ -19,7 +20,7 @@ const SQUARE_API_BASE = 'https://connect.squareup.com'
 const REFRESH_SKEW_SECONDS = 120 // refresh if token expires within 2 minutes
 
 export async function getMerchantSquareCreds(
-  env: any,
+  env: Bindings,
   customerId: number
 ): Promise<SquareMerchantCreds | SquareTokenError> {
   const row = await env.DB.prepare(
@@ -72,7 +73,7 @@ function isExpiringSoon(expiresAt: string): boolean {
 }
 
 async function refreshSquareToken(
-  env: any,
+  env: Bindings,
   customerId: number,
   refreshToken: string
 ): Promise<{ accessToken: string } | SquareTokenError> {

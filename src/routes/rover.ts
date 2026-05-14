@@ -284,7 +284,7 @@ RESPONSE GUIDELINES
 // One key, one endpoint, no fallbacks.
 // ============================================================
 async function callAI(
-  env: any,
+  env: Bindings,
   messages: any[],
   maxTokens: number = 1000,
   temperature: number = 0.7,
@@ -332,7 +332,7 @@ async function callAI(
 // Used by the /chat/stream and /assistant/stream endpoints
 // ============================================================
 async function callAIStreamRaw(
-  env: any,
+  env: Bindings,
   messages: any[],
   maxTokens: number = 1000,
   temperature: number = 0.7,
@@ -920,7 +920,7 @@ function stripNewlines(v: any): string {
 }
 
 // Helper to send lead notification email
-async function sendLeadNotification(env: any, lead: { name?: string; email?: string; phone?: string; company?: string; message?: string }) {
+async function sendLeadNotification(env: Bindings, lead: { name?: string; email?: string; phone?: string; company?: string; message?: string }) {
   const clientId = env.GMAIL_CLIENT_ID
   let clientSecret = env.GMAIL_CLIENT_SECRET || ''
   let refreshToken = env.GMAIL_REFRESH_TOKEN || ''

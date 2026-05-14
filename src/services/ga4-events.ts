@@ -1,3 +1,4 @@
+import type { Bindings } from '../types'
 // ============================================================
 // GA4 Server-Side Event Tracking via Measurement Protocol
 // Fires events from the backend so they appear in GA4 even
@@ -98,7 +99,7 @@ export function trackGA4(
 
 /** Track when a report is generated from satellite data */
 export function trackReportGenerated(
-  env: any,
+  env: Bindings,
   orderId: string,
   extra: GA4EventParams = {}
 ): Promise<boolean> {
@@ -111,7 +112,7 @@ export function trackReportGenerated(
 
 /** Track when a report is AI-enhanced by Cloud Run / Gemini */
 export function trackReportEnhanced(
-  env: any,
+  env: Bindings,
   orderId: string,
   extra: GA4EventParams = {}
 ): Promise<boolean> {
@@ -124,7 +125,7 @@ export function trackReportEnhanced(
 
 /** Track successful payment (Square or credit pack) */
 export function trackPaymentCompleted(
-  env: any,
+  env: Bindings,
   orderId: string,
   amountCents: number,
   extra: GA4EventParams = {}
@@ -140,7 +141,7 @@ export function trackPaymentCompleted(
 
 /** Track email delivery (report, invoice, proposal, etc.) */
 export function trackEmailSent(
-  env: any,
+  env: Bindings,
   emailType: string,
   recipient: string,
   extra: GA4EventParams = {}
@@ -155,7 +156,7 @@ export function trackEmailSent(
 
 /** Track new user signup (email, Google OAuth, team invite) */
 export function trackUserSignup(
-  env: any,
+  env: Bindings,
   userId: string,
   method: string = 'email',
   extra: GA4EventParams = {}
@@ -169,7 +170,7 @@ export function trackUserSignup(
 
 /** Track credit pack purchase — maps to GA4 e-commerce */
 export function trackCreditPurchase(
-  env: any,
+  env: Bindings,
   userId: string,
   credits: number,
   amountCents: number,
@@ -187,7 +188,7 @@ export function trackCreditPurchase(
 
 /** Track user login */
 export function trackUserLogin(
-  env: any,
+  env: Bindings,
   userId: string,
   method: string = 'email',
   extra: GA4EventParams = {}
@@ -201,7 +202,7 @@ export function trackUserLogin(
 
 /** Track email verification success — fires after the 6-digit code is accepted */
 export function trackEmailVerified(
-  env: any,
+  env: Bindings,
   userId: string,
   extra: GA4EventParams = {}
 ): Promise<boolean> {
@@ -213,7 +214,7 @@ export function trackEmailVerified(
 
 /** Track each onboarding step transition (1=welcome, 2=company, 3=first-report, 4=done) */
 export function trackOnboardingStep(
-  env: any,
+  env: Bindings,
   userId: string,
   step: number,
   action: 'completed' | 'skipped' = 'completed',
@@ -229,7 +230,7 @@ export function trackOnboardingStep(
 
 /** Track full onboarding completion (reached step 4) */
 export function trackOnboardingCompleted(
-  env: any,
+  env: Bindings,
   userId: string,
   extra: GA4EventParams = {}
 ): Promise<boolean> {
@@ -241,7 +242,7 @@ export function trackOnboardingCompleted(
 
 /** Track first report attempt — fires when a user creates their first order */
 export function trackFirstReportStarted(
-  env: any,
+  env: Bindings,
   userId: string,
   orderId: string,
   extra: GA4EventParams = {}
@@ -255,7 +256,7 @@ export function trackFirstReportStarted(
 
 /** Track proposal view by customer (public link opened) */
 export function trackProposalViewed(
-  env: any,
+  env: Bindings,
   proposalId: string,
   extra: GA4EventParams = {}
 ): Promise<boolean> {
@@ -268,7 +269,7 @@ export function trackProposalViewed(
 
 /** Track proposal accept/decline */
 export function trackProposalResponse(
-  env: any,
+  env: Bindings,
   proposalId: string,
   action: string,
   amountCents: number = 0,
@@ -286,7 +287,7 @@ export function trackProposalResponse(
 
 /** Track order placed */
 export function trackOrderPlaced(
-  env: any,
+  env: Bindings,
   orderId: string,
   address: string,
   userId?: string,
@@ -305,7 +306,7 @@ export function trackOrderPlaced(
  * `daysSinceFirstOrder` lets the cohort dashboard plot "first → second" timing.
  */
 export function trackRepeatOrder(
-  env: any,
+  env: Bindings,
   orderId: string,
   userId: string,
   daysSinceFirstOrder: number,
@@ -323,7 +324,7 @@ export function trackRepeatOrder(
 
 /** Track API usage (Solar API, Gemini, etc.) for cost monitoring */
 export function trackApiUsage(
-  env: any,
+  env: Bindings,
   apiName: string,
   costCad: number = 0,
   extra: GA4EventParams = {}
@@ -338,7 +339,7 @@ export function trackApiUsage(
 
 /** Track lead capture (contact form, blog CTA, etc.) */
 export function trackLeadCapture(
-  env: any,
+  env: Bindings,
   source: string,
   extra: GA4EventParams = {}
 ): Promise<boolean> {
@@ -351,7 +352,7 @@ export function trackLeadCapture(
 
 /** Track Gmail connection by roofer */
 export function trackGmailConnected(
-  env: any,
+  env: Bindings,
   userId: string,
   extra: GA4EventParams = {}
 ): Promise<boolean> {
@@ -363,7 +364,7 @@ export function trackGmailConnected(
 
 /** Track Workers AI usage */
 export function trackWorkersAI(
-  env: any,
+  env: Bindings,
   model: string,
   durationMs: number,
   extra: GA4EventParams = {}

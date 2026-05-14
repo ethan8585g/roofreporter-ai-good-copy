@@ -16,6 +16,7 @@
 //     window next tick.
 // ============================================================
 
+import type { Bindings } from '../types'
 import { loadGmailCreds } from './email'
 
 interface MirrorResult {
@@ -85,7 +86,7 @@ function extractHtmlBody(payload: any): { html: string; text: string } {
  * not-yet-recorded ones into email_sends. Returns a summary; never
  * throws (errors go on the result).
  */
-export async function mirrorMailboxSentFolder(env: any, mailbox: string): Promise<MirrorResult> {
+export async function mirrorMailboxSentFolder(env: Bindings, mailbox: string): Promise<MirrorResult> {
   const result: MirrorResult = { mailbox, fetched: 0, inserted: 0, skipped_existing: 0 }
 
   const creds = await loadGmailCreds(env)
@@ -208,7 +209,7 @@ export async function mirrorMailboxSentFolder(env: any, mailbox: string): Promis
   return result
 }
 
-export async function mirrorAllConfiguredMailboxes(env: any): Promise<MirrorResult[]> {
+export async function mirrorAllConfiguredMailboxes(env: Bindings): Promise<MirrorResult[]> {
   // For now, the platform's sole Gmail OAuth2 mailbox is the one tied
   // to GMAIL_REFRESH_TOKEN. We mirror it by name as listed in
   // GMAIL_SENDER_EMAIL (falls back to sales@roofmanager.ca).

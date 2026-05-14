@@ -16,6 +16,7 @@
 // (report bodies are large and regeneratable from the order).
 // ============================================================
 
+import type { Bindings } from '../types'
 import {
   buildTrackingPixel,
   wrapEmailLinks,
@@ -31,7 +32,7 @@ import {
 export type EmailCategory = 'customer' | 'internal' | 'cart' | 'alert' | 'lead' | 'manual'
 
 export interface LogAndSendEmailParams {
-  env: any
+  env: Bindings
   to: string
   subject: string
   html: string
@@ -137,7 +138,7 @@ function bodyForStorage(html: string, category: EmailCategory, orderId: number |
   return html
 }
 
-export async function isSuppressed(env: any, email: string): Promise<boolean> {
+export async function isSuppressed(env: Bindings, email: string): Promise<boolean> {
   try {
     const row = await env.DB.prepare(
       `SELECT id FROM email_suppressions WHERE LOWER(email) = LOWER(?) AND released_at IS NULL LIMIT 1`
@@ -300,7 +301,7 @@ export async function logAndSendEmail(p: LogAndSendEmailParams): Promise<LogAndS
  * suppressed). Kept tiny + tolerant — failures don't abort the send.
  */
 async function insertRow(
-  env: any,
+  env: Bindings,
   args: LogAndSendEmailParams & {
     from: string
     html: string
@@ -348,7 +349,7 @@ async function insertRow(
  * (or, for truncated customer-report rows, the caller passes a fresh
  * html in `overrideHtml`). Links back to the original via retry_of_id.
  */
-export async function resendEmail(env: any, emailSendId: number, opts?: {
+export async function resendEmail(env: Bindings, emailSendId: number, opts?: {
   overrideHtml?: string
   adminId?: number | null
 }): Promise<LogAndSendEmailResult> {

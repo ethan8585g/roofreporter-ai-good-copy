@@ -803,7 +803,7 @@ teamRoutes.post('/invite/:id/resend', async (c) => {
 // HELPER: Send team invitation email
 // ============================================================
 async function sendTeamInviteEmail(
-  env: any, toEmail: string, memberName: string,
+  env: Bindings, toEmail: string, memberName: string,
   ownerName: string, companyName: string, inviteUrl: string, role: string
 ): Promise<boolean> {
   const emailHtml = `

@@ -16,6 +16,7 @@
 // flipped paid/failed/refunded between query and send.
 // ============================================================
 
+import type { Bindings } from '../types'
 import { loadGmailCreds } from './email'
 
 export type CartRecoveryStage = '2h' | '24h'
@@ -145,7 +146,7 @@ export function renderCartRecoveryStep(stage: CartRecoveryStage, firstName: stri
 }
 
 export async function runAbandonedCheckoutRecoveryStage(
-  env: any,
+  env: Bindings,
   stage: CartRecoveryStage,
 ): Promise<CartRecoveryResult> {
   const cfg = STAGE_CONFIG[stage]
@@ -244,7 +245,7 @@ export async function runAbandonedCheckoutRecoveryStage(
   return result
 }
 
-export async function runAbandonedCheckoutRecovery(env: any): Promise<CartRecoveryResult[]> {
+export async function runAbandonedCheckoutRecovery(env: Bindings): Promise<CartRecoveryResult[]> {
   const results: CartRecoveryResult[] = []
   for (const stage of ['2h', '24h'] as CartRecoveryStage[]) {
     try {

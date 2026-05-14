@@ -14,6 +14,7 @@
  * truth; drip evaluator UPSERTs there on every send.
  */
 
+import type { Bindings } from '../types'
 import { sendGmailOAuth2, loadGmailCreds } from './email'
 import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from './email-tracking'
 
@@ -175,7 +176,7 @@ function renderTrialEnds(c: { name: string | null; first_name: string; days_unti
  * reasonable defaults if the customer is missing or sparse.
  */
 export async function renderDripTemplate(
-  env: any,
+  env: Bindings,
   templateKey: string,
   customer: { id?: number; name?: string | null; email?: string | null } | null,
 ): Promise<RenderedEmail | null> {
@@ -313,7 +314,7 @@ function renderTemplate(template: string, candidate: any): RenderedEmail | null 
  * eligible customers (cooldown-respecting), and either sends or
  * dry-runs based on config.
  */
-export async function runDripCampaigns(env: any, opts: { previewOnly?: boolean } = {}): Promise<{ campaigns: DripResult[]; dry_run: boolean; preview?: any[] }> {
+export async function runDripCampaigns(env: Bindings, opts: { previewOnly?: boolean } = {}): Promise<{ campaigns: DripResult[]; dry_run: boolean; preview?: any[] }> {
   const db = env.DB as Db
   const cfg = await loadConfig(db)
   const isDry = opts.previewOnly || cfg.dry_run

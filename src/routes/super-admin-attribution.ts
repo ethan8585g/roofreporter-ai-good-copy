@@ -20,10 +20,7 @@ import {
   runNightlyAttributionRollup,
 } from '../services/attribution'
 
-type Bindings = {
-  DB: D1Database
-  [k: string]: any
-}
+import type { Bindings } from '../types'
 
 export const superAdminAttribution = new Hono<{ Bindings: Bindings }>()
 

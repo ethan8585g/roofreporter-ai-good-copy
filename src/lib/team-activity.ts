@@ -61,7 +61,7 @@ export async function logTeamActivity(db: D1Database, input: TeamActivityInput):
 }
 
 // Resolves a Hono context to full team identity. Returns null if not a logged-in customer.
-export async function getTeamActorContext(c: any): Promise<{
+export async function getTeamActorContext(c: { req: { header: (n: string) => string | undefined }; env: { DB: D1Database } }): Promise<{
   ownerId: number
   actorCustomerId: number
   teamMemberId: number | null

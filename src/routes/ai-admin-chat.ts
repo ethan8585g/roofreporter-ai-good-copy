@@ -3,12 +3,7 @@ import { logAdminToolCall } from '../lib/audit-log'
 import { limitByKey, clientIp } from '../lib/rate-limit'
 import { getAdminSessionToken } from '../lib/session-tokens'
 
-type Bindings = {
-  DB: D1Database
-  OPENAI_API_KEY: string
-  OPENAI_BASE_URL: string
-  [key: string]: any
-}
+import type { Bindings } from '../types'
 
 export const aiAdminChatRoutes = new Hono<{ Bindings: Bindings }>()
 

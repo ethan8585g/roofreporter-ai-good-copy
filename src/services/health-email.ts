@@ -9,6 +9,7 @@
 // the result still gets logged to the loop tracker either way.
 // ============================================================
 
+import type { Bindings } from '../types'
 import { loadGmailCreds, sendGmailOAuth2 } from './email'
 import type { SignupHealthResult, SectionResult } from './signup-health'
 
@@ -16,7 +17,7 @@ const RECIPIENT = 'christinegourley04@gmail.com'
 const SENDER_DEFAULT = 'sales@roofmanager.ca'
 
 export async function sendSignupHealthEmail(
-  env: any,
+  env: Bindings,
   result: SignupHealthResult,
 ): Promise<{ ok: boolean; error?: string }> {
   const creds = await loadGmailCreds(env)

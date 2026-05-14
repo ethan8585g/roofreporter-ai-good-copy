@@ -31,7 +31,7 @@ import { loadGmailCreds, sendGmailOAuth2WithAttachment } from './services/email'
 
 // ── Abandoned signup recovery ─────────────────────────────────────────────────
 async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number; skipped: number }> {
-  const db = (env as any).DB
+  const db = env.DB
   const resendKey = (env as any).RESEND_API_KEY
   if (!resendKey) return { sent: 0, skipped: 0 }
 
@@ -115,7 +115,7 @@ async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number
 const ROVER_IDLE_AFTER_MIN = 30
 const ROVER_END_AFTER_HOURS = 24
 async function runRoverSessionSweep(env: Bindings): Promise<{ idled: number; ended: number }> {
-  const db = (env as any).DB
+  const db = env.DB
   let idled = 0
   let ended = 0
   try {
@@ -148,7 +148,7 @@ async function runRoverSessionSweep(env: Bindings): Promise<{ idled: number; end
 // that have been stuck for more than 7 days. Square handles the actual day-31
 // charge automatically via the subscription start_date; the webhook flips status.
 async function runSecretaryTrialManagement(env: Bindings): Promise<{ remindersSent: number; pastDueCancelled: number }> {
-  const db = (env as any).DB
+  const db = env.DB
   const resendKey = (env as any).RESEND_API_KEY
   let remindersSent = 0
   let pastDueCancelled = 0
@@ -264,7 +264,7 @@ async function runWeeklyOfflineConversionsEmail(env: Bindings): Promise<{
   const days = 7
   const conversionName = 'Roof Manager Paid Customer'
 
-  const rows = await (env as any).DB.prepare(`
+  const rows = await env.DB.prepare(`
     SELECT
       c.gclid AS gclid,
       sp.created_at AS conv_time,

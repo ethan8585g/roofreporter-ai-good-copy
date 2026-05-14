@@ -12,10 +12,7 @@
 import { Hono } from 'hono'
 import { validateAdminSession, requireSuperadmin } from './auth'
 
-type Bindings = {
-  DB: D1Database
-  [k: string]: any
-}
+import type { Bindings } from '../types'
 
 export const superAdminLtv = new Hono<{ Bindings: Bindings }>()
 

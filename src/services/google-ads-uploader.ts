@@ -1,3 +1,4 @@
+import type { Bindings } from '../types'
 // ============================================================
 // GOOGLE ADS CONVERSIONS API UPLOADER — Server-side offline conversion
 // uploads to close the iOS Safari ITP attribution gap and enable
@@ -45,7 +46,7 @@ export interface UploadResult {
   partial_failure?: any[]
 }
 
-function labelForKind(env: any, kind: ConversionKind): string | null {
+function labelForKind(env: Bindings, kind: ConversionKind): string | null {
   switch (kind) {
     case 'lead': return env.GADS_LEAD_LABEL || null
     case 'contact_lead': return env.GADS_CONTACT_LABEL || null
@@ -65,7 +66,7 @@ function nowGoogleAdsTs(): string {
 
 // Mint a Google OAuth2 access token from the GCP service account JSON.
 // Reuses the same JWT-based flow already proven by Solar API + Gemini calls.
-async function mintAccessToken(env: any): Promise<string | null> {
+async function mintAccessToken(env: Bindings): Promise<string | null> {
   const keyJson = env.GCP_SERVICE_ACCOUNT_KEY
   if (!keyJson) return null
   let creds: any
@@ -111,7 +112,7 @@ async function mintAccessToken(env: any): Promise<string | null> {
 }
 
 // Audit-log the outcome so we can spot silent failures without re-running.
-async function logUploadAttempt(env: any, kind: ConversionKind, gclid: string, result: UploadResult): Promise<void> {
+async function logUploadAttempt(env: Bindings, kind: ConversionKind, gclid: string, result: UploadResult): Promise<void> {
   try {
     await env.DB.prepare(
       "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'gads_conversion_upload', ?)"
@@ -127,7 +128,7 @@ async function logUploadAttempt(env: any, kind: ConversionKind, gclid: string, r
   } catch {}
 }
 
-export async function uploadGoogleAdsConversion(env: any, input: UploadConversionInput): Promise<UploadResult> {
+export async function uploadGoogleAdsConversion(env: Bindings, input: UploadConversionInput): Promise<UploadResult> {
   const devToken = env.GOOGLE_ADS_DEVELOPER_TOKEN
   const customerId = env.GOOGLE_ADS_CUSTOMER_ID
   const label = labelForKind(env, input.kind)

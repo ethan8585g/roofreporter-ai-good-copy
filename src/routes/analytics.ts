@@ -9,15 +9,7 @@ import { runTrafficAgent } from '../services/traffic-agent'
 import { validateAdminSession } from './auth'
 import { limitByIp } from '../lib/rate-limit'
 
-type Bindings = {
-  DB: D1Database
-  GCP_SERVICE_ACCOUNT_KEY: string
-  GA4_MEASUREMENT_ID: string
-  GA4_API_SECRET: string
-  GA4_PROPERTY_ID: string
-  ANTHROPIC_API_KEY: string
-  [key: string]: any
-}
+import type { Bindings } from '../types'
 
 // Minimum gap between event-triggered analysis runs (10 minutes)
 const LIVE_ANALYSIS_COOLDOWN_MS = 10 * 60 * 1000

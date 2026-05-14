@@ -106,7 +106,7 @@ automationsRoutes.get('/proposal/audit/:orderId', async (c) => {
 // recent audit entries from their own orders. Admins see platform-wide.
 automationsRoutes.get('/proposal/health', async (c) => {
   const s = scope(c)
-  const env: any = c.env
+  const env = c.env
   const platformGmail = !!(env.GMAIL_CLIENT_ID && env.GMAIL_CLIENT_SECRET && env.GMAIL_REFRESH_TOKEN)
 
   if (s.isAdmin) {

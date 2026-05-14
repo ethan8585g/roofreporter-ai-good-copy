@@ -17,7 +17,7 @@ const META_GRAPH_API = 'https://graph.facebook.com/v21.0'
 // Can be called from any route (not auth-guarded) — uses system token.
 // Pass testEventCode to route the event to Meta's "Test Events" tab in
 // Events Manager (not counted as a production conversion). Used by /ads-health.
-async function sendMetaConversion(env: any, opts: {
+async function sendMetaConversion(env: Bindings, opts: {
   eventName: string
   email?: string
   phone?: string

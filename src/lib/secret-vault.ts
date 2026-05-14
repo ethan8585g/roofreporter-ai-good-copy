@@ -1,3 +1,4 @@
+import type { Bindings } from '../types'
 // At-rest encryption for secrets stored in D1 (SIP credentials, OAuth tokens,
 // etc.). AES-256-GCM with a 96-bit random nonce per value.
 //
@@ -39,7 +40,7 @@ async function importKey(raw: Uint8Array): Promise<CryptoKey> {
   return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt'])
 }
 
-export function hasVault(env: any): boolean {
+export function hasVault(env: Bindings): boolean {
   return !!(env && env.SIP_ENCRYPTION_KEY)
 }
 
@@ -49,7 +50,7 @@ export function isEncrypted(value: string | null | undefined): boolean {
 
 // Encrypt a string for DB storage. Returns input untouched if vault is not
 // configured or the value is empty.
-export async function encryptSecret(env: any, plain: string | null | undefined): Promise<string> {
+export async function encryptSecret(env: Bindings, plain: string | null | undefined): Promise<string> {
   if (plain == null || plain === '') return ''
   if (!hasVault(env)) {
     console.warn('[secret-vault] SIP_ENCRYPTION_KEY unset — storing secret in plaintext')
@@ -65,7 +66,7 @@ export async function encryptSecret(env: any, plain: string | null | undefined):
 }
 
 // Decrypt a stored value. Legacy plaintext passes through unchanged.
-export async function decryptSecret(env: any, stored: string | null | undefined): Promise<string> {
+export async function decryptSecret(env: Bindings, stored: string | null | undefined): Promise<string> {
   if (stored == null || stored === '') return ''
   if (!isEncrypted(stored)) return String(stored) // plaintext legacy row
   if (!hasVault(env)) {

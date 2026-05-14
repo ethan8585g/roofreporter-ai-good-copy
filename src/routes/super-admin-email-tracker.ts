@@ -35,7 +35,7 @@ import {
   type SequenceStepCustom,
 } from '../services/sequence-engine'
 
-type Bindings = { DB: D1Database; [k: string]: any }
+import type { Bindings } from '../types'
 
 export const superAdminEmailTracker = new Hono<{ Bindings: Bindings }>()
 

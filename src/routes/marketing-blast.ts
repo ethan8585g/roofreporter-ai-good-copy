@@ -26,7 +26,7 @@ import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } fro
 export const marketingBlastRoutes = new Hono<{ Bindings: Bindings }>()
 
 marketingBlastRoutes.post('/reengagement-blast', async (c) => {
-  const env: any = c.env
+  const env = c.env
 
   // --- Bearer token auth
   const expected = env.FUNNEL_MONITOR_TOKEN

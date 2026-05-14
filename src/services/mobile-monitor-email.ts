@@ -5,6 +5,7 @@
 // monitor emails).
 // ============================================================
 
+import type { Bindings } from '../types'
 import { loadGmailCreds, sendGmailOAuth2 } from './email'
 import type { MobileResult, MobileFinding } from './mobile-monitor'
 
@@ -12,7 +13,7 @@ const RECIPIENT = 'christinegourley04@gmail.com'
 const SENDER_DEFAULT = 'sales@roofmanager.ca'
 
 export async function sendMobileMonitorEmail(
-  env: any,
+  env: Bindings,
   result: MobileResult,
   opts: { onlyOnIssues?: boolean } = {},
 ): Promise<{ ok: boolean; skipped?: boolean; error?: string }> {

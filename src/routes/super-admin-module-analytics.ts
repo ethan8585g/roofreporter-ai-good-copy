@@ -17,10 +17,7 @@
 import { Hono } from 'hono'
 import { validateAdminSession, requireSuperadmin } from './auth'
 
-type Bindings = {
-  DB: D1Database
-  [k: string]: any
-}
+import type { Bindings } from '../types'
 
 // Resolves a customer.id (aliased `c`) to their account-owner id. Team
 // members roll up to the team owner; standalone customers map to themselves.

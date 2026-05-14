@@ -14,7 +14,7 @@ import { Hono } from 'hono'
 import { validateAdminSession, requireSuperadmin } from './auth'
 import { hashPassword } from '../lib/password'
 
-type Bindings = { DB: D1Database; [key: string]: any }
+import type { Bindings } from '../types'
 const platformAdmin = new Hono<{ Bindings: Bindings }>()
 
 // Auth middleware — superadmin only. These routes manage tiers, voice/LLM

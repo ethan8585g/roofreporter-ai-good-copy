@@ -35,11 +35,11 @@ ga4GrantRoutes.use('/*', async (c, next) => {
 })
 
 // Pull the SA client_email out of GCP_SERVICE_ACCOUNT_KEY safely.
-function getSaEmail(env: any): string | null {
+function getSaEmail(env: Bindings): string | null {
   try { return JSON.parse(env.GCP_SERVICE_ACCOUNT_KEY || '{}').client_email || null } catch { return null }
 }
 // Normalize GA4_PROPERTY_ID to the numeric tail (Admin API uses `properties/{id}` paths).
-function getPropertyNumeric(env: any): string | null {
+function getPropertyNumeric(env: Bindings): string | null {
   const raw = String(env.GA4_PROPERTY_ID || '').trim()
   if (!raw) return null
   const m = raw.match(/(\d+)$/)

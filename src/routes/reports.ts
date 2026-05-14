@@ -2071,7 +2071,7 @@ reportsRoutes.post('/solar-panel-layout', async (c) => {
 // insurance estimating and contractor pricing. Supports JSON,
 // AccuLynx CSV, and Xactimate XML output formats.
 // ============================================================
-async function buildBomForOrder(env: any, orderId: number): Promise<DetailedMaterialBOM | null> {
+async function buildBomForOrder(env: Bindings, orderId: number): Promise<DetailedMaterialBOM | null> {
   const order: any = await env.DB.prepare(
     'SELECT id, property_address, trace_measurement_json FROM orders WHERE id = ?'
   ).bind(orderId).first()
@@ -3175,7 +3175,7 @@ reportsRoutes.post('/:orderId/share', async (c) => {
   </div>
 </div></body></html>`
 
-    const env: any = c.env
+    const env = c.env
     // Share-report emails ALWAYS go from sales@roofmanager.ca, regardless of
     // which user/account triggered the share. Use platform Gmail OAuth2 creds
     // — fall back to D1 `settings` rows when env vars are missing (same

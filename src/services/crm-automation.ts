@@ -11,10 +11,11 @@
 // endpoint hasn't been refactored yet).
 // ============================================================
 
+import type { Bindings } from '../types'
 import { syncJobToCalendarInternal } from '../routes/calendar'
 
 interface AutoCtx {
-  env: any
+  env: Bindings
   req: { url: string; header: (name: string) => string | undefined }
 }
 

@@ -8,11 +8,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { CLAUDE_MODEL } from '../services/anthropic-client'
 import { getAdminSessionToken } from '../lib/session-tokens'
 
-type Bindings = {
-  DB: D1Database
-  ANTHROPIC_API_KEY: string
-  [key: string]: any
-}
+import type { Bindings } from '../types'
 
 export const adminAgentRoutes = new Hono<{ Bindings: Bindings }>()
 

@@ -26,7 +26,7 @@ export const calendarRoutes = new Hono<{ Bindings: Bindings }>()
 // Resolves a Google access token for the given owner directly from D1 (no HTTP context).
 // Used by both the public HTTP endpoints (via getCalendarAuth) and the internal
 // auto-sync helper (which already has ownerId and must not depend on c.req).
-async function getCalendarAuthForOwner(env: any, ownerId: number): Promise<{ ownerId: number; accessToken: string; calendarEmail: string } | { error: string } | null> {
+async function getCalendarAuthForOwner(env: Bindings, ownerId: number): Promise<{ ownerId: number; accessToken: string; calendarEmail: string } | { error: string } | null> {
   try {
     const customer = await env.DB.prepare(
       'SELECT gmail_refresh_token, gmail_connected_email FROM customers WHERE id = ?'
@@ -399,7 +399,7 @@ calendarRoutes.delete('/events/:id', async (c) => {
 // requiring a Hono request context. Call this directly from
 // server-side automation (avoids fragile self-fetch on Workers).
 // ============================================================
-export async function syncJobToCalendarInternal(env: any, ownerId: number, jobId: number | string): Promise<{ success: boolean; error?: string; google_event_id?: string; html_link?: string; action?: 'created' | 'updated' }> {
+export async function syncJobToCalendarInternal(env: Bindings, ownerId: number, jobId: number | string): Promise<{ success: boolean; error?: string; google_event_id?: string; html_link?: string; action?: 'created' | 'updated' }> {
  try {
   const calAuth = await getCalendarAuthForOwner(env, ownerId)
   if (!calAuth) return { success: false, error: 'Calendar not connected' }

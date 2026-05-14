@@ -8,6 +8,7 @@
 // the inbox doesn't fill up with "all green" 6× per day.
 // ============================================================
 
+import type { Bindings } from '../types'
 import { loadGmailCreds, sendGmailOAuth2 } from './email'
 import type { AdsHealthResult, SectionResult } from './ads-health'
 
@@ -15,7 +16,7 @@ const RECIPIENT = 'christinegourley04@gmail.com'
 const SENDER_DEFAULT = 'sales@roofmanager.ca'
 
 export async function sendAdsHealthEmail(
-  env: any,
+  env: Bindings,
   result: AdsHealthResult,
 ): Promise<{ ok: boolean; error?: string; skipped?: boolean }> {
   // Quiet on healthy ticks — avoid 6× emails/day saying nothing's wrong.

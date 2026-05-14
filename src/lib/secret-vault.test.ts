@@ -3,7 +3,7 @@ import { encryptSecret, decryptSecret, isEncrypted, maskSecret, hasVault } from 
 
 // 32-byte key, base64url (no padding). Generated deterministically for tests.
 const TEST_KEY = 'aGVsbG9fd29ybGRfdGhpc19pc18zMl9ieXRlc19rZXk'
-const envWith = { SIP_ENCRYPTION_KEY: TEST_KEY }
+const envWith = { SIP_ENCRYPTION_KEY: TEST_KEY } as any
 const envWithout: any = {}
 
 describe('secret-vault', () => {

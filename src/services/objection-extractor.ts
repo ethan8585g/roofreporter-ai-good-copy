@@ -1,3 +1,4 @@
+import type { Bindings } from '../types'
 /**
  * Cold-call objection extractor — turns raw call transcripts into
  * structured `call_objections` rows so super admin can see "top 5
@@ -90,7 +91,7 @@ function safeParseObjections(raw: string): ExtractedObjection[] {
  * Extract objections from a transcript and persist them to call_objections.
  * Returns the number of rows written.
  */
-export async function extractAndStoreObjections(env: any, db: Db, ctx: ExtractContext): Promise<number> {
+export async function extractAndStoreObjections(env: Bindings, db: Db, ctx: ExtractContext): Promise<number> {
   if (!ctx.transcript || ctx.transcript.trim().length < 60) return 0
   const apiKey = env.GEMINI_API_KEY || env.GEMINI_ENHANCE_API_KEY || env.GOOGLE_VERTEX_API_KEY
   if (!apiKey) {

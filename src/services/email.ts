@@ -1,3 +1,4 @@
+import type { Bindings } from '../types'
 // ============================================================
 // Roof Manager — Email Delivery Service
 // Supports: Gmail Service Account, Gmail OAuth2, Resend API
@@ -9,7 +10,7 @@
 // Centralizes the pattern duplicated in notifyTraceCompletedToCustomer
 // and POST /:orderId/share.
 export async function getOrCreateShareToken(
-  env: any,
+  env: Bindings,
   orderId: number | string
 ): Promise<string | null> {
   if (!env?.DB || orderId == null) return null
@@ -281,7 +282,7 @@ export async function sendGmailEmail(serviceAccountJson: string, to: string, sub
 // Mirrors the resolution used by /api/auth/gmail/status so a successful
 // "Connect Gmail" flow (which writes to settings) is honored by every send path.
 // ============================================================
-export async function loadGmailCreds(env: any): Promise<{
+export async function loadGmailCreds(env: Bindings): Promise<{
   clientId: string
   clientSecret: string
   refreshToken: string
@@ -365,7 +366,7 @@ export async function sendViaResend(
 // attachment (the share link in the email body is the primary access
 // path now, so a missing PDF is annoying, not blocking).
 // ============================================================
-async function renderHtmlToPdf(env: any, html: string, label = 'unknown'): Promise<Uint8Array | null> {
+async function renderHtmlToPdf(env: Bindings, html: string, label = 'unknown'): Promise<Uint8Array | null> {
   if (!env?.BROWSER || !html) return null
   let browser: any = null
   try {
@@ -396,7 +397,7 @@ async function renderHtmlToPdf(env: any, html: string, label = 'unknown'): Promi
 }
 
 export async function renderCustomerReportPdf(
-  env: any,
+  env: Bindings,
   orderId: number | string,
 ): Promise<Uint8Array | null> {
   if (!env?.BROWSER || !env?.DB) {
@@ -420,7 +421,7 @@ export async function renderCustomerReportPdf(
 // fails the other still ships.
 // ============================================================
 export async function getCustomerReportAttachments(
-  env: any,
+  env: Bindings,
   orderId: number | string,
   orderNumber: string,
 ): Promise<Array<{ filename: string; mimeType: string; bytes: Uint8Array }>> {
@@ -487,7 +488,7 @@ async function renderHtmlOnBrowser(browser: any, html: string, label: string): P
 
 // Back-compat shim for callers that still want a single attachment.
 export async function getCustomerReportAttachment(
-  env: any,
+  env: Bindings,
   orderId: number | string,
   orderNumber: string,
 ): Promise<{ filename: string; mimeType: string; bytes: Uint8Array } | null> {
@@ -512,7 +513,7 @@ function htmlEsc(v: any): string {
 }
 
 export async function notifyTraceCompletedToCustomer(
-  env: any,
+  env: Bindings,
   args: {
     to: string
     order_number: string
@@ -656,7 +657,7 @@ ${pixel}</div>`
 // SALES NOTIFICATION — Sent to super admin on new report requests
 // ============================================================
 export async function notifyNewReportRequest(
-  env: any,
+  env: Bindings,
   order: {
     order_number: string
     property_address: string
@@ -758,7 +759,7 @@ export async function notifyNewReportRequest(
 // Site-health alert: signup funnel regression detected by /funnel-monitor.
 // Throws on total delivery failure so the caller can mark email_status='failed'.
 export async function notifyFunnelRegression(
-  env: any,
+  env: Bindings,
   data: {
     order_number: string
     drop_stage: string
@@ -826,7 +827,7 @@ export async function notifyFunnelRegression(
 // failure can be transient — sends may still succeed). Throws on total
 // delivery failure so the caller can mark email_status='failed'.
 export async function notifyEmailHealthFailure(
-  env: any,
+  env: Bindings,
   data: {
     order_number: string
     creds: { client_id: string; client_secret: string; refresh_token: string; sender_email: string }
@@ -1138,7 +1139,7 @@ export async function sendGmailOAuth2WithAttachment(
 // Resolves Gmail OAuth2 creds from env, with DB fallback.
 // Non-throwing — safe to fire-and-forget from any handler.
 // ============================================================
-export async function notifySalesNewLead(env: any, data: {
+export async function notifySalesNewLead(env: Bindings, data: {
   source: string
   name?: string | null
   email?: string | null
@@ -1201,7 +1202,7 @@ export async function notifySalesNewLead(env: any, data: {
 // Notify sales@roofmanager.ca when a NEW USER signs up.
 // Called fire-and-forget from registration handlers; never throws.
 // ============================================================
-export async function notifyNewUserSignup(env: any, data: {
+export async function notifyNewUserSignup(env: Bindings, data: {
   signup_method: 'email' | 'google'
   customer_id?: number | string | null
   email?: string | null
@@ -1271,7 +1272,7 @@ export async function notifyNewUserSignup(env: any, data: {
 // Fire-and-forget; never throws. Mirrors notifyNewUserSignup's
 // Gmail OAuth2 → Resend → GCP Service Account fallback chain.
 // ============================================================
-export async function sendWelcomeEmail(env: any, data: {
+export async function sendWelcomeEmail(env: Bindings, data: {
   email: string
   name?: string | null
   customerId?: number | null
@@ -1392,7 +1393,7 @@ ${pixel}`
 // refund logic here — super admin handles refunds out-of-band.
 // ============================================================
 export async function notifyReportDenied(
-  env: any,
+  env: Bindings,
   args: {
     to: string
     order_number: string
@@ -1485,7 +1486,7 @@ ${pixel}</div>`
 // canonical recipient; admin forwarding handled at the inbox layer.
 // ============================================================
 export async function notifyCustomerRetraceRequest(
-  env: any,
+  env: Bindings,
   args: {
     order_number: string
     property_address: string

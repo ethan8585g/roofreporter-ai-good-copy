@@ -1,3 +1,4 @@
+import type { Bindings } from '../types'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Hono } from 'hono'
 import { agentsRoutes } from './agents'
@@ -60,13 +61,13 @@ function makeEnv(db: any) {
   } as any
 }
 
-function buildApp(env: any) {
+function buildApp(env: Bindings) {
   const app = new Hono()
   app.route('/api/agents', agentsRoutes)
   return { app, env }
 }
 
-async function post(app: any, path: string, body: any, env: any) {
+async function post(app: any, path: string, body: any, env: Bindings) {
   return app.request(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

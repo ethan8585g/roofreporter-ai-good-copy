@@ -1,3 +1,4 @@
+import type { Bindings } from '../types'
 // ============================================================
 // Analytics Events — client-side snippet injected into every page
 // + server-side sign_up event helper
@@ -40,7 +41,7 @@ window.clarityEvent = function(name, val) {
  * Call from the register endpoint after successful customer creation.
  */
 export async function trackSignupEvent(
-  env: any,
+  env: Bindings,
   customerId: number,
   method: 'email' | 'google' | 'magic_link' = 'email',
   extra: Record<string, string | number | boolean> = {}

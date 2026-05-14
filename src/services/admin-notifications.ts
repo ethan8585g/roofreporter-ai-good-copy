@@ -8,6 +8,7 @@
 // before the row lands would leave admin blind to an order, which is
 // exactly the bug this module fixes.
 
+import type { Bindings } from '../types'
 import { notifyNewReportRequest, notifyTraceCompletedToCustomer, notifyCustomerRetraceRequest } from './email'
 
 export type NotificationKind =
@@ -59,7 +60,7 @@ function defaultSeverity(kind: NotificationKind): NotificationSeverity {
 }
 
 export async function recordAndNotify(
-  env: any,
+  env: Bindings,
   args: RecordAndNotifyArgs
 ): Promise<{ id: number | null }> {
   const { kind, order } = args

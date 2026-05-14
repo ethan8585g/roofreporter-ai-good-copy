@@ -182,7 +182,7 @@ function generateVerificationCode(): string {
 
 // Send email using best available provider
 // Priority: 1) Resend API  2) Gmail OAuth2 (env or DB token)  3) GCP service account
-async function sendVerificationEmail(env: any, toEmail: string, code: string, db?: any): Promise<boolean> {
+async function sendVerificationEmail(env: Bindings, toEmail: string, code: string, db?: any): Promise<boolean> {
   const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca'
   const emailSubject = `Your Roof Manager Verification Code: ${code}`
   // Tracking: pre-signup so customerId is null. Pixel still useful — open
@@ -2046,7 +2046,7 @@ customerAuthRoutes.get('/invoices/:id', async (c) => {
 // ============================================================
 // FORGOT PASSWORD — Send reset link to customer email
 // ============================================================
-async function sendPasswordResetEmail(env: any, toEmail: string, name: string, resetUrl: string, db?: any): Promise<boolean> {
+async function sendPasswordResetEmail(env: Bindings, toEmail: string, name: string, resetUrl: string, db?: any): Promise<boolean> {
   const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca'
   const subject = 'Reset your Roof Manager password'
   // Tracking: customerId looked up from email so the reset email links to the

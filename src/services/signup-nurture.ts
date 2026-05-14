@@ -17,6 +17,7 @@
 //   +0.5-1.4 extra activated customers/day, no ad spend.
 // ============================================================
 
+import type { Bindings } from '../types'
 import { loadGmailCreds, sendGmailOAuth2 } from './email'
 import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from './email-tracking'
 
@@ -147,7 +148,7 @@ export function renderNurtureStep(stage: NurtureStage, firstName: string): { sub
   return { subject: cfg.subject(firstName), html: cfg.body(firstName) }
 }
 
-export async function runSignupNurtureStage(env: any, stage: NurtureStage): Promise<NurtureResult> {
+export async function runSignupNurtureStage(env: Bindings, stage: NurtureStage): Promise<NurtureResult> {
   const cfg = STAGE_CONFIG[stage]
   const result: NurtureResult = { stage, found: 0, sent: 0, failed: 0, skipped: 0, errors: [] }
 
@@ -246,7 +247,7 @@ export async function runSignupNurtureStage(env: any, stage: NurtureStage): Prom
  * @returns success/error info
  */
 export async function sendSignupNurtureToCustomer(
-  env: any,
+  env: Bindings,
   customerId: number,
   stage: NurtureStage
 ): Promise<{ success: boolean; sent_to?: string; subject?: string; error?: string }> {
@@ -301,7 +302,7 @@ export async function sendSignupNurtureToCustomer(
  * a single tick can send a 1h email to customer A, a 24h email to
  * customer B, and a 3d email to customer C.
  */
-export async function runSignupNurture(env: any): Promise<NurtureResult[]> {
+export async function runSignupNurture(env: Bindings): Promise<NurtureResult[]> {
   const results: NurtureResult[] = []
   for (const stage of ['1h', '24h', '3d'] as NurtureStage[]) {
     try {

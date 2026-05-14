@@ -107,7 +107,7 @@ stormScoutRoutes.post('/ingest', async (c) => {
 stormScoutRoutes.get('/basemaps', async (c) => {
   const customerId = await requireCustomer(c)
   if (!customerId) return c.json({ error: 'Not authenticated' }, 401)
-  const env: any = c.env
+  const env = c.env
   const out: any[] = []
   for (const p of Object.values(BASEMAP_PROVIDERS)) {
     if (!p.requiresToken) {

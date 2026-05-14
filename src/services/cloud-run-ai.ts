@@ -20,6 +20,7 @@
 // fall back to existing Gemini-based analysis with zero disruption.
 // ============================================================
 
+import type { Bindings } from '../types'
 import type {
   VisionFindings,
   VisionFinding,
@@ -450,7 +451,7 @@ export function mergeVisionFindings(
 // CONVENIENCE: Build config from Cloudflare env bindings
 // ============================================================
 
-export function buildCloudRunConfig(env: any): CloudRunAIConfig | null {
+export function buildCloudRunConfig(env: Bindings): CloudRunAIConfig | null {
   const baseUrl = env.CLOUD_RUN_AI_URL || DEFAULT_CLOUD_RUN_URL
   if (!baseUrl) return null
 
