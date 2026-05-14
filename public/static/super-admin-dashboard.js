@@ -2512,7 +2512,8 @@ window.saTraceUndo = function() {
   if (window.saTraceV2 && typeof window.saTraceV2.snapshotForUndo === 'function') {
     try { window.saTraceV2.snapshotForUndo(); } catch (_) {}
   }
-  // Priority: partial segment start → last draft eave pt → last annotation → last line → last closed eave section
+  // Priority 1 -- in-progress drafts (tool-gated, since the draft only
+  // exists for the currently active tool).
   if (s._segStart) {
     if (s._segStartMarker) { s._segStartMarker.setMap(null); s._segStartMarker = null; }
     s._segStart = null; return;
@@ -2526,21 +2527,61 @@ window.saTraceUndo = function() {
     } else { s.eavePoly = null; }
     return;
   }
-  if (s.tool === 'dormer') {
-    // Priority: 1) drop last in-progress dormer point, 2) drop last closed dormer
-    if (s._dormerLatLngs && s._dormerLatLngs.length > 0) {
-      s._dormerLatLngs.pop();
-      var dm = (s._dormerMarkers || []).pop(); if (dm) dm.setMap(null);
-      if (s._dormerPoly) s._dormerPoly.setMap(null);
-      if (s._dormerLatLngs.length >= 2) {
-        s._dormerPoly = new google.maps.Polyline({
-          path: s._dormerLatLngs.concat([s._dormerLatLngs[0]]),
-          strokeColor: '#a855f7', strokeWeight: 2.5, map: s.map, zIndex: 4,
-        });
-      } else { s._dormerPoly = null; }
-      saUpdateDormerCompleteBtn();
-      return;
+  if (s.tool === 'dormer' && s._dormerLatLngs && s._dormerLatLngs.length > 0) {
+    s._dormerLatLngs.pop();
+    var dm = (s._dormerMarkers || []).pop(); if (dm) dm.setMap(null);
+    if (s._dormerPoly) s._dormerPoly.setMap(null);
+    if (s._dormerLatLngs.length >= 2) {
+      s._dormerPoly = new google.maps.Polyline({
+        path: s._dormerLatLngs.concat([s._dormerLatLngs[0]]),
+        strokeColor: '#a855f7', strokeWeight: 2.5, map: s.map, zIndex: 4,
+      });
+    } else { s._dormerPoly = null; }
+    if (typeof saUpdateDormerCompleteBtn === 'function') saUpdateDormerCompleteBtn();
+    return;
+  }
+  if (s.tool === 'cutout' && s._cutoutLatLngs && s._cutoutLatLngs.length > 0) {
+    s._cutoutLatLngs.pop();
+    var cm = (s._cutoutMarkers || []).pop(); if (cm) cm.setMap(null);
+    if (s._cutoutPoly) s._cutoutPoly.setMap(null);
+    if (s._cutoutLatLngs.length >= 2) {
+      s._cutoutPoly = new google.maps.Polyline({
+        path: s._cutoutLatLngs.concat([s._cutoutLatLngs[0]]),
+        strokeColor: '#6b7280', strokeWeight: 2.5, map: s.map, zIndex: 4,
+      });
+    } else { s._cutoutPoly = null; }
+    if (typeof saUpdateCutoutCompleteBtn === 'function') saUpdateCutoutCompleteBtn();
+    return;
+  }
+  // Priority 2 -- completed items. These pops used to be gated on the
+  // active tool, which stranded ridges/hips/valleys/annotations/closed
+  // dormers/closed cutouts once the operator switched tools (Undo would
+  // silently no-op after the first hit, so the trace could never be
+  // drained back to empty). They are now tool-agnostic: the active tool's
+  // collection gets first crack so the operator's most-recent context is
+  // honoured, then we fall through every other completed collection so
+  // repeated Undo clicks can drain the trace back to empty.
+  function popAnnotation(tool) {
+    if (tool !== 'vent' && tool !== 'skylight' && tool !== 'chimney' && tool !== 'downspout') return false;
+    var arr = s[tool + 's']; var marr = s['_' + tool + 'Markers'];
+    if (arr && arr.length > 0) {
+      arr.pop();
+      var mk = (marr || []).pop(); if (mk) mk.setMap(null);
+      return true;
     }
+    return false;
+  }
+  function popLine(tool) {
+    if (tool !== 'ridge' && tool !== 'hip' && tool !== 'valley') return false;
+    var key = tool + 's'; var dataKey = '_' + tool + 'Data';
+    if (s[key] && s[key].length > 0) {
+      var line = s[key].pop(); if (line) line.setMap(null);
+      (s[dataKey] || []).pop();
+      return true;
+    }
+    return false;
+  }
+  function popClosedDormer() {
     if (s.dormers && s.dormers.length > 0) {
       var lastD = s.dormers.pop();
       if (lastD && lastD.polygon) lastD.polygon.setMap(null);
@@ -2548,24 +2589,11 @@ window.saTraceUndo = function() {
         var dl = s._dormerLabelMarkers.pop();
         if (dl) dl.setMap(null);
       }
-      return;
+      return true;
     }
+    return false;
   }
-  if (s.tool === 'cutout') {
-    // Priority: 1) drop last in-progress cutout point, 2) drop last closed cutout
-    if (s._cutoutLatLngs && s._cutoutLatLngs.length > 0) {
-      s._cutoutLatLngs.pop();
-      var cm = (s._cutoutMarkers || []).pop(); if (cm) cm.setMap(null);
-      if (s._cutoutPoly) s._cutoutPoly.setMap(null);
-      if (s._cutoutLatLngs.length >= 2) {
-        s._cutoutPoly = new google.maps.Polyline({
-          path: s._cutoutLatLngs.concat([s._cutoutLatLngs[0]]),
-          strokeColor: '#6b7280', strokeWeight: 2.5, map: s.map, zIndex: 4,
-        });
-      } else { s._cutoutPoly = null; }
-      saUpdateCutoutCompleteBtn();
-      return;
-    }
+  function popClosedCutout() {
     if (s.cutouts && s.cutouts.length > 0) {
       var lastC = s.cutouts.pop();
       if (lastC && lastC.polygon) lastC.polygon.setMap(null);
@@ -2573,32 +2601,38 @@ window.saTraceUndo = function() {
         var cl = s._cutoutLabelMarkers.pop();
         if (cl) cl.setMap(null);
       }
-      return;
+      return true;
     }
+    return false;
   }
-  if ((s.tool === 'vent' || s.tool === 'skylight' || s.tool === 'chimney' || s.tool === 'downspout')) {
-    var arr = s[s.tool + 's']; var marr = s['_' + s.tool + 'Markers'];
-    if (arr && arr.length > 0) { arr.pop(); var mk = marr.pop(); if (mk) mk.setMap(null); return; }
-  }
-  if (s.tool === 'ridge' || s.tool === 'hip' || s.tool === 'valley') {
-    var key = s.tool + 's'; var dataKey = '_' + s.tool.charAt(0).toUpperCase() + s.tool.slice(1) + 'Data';
-    // dataKey needs to match _ridgeData / _hipData / _valleyData
-    dataKey = '_' + s.tool + 'Data';
-    if (s[key] && s[key].length > 0) {
-      var line = s[key].pop(); if (line) line.setMap(null);
-      s[dataKey].pop(); return;
+  function popEaveSection() {
+    if (s.eaveSections && s.eaveSections.length > 0) {
+      var last = s.eaveSections.pop();
+      if (last.polygon) last.polygon.setMap(null);
+      if (s._sectionLabelMarkers && s._sectionLabelMarkers.length > 0) {
+        var lbl = s._sectionLabelMarkers.pop();
+        if (lbl) lbl.setMap(null);
+      }
+      if (typeof saRenderSectionPitches === 'function') saRenderSectionPitches();
+      return true;
     }
+    return false;
   }
-  // Fall back to popping a closed eaves section
-  if (s.eaveSections && s.eaveSections.length > 0) {
-    var last = s.eaveSections.pop();
-    if (last.polygon) last.polygon.setMap(null);
-    if (s._sectionLabelMarkers && s._sectionLabelMarkers.length > 0) {
-      var lbl = s._sectionLabelMarkers.pop();
-      if (lbl) lbl.setMap(null);
-    }
-    saRenderSectionPitches();
-  }
+  // Active tool first.
+  if (popAnnotation(s.tool)) return;
+  if (popLine(s.tool)) return;
+  // Fall through every other completed collection so repeated clicks keep
+  // working until the trace is empty.
+  if (popLine('ridge')) return;
+  if (popLine('hip')) return;
+  if (popLine('valley')) return;
+  if (popAnnotation('vent')) return;
+  if (popAnnotation('skylight')) return;
+  if (popAnnotation('chimney')) return;
+  if (popAnnotation('downspout')) return;
+  if (popClosedDormer()) return;
+  if (popClosedCutout()) return;
+  if (popEaveSection()) return;
 };
 
 function saInitTraceMap(lat, lng, address) {
@@ -4428,14 +4462,24 @@ window.saAutoDetectOutline = async function() {
 // failure modes — foundation vision models like Claude perform
 // dramatically better when the target is visually marked.
 window.saToggleHintRegion = function() {
+  // Drawn state -- the button label is "Clear Mark" and there's a red
+  // circle on the map. _saHintArmed is false at this point (it was
+  // flipped back in saHintBeginDraw's mouseup), so without this branch
+  // the function fell through to the arm path and started listening
+  // for a new mark instead of clearing the existing one.
+  if (window._saHintCircle || window._saHintRegion) {
+    saClearHintRegion();
+    saHintBtnSetState('idle');
+    return;
+  }
   if (window._saHintArmed) {
-    // Already armed — clicking the button again disarms + clears.
+    // Already armed -- clicking the button again disarms + clears.
     saClearHintRegion();
     saHintBtnSetState('idle');
     return;
   }
   if (!(window._saTraceState && window._saTraceState.map)) {
-    alert('Map not ready yet — wait a moment and try again.');
+    alert('Map not ready yet -- wait a moment and try again.');
     return;
   }
   window._saHintArmed = true;
