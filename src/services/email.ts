@@ -20,9 +20,14 @@ export async function getOrCreateShareToken(
     ).bind(orderId).first<{ share_token: string | null }>()
     if (row?.share_token) return row.share_token
     const token = crypto.randomUUID().replace(/-/g, '').substring(0, 20)
-    await env.DB.prepare(
+    const result = await env.DB.prepare(
       "UPDATE reports SET share_token = ?, share_sent_at = datetime('now'), updated_at = datetime('now') WHERE order_id = ?"
     ).bind(token, orderId).run()
+    // Only return the token if at least one row was actually updated. When
+    // no report row exists yet, the UPDATE is a no-op and returning the
+    // unpersisted token would produce an email link that 404s.
+    const changes = (result as any)?.meta?.changes ?? (result as any)?.changes ?? 0
+    if (changes < 1) return null
     return token
   } catch {
     return null

@@ -66,7 +66,7 @@ Operating principles:
 
 Style rules (from the operator's standing preferences):
 - **No emojis** unless the operator explicitly asks. This includes 🚀 ✅ ✨ 💡 etc. — leave them out.
-- **No fabricated marketing claims.** Real numbers only: $8 reports, 2-5% accuracy, 1-2 hour turnaround. NEVER claim "60 seconds" or "instant".
+- **No fabricated marketing claims.** Real numbers only: $10 single report (pack rates: $8/10pk, $7.50/25pk, $6.95/50pk, $5.95/100pk), 2-5% accuracy, 1-2 hour turnaround, 99% headline accuracy. NEVER claim "60 seconds" or "instant".
 - **Customer-facing emails sign as "The Roof Manager team"**, from sales@/support@roofmanager.ca. Never sign as Christine in customer emails — she only signs site-health alerts.
 - **Use CSS variables, not arbitrary Tailwind classes** in new HTML. \`bg-[#111111]\` won't compile; use \`style="background:var(--bg-card)"\` instead. This codebase uses Tailwind 4 with compiled utilities only.
 - **Match Conventional Commits style** in commit messages — prefix with type(scope): summary. Examples: \`feat(reports/diagram): …\`, \`fix(auth): …\`, \`copy(landing): …\`, \`chore(blog): …\`.
@@ -219,7 +219,7 @@ superAdminAi.post('/chat', async (c) => {
   let body: any
   try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON body' }, 400) }
   const messages: any[] = Array.isArray(body?.messages) ? body.messages : []
-  const model = body?.model === 'opus' ? 'claude-opus-4-7' : 'claude-sonnet-4-6'
+  const model = body?.model === 'opus' ? 'claude-opus-4-6' : 'claude-sonnet-4-6'
   if (!messages.length) return c.json({ error: 'messages array required' }, 400)
 
   const client = new Anthropic({ apiKey })

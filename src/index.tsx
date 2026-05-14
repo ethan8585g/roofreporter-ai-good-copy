@@ -2448,9 +2448,11 @@ app.get('/admin', (c) => {
   return c.redirect('/super-admin/revenue', 302)
 })
 
-// /admin/login — redirect to the actual admin entry (login is handled at /super-admin)
+// /admin/login — send admins straight to the canonical login form instead of
+// bouncing through /super-admin/revenue (which itself redirects unauthenticated
+// users to /login, creating a confusing two-hop chain).
 app.get('/admin/login', (c) => {
-  return c.redirect('/super-admin/revenue', 302)
+  return c.redirect('/login?next=/super-admin/revenue', 302)
 })
 
 // Dispatch Board — crew scheduling + route optimization

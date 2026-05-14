@@ -831,9 +831,10 @@ customerAuthRoutes.post('/register', async (c) => {
     const cleanPrimaryUse = (primary_use && VALID_PRIMARY_USES.has(String(primary_use)))
       ? String(primary_use)
       : null
+    // Phone is OPTIONAL — when provided, validate shape; when empty, accept.
     const cleanPhone = (phone && String(phone).trim()) ? String(phone).trim() : null
-    if (!cleanPhone || cleanPhone.replace(/\D/g, '').length < 7) {
-      return c.json({ error: 'A valid phone number is required.' }, 400)
+    if (cleanPhone && cleanPhone.replace(/\D/g, '').length < 7) {
+      return c.json({ error: 'Phone number looks invalid. Please enter a real number or leave it blank.' }, 400)
     }
 
     const cleanEmail = email.toLowerCase().trim()

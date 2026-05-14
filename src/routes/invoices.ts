@@ -679,11 +679,26 @@ invoiceRoutes.post('/:id/send', async (c) => {
     if (invoice.linked_order_id || invoice.attached_report_id) {
       const reportId = invoice.attached_report_id || invoice.linked_order_id
       const report = await c.env.DB.prepare(`
-        SELECT r.id, r.status, o.order_number, o.property_address
+        SELECT r.id, r.status, r.share_token, r.order_id, o.order_number, o.property_address
         FROM reports r JOIN orders o ON o.id = r.order_id
         WHERE (r.id = ? OR r.order_id = ?) AND r.status IN ('completed','enhancing') LIMIT 1
       `).bind(reportId, reportId).first<any>()
-      if (report) attachedReport = { report_id: report.id, order_number: report.order_number, property_address: report.property_address, report_url: `/api/reports/${report.id}/html` }
+      if (report) {
+        // Mint a share-token if missing so the invoice email links work for
+        // recipients without a logged-in session (IDOR-gated /api/reports
+        // path 401s in Gmail).
+        let token: string | null = report.share_token || null
+        if (!token && report.order_id) {
+          token = (crypto as any).randomUUID().replace(/-/g, '').substring(0, 20)
+          const upd = await c.env.DB.prepare(
+            "UPDATE reports SET share_token = ?, share_sent_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
+          ).bind(token, report.id).run()
+          const changed = (upd as any)?.meta?.changes ?? (upd as any)?.changes ?? 0
+          if (changed < 1) token = null
+        }
+        const reportUrl = token ? `/report/share/${token}` : `/api/reports/${report.id}/html`
+        attachedReport = { report_id: report.id, order_number: report.order_number, property_address: report.property_address, report_url: reportUrl }
+      }
     }
 
     // Rate limit check

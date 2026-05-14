@@ -12,7 +12,7 @@ import { resolvePitch } from './pitch-resolver'
 import { generateProfessionalReportHTML } from '../templates/report-html'
 import { generateTraceBasedDiagramSVG } from '../templates/svg-diagrams'
 import * as repo from '../repositories/reports'
-import { buildEmailWrapper, sendViaResend, sendGmailOAuth2 } from './email'
+import { buildEmailWrapper, sendViaResend, sendGmailOAuth2, getOrCreateShareToken, loadGmailCreds } from './email'
 import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from './email-tracking'
 import { recordAndNotify } from './admin-notifications'
 import { trackReportGenerated } from './ga4-events'
@@ -607,7 +607,12 @@ async function notifyReportReady(env: Bindings, order: any, orderId: number) {
   const recipientEmail = order.requester_email || order.homeowner_email
   if (!recipientEmail) return
 
-  const reportUrl = `https://www.roofmanager.ca/api/reports/${orderId}/html`
+  // Use the public share-token URL so the email link opens without a logged-in
+  // session. The /api/reports/<id>/html path is IDOR-gated and 401s in Gmail.
+  const shareToken = await getOrCreateShareToken(env, orderId)
+  const reportUrl = shareToken
+    ? `https://www.roofmanager.ca/report/share/${shareToken}`
+    : `https://www.roofmanager.ca/api/reports/${orderId}/html`
   const subject = `Your Roof Report is Ready — ${order.property_address}`
   // Track this send so it shows up in super-admin Journey > Email Tracking
   // alongside the human-triggered notifyTraceCompletedToCustomer path.
@@ -651,9 +656,12 @@ async function notifyReportReady(env: Bindings, order: any, orderId: number) {
     if (resendKey) {
       await sendViaResend(resendKey, recipientEmail, subject, trackedHtml)
     } else {
-      const { GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN } = env as any
-      if (GMAIL_CLIENT_ID && GMAIL_CLIENT_SECRET && GMAIL_REFRESH_TOKEN) {
-        await sendGmailOAuth2(GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, recipientEmail, subject, trackedHtml)
+      // loadGmailCreds reads client_id/secret from env and refresh_token from
+      // D1 settings — the canonical split used everywhere else. Pure-env read
+      // would silently fail when refresh token lives only in D1.
+      const creds = await loadGmailCreds(env)
+      if (creds.clientId && creds.clientSecret && creds.refreshToken) {
+        await sendGmailOAuth2(creds.clientId, creds.clientSecret, creds.refreshToken, recipientEmail, subject, trackedHtml)
       } else {
         await markEmailFailed(env as any, trackingToken, 'no email provider configured')
       }

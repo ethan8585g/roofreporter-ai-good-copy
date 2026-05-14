@@ -158,15 +158,17 @@ reportsRoutes.use('/*', async (c, next) => {
 
   // For report-viewer endpoints, verify ownership before letting the handler
   // run. Admins bypass; customers must own the order. Path shape is
-  // /api/reports/:id/<suffix> — extract :id from the path.
+  // /api/reports/:orderId/<suffix> — the URL param is an order.id, not a
+  // report.id. Match against orders.id (and also report.id as a defensive
+  // fallback for any caller that still passes the report row id directly).
   if (user.role !== 'admin' && OWNERSHIP_GATED_SUFFIXES.some(s => path.endsWith(s))) {
     const m = path.match(/\/reports\/(\d+)\//)
     if (m) {
-      const reportId = Number(m[1])
-      if (Number.isFinite(reportId)) {
+      const orderId = Number(m[1])
+      if (Number.isFinite(orderId)) {
         const owner = await c.env.DB.prepare(
-          `SELECT o.customer_id FROM reports r JOIN orders o ON o.id = r.order_id WHERE r.id = ?`
-        ).bind(reportId).first<{ customer_id: number }>()
+          `SELECT o.customer_id FROM reports r JOIN orders o ON o.id = r.order_id WHERE r.order_id = ? OR r.id = ? LIMIT 1`
+        ).bind(orderId, orderId).first<{ customer_id: number }>()
         if (!owner) return c.json({ error: 'Report not found' }, 404)
         if (owner.customer_id !== (user as any).id) {
           return c.json({ error: 'Forbidden' }, 403)
@@ -2719,7 +2721,12 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
   // Send "report ready" notification to contractor if full auto-email didn't already fire
   if (!autoEmailEnabled && !email_report && contractorEmail) {
     const baseUrl = new URL(c.req.url).origin
-    const viewUrl = `${baseUrl}/api/reports/${orderId}/html`
+    // Use share-token URL — the /api/reports/<id>/html path is IDOR-gated and
+    // 401s for contractors who aren't logged into the customer portal.
+    const notifShareToken = await getOrCreateShareToken(c.env, orderId)
+    const viewUrl = notifShareToken
+      ? `${baseUrl}/report/share/${notifShareToken}`
+      : `${baseUrl}/api/reports/${orderId}/html`
     const matCalcUrl = `${baseUrl}/customer/material-calculator?order_id=${orderId}`
     const addr = order.property_address || 'your property'
     const notifHtml = `<!DOCTYPE html><html><body style="font-family:Inter,system-ui,sans-serif;background:#f8fafc;margin:0;padding:32px">
@@ -2740,10 +2747,10 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
   </div>
 </div></body></html>`
     try {
-      const ci = (c.env as any).GMAIL_CLIENT_ID
-      const cs = (c.env as any).GMAIL_CLIENT_SECRET
-      const rt = (c.env as any).GMAIL_REFRESH_TOKEN
-      if (ci && cs && rt) await sendGmailOAuth2(ci, cs, rt, contractorEmail, `\u2705 Roof Report Ready \u2014 ${addr}`, notifHtml, c.env.GMAIL_SENDER_EMAIL)
+      const notifCreds = await loadGmailCreds(c.env as any)
+      if (notifCreds.clientId && notifCreds.clientSecret && notifCreds.refreshToken) {
+        await sendGmailOAuth2(notifCreds.clientId, notifCreds.clientSecret, notifCreds.refreshToken, contractorEmail, `\u2705 Roof Report Ready \u2014 ${addr}`, notifHtml, notifCreds.senderEmail || c.env.GMAIL_SENDER_EMAIL)
+      }
     } catch (e: any) { console.warn('[NotifEmail] Failed:', e.message) }
   }
 

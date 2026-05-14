@@ -175,7 +175,7 @@ export async function runAbandonedCheckoutRecoveryStage(
     FROM square_payments sp
     JOIN customers c ON c.id = sp.customer_id
     WHERE sp.status = 'pending'
-      AND sp.payment_type IN ('credit_pack', 'single_report', 'subscription')
+      AND sp.payment_type IN ('credit_pack', 'single_report', 'one_time_report', 'subscription')
       AND sp.customer_id IS NOT NULL
       AND c.email IS NOT NULL
       AND c.is_active = 1
