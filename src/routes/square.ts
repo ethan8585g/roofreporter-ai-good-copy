@@ -2245,14 +2245,8 @@ squareRoutes.get('/admin/stats', async (c) => {
 // not us, so the truth is on Square's side. Gated to super-admin.
 // ============================================================
 squareRoutes.get('/admin/diagnostics', async (c) => {
-  const authHeader = c.req.header('Authorization') || c.req.header('authorization') || ''
-  const diagBearer = (c.env as any).DIAG_BEARER as string | undefined
-  const presentedBearer = authHeader.replace(/^Bearer\s+/i, '').trim()
-  const bearerOk = !!(diagBearer && presentedBearer && presentedBearer === diagBearer)
-  if (!bearerOk) {
-    const admin = await validateAdminSession(c.env.DB, authHeader)
-    if (!admin) return c.json({ error: 'Not authenticated' }, 401)
-  }
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization') || c.req.header('authorization') || '')
+  if (!admin) return c.json({ error: 'Not authenticated' }, 401)
 
   const accessToken = c.env.SQUARE_ACCESS_TOKEN
   const locationId = c.env.SQUARE_LOCATION_ID
