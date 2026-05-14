@@ -7,7 +7,7 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { Bindings, AppEnv, RoofReport } from '../types'
 import { computeMaterialEstimate, degreesToCardinal } from '../utils/geo-math'
-import { validateAdminSession } from '../routes/auth'
+import { validateAdminSession, requireSuperadmin } from '../routes/auth'
 import { getCustomerSessionToken } from '../lib/session-tokens'
 import { resolveTeamOwner } from './team'
 import { createAutoInvoiceForOrder } from '../services/auto-invoice'
@@ -348,8 +348,18 @@ reportsRoutes.get('/:orderId/html', async (c) => {
   // /api/admin/superadmin/orders/:id/preview-html instead. Returning 404
   // (not 403) so a customer guessing the URL gets the same response shape
   // as a never-rendered report.
+  //
+  // Super-admin escape hatch: if a super-admin's auth header is present, let
+  // them through. Same content as the preview-html endpoint; saves them from
+  // the orders-list "View" link landing on a 404 when their browser has the
+  // pre-fix cached JS that still points at this public route.
   if (row.admin_review_status === 'awaiting_review') {
-    return c.json({ error: 'Report not found' }, 404)
+    let isSuperAdminViewer = false
+    try {
+      const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+      isSuperAdminViewer = !!(admin && requireSuperadmin(admin))
+    } catch { /* fall through to 404 */ }
+    if (!isSuperAdminViewer) return c.json({ error: 'Report not found' }, 404)
   }
   trackReportView(c, { orderId, viewType: 'portal' })
   const cacheWasFresh = isCachedHtmlFresh(row.professional_report_html)
