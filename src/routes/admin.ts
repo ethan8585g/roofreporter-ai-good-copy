@@ -1594,6 +1594,7 @@ adminRoutes.get('/superadmin/orders', async (c) => {
         r.status as report_status, r.created_at as report_started_at, r.updated_at as report_completed_at,
         r.gross_squares, r.confidence_score, r.complexity_class,
         r.share_token, r.share_view_count, r.share_sent_at,
+        r.admin_review_status,
         (SELECT COUNT(*) FROM report_view_events
            WHERE order_id = o.id
              AND view_type IN ('share','portal','pdf')
@@ -6586,6 +6587,106 @@ adminRoutes.post('/superadmin/orders/:id/approve-and-deliver', async (c) => {
     return c.json({ success: true, order_id: orderId })
   } catch (err: any) {
     return c.json({ error: 'Failed to approve and deliver: ' + err.message }, 500)
+  }
+})
+
+// POST /superadmin/bulk-approve-pending
+// One-click delivery for everything still sitting in admin_review_status =
+// 'awaiting_review'. Same semantics as /approve-and-deliver but iterates over
+// the whole pending queue (optionally filtered by customer_id query param so
+// the admin can clear one customer's backlog without touching others).
+// Each delivery runs the same finalizeReportDelivery hook so customers get
+// email + CRM + invoice exactly like the per-report Submit button.
+adminRoutes.post('/superadmin/bulk-approve-pending', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const customerIdParam = c.req.query('customer_id')
+  const customerId = customerIdParam ? parseInt(customerIdParam) : null
+  if (customerIdParam && isNaN(customerId as number)) return c.json({ error: 'Invalid customer_id' }, 400)
+  try {
+    const sql = customerId != null
+      ? `SELECT r.order_id, r.professional_report_html FROM reports r JOIN orders o ON o.id = r.order_id WHERE r.admin_review_status = 'awaiting_review' AND o.customer_id = ? ORDER BY r.order_id ASC`
+      : `SELECT r.order_id, r.professional_report_html FROM reports r WHERE r.admin_review_status = 'awaiting_review' ORDER BY r.order_id ASC`
+    const stmt = c.env.DB.prepare(sql)
+    const rows = (customerId != null
+      ? await stmt.bind(customerId).all<{ order_id: number; professional_report_html: string | null }>()
+      : await stmt.all<{ order_id: number; professional_report_html: string | null }>()).results || []
+
+    const results: Array<{ order_id: number; ok: boolean; reason?: string }> = []
+    const ctx = (c as any).executionCtx
+
+    for (const row of rows) {
+      const orderId = row.order_id
+      // Skip rows whose HTML is empty/unrenderable — same gate the per-report
+      // endpoint uses. These need a re-trace, not a bulk approve.
+      if (!row.professional_report_html || row.professional_report_html.length < 1000) {
+        results.push({ order_id: orderId, ok: false, reason: 'html_empty' })
+        continue
+      }
+      try {
+        await finalizeReportDelivery(orderId, c.env, ctx)
+        await c.env.DB.prepare(`
+          UPDATE reports SET
+            admin_review_status = 'approved',
+            admin_review_completed_at = datetime('now'),
+            updated_at = datetime('now')
+          WHERE order_id = ?
+        `).bind(orderId).run()
+        // Fire customer-facing trace_completed notification (mirrors the
+        // per-report endpoint).
+        try {
+          const order = await c.env.DB.prepare(
+            'SELECT o.customer_id, o.property_address, o.order_number, o.service_tier, o.price, o.is_trial, c.email AS customer_email, c.name AS customer_name FROM orders o LEFT JOIN customers c ON c.id = o.customer_id WHERE o.id = ?'
+          ).bind(orderId).first<any>()
+          if (order) {
+            const notifyPromise = recordAndNotify(c.env, {
+              kind: 'trace_completed',
+              order: {
+                order_id: orderId,
+                order_number: order.order_number,
+                customer_id: order.customer_id,
+                customer_email: order.customer_email || '',
+                customer_name: order.customer_name || '',
+                property_address: order.property_address || '',
+                service_tier: order.service_tier || '',
+                price: order.price ?? 0,
+                payment_status: 'paid',
+                is_trial: !!order.is_trial,
+                trace_source: 'admin',
+                needs_admin_trace: false,
+                payload: { admin_id: admin.id, via: 'bulk_approve_pending' },
+              },
+            }).catch((e) => console.warn('[bulk-approve] trace_completed:', e?.message || e))
+            if (ctx?.waitUntil) ctx.waitUntil(notifyPromise)
+          }
+        } catch { /* non-fatal */ }
+        try {
+          await c.env.DB.prepare(
+            "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'admin_bulk_approve_and_deliver', ?)"
+          ).bind(JSON.stringify({
+            order_id: orderId,
+            admin_id: admin.id,
+            admin_email: admin.email,
+            customer_id_filter: customerId,
+          })).run()
+        } catch { /* non-fatal audit */ }
+        results.push({ order_id: orderId, ok: true })
+      } catch (e: any) {
+        results.push({ order_id: orderId, ok: false, reason: e?.message || 'unknown' })
+      }
+    }
+
+    const ok = results.filter(r => r.ok).length
+    const failed = results.length - ok
+    return c.json({
+      success: true,
+      total_pending: rows.length,
+      delivered: ok,
+      failed,
+      results,
+    })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to bulk-approve: ' + err.message }, 500)
   }
 })
 

@@ -4472,6 +4472,53 @@ function saPreviewWireUp() {
   });
 }
 
+// Bulk approve all reports stuck in admin_review_status='awaiting_review'.
+// Each delivery runs the same finalizeReportDelivery hook the per-report
+// Submit button uses (email + CRM + invoice + customer notification).
+window.saBulkApprovePending = async function() {
+  if (!confirm('Submit ALL pending reports to their customers?\n\nThis runs the same delivery pipeline as the per-report Submit button (email + CRM + auto-invoice) for every report still in admin review.\n\nClick OK to proceed.')) return;
+  var token = localStorage.getItem('rc_token') || '';
+  try {
+    var res = await fetch('/api/admin/superadmin/bulk-approve-pending', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    var data = await res.json();
+    if (data && data.success) {
+      alert('Delivered ' + data.delivered + ' of ' + data.total_pending + ' pending report' + (data.total_pending === 1 ? '' : 's') + '.' + (data.failed > 0 ? ' (' + data.failed + ' failed — check console for details.)' : ''));
+      if (data.failed > 0) console.warn('[bulk-approve] failures:', data.results.filter(function(r){return !r.ok;}));
+      loadView('orders');
+    } else {
+      alert('Error: ' + (data && data.error || 'Failed to bulk-approve'));
+    }
+  } catch (e) {
+    alert('Network error: ' + e.message);
+  }
+};
+
+// Single Submit button on the awaiting-approval list — reuses
+// saPreviewApprove's exact semantics but without the preview-page nav.
+window.saApproveSingle = async function(orderId) {
+  if (!confirm('Submit this report to the customer? This fires email + CRM + invoice.')) return;
+  var token = localStorage.getItem('rc_token') || '';
+  try {
+    var res = await fetch('/api/admin/superadmin/orders/' + orderId + '/approve-and-deliver', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    var data = await res.json();
+    if (data && data.success) {
+      loadView('orders');
+    } else {
+      alert('Error: ' + (data && data.error || 'Failed to deliver'));
+    }
+  } catch (e) {
+    alert('Network error: ' + e.message);
+  }
+};
+
 // Submit-to-Customer button on the preview page footer. Hits the
 // /approve-and-deliver endpoint which fires email + CRM + auto-invoice
 // + recordAndNotify. On success, returns the operator to the orders list.
@@ -4568,8 +4615,39 @@ function renderOrdersView() {
   const counts = d.counts || {};
   const avgSec = d.avg_processing_seconds || 0;
   const needsTraceOrders = (SA.data.needsTrace || {}).orders || [];
+  // Awaiting-approval orders — these have a generated draft sitting in
+  // admin_review_status='awaiting_review' but were never approved/delivered.
+  // The trace UI's Generate Report Preview is step 1; the operator MUST
+  // also click Submit to Customer on the preview page (or hit Submit All
+  // here) for the customer to receive the report.
+  const awaitingApprovalOrders = orders.filter(o => o.admin_review_status === 'awaiting_review');
 
   return `
+    ${awaitingApprovalOrders.length > 0 ? `
+    <div style="background:#0c1a3a;border:2px solid #3b82f6;border-radius:14px;padding:20px;margin-bottom:24px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:12px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:36px;height:36px;background:rgba(59,130,246,0.2);border-radius:8px;display:flex;align-items:center;justify-content:center"><i class="fas fa-paper-plane" style="color:#60a5fa;font-size:16px"></i></div>
+          <div>
+            <div style="color:#93c5fd;font-size:15px;font-weight:800">Awaiting Customer Approval</div>
+            <div style="color:#64748b;font-size:12px">${awaitingApprovalOrders.length} report${awaitingApprovalOrders.length !== 1 ? 's' : ''} traced but NOT yet delivered &mdash; customer sees these as still &ldquo;generating&rdquo;</div>
+          </div>
+        </div>
+        <button onclick="saBulkApprovePending()" style="padding:10px 18px;background:#16a34a;color:#fff;font-size:12px;font-weight:800;border:none;border-radius:8px;cursor:pointer;white-space:nowrap"><i class="fas fa-paper-plane mr-1.5"></i>Submit All ${awaitingApprovalOrders.length} to Customers</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto">
+        ${awaitingApprovalOrders.map(o => `
+          <div style="background:#111;border:1px solid #1e3a8a;border-radius:8px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <div style="flex:1;min-width:0">
+              <div style="color:#dbeafe;font-size:12px;font-weight:600">${o.property_address || 'Unknown address'}</div>
+              <div style="color:#64748b;font-size:11px;margin-top:1px">${o.customer_name || o.customer_email || ''} &middot; ${o.order_number || 'Order #' + o.id}</div>
+            </div>
+            <button onclick="saApproveSingle(${o.id})" style="padding:5px 12px;background:rgba(34,197,94,0.18);color:#86efac;font-size:11px;font-weight:700;border:1px solid rgba(34,197,94,0.4);border-radius:6px;cursor:pointer;white-space:nowrap"><i class="fas fa-paper-plane mr-1"></i>Submit</button>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    ` : ''}
     ${needsTraceOrders.length > 0 ? `
     <div style="background:#1a1200;border:2px solid #f59e0b;border-radius:14px;padding:20px;margin-bottom:24px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
