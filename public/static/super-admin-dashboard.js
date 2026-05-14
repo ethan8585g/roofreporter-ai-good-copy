@@ -16355,7 +16355,7 @@ function renderPeopleDirectoryView() {
   if (people.length === 0) {
     listHtml = '<div class="text-center py-16 text-gray-400"><i class="fas fa-users text-4xl mb-3"></i><p class="font-medium">No people found</p></div>';
   } else {
-    listHtml = '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-gray-50 text-left"><th class="px-4 py-2 font-semibold text-gray-600">Name</th><th class="px-4 py-2 font-semibold text-gray-600">Email</th><th class="px-4 py-2 font-semibold text-gray-600">Phone</th><th class="px-4 py-2 font-semibold text-gray-600">Company</th><th class="px-4 py-2 font-semibold text-gray-600">Type</th><th class="px-4 py-2 font-semibold text-gray-600">Logins</th><th class="px-4 py-2 font-semibold text-gray-600">Last Login</th><th class="px-4 py-2 font-semibold text-gray-600">Joined</th></tr></thead><tbody>';
+    listHtml = '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-gray-50 text-left"><th class="px-4 py-2 font-semibold text-gray-600">Name</th><th class="px-4 py-2 font-semibold text-gray-600">Email</th><th class="px-4 py-2 font-semibold text-gray-600">Phone</th><th class="px-4 py-2 font-semibold text-gray-600">Company</th><th class="px-4 py-2 font-semibold text-gray-600">Type</th><th class="px-4 py-2 font-semibold text-gray-600">Logins</th><th class="px-4 py-2 font-semibold text-gray-600">Reports</th><th class="px-4 py-2 font-semibold text-gray-600">Last Login</th><th class="px-4 py-2 font-semibold text-gray-600">Joined</th></tr></thead><tbody>';
     people.forEach(function(p) {
       var badge = typeBadge[p.person_type] || 'bg-gray-100 text-gray-600';
       var label = typeLabel[p.person_type] || p.person_type;
@@ -16371,6 +16371,10 @@ function renderPeopleDirectoryView() {
             ? '<td class="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">' + fmtDateTime(p.last_login) + '</td>'
             : '<td class="px-4 py-3 text-xs"><span class="px-2 py-0.5 bg-red-50 text-red-600 rounded-full text-[10px] font-semibold uppercase">Never</span></td>')
         : '<td class="px-4 py-3 text-gray-300 text-xs">—</td>';
+      var ordersCount = (p.orders_count != null) ? Number(p.orders_count) : null;
+      var reportsCell = (p.person_type === 'prospect' || ordersCount == null)
+        ? '<td class="px-4 py-3 text-gray-300 text-xs">—</td>'
+        : '<td class="px-4 py-3 text-xs font-semibold ' + (ordersCount > 0 ? 'text-emerald-700' : 'text-gray-400') + '">' + ordersCount + '</td>';
       // Team-member sub-line: show the parent account so admin can see the
       // invited member is attached to the inviter, not a fresh standalone signup.
       var teamSub = '';
@@ -16385,6 +16389,7 @@ function renderPeopleDirectoryView() {
         '<td class="px-4 py-3 text-gray-500">' + (p.effective_company || p.company_name || p.company || p.owner_company || p.team_owner_company || '—') + '</td>' +
         '<td class="px-4 py-3"><span class="px-2 py-0.5 ' + badge + ' rounded-full text-xs font-medium">' + label + '</span></td>' +
         loginsCell +
+        reportsCell +
         lastLoginCell +
         '<td class="px-4 py-3 text-gray-400 text-xs">' + fmtDate(p.created_at) + '</td>' +
       '</tr>';
