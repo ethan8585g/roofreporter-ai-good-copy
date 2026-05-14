@@ -18262,30 +18262,37 @@ function getPricingPageHTML() {
             <tr>
               <td class="px-6 py-3 font-medium" style="color:var(--text-primary)">Individual</td>
               <td class="text-center px-4 py-3" style="color:var(--text-secondary)">1</td>
-              <td class="text-center px-4 py-3" style="color:var(--text-secondary)">$8.00</td>
-              <td class="text-center px-4 py-3 font-semibold" style="color:var(--text-primary)">$8</td>
+              <td class="text-center px-4 py-3" style="color:var(--text-secondary)">$10.00</td>
+              <td class="text-center px-4 py-3 font-semibold" style="color:var(--text-primary)">$10</td>
               <td class="text-center px-4 py-3" style="color:var(--text-muted)">—</td>
             </tr>
             <tr>
               <td class="px-6 py-3 font-medium" style="color:var(--text-primary)">10-Pack</td>
               <td class="text-center px-4 py-3" style="color:var(--text-secondary)">10</td>
-              <td class="text-center px-4 py-3" style="color:var(--text-secondary)">$7.50</td>
-              <td class="text-center px-4 py-3 font-semibold" style="color:var(--text-primary)">$75</td>
-              <td class="text-center px-4 py-3"><span class="text-green-400 font-semibold">Save 6%</span></td>
+              <td class="text-center px-4 py-3" style="color:var(--text-secondary)">$8.00</td>
+              <td class="text-center px-4 py-3 font-semibold" style="color:var(--text-primary)">$80</td>
+              <td class="text-center px-4 py-3"><span class="text-green-400 font-semibold">Save 20%</span></td>
             </tr>
             <tr style="background:var(--bg-elevated)">
               <td class="px-6 py-3 font-medium" style="color:var(--text-primary)">25-Pack <span class="text-xs bg-accent-100 text-accent-700 px-1.5 py-0.5 rounded font-bold ml-1">POPULAR</span></td>
               <td class="text-center px-4 py-3" style="color:var(--text-secondary)">25</td>
-              <td class="text-center px-4 py-3" style="color:var(--text-secondary)">$7.00</td>
-              <td class="text-center px-4 py-3 font-semibold" style="color:var(--text-primary)">$175</td>
-              <td class="text-center px-4 py-3"><span class="text-green-400 font-semibold">Save 13%</span></td>
+              <td class="text-center px-4 py-3" style="color:var(--text-secondary)">$7.50</td>
+              <td class="text-center px-4 py-3 font-semibold" style="color:var(--text-primary)">$187.50</td>
+              <td class="text-center px-4 py-3"><span class="text-green-400 font-semibold">Save 25%</span></td>
+            </tr>
+            <tr>
+              <td class="px-6 py-3 font-medium" style="color:var(--text-primary)">50-Pack</td>
+              <td class="text-center px-4 py-3" style="color:var(--text-secondary)">50</td>
+              <td class="text-center px-4 py-3" style="color:var(--text-secondary)">$6.95</td>
+              <td class="text-center px-4 py-3 font-semibold" style="color:var(--text-primary)">$347.50</td>
+              <td class="text-center px-4 py-3"><span class="text-green-400 font-semibold">Save 30%</span></td>
             </tr>
             <tr>
               <td class="px-6 py-3 font-medium" style="color:var(--text-primary)">100-Pack <span class="text-xs bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded font-bold ml-1">BEST VALUE</span></td>
               <td class="text-center px-4 py-3" style="color:var(--text-secondary)">100</td>
               <td class="text-center px-4 py-3" style="color:var(--text-secondary)">$5.95</td>
               <td class="text-center px-4 py-3 font-semibold" style="color:var(--text-primary)">$595</td>
-              <td class="text-center px-4 py-3"><span class="text-green-400 font-semibold">Save 26%</span></td>
+              <td class="text-center px-4 py-3"><span class="text-green-400 font-semibold">Save 41%</span></td>
             </tr>
           </tbody>
         </table>
