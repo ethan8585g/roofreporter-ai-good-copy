@@ -1940,6 +1940,11 @@ app.get('/3d-verify', async (c) => {
     const d = ev && ev.data; if (!d || typeof d !== 'object') return;
     if (d.type === 'rm-3d-set-mode') {
       setCaptureMode(d.mode);
+    } else if (d.type === 'rm-3d-undo') {
+      // Parent's bottom Undo button — pop the last pick from this iframe's
+      // own state. 3D and 2D trace state are decoupled, so each side
+      // handles its own undo independently.
+      try { undoLastPick(); } catch (_) {}
     } else if (d.type === 'rm-3d-solar-segments') {
       drawSolarOverlay3D(d.segments || []);
     } else if (d.type === 'rm-3d-solar-clear') {
