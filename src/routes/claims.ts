@@ -1,11 +1,12 @@
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 import { validateAdminSession } from './auth'
 
-export const claimsRoutes = new Hono<{ Bindings: Bindings }>()
+export const claimsRoutes = new Hono<AppEnv>()
 
-async function getOwnerId(c: any): Promise<number | null> {
+async function getOwnerId(c: Context<AppEnv>): Promise<number | null> {
   const auth = c.req.header('Authorization')
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.slice(7)
@@ -176,7 +177,7 @@ claimsRoutes.delete('/:id', async (c) => {
 
 // ------------ LINE ITEMS ------------
 
-async function verifyClaimOwnership(c: any, claimId: string, ownerId: number) {
+async function verifyClaimOwnership(c: Context<AppEnv>, claimId: string, ownerId: number) {
   const claim = await c.env.DB.prepare(
     'SELECT id FROM insurance_claims WHERE id = ? AND owner_id = ?'
   ).bind(claimId, ownerId).first()

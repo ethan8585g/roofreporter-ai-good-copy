@@ -20,9 +20,9 @@ import {
   runNightlyAttributionRollup,
 } from '../services/attribution'
 
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 
-export const superAdminAttribution = new Hono<{ Bindings: Bindings }>()
+export const superAdminAttribution = new Hono<AppEnv>()
 
 // All routes require superadmin
 superAdminAttribution.use('*', async (c, next) => {

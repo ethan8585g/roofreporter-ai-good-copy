@@ -9,12 +9,12 @@ import { runTrafficAgent } from '../services/traffic-agent'
 import { validateAdminSession } from './auth'
 import { limitByIp } from '../lib/rate-limit'
 
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 
 // Minimum gap between event-triggered analysis runs (10 minutes)
 const LIVE_ANALYSIS_COOLDOWN_MS = 10 * 60 * 1000
 
-export const analyticsRoutes = new Hono<{ Bindings: Bindings }>()
+export const analyticsRoutes = new Hono<AppEnv>()
 
 // P0-07: every analytics endpoint except /track and /track-page requires an
 // authenticated admin session. /track stays public (client beacon) but is

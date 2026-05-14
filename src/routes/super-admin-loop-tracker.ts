@@ -17,13 +17,14 @@
 // ============================================================
 
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import { validateAdminSession, requireSuperadmin } from './auth'
 import { runScan, recordExternalRun, type ScanType, type RunSource } from '../services/loop-scanner'
 import { pruneExpiredScanSessions } from '../services/synthetic-auth'
 
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 
-export const superAdminLoopTracker = new Hono<{ Bindings: Bindings }>()
+export const superAdminLoopTracker = new Hono<AppEnv>()
 
 const VALID_SCAN_TYPES: ScanType[] = ['public', 'customer', 'admin', 'health', 'reports']
 
@@ -423,7 +424,7 @@ superAdminLoopTracker.post('/api/findings/bulk-resolve', async (c) => {
 // Self-contained endpoints — query existing tables only, no schema or
 // other-route changes. Backs the "Traffic / Dead Ends" panel below.
 
-function trafficWindow(c: any): { hours: number; sinceIso: string } {
+function trafficWindow(c: Context<AppEnv>): { hours: number; sinceIso: string } {
   const hours = Math.min(Math.max(Number(c.req.query('hours') || 24), 1), 720) // 1h..30d
   const sinceIso = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ')
   return { hours, sinceIso }

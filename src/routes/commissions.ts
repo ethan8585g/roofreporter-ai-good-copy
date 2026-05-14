@@ -18,16 +18,17 @@
 //   GET    /api/commissions/team-members    → List team members for dropdowns
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 import { logAdminAction } from '../lib/audit-log'
 import { clientIp } from '../lib/rate-limit'
 
-export const commissionRoutes = new Hono<{ Bindings: Bindings }>()
+export const commissionRoutes = new Hono<AppEnv>()
 
 // ── AUTH ──
-async function getOwnerId(c: any): Promise<number | null> {
+async function getOwnerId(c: Context<AppEnv>): Promise<number | null> {
   const auth = c.req.header('Authorization')
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.slice(7)

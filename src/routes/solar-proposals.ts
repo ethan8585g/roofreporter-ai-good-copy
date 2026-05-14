@@ -12,12 +12,13 @@
 // are frozen so later edits to templates or layouts cannot mutate what the
 // homeowner already saw. Draft rows are freely mutable.
 // ============================================================
+import type { Context } from 'hono'
 import { Hono } from 'hono'
 import { getCustomerSessionToken } from '../lib/session-tokens'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 
-export const solarProposalsRoutes = new Hono<{ Bindings: Bindings }>()
+export const solarProposalsRoutes = new Hono<AppEnv>()
 
 // 32-char hex, cryptographically random. Same shape as elsewhere in the app.
 function generateShareToken(): string {
@@ -26,7 +27,7 @@ function generateShareToken(): string {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-async function requireCustomer(c: any) {
+async function requireCustomer(c: Context<AppEnv>) {
   const token = getCustomerSessionToken(c)
   if (!token) return null
   const s = await c.env.DB.prepare(

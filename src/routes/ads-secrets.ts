@@ -10,10 +10,10 @@
 // ============================================================
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession, requireSuperadmin } from './auth'
 
-export const adsSecretsRoutes = new Hono<{ Bindings: Bindings }>()
+export const adsSecretsRoutes = new Hono<AppEnv>()
 
 interface SecretEntry {
   name: string

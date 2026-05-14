@@ -224,8 +224,8 @@ export function apiAuthMiddleware() {
       created_at: keyRow.created_at
     }
 
-    c.set('apiAccount' as any, account)
-    c.set('apiKey' as any, apiKey)
+    c.set('apiAccount', account)
+    c.set('apiKey', apiKey)
 
     await next()
 

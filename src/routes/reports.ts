@@ -4,7 +4,8 @@
 // ============================================================
 
 import { Hono } from 'hono'
-import type { Bindings, RoofReport } from '../types'
+import type { Context } from 'hono'
+import type { Bindings, AppEnv, RoofReport } from '../types'
 import { computeMaterialEstimate, degreesToCardinal } from '../utils/geo-math'
 import { validateAdminSession } from '../routes/auth'
 import { getCustomerSessionToken } from '../lib/session-tokens'
@@ -109,7 +110,7 @@ function avgEdgeConfidence(edges: any[] | undefined): number | null {
   return vals.reduce((s, v) => s + v, 0) / vals.length
 }
 
-export const reportsRoutes = new Hono<{ Bindings: Bindings }>()
+export const reportsRoutes = new Hono<AppEnv>()
 
 // ── GLOBAL ERROR HANDLER ──
 reportsRoutes.onError((err, c) => {
@@ -119,7 +120,7 @@ reportsRoutes.onError((err, c) => {
 })
 
 // ── AUTH MIDDLEWARE ──
-async function validateAdminOrCustomer(c: any) {
+async function validateAdminOrCustomer(c: Context<AppEnv>) {
   const db: D1Database = c.env.DB
   const authHeader = c.req.header('Authorization')
   const cookieHeader = c.req.header('Cookie')
@@ -153,7 +154,7 @@ reportsRoutes.use('/*', async (c, next) => {
 
   const user = await validateAdminOrCustomer(c)
   if (!user) return c.json({ error: 'Authentication required' }, 401)
-  c.set('user' as any, user)
+  c.set('user', user)
 
   // For report-viewer endpoints, verify ownership before letting the handler
   // run. Admins bypass; customers must own the order. Path shape is
@@ -2349,7 +2350,7 @@ reportsRoutes.post('/search', async (c) => {
 // Run once to backfill embeddings for all completed reports
 // ============================================================
 reportsRoutes.post('/embed-all', async (c) => {
-  const user = c.get('user' as any) as any
+  const user = c.get('user') as any
   if (user?.role !== 'admin') return c.json({ error: 'Admin only' }, 403)
 
   const apiKey = c.env.GEMINI_ENHANCE_API_KEY || c.env.GOOGLE_VERTEX_API_KEY
@@ -3108,7 +3109,7 @@ reportsRoutes.post('/webhooks/resend', async (c) => {
 // POST /:orderId/share — Generate a public shareable link for a report
 // ============================================================
 reportsRoutes.post('/:orderId/share', async (c) => {
-  const user = c.get('user' as any) as any
+  const user = c.get('user') as any
   const orderId = c.req.param('orderId')
   const body = await c.req.json().catch(() => ({} as any))
 

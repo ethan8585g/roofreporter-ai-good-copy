@@ -1,9 +1,9 @@
 import { Hono } from 'hono'
 import { getCustomerSessionToken } from '../lib/session-tokens'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { isDevAccount } from './customer-auth'
 
-export const propertyImageryRoutes = new Hono<{ Bindings: Bindings }>()
+export const propertyImageryRoutes = new Hono<AppEnv>()
 
 // ============================================================
 // AUTH MIDDLEWARE — Dev account only

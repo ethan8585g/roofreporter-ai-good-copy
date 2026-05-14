@@ -13,12 +13,13 @@
 //   POST /api/virtual-tryon/cancel/:id  → Cancel a pending job
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
 import { getCustomerSessionToken } from '../lib/session-tokens'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 
-const virtualTryonRoutes = new Hono<{ Bindings: Bindings }>()
+const virtualTryonRoutes = new Hono<AppEnv>()
 
 // ── CONSTANTS ──────────────────────────────────────────────
 
@@ -42,7 +43,7 @@ const NEGATIVE_PROMPT = 'ugly, distorted, messy edges, low resolution, blurry, d
 // ── HELPER: Get customer ID from auth token ────────────────
 // Team members resolve to their team owner's account for shared data
 
-async function getCustomerId(c: any): Promise<number | null> {
+async function getCustomerId(c: Context<AppEnv>): Promise<number | null> {
   const token = getCustomerSessionToken(c)
   if (!token) return null
   const session = await c.env.DB.prepare(`
@@ -581,7 +582,7 @@ function defaultHouseGeometry() {
 // Returns a job response compatible with the polling contract.
 // ============================================================
 
-async function generateWithGemini(c: any, opts: {
+async function generateWithGemini(c: Context<AppEnv>, opts: {
   geminiKey: string
   original_image: string
   mask_image: string

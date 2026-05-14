@@ -11,10 +11,10 @@
 // ============================================================
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { runScan } from '../services/loop-scanner'
 
-export const reportsMonitorRoutes = new Hono<{ Bindings: Bindings }>()
+export const reportsMonitorRoutes = new Hono<AppEnv>()
 
 reportsMonitorRoutes.use('*', async (c, next) => {
   const expected = (c.env as any).REPORTS_MONITOR_TOKEN

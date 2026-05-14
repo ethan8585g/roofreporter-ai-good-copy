@@ -1,5 +1,6 @@
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { trackUserSignup, trackUserLogin, trackEmailVerified, trackOnboardingStep, trackOnboardingCompleted } from '../services/ga4-events'
 import { identifySession } from '../services/attribution'
 import { linkCustomerToLead, markCustomerActive } from '../services/customer-activity'
@@ -39,7 +40,7 @@ function readGclidWithCookieFallback(bodyVal: unknown, cookieHeader: string | un
 
 // P0-05: HttpOnly cookie name for customer sessions.
 const CUSTOMER_SESSION_COOKIE = 'rm_customer_session'
-function setCustomerSessionCookie(c: any, token: string, maxAgeSeconds: number) {
+function setCustomerSessionCookie(c: Context<AppEnv>, token: string, maxAgeSeconds: number) {
   c.header('Set-Cookie', `${CUSTOMER_SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAgeSeconds}`, { append: true })
   // CSRF: issue a non-HttpOnly companion cookie at session-creation. JS reads
   // this and echoes it as X-RM-CSRF on cookie-only state-change requests.
@@ -47,7 +48,7 @@ function setCustomerSessionCookie(c: any, token: string, maxAgeSeconds: number) 
   const csrf = generateCsrfToken()
   c.header('Set-Cookie', csrfCookieAttrs(csrf, maxAgeSeconds), { append: true })
 }
-function clearCustomerSessionCookie(c: any) {
+function clearCustomerSessionCookie(c: Context<AppEnv>) {
   c.header('Set-Cookie', `${CUSTOMER_SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`, { append: true })
   c.header('Set-Cookie', `rm_csrf=; Path=/; SameSite=Lax; Secure; Max-Age=0`, { append: true })
 }
@@ -78,13 +79,13 @@ async function recordCustomerVisit(env: Bindings, customerId: number, ip: string
   }
 }
 
-function ipFromRequest(c: any): string | null {
+function ipFromRequest(c: Context<AppEnv>): string | null {
   return c.req.header('CF-Connecting-IP')
     || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim()
     || null
 }
 
-export const customerAuthRoutes = new Hono<{ Bindings: Bindings }>()
+export const customerAuthRoutes = new Hono<AppEnv>()
 
 // CSRF: enforce double-submit cookie on customer state-change endpoints.
 // Bypasses GET/HEAD/OPTIONS, Bearer-token API clients, and pre-auth endpoints
@@ -108,7 +109,7 @@ customerAuthRoutes.use('*', makeCsrfMiddleware(CUSTOMER_SESSION_COOKIE, CUSTOMER
 
 // Seeds the 12 default material catalog items for a new account so users have
 // context on what the Material Catalog section is for when they first open it.
-async function seedDefaultMaterials(db: any, ownerId: number) {
+async function seedDefaultMaterials(db: D1Database, ownerId: number) {
   const defaults = [
     { category: 'shingles',      name: 'Architectural Shingles (Laminate)',    unit: 'bundles', unit_price: 42.00,  coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', is_default: 1, sort_order: 1 },
     { category: 'shingles',      name: '3-Tab Standard Shingles',              unit: 'bundles', unit_price: 32.00,  coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', is_default: 0, sort_order: 2 },
@@ -3021,7 +3022,7 @@ const PROPOSAL_PRICING_DEFAULTS = {
   },
 }
 
-async function resolveCustomerOwnerId(c: any): Promise<number | null> {
+async function resolveCustomerOwnerId(c: Context<AppEnv>): Promise<number | null> {
   const token = getCustomerSessionToken(c)
   if (!token) return null
   const row = await c.env.DB.prepare(
@@ -3032,7 +3033,7 @@ async function resolveCustomerOwnerId(c: any): Promise<number | null> {
   return ownerId
 }
 
-async function loadCustomerPrefs(db: any, ownerId: number): Promise<any> {
+async function loadCustomerPrefs(db: D1Database, ownerId: number): Promise<any> {
   // Migration 0203 split material_preferences out of the customers table
   // into a side table so the wide customers row stays under D1's 100-column
   // result-set cap (which broke every SELECT * login path).
@@ -3041,7 +3042,7 @@ async function loadCustomerPrefs(db: any, ownerId: number): Promise<any> {
   try { return JSON.parse(row.material_preferences) || {} } catch { return {} }
 }
 
-async function saveCustomerPrefs(db: any, ownerId: number, prefs: any): Promise<void> {
+async function saveCustomerPrefs(db: D1Database, ownerId: number, prefs: any): Promise<void> {
   await db.prepare(
     `INSERT INTO customer_material_preferences (customer_id, material_preferences, updated_at)
      VALUES (?, ?, datetime('now'))

@@ -6,18 +6,19 @@
 // per-owner data isolation.
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession } from './auth'
 import { createAutoInvoiceForOrder } from '../services/auto-invoice'
 import { resolveTeamOwner } from './team'
 
-export const automationsRoutes = new Hono<{ Bindings: Bindings }>()
+export const automationsRoutes = new Hono<AppEnv>()
 
 // Auth middleware — accepts Admin OR Customer tokens (same pattern as invoices.ts)
 automationsRoutes.use('/*', async (c, next) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
-  if (admin) { c.set('admin' as any, admin); return next() }
+  if (admin) { c.set('admin', admin); return next() }
 
   const authHeader = c.req.header('Authorization')
   const token = authHeader?.replace('Bearer ', '')
@@ -29,7 +30,7 @@ automationsRoutes.use('/*', async (c, next) => {
     `).bind(token).first<any>()
     if (session) {
       const teamInfo = await resolveTeamOwner(c.env.DB, session.customer_id)
-      c.set('admin' as any, {
+      c.set('admin', {
         id: session.customer_id,
         email: session.email,
         name: session.name,
@@ -42,8 +43,8 @@ automationsRoutes.use('/*', async (c, next) => {
   return c.json({ error: 'Authentication required' }, 401)
 })
 
-function scope(c: any): { isAdmin: boolean; ownerId: number | null } {
-  const u = c.get('admin' as any) as any
+function scope(c: Context<AppEnv>): { isAdmin: boolean; ownerId: number | null } {
+  const u = c.get('admin') as any
   if (!u) return { isAdmin: false, ownerId: null }
   if (u.role === 'customer') return { isAdmin: false, ownerId: (u.ownerCustomerId ?? u.id) as number }
   return { isAdmin: true, ownerId: null }

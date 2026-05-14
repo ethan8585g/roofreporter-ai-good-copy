@@ -4,14 +4,15 @@
 // Auth: Bearer rm_live_… API key (validated inline per route)
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings, ApiAccount, ApiKey } from '../types'
+import type { Bindings, AppEnv, ApiAccount, ApiKey } from '../types'
 import { checkConcurrentJobLimit, generateApiKey, logApiRequest } from '../middleware/api-auth'
 import { holdCredit, refundCredit, getLedgerPage } from '../services/api-billing'
 import { signPdfUrl, verifyPdfUrl } from '../services/pdf-signing'
 import { recordAndNotify } from '../services/admin-notifications'
 
-export const publicApiRoutes = new Hono<{ Bindings: Bindings }>()
+export const publicApiRoutes = new Hono<AppEnv>()
 
 // ── Auth helper (called inline at the start of each protected route) ─────────
 
@@ -42,7 +43,7 @@ interface AuthResult {
   apiKey: ApiKey
 }
 
-async function requireApiAuth(c: any): Promise<AuthResult | Response> {
+async function requireApiAuth(c: Context<AppEnv>): Promise<AuthResult | Response> {
   const db = c.env.DB
   const authHeader: string = c.req.header('authorization') ?? ''
 

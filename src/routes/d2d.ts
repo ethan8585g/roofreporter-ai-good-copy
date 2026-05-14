@@ -1,10 +1,11 @@
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 import { sendGmailEmail } from '../services/email'
 import { getCustomerSessionToken } from '../lib/session-tokens'
 
-export const d2dRoutes = new Hono<{ Bindings: Bindings }>()
+export const d2dRoutes = new Hono<AppEnv>()
 
 // ============================================================
 // APPOINTMENT VALIDATION (exported for tests)
@@ -60,7 +61,7 @@ interface D2DUser {
   d2dPermissions: { d2d: string; reports: boolean; crm: boolean; secretary: boolean; team: boolean } | null
 }
 
-async function getUser(c: any): Promise<D2DUser | null> {
+async function getUser(c: Context<AppEnv>): Promise<D2DUser | null> {
   // Accept either Authorization: Bearer (legacy localStorage) or the
   // rm_customer_session HttpOnly cookie. Cookie-only users (e.g. Google OAuth
   // sign-in that didn't seed localStorage) were previously rejected with 401.
@@ -107,7 +108,7 @@ async function getUser(c: any): Promise<D2DUser | null> {
 // ============================================================
 let d2dTablesCreated = false
 
-async function ensureD2DTables(db: any) {
+async function ensureD2DTables(db: D1Database) {
   if (d2dTablesCreated) return
   try {
     await db.prepare(`

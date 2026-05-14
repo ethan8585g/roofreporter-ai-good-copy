@@ -19,11 +19,11 @@
 // Per-recipient copy varies by cohort.
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { sendGmailOAuth2 } from '../services/email'
 import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from '../services/email-tracking'
 
-export const marketingBlastRoutes = new Hono<{ Bindings: Bindings }>()
+export const marketingBlastRoutes = new Hono<AppEnv>()
 
 marketingBlastRoutes.post('/reengagement-blast', async (c) => {
   const env = c.env

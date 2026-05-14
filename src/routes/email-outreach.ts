@@ -1,8 +1,9 @@
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession, requireSuperadmin } from './auth'
 
-export const emailOutreachRoutes = new Hono<{ Bindings: Bindings }>()
+export const emailOutreachRoutes = new Hono<AppEnv>()
 
 // ============================================================
 // AUTH MIDDLEWARE — Superadmin only (skip for public /unsubscribe)
@@ -18,7 +19,7 @@ emailOutreachRoutes.use('/*', async (c, next) => {
   if (!admin || !requireSuperadmin(admin)) {
     return c.json({ error: 'Superadmin access required' }, 403)
   }
-  c.set('admin' as any, admin)
+  c.set('admin', admin)
   return next()
 })
 
@@ -1111,7 +1112,7 @@ emailOutreachRoutes.get('/lists/:id/export', async (c) => {
     `).bind(listId).all()
 
     const header = 'email,company_name,contact_name,phone,city,province,website,status,sends,opens,clicks,source,created_at'
-    const rows = (contacts.results || []).map((c: any) =>
+    const rows = (contacts.results || []).map((c: Context<AppEnv>) =>
       [c.email, c.company_name, c.contact_name, c.phone, c.city, c.province, c.website, c.status, c.sends_count, c.opens_count, c.clicks_count, c.source, c.created_at]
         .map(v => `"${(v || '').toString().replace(/"/g, '""')}"`)
         .join(',')

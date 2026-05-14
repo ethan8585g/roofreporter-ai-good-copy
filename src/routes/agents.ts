@@ -1,15 +1,16 @@
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 import { trackLeadCapture } from '../services/ga4-events'
 import { sendGmailOAuth2, sendViaResend, sendGmailEmail } from '../services/email'
 import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from '../services/email-tracking'
 import { sendMetaConversion } from './meta-connect'
 
-export const agentsRoutes = new Hono<{ Bindings: Bindings }>()
+export const agentsRoutes = new Hono<AppEnv>()
 
 // ── Auth helper ──
-async function getCustomer(c: any): Promise<{ id: number; email: string; ownerId: number } | null> {
+async function getCustomer(c: Context<AppEnv>): Promise<{ id: number; email: string; ownerId: number } | null> {
   const auth = c.req.header('Authorization')
   if (!auth?.startsWith('Bearer ')) return null
   const token = auth.slice(7)

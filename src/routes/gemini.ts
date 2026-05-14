@@ -12,10 +12,11 @@
 // ============================================================
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Context } from 'hono'
+import type { Bindings, AppEnv } from '../types'
 import { getAdminSessionToken } from '../lib/session-tokens'
 
-export const geminiRoutes = new Hono<{ Bindings: Bindings }>()
+export const geminiRoutes = new Hono<AppEnv>()
 
 // ── Auth middleware — superadmin only ──────────────────────────────
 geminiRoutes.use('/*', async (c, next) => {
@@ -28,8 +29,8 @@ geminiRoutes.use('/*', async (c, next) => {
     `SELECT s.*, a.email, a.name, a.role FROM admin_sessions s JOIN admin_users a ON s.admin_user_id = a.id WHERE s.session_token = ? AND s.expires_at > datetime('now')`
   ).bind(token).first<any>()
   if (!session || session.role !== 'superadmin') return c.json({ error: 'Forbidden' }, 403)
-  c.set('adminId' as any, session.admin_user_id)
-  c.set('adminName' as any, session.name || session.email)
+  c.set('adminId', session.admin_user_id)
+  c.set('adminName', session.name || session.email)
   await next()
 })
 
@@ -533,7 +534,7 @@ geminiRoutes.post('/command', async (c) => {
       c.env.DB.prepare(`SELECT COUNT(*) as c FROM secretary_subscriptions WHERE status = 'active'`).first<any>().catch(() => ({})),
     ])
 
-    const custList = (recentCustomers?.results || []).map((c: any) => 
+    const custList = (recentCustomers?.results || []).map((c: Context<AppEnv>) => 
       `  - ${c.company_name || c.name || c.email} (ID:${c.id}, email:${c.email}, joined:${c.created_at})`
     ).join('\n')
 
@@ -602,7 +603,7 @@ Be concise, actionable, and business-focused. The admin is a CEO-level operator 
   try {
     await c.env.DB.prepare(
       "INSERT INTO user_activity_log (action, details, created_at) VALUES ('gemini_command', ?, datetime('now'))"
-    ).bind(JSON.stringify({ prompt: prompt.slice(0, 200), admin_id: c.get('adminId' as any) })).run()
+    ).bind(JSON.stringify({ prompt: prompt.slice(0, 200), admin_id: c.get('adminId') })).run()
   } catch {}
 
   return c.json({ reply: result.text, usage: result.usage })

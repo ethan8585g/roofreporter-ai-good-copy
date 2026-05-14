@@ -1,13 +1,14 @@
 // ============================================================
 // Push subscription management — browser/Capacitor registers here.
 // ============================================================
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { sendWebPush, getVapidFromEnv } from '../services/web-push'
 
-export const pushRoutes = new Hono<{ Bindings: Bindings }>()
+export const pushRoutes = new Hono<AppEnv>()
 
-async function requireCustomer(c: any): Promise<number | null> {
+async function requireCustomer(c: Context<AppEnv>): Promise<number | null> {
   const auth = c.req.header('Authorization')
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.slice(7)

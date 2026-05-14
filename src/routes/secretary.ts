@@ -24,20 +24,21 @@
 //   POST /api/secretary/livekit-token    — Generate LiveKit agent token
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
 import { getCustomerSessionToken } from '../lib/session-tokens'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 import { isDevAccount } from './customer-auth'
 import * as SquareSubs from '../services/square-subscriptions'
 import * as LiveKitNumbers from '../services/livekit-numbers'
 
-export const secretaryRoutes = new Hono<{ Bindings: Bindings }>()
+export const secretaryRoutes = new Hono<AppEnv>()
 
 // ============================================================
 // AUTH MIDDLEWARE — Customer must be logged in
 // ============================================================
-async function getCustomerInfo(c: any): Promise<{ id: number; email: string; effectiveOwnerId: number; isTeamMember: boolean } | null> {
+async function getCustomerInfo(c: Context<AppEnv>): Promise<{ id: number; email: string; effectiveOwnerId: number; isTeamMember: boolean } | null> {
   // Accept both Bearer token (legacy localStorage clients) AND the HttpOnly
   // rm_customer_session cookie. The signup flow now uses cookie-only auth
   // for some paths (Google OAuth, magic link), so a bearer-only check
@@ -78,11 +79,11 @@ secretaryRoutes.use('/*', async (c, next) => {
   const info = await getCustomerInfo(c)
   if (!info) return c.json({ error: 'Authentication required' }, 401)
   // Team members access the owner's secretary subscription & config
-  c.set('customerId' as any, info.effectiveOwnerId)
-  c.set('realCustomerId' as any, info.id)
-  c.set('customerEmail' as any, info.email)
-  c.set('isDev' as any, isDevAccount(info.email, c.env))
-  c.set('isTeamMember' as any, info.isTeamMember)
+  c.set('customerId', info.effectiveOwnerId)
+  c.set('realCustomerId', info.id)
+  c.set('customerEmail', info.email)
+  c.set('isDev', isDevAccount(info.email, c.env))
+  c.set('isTeamMember', info.isTeamMember)
   return next()
 })
 
@@ -200,7 +201,7 @@ async function generateLiveKitToken(apiKey: string, apiSecret: string, identity:
 // Helper: log a secretary billing event (used by trial/subscription flows)
 // ============================================================
 async function logBillingEvent(
-  db: any,
+  db: D1Database,
   customerId: number,
   eventType: string,
   opts?: { amountCents?: number; squareEventId?: string; metadata?: any },
@@ -229,8 +230,8 @@ async function logBillingEvent(
 //   Square subscription scheduled to auto-charge on day 31 at $199/mo.
 // ============================================================
 secretaryRoutes.post('/start-trial', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-  const customerEmail = c.get('customerEmail' as any) as string
+  const customerId = c.get('customerId') as number
+  const customerEmail = c.get('customerEmail') as string
   const accessToken = c.env.SQUARE_ACCESS_TOKEN
   const locationId = c.env.SQUARE_LOCATION_ID
   if (!accessToken || !locationId) return c.json({ error: 'Square not configured' }, 500)
@@ -388,7 +389,7 @@ secretaryRoutes.post('/start-trial', async (c) => {
 // GET /trial-status — Days remaining, next charge date, card on file
 // ============================================================
 secretaryRoutes.get('/trial-status', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const row = await c.env.DB.prepare(
     `SELECT status, trial_ends_at, current_period_end, card_last4, card_brand, square_subscription_id, comp_until
      FROM secretary_subscriptions
@@ -423,8 +424,8 @@ secretaryRoutes.get('/trial-status', async (c) => {
 // marker so the next subscription.updated webhook fixes the state.
 // ============================================================
 secretaryRoutes.post('/cancel', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-  const realCustomerId = c.get('realCustomerId' as any) as number
+  const customerId = c.get('customerId') as number
+  const realCustomerId = c.get('realCustomerId') as number
   // Block team members — only the owning customer can cancel the subscription.
   if (realCustomerId !== customerId) {
     return c.json({ error: 'Only the account owner can cancel the subscription' }, 403)
@@ -500,7 +501,7 @@ secretaryRoutes.post('/cancel', async (c) => {
 // stays so old bookmarks don't 404.
 // ============================================================
 secretaryRoutes.post('/verify-session', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const row = await c.env.DB.prepare(
     `SELECT status FROM secretary_subscriptions WHERE customer_id = ? ORDER BY id DESC LIMIT 1`
   ).bind(customerId).first<any>()
@@ -511,8 +512,8 @@ secretaryRoutes.post('/verify-session', async (c) => {
 // GET /status — Full service status for the customer
 // ============================================================
 secretaryRoutes.get('/status', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-  const isDev = c.get('isDev' as any) as boolean
+  const customerId = c.get('customerId') as number
+  const isDev = c.get('isDev') as boolean
 
   const sub = await c.env.DB.prepare(
     `SELECT * FROM secretary_subscriptions WHERE customer_id = ? AND status IN ('active', 'trialing', 'pending', 'past_due') ORDER BY id DESC LIMIT 1`
@@ -551,7 +552,7 @@ secretaryRoutes.get('/status', async (c) => {
 // Supports 3 modes: directory | answering | full
 // ============================================================
 secretaryRoutes.post('/config', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const body = await c.req.json()
   const {
     business_phone, greeting_script, common_qa, general_notes,
@@ -681,7 +682,7 @@ secretaryRoutes.post('/config', async (c) => {
 // GET /config — Get current config
 // ============================================================
 secretaryRoutes.get('/config', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const config = await c.env.DB.prepare(
     `SELECT * FROM secretary_config WHERE customer_id = ?`
   ).bind(customerId).first<any>()
@@ -692,7 +693,7 @@ secretaryRoutes.get('/config', async (c) => {
 // PUT /directories — Save/replace directories (2-4)
 // ============================================================
 secretaryRoutes.put('/directories', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const { directories } = await c.req.json()
 
   if (!directories || !Array.isArray(directories)) return c.json({ error: 'directories array required' }, 400)
@@ -731,7 +732,7 @@ secretaryRoutes.put('/directories', async (c) => {
 // GET /directories — Get current directories
 // ============================================================
 secretaryRoutes.get('/directories', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const config = await c.env.DB.prepare(
     `SELECT id FROM secretary_config WHERE customer_id = ?`
   ).bind(customerId).first<any>()
@@ -748,8 +749,8 @@ secretaryRoutes.get('/directories', async (c) => {
 // POST /toggle — Activate or deactivate the service
 // ============================================================
 secretaryRoutes.post('/toggle', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-  const isDev = c.get('isDev' as any) as boolean
+  const customerId = c.get('customerId') as number
+  const isDev = c.get('isDev') as boolean
 
   // Verify active or trialing subscription (dev accounts bypass)
   if (!isDev) {
@@ -785,7 +786,7 @@ secretaryRoutes.post('/toggle', async (c) => {
 // caller_phone, caller_name, and call_summary.
 // ============================================================
 secretaryRoutes.get('/calls', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const rawLimit = parseInt(c.req.query('limit') || '50', 10)
   const rawOffset = parseInt(c.req.query('offset') || '0', 10)
   const limit = Math.min(Math.max(isNaN(rawLimit) ? 50 : rawLimit, 1), 200)
@@ -831,7 +832,7 @@ secretaryRoutes.get('/calls', async (c) => {
 // messages, appointments, and callbacks the agent captured for this call.
 // ============================================================
 secretaryRoutes.get('/calls/:id', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const callId = parseInt(c.req.param('id'), 10)
   if (!callId || isNaN(callId)) return c.json({ error: 'Invalid call id' }, 400)
 
@@ -865,7 +866,7 @@ secretaryRoutes.get('/calls/:id', async (c) => {
 // Used by LiveKit agent to connect and handle inbound calls
 // ============================================================
 secretaryRoutes.post('/livekit-token', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const apiKey = (c.env as any).LIVEKIT_API_KEY
   const apiSecret = (c.env as any).LIVEKIT_API_SECRET
   const livekitUrl = (c.env as any).LIVEKIT_URL
@@ -875,7 +876,7 @@ secretaryRoutes.post('/livekit-token', async (c) => {
   // Gate on a paying/trialing subscription. Without this, canceled customers
   // continue answering calls indefinitely and a leaked customerId could mint
   // tokens forever.
-  const isDev = c.get('isDev' as any) as boolean
+  const isDev = c.get('isDev') as boolean
   if (!isDev) {
     const sub = await c.env.DB.prepare(
       `SELECT status FROM secretary_subscriptions WHERE customer_id = ? ORDER BY id DESC LIMIT 1`
@@ -1073,7 +1074,7 @@ ${config.general_notes ? `BUSINESS NOTES:\n${config.general_notes}` : ''}`
 
 // ── GET /messages — List messages (answering mode) ──
 secretaryRoutes.get('/messages', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const status = c.req.query('status') || ''
   const limit = parseInt(c.req.query('limit') || '50')
   let sql = 'SELECT * FROM secretary_messages WHERE customer_id = ?'
@@ -1088,7 +1089,7 @@ secretaryRoutes.get('/messages', async (c) => {
 
 // ── POST /messages/:id/read — Mark message as read ──
 secretaryRoutes.post('/messages/:id/read', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const id = c.req.param('id')
   await c.env.DB.prepare('UPDATE secretary_messages SET is_read = 1 WHERE id = ? AND customer_id = ?').bind(id, customerId).run()
   return c.json({ success: true })
@@ -1096,14 +1097,14 @@ secretaryRoutes.post('/messages/:id/read', async (c) => {
 
 // ── POST /messages/read-all — Mark all messages as read ──
 secretaryRoutes.post('/messages/read-all', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   await c.env.DB.prepare('UPDATE secretary_messages SET is_read = 1 WHERE customer_id = ? AND is_read = 0').bind(customerId).run()
   return c.json({ success: true })
 })
 
 // ── GET /appointments — List appointments (full mode) ──
 secretaryRoutes.get('/appointments', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const status = c.req.query('status') || ''
   const limit = parseInt(c.req.query('limit') || '50')
   let sql = 'SELECT * FROM secretary_appointments WHERE customer_id = ?'
@@ -1118,7 +1119,7 @@ secretaryRoutes.get('/appointments', async (c) => {
 
 // ── PATCH /appointments/:id — Update appointment status ──
 secretaryRoutes.patch('/appointments/:id', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const id = c.req.param('id')
   const { status, notes } = await c.req.json()
   const validStatuses = ['pending', 'confirmed', 'cancelled', 'completed']
@@ -1135,7 +1136,7 @@ secretaryRoutes.patch('/appointments/:id', async (c) => {
 
 // ── GET /callbacks — List scheduled callbacks (full mode) ──
 secretaryRoutes.get('/callbacks', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const status = c.req.query('status') || ''
   const limit = parseInt(c.req.query('limit') || '50')
   let sql = 'SELECT * FROM secretary_callbacks WHERE customer_id = ?'
@@ -1150,7 +1151,7 @@ secretaryRoutes.get('/callbacks', async (c) => {
 
 // ── PATCH /callbacks/:id — Update callback status ──
 secretaryRoutes.patch('/callbacks/:id', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const id = c.req.param('id')
   const { status } = await c.req.json()
   if (status) {
@@ -1517,7 +1518,7 @@ function getCarrierForwardingInfo(carrier: string, forwardToNumber: string) {
 // GET /phone-setup — Get full phone connection status & instructions
 // ============================================================
 secretaryRoutes.get('/phone-setup', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
 
   const config = await c.env.DB.prepare(
     `SELECT * FROM secretary_config WHERE customer_id = ?`
@@ -1552,7 +1553,7 @@ secretaryRoutes.get('/phone-setup', async (c) => {
 // POST /phone-setup — Save phone connection preferences
 // ============================================================
 secretaryRoutes.post('/phone-setup', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const { forwarding_method, carrier_name, agent_voice, agent_name } = await c.req.json()
 
   if (!forwarding_method || !['call_forwarding', 'sip_trunk', 'livekit_number'].includes(forwarding_method)) {
@@ -1580,8 +1581,8 @@ secretaryRoutes.post('/phone-setup', async (c) => {
 // POST /assign-number — Assign a Twilio inbound number from pool
 // ============================================================
 secretaryRoutes.post('/assign-number', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-  const isDev = c.get('isDev' as any) as boolean
+  const customerId = c.get('customerId') as number
+  const isDev = c.get('isDev') as boolean
 
   // Check subscription
   if (!isDev) {
@@ -1708,7 +1709,7 @@ secretaryRoutes.post('/assign-number', async (c) => {
 // This configures LiveKit to accept calls on the assigned number
 // ============================================================
 secretaryRoutes.post('/setup-livekit', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const apiKey = (c.env as any).LIVEKIT_API_KEY
   const apiSecret = (c.env as any).LIVEKIT_API_SECRET
   const livekitUrl = (c.env as any).LIVEKIT_URL
@@ -1802,7 +1803,7 @@ secretaryRoutes.post('/setup-livekit', async (c) => {
 // POST /configure-twilio-trunk — Configure Twilio SIP trunk to forward to LiveKit
 // ============================================================
 secretaryRoutes.post('/configure-twilio-trunk', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
   const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
   const livekitSipUri = (c.env as any).LIVEKIT_SIP_URI
@@ -1895,7 +1896,7 @@ secretaryRoutes.post('/configure-twilio-trunk', async (c) => {
 // Places a test call via Twilio to verify the connection
 // ============================================================
 secretaryRoutes.post('/test-connection', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
   const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
 
@@ -1956,7 +1957,7 @@ secretaryRoutes.post('/test-connection', async (c) => {
 // POST /confirm-connection — Customer manually confirms forwarding works
 // ============================================================
 secretaryRoutes.post('/confirm-connection', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const { connected } = await c.req.json()
 
   const newStatus = connected ? 'connected' : 'failed'
@@ -1999,7 +2000,7 @@ secretaryRoutes.get('/carriers', async (c) => {
 // GET /forwarding-instructions/:carrier — Get specific carrier instructions
 // ============================================================
 secretaryRoutes.get('/forwarding-instructions/:carrier', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const carrier = c.req.param('carrier')
 
   const config = await c.env.DB.prepare(
@@ -2112,7 +2113,7 @@ secretaryRoutes.get('/admin/phone-pool', async (c) => {
 // ============================================================
 
 // ── Admin auth helper ──
-async function requireAdmin(c: any) {
+async function requireAdmin(c: Context<AppEnv>) {
   const auth = c.req.header('Authorization')
   if (!auth?.startsWith('Bearer ')) return null
   return c.env.DB.prepare(
@@ -2908,7 +2909,7 @@ IMPORTANT RULES:
 
 // POST /quick-connect/send-code — Send SMS verification code
 secretaryRoutes.post('/quick-connect/send-code', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
   const { phone_number } = await c.req.json()
 
   if (!phone_number) return c.json({ error: 'Phone number is required' }, 400)
@@ -2997,7 +2998,7 @@ secretaryRoutes.post('/quick-connect/send-code', async (c) => {
   }
 
   // If no Twilio at all, return the code for dev mode
-  const isDev = c.get('isDev' as any) as boolean
+  const isDev = c.get('isDev') as boolean
   if (isDev) {
     return c.json({
       success: true,
@@ -3018,8 +3019,8 @@ secretaryRoutes.post('/quick-connect/send-code', async (c) => {
 
 // POST /quick-connect/verify — Verify code and auto-setup everything
 secretaryRoutes.post('/quick-connect/verify', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-  const isDev = c.get('isDev' as any) as boolean
+  const customerId = c.get('customerId') as number
+  const isDev = c.get('isDev') as boolean
   const { phone_number, code } = await c.req.json()
 
   if (!code) return c.json({ error: 'Verification code is required' }, 400)
@@ -3293,7 +3294,7 @@ secretaryRoutes.post('/quick-connect/verify', async (c) => {
 
 // POST /quick-connect/complete — Mark connection as fully active
 secretaryRoutes.post('/quick-connect/complete', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
 
   await c.env.DB.prepare(
     `UPDATE secretary_config SET connection_status = 'connected', is_active = 1, updated_at = datetime('now') WHERE customer_id = ?`
@@ -3304,7 +3305,7 @@ secretaryRoutes.post('/quick-connect/complete', async (c) => {
 
 // GET /quick-connect/status — Get current quick-connect setup status
 secretaryRoutes.get('/quick-connect/status', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
 
   const config = await c.env.DB.prepare(
     `SELECT business_phone, assigned_phone_number, connection_status, phone_verified, forwarding_method, livekit_inbound_trunk_id, livekit_dispatch_rule_id, is_active FROM secretary_config WHERE customer_id = ?`
@@ -3386,7 +3387,7 @@ secretaryRoutes.get('/numbers/search', async (c) => {
 // rule → LiveKit PurchasePhoneNumbers (binds number to the dispatch) → D1
 // writes. No Square charge — LiveKit Cloud bills the number directly.
 secretaryRoutes.post('/numbers/purchase', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+  const customerId = c.get('customerId') as number
 
   let body: any = {}
   try { body = await c.req.json() } catch {}
@@ -3562,8 +3563,8 @@ secretaryRoutes.post('/numbers/purchase', async (c) => {
 
 // POST /numbers/release — Release the currently-assigned LiveKit number
 secretaryRoutes.post('/numbers/release', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-  const realCustomerId = c.get('realCustomerId' as any) as number
+  const customerId = c.get('customerId') as number
+  const realCustomerId = c.get('realCustomerId') as number
   // Only the owning customer can release the number — team members otherwise
   // have full write access to the owner's account, which is too much rope.
   if (realCustomerId !== customerId) {

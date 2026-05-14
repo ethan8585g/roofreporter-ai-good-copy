@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Context } from 'hono'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession, requireSuperadmin } from './auth'
 import { generateReportForOrder, finalizeReportDelivery } from './reports'
 import { createAutoInvoiceForOrder } from '../services/auto-invoice'
@@ -23,12 +24,12 @@ import { fetchDsmHillshade } from '../services/dsm-visualization'
 import { detectStepsAlongPolyline } from '../services/dsm-step-detection'
 import { sendSignupNurtureToCustomer, type NurtureStage } from '../services/signup-nurture'
 
-export const adminRoutes = new Hono<{ Bindings: Bindings }>()
+export const adminRoutes = new Hono<AppEnv>()
 
 // Seeds the default material catalog items for a new account. The list mirrors
 // every line item the proposal builder calculates from a roof measurement
 // report so the catalog is a useful starting point on day one.
-async function seedDefaultMaterials(db: any, ownerId: number) {
+async function seedDefaultMaterials(db: D1Database, ownerId: number) {
   const defaults = [
     { category: 'shingles',      name: '3-Tab Standard Shingles',              unit: 'bundles', unit_price: 32.00,  coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', is_default: 0, sort_order: 1 },
     { category: 'shingles',      name: 'Architectural Shingles (Laminate)',    unit: 'bundles', unit_price: 42.00,  coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', is_default: 1, sort_order: 2 },
@@ -88,7 +89,7 @@ adminRoutes.use('/*', async (c, next) => {
   }
 
   // Store admin info in context for downstream use
-  c.set('admin' as any, admin)
+  c.set('admin', admin)
 
   // Activity tracking — fire-and-forget. Never blocks the request.
   try {
@@ -1142,7 +1143,7 @@ adminRoutes.post('/init-db', async (c) => {
 // 1. All Active Users — full user list with account info
 // GET /superadmin/people — Unified people directory: platform users + CRM customers + prospects
 adminRoutes.get('/superadmin/people', async (c) => {
-  const admin = c.get('admin' as any)
+  const admin = c.get('admin')
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const search = c.req.query('search') || ''
@@ -1221,7 +1222,7 @@ adminRoutes.get('/superadmin/people', async (c) => {
 // Directory, used by the inline slide-over panel (Phase 4 #15). Mirrors the
 // three person_type buckets returned by /superadmin/people.
 adminRoutes.get('/superadmin/person/:type/:id', async (c) => {
-  const admin = c.get('admin' as any)
+  const admin = c.get('admin')
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   const type = c.req.param('type')
   const id = parseInt(c.req.param('id'), 10)
@@ -1288,7 +1289,7 @@ adminRoutes.get('/superadmin/person/:type/:id', async (c) => {
 })
 
 adminRoutes.get('/superadmin/users', async (c) => {
-  const admin = c.get('admin' as any)
+  const admin = c.get('admin')
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     // Each customer gets one row, labeled `team_member` when an active
@@ -1429,7 +1430,7 @@ adminRoutes.get('/superadmin/users', async (c) => {
 
 // 2. Credit Pack Sales — with period filter (daily/weekly/monthly)
 adminRoutes.get('/superadmin/sales', async (c) => {
-  const admin = c.get('admin' as any)
+  const admin = c.get('admin')
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const period = c.req.query('period') || 'monthly' // daily, weekly, monthly
@@ -1525,7 +1526,7 @@ adminRoutes.get('/superadmin/sales', async (c) => {
 
 // 3. Order History & Logistics — with report completion time
 adminRoutes.get('/superadmin/orders', async (c) => {
-  const admin = c.get('admin' as any)
+  const admin = c.get('admin')
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const limit = parseInt(c.req.query('limit') || '100')
@@ -1614,7 +1615,7 @@ adminRoutes.get('/superadmin/orders', async (c) => {
 // Sourced from `report_view_events` (migration 0216).
 // ============================================================
 adminRoutes.get('/superadmin/orders/:id/views', async (c) => {
-  const admin = c.get('admin' as any)
+  const admin = c.get('admin')
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const orderId = parseInt(c.req.param('id'))
@@ -1640,7 +1641,7 @@ adminRoutes.get('/superadmin/orders/:id/views', async (c) => {
 // admin POST /api/orders, submit-trace, unmatched-payment branch).
 // ============================================================
 adminRoutes.get('/superadmin/notifications', async (c) => {
-  const admin = c.get('admin' as any)
+  const admin = c.get('admin')
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const limit = Math.max(1, Math.min(parseInt(c.req.query('limit') || '50'), 200))
@@ -1686,7 +1687,7 @@ adminRoutes.get('/superadmin/notifications', async (c) => {
 })
 
 adminRoutes.post('/superadmin/notifications/:id/read', async (c) => {
-  const admin = c.get('admin' as any)
+  const admin = c.get('admin')
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   const id = parseInt(c.req.param('id'))
   if (isNaN(id)) return c.json({ error: 'Invalid notification id' }, 400)
@@ -1701,7 +1702,7 @@ adminRoutes.post('/superadmin/notifications/:id/read', async (c) => {
 })
 
 adminRoutes.post('/superadmin/notifications/read-all', async (c) => {
-  const admin = c.get('admin' as any)
+  const admin = c.get('admin')
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     let body: any = {}
@@ -1723,7 +1724,7 @@ adminRoutes.post('/superadmin/notifications/read-all', async (c) => {
 
 // 4. New User Sign-ups — with period filter
 adminRoutes.get('/superadmin/signups', async (c) => {
-  const admin = c.get('admin' as any)
+  const admin = c.get('admin')
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const period = c.req.query('period') || 'monthly'
@@ -1785,7 +1786,7 @@ adminRoutes.get('/superadmin/signups', async (c) => {
 
 // 5. Internal Sales & Marketing — proposals, invoices, leads, campaigns
 adminRoutes.get('/superadmin/marketing', async (c) => {
-  const admin = c.get('admin' as any)
+  const admin = c.get('admin')
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     // CRM aggregate across all users
@@ -1890,7 +1891,7 @@ adminRoutes.get('/superadmin/marketing', async (c) => {
 
 // GET /superadmin/trial-expiry — All trialing customers
 adminRoutes.get('/superadmin/trial-expiry', async (c) => {
-  const admin = c.get('admin' as any)
+  const admin = c.get('admin')
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const customers = await c.env.DB.prepare(`
@@ -3347,7 +3348,7 @@ adminRoutes.get('/superadmin/secretary-manager/customer/:customerId', async (c) 
 // PUT /superadmin/secretary-manager/customer/:customerId/config
 // Accepts the body posted by super-admin-dashboard.js smSaveConfig().
 // Updates secretary_config and replaces secretary_directories.
-const secretaryManagerConfigHandler = async (c: any) => {
+const secretaryManagerConfigHandler = async (c: Context<AppEnv>) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   const customerId = parseInt(c.req.param('customerId'))
@@ -6986,7 +6987,7 @@ adminRoutes.post('/customers/:id/send-nurture', async (c) => {
 // Returns one row per customer ranked by most-recent signal (page view,
 // email click, login, signup) so you see the freshest activity first.
 adminRoutes.get('/superadmin/journey/customers', async (c) => {
-  const admin = c.get('admin' as any)
+  const admin = c.get('admin')
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const search = c.req.query('search') || ''
@@ -7030,7 +7031,7 @@ adminRoutes.get('/superadmin/journey/customers', async (c) => {
 // UI can show recipient name and link straight into the per-customer
 // journey view.
 adminRoutes.get('/superadmin/journey/emails', async (c) => {
-  const admin = c.get('admin' as any)
+  const admin = c.get('admin')
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const kind = c.req.query('kind') || ''

@@ -16,11 +16,11 @@
 // recurring health probe.
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { loadGmailCreds, notifyEmailHealthFailure } from '../services/email'
 import { recordExternalRun } from '../services/loop-scanner'
 
-export const emailHealthRoutes = new Hono<{ Bindings: Bindings }>()
+export const emailHealthRoutes = new Hono<AppEnv>()
 
 interface HealthResult {
   healthy: boolean

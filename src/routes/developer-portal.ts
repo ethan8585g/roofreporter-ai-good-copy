@@ -5,12 +5,13 @@
 // Auth: cookie-based DB sessions (mirrors admin_sessions pattern)
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { generateApiKey } from '../middleware/api-auth'
 import { addCredits, getLedgerPage } from '../services/api-billing'
 
-export const developerPortalRoutes = new Hono<{ Bindings: Bindings }>()
+export const developerPortalRoutes = new Hono<AppEnv>()
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const SESSION_TTL = 30 * 24 * 60 * 60  // 30 days (seconds)
@@ -90,7 +91,7 @@ async function getSessionAccount(db: D1Database, token: string | undefined): Pro
   return row
 }
 
-function getSessionToken(c: any): string | undefined {
+function getSessionToken(c: Context<AppEnv>): string | undefined {
   const cookieHeader: string = c.req.header('cookie') ?? ''
   for (const part of cookieHeader.split(';')) {
     const [k, ...v] = part.trim().split('=')
@@ -111,7 +112,7 @@ function attachSessionCookie(resp: Response, token: string): Response {
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
 
-async function requireAuth(c: any): Promise<any | null> {
+async function requireAuth(c: Context<AppEnv>): Promise<any | null> {
   const token = getSessionToken(c)
   return getSessionAccount(c.env.DB, token)
 }

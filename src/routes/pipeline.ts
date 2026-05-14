@@ -2,16 +2,16 @@
 // Roof Manager — Revenue Pipeline, Notifications, Follow-ups, Payments
 // ============================================================
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession } from './auth'
 
-export const pipelineRoutes = new Hono<{ Bindings: Bindings }>()
+export const pipelineRoutes = new Hono<AppEnv>()
 
 // Admin auth middleware
 pipelineRoutes.use('/*', async (c, next) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin authentication required' }, 401)
-  c.set('admin' as any, admin)
+  c.set('admin', admin)
   return next()
 })
 
@@ -20,7 +20,7 @@ pipelineRoutes.use('/*', async (c, next) => {
 // ============================================================
 pipelineRoutes.get('/notifications', async (c) => {
   try {
-    const admin = c.get('admin' as any) as any
+    const admin = c.get('admin') as any
     const unreadOnly = c.req.query('unread') === '1'
     let q = 'SELECT * FROM notifications WHERE owner_id = ?'
     if (unreadOnly) q += ' AND is_read = 0'
@@ -36,7 +36,7 @@ pipelineRoutes.get('/notifications', async (c) => {
 pipelineRoutes.post('/notifications/:id/read', async (c) => {
   try {
     const id = c.req.param('id')
-    const admin = c.get('admin' as any) as any
+    const admin = c.get('admin') as any
     if (id === 'all') {
       await c.env.DB.prepare("UPDATE notifications SET is_read = 1 WHERE owner_id = ?").bind(admin.id).run()
     } else {
@@ -140,13 +140,13 @@ pipelineRoutes.get('/revenue-analytics', async (c) => {
 // WEBHOOKS — CRUD for webhook endpoints
 // ============================================================
 pipelineRoutes.get('/webhooks', async (c) => {
-  const admin = c.get('admin' as any) as any
+  const admin = c.get('admin') as any
   const hooks = await c.env.DB.prepare('SELECT * FROM webhooks WHERE owner_id = ? ORDER BY created_at DESC').bind(admin.id).all()
   return c.json({ webhooks: hooks.results })
 })
 
 pipelineRoutes.post('/webhooks', async (c) => {
-  const admin = c.get('admin' as any) as any
+  const admin = c.get('admin') as any
   const { event_type, url, secret } = await c.req.json()
   if (!event_type || !url) return c.json({ error: 'event_type and url required' }, 400)
   await c.env.DB.prepare(
@@ -156,7 +156,7 @@ pipelineRoutes.post('/webhooks', async (c) => {
 })
 
 pipelineRoutes.delete('/webhooks/:id', async (c) => {
-  const admin = c.get('admin' as any) as any
+  const admin = c.get('admin') as any
   await c.env.DB.prepare('DELETE FROM webhooks WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), admin.id).run()
   return c.json({ success: true })
 })
@@ -165,7 +165,7 @@ pipelineRoutes.delete('/webhooks/:id', async (c) => {
 // SCHEDULED FOLLOW-UPS — Check and trigger
 // ============================================================
 pipelineRoutes.get('/followups', async (c) => {
-  const admin = c.get('admin' as any) as any
+  const admin = c.get('admin') as any
   const tasks = await c.env.DB.prepare(
     "SELECT * FROM scheduled_tasks WHERE owner_id = ? AND status = 'pending' ORDER BY scheduled_for ASC LIMIT 50"
   ).bind(admin.id).all()
@@ -245,7 +245,7 @@ export async function fireWebhooks(db: D1Database, ownerId: number, eventType: s
 // HELPER: Create notification + trigger push delivery
 // ============================================================
 import { sendPushToUser } from '../services/push-service'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 
 export async function createNotification(
   db: D1Database,

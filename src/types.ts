@@ -218,6 +218,31 @@ export type Bindings = {
 }
 
 // ============================================================
+// Hono `c.set`/`c.get` Variables map — typed once, used everywhere
+// so middleware can stash auth context without `as any` casts.
+// ============================================================
+export type AppVariables = {
+  admin: any
+  adminId: number
+  adminEmail: string
+  adminName: string
+  apiAccount: ApiAccount
+  apiKey: ApiKey
+  customerId: number
+  customerEmail: string
+  realCustomerId: number
+  isTeamMember: boolean
+  isDev: boolean
+  perms: any
+  user: any
+}
+
+// Convenience generic for route files: `new Hono<AppEnv>()`
+// gives them `c.env` typed as Bindings and `c.get/c.set` typed
+// against the AppVariables map above.
+export type AppEnv = { Bindings: Bindings; Variables: AppVariables }
+
+// ============================================================
 // AI MEASUREMENT ENGINE TYPES — Gemini Vision roof geometry
 // ============================================================
 

@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { hashPassword, verifyPassword, isLegacyHash, dummyVerify } from '../lib/password'
 
-export const authRoutes = new Hono<{ Bindings: Bindings }>()
+export const authRoutes = new Hono<AppEnv>()
 
 // ============================================================
 // ADMIN SESSION MANAGEMENT — DB-backed sessions with expiry
@@ -792,7 +792,7 @@ authRoutes.get('/admin-stats', async (c) => {
 // ============================================================
 
 // Helper: get a setting value from the settings table
-async function getDbSetting(db: any, key: string): Promise<string | null> {
+async function getDbSetting(db: D1Database, key: string): Promise<string | null> {
   try {
     const row = await db.prepare(
       "SELECT setting_value FROM settings WHERE setting_key = ? AND master_company_id = 1"
@@ -802,7 +802,7 @@ async function getDbSetting(db: any, key: string): Promise<string | null> {
 }
 
 // Helper: save a setting value to the settings table
-async function setDbSetting(db: any, key: string, value: string, encrypted = false): Promise<void> {
+async function setDbSetting(db: D1Database, key: string, value: string, encrypted = false): Promise<void> {
   const existing = await db.prepare(
     "SELECT id FROM settings WHERE setting_key = ? AND master_company_id = 1"
   ).bind(key).first<any>()

@@ -31,17 +31,18 @@
 // POST /api/call-center/quick-connect/disconnect— Disconnect phone line
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession, requireSuperadmin } from './auth'
 import { extractAndStoreObjections } from '../services/objection-extractor'
 
-export const callCenterRoutes = new Hono<{ Bindings: Bindings }>()
+export const callCenterRoutes = new Hono<AppEnv>()
 
 // ── Superadmin auth guard ──
 // Uses admin_sessions + admin_users.role (NOT customer_sessions)
 // The customers table does not have a 'role' column — admin_users does.
-async function requireSuperAdmin(c: any): Promise<boolean> {
+async function requireSuperAdmin(c: Context<AppEnv>): Promise<boolean> {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   return requireSuperadmin(admin)
 }

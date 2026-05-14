@@ -3,16 +3,17 @@
 // Customer-facing — connect Google Ads account, sync campaigns
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 
-export const googleAdsRoutes = new Hono<{ Bindings: Bindings }>()
+export const googleAdsRoutes = new Hono<AppEnv>()
 
 const GOOGLE_ADS_API_BASE = 'https://googleads.googleapis.com/v17'
 
 // ── AUTH HELPER — same pattern as website-builder.ts ──
-async function getOwnerId(c: any): Promise<number | null> {
+async function getOwnerId(c: Context<AppEnv>): Promise<number | null> {
   const auth = c.req.header('Authorization')
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.slice(7)
@@ -25,7 +26,7 @@ async function getOwnerId(c: any): Promise<number | null> {
 }
 
 // ── Helper: refresh Google OAuth access token ──
-async function refreshAccessToken(c: any, refreshToken: string): Promise<string | null> {
+async function refreshAccessToken(c: Context<AppEnv>, refreshToken: string): Promise<string | null> {
   const clientId = (c.env as any).GMAIL_CLIENT_ID
   let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
   if (!clientSecret) {

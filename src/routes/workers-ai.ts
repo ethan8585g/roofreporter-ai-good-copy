@@ -7,15 +7,16 @@
 // ============================================================
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Context } from 'hono'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession } from './auth'
 import { resolveTeamOwner } from './team'
 import { trackWorkersAI } from '../services/ga4-events'
 
-export const workersAiRoutes = new Hono<{ Bindings: Bindings }>()
+export const workersAiRoutes = new Hono<AppEnv>()
 
 // Auth helper — accepts both admin and customer tokens
-async function getAuthUser(c: any): Promise<{ id: number; role: string } | null> {
+async function getAuthUser(c: Context<AppEnv>): Promise<{ id: number; role: string } | null> {
   const auth = c.req.header('Authorization')
   if (!auth?.startsWith('Bearer ')) return null
   const token = auth.slice(7)
@@ -37,7 +38,7 @@ async function getAuthUser(c: any): Promise<{ id: number; role: string } | null>
 workersAiRoutes.use('/*', async (c, next) => {
   const user = await getAuthUser(c)
   if (!user) return c.json({ error: 'Authentication required' }, 401)
-  c.set('user' as any, user)
+  c.set('user', user)
   return next()
 })
 
@@ -368,7 +369,7 @@ function categorizeForRoofing(classifications: any[]): any {
   const damageIndicators = ['rust', 'crack', 'broken', 'damaged', 'decay', 'moss', 'mold', 'stain']
   const obstructions = ['chimney', 'antenna', 'satellite', 'solar', 'panel', 'vent', 'pipe']
 
-  const topLabels = classifications.slice(0, 10).map((c: any) => ({
+  const topLabels = classifications.slice(0, 10).map((c: Context<AppEnv>) => ({
     label: c.label || c.name || '',
     score: c.score || c.confidence || 0
   }))

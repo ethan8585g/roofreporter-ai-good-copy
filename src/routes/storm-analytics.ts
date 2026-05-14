@@ -2,10 +2,10 @@
 // Storm Scout analytics — event intake + ROI summary
 // ============================================================
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { requireCustomerId as requireCustomer } from '../lib/session-tokens'
 
-export const stormAnalyticsRoutes = new Hono<{ Bindings: Bindings }>()
+export const stormAnalyticsRoutes = new Hono<AppEnv>()
 
 const ALLOWED_EVENTS = new Set([
   'map_open', 'alert_view', 'match_click', 'before_after_open',

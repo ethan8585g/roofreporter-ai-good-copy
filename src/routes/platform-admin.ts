@@ -14,8 +14,8 @@ import { Hono } from 'hono'
 import { validateAdminSession, requireSuperadmin } from './auth'
 import { hashPassword } from '../lib/password'
 
-import type { Bindings } from '../types'
-const platformAdmin = new Hono<{ Bindings: Bindings }>()
+import type { Bindings, AppEnv } from '../types'
+const platformAdmin = new Hono<AppEnv>()
 
 // Auth middleware — superadmin only. These routes manage tiers, voice/LLM
 // configs, prompts, and SIP setup — all platform-wide controls that a
@@ -28,7 +28,7 @@ platformAdmin.use('/*', async (c, next) => {
   )
   if (!admin) return c.json({ error: 'Admin authentication required' }, 401)
   if (!requireSuperadmin(admin)) return c.json({ error: 'Superadmin access required' }, 403)
-  c.set('admin' as any, admin)
+  c.set('admin', admin)
   return next()
 })
 

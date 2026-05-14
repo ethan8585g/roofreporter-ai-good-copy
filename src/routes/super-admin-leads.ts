@@ -17,8 +17,8 @@ import {
   sendGmailOAuth2, sendGmailOAuth2WithAttachment, sendViaResend, sendGmailEmail, buildEmailWrapper
 } from '../services/email'
 
-import type { Bindings } from '../types'
-const superAdminLeads = new Hono<{ Bindings: Bindings }>()
+import type { Bindings, AppEnv } from '../types'
+const superAdminLeads = new Hono<AppEnv>()
 
 const ALLOWED_STATUS = ['new', 'contacted', 'report_sent', 'converted', 'closed_lost']
 const ALLOWED_PRIORITY = ['low', 'normal', 'high', 'urgent']
@@ -36,7 +36,7 @@ superAdminLeads.use('/*', async (c, next) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin authentication required' }, 401)
   if (!requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
-  c.set('admin' as any, admin)
+  c.set('admin', admin)
   return next()
 })
 

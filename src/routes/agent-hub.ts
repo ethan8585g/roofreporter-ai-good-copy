@@ -4,7 +4,7 @@
 // ============================================================
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession } from './auth'
 import { processOrderQueue } from '../services/ai-agent'
 import { runContentAgent } from '../services/content-agent'
@@ -13,7 +13,7 @@ import { runEmailAgent } from '../services/email-agent'
 import { runMonitorAgent } from '../services/monitor-agent'
 import { runTrafficAgent } from '../services/traffic-agent'
 
-export const agentHubRoutes = new Hono<{ Bindings: Bindings }>()
+export const agentHubRoutes = new Hono<AppEnv>()
 
 const VALID_AGENTS = new Set(['tracing', 'content', 'email', 'lead', 'monitor', 'traffic'])
 

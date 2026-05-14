@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { getCustomerSessionToken } from '../lib/session-tokens'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { generateReportForOrder, enhanceReportInline, generateAIImageryForReport } from './reports'
 import { isDevAccount } from './customer-auth'
 import { trackPaymentCompleted, trackCreditPurchase, trackFirstReportStarted, trackRepeatOrder } from '../services/ga4-events'
@@ -17,7 +17,7 @@ function isValidEmail(email: string): boolean {
   return typeof email === 'string' && EMAIL_REGEX.test(email.trim()) && email.trim().length <= 320
 }
 
-export const squareRoutes = new Hono<{ Bindings: Bindings }>()
+export const squareRoutes = new Hono<AppEnv>()
 
 // ============================================================
 // SITEWIDE AUTO-PROMO — applies a percentage discount to every credit

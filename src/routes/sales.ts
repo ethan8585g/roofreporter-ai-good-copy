@@ -27,15 +27,16 @@
 // ============================================================
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Context } from 'hono'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 import { createNotification } from './pipeline'
 import { logFromContext } from '../lib/team-activity'
 
-export const salesRoutes = new Hono<{ Bindings: Bindings }>()
+export const salesRoutes = new Hono<AppEnv>()
 
 // ── AUTH ──
-async function getSalesOwnerId(c: any): Promise<number | null> {
+async function getSalesOwnerId(c: Context<AppEnv>): Promise<number | null> {
   const auth = c.req.header('Authorization')
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.slice(7)

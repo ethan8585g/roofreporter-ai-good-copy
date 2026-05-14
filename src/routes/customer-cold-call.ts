@@ -25,15 +25,16 @@
 // GET  /api/customer-calls/leads                 — Leads only
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 import { isDevAccount } from './customer-auth'
 
-export const customerCallsRoutes = new Hono<{ Bindings: Bindings }>()
+export const customerCallsRoutes = new Hono<AppEnv>()
 
 // ── Customer Auth ──
-async function getCustomerInfo(c: any): Promise<{ id: number; email: string; effectiveOwnerId: number; isTeamMember: boolean } | null> {
+async function getCustomerInfo(c: Context<AppEnv>): Promise<{ id: number; email: string; effectiveOwnerId: number; isTeamMember: boolean } | null> {
   const auth = c.req.header('Authorization')
   if (!auth?.startsWith('Bearer ')) return null
   const token = auth.slice(7)
@@ -57,10 +58,10 @@ customerCallsRoutes.use('/*', async (c, next) => {
   }
   const info = await getCustomerInfo(c)
   if (!info) return c.json({ error: 'Authentication required' }, 401)
-  c.set('customerId' as any, info.effectiveOwnerId)
-  c.set('realCustomerId' as any, info.id)
-  c.set('customerEmail' as any, info.email)
-  c.set('isDev' as any, isDevAccount(info.email, c.env))
+  c.set('customerId', info.effectiveOwnerId)
+  c.set('realCustomerId', info.id)
+  c.set('customerEmail', info.email)
+  c.set('isDev', isDevAccount(info.email, c.env))
   return next()
 })
 
@@ -68,7 +69,7 @@ customerCallsRoutes.use('/*', async (c, next) => {
 // DASHBOARD — Overview stats
 // ============================================================
 customerCallsRoutes.get('/dashboard', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   try {
     const [lists, todayStats, totalStats, recentCalls, leads] = await Promise.all([
       c.env.DB.prepare('SELECT COUNT(*) as cnt FROM cust_cc_lists WHERE customer_id=? AND status=?').bind(customerId, 'active').first<any>(),
@@ -116,7 +117,7 @@ customerCallsRoutes.get('/dashboard', async (c) => {
 // PROSPECT LISTS — CRUD
 // ============================================================
 customerCallsRoutes.get('/lists', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const { results } = await c.env.DB.prepare(
     `SELECT l.*, (SELECT COUNT(*) FROM cust_cc_prospects p WHERE p.list_id=l.id) as prospect_count FROM cust_cc_lists l WHERE l.customer_id=? AND l.status!='deleted' ORDER BY l.created_at DESC`
   ).bind(customerId).all<any>()
@@ -124,7 +125,7 @@ customerCallsRoutes.get('/lists', async (c) => {
 })
 
 customerCallsRoutes.post('/lists', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const { name, description, source } = await c.req.json()
   if (!name) return c.json({ error: 'List name required' }, 400)
   const res = await c.env.DB.prepare(
@@ -134,7 +135,7 @@ customerCallsRoutes.post('/lists', async (c) => {
 })
 
 customerCallsRoutes.put('/lists/:id', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const id = parseInt(c.req.param('id'))
   const body = await c.req.json()
   const allowed = ['name', 'description', 'source', 'status']
@@ -151,7 +152,7 @@ customerCallsRoutes.put('/lists/:id', async (c) => {
 })
 
 customerCallsRoutes.delete('/lists/:id', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const id = parseInt(c.req.param('id'))
   await c.env.DB.prepare("UPDATE cust_cc_lists SET status='deleted', updated_at=datetime('now') WHERE customer_id=? AND id=?").bind(customerId, id).run()
   return c.json({ success: true })
@@ -161,7 +162,7 @@ customerCallsRoutes.delete('/lists/:id', async (c) => {
 // CSV IMPORT — Parse CSV, create prospects, add to list
 // ============================================================
 customerCallsRoutes.post('/lists/:id/import', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const listId = parseInt(c.req.param('id'))
   try {
     const { csv_data } = await c.req.json()
@@ -241,7 +242,7 @@ function parseCSVLine(line: string): string[] {
 // PROSPECTS — CRUD + filters
 // ============================================================
 customerCallsRoutes.get('/prospects', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const listId = c.req.query('list_id')
   const status = c.req.query('status')
   const search = c.req.query('search')
@@ -272,7 +273,7 @@ customerCallsRoutes.get('/prospects', async (c) => {
 })
 
 customerCallsRoutes.post('/prospects', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const { list_id, contact_name, company_name, phone, email, linkedin_url, city, province_state, job_title, notes, tags } = await c.req.json()
   if (!contact_name && !phone) return c.json({ error: 'Contact name or phone required' }, 400)
 
@@ -291,7 +292,7 @@ customerCallsRoutes.post('/prospects', async (c) => {
 })
 
 customerCallsRoutes.put('/prospects/:id', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const id = parseInt(c.req.param('id'))
   const body = await c.req.json()
   const allowed = ['contact_name', 'company_name', 'phone', 'email', 'linkedin_url', 'city', 'province_state', 'job_title', 'notes', 'tags', 'call_status', 'outcome', 'is_lead', 'lead_quality', 'do_not_call', 'priority', 'appointment_booked', 'appointment_date', 'appointment_notes', 'next_call_at']
@@ -308,7 +309,7 @@ customerCallsRoutes.put('/prospects/:id', async (c) => {
 })
 
 customerCallsRoutes.delete('/prospects/:id', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const id = parseInt(c.req.param('id'))
   const prospect = await c.env.DB.prepare('SELECT list_id FROM cust_cc_prospects WHERE customer_id=? AND id=?').bind(customerId, id).first<any>()
   await c.env.DB.prepare('DELETE FROM cust_cc_prospects WHERE customer_id=? AND id=?').bind(customerId, id).run()
@@ -322,7 +323,7 @@ customerCallsRoutes.delete('/prospects/:id', async (c) => {
 // CALL LOGS — History with filtering
 // ============================================================
 customerCallsRoutes.get('/call-logs', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const outcome = c.req.query('outcome')
   const status = c.req.query('status')
   const listId = c.req.query('list_id')
@@ -350,7 +351,7 @@ customerCallsRoutes.get('/call-logs', async (c) => {
 })
 
 customerCallsRoutes.get('/call-logs/:id', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const id = parseInt(c.req.param('id'))
   const call = await c.env.DB.prepare(
     'SELECT cl.*, p.linkedin_url, p.job_title, p.email as prospect_email, p.notes as prospect_notes FROM cust_cc_call_logs cl LEFT JOIN cust_cc_prospects p ON p.id=cl.prospect_id WHERE cl.customer_id=? AND cl.id=?'
@@ -360,7 +361,7 @@ customerCallsRoutes.get('/call-logs/:id', async (c) => {
 })
 
 customerCallsRoutes.put('/call-logs/:id', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const id = parseInt(c.req.param('id'))
   const body = await c.req.json()
   const allowed = ['agent_notes', 'tags', 'is_lead', 'lead_quality', 'call_outcome', 'follow_up_required', 'follow_up_notes', 'follow_up_date', 'appointment_booked', 'appointment_date', 'appointment_notes']
@@ -379,7 +380,7 @@ customerCallsRoutes.put('/call-logs/:id', async (c) => {
 // LEADS — Filtered view
 // ============================================================
 customerCallsRoutes.get('/leads', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const { results } = await c.env.DB.prepare(
     `SELECT cl.*, p.linkedin_url, p.job_title, p.email as prospect_email FROM cust_cc_call_logs cl LEFT JOIN cust_cc_prospects p ON p.id=cl.prospect_id WHERE cl.customer_id=? AND cl.is_lead=1 ORDER BY cl.started_at DESC LIMIT 100`
   ).bind(customerId).all<any>()
@@ -453,13 +454,13 @@ customerCallsRoutes.post('/call-complete', async (c) => {
 // CONFIG — Agent settings
 // ============================================================
 customerCallsRoutes.get('/config', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const config = await c.env.DB.prepare('SELECT * FROM cust_cc_config WHERE customer_id=?').bind(customerId).first<any>()
   return c.json({ config: config || null })
 })
 
 customerCallsRoutes.post('/config', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const { agent_name, agent_voice, script_intro, script_pitch, script_objections, script_closing, business_name, callback_number } = await c.req.json()
 
   const existing = await c.env.DB.prepare('SELECT id FROM cust_cc_config WHERE customer_id=?').bind(customerId).first<any>()
@@ -489,7 +490,7 @@ customerCallsRoutes.post('/config', async (c) => {
 // START / STOP CALLING — Control AI dialer
 // ============================================================
 customerCallsRoutes.post('/start-calling', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const { list_id } = await c.req.json()
 
   // Verify list belongs to customer
@@ -513,7 +514,7 @@ customerCallsRoutes.post('/start-calling', async (c) => {
 })
 
 customerCallsRoutes.post('/stop-calling', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   await c.env.DB.prepare(
     `UPDATE cust_cc_config SET is_active=0, updated_at=datetime('now') WHERE customer_id=?`
   ).bind(customerId).run()
@@ -524,7 +525,7 @@ customerCallsRoutes.post('/stop-calling', async (c) => {
 // NEXT PROSPECT — Get next in queue for AI agent
 // ============================================================
 customerCallsRoutes.get('/next-prospect', async (c) => {
-  const customerId = c.get('customerId' as any)
+  const customerId = c.get('customerId')
   const listId = c.req.query('list_id')
 
   let where = `customer_id=? AND (call_status='pending' OR (call_status='callback' AND next_call_at<=datetime('now'))) AND do_not_call=0`

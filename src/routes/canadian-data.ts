@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 
-export const canadianDataRoutes = new Hono<{ Bindings: Bindings }>()
+export const canadianDataRoutes = new Hono<AppEnv>()
 
 const head = (title: string, desc: string, canonical: string, schema?: string) => `<!DOCTYPE html>
 <html lang="en-CA">

@@ -13,19 +13,21 @@
  *   GET /api/admin/bi/anomalies        — Threshold-based alerts (revenue drop, error spike, etc.)
  *   GET /api/admin/bi/api-performance  — Avg/P95 response time + error rate by endpoint
  */
+import type { Context } from 'hono'
 import { Hono } from 'hono'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession, requireSuperadmin } from './auth'
 import { runDripCampaigns, setDripDryRun } from '../services/drip-campaigns'
 
 type Bindings = { DB: D1Database; [key: string]: any }
-const superAdminBi = new Hono<{ Bindings: Bindings }>()
+const superAdminBi = new Hono<AppEnv>()
 
 // Auth middleware — superadmin only
 superAdminBi.use('/*', async (c, next) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin authentication required' }, 401)
   if (!requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
-  c.set('admin' as any, admin)
+  c.set('admin', admin)
   return next()
 })
 
@@ -146,7 +148,7 @@ superAdminBi.get('/customer-health', async (c) => {
     for (const r of (callsRow.results || [])) callMap.set(r.customer_id, r.calls_30d)
 
     const now = Date.now()
-    const customers = (customersRow.results || []).map((c: any) => {
+    const customers = (customersRow.results || []).map((c: Context<AppEnv>) => {
       const lastLoginMs = c.last_login ? new Date(c.last_login).getTime() : null
       const daysSinceLogin = lastLoginMs ? Math.floor((now - lastLoginMs) / 86400000) : null
 
@@ -189,7 +191,7 @@ superAdminBi.get('/customer-health', async (c) => {
       }
     })
 
-    const at_risk_count = customers.filter((c: any) => c.at_risk).length
+    const at_risk_count = customers.filter((c: Context<AppEnv>) => c.at_risk).length
 
     return c.json({ customers, at_risk_count, total: customers.length })
   } catch (e: any) {
@@ -903,7 +905,7 @@ superAdminBi.get('/command-center', async (c) => {
 // total_sales, top_spenders, and the revenue waterfall. Superadmin only.
 superAdminBi.post('/manual-payments', async (c) => {
   try {
-    const admin = c.get('admin' as any) as any
+    const admin = c.get('admin') as any
     const body = await c.req.json().catch(() => ({})) as any
     const customerId = parseInt(body.customer_id)
     const amount = parseFloat(body.amount)
@@ -951,7 +953,7 @@ superAdminBi.get('/manual-payments', async (c) => {
 
 superAdminBi.delete('/manual-payments/:id', async (c) => {
   try {
-    const admin = c.get('admin' as any) as any
+    const admin = c.get('admin') as any
     const id = parseInt(c.req.param('id'))
     if (!id) return c.json({ error: 'id required' }, 400)
     const result = await c.env.DB.prepare('DELETE FROM manual_payments WHERE id = ?').bind(id).run()

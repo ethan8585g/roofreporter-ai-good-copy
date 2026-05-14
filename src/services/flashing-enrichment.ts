@@ -48,7 +48,7 @@ export function deriveFlashingCounts(findings: VisionFinding[] = []): {
 }
 
 /** Pull this contractor's per-team flashing prices, falling back to platform defaults. */
-export async function loadFlashingPrices(db: any, customerId: number | null | undefined): Promise<FlashingPrices> {
+export async function loadFlashingPrices(db: D1Database, customerId: number | null | undefined): Promise<FlashingPrices> {
   const fallback: FlashingPrices = {
     step_flashing_lf: 0.85,
     headwall_flashing_lf: 1.40,
@@ -137,7 +137,7 @@ export function appendFlashingBom(
  *  matching BOM lines using per-team prices. Never throws. */
 export async function enrichReportWithFlashing(
   reportData: RoofReport,
-  db: any,
+  db: D1Database,
   opts: EnrichOpts,
 ): Promise<void> {
   try {

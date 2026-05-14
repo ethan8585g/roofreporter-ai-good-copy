@@ -1,17 +1,18 @@
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 import { trueAreaFromFootprint, pitchToRatio } from '../utils/geo-math'
 import { calculateTieredProposals, calculateProposal, DEFAULT_PRESETS, TIER_PRESETS } from '../services/pricing-engine'
 import type { RoofMeasurements, RoofPresetCosts } from '../services/pricing-engine'
 import { limitByIp, limitByKey } from '../lib/rate-limit'
 
-export const widgetRoutes = new Hono<{ Bindings: Bindings }>()
+export const widgetRoutes = new Hono<AppEnv>()
 
 // ============================================================
 // AUTH HELPER — same pattern as website-builder.ts
 // ============================================================
-async function getOwnerId(c: any): Promise<number | null> {
+async function getOwnerId(c: Context<AppEnv>): Promise<number | null> {
   const auth = c.req.header('Authorization')
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.slice(7)
@@ -26,7 +27,7 @@ async function getOwnerId(c: any): Promise<number | null> {
 // ============================================================
 // DYNAMIC CORS for public widget endpoints
 // ============================================================
-async function setWidgetCors(c: any, allowedDomains: string) {
+async function setWidgetCors(c: Context<AppEnv>, allowedDomains: string) {
   const origin = c.req.header('Origin') || ''
   const domains = (allowedDomains || '').split(',').map((d: string) => d.trim()).filter(Boolean)
   // If no domains configured, allow all. Otherwise check origin.

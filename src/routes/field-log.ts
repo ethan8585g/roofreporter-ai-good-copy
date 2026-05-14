@@ -1,9 +1,10 @@
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Context } from 'hono'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession } from './auth'
 import { getCustomerSessionToken } from '../lib/session-tokens'
 
-export const fieldLogRoutes = new Hono<{ Bindings: Bindings }>()
+export const fieldLogRoutes = new Hono<AppEnv>()
 
 function esc(s: unknown): string {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -20,7 +21,7 @@ function randomToken(): string {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-async function resolveAuth(c: any): Promise<
+async function resolveAuth(c: Context<AppEnv>): Promise<
   | { kind: 'admin'; adminId: number; ownerId: number; name: string }
   | { kind: 'crew'; crewId: number; ownerId: number; name: string }
   | null

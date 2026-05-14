@@ -1,10 +1,11 @@
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { sendGmailEmail, notifySalesNewLead } from '../services/email'
 import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from '../services/email-tracking'
 import { sendMetaConversion } from './meta-connect'
 
-export const leadCaptureRoutes = new Hono<{ Bindings: Bindings }>()
+export const leadCaptureRoutes = new Hono<AppEnv>()
 
 // conv-v5: hardened per V5 Section 7
 // Per-isolate soft rate limiter: 20 submissions / 10 minutes per IP+endpoint.
@@ -17,7 +18,7 @@ const RL_MAX = 20
 const rateLimitMap: Map<string, RLEntry> = (globalThis as any).__rmLeadRL__ || new Map()
 ;(globalThis as any).__rmLeadRL__ = rateLimitMap
 
-function getClientIP(c: any): string {
+function getClientIP(c: Context<AppEnv>): string {
   try {
     return (
       c.req.header('cf-connecting-ip') ||
@@ -32,7 +33,7 @@ function getClientIP(c: any): string {
  * Returns true if the request should be throttled. Caller should respond 429.
  * Safe to call on every submission — self-prunes expired entries lazily.
  */
-function rateLimited(c: any, endpoint: string): boolean {
+function rateLimited(c: Context<AppEnv>, endpoint: string): boolean {
   const ip = getClientIP(c)
   const key = `${ip}:${endpoint}`
   const now = Date.now()
@@ -56,7 +57,7 @@ function rateLimited(c: any, endpoint: string): boolean {
 }
 
 /** Log UA + Referer (+ IP) on every submission. Low-signal but useful for abuse forensics. */
-function logSubmission(c: any, endpoint: string, extra: Record<string, any> = {}) {
+function logSubmission(c: Context<AppEnv>, endpoint: string, extra: Record<string, any> = {}) {
   try {
     const ua = c.req.header('user-agent') || ''
     const ref = c.req.header('referer') || c.req.header('referrer') || ''
@@ -82,7 +83,7 @@ export function isValidLeadSource(s: any): s is LeadSource {
 }
 
 let leadTableReady = false
-async function ensureLeadTable(db: any) {
+async function ensureLeadTable(db: D1Database) {
   if (leadTableReady) return
   try {
     await db.prepare(`
@@ -106,7 +107,7 @@ async function ensureLeadTable(db: any) {
 }
 
 let contactLeadTableReady = false
-async function ensureContactLeadsTable(db: any) {
+async function ensureContactLeadsTable(db: D1Database) {
   if (contactLeadTableReady) return
   try {
     await db.prepare(`

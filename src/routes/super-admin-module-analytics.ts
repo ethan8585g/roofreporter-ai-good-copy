@@ -17,7 +17,7 @@
 import { Hono } from 'hono'
 import { validateAdminSession, requireSuperadmin } from './auth'
 
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 
 // Resolves a customer.id (aliased `c`) to their account-owner id. Team
 // members roll up to the team owner; standalone customers map to themselves.
@@ -27,7 +27,7 @@ const OWNER_ID_EXPR = `COALESCE(
   c.id
 )`
 
-export const superAdminModuleAnalytics = new Hono<{ Bindings: Bindings }>()
+export const superAdminModuleAnalytics = new Hono<AppEnv>()
 
 // All routes require superadmin
 superAdminModuleAnalytics.use('*', async (c, next) => {

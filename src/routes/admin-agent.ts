@@ -8,9 +8,9 @@ import Anthropic from '@anthropic-ai/sdk'
 import { CLAUDE_MODEL } from '../services/anthropic-client'
 import { getAdminSessionToken } from '../lib/session-tokens'
 
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 
-export const adminAgentRoutes = new Hono<{ Bindings: Bindings }>()
+export const adminAgentRoutes = new Hono<AppEnv>()
 
 adminAgentRoutes.use('/*', async (c, next) => {
   const token = getAdminSessionToken(c)
@@ -21,7 +21,7 @@ adminAgentRoutes.use('/*', async (c, next) => {
      WHERE s.session_token = ? AND s.expires_at > datetime('now')`
   ).bind(token).first<any>()
   if (!session || session.role !== 'superadmin') return c.json({ error: 'Forbidden' }, 403)
-  c.set('adminId' as any, session.admin_id)
+  c.set('adminId', session.admin_id)
   await next()
 })
 
@@ -206,7 +206,7 @@ adminAgentRoutes.post('/chat', async (c) => {
   const { message, thread_id } = await c.req.json<{ message: string; thread_id?: number }>()
   if (!message) return c.json({ error: 'No message' }, 400)
 
-  const adminId = c.get('adminId' as any) as number
+  const adminId = c.get('adminId') as number
   const db = c.env.DB
   const apiKey = c.env.ANTHROPIC_API_KEY
   if (!apiKey) return c.json({ reply: 'ANTHROPIC_API_KEY not configured.', actions: [] })
@@ -308,7 +308,7 @@ adminAgentRoutes.post('/chat', async (c) => {
 })
 
 adminAgentRoutes.get('/threads', async (c) => {
-  const adminId = c.get('adminId' as any) as number
+  const adminId = c.get('adminId') as number
   const r = await c.env.DB.prepare(
     `SELECT id, title, created_at, updated_at FROM admin_agent_threads WHERE admin_user_id = ? ORDER BY updated_at DESC LIMIT 50`
   ).bind(adminId).all()

@@ -14,11 +14,11 @@
 // ============================================================
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { runAbandonedCheckoutRecovery } from '../services/abandoned-checkout-recovery'
 import { recordExternalRun } from '../services/loop-scanner'
 
-export const cartRecoveryRoutes = new Hono<{ Bindings: Bindings }>()
+export const cartRecoveryRoutes = new Hono<AppEnv>()
 
 cartRecoveryRoutes.use('*', async (c, next) => {
   const expected = c.env.FUNNEL_MONITOR_TOKEN

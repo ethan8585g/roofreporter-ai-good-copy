@@ -1,11 +1,11 @@
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { getActiveAlerts, getHailReports, stormCacheClear } from '../services/storm-data'
 import { buildDailySnapshot, writeSnapshot, readSnapshot, listSnapshotDates, pruneOldSnapshots, matchSnapshotAndNotify } from '../services/storm-ingest'
 import { GIBS_LAYERS, getGibsTileUrl, getGibsMaxZoom, buildGoogleStaticMapUrl, BASEMAP_PROVIDERS } from '../services/satellite-imagery'
 import { requireCustomerId as requireCustomer } from '../lib/session-tokens'
 
-export const stormScoutRoutes = new Hono<{ Bindings: Bindings }>()
+export const stormScoutRoutes = new Hono<AppEnv>()
 
 stormScoutRoutes.get('/alerts', async (c) => {
   const customerId = await requireCustomer(c)

@@ -13,13 +13,13 @@
 // ============================================================
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { runSignupJourney } from '../services/signup-journey'
 import { sendJourneyEmail } from '../services/journey-email'
 import { recordExternalRun } from '../services/loop-scanner'
 import { pruneExpiredScanSessions } from '../services/synthetic-auth'
 
-export const signupJourneyRoutes = new Hono<{ Bindings: Bindings }>()
+export const signupJourneyRoutes = new Hono<AppEnv>()
 
 signupJourneyRoutes.use('*', async (c, next) => {
   const expected = c.env.FUNNEL_MONITOR_TOKEN

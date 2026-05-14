@@ -3,9 +3,9 @@ import { logAdminToolCall } from '../lib/audit-log'
 import { limitByKey, clientIp } from '../lib/rate-limit'
 import { getAdminSessionToken } from '../lib/session-tokens'
 
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 
-export const aiAdminChatRoutes = new Hono<{ Bindings: Bindings }>()
+export const aiAdminChatRoutes = new Hono<AppEnv>()
 
 // P0-08: allowlist of setting keys this tool may touch. Pricing and feature
 // flags are intentionally excluded — those changes must go through an explicit
@@ -33,9 +33,9 @@ aiAdminChatRoutes.use('/*', async (c, next) => {
     `SELECT s.*, a.email, a.name, a.role FROM admin_sessions s JOIN admin_users a ON s.admin_id = a.id WHERE s.session_token = ? AND s.expires_at > datetime('now')`
   ).bind(token).first<any>()
   if (!session || session.role !== 'superadmin') return c.json({ error: 'Forbidden' }, 403)
-  c.set('adminId' as any, session.admin_id)
-  c.set('adminName' as any, session.name || session.email)
-  c.set('adminEmail' as any, session.email)
+  c.set('adminId', session.admin_id)
+  c.set('adminName', session.name || session.email)
+  c.set('adminEmail', session.email)
   await next()
 })
 
@@ -568,8 +568,8 @@ aiAdminChatRoutes.post('/chat', async (c) => {
           toolArgs = {}
         }
 
-        const adminId = c.get('adminId' as any) as number
-        const adminEmail = c.get('adminEmail' as any) as string | undefined
+        const adminId = c.get('adminId') as number
+        const adminEmail = c.get('adminEmail') as string | undefined
 
         // P0-08: rate limits. 10 mutations / hour / admin; 1 credit-grant / day.
         if (MUTATION_TOOLS.has(toolName)) {
@@ -643,7 +643,7 @@ aiAdminChatRoutes.post('/chat', async (c) => {
       await c.env.DB.prepare(
         `INSERT INTO user_activity_log (action, details, created_at) VALUES ('ai_admin_chat', ?, datetime('now'))`
       ).bind(JSON.stringify({
-        admin_id: c.get('adminId' as any),
+        admin_id: c.get('adminId'),
         user_message: messages[messages.length - 1]?.content?.slice(0, 200),
         actions_taken: actions.map(a => a.tool),
         actions_count: actions.length

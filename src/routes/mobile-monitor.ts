@@ -12,13 +12,13 @@
 // ============================================================
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { runMobileMonitor } from '../services/mobile-monitor'
 import { sendMobileMonitorEmail } from '../services/mobile-monitor-email'
 import { recordExternalRun } from '../services/loop-scanner'
 import { pruneExpiredScanSessions } from '../services/synthetic-auth'
 
-export const mobileMonitorRoutes = new Hono<{ Bindings: Bindings }>()
+export const mobileMonitorRoutes = new Hono<AppEnv>()
 
 mobileMonitorRoutes.use('*', async (c, next) => {
   const expected = c.env.FUNNEL_MONITOR_TOKEN

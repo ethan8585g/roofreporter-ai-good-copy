@@ -4,15 +4,16 @@
 // Auth: customer bearer token (rc_customer_token). Deal rows are
 // scoped to the owning customer_id resolved via the team helper.
 // ============================================================
+import type { Context } from 'hono'
 import { Hono } from 'hono'
 import { getCustomerSessionToken } from '../lib/session-tokens'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 
-export const solarPipelineRoutes = new Hono<{ Bindings: Bindings }>()
+export const solarPipelineRoutes = new Hono<AppEnv>()
 
 // Resolve customer from bearer token. Returns { ownerId } or null.
-async function requireCustomer(c: any) {
+async function requireCustomer(c: Context<AppEnv>) {
   const token = getCustomerSessionToken(c)
   if (!token) return null
   const session = await c.env.DB.prepare(

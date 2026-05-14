@@ -3,11 +3,11 @@
 // ============================================================
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import type { ServiceArea, Ring } from '../services/storm-matcher'
 import { requireCustomerId as requireCustomer } from '../lib/session-tokens'
 
-export const stormAlertsRoutes = new Hono<{ Bindings: Bindings }>()
+export const stormAlertsRoutes = new Hono<AppEnv>()
 
 function parsePolygon(raw: any): Ring | null {
   if (!Array.isArray(raw) || raw.length < 3) return null

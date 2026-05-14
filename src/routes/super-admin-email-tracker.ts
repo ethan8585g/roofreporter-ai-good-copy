@@ -35,9 +35,9 @@ import {
   type SequenceStepCustom,
 } from '../services/sequence-engine'
 
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 
-export const superAdminEmailTracker = new Hono<{ Bindings: Bindings }>()
+export const superAdminEmailTracker = new Hono<AppEnv>()
 
 // ── Session gate (superadmin only) ───────────────────────────
 // This router is mounted at app.route('/', ...) so use('*') would intercept

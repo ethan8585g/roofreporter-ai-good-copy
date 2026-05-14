@@ -16,11 +16,12 @@
 //   GET  /api/calendar/availability     → Get free/busy times
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 
-export const calendarRoutes = new Hono<{ Bindings: Bindings }>()
+export const calendarRoutes = new Hono<AppEnv>()
 
 // ── AUTH HELPER ──
 // Resolves a Google access token for the given owner directly from D1 (no HTTP context).
@@ -84,7 +85,7 @@ async function getCalendarAuthForOwner(env: Bindings, ownerId: number): Promise<
   }
 }
 
-async function getCalendarAuth(c: any): Promise<{ ownerId: number; accessToken: string; calendarEmail: string } | { error: string } | null> {
+async function getCalendarAuth(c: Context<AppEnv>): Promise<{ ownerId: number; accessToken: string; calendarEmail: string } | { error: string } | null> {
   try {
     const auth = c.req.header('Authorization')
     if (!auth || !auth.startsWith('Bearer ')) return null
@@ -108,7 +109,7 @@ function isCalAuth(x: any): x is { ownerId: number; accessToken: string; calenda
 }
 
 // Simple owner auth (no calendar token needed)
-async function getOwnerId(c: any): Promise<number | null> {
+async function getOwnerId(c: Context<AppEnv>): Promise<number | null> {
   const auth = c.req.header('Authorization')
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.slice(7)

@@ -4,14 +4,15 @@
 // session of the report owner OR an admin session.
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import * as ins from '../repositories/insurance'
 
-export const insuranceRoutes = new Hono<{ Bindings: Bindings }>()
+export const insuranceRoutes = new Hono<AppEnv>()
 
 // Auth: customer session ownership OR admin.
-async function authReportAccess(c: any, reportId: number) {
+async function authReportAccess(c: Context<AppEnv>, reportId: number) {
   // Admin session — re-use cookie set by /api/auth/login
   const adminCookie = c.req.header('cookie')?.match(/rm_admin_session=([^;]+)/)?.[1]
   if (adminCookie) {
@@ -37,7 +38,7 @@ async function authReportAccess(c: any, reportId: number) {
   return { ok: false }
 }
 
-function reportIdParam(c: any): number {
+function reportIdParam(c: Context<AppEnv>): number {
   const p = c.req.param('reportId')
   const n = parseInt(p, 10)
   if (!Number.isFinite(n) || n <= 0) throw new Error('invalid report id')

@@ -1,17 +1,18 @@
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 import { generateSiteCopy } from '../services/site-generator'
 import { buildPageHTML } from '../services/site-templates'
 import { getCustomerSessionToken } from '../lib/session-tokens'
 import type { WBIntakeFormData, WBBrandColors } from '../types'
 
-export const websiteBuilderRoutes = new Hono<{ Bindings: Bindings }>()
+export const websiteBuilderRoutes = new Hono<AppEnv>()
 
 // ============================================================
 // AUTH HELPER — accepts Bearer header OR rm_customer_session cookie
 // ============================================================
-async function getOwnerId(c: any): Promise<number | null> {
+async function getOwnerId(c: Context<AppEnv>): Promise<number | null> {
   const token = getCustomerSessionToken(c)
   if (!token) return null
   const session = await c.env.DB.prepare(

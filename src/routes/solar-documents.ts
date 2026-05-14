@@ -2,14 +2,15 @@
 // Two modes:
 //   - Company templates (is_template=1, no deal_id)       → reusable library
 //   - Deal attachments (is_template=0, deal_id set)       → on a specific proposal
+import type { Context } from 'hono'
 import { Hono } from 'hono'
 import { getCustomerSessionToken } from '../lib/session-tokens'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 
-export const solarDocumentsRoutes = new Hono<{ Bindings: Bindings }>()
+export const solarDocumentsRoutes = new Hono<AppEnv>()
 
-async function requireCustomer(c: any) {
+async function requireCustomer(c: Context<AppEnv>) {
   const token = getCustomerSessionToken(c)
   if (!token) return null
   const s = await c.env.DB.prepare(

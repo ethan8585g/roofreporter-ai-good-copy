@@ -6,8 +6,9 @@
 // members share the same set.
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 import {
   encryptApiKey,
@@ -15,11 +16,11 @@ import {
   testCRMConnection,
 } from '../services/external-crm-dispatch'
 
-export const customerApiConnectionsRoutes = new Hono<{ Bindings: Bindings }>()
+export const customerApiConnectionsRoutes = new Hono<AppEnv>()
 
 // ── Auth: resolve session → account owner (shared across team) ─────────
 
-async function getOwnerId(c: any): Promise<{ ownerId: number; userId: number } | null> {
+async function getOwnerId(c: Context<AppEnv>): Promise<{ ownerId: number; userId: number } | null> {
   const auth = c.req.header('Authorization')
   let token = ''
   if (auth?.startsWith('Bearer ')) token = auth.slice(7)

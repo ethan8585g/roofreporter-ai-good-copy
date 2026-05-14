@@ -1,17 +1,18 @@
 // Solar Permitting — jurisdiction, permit #, status, inspections.
+import type { Context } from 'hono'
 import { Hono } from 'hono'
 import { getCustomerSessionToken } from '../lib/session-tokens'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 
-export const solarPermitsRoutes = new Hono<{ Bindings: Bindings }>()
+export const solarPermitsRoutes = new Hono<AppEnv>()
 
 const STATUSES = [
   'not_started','preparing','submitted','under_review','approved','rejected',
   'inspection_scheduled','passed_inspection','closed'
 ] as const
 
-async function requireCustomer(c: any) {
+async function requireCustomer(c: Context<AppEnv>) {
   const token = getCustomerSessionToken(c)
   if (!token) return null
   const s = await c.env.DB.prepare(

@@ -5,13 +5,14 @@
 // Mounted at /api/activity in index.tsx. The /api/admin/bi/* paths are
 // also exposed here under the same router via the prefix mount.
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession, requireSuperadmin } from './auth'
 import { getCustomerSessionToken, getAdminSessionToken } from '../lib/session-tokens'
 import { trackActivity, closeStaleVisits, ACTIVITY_MODULES } from '../services/activity-tracker'
 
-export const activityRoutes = new Hono<{ Bindings: Bindings }>()
+export const activityRoutes = new Hono<AppEnv>()
 
 // ─────────────────────────────────────────────────────────────────────
 // HEARTBEAT — called by activity-heartbeat.js every 60s while tab visible
@@ -93,7 +94,7 @@ activityRoutes.post('/heartbeat', async (c) => {
 // SUPER-ADMIN AUTH GUARD — applies to every /admin-bi/* below
 // ─────────────────────────────────────────────────────────────────────
 
-async function requireSuperadminGuard(c: any) {
+async function requireSuperadminGuard(c: Context<AppEnv>) {
   const admin = await validateAdminSession(
     c.env.DB,
     c.req.header('Authorization'),

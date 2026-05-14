@@ -12,9 +12,9 @@
 import { Hono } from 'hono'
 import { validateAdminSession, requireSuperadmin } from './auth'
 
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 
-export const superAdminLtv = new Hono<{ Bindings: Bindings }>()
+export const superAdminLtv = new Hono<AppEnv>()
 
 superAdminLtv.use('*', async (c, next) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))

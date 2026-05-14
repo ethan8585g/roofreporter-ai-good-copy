@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import { getCustomerSessionToken } from '../lib/session-tokens'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { getActivityFeed, logFromContext } from '../lib/team-activity'
 import { sanitizePermissions } from '../lib/permissions'
 import { hashPassword } from '../lib/password'
@@ -13,7 +14,7 @@ function diffPermissionKeys(before: Record<string, boolean>, after: Record<strin
   return changed
 }
 
-export const teamRoutes = new Hono<{ Bindings: Bindings }>()
+export const teamRoutes = new Hono<AppEnv>()
 
 // ============================================================
 // CONSTANTS
@@ -88,7 +89,7 @@ export async function evaluateTeamGating(db: D1Database, ownerId: number) {
 // ============================================================
 // MIDDLEWARE — Require auth + extract customer
 // ============================================================
-async function requireAuth(c: any): Promise<{ customer: any; customerId: number } | null> {
+async function requireAuth(c: Context<AppEnv>): Promise<{ customer: any; customerId: number } | null> {
   const token = getCustomerSessionToken(c)
   const customer = await getCustomer(c.env.DB, token)
   if (!customer) return null

@@ -1,14 +1,14 @@
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession } from './auth'
 
-export const companiesRoutes = new Hono<{ Bindings: Bindings }>()
+export const companiesRoutes = new Hono<AppEnv>()
 
 // Admin auth middleware
 companiesRoutes.use('/*', async (c, next) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin authentication required' }, 401)
-  c.set('admin' as any, admin)
+  c.set('admin', admin)
   return next()
 })
 

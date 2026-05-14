@@ -4,11 +4,12 @@
 // ALL operations chunked to avoid Cloudflare Workers timeout
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession, requireSuperadmin } from './auth'
 
-export const metaConnectRoutes = new Hono<{ Bindings: Bindings }>()
+export const metaConnectRoutes = new Hono<AppEnv>()
 
 const META_GRAPH_API = 'https://graph.facebook.com/v21.0'
 
@@ -136,7 +137,7 @@ export { sendMetaConversion }
 // ── Superadmin auth guard ──
 // Uses admin_sessions + admin_users.role (NOT customer_sessions)
 // The customers table does not have a 'role' column — admin_users does.
-async function requireSuperAdmin(c: any): Promise<boolean> {
+async function requireSuperAdmin(c: Context<AppEnv>): Promise<boolean> {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   return requireSuperadmin(admin)
 }

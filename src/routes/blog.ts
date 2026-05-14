@@ -1,12 +1,12 @@
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { runOnce, seedDefaultKeywords, pickStalePostIds, refreshStalePost, getAgentHealth } from '../services/blog-agent'
 import { pingGoogleIndexing, pingGoogleIndexingBatch } from '../services/indexing-api'
 import { pingIndexNow } from '../services/indexnow'
 import { sanitizeHtml } from '../utils/sanitize-html'
 import { validateAdminSession } from './auth'
 
-export const blogRoutes = new Hono<{ Bindings: Bindings }>()
+export const blogRoutes = new Hono<AppEnv>()
 
 // ============================================================
 // PUBLIC: Get published blog posts (paginated)

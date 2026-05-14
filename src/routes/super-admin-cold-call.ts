@@ -14,9 +14,9 @@ import {
   VALID_STATUSES, VALID_OUTCOMES,
 } from '../repositories/cold-call'
 
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 
-export const superAdminColdCall = new Hono<{ Bindings: Bindings }>()
+export const superAdminColdCall = new Hono<AppEnv>()
 
 superAdminColdCall.use('*', async (c, next) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))

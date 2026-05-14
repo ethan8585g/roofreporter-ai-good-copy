@@ -6,11 +6,11 @@
 // ============================================================
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession } from './auth'
 import { sendGmailOAuth2 } from '../services/email'
 
-export const roverRoutes = new Hono<{ Bindings: Bindings }>()
+export const roverRoutes = new Hono<AppEnv>()
 
 // ============================================================
 // MODEL CONFIGURATION

@@ -22,12 +22,13 @@
 //   DELETE /api/home-designer/projects/:id    → Delete project
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
 import { getCustomerSessionToken } from '../lib/session-tokens'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 
-const homeDesignerRoutes = new Hono<{ Bindings: Bindings }>()
+const homeDesignerRoutes = new Hono<AppEnv>()
 
 // ── CONSTANTS ──────────────────────────────────────────────
 
@@ -137,7 +138,7 @@ Output a valid SVG string that can be embedded directly in HTML.`
 
 // ── AUTH HELPER ──────────────────────────────────────────────
 
-async function getDesignerCustomerId(c: any): Promise<number | null> {
+async function getDesignerCustomerId(c: Context<AppEnv>): Promise<number | null> {
   const token = getCustomerSessionToken(c)
   if (!token) return null
   const session = await c.env.DB.prepare(`

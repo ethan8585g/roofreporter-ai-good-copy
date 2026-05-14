@@ -12,13 +12,14 @@
 //                                to add SA as Viewer → render result
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession, requireSuperadmin } from './auth'
 
-export const ga4GrantRoutes = new Hono<{ Bindings: Bindings }>()
+export const ga4GrantRoutes = new Hono<AppEnv>()
 
-async function requireSuperAdmin(c: any): Promise<boolean> {
+async function requireSuperAdmin(c: Context<AppEnv>): Promise<boolean> {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   return requireSuperadmin(admin)
 }

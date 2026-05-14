@@ -7,12 +7,12 @@
 // ============================================================
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { getSnapFeatures } from '../services/measure-snap-cache'
 import { resolvePitch } from '../services/pitch-resolver'
 import { segmentWithGemini, geminiOutlineToTracePayload } from '../services/sam3-segmentation'
 
-export const measureRoutes = new Hono<{ Bindings: Bindings }>()
+export const measureRoutes = new Hono<AppEnv>()
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/measure/snap-features?lat=&lng=

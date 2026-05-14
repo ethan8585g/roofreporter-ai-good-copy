@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import { getCustomerSessionToken } from '../lib/session-tokens'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 import { loadPermissionContext, can, redactFinancials } from '../lib/permissions'
 import { validateAdminSession } from './auth'
@@ -15,21 +16,21 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-export const crmRoutes = new Hono<{ Bindings: Bindings }>()
+export const crmRoutes = new Hono<AppEnv>()
 
 // ============================================================
 // AUTH MIDDLEWARE — Validate customer session token
 // Now supports team members: resolves to owner's account
 // so team members see/manage the owner's CRM data.
 // ============================================================
-async function getOwnerId(c: any): Promise<number | null> {
+async function getOwnerId(c: Context<AppEnv>): Promise<number | null> {
   const info = await getOwnerAndPerms(c)
   return info?.ownerId ?? null
 }
 
 // Returns owner id AND whether financial fields should be hidden for this caller.
 // Admin sessions never hide; customer sessions hide when the user lacks view_financials.
-async function getOwnerAndPerms(c: any): Promise<{ ownerId: number; hideMoney: boolean } | null> {
+async function getOwnerAndPerms(c: Context<AppEnv>): Promise<{ ownerId: number; hideMoney: boolean } | null> {
   const token = getCustomerSessionToken(c)
   if (token) {
     const session = await c.env.DB.prepare(
@@ -51,7 +52,7 @@ async function getOwnerAndPerms(c: any): Promise<{ ownerId: number; hideMoney: b
 // ============================================================
 // HELPER: Resolve customer ID — auto-create if new_customer provided
 // ============================================================
-async function resolveCustomerId(c: any, ownerId: number, body: any): Promise<{ id: number | null; error?: string }> {
+async function resolveCustomerId(c: Context<AppEnv>, ownerId: number, body: any): Promise<{ id: number | null; error?: string }> {
   // If an existing customer ID is provided, use it
   if (body.crm_customer_id) {
     return { id: body.crm_customer_id }
@@ -3423,7 +3424,7 @@ crmRoutes.post('/jobs/:id/unassign', async (c) => {
 // JOB PHOTOS — crew uploads progress photos tied to jobs
 // ============================================================
 
-async function resolveAuthor(c: any): Promise<{ id: number | null; name: string; ownerId: number | null }> {
+async function resolveAuthor(c: Context<AppEnv>): Promise<{ id: number | null; name: string; ownerId: number | null }> {
   const auth = c.req.header('Authorization')
   if (!auth || !auth.startsWith('Bearer ')) return { id: null, name: '', ownerId: null }
   const token = auth.slice(7)

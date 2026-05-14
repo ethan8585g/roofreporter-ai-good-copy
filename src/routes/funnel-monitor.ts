@@ -17,11 +17,11 @@
 // outside a browser.
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { recordExternalRun } from '../services/loop-scanner'
 import { notifyFunnelRegression } from '../services/email'
 
-export const funnelMonitorRoutes = new Hono<{ Bindings: Bindings }>()
+export const funnelMonitorRoutes = new Hono<AppEnv>()
 
 // Conversion-rate drop (relative) that triggers an alert. 0.25 = "current
 // stage rate is 25% below baseline". Tunable; pick conservatively because

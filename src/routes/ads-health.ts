@@ -14,12 +14,12 @@
 // ============================================================
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { runAdsHealthCheck } from '../services/ads-health'
 import { sendAdsHealthEmail } from '../services/ads-health-email'
 import { recordExternalRun } from '../services/loop-scanner'
 
-export const adsHealthRoutes = new Hono<{ Bindings: Bindings }>()
+export const adsHealthRoutes = new Hono<AppEnv>()
 
 adsHealthRoutes.use('*', async (c, next) => {
   const expected = c.env.FUNNEL_MONITOR_TOKEN

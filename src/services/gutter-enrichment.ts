@@ -31,7 +31,7 @@ export function deriveGutterMeasurements(edgeSummary: any | null | undefined): {
 }
 
 /** Pull this contractor's per-team gutter price, falling back to platform default. */
-export async function loadGutterPrices(db: any, customerId: number | null | undefined): Promise<GutterPrices> {
+export async function loadGutterPrices(db: D1Database, customerId: number | null | undefined): Promise<GutterPrices> {
   const fallback: GutterPrices = { gutter_lf: 4.50 }
   if (!db || !customerId) return fallback
   try {
@@ -89,7 +89,7 @@ export function appendGutterBom(
  *  Never throws. */
 export async function enrichReportWithGutters(
   reportData: RoofReport,
-  db: any,
+  db: D1Database,
   opts: EnrichGutterOpts,
 ): Promise<void> {
   try {

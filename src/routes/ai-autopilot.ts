@@ -5,7 +5,7 @@
 // ============================================================
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession } from './auth'
 import {
   autoProcessOrder,
@@ -15,7 +15,7 @@ import {
   getConfidenceThreshold,
 } from '../services/ai-agent'
 
-export const aiAutopilotRoutes = new Hono<{ Bindings: Bindings }>()
+export const aiAutopilotRoutes = new Hono<AppEnv>()
 
 // ── AUTH MIDDLEWARE — Superadmin only ──
 aiAutopilotRoutes.use('*', async (c, next) => {

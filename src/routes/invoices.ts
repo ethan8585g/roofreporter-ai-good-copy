@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Context } from 'hono'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession } from './auth'
 import { sendGmailOAuth2, loadGmailCreds } from '../services/email'
 import { logEmailSend, markEmailFailed, buildTrackingPixel, wrapEmailLinks } from '../services/email-tracking'
@@ -10,7 +11,7 @@ import { getCustomerSessionToken } from '../lib/session-tokens'
 import { getMerchantSquareCreds } from '../services/square-token'
 import { verifySquareSignature } from '../routes/square'
 
-export const invoiceRoutes = new Hono<{ Bindings: Bindings }>()
+export const invoiceRoutes = new Hono<AppEnv>()
 
 // Auth middleware — accepts Admin OR Customer tokens
 // (Invoice Manager is used by both Super Admin and Customer dashboards)
@@ -21,7 +22,7 @@ invoiceRoutes.use('/*', async (c, next) => {
 
   // Try admin auth first
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
-  if (admin) { c.set('admin' as any, admin); return next() }
+  if (admin) { c.set('admin', admin); return next() }
 
   // Fallback: try customer auth (Bearer header OR rm_customer_session cookie)
   const token = getCustomerSessionToken(c)
@@ -34,14 +35,14 @@ invoiceRoutes.use('/*', async (c, next) => {
     if (session) {
       const teamInfo = await resolveTeamOwner(c.env.DB, session.customer_id)
       const perms = await loadPermissionContext(c.env.DB, session.customer_id)
-      c.set('admin' as any, {
+      c.set('admin', {
         id: session.customer_id,
         email: session.email,
         name: session.name,
         role: 'customer',
         ownerCustomerId: teamInfo.ownerId,
       })
-      c.set('perms' as any, perms)
+      c.set('perms', perms)
       return next()
     }
   }
@@ -52,8 +53,8 @@ invoiceRoutes.use('/*', async (c, next) => {
 // Scope helper: returns the effective data owner for a request.
 // - Admin/superadmin: { isAdmin: true, ownerId: null } → full access
 // - Customer (incl. team member): { isAdmin: false, ownerId: effective team owner id }
-export function getScope(c: any): { isAdmin: boolean; ownerId: number | null } {
-  const user = c.get('admin' as any) as any
+export function getScope(c: Context<AppEnv>): { isAdmin: boolean; ownerId: number | null } {
+  const user = c.get('admin') as any
   if (!user) return { isAdmin: false, ownerId: null }
   if (user.role === 'customer') {
     return { isAdmin: false, ownerId: (user.ownerCustomerId ?? user.id) as number }
@@ -63,8 +64,8 @@ export function getScope(c: any): { isAdmin: boolean; ownerId: number | null } {
 
 // Pulls the PermissionContext loaded by the auth middleware. Super-admins
 // (non-customer sessions) have no context; they bypass everything.
-function getPerms(c: any): PermissionContext | null {
-  return (c.get('perms' as any) as PermissionContext | undefined) || null
+function getPerms(c: Context<AppEnv>): PermissionContext | null {
+  return (c.get('perms') as PermissionContext | undefined) || null
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -627,7 +628,7 @@ invoiceRoutes.patch('/:id/status', async (c) => {
     await c.env.DB.prepare(`UPDATE invoices SET ${updates.join(', ')} WHERE id = ?`).bind(...binds, id).run()
 
     // Audit trail
-    const admin = c.get('admin' as any) as any
+    const admin = c.get('admin') as any
     await c.env.DB.prepare(
       `INSERT INTO invoice_audit_log (invoice_id, action, old_value, new_value, changed_by) VALUES (?, 'status_change', ?, ?, ?)`
     ).bind(id, own.old_status || '', status, admin?.email || 'unknown').run().catch((e) => console.warn('[invoice-status-audit]', (e && e.message) || e))
@@ -1116,7 +1117,7 @@ invoiceRoutes.get('/customers/list', async (c) => {
         `).bind(scope.ownerId).all()
 
     // CRM contacts owned by the authenticated user (by team owner for team members)
-    const ownerIdForCrm = scope.isAdmin ? (c.get('admin' as any) as any)?.id : scope.ownerId
+    const ownerIdForCrm = scope.isAdmin ? (c.get('admin') as any)?.id : scope.ownerId
     let crmCustomers: any[] = []
     if (ownerIdForCrm) {
       const res = await c.env.DB.prepare(

@@ -13,9 +13,10 @@
 //   POST /api/reports/:orderId/auto-pipeline    → Full auto-fallback: SAM3 → Gemini → RANSAC
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
 import { getCustomerSessionToken } from '../lib/session-tokens'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import {
   segmentWithSAM3,
   segmentWithGemini,
@@ -29,11 +30,11 @@ import {
   type EnrichedEdge
 } from '../services/sam3-segmentation'
 
-const sam3Routes = new Hono<{ Bindings: Bindings }>()
+const sam3Routes = new Hono<AppEnv>()
 
 // ── AUTH HELPER ──────────────────────────────────────────────
 
-async function validateAdmin(c: any): Promise<boolean> {
+async function validateAdmin(c: Context<AppEnv>): Promise<boolean> {
   const authHeader = c.req.header('Authorization') || ''
   const token = authHeader.replace('Bearer ', '')
   if (!token) return false
@@ -43,7 +44,7 @@ async function validateAdmin(c: any): Promise<boolean> {
   return !!session
 }
 
-async function validateCustomer(c: any): Promise<number | null> {
+async function validateCustomer(c: Context<AppEnv>): Promise<number | null> {
   const token = getCustomerSessionToken(c)
   if (!token) return null
   const session = await c.env.DB.prepare(

@@ -8,26 +8,27 @@
 // POST /api/ai/vertex-proxy     — Vertex AI proxy for frontend SDK calls
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings, RASYieldAnalysis } from '../types'
+import type { Bindings, AppEnv, RASYieldAnalysis } from '../types'
 import { computeRASYieldAnalysis, trueAreaFromFootprint, pitchToRatio, degreesToCardinal } from '../utils/geo-math'
 import { analyzeRoofGeometry, generateAIRoofingReport, quickMeasure } from '../services/gemini'
 
-export const aiAnalysisRoutes = new Hono<{ Bindings: Bindings }>()
+export const aiAnalysisRoutes = new Hono<AppEnv>()
 import { validateAdminSession } from './auth'
 
 // Admin auth middleware for AI analysis endpoints
 aiAnalysisRoutes.use('/*', async (c, next) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin) return c.json({ error: 'Admin authentication required' }, 401)
-  c.set('admin' as any, admin)
+  c.set('admin', admin)
   return next()
 })
 
 // ============================================================
 // Helper: Build environment credentials from Hono context
 // ============================================================
-function getGeminiEnv(c: any) {
+function getGeminiEnv(c: Context<AppEnv>) {
   return {
     apiKey: c.env.GOOGLE_VERTEX_API_KEY || undefined,
     accessToken: c.env.GOOGLE_CLOUD_ACCESS_TOKEN || undefined,

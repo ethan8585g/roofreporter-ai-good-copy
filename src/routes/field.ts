@@ -6,10 +6,11 @@
 // ============================================================
 
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Context } from 'hono'
+import type { Bindings, AppEnv } from '../types'
 
-export const fieldRoutes = new Hono<{ Bindings: Bindings }>()
-export const fieldUiRoutes = new Hono<{ Bindings: Bindings }>()
+export const fieldRoutes = new Hono<AppEnv>()
+export const fieldUiRoutes = new Hono<AppEnv>()
 
 // ---------------- helpers ----------------
 
@@ -24,7 +25,7 @@ function randomToken(): string {
   return Array.from(a).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-async function requireCrew(c: any): Promise<{ crewId: number; ownerId: number } | null> {
+async function requireCrew(c: Context<AppEnv>): Promise<{ crewId: number; ownerId: number } | null> {
   const auth = c.req.header('Authorization') || ''
   const token = auth.replace('Bearer ', '').trim()
   if (!token) return null

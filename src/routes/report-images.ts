@@ -14,10 +14,11 @@
 // or falls back to GOOGLE_VERTEX_API_KEY.
 // ============================================================
 
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 
-export const reportImagesRoutes = new Hono<{ Bindings: Bindings }>()
+export const reportImagesRoutes = new Hono<AppEnv>()
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -155,7 +156,7 @@ function feetToFtIn(decimalFt: number): string {
 
 // ── Auth middleware ─────────────────────────────────────────
 
-async function getAuthUser(c: any): Promise<{ id: number; role: string } | null> {
+async function getAuthUser(c: Context<AppEnv>): Promise<{ id: number; role: string } | null> {
   const auth = c.req.header('Authorization')
   if (!auth?.startsWith('Bearer ')) return null
   const token = auth.slice(7)
@@ -178,7 +179,7 @@ async function getAuthUser(c: any): Promise<{ id: number; role: string } | null>
 reportImagesRoutes.use('/*', async (c, next) => {
   const user = await getAuthUser(c)
   if (!user) return c.json({ error: 'Authentication required' }, 401)
-  c.set('user' as any, user)
+  c.set('user', user)
   return next()
 })
 

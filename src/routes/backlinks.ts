@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession } from './auth'
 
-export const backlinksRoutes = new Hono<{ Bindings: Bindings }>()
+export const backlinksRoutes = new Hono<AppEnv>()
 
 // ============================================================
 // ADMIN: List backlinks

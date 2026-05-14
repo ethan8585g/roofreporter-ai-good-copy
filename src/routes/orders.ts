@@ -1,11 +1,11 @@
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession } from './auth'
 import { recordAndNotify } from '../services/admin-notifications'
 import { autoProcessOrder } from '../services/ai-agent'
 import { trackOrderPlaced } from '../services/ga4-events'
 
-export const ordersRoutes = new Hono<{ Bindings: Bindings }>()
+export const ordersRoutes = new Hono<AppEnv>()
 
 // ============================================================
 // AUTH MIDDLEWARE — All /api/orders endpoints require admin auth
@@ -16,7 +16,7 @@ ordersRoutes.use('/*', async (c, next) => {
   if (!admin) {
     return c.json({ error: 'Admin authentication required' }, 401)
   }
-  c.set('admin' as any, admin)
+  c.set('admin', admin)
   return next()
 })
 
@@ -280,7 +280,7 @@ ordersRoutes.patch('/:id/status', async (c) => {
 // finance can see this wasn't a Stripe/Square charge.
 ordersRoutes.post('/:id/pay', async (c) => {
   try {
-    const admin = c.get('admin' as any) as any
+    const admin = c.get('admin') as any
     if (!admin || admin.role !== 'superadmin') {
       return c.json({ error: 'Superadmin role required to manually mark orders paid' }, 403)
     }

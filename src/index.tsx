@@ -117,9 +117,9 @@ import { runEmailAgent } from './services/email-agent'
 import { runMonitorAgent } from './services/monitor-agent'
 import { runTrafficAgent } from './services/traffic-agent'
 import { renderSolarWebProposal } from './templates/solar-web-proposal'
-import type { Bindings } from './types'
+import type { Bindings, AppEnv } from './types'
 
-const app = new Hono<{ Bindings: Bindings }>()
+const app = new Hono<AppEnv>()
 
 // Baseline security headers on every response.
 // CSP kept permissive enough for inline scripts we still emit from the SSR layer,

@@ -1,13 +1,14 @@
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { resolveTeamOwner } from './team'
 
-export const customerLeadsRoutes = new Hono<{ Bindings: Bindings }>()
+export const customerLeadsRoutes = new Hono<AppEnv>()
 
 // ============================================================
 // AUTH — resolve to team owner so team members see owner's leads
 // ============================================================
-async function getOwnerId(c: any): Promise<{ ownerId: number; userId: number } | null> {
+async function getOwnerId(c: Context<AppEnv>): Promise<{ ownerId: number; userId: number } | null> {
   const auth = c.req.header('Authorization')
   if (!auth?.startsWith('Bearer ')) return null
   const token = auth.slice(7)
