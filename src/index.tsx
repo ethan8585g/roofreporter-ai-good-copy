@@ -18105,7 +18105,7 @@ function getPricingPageHTML() {
         </div>
         <div class="text-center sm:text-right flex-shrink-0">
           <div class="mb-2">
-            <span class="text-3xl font-black" style="color:var(--text-primary)">$8</span>
+            <span class="text-3xl font-black" style="color:var(--text-primary)">$10</span>
             <span class="text-xs ml-1" style="color:var(--text-muted)">CAD / report</span>
           </div>
           <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_single_report'})" class="inline-block py-2.5 px-6 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-lg text-sm transition-all hover:scale-[1.02]">
