@@ -3815,13 +3815,19 @@ async function _generateReportForOrderInner(
     // Allow retry even if max attempts exceeded — reset counter if status was 'failed'.
     // On the 4th+ attempt of a non-failed run, route to super-admin trace queue
     // instead of returning a hard rejection. Customer keeps seeing 'in progress'.
-    if (attemptNum > 3 && existing?.status !== 'failed') {
+    //
+    // Admin-initiated retries (opts.skipCustomerDelivery === true, set by the
+    // /generate-draft route the super-admin trace UI calls) bypass the cap and
+    // reset the counter — the admin is the queue, so there is nowhere else to
+    // route to. Without this bypass, a super-admin who attempted a trace 3+
+    // times got permanently locked out of regenerating that order.
+    if (attemptNum > 3 && existing?.status !== 'failed' && !opts?.skipCustomerDelivery) {
       try {
         await repo.flagForReview(env.DB, orderId, 'max_attempts', { attempt_num: attemptNum })
       } catch {}
       return { success: false, error: 'Max attempts exceeded — queued for review' }
     }
-    const safeAttempt = attemptNum > 3 ? 1 : attemptNum
+    const safeAttempt = (attemptNum > 3 || opts?.skipCustomerDelivery) ? 1 : attemptNum
     await repo.upsertGeneratingState(env.DB, orderId, safeAttempt, !!existing)
     await repo.markOrderStatus(env.DB, orderId, 'processing')
 
