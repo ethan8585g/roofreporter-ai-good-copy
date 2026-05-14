@@ -1614,7 +1614,7 @@
         '<div class="grid grid-cols-2 gap-3">' +
           '<div class="col-span-2"><label class="text-xs font-semibold text-gray-400 mb-1 block">Full Name *</label><input id="memberName" class="d2d-input" placeholder="e.g. John Smith" autofocus></div>' +
           '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Phone</label><input id="memberPhone" class="d2d-input" type="tel" placeholder="(555) 123-4567"></div>' +
-          '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Role</label><select id="memberRole" class="d2d-select"><option value="salesperson">Salesperson</option><option value="manager">Manager</option></select></div>' +
+          '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Role</label><select id="memberRole" class="d2d-select"><option value="salesperson">Salesperson</option><option value="manager">Manager</option><option value="door_knocker_only">Door Knocker Only</option></select></div>' +
         '</div>' +
         // Login credentials section
         '<div class="border border-dashed border-sky-300 bg-sky-50/50 rounded-xl p-4">' +
@@ -1702,7 +1702,7 @@
         '<div class="grid grid-cols-2 gap-3">' +
           '<div class="col-span-2"><label class="text-xs font-semibold text-gray-400 mb-1 block">Name</label><input id="editMemberName" class="d2d-input" value="' + escAttr(m.name) + '"></div>' +
           '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Phone</label><input id="editMemberPhone" class="d2d-input" type="tel" value="' + escAttr(m.phone || '') + '"></div>' +
-          '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Role</label><select id="editMemberRole" class="d2d-select"><option value="salesperson"' + (m.role !== 'manager' ? ' selected' : '') + '>Salesperson</option><option value="manager"' + (m.role === 'manager' ? ' selected' : '') + '>Manager</option></select></div>' +
+          '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Role</label><select id="editMemberRole" class="d2d-select"><option value="salesperson"' + (m.role !== 'manager' && m.role !== 'door_knocker_only' ? ' selected' : '') + '>Salesperson</option><option value="manager"' + (m.role === 'manager' ? ' selected' : '') + '>Manager</option><option value="door_knocker_only"' + (m.role === 'door_knocker_only' ? ' selected' : '') + '>Door Knocker Only</option></select></div>' +
         '</div>' +
         // Login credentials
         '<div class="border border-dashed border-sky-300 bg-sky-50/50 rounded-xl p-4">' +

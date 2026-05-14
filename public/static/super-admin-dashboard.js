@@ -1049,7 +1049,7 @@ function renderUsersView() {
                     ${u.google_avatar ? `<img src="${u.google_avatar}" class="w-8 h-8 rounded-full border-2 border-white shadow-sm">` : `<div class="w-8 h-8 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold">${(u.name||'?')[0].toUpperCase()}</div>`}
                     <div>
                       <p class="font-semibold text-gray-800 text-sm">${u.name || '-'} ${new Date(u.created_at) > new Date(Date.now() - 7*86400000) ? '<span class="ml-1 px-1.5 py-0.5 bg-green-100 text-green-700 text-[9px] font-bold rounded-full uppercase">New</span>' : ''} ${u.user_type === 'team_member' ? `<span class="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[9px] font-bold rounded-full uppercase" title="Team member of ${(u.team_owner_name || u.team_owner_email || 'owner').replace(/"/g,'&quot;')}">Team${u.team_role === 'admin' ? ' Admin' : ''}</span>` : ''}${u.user_type === 'api_account' ? '<span class="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-bold rounded-full uppercase" title="API key account"><i class="fas fa-key mr-0.5"></i>API</span>' : ''}</p>
-                      <p class="text-[10px] text-gray-400">${u.email}${u.user_type === 'team_member' ? ` <span class="text-purple-500">· under ${u.team_owner_name || u.team_owner_company || u.team_owner_email || '#'+u.team_owner_id}</span>` : ''}${u.user_type === 'api_account' ? ' <span class="text-amber-600">· developer API</span>' : ''}</p>
+                      <p class="text-[10px] text-gray-400">${u.email}${u.user_type === 'team_member' ? ` <span class="text-purple-500">· team member of ${u.team_owner_name || u.team_owner_email || u.team_owner_company || '#'+u.team_owner_id}</span>` : ''}${u.user_type === 'api_account' ? ' <span class="text-amber-600">· developer API</span>' : ''}</p>
                     </div>
                   </div>
                 </td>
@@ -16464,7 +16464,7 @@ function renderPersonPanelBody(d) {
       row('Lead source', esc(c.lead_source || c.lead_utm_source || '')) +
       (c.owner_id ? row('Owned by', esc((c.owner_name || c.owner_email || '#' + c.owner_id) + (c.owner_company ? ' · ' + c.owner_company : ''))) : '') +
       (d.type === 'team_member' && (c.team_owner_email || c.team_owner_name)
-        ? row('Member of', '<span class="text-violet-700 font-semibold">' + esc(c.team_owner_company || c.team_owner_name || c.team_owner_email) + '</span>'
+        ? row('Team member of', '<span class="text-violet-700 font-semibold">' + esc(c.team_owner_name || c.team_owner_company || c.team_owner_email) + '</span>'
             + (c.team_owner_email ? ' <span class="text-slate-400">· ' + esc(c.team_owner_email) + '</span>' : '')
             + (c.team_role ? ' <span class="ml-1 px-1.5 py-0.5 bg-violet-50 text-violet-700 rounded text-[9px] font-bold uppercase">' + esc(c.team_role) + '</span>' : ''))
         : '') +

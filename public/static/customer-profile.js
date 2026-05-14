@@ -36,6 +36,13 @@
       if (!res.ok) { window.location.href = '/customer/login'; return; }
       var data = await res.json();
       profile = data.customer || {};
+      // Pull team roster so owners get the Team Members section. Failure is non-fatal —
+      // team members (non-admin) get a 200 with a simplified payload, and any other
+      // failure just hides the section instead of breaking Settings.
+      try {
+        var tRes = await fetch('/api/team/members', { headers: hdrs() });
+        if (tRes.ok) profile._team = await tRes.json();
+      } catch (te) {}
       render();
     } catch (e) {
       root.innerHTML = '<p class="text-center text-red-500 py-12">Failed to load settings. Please refresh.</p>';
@@ -139,6 +146,9 @@
         '</div>',
         'security'
       ) +
+
+      // ── 5b. Team Members ─────────────────────────────────
+      teamMembersSection() +
 
       // ── 6. Account / Billing ──────────────────────────────
       '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">' +
@@ -579,6 +589,126 @@
       showToast('Switched to ' + (type === 'solar' ? 'Solar Sales Company' : 'Roofing Company') + '!', 'success');
     } catch (e) {
       showToast(e.message || 'Switch failed', 'error');
+    }
+  };
+
+  // ── Team Members section ──────────────────────────────────
+  // Lets owners and team admins review the roster and toggle per-member access
+  // points inline. Full CRUD (invite / suspend / remove) still lives on
+  // /customer/team — this is the at-a-glance access editor for Settings.
+  var TEAM_MODULE_KEYS = [
+    { key: 'orders',    label: 'Orders',     icon: 'fa-clipboard-list' },
+    { key: 'reports',   label: 'Reports',    icon: 'fa-file-alt' },
+    { key: 'crm',       label: 'CRM',        icon: 'fa-briefcase' },
+    { key: 'pipeline',  label: 'Pipeline',   icon: 'fa-stream' },
+    { key: 'jobs',      label: 'Jobs',       icon: 'fa-hard-hat' },
+    { key: 'invoices',  label: 'Invoices',   icon: 'fa-file-invoice-dollar' },
+    { key: 'proposals', label: 'Proposals',  icon: 'fa-file-signature' },
+    { key: 'secretary', label: 'Secretary',  icon: 'fa-headset' },
+    { key: 'cold_call', label: 'Cold Call',  icon: 'fa-phone' },
+    { key: 'd2d',       label: 'D2D Manager',icon: 'fa-map-marked-alt' },
+    { key: 'billing',   label: 'Billing',    icon: 'fa-credit-card' },
+    { key: 'settings',  label: 'Settings',   icon: 'fa-cog' },
+    { key: 'team',      label: 'Team Mgmt',  icon: 'fa-users-cog' },
+  ];
+
+  function teamMembersSection() {
+    var t = profile && profile._team;
+    if (!t || t.can_manage !== true) return '';
+    var members = (t.members || []).filter(function (m) { return m.status === 'active'; });
+
+    var header = '<div class="flex items-center justify-between mb-4">' +
+      '<div>' +
+        '<h2 class="text-base font-bold text-gray-800"><i class="fas fa-users text-blue-500 mr-2"></i>Team Members</h2>' +
+        '<p class="text-xs text-gray-500 mt-0.5">Toggle each member\'s access to platform modules. Saves are per-row.</p>' +
+      '</div>' +
+      '<a href="/customer/team" class="text-xs font-semibold text-blue-600 hover:underline"><i class="fas fa-user-plus mr-1"></i>Invite / Manage roster</a>' +
+    '</div>';
+
+    var body = '';
+    if (members.length === 0) {
+      body = '<p class="text-sm text-gray-500 italic">No team members yet. ' +
+        '<a href="/customer/team" class="text-blue-600 hover:underline font-semibold">Invite your first team member</a>.</p>';
+    } else {
+      body = members.map(function (m) { return renderTeamMemberRow(m); }).join('');
+    }
+
+    return '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">' +
+      header + body +
+    '</div>';
+  }
+
+  function renderTeamMemberRow(m) {
+    var perms = {};
+    try { perms = m.permissions ? (typeof m.permissions === 'string' ? JSON.parse(m.permissions) : m.permissions) : {}; }
+    catch (e) { perms = {}; }
+    var roleBadge = m.role === 'admin'
+      ? '<span class="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full uppercase">Admin</span>'
+      : '<span class="ml-2 px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded-full uppercase">Member</span>';
+
+    var toggles = TEAM_MODULE_KEYS.map(function (k) {
+      // Module keys default to TRUE for backward compat — match server's sanitizePermissions.
+      var checked = (k.key in perms) ? perms[k.key] === true : true;
+      var id = 'tm-' + m.id + '-perm-' + k.key;
+      return '<label class="flex items-center gap-2 text-xs text-gray-700 cursor-pointer p-2 rounded-lg hover:bg-gray-50 border border-gray-100">' +
+        '<input type="checkbox" id="' + id + '" data-member="' + m.id + '" data-perm-key="' + k.key + '" class="tm-perm-toggle accent-blue-500"' + (checked ? ' checked' : '') + '>' +
+        '<i class="fas ' + k.icon + ' text-gray-400 w-4 text-center"></i>' +
+        '<span>' + k.label + '</span>' +
+      '</label>';
+    }).join('');
+
+    return '<div class="border border-gray-200 rounded-xl p-4 mb-3" data-team-row="' + m.id + '">' +
+      '<div class="flex items-start justify-between gap-3 mb-3">' +
+        '<div>' +
+          '<p class="text-sm font-semibold text-gray-800">' + esc(m.name || 'Unnamed') + roleBadge + '</p>' +
+          '<p class="text-xs text-gray-500">' + esc(m.email || '') + '</p>' +
+        '</div>' +
+        '<button onclick="saveTeamMemberPerms(' + m.id + ')" id="save-tm-' + m.id + '" class="hidden px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors">Save</button>' +
+      '</div>' +
+      '<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">' + toggles + '</div>' +
+    '</div>';
+  }
+
+  // Show the per-row save button when any toggle on that row flips.
+  document.addEventListener('change', function (ev) {
+    var t = ev.target;
+    if (!t || !t.classList || !t.classList.contains('tm-perm-toggle')) return;
+    var memberId = t.getAttribute('data-member');
+    if (!memberId) return;
+    var btn = document.getElementById('save-tm-' + memberId);
+    if (btn) btn.classList.remove('hidden');
+  });
+
+  window.saveTeamMemberPerms = async function (memberId) {
+    var btn = document.getElementById('save-tm-' + memberId);
+    if (!btn) return;
+    btn.disabled = true;
+    var oldText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving';
+
+    var permissions = {};
+    TEAM_MODULE_KEYS.forEach(function (k) {
+      var el = document.getElementById('tm-' + memberId + '-perm-' + k.key);
+      permissions[k.key] = !!(el && el.checked);
+    });
+
+    try {
+      var res = await fetch('/api/team/members/' + memberId, {
+        method: 'PUT', headers: hdrs(),
+        body: JSON.stringify({ permissions: permissions })
+      });
+      if (!res.ok) {
+        var err = {}; try { err = await res.json(); } catch (e) {}
+        throw new Error(err.error || ('HTTP ' + res.status));
+      }
+      btn.classList.add('hidden');
+      btn.innerHTML = oldText;
+      btn.disabled = false;
+      showToast('Access updated', 'success');
+    } catch (e) {
+      btn.disabled = false;
+      btn.innerHTML = oldText;
+      showToast(e.message || 'Save failed', 'error');
     }
   };
 

@@ -90,6 +90,11 @@ async function getUser(c: Context<AppEnv>): Promise<D2DUser | null> {
     if (d2dMember?.permissions) {
       try { d2dPermissions = { ...d2dPermissions, ...JSON.parse(d2dMember.permissions) } } catch (e) {}
     }
+    // Server-enforced role: door_knocker_only is strict-field-rep — own pins/turfs only,
+    // no Reports/CRM/Secretary/Team Mgmt, regardless of what the permissions JSON says.
+    if (d2dMember?.role === 'door_knocker_only') {
+      d2dPermissions = { d2d: 'assigned', reports: false, crm: false, secretary: false, team: false }
+    }
   }
 
   return {
