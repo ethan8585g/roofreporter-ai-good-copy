@@ -2241,30 +2241,37 @@ function saInitTraceStreetView(lat, lng) {
   if (!el || lat == null || lng == null) return;
   var house = { lat: lat, lng: lng };
   var svService = new google.maps.StreetViewService();
-  svService.getPanorama({ location: house, radius: 50, source: 'outdoor' }, function(data, status) {
-    if (status !== 'OK' || !data || !data.location) {
+  // Tiered lookup: 100m catches urban addresses with the closest pano (best
+  // heading accuracy), 500m handles suburban setbacks, 2000m covers rural
+  // acreages where the nearest panorama is out on the range road.
+  var radii = [100, 500, 2000];
+  function tryRadius(i) {
+    if (i >= radii.length) {
       el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#6b7280;font-size:12px">No street view available for this address</div>';
       return;
     }
-    var panoLatLng = data.location.latLng;
-    // Compute heading from pano → house so the camera looks at the property
-    var fromLat = panoLatLng.lat() * Math.PI / 180;
-    var toLat = house.lat * Math.PI / 180;
-    var dLng = (house.lng - panoLatLng.lng()) * Math.PI / 180;
-    var y = Math.sin(dLng) * Math.cos(toLat);
-    var x = Math.cos(fromLat) * Math.sin(toLat) - Math.sin(fromLat) * Math.cos(toLat) * Math.cos(dLng);
-    var heading = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-    new google.maps.StreetViewPanorama(el, {
-      pano: data.location.pano,
-      pov: { heading: heading, pitch: 10 },
-      zoom: 0,
-      addressControl: false,
-      fullscreenControl: true,
-      motionTracking: false,
-      motionTrackingControl: false,
-      showRoadLabels: false
+    svService.getPanorama({ location: house, radius: radii[i], source: 'outdoor' }, function(data, status) {
+      if (status !== 'OK' || !data || !data.location) { tryRadius(i + 1); return; }
+      var panoLatLng = data.location.latLng;
+      var fromLat = panoLatLng.lat() * Math.PI / 180;
+      var toLat = house.lat * Math.PI / 180;
+      var dLng = (house.lng - panoLatLng.lng()) * Math.PI / 180;
+      var y = Math.sin(dLng) * Math.cos(toLat);
+      var x = Math.cos(fromLat) * Math.sin(toLat) - Math.sin(fromLat) * Math.cos(toLat) * Math.cos(dLng);
+      var heading = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+      new google.maps.StreetViewPanorama(el, {
+        pano: data.location.pano,
+        pov: { heading: heading, pitch: 10 },
+        zoom: 0,
+        addressControl: false,
+        fullscreenControl: true,
+        motionTracking: false,
+        motionTrackingControl: false,
+        showRoadLabels: false
+      });
     });
-  });
+  }
+  tryRadius(0);
 }
 
 // ──────────────────────────────────────────────────────────────────────────
