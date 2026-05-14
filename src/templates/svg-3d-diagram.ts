@@ -100,6 +100,28 @@ const EDGE_COLOR: Record<string, string> = {
   RAKE:   '#6D28D9',
 }
 
+// Color + dash pattern for the 'infographic' style overlay pass. Hexes match
+// the page-2 legend in report-html.ts so the legend ↔ overlay stay 1:1.
+// Distinct from EDGE_COLOR (which the classic axonometric uses) so the legacy
+// renderer stays bit-for-bit identical.
+type InfographicEdgeKind = 'ridge' | 'hip' | 'valley' | 'eave' | 'rake' | 'dormer'
+const INFOGRAPHIC_EDGE_STYLE: Record<InfographicEdgeKind, { color: string; width: number; dash: string; label: string; subtitle: string }> = {
+  ridge:  { color: '#DC2626', width: 2.5, dash: '8,4',     label: 'RIDGE',   subtitle: 'High point' },
+  hip:    { color: '#EA580C', width: 2.2, dash: '7,3',     label: 'HIP',     subtitle: 'External sloping angle' },
+  valley: { color: '#2563EB', width: 2.2, dash: '4,3',     label: 'VALLEY',  subtitle: 'Internal angle' },
+  eave:   { color: '#16A34A', width: 2.0, dash: '5,3',     label: 'EAVE',    subtitle: 'Low edge (gutter)' },
+  rake:   { color: '#7C3AED', width: 2.0, dash: '6,2,2,2', label: 'RAKE',    subtitle: 'Sloped gable edge' },
+  dormer: { color: '#A855F7', width: 1.8, dash: '5,4',     label: 'DORMER',  subtitle: 'Projects from roof plane' },
+}
+
+type AnnotationKind = 'chimney' | 'skylight' | 'vent' | 'pipe_boot'
+const ANNOTATION_CALLOUT: Record<AnnotationKind, { color: string; label: string; subtitle: string }> = {
+  chimney:   { color: '#B45309', label: 'CHIMNEY',   subtitle: 'Flue penetration' },
+  skylight:  { color: '#EAB308', label: 'SKYLIGHT',  subtitle: 'Roof window' },
+  vent:      { color: '#15803D', label: 'VENT',      subtitle: 'Roof vent' },
+  pipe_boot: { color: '#0891B2', label: 'PIPE BOOT', subtitle: 'Pipe penetration' },
+}
+
 // Per-pitch base color ramp; gets shaded by Lambert. Lighter mid-tones
 // than the prior palette so the widened Lambert range (see lambertFactor
 // below) has actual headroom to read — the old palette landed every
@@ -1297,7 +1319,28 @@ function lambertFactor(normal: V3): number {
  */
 export function generateAxonometricRoofSVG(
   structure: StructurePartition,
-  opts: { width?: number; height?: number; showShadow?: boolean; showCompass?: boolean; showDimensions?: boolean; structureIndex?: number } = {},
+  opts: {
+    width?: number
+    height?: number
+    showShadow?: boolean
+    showCompass?: boolean
+    showDimensions?: boolean
+    structureIndex?: number
+    /** 'classic' (default) renders identically to the legacy axonometric.
+     *  'infographic' draws color-dashed overlays for every traced edge type
+     *  and emits leader callouts pointing to a representative segment of
+     *  each. Strictly additive — classic output is unchanged. */
+    style?: 'classic' | 'infographic'
+    /** Lat/lng annotations to label in infographic style. Only used when
+     *  style === 'infographic'. Each annotation that falls inside the
+     *  structure's eave polygon gets one leader callout. */
+    annotations?: {
+      chimneys?: LatLng[]
+      skylights?: LatLng[]
+      vents?: LatLng[]
+      pipe_boots?: LatLng[]
+    }
+  } = {},
 ): string {
   const W = opts.width ?? 1200
   const H = opts.height ?? 750
@@ -1305,6 +1348,8 @@ export function generateAxonometricRoofSVG(
   const showShadow = opts.showShadow !== false
   const showCompass = opts.showCompass !== false
   const showDimensions = opts.showDimensions !== false
+  const style: 'classic' | 'infographic' = opts.style === 'infographic' ? 'infographic' : 'classic'
+  const isInfographic = style === 'infographic'
   // Per-structure tint cycles through STRUCTURE_TINT so adjacent
   // buildings on the same report don't render as visual duplicates.
   // structureIndex is passed by generateAllStructureSVGs (and omitted
@@ -1361,13 +1406,18 @@ export function generateAxonometricRoofSVG(
     minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
     minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y)
   }
-  const drawW = W - PAD * 2
-  const drawH = H - PAD * 2 - 28  // reserve bottom strip for label
+  // Reserve a ring of margin INSIDE the canvas for leader-callout pills in
+  // infographic mode. Without this, structures that scale to fill the canvas
+  // leave no room for outward-pointing pills. Classic mode keeps 0 inset so
+  // its output is bit-for-bit identical to before.
+  const calloutInset = isInfographic ? 80 : 0
+  const drawW = W - PAD * 2 - calloutInset * 2
+  const drawH = H - PAD * 2 - 28 - calloutInset * 2  // reserve bottom strip for label
   const sx = drawW / Math.max(1e-3, maxX - minX)
   const sy = drawH / Math.max(1e-3, maxY - minY)
   const sc = Math.min(sx, sy)
-  const oX = PAD + (drawW - (maxX - minX) * sc) / 2 - minX * sc
-  const oY = PAD + (drawH - (maxY - minY) * sc) / 2 - minY * sc
+  const oX = PAD + calloutInset + (drawW - (maxX - minX) * sc) / 2 - minX * sc
+  const oY = PAD + calloutInset + (drawH - (maxY - minY) * sc) / 2 - minY * sc
   const tx = (x: number) => oX + x * sc
   const ty = (y: number) => oY + y * sc
 
@@ -1515,16 +1565,25 @@ export function generateAxonometricRoofSVG(
       const aw = wverts[bestEdgeIdx]
       const bw = wverts[(bestEdgeIdx + 1) % wverts.length]
       const lengthFt = Math.hypot(bw.x - aw.x, bw.y - aw.y, bw.z - aw.z) * M_TO_FT
-      svg += `<line x1="${tx(a.x).toFixed(1)}" y1="${ty(a.y).toFixed(1)}" x2="${tx(b.x).toFixed(1)}" y2="${ty(b.y).toFixed(1)}" stroke="${EDGE_COLOR.RIDGE}" stroke-width="1.8" stroke-linecap="round" stroke-opacity="0.9"/>`
+      // Infographic style replaces the heuristic ridge line with the dashed
+      // overlay pass below — the per-face guess often differs from the user's
+      // traced ridges and would conflict with the dashed line.
+      if (!isInfographic) {
+        svg += `<line x1="${tx(a.x).toFixed(1)}" y1="${ty(a.y).toFixed(1)}" x2="${tx(b.x).toFixed(1)}" y2="${ty(b.y).toFixed(1)}" stroke="${EDGE_COLOR.RIDGE}" stroke-width="1.8" stroke-linecap="round" stroke-opacity="0.9"/>`
+      }
       ridgeRenders.push({ aProj: a, bProj: b, aWorld: aw, bWorld: bw, lengthFt })
     }
   }
 
-  // Eave perimeter on top of walls
-  const eavePts = groundOutline
-    .map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`)
-    .join(' ')
-  svg += `<polygon points="${eavePts}" fill="none" stroke="${EDGE_COLOR.EAVE}" stroke-width="2.0" stroke-linejoin="round" stroke-opacity="0.95"/>`
+  // Eave perimeter on top of walls. Classic style: solid teal outline.
+  // Infographic style: the dashed overlay pass below renders the eave in the
+  // legend-matching green, so we skip this draw to avoid stacking two lines.
+  if (!isInfographic) {
+    const eavePts = groundOutline
+      .map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`)
+      .join(' ')
+    svg += `<polygon points="${eavePts}" fill="none" stroke="${EDGE_COLOR.EAVE}" stroke-width="2.0" stroke-linejoin="round" stroke-opacity="0.95"/>`
+  }
 
   // ── DORMER RAISED VOLUMES ──
   // Each traced dormer becomes a small gabled mass sitting on top of the
@@ -1691,7 +1750,12 @@ export function generateAxonometricRoofSVG(
       const r1: V3 = { x: cxD + (tMin + ridgeInset) * ax, y: cyD + (tMin + ridgeInset) * ay, z: apexZ }
       const r2: V3 = { x: cxD + (tMax - ridgeInset) * ax, y: cyD + (tMax - ridgeInset) * ay, z: apexZ }
       const p1 = projectAxonometric(r1), p2 = projectAxonometric(r2)
-      svg += `<line x1="${tx(p1.x).toFixed(1)}" y1="${ty(p1.y).toFixed(1)}" x2="${tx(p2.x).toFixed(1)}" y2="${ty(p2.y).toFixed(1)}" stroke="${EDGE_COLOR.RIDGE}" stroke-width="1.6" stroke-linecap="round" stroke-opacity="0.95"/>`
+      if (isInfographic) {
+        const ds = INFOGRAPHIC_EDGE_STYLE.dormer
+        svg += `<line x1="${tx(p1.x).toFixed(1)}" y1="${ty(p1.y).toFixed(1)}" x2="${tx(p2.x).toFixed(1)}" y2="${ty(p2.y).toFixed(1)}" stroke="${ds.color}" stroke-width="${ds.width}" stroke-linecap="round" stroke-dasharray="${ds.dash}" stroke-opacity="0.95"/>`
+      } else {
+        svg += `<line x1="${tx(p1.x).toFixed(1)}" y1="${ty(p1.y).toFixed(1)}" x2="${tx(p2.x).toFixed(1)}" y2="${ty(p2.y).toFixed(1)}" stroke="${EDGE_COLOR.RIDGE}" stroke-width="1.6" stroke-linecap="round" stroke-opacity="0.95"/>`
+      }
     }
     // Overlay pills last so they sit above everything.
     for (const d of dormerOverlayDraws) svg += d
@@ -1769,6 +1833,238 @@ export function generateAxonometricRoofSVG(
     }
   }
 
+  // ── INFOGRAPHIC OVERLAY PASS ──
+  // Color-dashed overlays for every traced edge type + leader callouts.
+  // Drawn after the mesh + dimension labels so labels sit on top.
+  // Strictly gated on isInfographic — classic style emits nothing here.
+  if (isInfographic) {
+    const ridgeHeightM = ridgeHeightFromMesh(eavesXY, pitchRise)
+    // Vertex z classifier: interior polyline vertices that snap to an eave
+    // corner (within 1.5m) sit at z=0; everything else sits at the ridge
+    // height. That matches how trace tools snap hip/valley/rake endpoints —
+    // the start touches an eave corner, the interior endpoint touches a
+    // ridge point. Good enough for visual overlay purposes; we don't need
+    // pixel-perfect 3D placement for an annotation line.
+    const classifyZ = (p: { x: number; y: number }): number => {
+      let minDist = Infinity
+      for (const e of eavesXY) {
+        const d = Math.hypot(p.x - e.x, p.y - e.y)
+        if (d < minDist) minDist = d
+      }
+      return minDist < 1.5 ? 0 : ridgeHeightM
+    }
+
+    const projectScreen = (line: LatLng[], forcedZ?: number) => {
+      const xy = projectLatLngToMeters(line, cosLat, refLat, refLng)
+      return xy.map(p => {
+        const z = forcedZ !== undefined ? forcedZ : classifyZ(p)
+        const proj = projectAxonometric({ x: p.x, y: p.y, z })
+        return { x: tx(proj.x), y: ty(proj.y) }
+      })
+    }
+
+    // Polyline -> SVG path "M x y L x y..." string.
+    const polylineToPath = (pts: { x: number; y: number }[]): string => {
+      if (pts.length < 2) return ''
+      return pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
+    }
+
+    // ── 1. Dashed overlays ──
+    type EdgeRender = { kind: InfographicEdgeKind; points: { x: number; y: number }[]; lengthPx: number }
+    const edgeRenders: EdgeRender[] = []
+
+    // Eave perimeter (closed loop, z=0 always).
+    const eaveScreenPts = groundOutline.map(p => ({ x: tx(p.x), y: ty(p.y) }))
+    if (eaveScreenPts.length >= 3) {
+      const closed = eaveScreenPts.concat([eaveScreenPts[0]])
+      let len = 0
+      for (let i = 0; i < eaveScreenPts.length; i++) {
+        const a = closed[i], b = closed[i + 1]
+        len += Math.hypot(b.x - a.x, b.y - a.y)
+      }
+      edgeRenders.push({ kind: 'eave', points: closed, lengthPx: len })
+    }
+
+    const polylineLines = (lines: LatLng[][], kind: InfographicEdgeKind) => {
+      for (const line of lines || []) {
+        if (!line || line.length < 2) continue
+        const screen = projectScreen(line, kind === 'ridge' ? ridgeHeightM : undefined)
+        let len = 0
+        for (let i = 0; i < screen.length - 1; i++) {
+          len += Math.hypot(screen[i + 1].x - screen[i].x, screen[i + 1].y - screen[i].y)
+        }
+        edgeRenders.push({ kind, points: screen, lengthPx: len })
+      }
+    }
+    polylineLines(structure.ridges || [], 'ridge')
+    polylineLines(structure.hips || [], 'hip')
+    polylineLines(structure.valleys || [], 'valley')
+    polylineLines(structure.rakes || [], 'rake')
+
+    // Draw all overlays as dashed paths. Order: eave first (so interior
+    // dashed lines render on top of the perimeter), then ridges/hips/valleys/
+    // rakes.
+    const drawOrder: InfographicEdgeKind[] = ['eave', 'rake', 'valley', 'hip', 'ridge']
+    for (const kind of drawOrder) {
+      const st = INFOGRAPHIC_EDGE_STYLE[kind]
+      for (const er of edgeRenders) {
+        if (er.kind !== kind) continue
+        const d = polylineToPath(er.points)
+        if (!d) continue
+        svg += `<path d="${d}" fill="none" stroke="${st.color}" stroke-width="${st.width}" stroke-dasharray="${st.dash}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.95"/>`
+      }
+    }
+
+    // ── 2. Leader callouts (collision-avoided) ──
+    // Tiny-structure gate: if the projected footprint is below this many
+    // square pixels, callouts crowd the diagram beyond legibility. We still
+    // render the dashed overlays — the legend is the fallback that tells
+    // the reader what each color means.
+    const footprintW = (maxX - minX) * sc
+    const footprintH = (maxY - minY) * sc
+    const TINY_FOOTPRINT_PX2 = 10000  // ~100x100 px
+    const footprintArea = footprintW * footprintH
+
+    if (footprintArea >= TINY_FOOTPRINT_PX2) {
+      // Building centroid in screen space (callouts point outward from it).
+      const buildingCX = eaveScreenPts.reduce((s, p) => s + p.x, 0) / Math.max(1, eaveScreenPts.length)
+      const buildingCY = eaveScreenPts.reduce((s, p) => s + p.y, 0) / Math.max(1, eaveScreenPts.length)
+
+      type PlacedRect = { x: number; y: number; w: number; h: number }
+      const placedRects: PlacedRect[] = []
+      const rectsOverlap = (a: PlacedRect, b: PlacedRect): boolean =>
+        !(a.x + a.w < b.x || b.x + b.w < a.x || a.y + a.h < b.y || b.y + b.h < a.y)
+
+      const PILL_W = 110
+      const PILL_H = 30
+      const TRY_OFFSETS = [80, 100, 120, 140]
+
+      const drawCallout = (
+        anchorX: number,
+        anchorY: number,
+        color: string,
+        label: string,
+        subtitle: string,
+      ): boolean => {
+        // Direction outward from building centroid.
+        let dx = anchorX - buildingCX
+        let dy = anchorY - buildingCY
+        const dlen = Math.hypot(dx, dy) || 1
+        dx /= dlen; dy /= dlen
+
+        for (const offsetPx of TRY_OFFSETS) {
+          const labelCX = anchorX + dx * offsetPx
+          const labelCY = anchorY + dy * offsetPx
+          const rect: PlacedRect = {
+            x: labelCX - PILL_W / 2,
+            y: labelCY - PILL_H / 2,
+            w: PILL_W,
+            h: PILL_H,
+          }
+          // Clamp inside canvas — if pill clips out, give up early.
+          if (rect.x < 2 || rect.y < 2 || rect.x + rect.w > W - 2 || rect.y + rect.h > H - 32) continue
+          let collides = false
+          for (const r of placedRects) {
+            if (rectsOverlap(rect, r)) { collides = true; break }
+          }
+          if (collides) continue
+
+          placedRects.push(rect)
+          // Leader line: anchor → near pill edge (pull back ~6px from rect).
+          const lex = labelCX - dx * (PILL_W / 2 + 2)
+          const ley = labelCY - dy * (PILL_H / 2 + 2)
+          svg += `<line x1="${anchorX.toFixed(1)}" y1="${anchorY.toFixed(1)}" x2="${lex.toFixed(1)}" y2="${ley.toFixed(1)}" stroke="#475569" stroke-width="0.9" stroke-opacity="0.85"/>`
+          svg += `<circle cx="${anchorX.toFixed(1)}" cy="${anchorY.toFixed(1)}" r="2.4" fill="${color}" stroke="#fff" stroke-width="0.9"/>`
+          // Pill background.
+          svg += `<g transform="translate(${labelCX.toFixed(1)},${labelCY.toFixed(1)})">`
+          svg += `<rect x="${(-PILL_W / 2).toFixed(1)}" y="${(-PILL_H / 2).toFixed(1)}" width="${PILL_W}" height="${PILL_H}" rx="4" fill="#fff" stroke="${color}" stroke-width="1.1"/>`
+          // Left color bar.
+          svg += `<rect x="${(-PILL_W / 2).toFixed(1)}" y="${(-PILL_H / 2).toFixed(1)}" width="4" height="${PILL_H}" fill="${color}"/>`
+          svg += `<text x="${(-PILL_W / 2 + 9).toFixed(1)}" y="-2" text-anchor="start" font-size="9" font-weight="800" fill="${color}" ${FONT}>${label}</text>`
+          svg += `<text x="${(-PILL_W / 2 + 9).toFixed(1)}" y="9" text-anchor="start" font-size="7.5" font-weight="600" fill="#475569" ${FONT}>${subtitle}</text>`
+          svg += `</g>`
+          return true
+        }
+        return false
+      }
+
+      // For each edge kind: anchor at the midpoint of the longest
+      // *single* screen-space segment of that kind. Picking the longest
+      // segment (rather than longest polyline) avoids anchoring at a
+      // polygon corner — corners have no clean outward direction and
+      // tend to push the pill off-canvas on full-frame structures.
+      type SegAnchor = { kind: InfographicEdgeKind; mx: number; my: number; lengthPx: number }
+      const longestSegByKind: Partial<Record<InfographicEdgeKind, SegAnchor>> = {}
+      for (const er of edgeRenders) {
+        for (let i = 0; i < er.points.length - 1; i++) {
+          const a = er.points[i], b = er.points[i + 1]
+          const segLen = Math.hypot(b.x - a.x, b.y - a.y)
+          const cur = longestSegByKind[er.kind]
+          if (!cur || segLen > cur.lengthPx) {
+            longestSegByKind[er.kind] = {
+              kind: er.kind,
+              mx: (a.x + b.x) / 2,
+              my: (a.y + b.y) / 2,
+              lengthPx: segLen,
+            }
+          }
+        }
+      }
+      const calloutOrder: InfographicEdgeKind[] = ['ridge', 'hip', 'valley', 'rake', 'eave']
+      for (const kind of calloutOrder) {
+        const seg = longestSegByKind[kind]
+        if (!seg || seg.lengthPx < 30) continue
+        const st = INFOGRAPHIC_EDGE_STYLE[kind]
+        drawCallout(seg.mx, seg.my, st.color, st.label, st.subtitle)
+      }
+
+      // Dormer callouts — anchor at each dormer ridge midpoint, but cap at
+      // 2 to avoid spamming a roof with many dormers.
+      if (structure.dormers && structure.dormers.length > 0) {
+        const dormerAnchors: { x: number; y: number; spanM: number }[] = []
+        for (const d of structure.dormers) {
+          if (!d.polygon || d.polygon.length < 3) continue
+          const dXY = projectLatLngToMeters(d.polygon, cosLat, refLat, refLng)
+          if (dXY.length < 3) continue
+          const cxD = dXY.reduce((s, p) => s + p.x, 0) / dXY.length
+          const cyD = dXY.reduce((s, p) => s + p.y, 0) / dXY.length
+          let extentSqM = 0
+          for (const p of dXY) extentSqM += (p.x - cxD) * (p.x - cxD) + (p.y - cyD) * (p.y - cyD)
+          // Anchor at dormer centroid lifted to its apex height (close enough).
+          const mainRidgeHeightM = ridgeHeightFromMesh(eavesXY, pitchRise)
+          const apexZ = mainRidgeHeightM * 0.45 + 1.0
+          const proj = projectAxonometric({ x: cxD, y: cyD, z: apexZ })
+          dormerAnchors.push({ x: tx(proj.x), y: ty(proj.y), spanM: extentSqM })
+        }
+        dormerAnchors.sort((a, b) => b.spanM - a.spanM)
+        const ds = INFOGRAPHIC_EDGE_STYLE.dormer
+        for (let i = 0; i < Math.min(2, dormerAnchors.length); i++) {
+          drawCallout(dormerAnchors[i].x, dormerAnchors[i].y, ds.color, ds.label, ds.subtitle)
+        }
+      }
+
+      // Annotation callouts (chimney / skylight / vent / pipe boot).
+      // Only label each kind once per structure to keep the diagram readable —
+      // the report's legend already enumerates counts elsewhere.
+      const ann = opts.annotations || {}
+      const annPasses: Array<[AnnotationKind, LatLng[] | undefined]> = [
+        ['chimney',   ann.chimneys],
+        ['skylight',  ann.skylights],
+        ['vent',      ann.vents],
+        ['pipe_boot', ann.pipe_boots],
+      ]
+      for (const [kind, list] of annPasses) {
+        if (!Array.isArray(list) || list.length === 0) continue
+        const pt = list[0]
+        if (typeof pt?.lat !== 'number' || typeof pt?.lng !== 'number') continue
+        const xy = projectLatLngToMeters([pt], cosLat, refLat, refLng)[0]
+        const proj = projectAxonometric({ x: xy.x, y: xy.y, z: ridgeHeightM * 0.5 })
+        const ac = ANNOTATION_CALLOUT[kind]
+        drawCallout(tx(proj.x), ty(proj.y), ac.color, ac.label, ac.subtitle)
+      }
+    }
+  }
+
   // Bottom label strip — gated by showDimensions so the customer-facing
   // diagram never reveals area / pitch.
   if (showDimensions) {
@@ -1789,13 +2085,73 @@ export function generateAxonometricRoofSVG(
  */
 export function generateAllStructureSVGs(
   report: RoofReport,
-  opts: { width?: number; height?: number; showShadow?: boolean; showCompass?: boolean; showDimensions?: boolean } = {},
+  opts: { width?: number; height?: number; showShadow?: boolean; showCompass?: boolean; showDimensions?: boolean; style?: 'classic' | 'infographic' } = {},
 ): { partition: StructurePartition; svg: string }[] {
   const partitions = splitStructures(report)
-  return partitions.map((p, i) => ({
-    partition: p,
-    svg: generateAxonometricRoofSVG(p, { ...opts, structureIndex: i }),
-  }))
+
+  // Pull lat/lng annotations off the report once. Each partition gets its
+  // own filtered subset (the annotation has to fall inside that structure's
+  // eave polygon) so a chimney on the house doesn't show up as a callout
+  // on the detached garage.
+  const rawAnn = (report as any)?.roof_trace?.annotations || {}
+  const pickLatLngList = (raw: any): LatLng[] => {
+    if (!Array.isArray(raw)) return []
+    const out: LatLng[] = []
+    for (const item of raw) {
+      // Annotations may be stored as {lat,lng}, {position:{lat,lng}}, or
+      // {polygon:[...]} (e.g. chimney box). Try the common shapes; fall
+      // back to first vertex of a polygon if present.
+      if (item && typeof item.lat === 'number' && typeof item.lng === 'number') {
+        out.push({ lat: item.lat, lng: item.lng })
+      } else if (item?.position && typeof item.position.lat === 'number' && typeof item.position.lng === 'number') {
+        out.push({ lat: item.position.lat, lng: item.position.lng })
+      } else if (Array.isArray(item?.polygon) && item.polygon.length > 0) {
+        const v = item.polygon[0]
+        if (v && typeof v.lat === 'number' && typeof v.lng === 'number') {
+          out.push({ lat: v.lat, lng: v.lng })
+        }
+      }
+    }
+    return out
+  }
+  const allAnn = {
+    chimneys:   pickLatLngList(rawAnn.chimneys),
+    skylights:  pickLatLngList(rawAnn.skylights),
+    vents:      pickLatLngList(rawAnn.vents),
+    pipe_boots: pickLatLngList(rawAnn.pipe_boots),
+  }
+
+  // Point-in-polygon in WGS84 lat/lng space (good enough at residential
+  // scale — same approach splitStructures uses internally).
+  const inEavePolygon = (pt: LatLng, eaves: LatLng[]): boolean => {
+    let inside = false
+    for (let i = 0, j = eaves.length - 1; i < eaves.length; j = i++) {
+      const xi = eaves[i].lng, yi = eaves[i].lat
+      const xj = eaves[j].lng, yj = eaves[j].lat
+      const intersect = ((yi > pt.lat) !== (yj > pt.lat)) &&
+        (pt.lng < (xj - xi) * (pt.lat - yi) / ((yj - yi) || 1e-9) + xi)
+      if (intersect) inside = !inside
+    }
+    return inside
+  }
+
+  return partitions.map((p, i) => {
+    const filter = (list: LatLng[]) => list.filter(pt => inEavePolygon(pt, p.eaves))
+    const annForStructure = {
+      chimneys:   filter(allAnn.chimneys),
+      skylights:  filter(allAnn.skylights),
+      vents:      filter(allAnn.vents),
+      pipe_boots: filter(allAnn.pipe_boots),
+    }
+    return {
+      partition: p,
+      svg: generateAxonometricRoofSVG(p, {
+        ...opts,
+        structureIndex: i,
+        annotations: annForStructure,
+      }),
+    }
+  })
 }
 
 /**

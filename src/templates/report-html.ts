@@ -31,6 +31,7 @@ function htmlEsc(v: any): string {
 import {
   RoofMeasurementEngine, traceUiToEnginePayload, type TraceReport,
 } from '../services/roof-measurement-engine'
+import { renderRoofAnatomyAppendix } from './roof-anatomy-appendix'
 
 // ============================================================
 // Per-structure breakdown helper — derives footprint/true-area/
@@ -635,7 +636,7 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   // 3D-look diagram so house and garage no longer get merged into one.
   // Single-structure reports also benefit (3D look replaces the flat view
   // when no AI geometry is available).
-  const structureDiagrams = generateAllStructureSVGs(report, { showDimensions: false })
+  const structureDiagrams = generateAllStructureSVGs(report, { showDimensions: false, style: 'infographic' })
   const perStructureMaterials = structureDiagrams.length > 0
     ? allocateMaterialsToStructures(report, structureDiagrams.map(s => s.partition))
     : []
@@ -1283,6 +1284,7 @@ ${buildMeasurementSummaryPage(report, reportNum, reportDate, fullAddress)}
 
 ${report.solar_panel_layout ? buildSolarProposalPage(report, reportNum, reportDate, fullAddress) : ''}
 
+${renderRoofAnatomyAppendix({ dominantPitchLabel: report.roof_pitch_ratio })}
 
 </body>
 </html>`
