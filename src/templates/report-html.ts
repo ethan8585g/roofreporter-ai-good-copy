@@ -375,6 +375,42 @@ function buildPerStructureSynthReport(
     })
   }
 
+  // Regenerate the cover-page trace SVG from THIS partition's eaves + lines.
+  // Without this, generateProfessionalReportHTML falls through to the generic
+  // gable/hip fallback (architecturalDiagramSVG) which draws a synthetic
+  // rectangle, not the user's actual polygon — so a "Lower Eave" page would
+  // show only the synthetic ridge line with no real eaves visible.
+  // Mirrors the per-structure 2D plan generation on Page 2.
+  const wastePctForSvg = (report.materials as any)?.waste_pct || 5
+  try {
+    synth.trace_diagram_svg = generateTraceBasedDiagramSVG(
+      {
+        eaves: partition.eaves,
+        eaves_sections: [partition.eaves],
+        ridges: partition.ridges,
+        hips: partition.hips,
+        valleys: partition.valleys,
+        dormers: dormersForPartition((report as any).roof_trace?.dormers, partition.eaves),
+        cutouts: (report as any).roof_trace?.cutouts,
+        annotations: (report as any).roof_trace?.annotations,
+      },
+      {
+        total_ridge_ft: partition.ridge_lf,
+        total_hip_ft: partition.hip_lf,
+        total_valley_ft: partition.valley_lf,
+        total_eave_ft: partition.eave_lf,
+        total_rake_ft: partition.rake_lf,
+      },
+      partition.footprint_sqft,
+      partition.dominant_pitch_deg,
+      partition.dominant_pitch_label,
+      Math.round(partition.true_area_sqft / 100 * (1 + wastePctForSvg / 100) * 10) / 10,
+      partition.true_area_sqft,
+    )
+  } catch (e) {
+    console.warn('[multi-structure] per-partition trace SVG failed:', (e as any)?.message || e)
+  }
+
   ;(synth as any).__per_structure_render = true
   ;(synth as any).__structure_label = `Structure ${partitionIdx} of ${partitionCount} — ${partition.label}`
   return synth as RoofReport
@@ -432,7 +468,7 @@ function renderMultiStructureReport(report: RoofReport): string {
 
 // Bump this whenever the template visibly changes so cached HTML in
 // reports.professional_report_html gets re-rendered on next view.
-export const TEMPLATE_VERSION = 'v6.1-multistructure-fix-2026-05-12'
+export const TEMPLATE_VERSION = 'v6.2-perstructure-cover-svg-2026-05-13'
 
 export function generateProfessionalReportHTML(report: RoofReport): string {
   // ── Multi-structure: render full report per traced building ──
