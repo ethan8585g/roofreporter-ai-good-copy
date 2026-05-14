@@ -62,11 +62,11 @@ FREE TRIAL (start here):
 - Sign up at: /customer/login
 
 REPORT CREDIT PACKS (CAD — buy once, credits never expire):
-- Single report: $8.00 CAD
-- 10-Pack: $75 CAD ($7.50/report) — Starter
-- 25-Pack: $175 CAD ($7.00/report) — POPULAR (save 7%)
-- 50-Pack: $325 CAD ($6.50/report) — save 13%
-- 100-Pack: $595 CAD ($5.95/report) — BEST VALUE (save 21%)
+- Single report: $10.00 CAD
+- 10-Pack: $80 CAD ($8.00/report) — Starter
+- 25-Pack: $187.50 CAD ($7.50/report) — POPULAR (save 25%)
+- 50-Pack: $347.50 CAD ($6.95/report) — save 30%
+- 100-Pack: $595 CAD ($5.95/report) — BEST VALUE (save 41%)
 
 ALWAYS present the full list above when asked about pricing. Format it as a tidy bulleted list. Mention that the 4 free reports come first and the credit packs are only used after.
 
@@ -182,7 +182,7 @@ DELIVERY:
 - Access reports anytime from your dashboard
 
 ═══════════════════════════════════════════════════
-WHO USES ROOFREPORTERAI
+WHO USES ROOF MANAGER
 ═══════════════════════════════════════════════════
 
 - Roofing contractors & estimators (our biggest user group)
@@ -204,7 +204,7 @@ vs. Manual Measurement:
 - Measure ANY property from your office or truck
 
 vs. EagleView / Hover / Other Aerial Measurement:
-- $8 per report vs. $15-$50+ per report with competitors
+- $10 per report (from $5.95 in packs) vs. $15-$50+ per report with competitors
 - Instant delivery vs. 24-72 hour wait times
 - No subscription lock-in — pay per report
 - Built-in CRM, invoicing, and D2D tools (competitors don't offer this)
@@ -233,19 +233,19 @@ Q: "Can I try it for free?"
 A: Absolutely! Sign up at /customer/login — you get 4 completely free roof reports, no credit card required. Same full-featured reports that paid customers get.
 
 Q: "What if I need a lot of reports?"
-A: We have credit packs that scale with you — 10-Pack at $75 ($7.50 ea), 25-Pack at $175 ($7 ea), 50-Pack at $325 ($6.50 ea), or 100-Pack at $595 ($5.95 ea). Credits never expire. If you're doing 200+ reports a month, email sales@roofmanager.ca and we'll talk custom volume pricing.
+A: We have credit packs that scale with you — 10-Pack at $80 ($8.00 ea), 25-Pack at $187.50 ($7.50 ea), 50-Pack at $347.50 ($6.95 ea), or 100-Pack at $595 ($5.95 ea). Credits never expire. If you're doing 200+ reports a month, email sales@roofmanager.ca and we'll talk custom volume pricing.
 
 Q: "How much does this cost?" / "What are your prices?" / "What are your packages?"
 A: List every package with exact prices, like this:
 "Here's the full pricing — no contracts, no monthly platform fee:
 • 4 FREE reports when you sign up (no credit card)
-• Single report: $8 CAD
-• 10-Pack: $75 ($7.50/report)
-• 25-Pack: $175 ($7/report) — most popular
-• 50-Pack: $325 ($6.50/report)
+• Single report: $10 CAD
+• 10-Pack: $80 ($8.00/report)
+• 25-Pack: $187.50 ($7.50/report) — most popular
+• 50-Pack: $347.50 ($6.95/report)
 • 100-Pack: $595 ($5.95/report) — best value
 Credits never expire. Want to start with your 4 free reports?"
-ALSO mention the AI Secretary at $199/month with 1 month free, if relevant. NEVER answer with just '$8/report' or 'check our pricing page' — always list every tier.
+ALSO mention the AI Secretary at $199/month with 1 month free, if relevant. NEVER answer with just '$10/report' or 'check our pricing page' — always list every tier.
 
 Q: "Can I brand the reports with my company logo?"
 A: Yes! Through your customer portal, you can add your company logo, name, and contact info to every report. Your clients will see YOUR brand, not ours.
@@ -268,7 +268,7 @@ RESPONSE GUIDELINES
 
 1. ALWAYS answer the visitor's question FIRST, then add your sales angle
 2. Keep responses 2-4 sentences unless the question needs more detail
-3. Use specific numbers and facts — $8 per report, 4 free reports
+3. Use specific numbers and facts — $10 per report, 4 free reports
 4. NEVER make up features, pricing, or capabilities not listed above
 5. If you genuinely don't know something, say: "That's a great question! I'd recommend reaching out to our team at sales@roofmanager.ca or filling out the contact form so we can get you the right answer."
 6. Always try to understand what brought them to the site and what their business does
@@ -511,7 +511,7 @@ async function executeAssistantTool(
 function buildPageContext(pageUrl?: string | null): string {
   const url = (pageUrl || '').toLowerCase()
   let hint = 'The visitor is browsing the Roof Manager website.'
-  if (url.includes('/pricing')) hint = 'The visitor is on the PRICING page — they are actively comparing cost. List EVERY credit pack with the exact price (10-Pack $75 / 25-Pack $175 / 50-Pack $325 / 100-Pack $595, plus single report $8 and 4 free to start). Do not just say "see above" or send them elsewhere — they want a direct answer. Ask which pack fits their volume.'
+  if (url.includes('/pricing')) hint = 'The visitor is on the PRICING page — they are actively comparing cost. List EVERY credit pack with the exact price (10-Pack $80 / 25-Pack $187.50 / 50-Pack $347.50 / 100-Pack $595, plus single report $10 and 4 free to start). Do not just say "see above" or send them elsewhere — they want a direct answer. Ask which pack fits their volume.'
   else if (url.includes('/coverage')) hint = 'The visitor is on the COVERAGE page — they care about whether we serve their region. Confirm coverage and funnel to /customer/login.'
   else if (url.includes('/customer/login') || url.includes('/customer/register') || url.includes('/register')) hint = 'The visitor is on the SIGNUP/LOGIN page — they are near the goal line. Help them complete signup, emphasize "no credit card required, 4 free reports".'
   else if (url.includes('/customer/dashboard') || url.includes('/customer/order')) hint = 'The visitor is INSIDE their customer dashboard (existing user). Help with orders, billing, branding, CRM.'
@@ -712,7 +712,7 @@ function getFallbackResponse(message: string): string {
   const msg = message.toLowerCase()
 
   if (msg.includes('price') || msg.includes('cost') || msg.includes('how much') || msg.includes('pricing') || msg.includes('package')) {
-    return "Here's our full pricing — no contracts, no monthly platform fee:\n\n• 4 FREE reports when you sign up (no credit card)\n• Single report: $8 CAD\n• 10-Pack: $75 ($7.50/report) — Starter\n• 25-Pack: $175 ($7.00/report) — Most Popular\n• 50-Pack: $325 ($6.50/report)\n• 100-Pack: $595 ($5.95/report) — Best Value\n\nCredits never expire. We also offer the AI Roofer/Solar Sales Secretary at $199/month with a 1-month free trial. Want to start with your 4 free reports? Head to /customer/login! 🏠"
+    return "Here's our full pricing — no contracts, no monthly platform fee:\n\n• 4 FREE reports when you sign up (no credit card)\n• Single report: $10 CAD\n• 10-Pack: $80 ($8.00/report) — Starter\n• 25-Pack: $187.50 ($7.50/report) — Most Popular\n• 50-Pack: $347.50 ($6.95/report)\n• 100-Pack: $595 ($5.95/report) — Best Value\n\nCredits never expire. We also offer the AI Roofer/Solar Sales Secretary at $199/month with a 1-month free trial. Want to start with your 4 free reports? Head to /customer/login! 🏠"
   }
 
   if (msg.includes('free') || msg.includes('trial') || msg.includes('try')) {
@@ -760,7 +760,7 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('eagleview') || msg.includes('hover') || msg.includes('competitor') || msg.includes('compare') || msg.includes('vs') || msg.includes('versus')) {
-    return "Great comparison question! Roof Manager starts at $8/report (down to $5.95/report on the 100-Pack) vs. $15-$50+ with competitors, with much faster delivery than the 24-72 hour wait competitors charge for, and includes built-in CRM, invoicing, and D2D tools that others don't offer. Plus 4 free reports to test it out at /customer/login! 🏆"
+    return "Great comparison question! Roof Manager starts at $10/report (down to $5.95/report on the 100-Pack) vs. $15-$50+ with competitors, with much faster delivery than the 24-72 hour wait competitors charge for, and includes built-in CRM, invoicing, and D2D tools that others don't offer. Plus 4 free reports to test it out at /customer/login! 🏆"
   }
 
   if (msg.includes('drone')) {
@@ -2164,7 +2164,7 @@ const ROVER_PLATFORM_NAV = `## ROOF MANAGER PLATFORM — EVERY PAGE A CUSTOMER U
 
 ### Pricing reality (always quote these exact numbers, never invent)
 - **Free tier**: 4 reports on signup, no credit card required.
-- **Report credits** (volume pricing, never expire): $8 single; 10-pack $75 ($7.50/ea); 25-pack $175 ($7.00/ea); 50-pack $325 ($6.50/ea); 100-pack $595 ($5.95/ea). Buy at /customer/buy-reports or /pricing.
+- **Report credits** (volume pricing, never expire): $10 single; 10-pack $80 ($8.00/ea); 25-pack $187.50 ($7.50/ea); 50-pack $347.50 ($6.95/ea); 100-pack $595 ($5.95/ea). Buy at /customer/buy-reports or /pricing.
 - **AI Secretary** (24/7 phone answering): $199 CAD/month + 1-month free trial, cancel anytime. Manage at /customer/secretary.
 - **Team members**: FREE / unlimited. (Previously $50/seat/mo — that pricing has been REMOVED. Do NOT quote a per-seat charge.) Manage at /customer/team.
 - **All other features below are free** with the account: CRM, proposals, invoices, jobs, pipeline, D2D, virtual try-on, solar design, website builder, lead widget, integrations, certificate alerts, material calculator, referrals.

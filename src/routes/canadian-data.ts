@@ -384,7 +384,7 @@ ${nav}
 
   <h2 class="text-2xl font-bold mb-4">About Roof Manager</h2>
   <p class="text-gray-300 mb-4 text-sm leading-relaxed">Roof Manager is the all-in-one roofing technology platform for Canadian and North American contractors. The platform combines satellite-based roof measurement (powered by Google Solar API), AI roof condition vision analysis, an integrated CRM, proposal builder, invoicing, and a 24/7 AI receptionist. Roof Manager is used by independent contractors across all 10 Canadian provinces and is headquartered in Canada.</p>
-  <p class="text-gray-300 mb-10 text-sm leading-relaxed"><strong class="text-white">Boilerplate:</strong> Roof Manager (roofmanager.ca) is a Canadian roofing technology platform that combines satellite-based AI roof measurement, condition analysis, and a full contractor CRM. The platform serves roofing contractors across Canada and the United States with reports starting at $8 CAD.</p>
+  <p class="text-gray-300 mb-10 text-sm leading-relaxed"><strong class="text-white">Boilerplate:</strong> Roof Manager (roofmanager.ca) is a Canadian roofing technology platform that combines satellite-based AI roof measurement, condition analysis, and a full contractor CRM. The platform serves roofing contractors across Canada and the United States with reports starting at $10 CAD (volume packs from $5.95).</p>
 
   <div class="rounded-xl border border-white/10 bg-white/5 p-6">
     <h3 class="text-xl font-bold mb-3">Citation guidelines</h3>

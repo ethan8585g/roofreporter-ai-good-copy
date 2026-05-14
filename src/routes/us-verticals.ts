@@ -97,7 +97,7 @@ function stateDirectory(verticalSlug: string, label: string) {
 
 app.get('/insurance-claims', (c) => {
   const html = `<!DOCTYPE html><html lang="en-US"><head>
-  ${head('Roof Damage Insurance Claims by State | Roof Manager', 'How to document roof damage insurance claims in every US state. Satellite measurement reports accepted by adjusters. $8 CAD/report after 4 free.')}</head>
+  ${head('Roof Damage Insurance Claims by State | Roof Manager', 'How to document roof damage insurance claims in every US state. Satellite measurement reports accepted by adjusters. $10 CAD/report after 4 free.')}</head>
   <body class="min-h-screen" style="background:#0A0A0A;color:#fff">${nav()}
   <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
     <div class="max-w-4xl mx-auto px-4">
@@ -126,7 +126,7 @@ app.get('/insurance-claims/:state', (c) => {
   const xactimatePara = `Roof Manager reports generate pitch-corrected square footage that aligns with Xactimate F9 line items used by ${state.name} adjusters. The edge breakdown (ridge, hip, valley, eave, rake) matches Xactimate\'s edge category inputs, reducing back-and-forth with carriers.`
 
   const html = `<!DOCTYPE html><html lang="en-US"><head>
-  ${head(`Roof Insurance Claims in ${state.name} — Documentation Guide | Roof Manager`, `How to document roof damage insurance claims in ${state.name}. Satellite measurement reports accepted by ${state.topInsurers[0]} and other ${state.code} carriers. $8 CAD/report.`, state.code)}
+  ${head(`Roof Insurance Claims in ${state.name} — Documentation Guide | Roof Manager`, `How to document roof damage insurance claims in ${state.name}. Satellite measurement reports accepted by ${state.topInsurers[0]} and other ${state.code} carriers. $10 CAD/report.`, state.code)}
   <link rel="canonical" href="https://www.roofmanager.ca/us/insurance-claims/${stateSlug}">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Insurance Claims","item":"https://www.roofmanager.ca/us/insurance-claims"},{"@type":"ListItem","position":3,"name":"${state.name}","item":"https://www.roofmanager.ca/us/insurance-claims/${stateSlug}"}]}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"HowTo","name":"How to File a Roof Damage Insurance Claim in ${state.name}","description":"Step-by-step guide to documenting and filing a roof damage insurance claim in ${state.name}.","step":[{"@type":"HowToStep","name":"Generate Satellite Measurement Report","text":"Use Roof Manager to generate a satellite-powered roof measurement report for the damaged property."},{"@type":"HowToStep","name":"Document Damage with Photos","text":"Photograph all visible damage from ground level. Use the Roof Manager report as the technical measurement documentation."},{"@type":"HowToStep","name":"Submit to Adjuster","text":"Submit the Roof Manager PDF report with your claim. The report includes pitch-corrected area, edge breakdowns, and material BOM accepted by ${state.topInsurers[0]} and other ${state.name} carriers."},{"@type":"HowToStep","name":"Follow Up on Claim","text":"Reference the report\'s measurement data if the adjuster requests clarification on square footage or material quantities."}]}</script>
@@ -172,7 +172,7 @@ app.get('/insurance-claims/:state', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Document ${state.name} Claims Faster</h2>
-      <p class="text-blue-200 mb-8">Generate an insurance-ready satellite report for any ${state.name} property. $8 CAD/report after 4 free.</p>
+      <p class="text-blue-200 mb-8">Generate an insurance-ready satellite report for any ${state.name} property. $10 CAD/report after 4 free.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
@@ -184,7 +184,7 @@ app.get('/insurance-claims/:state', (c) => {
 
 app.get('/storm-damage', (c) => {
   const html = `<!DOCTYPE html><html lang="en-US"><head>
-  ${head('Storm Damage Roof Assessment by State | Roof Manager', 'Satellite roof measurement for storm damage assessment in all 50 US states. Insurance-ready reports. $8 CAD after 4 free.')}</head>
+  ${head('Storm Damage Roof Assessment by State | Roof Manager', 'Satellite roof measurement for storm damage assessment in all 50 US states. Insurance-ready reports. $10 CAD after 4 free.')}</head>
   <body class="min-h-screen" style="background:#0A0A0A;color:#fff">${nav()}
   <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
     <div class="max-w-4xl mx-auto px-4">
@@ -209,7 +209,7 @@ app.get('/storm-damage/:state', (c) => {
   if (!state) return c.redirect('/us/storm-damage')
 
   const html = `<!DOCTYPE html><html lang="en-US"><head>
-  ${head(`Storm Damage Roof Assessment in ${state.name} | Roof Manager`, `Storm damage roof assessment for ${state.name} roofing contractors. ${state.stormProfile.primaryPeril}. Satellite measurement reports for $8 CAD.`, state.code)}
+  ${head(`Storm Damage Roof Assessment in ${state.name} | Roof Manager`, `Storm damage roof assessment for ${state.name} roofing contractors. ${state.stormProfile.primaryPeril}. Satellite measurement reports for $10 CAD.`, state.code)}
   <link rel="canonical" href="https://www.roofmanager.ca/us/storm-damage/${stateSlug}">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Storm Damage","item":"https://www.roofmanager.ca/us/storm-damage"},{"@type":"ListItem","position":3,"name":"${state.name}","item":"https://www.roofmanager.ca/us/storm-damage/${stateSlug}"}]}</script>
   </head>
@@ -239,7 +239,7 @@ app.get('/storm-damage/:state', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Document ${state.name} Storm Damage Fast</h2>
-      <p class="text-blue-200 mb-8">Generate a satellite measurement report for any ${state.name} storm-damaged property. $8 CAD/report after 4 free.</p>
+      <p class="text-blue-200 mb-8">Generate a satellite measurement report for any ${state.name} storm-damaged property. $10 CAD/report after 4 free.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
@@ -267,7 +267,7 @@ app.get('/hail-damage', (c) => {
   }).join('')
 
   const html = `<!DOCTYPE html><html lang="en-US"><head>
-  ${head('Hail Damage Roof Assessment by State | Roof Manager', 'Satellite roof measurement for hail damage documentation in the US hail belt. CO, TX, OK, KS, NE and all 50 states. $8 CAD after 4 free.')}</head>
+  ${head('Hail Damage Roof Assessment by State | Roof Manager', 'Satellite roof measurement for hail damage documentation in the US hail belt. CO, TX, OK, KS, NE and all 50 states. $10 CAD after 4 free.')}</head>
   <body class="min-h-screen" style="background:#0A0A0A;color:#fff">${nav()}
   <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
     <div class="max-w-4xl mx-auto px-4">
@@ -328,7 +328,7 @@ app.get('/hail-damage/:state', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Start Documenting ${state.name} Hail Claims</h2>
-      <p class="text-blue-200 mb-8">$8 CAD per report after 4 free. Insurance-ready satellite measurements.</p>
+      <p class="text-blue-200 mb-8">$10 CAD per report after 4 free. Insurance-ready satellite measurements.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
@@ -426,7 +426,7 @@ app.get('/hurricane-damage/:state', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Ready for ${state.name} Storm Season?</h2>
-      <p class="text-blue-200 mb-8">$8 CAD per report after 4 free. Generate satellite reports for any ${state.name} address.</p>
+      <p class="text-blue-200 mb-8">$10 CAD per report after 4 free. Generate satellite reports for any ${state.name} address.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
@@ -634,7 +634,7 @@ app.get('/roofing-contractors', (c) => {
   <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
     <div class="max-w-4xl mx-auto px-4">
       <h1 class="text-4xl font-black mb-6">Best Roofing Software for US Contractors — 2026</h1>
-      <p class="text-xl text-blue-200 mb-8">Roof Manager is the most affordable full-featured roofing software for US contractors. At $8 CAD per report (vs $49–$95 for EagleView and Hover), Roof Manager gives contractors satellite measurements, full CRM, invoicing, and AI tools — all in one platform. Available in all 50 US states.</p>
+      <p class="text-xl text-blue-200 mb-8">Roof Manager is the most affordable full-featured roofing software for US contractors. At $10 CAD per report (vs $49–$95 for EagleView and Hover), Roof Manager gives contractors satellite measurements, full CRM, invoicing, and AI tools — all in one platform. Available in all 50 US states.</p>
       <div class="flex flex-col sm:flex-row gap-4 justify-center mb-8">
         <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg">Start Free (CAD)</a>
         <a href="/cheaper-alternative-to-eagleview" class="px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-lg border border-white/20">vs EagleView →</a>
@@ -665,7 +665,7 @@ app.get('/roofing-contractors/:state', (c) => {
   <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
     <div class="max-w-4xl mx-auto px-4">
       <h1 class="text-4xl font-black mb-6">Best Roofing Software for<br><span class="text-sky-400">${state.name}</span> Contractors — 2026</h1>
-      <p class="text-xl text-blue-200 mb-8">${state.roofingNotes} Roof Manager is the most affordable full-featured roofing platform for ${state.code} contractors: $8 CAD per satellite measurement report vs $49–$95 with EagleView. Includes full CRM, invoicing, proposals, and AI tools.</p>
+      <p class="text-xl text-blue-200 mb-8">${state.roofingNotes} Roof Manager is the most affordable full-featured roofing platform for ${state.code} contractors: $10 CAD per satellite measurement report vs $49–$95 with EagleView. Includes full CRM, invoicing, proposals, and AI tools.</p>
       <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg inline-block">Start Free in ${state.name}</a>
     </div>
   </section>
@@ -688,7 +688,7 @@ app.get('/roofing-contractors/:state', (c) => {
   <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Switch to Roof Manager in ${state.name}</h2>
-      <p class="text-blue-200 mb-8">Stop paying $49/report for EagleView. Get the same satellite data for $8 CAD — plus a full CRM built for ${state.code} contractors.</p>
+      <p class="text-blue-200 mb-8">Stop paying $49/report for EagleView. Get the same satellite data for $10 CAD — plus a full CRM built for ${state.code} contractors.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>

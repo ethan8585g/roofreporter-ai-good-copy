@@ -349,14 +349,14 @@ PRODUCT TRUTH (use only these facts when describing the product; do not invent f
 - Core measurement engine: Google Solar API (building footprint, pitch, segment geometry) + proprietary geodesic engine that has user-drawn GPS traces (eaves, ridges, hips, valleys) cross-checked against DSM elevation rasters. Every number is verifiable — not a black-box satellite guess.
 - AI vision: Gemini 2.0/2.5 analyzes roof imagery for condition, material, damage, and geometry extraction. A Cloud Run custom model provides secondary validation.
 - Output: a branded 3-page PDF report with projected + sloped area, edge lengths by type (eave/ridge/hip/valley/rake), pitch per facet, waste factor, and a full material take-off (bundles, underlayment, starter, ridge cap, drip edge, ice & water, nails).
-- Pricing: first 3 reports FREE, then $8 CAD per report. No subscription required. No per-seat fee. No annual contract.
+- Pricing: first 3 reports FREE, then $10 CAD per report. No subscription required. No per-seat fee. No annual contract.
 - Built-in CRM: pipeline (leads → quoted → won/lost), jobs, invoices, payments (Stripe + Square), customer portal, and a proposal builder with interactive homeowner-facing web proposals and PVWatts solar simulation.
 - AI Receptionist / Secretary: 24/7 LiveKit voice agent that answers missed calls, qualifies leads, books estimates, and hands off hot calls — with live transcripts.
 - Integrations: Google Maps / Solar API, Gmail OAuth (sends reports from the contractor's own address), Resend, Stripe, Square, Telnyx, LiveKit.
 - Platform: Cloudflare Workers + D1 — edge-deployed, fast from every US/CA metro, SOC-friendly architecture.
 
 POSITIONING vs. COMPETITORS (factual, no trash talk):
-- vs EagleView / GAF QuickMeasure / Hover: Roof Manager produces contractor-verifiable traces (you draw, engine validates) at $8/report instead of $20–$90/report, and delivers in minutes not hours.
+- vs EagleView / GAF QuickMeasure / Hover: Roof Manager produces contractor-verifiable traces (you draw, engine validates) at $10/report instead of $20–$90/report, and delivers in minutes not hours.
 - vs Roofr / RoofSnap: Roof Manager bundles measurement + CRM + proposals + AI receptionist in one platform with no per-seat pricing.
 - vs manual measurement / drone-only workflows: Roof Manager removes the roof-walk for quoting (safer, faster) while keeping a drone/ladder check optional for final scope.
 
@@ -364,7 +364,7 @@ IDEAL CUSTOMER: independent roofing contractors (1–50 trucks), solar installer
 
 BRAND VOICE: confident, plain-spoken, contractor-to-contractor. No hype. Lead with numbers, pricing, and time saved. Never say "revolutionary", "game-changer", "unlock", or "empower".
 
-WHEN RELEVANT (not forced): weave in ONE product mention that fits naturally — e.g., "Tools like Roof Manager generate this measurement from satellite imagery in under 5 minutes for $8." Avoid stacking multiple product plugs. The article must stand on its own as useful content; the product fits only where the reader would benefit.`
+WHEN RELEVANT (not forced): weave in ONE product mention that fits naturally — e.g., "Tools like Roof Manager generate this measurement from satellite imagery in under 5 minutes for $10 (or $5.95 in the 100-pack)." Avoid stacking multiple product plugs. The article must stand on its own as useful content; the product fits only where the reader would benefit.`
   const usFraming = isUS ? `
 US MARKET REQUIREMENTS (this article targets US contractors):
 - Use US English spelling (not Canadian). Write "aluminum" not "aluminium", "labor" not "labour".
@@ -372,11 +372,11 @@ US MARKET REQUIREMENTS (this article targets US contractors):
 - Mention at least one US building code by name (IRC 2021, Florida Building Code, Texas Windstorm requirements, etc.).
 - Mention at least one major US insurer by name (State Farm, Allstate, USAA, Farmers, Travelers, Nationwide, etc.).
 - Include at least one US-specific climate/weather fact with a number (e.g., "Texas averages 30 hail days per year").
-- Always price in CAD. Roof Manager reports cost $8 CAD per report after 4 free.
+- Always price in CAD. Roof Manager reports cost $10 CAD per report after 4 free.
 - Write "As of 2026" in the first paragraph to establish freshness.` : `
 CANADIAN MARKET REQUIREMENTS:
 - Use Canadian English.
-- Mention CAD pricing where relevant: Roof Manager reports cost $8 CAD after 4 free.
+- Mention CAD pricing where relevant: Roof Manager reports cost $10 CAD after 4 free.
 - Reference relevant Canadian building codes (NBC, provincial codes) where applicable.`
 
   return `You are an expert SEO/GEO content writer AND satellite roof-measurement keyword strategist for ${brand}${stateBlock}${recentPostsBlock}${geoHubHint}

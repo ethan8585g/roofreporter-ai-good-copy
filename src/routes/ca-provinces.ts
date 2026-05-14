@@ -90,7 +90,7 @@ app.get('/', (c) => {
 <head>
   ${getHeadTagsMinimal()}
   <title>Roof Measurement Software for Canadian Roofing Contractors | Roof Manager</title>
-  <meta name="description" content="Satellite roof measurement reports for roofing contractors in every Canadian province and territory. $8 CAD/report after 4 free. Works in Alberta, Ontario, BC, Quebec, and everywhere in between.">
+  <meta name="description" content="Satellite roof measurement reports for roofing contractors in every Canadian province and territory. $10 CAD/report after 4 free. Works in Alberta, Ontario, BC, Quebec, and everywhere in between.">
   <meta property="og:locale" content="en_CA">
   <meta name="geo.region" content="CA">
   <link rel="canonical" href="https://www.roofmanager.ca/ca">
@@ -111,7 +111,7 @@ app.get('/', (c) => {
     <div class="max-w-4xl mx-auto px-4">
       <span class="inline-block px-4 py-1.5 bg-[#00FF88]/20 border border-[#00FF88]/30 rounded-full text-sm text-[#00FF88] mb-6">&#127464;&#127462; All 10 Provinces &amp; 3 Territories Covered</span>
       <h1 class="text-4xl md:text-5xl font-black mb-6">Roof Measurement Software<br>for Canadian Roofing Contractors</h1>
-      <p class="text-xl text-gray-300 mb-4">Roof Manager generates satellite-powered roof reports for contractors in every Canadian province and territory. Reports cost $8 CAD per report after 4 free reports &mdash; and the platform is hosted in Canada.</p>
+      <p class="text-xl text-gray-300 mb-4">Roof Manager generates satellite-powered roof reports for contractors in every Canadian province and territory. Reports cost $10 CAD per report after 4 free reports &mdash; and the platform is hosted in Canada.</p>
       <p class="text-gray-400 mb-8">Insurance-ready documentation accepted by Intact, Aviva, Desjardins, Co-operators, and every major Canadian carrier.</p>
       <div class="flex flex-col sm:flex-row gap-4 justify-center mt-8">
         <a href="/register" class="px-8 py-4 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold rounded-xl text-lg">Get 4 Free Reports <i class="fas fa-arrow-right ml-2"></i></a>
@@ -186,7 +186,7 @@ app.get('/:province', (c) => {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
     mainEntity: [
-      { '@type': 'Question', name: `Does Roof Manager work in ${province.name}?`, acceptedAnswer: { '@type': 'Answer', text: `Yes. Roof Manager generates satellite-powered roof measurement reports for roofing contractors across ${province.name}. Google Solar API coverage is available for the vast majority of ${province.name} urban and suburban addresses. Reports cost $8 CAD per report after 4 free trial reports.` } },
+      { '@type': 'Question', name: `Does Roof Manager work in ${province.name}?`, acceptedAnswer: { '@type': 'Answer', text: `Yes. Roof Manager generates satellite-powered roof measurement reports for roofing contractors across ${province.name}. Google Solar API coverage is available for the vast majority of ${province.name} urban and suburban addresses. Reports cost $10 CAD per report after 4 free trial reports.` } },
       { '@type': 'Question', name: `What is the primary roofing peril in ${province.name}?`, acceptedAnswer: { '@type': 'Answer', text: `The primary roofing peril in ${province.name} is: ${province.stormProfile.primaryPeril}. ${province.roofingNotes}` } },
       { '@type': 'Question', name: `What building code applies to roofing in ${province.name}?`, acceptedAnswer: { '@type': 'Answer', text: `${province.name} operates under the ${province.buildingCode.adopted}. ${province.buildingCode.notes}` } },
       { '@type': 'Question', name: `Which insurance carriers cover roof damage in ${province.name}?`, acceptedAnswer: { '@type': 'Answer', text: `Major Canadian carriers serving ${province.name} include ${province.topInsurers.join(', ')}. Roof Manager reports are accepted as supporting documentation for claims with each of these carriers.` } },
@@ -225,7 +225,7 @@ app.get('/:province', (c) => {
       <span class="inline-block px-4 py-1.5 bg-[#00FF88]/20 border border-[#00FF88]/30 rounded-full text-sm text-[#00FF88] mb-6"><i class="fas fa-map-marker-alt mr-2"></i>${province.name}, ${province.code}</span>
       <h1 class="text-4xl md:text-5xl font-black mb-6">Satellite Roof Measurement Software<br>for <span class="text-[#00FF88]">${province.name}</span> Roofing Contractors</h1>
       <p class="text-xl text-gray-300 mb-4">${province.roofingNotes}</p>
-      <p class="text-gray-400 mb-8">Reports cost <strong>$8 CAD</strong> after 4 free reports. Available across every ${province.name} metro. Insurance-ready documentation for ${province.stormProfile.primaryPeril.toLowerCase()} claims.</p>
+      <p class="text-gray-400 mb-8">Reports cost <strong>$10 CAD</strong> after 4 free reports. Available across every ${province.name} metro. Insurance-ready documentation for ${province.stormProfile.primaryPeril.toLowerCase()} claims.</p>
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
         <a href="/register" class="px-8 py-4 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold rounded-xl text-lg">Get 4 Free Reports <i class="fas fa-arrow-right ml-2"></i></a>
         <a href="/pricing" class="px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-lg border border-white/20">View Pricing (CAD)</a>
@@ -304,7 +304,7 @@ app.get('/:province', (c) => {
     <div class="max-w-4xl mx-auto px-4">
       <h2 class="text-2xl font-black text-center mb-8">Frequently Asked Questions &mdash; ${province.name} Roofing</h2>
       <div class="space-y-4">
-        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Does Roof Manager work in ${province.name}?</h3><p class="text-gray-400 text-sm">Yes. Roof Manager generates satellite-powered roof measurement reports for roofing contractors across ${province.name}. Google Solar API coverage is available for the vast majority of urban and suburban addresses. Reports cost $8 CAD after 4 free.</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Does Roof Manager work in ${province.name}?</h3><p class="text-gray-400 text-sm">Yes. Roof Manager generates satellite-powered roof measurement reports for roofing contractors across ${province.name}. Google Solar API coverage is available for the vast majority of urban and suburban addresses. Reports cost $10 CAD after 4 free.</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">What is the primary roofing peril in ${province.name}?</h3><p class="text-gray-400 text-sm">${province.stormProfile.primaryPeril}. ${province.roofingNotes}</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">What building code applies to roofing in ${province.name}?</h3><p class="text-gray-400 text-sm">${province.name} operates under the ${province.buildingCode.adopted}. ${province.buildingCode.notes}</p></div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-6"><h3 class="font-bold text-white mb-2">Which carriers do Roof Manager reports work with?</h3><p class="text-gray-400 text-sm">Every major Canadian carrier serving ${province.name}, including ${province.topInsurers.join(', ')}. Reports include pitch-corrected area, edge breakdowns, and material BOMs accepted as supporting documentation for storm, hail, wind, ice, and post-tropical claim types.</p></div>
