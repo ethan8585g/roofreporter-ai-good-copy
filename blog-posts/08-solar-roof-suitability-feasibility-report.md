@@ -196,7 +196,7 @@ A complete report presents three scenarios:
 - **Solar loan (10–25 year term).** Monthly payment vs. current electric bill. If the loan payment is less than the current bill, the homeowner is net-positive from month one — the single strongest sales argument in solar.
 - **PPA or lease.** No upfront cost, fixed monthly payment below current bill. Lower lifetime savings but zero out-of-pocket.
 
-## How Automation Generates Feasibility Reports in 60 Seconds
+## How Automation Generates Feasibility Reports in 1–2 Hours
 
 The components above used to require 2–4 hours of engineer time per report: drive to the site, measure the roof, gauge the pitch, walk the shading, pull the utility bills, run PVsyst or Aurora for the production estimate, price the system, build the financial model, format the PDF.
 

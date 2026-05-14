@@ -157,7 +157,7 @@ The Solar API's Digital Surface Model is the key piece. A DSM encodes elevation 
 3. **Compute geometry per facet.** Each fitted plane yields a normal vector; from the normal, you directly calculate pitch (angle from horizontal) and azimuth (rotation from north). Facet area comes from the horizontal projection of the facet's boundary divided by cos(pitch).
 4. **Reconcile with user trace.** Because automated segmentation still misses tight dormers and small shed additions, a well-built measurement workflow overlays the automated output on the RGB image and lets the user nudge edges as needed.
 
-Compared to the previous generation of measurement — manual 2D tracing on satellite imagery with user-estimated pitch — this workflow replaces three error-prone human judgments with three well-defined math operations. The accuracy improvement is measurable (see our [20-roof test](/blog/ai-roof-measurement-accuracy-vs-eagleview-2026-test)), but the more important gain is operational: the process runs in seconds with no human review, which is what makes $8 instant reports possible in the first place.
+Compared to the previous generation of measurement — manual 2D tracing on satellite imagery with user-estimated pitch — this workflow replaces three error-prone human judgments with three well-defined math operations. The accuracy improvement is measurable (see our [20-roof test](/blog/ai-roof-measurement-accuracy-vs-eagleview-2026-test)), but the more important gain is operational: the process runs without manual review, which is what makes $8 same-day reports possible in the first place.
 
 ## Integrating Google Solar Data into Your Roofing CRM
 

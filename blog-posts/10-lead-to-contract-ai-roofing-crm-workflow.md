@@ -14,7 +14,7 @@ cover_image_url: "/static/blog/ai-roofing-workflow-cover.jpg"
 
 # From Lead to Signed Contract in 24 Hours: An AI-Native Roofing CRM Workflow
 
-**Quick Answer:** An AI-native roofing CRM workflow moves a new lead to a signed contract in under 24 hours by chaining five automated stages: a real-time voice agent captures and qualifies the call, an instant satellite measurement produces an insurance-ready report within 60 seconds, a large language model drafts the itemized estimate from the measurement and local pricing data, a human sales rep reviews and adjusts at a single human-in-the-loop checkpoint, and the CRM issues the contingency agreement with e-signature and fires follow-up automations. Operations running this workflow close 2–4x the contracts per rep versus traditional phone-and-email pipelines.
+**Quick Answer:** An AI-native roofing CRM workflow moves a new lead to a signed contract in under 24 hours by chaining five automated stages: a real-time voice agent captures and qualifies the call, an instant satellite measurement produces an insurance-ready report within 1–2 hours, a large language model drafts the itemized estimate from the measurement and local pricing data, a human sales rep reviews and adjusts at a single human-in-the-loop checkpoint, and the CRM issues the contingency agreement with e-signature and fires follow-up automations. Operations running this workflow close 2–4x the contracts per rep versus traditional phone-and-email pipelines.
 
 Roofing has the strangest sales cycle in home services. The problem is urgent — a leaking roof, a storm-damaged shingle bundle, an insurance inspection deadline — but the traditional response cycle is absurdly slow. A lead calls, hits voicemail, gets a callback the next day, schedules an inspection 3–5 days out, receives a written quote a week after that, and signs a contract 10–14 days from the original call. The homeowner who actually needed the roof fixed this week has hired three other contractors in the meantime.
 
@@ -106,7 +106,7 @@ Once the estimate is approved, the final stage fires automatically:
 
 **E-signature routed.** DocuSign, HelloSign, or the CRM's native signing layer sends the contract to the homeowner. Mobile-first signing is critical — most contracts are signed on a phone within hours of receipt.
 
-**Follow-up automations fire.** SMS confirmation within 60 seconds of signing, email receipt with documents attached, Slack or Teams ping to the crew lead, CRM job card moved to "signed — awaiting materials" status, insurance carrier notified if a claim is involved.
+**Follow-up automations fire.** SMS confirmation within 1–2 hours of signing, email receipt with documents attached, Slack or Teams ping to the crew lead, CRM job card moved to "signed — awaiting materials" status, insurance carrier notified if a claim is involved.
 
 **Materials pre-order triggered.** On contracts with clean measurement data and standard specs, the materials order can fire automatically to the contractor's primary supplier — or at minimum, the order is pre-drafted in the contractor's ordering portal for a human to confirm.
 
@@ -155,7 +155,7 @@ Roofing automation projects fail in predictable ways. Four patterns to avoid:
 ## Frequently Asked Questions
 
 **How do you automate roofing leads?**
-Lead automation in 2026 chains five stages: a real-time AI voice agent that captures and qualifies inbound calls under 500ms response time, an instant satellite measurement pipeline that returns insurance-ready roof data within 60 seconds, an LLM-assisted estimator that drafts the itemized quote from the measurement and local pricing, a human-in-the-loop approval checkpoint, and automated contract execution with e-signature and follow-up. Total lead-to-contract time compresses from 5–14 days to under 24 hours.
+Lead automation in 2026 chains five stages: a real-time AI voice agent that captures and qualifies inbound calls under 500ms response time, an instant satellite measurement pipeline that returns insurance-ready roof data within 1–2 hours, an LLM-assisted estimator that drafts the itemized quote from the measurement and local pricing, a human-in-the-loop approval checkpoint, and automated contract execution with e-signature and follow-up. Total lead-to-contract time compresses from 5–14 days to under 24 hours.
 
 **Can n8n integrate with Google Gemini?**
 Yes. n8n ships with native Google AI Studio (Gemini) nodes that handle authentication, request construction, and response parsing. The typical integration pattern is a webhook node that receives input from an earlier workflow stage, a Gemini node that runs an LLM prompt against the input, and a downstream node that writes the result to a CRM, database, or notification channel.

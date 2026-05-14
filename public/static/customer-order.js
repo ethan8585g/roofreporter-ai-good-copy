@@ -4234,7 +4234,7 @@ function showOrderSuccessOverlay(order) {
     : '';
   const autoProp = order?.auto_proposal;
   const autoPropLine = (autoProp && autoProp.will_send && autoProp.recipient)
-    ? '<div style="margin:12px auto 0;padding:10px 14px;background:linear-gradient(135deg,#ecfeff,#cffafe);border:1px solid #a5f3fc;border-radius:12px;text-align:left;font-size:12px;color:#0e7490;display:flex;gap:8px;align-items:flex-start"><i class="fas fa-envelope-open-text" style="color:#0891b2;margin-top:2px"></i><div><strong>Homeowner will receive their proposal</strong> at <span style="font-family:monospace">' + autoProp.recipient + '</span> as soon as your report finishes (usually under 60 seconds).</div></div>'
+    ? '<div style="margin:12px auto 0;padding:10px 14px;background:linear-gradient(135deg,#ecfeff,#cffafe);border:1px solid #a5f3fc;border-radius:12px;text-align:left;font-size:12px;color:#0e7490;display:flex;gap:8px;align-items:flex-start"><i class="fas fa-envelope-open-text" style="color:#0891b2;margin-top:2px"></i><div><strong>Homeowner will receive their proposal</strong> at <span style="font-family:monospace">' + autoProp.recipient + '</span> as soon as your report finishes (usually within 1–2 hours).</div></div>'
     : '';
   
   // Create full-screen overlay

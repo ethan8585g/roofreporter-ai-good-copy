@@ -84,6 +84,12 @@ function animateCounter(el) {
   const target = parseInt(el.getAttribute('data-count'));
   const suffix = el.getAttribute('data-suffix') || '';
   const prefix = el.getAttribute('data-prefix') || '';
+  // Skip count-up for stats marked static (e.g. accuracy %). Animating "98%
+  // accuracy" up from 0% briefly shows "8% accuracy", which reads as failure.
+  if (el.dataset.staticDisplay === 'true') {
+    el.textContent = prefix + target.toLocaleString() + suffix;
+    return;
+  }
   const duration = 2000;
   const start = performance.now();
 

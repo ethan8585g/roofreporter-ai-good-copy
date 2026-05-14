@@ -4090,7 +4090,7 @@
     var refData = null;
     fetch('/api/customer/referrals', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }).then(function(d) {
       var subject = encodeURIComponent('Try Roof Manager — Get 4 Free Roof Reports');
-      var body = encodeURIComponent('Hey! I\'ve been using Roof Manager for satellite roof measurements and it\'s been a game changer. You get 4 free reports to try it out.\n\nSign up here: ' + (d.share_url || '') + '\n\nIt does roof area, pitch, edges, material takeoff — all in 60 seconds from satellite. Plus full CRM, invoicing, and proposals.');
+      var body = encodeURIComponent('Hey! I\'ve been using Roof Manager for satellite roof measurements and it\'s been a game changer. You get 4 free reports to try it out.\n\nSign up here: ' + (d.share_url || '') + '\n\nIt does roof area, pitch, edges, material takeoff — all from satellite, delivered in 1–2 hours. Plus full CRM, invoicing, and proposals.');
       window.open('mailto:?subject=' + subject + '&body=' + body);
     });
   };

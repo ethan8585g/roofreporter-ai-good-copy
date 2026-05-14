@@ -545,7 +545,7 @@
       url: '/features/measurements', color: '#00FF88', icon: 'fas fa-satellite',
       name: 'AI Measurement Reports',
       headline: 'Get the measurement — quote from your truck',
-      sub: '99% accuracy in under 60 seconds · No credit card needed',
+      sub: '99% accuracy in 1–2 hours · No credit card needed',
       cta: 'Start 4 Free Reports'
     };
   }

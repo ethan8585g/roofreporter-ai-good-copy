@@ -60,7 +60,7 @@ function renderPricing(root, packages) {
             <span class="text-green-700 font-bold text-lg">4</span>
           </div>
           <h3 class="font-semibold text-gray-800 mb-1">Get Your Report</h3>
-          <p class="text-sm text-gray-500">AI-powered analysis with full measurements in seconds</p>
+          <p class="text-sm text-gray-500">AI-powered analysis with full measurements in 1–2 hours</p>
         </div>
       </div>
     </div>

@@ -399,7 +399,7 @@
           <div>
             <label class="block text-xs font-semibold text-gray-600 mb-1">Persona / Full System Prompt</label>
             <p class="text-xs text-gray-400 mb-1">Detailed instructions for how the agent should behave, respond, handle objections, and close</p>
-            <textarea id="cc-agent-persona" rows="5" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" placeholder="e.g. You are Alex, a friendly and consultative sales representative for Roof Manager. Your goal is to connect with roofing company owners and estimators, understand their current estimating workflow, and show how our AI-powered instant roof measurement reports can save them time and money.&#10;&#10;Opening: Ask about their business and current estimating process.&#10;Value prop: Highlight 60-second reports, 95%+ accuracy, no ladders or drones needed.&#10;Objection handling: For price concerns, emphasize ROI — each $15-30 report replaces an hour of manual work.&#10;Close: Offer a free demo report on one of their recent job sites."></textarea>
+            <textarea id="cc-agent-persona" rows="5" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" placeholder="e.g. You are Alex, a friendly and consultative sales representative for Roof Manager. Your goal is to connect with roofing company owners and estimators, understand their current estimating workflow, and show how our AI-powered roof measurement reports can save them time and money.&#10;&#10;Opening: Ask about their business and current estimating process.&#10;Value prop: Highlight 1–2 hour same-day reports, 95%+ accuracy, no ladders or drones needed.&#10;Objection handling: For price concerns, emphasize ROI — each $8 report replaces an hour of manual work.&#10;Close: Offer a free demo report on one of their recent job sites."></textarea>
           </div>
           <div>
             <label class="block text-xs font-semibold text-gray-600 mb-1">Room Prefix</label>
@@ -543,7 +543,7 @@
           </div>
           <div>
             <label class="block text-xs font-semibold text-gray-600 mb-1">Value Proposition</label>
-            <textarea id="cc-camp-value" rows="3" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" placeholder="Our platform lets you get a complete roof report — measurements, pitch, materials estimate — in under 60 seconds, just from an address. No climbing ladders, no drone flights..."></textarea>
+            <textarea id="cc-camp-value" rows="3" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" placeholder="Our platform lets you get a complete roof report — measurements, pitch, materials estimate — in 1–2 hours, just from an address. No climbing ladders, no drone flights..."></textarea>
           </div>
           <div>
             <label class="block text-xs font-semibold text-gray-600 mb-1">Objection Handling</label>

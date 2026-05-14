@@ -84,7 +84,7 @@ A proper AI receptionist workflow writes directly to your CRM the moment the cal
 2. **Lead record** attached with the job type (emergency repair, reroof, storm claim, inspection), source ("inbound call"), priority score based on conversation content, and full call transcript and recording.
 3. **Appointment record** written to the assigned crew's calendar with the confirmed slot, property address, and customer notes.
 4. **Notifications** fire: text message to the on-call sales rep, Slack or Teams ping to the crew lead, email to the office inbox.
-5. **Follow-up automations** trigger: a confirmation text to the homeowner within 60 seconds, a reminder text 24 hours before the appointment, a pre-visit measurement report generated from the property address (see our [AI Roof Measurement Accuracy vs. EagleView test](/blog/ai-roof-measurement-accuracy-vs-eagleview-2026-test) for how the instant measurement layer works).
+5. **Follow-up automations** trigger: a confirmation text to the homeowner within 1–2 hours, a reminder text 24 hours before the appointment, a pre-visit measurement report generated from the property address (see our [AI Roof Measurement Accuracy vs. EagleView test](/blog/ai-roof-measurement-accuracy-vs-eagleview-2026-test) for how the instant measurement layer works).
 
 RoofManager's native voice agent runs on the LiveKit real-time voice framework and writes directly into the RoofManager CRM without any middleware. Third-party voice AI vendors (PeakDemand, Goodcall, Synthflow, etc.) typically integrate via webhook or Zapier into JobNimbus, AccuLynx, or similar — the integration works but is less reliable during high-volume surges because each webhook call is a separate network hop that can time out or retry.
 

@@ -14,7 +14,7 @@ cover_image_url: "/static/blog/storm-playbook-cover.jpg"
 
 # Storm Restoration Playbook: How to Canvass, Measure, and Quote 50 Roofs in 48 Hours After a Hailstorm
 
-**Quick Answer:** The first 48 hours after a qualifying hailstorm decide which roofing contractors win the deployment. To sign 50 full-envelope storm contracts in that window, a contractor needs four things working simultaneously: an AI receptionist handling the 300–500% call surge, an instant satellite measurement pipeline that produces insurance-ready reports in 60 seconds, a structured canvassing script and territory map, and a CRM that auto-generates contingency agreements with e-signature. The operations that execute this play consistently capture 5–10x the revenue of competitors running 2019-era phone-and-clipboard workflows.
+**Quick Answer:** The first 48 hours after a qualifying hailstorm decide which roofing contractors win the deployment. To sign 50 full-envelope storm contracts in that window, a contractor needs four things working simultaneously: an AI receptionist handling the 300–500% call surge, an instant satellite measurement pipeline that produces insurance-ready reports in 1–2 hours, a structured canvassing script and territory map, and a CRM that auto-generates contingency agreements with e-signature. The operations that execute this play consistently capture 5–10x the revenue of competitors running 2019-era phone-and-clipboard workflows.
 
 Storms are the entire year's revenue for a lot of roofing operations. A single qualifying hail event across a suburban metro can represent $5M–$30M in accessible work within a 48-hour window. The operations that consistently capture that revenue aren't the ones with the biggest ad spend, the prettiest trucks, or the longest history in market — they're the ones with the tightest execution in the first two days.
 
@@ -66,7 +66,7 @@ Traditional storm-restoration operations dispatch a sales rep to every lead in p
 
 ### The modern workflow
 
-**Satellite measurement runs automatically on lead intake.** The instant the AI receptionist captures the property address, the CRM triggers an AI-native satellite measurement (see our [20-roof accuracy test](/blog/ai-roof-measurement-accuracy-vs-eagleview-2026-test) for the precision data). Within 60 seconds of the call ending, the lead record has slope-adjusted area, per-facet pitch and azimuth, linear edges, and a pre-priced full-envelope estimate attached.
+**Satellite measurement runs automatically on lead intake.** The instant the AI receptionist captures the property address, the CRM triggers an AI-native satellite measurement (see our [20-roof accuracy test](/blog/ai-roof-measurement-accuracy-vs-eagleview-2026-test) for the precision data). Within 1–2 hours of the call ending, the lead record has slope-adjusted area, per-facet pitch and azimuth, linear edges, and a pre-priced full-envelope estimate attached.
 
 **Sales rep arrives with the measurement already done.** The rep's tablet loads the pre-pulled measurement, the suggested contract value, and the contingency agreement template before they knock on the door. Site visit time drops from 60–90 minutes (measure + walk + quote) to 20–30 minutes (walk-through + damage inspection + sign).
 
@@ -88,7 +88,7 @@ Storm canvassing is a distinct sales discipline from retail roofing and should b
 
 2. **Offer the no-cost inspection.** Frame it as an inspection, not a sales call. Homeowners respond to "free roof inspection" far more than to "free estimate" — the first implies expertise offered, the second implies sales pressure coming.
 
-3. **Explain the insurance process if applicable.** Many homeowners in first-storm markets don't understand that a qualifying hail claim costs them only the deductible. A 60-second explanation of the contingency process — roofer does the work, insurance pays the roofer directly, homeowner pays deductible — materially lifts sign rates.
+3. **Explain the insurance process if applicable.** Many homeowners in first-storm markets don't understand that a qualifying hail claim costs them only the deductible. A brief explanation of the contingency process — roofer does the work, insurance pays the roofer directly, homeowner pays deductible — materially lifts sign rates.
 
 4. **Book the inspection, not the contract.** The goal of the door knock is a scheduled inspection, not an on-the-spot sale. Reps who try to close at the door convert at roughly half the rate of reps who book an inspection and come back to complete the full damage walk.
 
@@ -132,7 +132,7 @@ No single piece of software makes the 50-in-48 play work. The combination is the
 |---|---|---|
 | Inbound call handling | AI voice receptionist | Answers all calls, qualifies, books, routes emergencies |
 | CRM | Roofing-specific CRM | Houses leads, jobs, contracts, communications |
-| Measurement | AI-native satellite + drone | Produces insurance-ready reports in 60 seconds |
+| Measurement | AI-native satellite + drone | Produces insurance-ready reports in 1–2 hours |
 | Estimating | Integrated with measurement | Auto-prices full-envelope from measurement data |
 | Contract execution | E-signature embedded in CRM | Contingency agreements signed on-tablet |
 | Insurance claim submission | Carrier portal integration | Signed contingency forwarded within 24 hours |
@@ -164,13 +164,13 @@ The full envelope refers to the complete exterior of the building covered by a s
 Under 5 minutes from the moment the homeowner calls or submits a form. First-responder win rates run at approximately 85%, and the drop-off is measured in minutes, not hours. Operations without 24/7 live call handling during storm deployments lose the first wave of the most valuable leads to competitors running AI receptionists.
 
 **How do you measure multiple roofs quickly?**
-Using AI-native satellite measurement platforms that produce insurance-ready reports in 60 seconds from an address. The sales rep arrives at the site visit with the measurement already done and walks only damage documentation and contract execution. Manual measurement (tape + pitch gauge + sketch) caps throughput at 6–10 inspections per rep per day; automated measurement raises it to 15–20.
+Using AI-native satellite measurement platforms that produce insurance-ready reports in 1–2 hours from an address. The sales rep arrives at the site visit with the measurement already done and walks only damage documentation and contract execution. Manual measurement (tape + pitch gauge + sketch) caps throughput at 6–10 inspections per rep per day; automated measurement raises it to 15–20.
 
 **What percentage of roofing calls involve insurance?**
 During active storm deployments, 80–95% of new leads are insurance-related. In baseline (non-storm) periods, insurance calls run 15–30% of total lead volume, concentrated in markets with seasonal hail or tropical weather risk.
 
 **How do I qualify storm damage leads efficiently?**
-Three questions qualify 95% of inbound storm leads: (1) What is the property address? (triggers instant satellite measurement and damage-area confirmation), (2) Have you filed a claim yet? (determines claim stage and urgency), (3) Have you signed with another contractor? (determines competitive pressure and pace). Modern AI receptionists ask these conversationally within the first 60 seconds of the call.
+Three questions qualify 95% of inbound storm leads: (1) What is the property address? (triggers instant satellite measurement and damage-area confirmation), (2) Have you filed a claim yet? (determines claim stage and urgency), (3) Have you signed with another contractor? (determines competitive pressure and pace). Modern AI receptionists ask these conversationally within the first 1–2 hours of the call.
 
 **What is a contingency agreement in roofing?**
 A contingency agreement is a contract between the homeowner and the roofing contractor stipulating that the contractor will perform the work if the homeowner's insurance claim is approved. The homeowner has no financial obligation if the claim is denied. It is the standard instrument of the first-48-hour storm restoration workflow and allows the contractor to commit resources (measurement, estimating, adjuster meeting) before the claim is underwritten. Legal specifics vary by state and province.

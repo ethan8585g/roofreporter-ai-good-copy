@@ -968,7 +968,7 @@ function showOnboardingModal() {
           '<div class="space-y-2 text-sm text-sky-700">' +
             '<div class="flex items-center gap-2"><span class="w-6 h-6 bg-sky-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">1</span><span>Enter the property address</span></div>' +
             '<div class="flex items-center gap-2"><span class="w-6 h-6 bg-sky-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">2</span><span>AI analyzes satellite imagery</span></div>' +
-            '<div class="flex items-center gap-2"><span class="w-6 h-6 bg-sky-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">3</span><span>Full report ready in ~60 seconds</span></div>' +
+            '<div class="flex items-center gap-2"><span class="w-6 h-6 bg-sky-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">3</span><span>Full report ready in 1–2 hours</span></div>' +
           '</div>' +
         '</div>' +
         '<a href="/customer/order" onclick="dismissOnboarding()" class="block w-full py-3 text-center bg-emerald-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-colors">' +

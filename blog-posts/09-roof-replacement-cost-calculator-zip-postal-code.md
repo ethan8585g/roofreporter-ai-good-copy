@@ -166,7 +166,7 @@ Code requirements are where homeowners get blindsided. A contractor quoting per 
 
 The biggest source of quote inaccuracy isn't labor or material — it's the measurement. A contractor quoting from a windshield survey or a photo is guessing. A contractor quoting from a handheld measurement is pulling 3–5% error on a typical roof and much more on a complex one. In both cases, the customer either gets a lowball quote that grows during the project, or an inflated quote that loses the job to a competitor.
 
-AI-native satellite measurement fixes this. For $8 per report delivered in under 60 seconds, a contractor gets per-facet slope-adjusted area, linear edges, and material takeoff accurate to within 1–2% of drone ground truth. Every quote starts from the same number the insurance adjuster will see, the material supplier will use for the order, and the homeowner can independently verify with a free calculator.
+AI-native satellite measurement fixes this. For $8 per report delivered in 1–2 hours, a contractor gets per-facet slope-adjusted area, linear edges, and material takeoff accurate to within 1–2% of drone ground truth. Every quote starts from the same number the insurance adjuster will see, the material supplier will use for the order, and the homeowner can independently verify with a free calculator.
 
 The [20-roof AI vs. EagleView accuracy test](/blog/ai-roof-measurement-accuracy-vs-eagleview-2026-test) has the full precision data. For homeowners, the [Free Roof Measurement Tool](/blog/free-roof-measurement-tool-square-footage-calculator) delivers the same measurement ungated for the first report per session — useful for sanity-checking contractor bids before signing.
 
