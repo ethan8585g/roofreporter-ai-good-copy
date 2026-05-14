@@ -635,7 +635,7 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   // 3D-look diagram so house and garage no longer get merged into one.
   // Single-structure reports also benefit (3D look replaces the flat view
   // when no AI geometry is available).
-  const structureDiagrams = generateAllStructureSVGs(report)
+  const structureDiagrams = generateAllStructureSVGs(report, { showDimensions: false })
   const perStructureMaterials = structureDiagrams.length > 0
     ? allocateMaterialsToStructures(report, structureDiagrams.map(s => s.partition))
     : []

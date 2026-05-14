@@ -389,7 +389,7 @@ export function estimateMaterials(input: MaterialEstimationInput): DetailedMater
     lineItems.push({
       category: 'ice_water',
       name: 'Ice & Water Barrier — Full Roof Coverage (Low Slope)',
-      description: `${Math.round(iceWaterFullSqft)} sqft full coverage (pitch ${pitchRise}:12 < 2:12)`,
+      description: `${Math.round(iceWaterFullSqft)} sqft full coverage (pitch ${Math.round(pitchRise * 10) / 10}:12 < 2:12)`,
       quantity: fullRolls,
       unit: 'rolls (200 sqft each)',
       coverage_per_unit: `${ICE_WATER_ROLL_SQFT} sqft / roll`,
@@ -572,7 +572,7 @@ export function estimateMaterials(input: MaterialEstimationInput): DetailedMater
       total_valley_lf: Math.round(valleyLF),
       total_rake_lf: Math.round(rakeLF),
       total_perimeter_lf: Math.round(perimeterLF),
-      predominant_pitch: `${pitchRise}:12`,
+      predominant_pitch: `${Math.round(pitchRise * 10) / 10}:12`,
       pitch_rise: pitchRise,
       complexity
     },

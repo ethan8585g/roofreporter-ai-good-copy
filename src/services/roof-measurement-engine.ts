@@ -700,7 +700,7 @@ export function calculateRoofSpecs(
   const trueArea = flatArea * multiplier
   const panelLength = flatWidth * multiplier  // slope-adjusted panel run
   return {
-    pitch_label:          `${pitchRise}:12`,
+    pitch_label:          `${round(pitchRise, 1)}:12`,
     pitch_angle_deg:      round(pitchAngleDeg(pitchRise), 2),
     multiplier:           round(multiplier, 4),
     flat_area_sqft:       round(flatArea, 1),
@@ -1599,7 +1599,7 @@ export class RoofMeasurementEngine {
         results.push({
           face_id:            face.face_id,
           pitch_rise:         face.pitch,
-          pitch_label:        `${face.pitch}:12`,
+          pitch_label:        `${round(face.pitch, 1)}:12`,
           pitch_angle_deg:    round(pitchAngleDeg(face.pitch), 1),
           slope_factor:       round(slopeFactor(face.pitch), 4),
           projected_area_ft2: round(projFt2, 1),
@@ -1676,7 +1676,7 @@ export class RoofMeasurementEngine {
         results.push({
           face_id:            'total_roof',
           pitch_rise:         rise,
-          pitch_label:        `${rise}:12`,
+          pitch_label:        `${round(rise, 1)}:12`,
           pitch_angle_deg:    round(pitchAngleDeg(rise), 1),
           slope_factor:       round(slopeFactor(rise), 4),
           projected_area_ft2: round(totalProjFt2, 1),
@@ -1787,7 +1787,7 @@ export class RoofMeasurementEngine {
     results.push({
       face_id: 'total_roof',
       pitch_rise: rise,
-      pitch_label: `${rise}:12`,
+      pitch_label: `${round(rise, 1)}:12`,
       pitch_angle_deg: round(pitchAngleDeg(rise), 1),
       slope_factor: round(slopeFactor(rise), 4),
       projected_area_ft2: round(totalProjFt2, 1),
