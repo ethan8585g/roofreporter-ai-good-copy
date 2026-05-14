@@ -2704,7 +2704,7 @@ function saInitTraceMap(lat, lng, address) {
         mapTypeIds: controlIds
       }
     });
-    var priority = ['nearmap', 'mapbox_satellite', 'esri_world_imagery'];
+    var priority = ['nearmap', 'vexcel', 'mapbox_satellite', 'esri_world_imagery'];
     var chosen = null;
     for (var i = 0; i < priority.length; i++) {
       if (providers.some(function(p) { return p.id === priority[i]; })) { chosen = priority[i]; break; }
