@@ -1786,7 +1786,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
         '</span>' +
       '</div>' +
       '<div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:0 8px">' +
-        '<div style="flex:1;min-height:0;display:flex;gap:8px">' +
+        '<div style="flex:1.5;min-height:0;display:flex;gap:8px">' +
           '<div style="flex:1;min-height:0;display:flex;flex-direction:column;position:relative">' +
             '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Trace</div>' +
             '<div id="sa-trace-map" style="flex:1;min-height:0;border-radius:8px;overflow:hidden"></div>' +
