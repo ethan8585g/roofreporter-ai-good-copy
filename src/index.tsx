@@ -4482,8 +4482,10 @@ app.post('/api/demo/lead', async (c) => {
 // Customer Order & Pay page
 app.get('/customer/order', async (c) => {
   // Server-side auth gate — anonymous visitors otherwise see the order form
-  // but hit a confusing 401 toast when they try to submit. Redirect them
-  // to /customer/login with a next= param so they land back here.
+  // but hit a confusing 401 toast when they try to submit. Redirect them to
+  // /customer/login with mode=signup so new visitors land on the Register
+  // tab (people coming to /customer/order are usually first-time buyers, not
+  // returning logins). next= sends them back here after registering.
   const cookieHeader = c.req.header('Cookie') || ''
   let sessionToken: string | null = null
   for (const part of cookieHeader.split(/;\s*/)) {
@@ -4503,7 +4505,7 @@ app.get('/customer/order', async (c) => {
   }
   if (!hasSession) {
     const qs = new URL(c.req.url).search
-    return c.redirect(`/customer/login?next=${encodeURIComponent('/customer/order' + qs)}`, 302)
+    return c.redirect(`/customer/login?mode=signup&next=${encodeURIComponent('/customer/order' + qs)}`, 302)
   }
 
   const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
