@@ -17316,6 +17316,7 @@ function renderPeopleDirectoryView() {
   var typeFilters = [
     { id: '', label: 'All', icon: 'fa-users' },
     { id: 'platform_user', label: 'Platform Users', icon: 'fa-user-check' },
+    { id: 'team_member', label: 'Team Members', icon: 'fa-user-friends' },
     { id: 'crm_customer', label: 'CRM Customers', icon: 'fa-home' },
     { id: 'prospect', label: 'Prospects', icon: 'fa-phone-volume' }
   ];
@@ -17336,8 +17337,8 @@ function renderPeopleDirectoryView() {
     '<i class="fas fa-search absolute left-3 top-2.5 text-gray-400 text-sm"></i>' +
     '</div>';
 
-  var typeBadge = { platform_user: 'bg-blue-100 text-blue-800', crm_customer: 'bg-green-100 text-green-800', prospect: 'bg-orange-100 text-orange-800' };
-  var typeLabel = { platform_user: 'Platform User', crm_customer: 'CRM Customer', prospect: 'Prospect' };
+  var typeBadge = { platform_user: 'bg-blue-100 text-blue-800', team_member: 'bg-violet-100 text-violet-800', crm_customer: 'bg-green-100 text-green-800', prospect: 'bg-orange-100 text-orange-800' };
+  var typeLabel = { platform_user: 'Platform User', team_member: 'Team Member', crm_customer: 'CRM Customer', prospect: 'Prospect' };
 
   var listHtml = '';
   if (people.length === 0) {
@@ -17350,19 +17351,27 @@ function renderPeopleDirectoryView() {
       var dupPill = (p._dupCount > 0)
         ? ' <span title="' + (p._dupTypes || []).join(', ') + '" class="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold">+' + p._dupCount + ' dup</span>'
         : '';
-      var loginsCell = (p.person_type === 'platform_user')
+      var isLoginAccount = (p.person_type === 'platform_user' || p.person_type === 'team_member');
+      var loginsCell = isLoginAccount
         ? '<td class="px-4 py-3 text-xs text-gray-700 font-semibold">' + (p.login_count != null ? p.login_count : 0) + '</td>'
         : '<td class="px-4 py-3 text-gray-300 text-xs">—</td>';
-      var lastLoginCell = (p.person_type === 'platform_user')
+      var lastLoginCell = isLoginAccount
         ? (p.last_login
             ? '<td class="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">' + fmtDateTime(p.last_login) + '</td>'
             : '<td class="px-4 py-3 text-xs"><span class="px-2 py-0.5 bg-red-50 text-red-600 rounded-full text-[10px] font-semibold uppercase">Never</span></td>')
         : '<td class="px-4 py-3 text-gray-300 text-xs">—</td>';
+      // Team-member sub-line: show the parent account so admin can see the
+      // invited member is attached to the inviter, not a fresh standalone signup.
+      var teamSub = '';
+      if (p.person_type === 'team_member' && (p.team_owner_email || p.team_owner_name)) {
+        var ownerLabel = p.team_owner_company || p.team_owner_name || p.team_owner_email;
+        teamSub = '<div class="text-[10px] text-violet-600 mt-0.5"><i class="fas fa-link mr-1"></i>via ' + ownerLabel + '</div>';
+      }
       listHtml += '<tr class="border-t border-gray-100 hover:bg-gray-50 cursor-pointer" onclick="peopleOpenProfile(\'' + p.person_type + '\',' + p.id + ')">' +
-        '<td class="px-4 py-3 font-medium text-gray-900">' + (p.name || '—') + dupPill + '</td>' +
+        '<td class="px-4 py-3 font-medium text-gray-900">' + (p.name || '—') + dupPill + teamSub + '</td>' +
         '<td class="px-4 py-3 text-gray-500">' + (p.email || '—') + '</td>' +
         '<td class="px-4 py-3 text-gray-500">' + (p.phone || '—') + '</td>' +
-        '<td class="px-4 py-3 text-gray-500">' + (p.company_name || p.company || p.owner_company || '—') + '</td>' +
+        '<td class="px-4 py-3 text-gray-500">' + (p.effective_company || p.company_name || p.company || p.owner_company || p.team_owner_company || '—') + '</td>' +
         '<td class="px-4 py-3"><span class="px-2 py-0.5 ' + badge + ' rounded-full text-xs font-medium">' + label + '</span></td>' +
         loginsCell +
         lastLoginCell +
@@ -17462,6 +17471,7 @@ function renderPersonPanelBody(d) {
   var orders = d.recent_orders || [];
   var typeBadge = {
     platform_user: '<span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold uppercase tracking-wide">Platform User</span>',
+    team_member: '<span class="px-2 py-0.5 bg-violet-100 text-violet-700 rounded-full text-[10px] font-bold uppercase tracking-wide">Team Member</span>',
     crm_customer: '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-bold uppercase tracking-wide">CRM Customer</span>',
     prospect: '<span class="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-[10px] font-bold uppercase tracking-wide">Prospect</span>'
   }[d.type] || '';
@@ -17481,6 +17491,11 @@ function renderPersonPanelBody(d) {
       row('Last login', c.last_login ? esc(fmtDateTime(c.last_login)) : '') +
       row('Lead source', esc(c.lead_source || c.lead_utm_source || '')) +
       (c.owner_id ? row('Owned by', esc((c.owner_name || c.owner_email || '#' + c.owner_id) + (c.owner_company ? ' · ' + c.owner_company : ''))) : '') +
+      (d.type === 'team_member' && (c.team_owner_email || c.team_owner_name)
+        ? row('Member of', '<span class="text-violet-700 font-semibold">' + esc(c.team_owner_company || c.team_owner_name || c.team_owner_email) + '</span>'
+            + (c.team_owner_email ? ' <span class="text-slate-400">· ' + esc(c.team_owner_email) + '</span>' : '')
+            + (c.team_role ? ' <span class="ml-1 px-1.5 py-0.5 bg-violet-50 text-violet-700 rounded text-[9px] font-bold uppercase">' + esc(c.team_role) + '</span>' : ''))
+        : '') +
     '</div>';
   var statsHtml = '';
   if (d.type === 'platform_user') {
