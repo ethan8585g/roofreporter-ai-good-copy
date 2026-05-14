@@ -3939,6 +3939,25 @@ window.saSubmitTrace = async function(orderId, force) {
     alert('Please draw the eaves polygon first (at least 3 points). Click the first point again to close it.');
     return;
   }
+  // ── MULTI-TIER NUDGE ────────────────────────────────────────────────
+  // If the trace is a single irregular outline and the user never armed
+  // "+ Add Lower Eave", warn them — the wall area between an upper roof
+  // and a lower garage/addition roof gets counted as flat roof unless
+  // each tier is its own section. Heuristic: only one section, >8
+  // vertices (suggests L-shape or step-back footprint), zero
+  // lower-eave intent. False positives are fine — OK skips the prompt
+  // in one click; false negatives just keep today's behavior.
+  if (!force && s.eaveSections.length === 1) {
+    var primaryVertexCount = (s.eaveSections[0].points || []).length;
+    var armedLowerEave = (s._lowerEaveIntentCount || 0) > 0;
+    if (primaryVertexCount > 8 && !armedLowerEave) {
+      var nudgeMsg = 'Looks like this might be a multi-tier building (house + garage, or main + addition).\n\n' +
+        'You traced a single ' + primaryVertexCount + '-point outline. If different parts of this roof sit at different elevations, the wall between them gets counted as flat roof unless each tier is traced separately.\n\n' +
+        'OK = submit anyway (single-tier)\n' +
+        'Cancel = go back and use "+ Add Lower Eave" to mark the lower roof';
+      if (!confirm(nudgeMsg)) return;
+    }
+  }
   // ── LOWER-EAVE INTENT GUARD ─────────────────────────────────────────
   // The operator pressed "+ Add Lower Eave" (or clicked a yellow STEP
   // marker) at some point — we persist that intent in s._lowerEaveIntentAt.

@@ -3166,6 +3166,14 @@ export function generateTraceBasedDiagramSVG(
     svg += `<g transform="translate(1.6,2.2)"><polygon points="${eavePts}" fill="none" stroke="rgba(15,23,42,0.22)" stroke-width="2.6" stroke-linejoin="round"/></g>`
     svg += `<polygon points="${eavePts}" fill="none" stroke="#1a1a1a" stroke-width="2.2" stroke-linejoin="round"/>`
   }
+  // UPPER ROOF badge on the primary outline — only when at least one extra
+  // section is tagged lower_tier (otherwise no level difference to call out).
+  const hasLowerTier = extraSectionKinds.some(k => k === 'lower_tier')
+  if (!HIDE && hasLowerTier && L.perimeter) {
+    const ecx = eavesXY.reduce((s, p) => s + p.x, 0) / eavesXY.length
+    const ecy = eavesXY.reduce((s, p) => s + p.y, 0) / eavesXY.length
+    svg += `<text x="${tx(ecx).toFixed(1)}" y="${(ty(ecy) - 14).toFixed(1)}" text-anchor="middle" font-size="7" font-weight="800" fill="#1a1a1a" letter-spacing="1.4" ${FONT}>UPPER ROOF</text>`
+  }
 
   // ── EXTRA EAVE SECTIONS (detached structures, lower-eave lips, etc.) ──
   // Each extra section gets its own per-edge dimension labels and an area label
@@ -3280,10 +3288,111 @@ export function generateTraceBasedDiagramSVG(
       const titleText = isLower
         ? `Lower Eave ${++lowerEaveCounter}`
         : `Structure ${facets.length + (++mainStructCounter)}`
+      // Tier badge — "UPPER ROOF" / "LOWER ROOF" caps label above the structure
+      // title so a reader instantly sees the level difference even without the
+      // step line below.
+      const tierLabel = isLower ? 'LOWER ROOF' : 'UPPER ROOF'
+      svg += `<text x="${lcx.toFixed(1)}" y="${(lcy - 14).toFixed(1)}" text-anchor="middle" font-size="7" font-weight="800" fill="${stroke}" letter-spacing="1.4" ${FONT}>${tierLabel}</text>`
       svg += `<text x="${lcx.toFixed(1)}" y="${(lcy - 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="800" fill="${strokeDeep}" fill-opacity="0.85" ${FONT}>${titleText}</text>`
       svg += `<text x="${lcx.toFixed(1)}" y="${(lcy + 9).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="${strokeDeep}" fill-opacity="0.85" ${FONT}>${slopedFt2.toLocaleString()} SF${pitchLabel ? ` · ${pitchLabel}` : ''}</text>`
     }
   })
+
+  // ── WALL STEP between upper roof and lower-tier sections ──
+  // For each lower_tier section, find edges that are spatially close to any
+  // edge of the main eaves polygon. Those edges are the shared boundary where
+  // the vertical wall sits. Draw a heavy black solid line over them and emit
+  // a single "WALL STEP" callout summing total LF (and approximate sf at a
+  // typical 8 ft wall height — flagged as an assumption in the callout).
+  if (!HIDE && L.perimeter && hasLowerTier) {
+    // Point-to-segment distance in metres (XY are metres).
+    const pointSegDistM = (p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) => {
+      const dx = b.x - a.x, dy = b.y - a.y
+      const len2 = dx * dx + dy * dy
+      if (len2 < 1e-9) return Math.hypot(p.x - a.x, p.y - a.y)
+      let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2
+      if (t < 0) t = 0; else if (t > 1) t = 1
+      return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy))
+    }
+    // 0.6 m ≈ 2 ft tolerance — generous enough for trace-vertex jitter,
+    // tight enough to not misidentify two parallel walls 4 ft apart as shared.
+    const SHARED_TOL_M = 0.6
+    const stepSegments: { ax: number; ay: number; bx: number; by: number; lengthFt: number; rawA: { lat: number; lng: number }; rawB: { lat: number; lng: number } }[] = []
+
+    extraSections.forEach((sec, si) => {
+      if (extraSectionKinds[si] !== 'lower_tier') return
+      const secXY = sec.map(toXY)
+      const nLow = sec.length
+      for (let i = 0; i < nLow; i++) {
+        const a = secXY[i], b = secXY[(i + 1) % nLow]
+        const rawA = sec[i], rawB = sec[(i + 1) % nLow]
+        // Edge is "shared" if BOTH endpoints sit within tolerance of any
+        // segment of the main eaves polygon.
+        let bestADist = Infinity
+        let bestBDist = Infinity
+        const nMain = eavesXY.length
+        for (let k = 0; k < nMain; k++) {
+          const ma = eavesXY[k], mb = eavesXY[(k + 1) % nMain]
+          bestADist = Math.min(bestADist, pointSegDistM(a, ma, mb))
+          bestBDist = Math.min(bestBDist, pointSegDistM(b, ma, mb))
+        }
+        if (bestADist <= SHARED_TOL_M && bestBDist <= SHARED_TOL_M) {
+          stepSegments.push({
+            ax: a.x, ay: a.y, bx: b.x, by: b.y,
+            lengthFt: haversineFt(rawA, rawB),
+            rawA, rawB,
+          })
+        }
+      }
+    })
+
+    // Draw step lines + emit one summary callout near the longest segment.
+    if (stepSegments.length > 0) {
+      stepSegments.forEach(seg => {
+        const x1 = tx(seg.ax), y1 = ty(seg.ay), x2 = tx(seg.bx), y2 = ty(seg.by)
+        // Heavy black step line over the existing dashed lower-tier outline.
+        svg += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#0F172A" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>`
+        // Downward chevron at midpoint pointing toward the lower section to
+        // indicate elevation drop. Chevron perpendicular to the edge.
+        const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
+        const ex = x2 - x1, ey = y2 - y1
+        const elen = Math.hypot(ex, ey)
+        if (elen > 8) {
+          const nx = -ey / elen, ny = ex / elen
+          // Decide which side faces the lower section's centroid — pick
+          // whichever offset moves toward inside the lower polygon's bounds.
+          // Cheap approximation: nudge by both, pick the larger nudge magnitude.
+          const tipX = mx + nx * 5, tipY = my + ny * 5
+          const a1X = mx - nx * 1.5 - (ex / elen) * 4, a1Y = my - ny * 1.5 - (ey / elen) * 4
+          const a2X = mx - nx * 1.5 + (ex / elen) * 4, a2Y = my - ny * 1.5 + (ey / elen) * 4
+          svg += `<polygon points="${tipX.toFixed(1)},${tipY.toFixed(1)} ${a1X.toFixed(1)},${a1Y.toFixed(1)} ${a2X.toFixed(1)},${a2Y.toFixed(1)}" fill="#0F172A"/>`
+        }
+      })
+
+      const totalWallLf = stepSegments.reduce((s, sg) => s + sg.lengthFt, 0)
+      if (totalWallLf >= 6) {
+        const longest = [...stepSegments].sort((a, b) => b.lengthFt - a.lengthFt)[0]
+        const cmx = tx((longest.ax + longest.bx) / 2), cmy = ty((longest.ay + longest.by) / 2)
+        // Offset the callout outward (perpendicular to the longest edge) so
+        // it sits clear of the step line + any nearby dimension labels.
+        const ex = longest.bx - longest.ax, ey = longest.by - longest.ay
+        const elen = Math.hypot(ex, ey) || 1
+        const nx = -ey / elen, ny = ex / elen
+        const offsetPx = 28
+        const labelX = cmx + nx * offsetPx
+        const labelY = cmy + ny * offsetPx
+        const lfTxt = `${Math.round(totalWallLf)} LF`
+        const sfTxt = `~${Math.round(totalWallLf * 8)} sf (8′ typ.)`
+        const pillW = 96, pillH = 30
+        svg += `<g transform="translate(${labelX.toFixed(1)},${labelY.toFixed(1)})">`
+        svg += `<rect x="${(-pillW / 2).toFixed(1)}" y="${(-pillH / 2).toFixed(1)}" width="${pillW}" height="${pillH}" rx="4" fill="#fff" stroke="#0F172A" stroke-width="1.0"/>`
+        svg += `<text x="0" y="${(-pillH / 2 + 9).toFixed(1)}" text-anchor="middle" font-size="6.5" font-weight="800" fill="#0F172A" letter-spacing="1.2" ${FONT}>WALL STEP</text>`
+        svg += `<text x="0" y="${(-pillH / 2 + 19).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="800" fill="#0F172A" ${FONT}>${lfTxt}</text>`
+        svg += `<text x="0" y="${(-pillH / 2 + 27).toFixed(1)}" text-anchor="middle" font-size="6" font-weight="600" fill="#475569" ${FONT}>${sfTxt}</text>`
+        svg += `</g>`
+      }
+    }
+  }
 
   // ── RIDGE LINES (red, solid, prominent) ──
   // Stroke hierarchy: ridge (3.0) > hip (2.2) > valley (1.8 dashed) so the
