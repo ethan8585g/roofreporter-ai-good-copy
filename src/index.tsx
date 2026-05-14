@@ -695,6 +695,7 @@ app.route('/api/insurance', insuranceRoutes)
 app.route('/api/admin', adminRoutes)
 app.route('/api/funnel-monitor', funnelMonitorRoutes)
 app.route('/api/email-health', emailHealthRoutes)
+app.route('/api/gmail-health', emailHealthRoutes) // alias — /gmail-health skill calls this path
 app.route('/api/reports-monitor', reportsMonitorRoutes)
 app.route('/api/signup-health', signupHealthRoutes)
 app.route('/api/signup-journey', signupJourneyRoutes)
