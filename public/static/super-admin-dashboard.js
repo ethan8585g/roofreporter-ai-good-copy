@@ -2431,6 +2431,8 @@ window.saTraceClear = function() {
   if (s._segStartMarker) { s._segStartMarker.setMap(null); s._segStartMarker = null; }
   s.eavePoints = []; s._eaveLatLngs = []; s._segStart = null;
   s._nextSectionKind = null;
+  s._lowerEaveIntentAt = null;
+  s._lowerEaveIntentCount = 0;
   s._ridgeData = []; s._hipData = []; s._valleyData = [];
   s.vents = []; s.skylights = []; s.chimneys = []; s.downspouts = [];
   // Dormers — clear closed polygons + draft + labels
@@ -3053,6 +3055,11 @@ window.saAddLowerEave = function() {
     return;
   }
   s._nextSectionKind = 'lower_tier';
+  // Track operator INTENT to add a lower-eave so the submit gate can
+  // detect "pressed Add Lower Eave but no lower_tier section ended up
+  // in eaveSections" and refuse to silently ship that report.
+  s._lowerEaveIntentAt = Date.now();
+  s._lowerEaveIntentCount = (s._lowerEaveIntentCount || 0) + 1;
   s._eaveLatLngs = [];
   s.eavePoints = [];
   if (s.eavePoly) { s.eavePoly.setMap(null); s.eavePoly = null; }
@@ -4332,6 +4339,8 @@ function saStartLowerTierFromStep(step) {
   // Arm lower-tier mode and seed the first vertex. saTraceSetTool('eave')
   // routes future clicks (on 2D or 3D) into the same _eaveLatLngs array.
   s._nextSectionKind = 'lower_tier';
+  s._lowerEaveIntentAt = Date.now();
+  s._lowerEaveIntentCount = (s._lowerEaveIntentCount || 0) + 1;
   s._eaveLatLngs = [new google.maps.LatLng(step.mid_lat, step.mid_lng)];
   s.eavePoints = [{ lat: step.mid_lat, lng: step.mid_lng }];
   if (s.eavePoly) { s.eavePoly.setMap(null); s.eavePoly = null; }
@@ -4884,6 +4893,34 @@ window.saSubmitTrace = async function(orderId, force) {
     alert('Please draw the eaves polygon first (at least 3 points). Click the first point again to close it.');
     return;
   }
+  // ── LOWER-EAVE INTENT GUARD ─────────────────────────────────────────
+  // The operator pressed "+ Add Lower Eave" (or clicked a yellow STEP
+  // marker) at some point — we persist that intent in s._lowerEaveIntentAt.
+  // If the submit-time eaveSections doesn't actually CONTAIN a section
+  // tagged kind:'lower_tier', they almost certainly meant to but the
+  // section never closed (or got wiped). Refuse to silently ship a single-
+  // structure report in that case — show a confirm with a clear path back.
+  // Skip when force=true so the override branch in the validation modal
+  // doesn't get blocked twice.
+  if (!force && s._lowerEaveIntentCount > 0) {
+    var hasLowerTier = (s.eaveSections || []).some(function(sec) {
+      return sec && sec.kind === 'lower_tier';
+    });
+    if (!hasLowerTier) {
+      var draftPts = (s._eaveLatLngs && s._eaveLatLngs.length) || 0;
+      var msg = 'You pressed "+ Add Lower Eave" ' + s._lowerEaveIntentCount +
+        ' time' + (s._lowerEaveIntentCount === 1 ? '' : 's') +
+        ', but no closed lower-eave section is in the trace.\n\n' +
+        'Current sections: ' + s.eaveSections.length + ' main, 0 lower-tier.\n' +
+        (draftPts >= 3
+          ? 'You have ' + draftPts + ' uncommitted points — Cancel and click the first one to close the lower eave.'
+          : draftPts > 0
+            ? 'You have ' + draftPts + ' uncommitted point(s) — not enough to close a polygon. Cancel and finish tracing.'
+            : 'It looks like you cleared the lower eave or never placed any points.') +
+        '\n\nClick OK to submit anyway (no lower eave will appear in the report), or Cancel to go back and finish tracing it.';
+      if (!confirm(msg)) return;
+    }
+  }
   var eaves_sections = s.eaveSections.map(function(sec) { return sec.points; });
   // Per-section pitches parallel to eaves_sections. Engine routes the largest
   // section's pitch to default_pitch and the rest to per-section overrides,
@@ -4896,6 +4933,17 @@ window.saSubmitTrace = async function(orderId, force) {
   var eaves_section_kinds = s.eaveSections.map(function(sec) {
     return (sec && sec.kind === 'lower_tier') ? 'lower_tier' : 'main';
   });
+  // One-line console signpost so the browser DevTools shows exactly what's
+  // about to be POSTed. Cheap, non-intrusive, helps post-mortem any
+  // future "wait, my section didn't make it" reports.
+  try {
+    console.log('[saSubmitTrace] sections=' + s.eaveSections.length +
+      ' kinds=[' + eaves_section_kinds.join(',') + ']' +
+      ' ridges=' + (s._ridgeData || []).length +
+      ' hips=' + (s._hipData || []).length +
+      ' valleys=' + (s._valleyData || []).length +
+      ' lowerEaveIntent=' + (s._lowerEaveIntentCount || 0));
+  } catch (_) {}
   // Dormers — only ship those with a valid pitch. Engine adds only the
   // differential sloped area; renderer keeps the report as a single
   // structure (so dormers don't get split into separate buildings).
