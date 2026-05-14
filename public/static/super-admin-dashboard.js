@@ -1757,7 +1757,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
   overlay.id = 'sa-trace-modal';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:16px';
   overlay.innerHTML =
-    '<div id="sa-trace-inner" style="background:#111827;border:1px solid #374151;border-radius:16px;width:96vw;max-width:1700px;height:90vh;display:flex;flex-direction:column">' +
+    '<div id="sa-trace-inner" style="background:#111827;border:1px solid #374151;border-radius:16px;width:96vw;max-width:1700px;height:96vh;display:flex;flex-direction:column">' +
       '<div id="sa-trace-header" style="padding:16px 20px;border-bottom:1px solid #374151;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">' +
         '<div>' +
           '<div style="color:#f9fafb;font-size:15px;font-weight:700"><i class="fas fa-drafting-compass mr-2" style="color:#f59e0b"></i>Trace Roof — ' + orderNum + '</div>' +

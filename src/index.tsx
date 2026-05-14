@@ -1446,9 +1446,7 @@ app.get('/3d-verify', async (c) => {
   body.postmsg .topbar .pill,
   body.postmsg .topbar .btn.capture { display: none !important; }
   body.postmsg .legend { font-size: 10px; padding: 4px 8px; bottom: 6px; left: 6px; }
-  /* Tilt ⬇ / Tilt ⬆ are customer-only — set on <body> when ?customer=1 */
-  .tilt-btn { display: none; }
-  body.customer .tilt-btn { display: inline-flex; }
+  /* Tilt ⬇ / Tilt ⬆ always visible alongside Rotate in the 3D topbar. */
 </style>
 </head>
 <body>
@@ -2147,7 +2145,7 @@ app.get('/3d-verify', async (c) => {
       const carto = viewer.camera.positionCartographic;
       const heightM = carto ? Math.max(carto.height, 5) : 250;
       const isPinch = ev.ctrlKey; // Mac trackpad pinch
-      const perUnit = isPinch ? 0.022 : 0.0008;
+      const perUnit = isPinch ? 0.011 : 0.0004;
       const frac = Math.min(Math.abs(ev.deltaY) * perUnit, 0.22);
       const amount = heightM * frac;
       if (ev.deltaY > 0) viewer.camera.zoomOut(amount);
@@ -4771,8 +4769,20 @@ app.get('/report/share/:token', async (c) => {
 
     return c.html(wrappedHtml)
   } catch (err: any) {
-    console.error('[ShareReport]', err.message)
-    return c.html(`<!DOCTYPE html><html><body><p>Error loading report.</p></body></html>`, 500)
+    console.error('[ShareReport]', err?.message || err)
+    // Return a styled error page on transient failures so we never leak
+    // template-fragment HTML to homeowners opening a shared link.
+    return c.html(`<!DOCTYPE html><html><head><title>Report Temporarily Unavailable</title><link rel="stylesheet" href="/static/tailwind.css"></head>
+<body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A">
+<div class="text-center max-w-md mx-auto px-4">
+  <div class="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+    <i class="fas fa-triangle-exclamation text-amber-500 text-2xl"></i>
+  </div>
+  <h1 class="text-2xl font-bold mb-2 text-white">Report Temporarily Unavailable</h1>
+  <p class="text-gray-400">We hit a snag loading this report. Please try again in a moment, or contact support@roofmanager.ca if it keeps happening.</p>
+</div>
+<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+</body></html>`, 503)
   }
 })
 
@@ -11971,8 +11981,8 @@ ${previewId ? `
         if (err2) { err2.textContent = 'Please fill in all required fields.'; err2.style.display = 'block'; }
         return;
       }
-      if (password.length < 6) {
-        setRegError('Password must be at least 6 characters.');
+      if (password.length < 8) {
+        setRegError('Password must be at least 8 characters.');
         var pwEl = document.getElementById('reg-password'); if (pwEl) pwEl.focus();
         return;
       }
@@ -12501,7 +12511,7 @@ function getCustomerLoginHTML(googleClientId = '') {
       const btn = document.getElementById('regSubmitBtn');
       err.classList.add('hidden');
       if (!name || !email || !password) { err.textContent = 'Name, email, and password required.'; err.classList.remove('hidden'); return; }
-      if (password.length < 6) { err.textContent = 'Password must be at least 6 characters.'; err.classList.remove('hidden'); return; }
+      if (password.length < 8) { err.textContent = 'Password must be at least 8 characters.'; err.classList.remove('hidden'); return; }
       if (password !== confirm) { err.textContent = 'Passwords do not match.'; err.classList.remove('hidden'); return; }
       if (!_regVerificationToken) { err.textContent = 'Please verify your email first.'; err.classList.remove('hidden'); return; }
       // P2: disable the button while the network call is in flight so users
