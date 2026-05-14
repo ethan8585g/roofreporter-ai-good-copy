@@ -2,6 +2,24 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Always log a task memory after every prompt
+
+**At the end of every user-prompt execution — without exception — save a `project` memory summarizing the task just completed before sending the final response.** This is how Claude maintains continuous awareness of what's happening in the codebase across sessions.
+
+Workflow (run this as the last step of every turn, even for tiny edits, questions, or one-line fixes):
+
+1. Write a new memory file at `/Users/ethan/.claude/projects/-Users-ethan-Documents-roofreporter-ai-good-copy/memory/project_task_<YYYY_MM_DD>_<short-slug>.md` with frontmatter `type: project`.
+2. Body should include, in this order:
+   - **What was asked:** one-line restatement of the user's request.
+   - **What changed:** files touched (with paths), behavior change, and whether it was deployed/committed.
+   - **Why:** the motivation or root cause if relevant.
+   - **State now:** what's live vs. uncommitted vs. broken, so the next session picks up cleanly.
+3. Add a one-line index entry to `MEMORY.md`: `- [Short title](project_task_<...>.md) — one-line hook`.
+4. If the task is a continuation of an existing project memory, **update that memory in place** instead of creating a duplicate — keep one running memory per feature/initiative.
+5. Skip only if the user explicitly says "don't save a memory for this" for the current turn.
+
+This rule overrides the general "don't save ephemeral task details" guidance in the memory system — for this project, every task log is wanted.
+
 ## Project Overview
 
 **Roof Manager** — A full-stack roofing measurement and CRM platform built on Cloudflare Pages + Workers. Combines Google Solar API data with a custom geodesic measurement engine, AI vision analysis (Gemini), and a voice receptionist (LiveKit). Deployed at https://www.roofmanager.ca.
