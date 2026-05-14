@@ -4364,6 +4364,7 @@ function renderPreviewView() {
       <!-- Sticky footer -->
       <div style="padding:14px 20px;background:#0f172a;border-top:1px solid #1e293b;display:flex;gap:12px;justify-content:flex-end;align-items:center">
         <span id="sa-preview-status" style="margin-right:auto;font-size:11px;color:#64748b"></span>
+        <button onclick="saPreviewDecline(${orderId})" style="padding:10px 18px;background:#7f1d1d;color:#fff;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer"><i class="fas fa-ban mr-1.5"></i>Decline</button>
         <button onclick="saPreviewCancelRetrace(${orderId})" style="padding:10px 18px;background:#dc2626;color:#fff;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer"><i class="fas fa-rotate-left mr-1.5"></i>Re-Trace</button>
         <button onclick="saPreviewApprove(${orderId})" style="padding:10px 22px;background:#16a34a;color:#fff;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer"><i class="fas fa-paper-plane mr-1.5"></i>Submit to Customer</button>
       </div>
@@ -4473,6 +4474,44 @@ window.saPreviewApprove = async function(orderId) {
       loadView('orders');
     } else {
       alert('Error: ' + (data && data.error || 'Failed to deliver'));
+      if (status) status.textContent = '';
+    }
+  } catch (e) {
+    alert('Network error: ' + e.message);
+    if (status) status.textContent = '';
+  }
+};
+
+// Decline button. Marks the order denied, emails the customer the apology,
+// and reimburses the report credit (or free trial) to their account in one
+// click. Reason prompt is optional — if provided, it's shown in the email
+// callout and stored on the audit row.
+window.saPreviewDecline = async function(orderId) {
+  if (!confirm('Decline this order?\n\nThis will:\n  • Email the customer an apology that we are unable to complete the report\n  • Reimburse their report credit to their account\n  • Mark the order as denied (cannot be undone)\n\nClick OK to proceed.')) return;
+  var reason = window.prompt('Optional — reason for denial (will appear in the customer email if filled). Leave blank to send the generic apology:', '') || '';
+  reason = reason.trim();
+  var token = localStorage.getItem('rc_token') || '';
+  var status = document.getElementById('sa-preview-status');
+  if (status) status.textContent = 'Declining...';
+  try {
+    var res = await fetch('/api/admin/superadmin/orders/' + orderId + '/deny-report', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason, refund_credit: true })
+    });
+    var data = await res.json();
+    if (data && data.success) {
+      var emailNote = data.email_status === 'sent' ? ' Customer notified.'
+        : data.email_status === 'failed' ? ' Customer email FAILED — follow up manually.'
+        : ' No customer email on file.';
+      var creditNote = data.credit_refunded
+        ? (' ' + (data.refund_kind === 'trial' ? 'Free trial' : 'Credit') + ' reimbursed.')
+        : ' (No credit refunded — customer had none used.)';
+      alert('Order declined.' + emailNote + creditNote);
+      SA.previewOrderId = null;
+      loadView('orders');
+    } else {
+      alert('Error: ' + (data && data.error || 'Failed to decline'));
       if (status) status.textContent = '';
     }
   } catch (e) {

@@ -1199,7 +1199,8 @@ adminRoutes.get('/superadmin/people', async (c) => {
       if (restrictPlatform) whereParts.push(restrictPlatform)
       const whereSql = whereParts.length ? (`WHERE ` + whereParts.join(' AND ')) : ``
       const q = `SELECT customers.id, customers.name, customers.email, customers.phone, customers.company_name,
-                        ${personTypeExpr}, customers.created_at, customers.is_active, customers.last_login
+                        ${personTypeExpr}, customers.created_at, customers.is_active, customers.last_login,
+                        (SELECT COUNT(*) FROM orders WHERE orders.customer_id = customers.id) as orders_count
                         ${ownerCols}${loginCountSql}
                  FROM customers ${tmJoin} ${whereSql}
                  ORDER BY customers.created_at DESC LIMIT ?`
@@ -1213,12 +1214,14 @@ adminRoutes.get('/superadmin/people', async (c) => {
       try {
         const q = search
           ? `SELECT cc.id, cc.name, cc.email, cc.phone, cc.company, 'crm_customer' as person_type, cc.created_at, cc.status,
-               c.company_name as owner_company
+               c.company_name as owner_company,
+               (SELECT COUNT(*) FROM orders WHERE orders.crm_customer_id = cc.id) as orders_count
              FROM crm_customers cc LEFT JOIN customers c ON c.id = cc.owner_id
              WHERE cc.name LIKE ? OR cc.email LIKE ? OR cc.phone LIKE ? OR cc.address LIKE ?
              ORDER BY cc.created_at DESC LIMIT ?`
           : `SELECT cc.id, cc.name, cc.email, cc.phone, cc.company, 'crm_customer' as person_type, cc.created_at, cc.status,
-               c.company_name as owner_company
+               c.company_name as owner_company,
+               (SELECT COUNT(*) FROM orders WHERE orders.crm_customer_id = cc.id) as orders_count
              FROM crm_customers cc LEFT JOIN customers c ON c.id = cc.owner_id
              ORDER BY cc.created_at DESC LIMIT ?`
         const res = search
@@ -6671,13 +6674,17 @@ adminRoutes.post('/superadmin/orders/:id/deny-report', async (c) => {
   try {
     const body = await c.req.json().catch(() => ({}))
     const reason = (body?.reason || '').toString().trim().slice(0, 1000)
-    if (!reason || reason.length < 3) {
+    const refundCredit = !!body?.refund_credit
+    // Reason is optional when refund_credit is set (Decline button on trace
+    // preview); the existing dashboard Deny button always passes one.
+    if (!refundCredit && (!reason || reason.length < 3)) {
       return c.json({ error: 'A denial reason is required.' }, 400)
     }
 
     const order = await c.env.DB.prepare(`
-      SELECT o.id, o.order_number, o.property_address, o.denied_at,
-        o.customer_id, c.email as customer_email, c.name as customer_name
+      SELECT o.id, o.order_number, o.property_address, o.denied_at, o.is_trial,
+        o.customer_id, c.email as customer_email, c.name as customer_name,
+        c.report_credits, c.credits_used, c.free_trial_total, c.free_trial_used
       FROM orders o
       LEFT JOIN customers c ON c.id = o.customer_id
       WHERE o.id = ?
@@ -6695,6 +6702,28 @@ adminRoutes.post('/superadmin/orders/:id/deny-report', async (c) => {
       WHERE id = ?
     `).bind(deniedAt, reason, admin.id, orderId).run()
 
+    // Credit refund — mirrors the _refundDeduct pattern in square.ts use-credit.
+    // Trial orders refund free_trial_used; paid orders refund credits_used.
+    let creditRefunded = false
+    let refundKind: 'trial' | 'credit' | null = null
+    if (refundCredit && order.customer_id) {
+      try {
+        if (order.is_trial) {
+          const r = await c.env.DB.prepare(
+            "UPDATE customers SET free_trial_used = MAX(0, COALESCE(free_trial_used, 0) - 1), updated_at = datetime('now') WHERE id = ?"
+          ).bind(order.customer_id).run()
+          if (r.meta.changes) { creditRefunded = true; refundKind = 'trial' }
+        } else {
+          const r = await c.env.DB.prepare(
+            "UPDATE customers SET credits_used = MAX(0, COALESCE(credits_used, 0) - 1), updated_at = datetime('now') WHERE id = ?"
+          ).bind(order.customer_id).run()
+          if (r.meta.changes) { creditRefunded = true; refundKind = 'credit' }
+        }
+      } catch (e: any) {
+        console.warn('[deny-report] credit refund failed:', e?.message || e)
+      }
+    }
+
     try {
       await c.env.DB.prepare(
         "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'admin_deny_report', ?)"
@@ -6705,6 +6734,8 @@ adminRoutes.post('/superadmin/orders/:id/deny-report', async (c) => {
         reason,
         order_number: order.order_number,
         property_address: order.property_address,
+        credit_refunded: creditRefunded,
+        refund_kind: refundKind,
       })).run()
     } catch { /* non-fatal audit */ }
 
@@ -6720,6 +6751,7 @@ adminRoutes.post('/superadmin/orders/:id/deny-report', async (c) => {
           customer_name: order.customer_name || '',
           customer_id: order.customer_id ?? null,
           denial_reason: reason,
+          credit_refunded: creditRefunded,
         })
         emailStatus = 'sent'
       } catch (e: any) {
@@ -6742,7 +6774,7 @@ adminRoutes.post('/superadmin/orders/:id/deny-report', async (c) => {
           customer_email: order.customer_email || null,
           customer_name: order.customer_name || null,
           property_address: order.property_address || '',
-          payload: { reason, admin_id: admin.id, admin_email: admin.email },
+          payload: { reason, admin_id: admin.id, admin_email: admin.email, credit_refunded: creditRefunded, refund_kind: refundKind },
         },
       })
     } catch (e: any) {
@@ -6756,6 +6788,8 @@ adminRoutes.post('/superadmin/orders/:id/deny-report', async (c) => {
       denied_at: deniedAt,
       email_status: emailStatus,
       email_detail: emailDetail,
+      credit_refunded: creditRefunded,
+      refund_kind: refundKind,
     })
   } catch (err: any) {
     return c.json({ error: 'Failed to deny report: ' + err.message }, 500)

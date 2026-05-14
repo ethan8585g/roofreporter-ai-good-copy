@@ -3765,6 +3765,54 @@ export function generateTraceBasedDiagramSVG(
     svg += `<text x="${lgX + 8}" y="${iy}" font-size="7.5" font-weight="700" fill="#666" ${FONT} letter-spacing="0.3">${r.label.toUpperCase()}</text>`
     svg += `<text x="${lgX + lgW - 8}" y="${iy}" text-anchor="end" font-size="8" font-weight="800" fill="#1a1a1a" ${FONT}>${r.value}</text>`
   })
+
+  // ── ANNOTATIONS PANEL — sits directly below the ROOF MEASUREMENTS panel.
+  // Only renders rows for marker types that actually appear in the diagram so
+  // the panel stays tight (most rural roofs have nothing but vents).
+  const ann = roofTrace.annotations || {}
+  const annRows: { glyph: 'circle' | 'square' | 'triangle'; letter: string | null; color: string; label: string; count: number }[] = []
+  const ventCount     = Array.isArray(ann.vents)      ? ann.vents.length      : 0
+  const skylightCount = Array.isArray(ann.skylights)  ? ann.skylights.length  : 0
+  const chimneyCount  = Array.isArray(ann.chimneys)   ? ann.chimneys.length   : 0
+  const pipeCount     = Array.isArray((ann as any).pipe_boots) ? (ann as any).pipe_boots.length : 0
+  const dsCount       = Array.isArray((ann as any).downspouts) ? (ann as any).downspouts.length : 0
+  if (ventCount > 0)     annRows.push({ glyph: 'circle',   letter: 'V', color: '#15803D', label: 'Vents',       count: ventCount })
+  if (skylightCount > 0) annRows.push({ glyph: 'square',   letter: 'S', color: '#EAB308', label: 'Skylights',   count: skylightCount })
+  if (chimneyCount > 0)  annRows.push({ glyph: 'square',   letter: 'C', color: '#B45309', label: 'Chimneys',    count: chimneyCount })
+  if (pipeCount > 0)     annRows.push({ glyph: 'circle',   letter: 'P', color: '#0891b2', label: 'Pipe boots',  count: pipeCount })
+  if (dsCount > 0)       annRows.push({ glyph: 'triangle', letter: null, color: '#475569', label: 'Downspouts', count: dsCount })
+
+  if (annRows.length > 0) {
+    const annTitleH = 14
+    const annRowH = 12
+    const annPadBottom = 8
+    const annH = annTitleH + annRows.length * annRowH + annPadBottom
+    const annX = lgX
+    const annY = lgY + lgH + 6
+    svg += `<rect x="${annX}" y="${annY}" width="${lgW}" height="${annH}" rx="3" fill="#fff" fill-opacity="0.97" stroke="#c8c8c8" stroke-width="0.6"/>`
+    svg += `<rect x="${annX}" y="${annY}" width="${lgW}" height="${annTitleH}" rx="3" fill="#002244"/>`
+    svg += `<rect x="${annX}" y="${annY + annTitleH - 4}" width="${lgW}" height="4" fill="#002244"/>`
+    svg += `<text x="${annX + lgW / 2}" y="${annY + 10}" text-anchor="middle" font-size="7" font-weight="800" fill="#fff" ${FONT} letter-spacing="1.2">ANNOTATIONS</text>`
+    annRows.forEach((row, i) => {
+      const iy = annY + annTitleH + 9 + i * annRowH
+      const gx = annX + 12
+      // Marker glyph — matches the in-diagram marker style
+      if (row.glyph === 'circle') {
+        svg += `<circle cx="${gx}" cy="${iy - 2.5}" r="4" fill="${row.color}" stroke="#fff" stroke-width="0.8"/>`
+        if (row.letter) svg += `<text x="${gx}" y="${(iy - 0.5).toFixed(1)}" text-anchor="middle" font-size="5.5" font-weight="800" fill="#fff" ${FONT}>${row.letter}</text>`
+      } else if (row.glyph === 'square') {
+        svg += `<rect x="${gx - 4}" y="${iy - 6.5}" width="8" height="8" fill="${row.color}" stroke="#fff" stroke-width="0.8"/>`
+        if (row.letter) svg += `<text x="${gx}" y="${(iy - 0.5).toFixed(1)}" text-anchor="middle" font-size="5.5" font-weight="800" fill="#fff" ${FONT}>${row.letter}</text>`
+      } else {
+        // Down-pointing triangle (downspouts)
+        const tri = `${gx - 4},${iy - 6} ${gx + 4},${iy - 6} ${gx},${iy + 2}`
+        svg += `<polygon points="${tri}" fill="${row.color}" stroke="#fff" stroke-width="0.8"/>`
+      }
+      // Label + count
+      svg += `<text x="${gx + 12}" y="${(iy + 1).toFixed(1)}" font-size="8" font-weight="600" fill="#333" ${FONT}>${row.label}</text>`
+      svg += `<text x="${annX + lgW - 8}" y="${(iy + 1).toFixed(1)}" text-anchor="end" font-size="8" font-weight="800" fill="${row.color}" ${FONT}>${row.count}</text>`
+    })
+  }
   } // end if (!HIDE && L.legend)
 
   // ── SCALE BAR (bottom-left, above footer) ──

@@ -1406,9 +1406,10 @@ export async function notifyReportDenied(
     customer_name?: string
     customer_id?: number | null
     denial_reason?: string
+    credit_refunded?: boolean
   }
 ): Promise<void> {
-  const { to, order_number, property_address, customer_name, customer_id, denial_reason } = args
+  const { to, order_number, property_address, customer_name, customer_id, denial_reason, credit_refunded } = args
   if (!to) return
   const firstName = (customer_name || '').split(' ')[0]
   const greeting = firstName ? `Hi ${htmlEsc(firstName)},` : 'Hi,'
@@ -1427,6 +1428,10 @@ export async function notifyReportDenied(
     ? `<p style="color:#222;font-size:15px;line-height:1.5;background:#fef2f2;border-left:3px solid #b91c1c;padding:10px 14px;margin:14px 0">${htmlEsc(denial_reason)}</p>`
     : ''
 
+  const creditBlock = credit_refunded
+    ? `<p style="color:#064e3b;font-size:15px;line-height:1.5;background:#ecfdf5;border-left:3px solid #059669;padding:10px 14px;margin:14px 0">Your credit for this report has been reimbursed to your account and is ready to use on a future order.</p>`
+    : ''
+
   const rawHtml = `
 <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
   <h2 style="color:#111;margin-bottom:4px">We're unable to complete this report</h2>
@@ -1436,6 +1441,7 @@ export async function notifyReportDenied(
     We're sorry — after reviewing the property at <strong>${htmlEsc(property_address)}</strong>, we're not able to complete this roof report.
   </p>
   ${reasonBlock}
+  ${creditBlock}
   <p style="color:#222;font-size:15px;line-height:1.5">
     If you'd like to discuss next steps or have any questions, just reply to this email or reach us at <a href="mailto:sales@roofmanager.ca" style="color:#0369a1">sales@roofmanager.ca</a>.
   </p>
