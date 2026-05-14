@@ -163,14 +163,27 @@ async function triggerReportGeneration(orderId: number, env: Bindings, ctx?: Exe
   try {
     const startMs = Date.now()
     console.log(`[Auto-Generate] Phase 1: Base report for order ${orderId}`)
-    const result = await generateReportForOrder(orderId, env, ctx)
+    // Render HTML but withhold customer-facing side effects (email/CRM/
+    // delivered_at/invoice). The order then sits in admin-review until the
+    // operator opens the SA preview and clicks Submit-to-Customer.
+    const result = await generateReportForOrder(orderId, env, ctx, { skipCustomerDelivery: true })
     const elapsed = Date.now() - startMs
     console.log(`[Auto-Generate] Order ${orderId}: ${result.success ? 'SUCCESS' : result.error || 'FAILED'} — provider: ${result.provider || 'n/a'}, ${elapsed}ms`)
 
-    // ⛔ Enhancement and AI Imagery are NO LONGER run here.
-    // They caused Cloudflare Workers waitUntil() to exceed 30s.
-    // The customer dashboard polls /enhancement-status and triggers
-    // /enhance (or /ai-imagery) in separate HTTP requests instead.
+    if (result.success === true) {
+      try {
+        await env.DB.prepare(`
+          UPDATE reports SET
+            admin_review_status = 'awaiting_review',
+            admin_review_started_at = COALESCE(admin_review_started_at, datetime('now')),
+            admin_review_completed_at = NULL,
+            updated_at = datetime('now')
+          WHERE order_id = ?
+        `).bind(orderId).run()
+      } catch (e: any) {
+        console.warn(`[Auto-Generate] Order ${orderId}: failed to set awaiting_review:`, e?.message)
+      }
+    }
 
     return result.success === true
   } catch (err: any) {

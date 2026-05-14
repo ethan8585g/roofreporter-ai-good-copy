@@ -166,11 +166,14 @@ export async function autoProcessOrder(
     await logAgentAction(env.DB, orderId, 'auto_trace_completed',
       `Confidence: ${autoTraceResult.confidence}/100, Area: ${autoTraceResult.measurements?.footprint_sqft || '?'} sqft`)
 
-    // ── Step 5: Generate the full professional report ──
-    // Use the existing generateReportForOrder which handles all the heavy lifting
+    // ── Step 5: Generate the full professional report as an admin-review draft ──
+    // Use the existing generateReportForOrder which handles all the heavy lifting.
+    // skipCustomerDelivery=true withholds email/CRM/delivered_at/invoice so the
+    // operator can preview the draft and click Submit-to-Customer in the SA
+    // preview view before the customer is notified.
     // Dynamic import to avoid circular dependency (routes → services → routes)
     const reportsModule = await import('../routes/reports')
-    const reportResult = await reportsModule.generateReportForOrder(Number(orderId), env)
+    const reportResult = await reportsModule.generateReportForOrder(Number(orderId), env, undefined, { skipCustomerDelivery: true })
 
     if (!reportResult.success) {
       await logAgentAction(env.DB, orderId, 'report_generation_failed', reportResult.error || 'Unknown error')
@@ -182,21 +185,36 @@ export async function autoProcessOrder(
       }
     }
 
-    // ── Step 6: Mark order completed ──
+    // ── Step 6: Flag the draft for admin review ──
+    // Order status stays at whatever it was (paid/in_progress) — we don't
+    // mark it 'completed' until /approve-and-deliver fires after the admin
+    // reviews the draft in the SA preview view.
     await env.DB.prepare(
-      "UPDATE orders SET status = 'completed', trace_source = 'ai_agent', notes = COALESCE(notes, '') || '\n[AI Agent] Report generated automatically at ' || datetime('now') WHERE id = ?"
+      "UPDATE orders SET trace_source = 'ai_agent', notes = COALESCE(notes, '') || '\n[AI Agent] Draft report generated automatically at ' || datetime('now') || ' — awaiting admin review' WHERE id = ?"
     ).bind(orderId).run()
+    await env.DB.prepare(`
+      UPDATE reports SET
+        admin_review_status = 'awaiting_review',
+        admin_review_started_at = COALESCE(admin_review_started_at, datetime('now')),
+        admin_review_completed_at = NULL,
+        updated_at = datetime('now')
+      WHERE order_id = ?
+    `).bind(orderId).run().catch((e: any) => console.warn(`[AI Agent] order ${orderId} awaiting_review flip failed:`, e?.message))
 
-    await logAgentAction(env.DB, orderId, 'report_generated',
-      `Report generated successfully. Version: ${reportResult.version || 'unknown'}`)
+    await logAgentAction(env.DB, orderId, 'report_draft_generated',
+      `Draft generated — awaiting admin review. Version: ${reportResult.version || 'unknown'}`)
 
-    // ── Step 7: Surface trace completion to super admin + email customer ──
+    // ── Step 7: Notify super admin only (no customer email until approved) ──
+    // recordAndNotify(skipCustomerEmail=true) keeps the trace_completed row
+    // in the SA notification feed but suppresses the customer ping. The
+    // customer-facing email fires from /approve-and-deliver instead.
     try {
       const cust = order?.customer_id
         ? await env.DB.prepare('SELECT name, email FROM customers WHERE id = ?').bind(order.customer_id).first<any>()
         : null
       await recordAndNotify(env, {
         kind: 'trace_completed',
+        skipCustomerEmail: true,
         order: {
           order_id: Number(orderId),
           order_number: order.order_number,
@@ -210,19 +228,16 @@ export async function autoProcessOrder(
           is_trial: !!order.is_trial,
           trace_source: 'ai_agent',
           needs_admin_trace: false,
-          payload: { source: 'ai_agent_auto_process' },
+          payload: { source: 'ai_agent_auto_process', admin_review: 'awaiting_review' },
         },
       })
     } catch (notifyErr: any) {
       console.warn(`[AI Agent] recordAndNotify failed for order ${orderId}: ${notifyErr?.message || notifyErr}`)
     }
 
-    // ── Step 7b: Send legacy notification email (fire-and-forget) ──
-    try {
-      await notifyReportReady(env, order, Number(orderId))
-    } catch (emailErr: any) {
-      console.warn(`[AI Agent] Email notification failed for order ${orderId}: ${emailErr.message}`)
-    }
+    // ── Step 7b: Customer "report ready" email DEFERRED to /approve-and-deliver ──
+    // Was: notifyReportReady fired here. That bypassed admin review and was
+    // why customers got reports the moment the auto-pipeline finished.
 
     // ── Step 8: Track in GA4 ──
     try {

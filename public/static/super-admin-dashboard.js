@@ -4914,6 +4914,33 @@ window.saSubmitTrace = async function(orderId, force) {
     alert('Please draw the eaves polygon first (at least 3 points). Click the first point again to close it.');
     return;
   }
+  // ── VERIFY PLANES GUARD ─────────────────────────────────────────────
+  // Operator drew interior ridge/hip/valley lines but never opened the
+  // Verify Planes panel. Auto-launch it so each plane's Solar pitch can
+  // be confirmed (or overridden) against Street View before the report
+  // generates. force=true (override path from validation dialog) skips
+  // this so the operator can ship without per-plane verification when
+  // they explicitly choose to.
+  if (!force) {
+    var interiorLineCount = (s._ridgeData || []).length + (s._hipData || []).length + (s._valleyData || []).length;
+    var alreadyVerified = Array.isArray(s.verifiedFaces) && s.verifiedFaces.length > 0;
+    if (interiorLineCount > 0 && !alreadyVerified && !s._verifyPlanesActive) {
+      var proceed = confirm(
+        'Confirm per-plane pitches?\n\n' +
+        'You drew ' + interiorLineCount + ' interior line' + (interiorLineCount === 1 ? '' : 's') +
+        ' (ridge/hip/valley). Verify Planes will split the roof into individual planes ' +
+        'and show what Google Solar measured for each so you can confirm against Street View.\n\n' +
+        'OK = open Verify Planes now (recommended)\n' +
+        'Cancel = generate report using the single section pitch'
+      );
+      if (proceed) {
+        if (typeof window.saStartVerifyPlanes === 'function') {
+          window.saStartVerifyPlanes(orderId);
+        }
+        return;
+      }
+    }
+  }
   // ── LOWER-EAVE INTENT GUARD ─────────────────────────────────────────
   // The operator pressed "+ Add Lower Eave" (or clicked a yellow STEP
   // marker) at some point — we persist that intent in s._lowerEaveIntentAt.
@@ -18202,13 +18229,16 @@ window.saTraceV2 = (function() {
   }
 
   // ── Inline pitch picker on eave-section close ──────────────
+  // Always show the popover after a section closes — even when Solar
+  // auto-fill set sec.pitch_rise. Operator confirms (or overrides) the
+  // value against Street View. Skip = accept current value as-is.
   function maybeShowPitchPicker() {
     var st = s(); if (!st) return;
     var sections = st.eaveSections || [];
     if (sections.length <= state.pitchPickerShownFor) return;
     var idx = sections.length - 1;
     var sec = sections[idx];
-    if (!sec || sec.pitch_rise) { state.pitchPickerShownFor = sections.length; return; }
+    if (!sec) { state.pitchPickerShownFor = sections.length; return; }
     state.pitchPickerShownFor = sections.length;
     showPitchPopover(idx, sec);
   }
@@ -18216,51 +18246,77 @@ window.saTraceV2 = (function() {
     var prev = document.getElementById('sa-trace-pitch-popover');
     if (prev) prev.remove();
     var mp = map(); if (!mp) return;
-    // Centroid in pixel space — anchor the popover near the closed polygon
-    var cx = 0, cy = 0;
-    (sec.points || []).forEach(function(p) { cx += p.lat; cy += p.lng; });
-    cx /= sec.points.length; cy /= sec.points.length;
+    // Section centroid → used to seed the Street View link.
+    var cLat = 0, cLng = 0;
+    (sec.points || []).forEach(function(p) { cLat += p.lat; cLng += p.lng; });
+    cLat /= sec.points.length; cLng /= sec.points.length;
+    // Pre-fill: prefer the Solar auto-fill that saCloseEaveSection wrote.
+    // Fall back to whatever manual value already exists. Empty = no source.
+    var prefilled = (sec.pitch_rise && isFinite(sec.pitch_rise) && sec.pitch_rise > 0) ? sec.pitch_rise : null;
+    var sourceLabel = '';
+    if (sec.pitch_source === 'solar_auto' && prefilled != null) {
+      sourceLabel = 'Google Solar suggests ' + prefilled + ':12 — confirm or override.';
+    } else if (prefilled != null) {
+      sourceLabel = 'Current value: ' + prefilled + ':12. Edit or confirm.';
+    } else {
+      sourceLabel = 'No Solar match for this section. Enter the pitch (or Skip for roof default).';
+    }
+    var streetViewUrl = 'https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=' + encodeURIComponent(cLat + ',' + cLng);
     var pop = document.createElement('div');
     pop.id = 'sa-trace-pitch-popover';
-    pop.style.cssText = 'position:absolute;z-index:9;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(15,23,42,0.98);border:1px solid #f59e0b;border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.5);min-width:230px;color:#f9fafb';
+    pop.style.cssText = 'position:absolute;z-index:9;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(15,23,42,0.98);border:1px solid #f59e0b;border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.5);min-width:260px;color:#f9fafb';
     pop.innerHTML =
       '<div style="font-size:11px;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px"><i class="fas fa-mountain mr-1"></i>Pitch for Section ' + (idx + 1) + '</div>' +
-      '<div style="font-size:11px;color:#cbd5e1;margin-bottom:8px;line-height:1.4">Enter rise:12 for this section. Common: 4 (low), 6 (typical), 8, 10, 12 (steep dormer). Skip to use roof default.</div>' +
+      '<div style="font-size:11px;color:#cbd5e1;margin-bottom:8px;line-height:1.4">' + sourceLabel + '</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' +
         [4, 6, 8, 10, 12].map(function(v) {
-          return '<button type="button" data-pp-val="' + v + '" style="flex:1;min-width:36px;padding:6px 4px;background:#1e293b;color:#cbd5e1;border:1px solid #334155;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">' + v + ':12</button>';
+          var isMatch = prefilled != null && Math.abs(prefilled - v) < 0.25;
+          var bg = isMatch ? '#f59e0b' : '#1e293b';
+          var color = isMatch ? '#111' : '#cbd5e1';
+          var border = isMatch ? '#fbbf24' : '#334155';
+          return '<button type="button" data-pp-val="' + v + '" style="flex:1;min-width:36px;padding:6px 4px;background:' + bg + ';color:' + color + ';border:1px solid ' + border + ';border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">' + v + ':12</button>';
         }).join('') +
       '</div>' +
       '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">' +
-        '<input id="sa-pitch-pop-input" type="number" min="0" max="24" step="0.5" placeholder="Custom" style="flex:1;padding:6px 8px;background:#0f172a;color:#fbbf24;border:1px solid #374151;border-radius:6px;font-size:13px;font-weight:700" />' +
+        '<input id="sa-pitch-pop-input" type="number" min="0" max="24" step="0.5" placeholder="Custom" value="' + (prefilled != null ? prefilled : '') + '" style="flex:1;padding:6px 8px;background:#0f172a;color:#fbbf24;border:1px solid #374151;border-radius:6px;font-size:13px;font-weight:700" />' +
         '<span style="color:#6b7280;font-size:11px">:12</span>' +
       '</div>' +
+      '<a id="sa-pitch-pop-streetview" href="' + streetViewUrl + '" target="_blank" rel="noopener" style="display:block;text-align:center;padding:5px;margin-bottom:8px;background:rgba(34,197,94,0.12);color:#86efac;border:1px solid rgba(34,197,94,0.35);border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;cursor:pointer">' +
+        '<i class="fas fa-street-view mr-1"></i>Open Street View to verify' +
+      '</a>' +
       '<div style="display:flex;gap:6px">' +
-        '<button id="sa-pitch-pop-skip" style="flex:1;padding:6px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">Skip</button>' +
-        '<button id="sa-pitch-pop-save" style="flex:2;padding:6px;background:#f59e0b;color:#111;border:none;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer">Save</button>' +
+        '<button id="sa-pitch-pop-skip" style="flex:1;padding:6px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">' + (prefilled != null ? 'Keep ' + prefilled + ':12' : 'Skip') + '</button>' +
+        '<button id="sa-pitch-pop-save" style="flex:2;padding:6px;background:#f59e0b;color:#111;border:none;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer">Confirm</button>' +
       '</div>';
     var mapEl = document.getElementById('sa-trace-map');
     if (mapEl) {
       mapEl.style.position = 'relative';
       mapEl.appendChild(pop);
     }
-    function save(v) {
+    function applyAndClose(v) {
       if (typeof v === 'number' && isFinite(v) && v > 0 && v <= 24) {
         sec.pitch_rise = v;
+        // Manual touch overrides the solar_auto source label so the Section
+        // Pitches panel shows "manual" instead of an "auto" pill.
+        if (sec.pitch_source === 'solar_auto' && Math.abs(v - prefilled) > 0.01) {
+          sec.pitch_source = 'manual';
+        }
+        if (typeof saApplyPitchHeatRamp === 'function') saApplyPitchHeatRamp(sec);
         if (typeof saRenderSectionPitches === 'function') saRenderSectionPitches();
       }
       pop.remove();
     }
     pop.querySelectorAll('[data-pp-val]').forEach(function(b) {
-      b.addEventListener('click', function() { save(parseFloat(b.getAttribute('data-pp-val'))); });
+      b.addEventListener('click', function() { applyAndClose(parseFloat(b.getAttribute('data-pp-val'))); });
     });
+    // Skip = keep the prefilled value (or null = roof default).
     pop.querySelector('#sa-pitch-pop-skip').addEventListener('click', function() { pop.remove(); });
     pop.querySelector('#sa-pitch-pop-save').addEventListener('click', function() {
       var v = parseFloat(pop.querySelector('#sa-pitch-pop-input').value);
-      save(v);
+      applyAndClose(v);
     });
     var input = pop.querySelector('#sa-pitch-pop-input');
-    if (input) setTimeout(function() { try { input.focus(); } catch (_) {} }, 50);
+    if (input) setTimeout(function() { try { input.focus(); input.select(); } catch (_) {} }, 50);
   }
 
   // ── Undo / Redo ────────────────────────────────────────────
