@@ -3075,7 +3075,7 @@ app.get('/llms.txt', (c) => {
 ## Comparison Hubs
 - [Roofing Software Comparison Hub](https://www.roofmanager.ca/roofing-software-comparison): Central comparison index — EagleView, Xactimate, Roofr, RoofSnap
 - [Xactimate Alternative](https://www.roofmanager.ca/xactimate-alternative): $10/report (from $5.95 in packs) vs $155+/month; F9-compatible output; accepted by adjusters
-- [EagleView Alternative](https://www.roofmanager.ca/cheaper-alternative-to-eagleview): $8 vs $60–$90/report; same accuracy for residential
+- [EagleView Alternative](https://www.roofmanager.ca/cheaper-alternative-to-eagleview): $10 vs $60–$90/report; same accuracy for residential
 - [Roofr Alternative](https://www.roofmanager.ca/roofr-alternative): Transparent pay-per-report vs tiered subscription
 
 ## Free Tools (embeddable, attribution-backlink)
@@ -3108,7 +3108,7 @@ app.get('/llms.txt', (c) => {
 - [Solar](https://www.roofmanager.ca/blog?category=solar): Solar suitability, panel placement, shade analysis
 - [Inspection](https://www.roofmanager.ca/blog?category=inspection): Condition grading, defect ID, AI photo analysis
 - [How to Measure a Roof Without Climbing It](https://www.roofmanager.ca/blog/how-to-measure-a-roof-without-climbing-2026): Satellite vs manual — accuracy, time, cost
-- [Satellite Roof Measurement vs EagleView](https://www.roofmanager.ca/blog/satellite-roof-measurement-vs-eagleview-2026): $8 vs $60-90/report; accuracy; turnaround; insurance workflow
+- [Satellite Roof Measurement vs EagleView](https://www.roofmanager.ca/blog/satellite-roof-measurement-vs-eagleview-2026): $10 vs $60-90/report; accuracy; turnaround; insurance workflow
 - [US Contractors Guide](https://www.roofmanager.ca/blog/roof-measurement-reports-guide-us-contractors-2026): Satellite reports for estimates, insurance claims, proposals
 
 ## Frequently Asked Questions
@@ -3126,7 +3126,7 @@ Within 2–5% of ground-truth for properties with high-quality satellite imagery
 Enter address → configure → order → receive PDF by email when it's ready.
 
 ### How does Roof Manager compare to EagleView?
-85–95% cheaper ($8 vs $60–90/report), comparable accuracy, much faster than the hours-to-days wait competitors charge for, includes full CRM + invoicing + AI secretary vs measurement-only.
+85–95% cheaper ($10 vs $60–90/report), comparable accuracy, much faster than the hours-to-days wait competitors charge for, includes full CRM + invoicing + AI secretary vs measurement-only.
 
 ### What's in a roof measurement report?
 3D sloped area, footprint area, pitch per segment, ridge/hip/valley/eave/rake in linear feet, material BOM (shingles, underlayment, starter, ridge cap, drip edge, ice & water shield), complexity rating, solar potential, branded PDF.
@@ -4122,7 +4122,7 @@ app.get('/roof-replacement-cost/:city', (c) => {
       { "@type": "Question", "name": `What roofing materials are best for ${city.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `${cost.notes} Most contractors in ${city.name} recommend 30–50 year architectural asphalt shingles as the best value. Metal roofing offers longer life (50+ years) at higher upfront cost.` } },
       { "@type": "Question", "name": `Do I need a permit for roof replacement in ${city.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `Yes — most municipalities in ${city.province} require a building permit for full roof replacement. Your licensed roofing contractor typically handles the permit application. Permits ensure the work meets ${buildingCode} requirements.` } },
       { "@type": "Question", "name": `How long does a roof replacement take in ${city.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `Most residential roof replacements in ${city.name} take 1–3 days for a standard asphalt shingle roof. Complex roofs with multiple pitches, dormers, or skylights may take 3–5 days. Weather delays are common during spring and fall seasons.` } },
-      { "@type": "Question", "name": `How do I get an accurate roof measurement in ${city.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `Satellite roof measurement tools like Roof Manager generate accurate measurements (3D area, pitch, edges, material BOM) for any ${city.name} address for $8 ${currency}. Results are within 2–5% of manual measurement, accepted by most insurers and contractors.` } }
+      { "@type": "Question", "name": `How do I get an accurate roof measurement in ${city.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `Satellite roof measurement tools like Roof Manager generate accurate measurements (3D area, pitch, edges, material BOM) for any ${city.name} address for $10 ${currency}. Results are within 2–5% of manual measurement, accepted by most insurers and contractors.` } }
     ]
   })
 
@@ -4275,7 +4275,7 @@ app.get('/roof-replacement-cost/:city', (c) => {
       <ol class="space-y-4">
         ${[
           ['Get 3+ quotes', `Get at least 3 licensed contractor quotes. Prices in ${city.name} can vary 20–40% between contractors for the same scope of work.`],
-          ['Use a satellite measurement report', `Know your exact roof size before calling contractors. Contractors who measure themselves often add a 10–15% buffer. A $8 ${currency} Roof Manager report gives you independent measurements to verify quotes.`],
+          ['Use a satellite measurement report', `Know your exact roof size before calling contractors. Contractors who measure themselves often add a 10–15% buffer. A $10 ${currency} Roof Manager report gives you independent measurements to verify quotes.`],
           ['Book in fall', `Roofing demand drops in late summer and fall in ${city.province}. Contractors are more willing to negotiate on labour when filling their schedule.`],
           ['Check insurance coverage', `If ${isCanada ? 'hail, ice, or wind damage is involved' : 'storm, hail, or wind damage is present'}, your homeowner's insurance may cover most or all of the replacement cost. Get a professional damage assessment and measurement report first.`],
           ['Choose right materials', `50-year architectural shingles cost only 10–20% more than 30-year options but last significantly longer. In ${city.name}'s climate, the upgrade typically pays back within the first full replacement cycle.`]
@@ -4299,7 +4299,7 @@ app.get('/roof-replacement-cost/:city', (c) => {
           [`Do I need a permit for roof replacement in ${city.name}?`, `Yes — most municipalities in ${city.province} require a building permit for full roof replacement. Your licensed contractor typically applies for the permit on your behalf. Permits ensure compliance with ${buildingCode}.`],
           [`What roofing material is best for ${city.name}?`, `${cost.notes.split('.')[0]}. Most contractors recommend 50-year architectural asphalt shingles as the best value for ${city.name}'s climate. Metal roofing (standing seam or corrugated) offers a 50+ year lifespan at roughly 2–3x the upfront cost of asphalt.`],
           [`How long does a roof replacement take in ${city.name}?`, `Most residential roof replacements in ${city.name} take 1–3 days. Complex roofs with multiple pitches, skylights, or chimneys take 3–5 days. Weather (rain, wind, frost) may extend the timeline.`],
-          [`How do I measure my roof before getting quotes in ${city.name}?`, `Use a satellite measurement tool like Roof Manager — enter your ${city.name} address and receive a full PDF report (3D area, pitch, edges, material BOM) for $8 ${currency}. Having your own measurement prevents inflated contractor estimates.`],
+          [`How do I measure my roof before getting quotes in ${city.name}?`, `Use a satellite measurement tool like Roof Manager — enter your ${city.name} address and receive a full PDF report (3D area, pitch, edges, material BOM) for $10 ${currency}. Having your own measurement prevents inflated contractor estimates.`],
           [`Does insurance cover roof replacement in ${city.name}?`, `${isCanada ? 'Most Canadian home insurance policies cover roof damage caused by hail, wind, ice, or fire.' : 'Most US homeowner policies cover storm, hail, and wind damage to roofs.'} Gradual wear and tear is excluded. Document damage with photos immediately after a storm and file your claim within your policy's reporting window (usually 30–60 days).`]
         ].map(([q, a]) => `
           <details class="cost-card mb-2">
@@ -4315,7 +4315,7 @@ app.get('/roof-replacement-cost/:city', (c) => {
       <p class="text-gray-400 mb-6 max-w-lg mx-auto text-sm">Know your exact roof size, pitch, and materials before calling contractors. Satellite measurement — no ladder required.</p>
       <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
         <a href="/free-roof-estimate" style="background:#00FF88;color:#0A0A0A;" class="font-bold py-3 px-8 rounded-lg hover:opacity-90 transition-opacity text-sm"><i class="fas fa-satellite-dish mr-2"></i>Measure My Roof Free</a>
-        <a href="/pricing" class="text-[#00FF88] text-sm font-semibold hover:opacity-80"><i class="fas fa-tag mr-1"></i>Contractor Reports from $8 ${currency}</a>
+        <a href="/pricing" class="text-[#00FF88] text-sm font-semibold hover:opacity-80"><i class="fas fa-tag mr-1"></i>Contractor Reports from $10 ${currency}</a>
       </div>
     </div>
 
@@ -5015,9 +5015,30 @@ app.get('/proposal/view/:token', async (c) => {
               if (!cust) useCustomerCopy = false
             } catch { useCustomerCopy = false }
           }
-          const reportPath = useCustomerCopy
-            ? `/api/reports/${invProposal.attached_report_id}/customer-html`
-            : `/api/reports/${invProposal.attached_report_id}/html`
+          // Resolve a public share-token so the proposal recipient (an
+          // unauthenticated homeowner) can open the embedded report without
+          // hitting the IDOR-gated /api/reports/<id>/html path.
+          let proposalReportShareToken: string | null = null
+          try {
+            const stRow = await c.env.DB.prepare(
+              `SELECT share_token, order_id FROM reports WHERE id = ? OR order_id = ? LIMIT 1`
+            ).bind(invProposal.attached_report_id, invProposal.attached_report_id).first<any>()
+            if (stRow?.share_token) {
+              proposalReportShareToken = stRow.share_token
+            } else if (stRow?.order_id) {
+              const token = (crypto as any).randomUUID().replace(/-/g, '').substring(0, 20)
+              const upd = await c.env.DB.prepare(
+                "UPDATE reports SET share_token = ?, share_sent_at = datetime('now'), updated_at = datetime('now') WHERE id = ? OR order_id = ?"
+              ).bind(token, invProposal.attached_report_id, invProposal.attached_report_id).run()
+              const changed = (upd as any)?.meta?.changes ?? (upd as any)?.changes ?? 0
+              if (changed >= 1) proposalReportShareToken = token
+            }
+          } catch {}
+          const reportPath = proposalReportShareToken
+            ? `/report/share/${proposalReportShareToken}${useCustomerCopy ? '?v=c' : ''}`
+            : (useCustomerCopy
+              ? `/api/reports/${invProposal.attached_report_id}/customer-html`
+              : `/api/reports/${invProposal.attached_report_id}/html`)
           const reportLabel = useCustomerCopy ? 'View Roof Report' : 'View Full Roof Report'
           reportLink = `<a href="${reportPath}" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100"><i class="fas fa-file-alt"></i>${reportLabel}</a>`
           try {
@@ -7561,22 +7582,12 @@ function getDispatchBoardHTML(mapsApiKey: string = '') {
 }
 
 function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
-  // Force preserveDrawingBuffer:true on every WebGL context the page creates
-  // BEFORE Maps 3D loads. Without this, gmp-map-3d's internal canvas clears
-  // its drawing buffer between paints, so canvas.toDataURL() returns an
-  // empty/black frame for the "Capture View" button. The patch is a no-op
-  // for any non-webgl context (2D, etc.) and runs once per pageload.
+  // The 3D reference panel is a Cesium iframe (/3d-verify), which has its own
+  // preserveDrawingBuffer setup. No <gmp-map-3d> on the parent page, so no
+  // monkey-patch is needed here — it only confused the new Maps SDK's WebGL
+  // context attribute checks and triggered "Oops! Something went wrong".
   const mapsScript = mapsApiKey
     ? `<script>
-      (function(){
-        var origGetContext = HTMLCanvasElement.prototype.getContext;
-        HTMLCanvasElement.prototype.getContext = function(type, attrs) {
-          if (typeof type === 'string' && (type === 'webgl' || type === 'webgl2' || type === 'experimental-webgl')) {
-            attrs = Object.assign({}, attrs || {}, { preserveDrawingBuffer: true });
-          }
-          return origGetContext.call(this, type, attrs);
-        };
-      })();
       function onSaGoogleMapsReady(){window._saGoogleMapsLoaded=true;}
     </script>
     <script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places,geometry&callback=onSaGoogleMapsReady" async defer></script>`
@@ -8884,7 +8895,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 {"@context":"https://schema.org","@type":"Organization","@id":"https://www.roofmanager.ca/#organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://www.roofmanager.ca/static/logo.png?v=20260504","description":"AI-powered satellite roof measurement reports for roofing professionals across the US and Canada","address":[{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},{"@type":"PostalAddress","addressCountry":"US","areaServed":"United States"}],"areaServed":["US","CA"],"contactPoint":{"@type":"ContactPoint","email":"sales@roofmanager.ca","contactType":"sales","areaServed":["US","CA"],"availableLanguage":"en"},"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager","https://www.crunchbase.com/organization/roof-manager","https://www.trustpilot.com/review/roofmanager.ca"]}
   </script>
   <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"ProfessionalService","@id":"https://www.roofmanager.ca/#localbusiness","name":"Roof Manager","url":"https://www.roofmanager.ca","image":"https://www.roofmanager.ca/static/logo.png?v=20260504","logo":"https://www.roofmanager.ca/static/logo.png?v=20260504","description":"AI-powered satellite roof measurement reports and roofing CRM for contractors across the US and Canada. $8 reports, full CRM, AI phone secretary, and team management.","email":"sales@roofmanager.ca","priceRange":"$$","address":{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},"areaServed":[{"@type":"Country","name":"Canada"},{"@type":"Country","name":"United States"}],"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.trustpilot.com/review/roofmanager.ca","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager"],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.9","ratingCount":"200","bestRating":"5"}}
+{"@context":"https://schema.org","@type":"ProfessionalService","@id":"https://www.roofmanager.ca/#localbusiness","name":"Roof Manager","url":"https://www.roofmanager.ca","image":"https://www.roofmanager.ca/static/logo.png?v=20260504","logo":"https://www.roofmanager.ca/static/logo.png?v=20260504","description":"AI-powered satellite roof measurement reports and roofing CRM for contractors across the US and Canada. $10 reports (from $5.95 in packs), full CRM, AI phone secretary, and team management.","email":"sales@roofmanager.ca","priceRange":"$$","address":{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},"areaServed":[{"@type":"Country","name":"Canada"},{"@type":"Country","name":"United States"}],"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.trustpilot.com/review/roofmanager.ca","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager"],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.9","ratingCount":"200","bestRating":"5"}}
   </script>
   <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebSite","name":"Roof Manager","url":"https://www.roofmanager.ca","potentialAction":{"@type":"SearchAction","target":"https://www.roofmanager.ca/blog?q={search_term_string}","query-input":"required name=search_term_string"}}
@@ -10699,7 +10710,7 @@ function getContactPageHTML() {
   <meta name="description" content="Talk to a roofing software specialist at Roof Manager. Real humans, usually reply within 2 business hours.">
   <link rel="canonical" href="https://www.roofmanager.ca/contact">
   <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"ProfessionalService","@id":"https://www.roofmanager.ca/#localbusiness","name":"Roof Manager","url":"https://www.roofmanager.ca","image":"https://www.roofmanager.ca/static/logo.png?v=20260504","logo":"https://www.roofmanager.ca/static/logo.png?v=20260504","description":"AI-powered satellite roof measurement reports and roofing CRM for contractors across the US and Canada. $8 reports, full CRM, AI phone secretary, and team management.","email":"sales@roofmanager.ca","priceRange":"$$","address":{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},"areaServed":[{"@type":"Country","name":"Canada"},{"@type":"Country","name":"United States"}],"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.trustpilot.com/review/roofmanager.ca","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager"],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.9","ratingCount":"200","bestRating":"5"},"contactPoint":{"@type":"ContactPoint","email":"sales@roofmanager.ca","contactType":"sales","areaServed":["US","CA"],"availableLanguage":"en"}}
+{"@context":"https://schema.org","@type":"ProfessionalService","@id":"https://www.roofmanager.ca/#localbusiness","name":"Roof Manager","url":"https://www.roofmanager.ca","image":"https://www.roofmanager.ca/static/logo.png?v=20260504","logo":"https://www.roofmanager.ca/static/logo.png?v=20260504","description":"AI-powered satellite roof measurement reports and roofing CRM for contractors across the US and Canada. $10 reports (from $5.95 in packs), full CRM, AI phone secretary, and team management.","email":"sales@roofmanager.ca","priceRange":"$$","address":{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},"areaServed":[{"@type":"Country","name":"Canada"},{"@type":"Country","name":"United States"}],"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.trustpilot.com/review/roofmanager.ca","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager"],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.9","ratingCount":"200","bestRating":"5"},"contactPoint":{"@type":"ContactPoint","email":"sales@roofmanager.ca","contactType":"sales","areaServed":["US","CA"],"availableLanguage":"en"}}
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16809,7 +16820,7 @@ function getRoofingSoftwareComparisonHubHTML(): string {
     { name: 'RoofLink', slug: 'rooflink', href: '/rooflink-vs-roofmanager', blurb: 'Bundled measurement + CRM + AI secretary vs per-user CRM subscription.' },
     { name: 'iRoofing', slug: 'iroofing', href: '/iroofing-vs-roofmanager', blurb: '$10/report flat vs $29–$59/report plus subscription. Same satellite accuracy.' },
     { name: 'CompanyCam', slug: 'companycam', href: '/companycam-vs-roofmanager', blurb: 'Complementary — CompanyCam for photos, Roof Manager for the measurement report and CRM.' },
-    { name: 'JobNimbus', slug: 'jobnimbus', href: '/jobnimbus-vs-roofmanager', blurb: 'Includes measurement at $8 instead of JobNimbus + EagleView add-on at $49–$95/report.' },
+    { name: 'JobNimbus', slug: 'jobnimbus', href: '/jobnimbus-vs-roofmanager', blurb: 'Includes measurement at $10 (or $5.95 in packs) instead of JobNimbus + EagleView add-on at $49–$95/report.' },
   ]
   const itemList = JSON.stringify({
     '@context': 'https://schema.org', '@type': 'ItemList',
@@ -18761,7 +18772,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
           { q: 'How does AI roof measurement software work?', a: 'AI roof measurement software pulls satellite imagery and LiDAR elevation data for the property address, runs computer vision to identify roof segments and edges, then applies geospatial math to calculate 3D sloped area, pitch, and edge lengths. The PDF is delivered to your inbox.' },
           { q: 'What is the Google Solar API and how does it help roofers?', a: 'The Google Solar API provides LiDAR-calibrated 3D building models and high-resolution satellite imagery for most North American properties. Roofing software uses it to generate accurate roof measurements (area, pitch, edges) without site visits, enabling contractors to quote faster.' },
           { q: 'Is satellite roof measurement accurate enough for insurance claims?', a: 'Yes — satellite measurements within 2–5% of manual measurements are generally accepted by insurance adjusters for initial claim documentation. Most insurers require a licensed contractor to verify on-site before final approval, but satellite reports dramatically speed up the claims process.' },
-          { q: 'How does Roof Manager compare to EagleView for roof measurements?', a: 'Roof Manager is 85–95% cheaper than EagleView ($8 vs $60–90 per report), delivers reports much faster than EagleView\'s hours-to-days wait, and includes a full CRM, invoicing, and AI phone secretary. Accuracy is comparable for most residential properties in North America.' }
+          { q: 'How does Roof Manager compare to EagleView for roof measurements?', a: 'Roof Manager is 85–95% cheaper than EagleView ($10 vs $60–90 per report), delivers reports much faster than EagleView\'s hours-to-days wait, and includes a full CRM, invoicing, and AI phone secretary. Accuracy is comparable for most residential properties in North America.' }
         )
       } else if (cat.includes('solar')) {
         pairs.push(
@@ -19135,7 +19146,7 @@ function getLanderFunnelHTML() {
   <section class="py-16 bg-gray-50">
     <div class="max-w-6xl mx-auto px-4">
       <div class="text-center mb-12 scroll-animate">
-        <h2 class="text-3xl font-black text-gray-900 mb-3 tracking-tight">What's in Every $8 Report</h2>
+        <h2 class="text-3xl font-black text-gray-900 mb-3 tracking-tight">What's in Every $10 Report</h2>
         <p class="text-gray-500">Your first 4 are FREE. Full professional report, no restrictions.</p>
       </div>
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -21675,9 +21686,11 @@ function getTermsPageHTML() {
         <h2 class="text-xl font-semibold text-gray-900 mb-3">4. Pricing and Payment</h2>
         <ul class="list-disc list-inside space-y-2 text-gray-600">
           <li><strong>Free reports:</strong> Each new account receives 4 complimentary reports at no charge.</li>
-          <li><strong>Individual report:</strong> $8.00 CAD per report.</li>
-          <li><strong>25-Pack:</strong> $175 CAD (25 reports, $7.00/report — save 13%).</li>
-          <li><strong>100-Pack:</strong> $595 CAD (100 reports, $5.95/report — save 26%).</li>
+          <li><strong>Individual report:</strong> $10.00 CAD per report.</li>
+          <li><strong>10-Pack:</strong> $80 CAD (10 reports, $8.00/report).</li>
+          <li><strong>25-Pack:</strong> $187.50 CAD (25 reports, $7.50/report — save 25%).</li>
+          <li><strong>50-Pack:</strong> $347.50 CAD (50 reports, $6.95/report — save 30%).</li>
+          <li><strong>100-Pack:</strong> $595 CAD (100 reports, $5.95/report — save 41%).</li>
           <li><strong>Team membership:</strong> $50 CAD/month per additional team member.</li>
           <li><strong>AI Secretary (optional add-on):</strong> $199 CAD/month after a 1-month free trial. Includes 24/7 AI phone answering, appointment booking, and lead capture.</li>
         </ul>
