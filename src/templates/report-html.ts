@@ -31,7 +31,7 @@ function htmlEsc(v: any): string {
 import {
   RoofMeasurementEngine, traceUiToEnginePayload, type TraceReport,
 } from '../services/roof-measurement-engine'
-import { renderRoofAnatomyAppendix } from './roof-anatomy-appendix'
+import { renderPitchAreaMap } from './pitch-area-map'
 
 // ============================================================
 // Per-structure breakdown helper — derives footprint/true-area/
@@ -1284,7 +1284,7 @@ ${buildMeasurementSummaryPage(report, reportNum, reportDate, fullAddress)}
 
 ${report.solar_panel_layout ? buildSolarProposalPage(report, reportNum, reportDate, fullAddress) : ''}
 
-${renderRoofAnatomyAppendix({ dominantPitchLabel: report.roof_pitch_ratio })}
+${renderPitchAreaMap(report)}
 
 </body>
 </html>`
