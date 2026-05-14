@@ -2429,11 +2429,16 @@ window.saTraceSetTool = function(tool) {
   });
   if (typeof saUpdateDormerCompleteBtn === 'function') saUpdateDormerCompleteBtn();
   if (typeof saUpdateCutoutCompleteBtn === 'function') saUpdateCutoutCompleteBtn();
-  // The 3D iframe is opt-in for click-to-trace: it stays in 'pan' mode unless
-  // the operator explicitly switches it via the iframe's own toolbar
-  // (Pan/Eave/Ridge/Hip/Valley buttons inside /3d-verify). Selecting a 2D tool
-  // no longer hijacks the 3D cursor — you can still pan/orbit the 3D map
-  // freely while tracing on 2D.
+  // Sync the selected tool to the 3D Reference iframe so a click on the 3D
+  // mesh commits to the same edge type as the 2D map. The iframe's
+  // normalizeMode() collapses non-edge tools (dormer/cutout/vent/skylight/
+  // chimney/downspout) to 'pan' so those stay 2D-only.
+  try {
+    var iframe3d = document.getElementById('sa-trace-map-3d-iframe');
+    if (iframe3d && iframe3d.contentWindow) {
+      iframe3d.contentWindow.postMessage({ type: 'rm-3d-set-mode', mode: tool }, '*');
+    }
+  } catch (_) {}
 };
 
 window.saTraceClear = function() {
