@@ -1547,7 +1547,7 @@ app.get('/3d-verify', async (c) => {
     setTimeout(() => { el.className = 'toast'; }, 3500);
   }
 
-  function flyToInitial(headingDeg){
+  function flyToInitial(headingDeg, rangeOverride){
     if (!viewer) return;
     // Once the rooftop height has been sampled from the photorealistic mesh,
     // frame the camera with a bounding-sphere offset anchored to the actual
@@ -1555,6 +1555,9 @@ app.get('/3d-verify', async (c) => {
     // and pitch are expressed in the local frame, so they work the same way
     // regardless of whether the city sits at 0m (Vancouver) or 1050m (Calgary).
     if (roofGroundHeight !== null && Cesium.BoundingSphere && Cesium.HeadingPitchRange) {
+      const range = (typeof rangeOverride === 'number' && isFinite(rangeOverride) && rangeOverride > 0)
+        ? rangeOverride
+        : INTERACTIVE_RANGE;
       viewer.camera.flyToBoundingSphere(
         new Cesium.BoundingSphere(
           Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, roofGroundHeight),
@@ -1564,7 +1567,7 @@ app.get('/3d-verify', async (c) => {
           offset: new Cesium.HeadingPitchRange(
             Cesium.Math.toRadians(headingDeg || 0),
             Cesium.Math.toRadians(currentPitchDeg),
-            INTERACTIVE_RANGE
+            range
           ),
           duration: 1.0
         }
@@ -1589,20 +1592,31 @@ app.get('/3d-verify', async (c) => {
     currentPitchDeg = INTERACTIVE_PITCH_DEG;
     flyToInitial(INITIAL_HEADING_DEG);
   }
+  // Distance from camera to the target rooftop centre, in metres. Used by
+  // rotate/tilt so the camera orbits at the operator's current zoom instead
+  // of snapping back to INTERACTIVE_RANGE on every click. Returns null
+  // pre-height-sample (resetView's default behaviour applies then).
+  function currentCameraRange(){
+    if (!viewer || !viewer.camera || roofGroundHeight === null) return null;
+    try {
+      const target = Cesium.Cartesian3.fromDegrees(TARGET.lng, TARGET.lat, roofGroundHeight);
+      return Cesium.Cartesian3.distance(viewer.camera.positionWC, target);
+    } catch (_) { return null; }
+  }
   function rotate(deltaDeg){
     if (!viewer) return;
     const heading = Cesium.Math.toDegrees(viewer.camera.heading);
-    flyToInitial((heading + deltaDeg + 360) % 360);
+    flyToInitial((heading + deltaDeg + 360) % 360, currentCameraRange());
   }
-  // Tilt ⬇ / Tilt ⬆ — customer-only buttons that adjust camera pitch
-  // toward street level (pitch → 0°) or overhead (pitch → -89°) while
-  // keeping the house centered. Clamped so the camera never goes fully
-  // vertical or below the horizon.
+  // Tilt ⬇ / Tilt ⬆ adjust camera pitch toward street level (pitch → 0°) or
+  // overhead (pitch → -89°) while keeping the house centered AND the current
+  // zoom distance. Clamped so the camera never goes fully vertical or below
+  // the horizon.
   function tilt(deltaDeg){
     if (!viewer) return;
     currentPitchDeg = Math.max(-89, Math.min(-5, currentPitchDeg + deltaDeg));
     const heading = Cesium.Math.toDegrees(viewer.camera.heading);
-    flyToInitial(heading);
+    flyToInitial(heading, currentCameraRange());
   }
 
   // ── Active capture: mode bar + click-to-pick on the photorealistic mesh ──
