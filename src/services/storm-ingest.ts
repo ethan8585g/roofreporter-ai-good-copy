@@ -104,7 +104,8 @@ export async function matchSnapshotAndNotify(
   db: D1Database,
   snapshot: DailySnapshot,
   serviceAccountJson?: string,
-  vapid?: VapidKeys | null
+  vapid?: VapidKeys | null,
+  env?: any
 ): Promise<MatchRunResult & { pushesSent: number; pushErrors: number }> {
   const areasRs = await db.prepare(
     'SELECT * FROM storm_service_areas WHERE is_active = 1'

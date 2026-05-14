@@ -14,7 +14,7 @@ import { logAdminAction } from '../lib/audit-log'
 import { clientIp } from '../lib/rate-limit'
 import { encryptSecret, decryptSecret } from '../lib/secret-vault'
 import { trackActivity } from '../services/activity-tracker'
-import { getReportViewEvents, getReportViewSummary } from '../repositories/reports'
+import { getReportViewEvents, getReportViewSummary, getReportHtml } from '../repositories/reports'
 import { runAutoTrace, type AutoTraceEdge } from '../services/auto-trace-agent'
 import { logCorrections as logAutoTraceCorrections } from '../services/auto-trace-learning'
 import { refreshTracedIndexCache } from '../services/trace-training-data'
@@ -6326,7 +6326,7 @@ adminRoutes.get('/superadmin/orders/:id/preview-html', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
   if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
   const orderId = c.req.param('id')
-  const row = await reportsRepo.getReportHtml(c.env.DB, orderId)
+  const row = await getReportHtml(c.env.DB, orderId)
   if (!row) return c.json({ error: 'Report not found' }, 404)
   const stored = row.professional_report_html || null
   const raw = row.api_response_raw || null

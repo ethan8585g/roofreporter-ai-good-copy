@@ -710,9 +710,6 @@ export function calculateRoofSpecs(
   }
 }
 
-/** Export the lookup table for API consumers / reports */
-export { ROOF_PITCH_MULTIPLIERS, HIP_VALLEY_MULTIPLIERS }
-
 // ═══════════════════════════════════════════════════════════════
 // COMMON RUN COMPUTATION
 //

@@ -19,10 +19,10 @@ const escapeHtml = (s: string): string =>
 
 export function generateCustomerReportHTML(report: RoofReport): string {
   const property = report.property || ({} as any)
-  const address = property.address || property.formatted_address || 'Property'
+  const address = property.address || (property as any).formatted_address || 'Property'
   const homeowner = property.homeowner_name || ''
-  const orderNumber = property.order_number || ''
-  const reportDate = property.report_date || new Date().toISOString().slice(0, 10)
+  const orderNumber = (property as any).order_number || ''
+  const reportDate = (property as any).report_date || new Date().toISOString().slice(0, 10)
 
   // Only use the Photorealistic 3D oblique capture when an admin has
   // approved it — Google's 3D Tiles return broken-mesh blobs in some

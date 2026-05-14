@@ -81,7 +81,8 @@ stormScoutRoutes.post('/ingest', async (c) => {
           c.env.DB,
           snapshot,
           (c.env as any).GCP_SERVICE_ACCOUNT_JSON || c.env.GCP_SERVICE_ACCOUNT_KEY,
-          getVapidFromEnv(c.env as any)
+          getVapidFromEnv(c.env as any),
+          c.env
         )
       } catch (e: any) {
         matchResult = { error: e?.message || String(e) }

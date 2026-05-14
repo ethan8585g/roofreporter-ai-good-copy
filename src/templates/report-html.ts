@@ -522,8 +522,8 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   const ridgeHipFt = es.total_ridge_ft + es.total_hip_ft
   const totalLinearFt = es.total_ridge_ft + es.total_hip_ft + es.total_valley_ft + es.total_eave_ft + es.total_rake_ft
   const stepFlashingFt = es.total_step_flashing_ft || 0
-  const wallFlashingFt = es.total_wall_flashing_ft || 0
-  const slopeChangeFt = es.total_transition_ft || 0
+  const wallFlashingFt = (es as any).total_wall_flashing_ft || 0
+  const slopeChangeFt = (es as any).total_transition_ft || 0
   // Eaves flashing (drip edge / gutter apron) — auto-derived from the
   // traced eave perimeter so contractors see it as a distinct flashing
   // line item alongside step/headwall/valley/chimney.
@@ -1598,7 +1598,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       <div style="display:flex;align-items:center;gap:4px"><span style="width:16px;height:3px;background:#2563EB;display:inline-block;border-radius:1px"></span>Valley</div>
       <div style="display:flex;align-items:center;gap:4px"><span style="width:16px;height:3px;background:#EA580C;display:inline-block;border-radius:1px"></span>Hip</div>
       <div style="display:flex;align-items:center;gap:4px"><span style="width:16px;height:3px;background:#7C3AED;display:inline-block;border-radius:1px"></span>Rake Edge</div>
-      ${es.total_parapet_ft ? `<div style="display:flex;align-items:center;gap:4px"><span style="width:16px;height:3px;background:#78716C;display:inline-block;border-radius:1px"></span>Parapet</div>` : ''}
+      ${(es as any).total_parapet_ft ? `<div style="display:flex;align-items:center;gap:4px"><span style="width:16px;height:3px;background:#78716C;display:inline-block;border-radius:1px"></span>Parapet</div>` : ''}
       ${(es.total_step_flashing_ft || 0) > 0 ? `<div style="display:flex;align-items:center;gap:4px"><span style="width:16px;height:3px;background:#F59E0B;display:inline-block;border-radius:1px"></span>Step Flashing</div>` : ''}
     </div>
   </div>
@@ -1682,10 +1682,10 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         <div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Ridge</span><span style="font-weight:700">${es.total_ridge_ft} LF</span></div>
         ${es.total_hip_ft > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Hip</span><span style="font-weight:700">${es.total_hip_ft} LF</span></div>` : ''}
         ${es.total_valley_ft > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Valley</span><span style="font-weight:700">${es.total_valley_ft} LF</span></div>` : ''}
-        ${(es.total_transition_ft || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Slope Change</span><span style="font-weight:700">${es.total_transition_ft} LF</span></div>` : ''}
-        ${eavesFlashingFt > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Eaves Flashing</span><span style="font-weight:700">${eavesFlashingFt} LF</span></div>` : ''}
+        ${((es as any).total_transition_ft || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Slope Change</span><span style="font-weight:700">${(es as any).total_transition_ft} LF</span></div>` : ''}
+        ${((es as any).total_eaves_flashing_ft || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Eaves Flashing</span><span style="font-weight:700">${(es as any).total_eaves_flashing_ft} LF</span></div>` : ''}
         ${(es.total_step_flashing_ft || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Step Flashing</span><span style="font-weight:700">${es.total_step_flashing_ft} LF</span></div>` : ''}
-        ${(es.total_wall_flashing_ft || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Headwall Flashing</span><span style="font-weight:700">${es.total_wall_flashing_ft} LF</span></div>` : ''}
+        ${((es as any).total_wall_flashing_ft || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Headwall Flashing</span><span style="font-weight:700">${(es as any).total_wall_flashing_ft} LF</span></div>` : ''}
         ${((es as any).chimney_flashing_count || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Chimney Flashing</span><span style="font-weight:700">${(es as any).chimney_flashing_count} ea</span></div>` : ''}
         ${((es as any).pipe_boot_count || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Pipe Boots</span><span style="font-weight:700">${(es as any).pipe_boot_count} ea</span></div>` : ''}
         ${((es as any).gutter_lf || 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px"><span style="color:#555">Gutters</span><span style="font-weight:700">${(es as any).gutter_lf} LF${((es as any).downspout_count || 0) > 0 ? ` · ${(es as any).downspout_count} ds` : ''}</span></div>` : ''}
@@ -1821,7 +1821,7 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
   // Resolve shingle name from the materials line_items if available
   const shingleLine = mat.line_items?.find((li: any) => li.category === 'shingles')
   const shingleName = shingleLine?.description?.replace(' Shingles', '') || 'Architectural (Laminate)'
-  const shingleNote = shingleLine?.notes
+  const shingleNote = (shingleLine as any)?.notes
   // Extract warranty/wind from notes like "IKO Cambridge... | 30-year warranty | Wind: 210 km/h | Class A"
   const warrantyMatch = shingleNote?.match(/(\d+[-\s]?year|Ltd\.\s*Lifetime|Lifetime|Limited Lifetime)/i)
   const windMatch = shingleNote?.match(/Wind:\s*(\d+)\s*km\/h/i)
