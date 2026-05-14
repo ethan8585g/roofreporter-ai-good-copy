@@ -1145,10 +1145,12 @@ app.get('/api/config/client', (c) => {
 
 // Landing / Marketing page
 app.get('/', async (c) => {
-  // Paid-traffic redirect: Google Ads / Bing Ads / Meta Ads visitors land on the
-  // focused /lander instead of the cluttered marketing homepage. Detected via
-  // ?gclid= (Google Ads) or ?utm_medium=cpc|paid_social. The query string is
-  // preserved so gclid/UTM persistence + attribution still work on /lander.
+  // Paid-traffic funnel: Google Ads / Bing Ads / Meta Ads visitors get the
+  // focused lander instead of the cluttered marketing homepage. Detected via
+  // ?gclid= (Google Ads) or ?utm_medium=cpc|paid_social. Rendered inline (NOT
+  // a 302) — Google Ads policy bots flag 302s on ad destination URLs as
+  // "Destination not working" and disapprove the asset. cookie middleware
+  // upstream still sees the gclid/utm params on the URL and persists them.
   const qs = c.req.url.split('?')[1] || ''
   const params = new URLSearchParams(qs)
   const isPaid =
@@ -1157,7 +1159,7 @@ app.get('/', async (c) => {
     params.get('utm_medium') === 'paid_social' ||
     params.get('utm_medium') === 'ppc'
   if (isPaid) {
-    return c.redirect(qs ? `/lander?${qs}` : '/lander', 302)
+    return c.html(getLanderFunnelHTML())
   }
 
   let latestPosts: any[] = []
