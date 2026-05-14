@@ -2159,8 +2159,8 @@ app.get('/3d-verify', async (c) => {
       const carto = viewer.camera.positionCartographic;
       const heightM = carto ? Math.max(carto.height, 5) : 250;
       const isPinch = ev.ctrlKey; // Mac trackpad pinch
-      const perUnit = isPinch ? 0.005 : 0.0002;
-      const frac = Math.min(Math.abs(ev.deltaY) * perUnit, 0.10);
+      const perUnit = isPinch ? 0.0025 : 0.0001;
+      const frac = Math.min(Math.abs(ev.deltaY) * perUnit, 0.05);
       const amount = heightM * frac;
       if (ev.deltaY > 0) viewer.camera.zoomOut(amount);
       else if (ev.deltaY < 0) viewer.camera.zoomIn(amount);
