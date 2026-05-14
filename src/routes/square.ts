@@ -546,6 +546,9 @@ squareRoutes.post('/checkout', async (c) => {
       order_id: squareOrderId,
     })
   } catch (err: any) {
+    console.error('[square:/checkout] credit-pack checkout failed:', {
+      message: err?.message, stack: err?.stack?.split('\n').slice(0, 3).join(' | '),
+    })
     return c.json({ error: 'Checkout failed', details: err.message }, 500)
   }
 })
@@ -704,6 +707,9 @@ squareRoutes.post('/checkout/report', async (c) => {
       payment_link_id: link?.id,
     })
   } catch (err: any) {
+    console.error('[square:/checkout/report] single-report checkout failed:', {
+      message: err?.message, stack: err?.stack?.split('\n').slice(0, 3).join(' | '),
+    })
     return c.json({ error: 'Checkout failed', details: err.message }, 500)
   }
 })
@@ -1180,6 +1186,9 @@ squareRoutes.post('/use-credit', async (c) => {
       paid_credits_remaining: newPaidRemaining
     })
   } catch (err: any) {
+    console.error('[square:/use-credit] use-credit failed:', {
+      message: err?.message, stack: err?.stack?.split('\n').slice(0, 3).join(' | '),
+    })
     return c.json({ error: 'Failed to use credit', details: err.message }, 500)
   }
 })
@@ -2220,6 +2229,83 @@ squareRoutes.get('/admin/stats', async (c) => {
   } catch (err: any) {
     return c.json({ error: 'Failed to fetch stats', details: err.message }, 500)
   }
+})
+
+// ============================================================
+// ADMIN: Square merchant + location diagnostics
+// Read-only — asks Square's API the questions we need to answer
+// when a customer reports "Sorry. Your order didn't go through."
+// on Square's hosted checkout. The error is rendered by Square,
+// not us, so the truth is on Square's side. Gated to super-admin.
+// ============================================================
+squareRoutes.get('/admin/diagnostics', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization') || c.req.header('authorization') || '')
+  if (!admin) return c.json({ error: 'Not authenticated' }, 401)
+
+  const accessToken = c.env.SQUARE_ACCESS_TOKEN
+  const locationId = c.env.SQUARE_LOCATION_ID
+  if (!accessToken || !locationId) return c.json({ error: 'Square not configured' }, 503)
+
+  const out: any = {
+    env: {
+      has_access_token: !!accessToken,
+      access_token_prefix: accessToken ? accessToken.slice(0, 4) : null,
+      access_token_kind: accessToken?.startsWith('EAAA') ? 'production' : accessToken?.startsWith('EAAAE') ? 'production-newer' : 'unknown',
+      has_application_id: !!c.env.SQUARE_APPLICATION_ID,
+      application_id_prefix: c.env.SQUARE_APPLICATION_ID ? c.env.SQUARE_APPLICATION_ID.slice(0, 8) : null,
+      has_webhook_signature_key: !!c.env.SQUARE_WEBHOOK_SIGNATURE_KEY,
+      location_id: locationId,
+      square_api_base: SQUARE_API_BASE,
+      square_api_version: SQUARE_API_VERSION,
+    },
+  }
+
+  try {
+    const r = await squareRequest(accessToken, 'GET', `/locations/${locationId}`)
+    out.location = r.location || null
+  } catch (e: any) { out.location_error = e?.message || String(e) }
+
+  try {
+    const r = await squareRequest(accessToken, 'GET', `/merchants/me`)
+    out.merchant = r.merchant || r
+  } catch (e: any) { out.merchant_error = e?.message || String(e) }
+
+  try {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const r = await squareRequest(accessToken, 'GET', `/payments?begin_time=${encodeURIComponent(since)}&sort_order=DESC&limit=20`)
+    out.recent_payments = (r.payments || []).map((p: any) => ({
+      id: p.id,
+      created_at: p.created_at,
+      status: p.status,
+      amount: p.amount_money,
+      source_type: p.source_type,
+      card_brand: p.card_details?.card?.card_brand,
+      card_last_4: p.card_details?.card?.last_4,
+      entry_method: p.card_details?.entry_method,
+      avs_status: p.card_details?.avs_status,
+      cvv_status: p.card_details?.cvv_status,
+      auth_result_code: p.card_details?.auth_result_code,
+      statement_description: p.statement_description_identifier,
+      buyer_email_address: p.buyer_email_address,
+      receipt_number: p.receipt_number,
+      risk_evaluation: p.risk_evaluation,
+      processing_fee: p.processing_fee,
+      location_id: p.location_id,
+      card_payment_timeline: p.card_details?.card_payment_timeline,
+      errors: p.errors,
+    }))
+  } catch (e: any) { out.recent_payments_error = e?.message || String(e) }
+
+  try {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const r = await c.env.DB.prepare(
+      `SELECT id, customer_id, square_order_id, square_payment_link_id, amount, currency, status, payment_type, created_at, updated_at, idempotency_key
+       FROM square_payments WHERE created_at >= ? ORDER BY created_at DESC LIMIT 20`
+    ).bind(since).all<any>()
+    out.our_recent_square_payments = r.results || []
+  } catch (e: any) { out.our_recent_square_payments_error = e?.message || String(e) }
+
+  return c.json(out)
 })
 
 // ============================================================
