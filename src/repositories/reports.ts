@@ -59,10 +59,10 @@ export async function getReportRawData(db: D1Database, orderId: number | string)
 
 export async function getReportHtml(db: D1Database, orderId: number | string) {
   return db.prepare(`
-    SELECT r.professional_report_html, r.api_response_raw
+    SELECT r.professional_report_html, r.api_response_raw, r.admin_review_status
     FROM reports r JOIN orders o ON r.order_id = o.id
     WHERE r.order_id = ? OR o.order_number = ?
-  `).bind(orderId, orderId).first<{ professional_report_html: string | null; api_response_raw: string | null }>()
+  `).bind(orderId, orderId).first<{ professional_report_html: string | null; api_response_raw: string | null; admin_review_status: string | null }>()
 }
 
 export async function getReportWithOrder(db: D1Database, orderId: number | string) {

@@ -1782,6 +1782,10 @@ customerAuthRoutes.get('/orders', async (c) => {
   // Resolve team membership — show owner's orders if team member
   const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
 
+  // Customer-visibility gate: when a report is mid-admin-review
+  // (admin_review_status='awaiting_review'), the LEFT JOIN drops the report
+  // row so the order surfaces as "still in progress" instead of leaking the
+  // unapproved draft. Approved + legacy NULL reports flow through normally.
   const orders = await c.env.DB.prepare(`
     SELECT o.*, r.status as report_status, r.roof_area_sqft, r.total_material_cost_cad,
            r.complexity_class, r.confidence_score,
@@ -1790,6 +1794,7 @@ customerAuthRoutes.get('/orders', async (c) => {
            r.needs_review, r.review_reason, r.review_detail
     FROM orders o
     LEFT JOIN reports r ON r.order_id = o.id
+      AND (r.admin_review_status IS NULL OR r.admin_review_status = 'approved')
     WHERE o.customer_id = ?
     ORDER BY o.created_at DESC
   `).bind(ownerId).all()
@@ -1872,7 +1877,9 @@ customerAuthRoutes.get('/orders/:orderId/progress', async (c) => {
 
   const orderId = c.req.param('orderId')
 
-  // Get order + report status
+  // Get order + report status. Same admin-review gate as the /orders
+  // listing — a draft mid-review must show as "in progress", not surface
+  // its report fields to the customer.
   const order = await c.env.DB.prepare(`
     SELECT o.*, r.status as report_status, r.generation_attempts,
            r.generation_started_at, r.generation_completed_at,
@@ -1881,6 +1888,7 @@ customerAuthRoutes.get('/orders/:orderId/progress', async (c) => {
            r.roof_area_sqft, r.total_material_cost_cad, r.complexity_class
     FROM orders o
     LEFT JOIN reports r ON r.order_id = o.id
+      AND (r.admin_review_status IS NULL OR r.admin_review_status = 'approved')
     WHERE o.id = ? AND o.customer_id = ?
   `).bind(orderId, ownerId).first<any>()
 
@@ -2311,6 +2319,7 @@ customerAuthRoutes.post('/reports/:orderId/request-retrace', async (c) => {
       FROM orders o
       LEFT JOIN customers c ON c.id = o.customer_id
       LEFT JOIN reports r ON r.order_id = o.id
+        AND (r.admin_review_status IS NULL OR r.admin_review_status = 'approved')
       WHERE o.id = ? AND o.customer_id = ?
     `).bind(orderId, ownerId).first<any>()
 

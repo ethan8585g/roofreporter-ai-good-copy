@@ -340,6 +340,14 @@ reportsRoutes.get('/:orderId/html', async (c) => {
   const orderId = c.req.param('orderId')
   const row = await repo.getReportHtml(c.env.DB, orderId)
   if (!row) return c.json({ error: 'Report not found' }, 404)
+  // Admin-review gate: a report mid-review must NOT be reachable via the
+  // public iframe URL. The super-admin preview UI hits the auth-gated
+  // /api/admin/superadmin/orders/:id/preview-html instead. Returning 404
+  // (not 403) so a customer guessing the URL gets the same response shape
+  // as a never-rendered report.
+  if (row.admin_review_status === 'awaiting_review') {
+    return c.json({ error: 'Report not found' }, 404)
+  }
   trackReportView(c, { orderId, viewType: 'portal' })
   const cacheWasFresh = isCachedHtmlFresh(row.professional_report_html)
   const html = resolveHtml(row.professional_report_html, row.api_response_raw)
@@ -3605,7 +3613,8 @@ export async function generateAIImageryForReport(
 // segments, or edge calculations. Only pitch (slope) and imagery.
 // ============================================================
 export async function generateReportForOrder(
-  orderId: number | string, env: Bindings, ctx?: ExecutionContext
+  orderId: number | string, env: Bindings, ctx?: ExecutionContext,
+  opts?: { skipCustomerDelivery?: boolean }
 ): Promise<{ success: boolean; report?: RoofReport; error?: string; version?: string; provider?: string; hasEnhanceKey?: boolean }> {
   // ── GLOBAL 25-SECOND TIMEOUT ──
   // Cloudflare Workers have a 30s CPU budget. We cap at 25s to ensure
@@ -3618,7 +3627,7 @@ export async function generateReportForOrder(
     setTimeout(() => resolve({ success: false, error: `Report generation timed out after ${GENERATION_TIMEOUT_MS / 1000}s. This order will be retried automatically.` }), GENERATION_TIMEOUT_MS)
   })
 
-  const generationPromise = _generateReportForOrderInner(orderId, env, generationStart, ctx)
+  const generationPromise = _generateReportForOrderInner(orderId, env, generationStart, ctx, opts)
 
   const result = await Promise.race([generationPromise, timeoutPromise])
 
@@ -3639,8 +3648,111 @@ export async function generateReportForOrder(
   return result
 }
 
+// ============================================================
+// finalizeReportDelivery — customer-visible side effects.
+//
+// Extracted from _generateReportForOrderInner so the admin-review flow
+// (POST /superadmin/orders/:id/generate-draft → admin reviews →
+// /approve-and-deliver) can run the same delivery sequence on demand
+// instead of triggering it the moment HTML renders.
+//
+// Fires:
+//   1. orders.status='completed' + orders.delivered_at = now (the customer-
+//      visibility gate — both this AND admin_review_status='approved' are
+//      required before the customer dashboard surfaces the report)
+//   2. dispatchReportToExternalCRMs (AccuLynx / JobNimbus / webhook)
+//   3. Auto-email the report link to send_report_to_email →
+//      requester_email → homeowner_email (Gmail OAuth2 → Resend fallback)
+//   4. createAutoInvoiceForOrder (idempotent)
+//
+// All fire-and-forget hooks use ctx.waitUntil so Cloudflare doesn't kill
+// the worker before they complete. The function itself awaits only the
+// markOrderStatus DB write.
+//
+// `extras` supplies pre-fetched context to avoid re-querying when called
+// inline from the engine; both callers (_generateReportForOrderInner and
+// approve-and-deliver) pass it.
+// ============================================================
+export async function finalizeReportDelivery(
+  orderId: number | string,
+  env: Bindings,
+  ctx?: ExecutionContext,
+  extras?: { order?: any; customerHtmlExists?: boolean }
+): Promise<void> {
+  // Lazy-load the order if the caller didn't pass one (e.g. approve-and-
+  // deliver hits this fresh).
+  let order = extras?.order
+  if (!order) {
+    try { order = await repo.getOrderById(env.DB, orderId) } catch {}
+  }
+  if (!order) {
+    console.warn(`[finalizeReportDelivery] Order ${orderId} not found — aborting delivery hooks`)
+    return
+  }
+
+  // Stamp orders.delivered_at + flip status='completed'. Customer
+  // dashboard queries gate on this column being non-null.
+  await repo.markOrderStatus(env.DB, orderId, 'completed')
+
+  // Push to any external CRM connections the customer has configured
+  // (AccuLynx, JobNimbus, custom webhook, etc.). Fire-and-forget via
+  // waitUntil — failures land in customer_api_deliveries and never
+  // affect the report flow.
+  if (order.customer_id) {
+    const { dispatchReportToExternalCRMs } = await import('../services/external-crm-dispatch')
+    const crmP = dispatchReportToExternalCRMs(env, orderId, order.customer_id, ctx)
+      .catch(e => console.warn(`[CRM-Dispatch] Order ${orderId} hook error:`, e?.message))
+    if (ctx?.waitUntil) ctx.waitUntil(crmP)
+  }
+
+  // Auto-send report to the order's email. Falls back through
+  // send_report_to_email → requester_email → homeowner_email so every
+  // completed report ships automatically. Fire-and-forget via waitUntil.
+  const autoRecipient = (
+    order.send_report_to_email
+    || order.requester_email
+    || order.homeowner_email
+    || ''
+  ).toString().trim()
+  if (autoRecipient) {
+    const customerHtmlExists = !!extras?.customerHtmlExists
+    const autoSendP = (async () => {
+      try {
+        const recipient = autoRecipient
+        const reportNum = `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`
+        const emailHtml = buildReportLinkEmail('https://www.roofmanager.ca', orderId, order.property_address || 'Property', reportNum, recipient, customerHtmlExists)
+        const ci = (env as any).GMAIL_CLIENT_ID
+        let cs = (env as any).GMAIL_CLIENT_SECRET
+        let rt = (env as any).GMAIL_REFRESH_TOKEN
+        if (!cs) { try { cs = (await repo.getSettingValue(env.DB, 'gmail_client_secret')) || '' } catch {} }
+        if (!rt) { try { rt = (await repo.getSettingValue(env.DB, 'gmail_refresh_token')) || '' } catch {} }
+        if (ci && cs && rt) {
+          await sendGmailOAuth2(ci, cs, rt, recipient, `Roof Report - ${order.property_address || 'Property'}`, emailHtml, (env as any).GMAIL_SENDER_EMAIL)
+          console.log(`[AutoSendEmail] Order ${orderId}: report auto-sent to ${recipient}`)
+        } else if ((env as any).RESEND_API_KEY) {
+          await sendViaResend((env as any).RESEND_API_KEY, recipient, `Roof Report - ${order.property_address || 'Property'}`, emailHtml, (env as any).GMAIL_SENDER_EMAIL || null)
+          console.log(`[AutoSendEmail] Order ${orderId}: report auto-sent via Resend to ${recipient}`)
+        } else {
+          console.warn(`[AutoSendEmail] Order ${orderId}: no email provider configured — auto-send skipped`)
+        }
+      } catch (e: any) {
+        console.warn(`[AutoSendEmail] Order ${orderId}: send failed — ${e?.message || e}`)
+      }
+    })()
+    if (ctx?.waitUntil) ctx.waitUntil(autoSendP)
+  }
+
+  // Auto-invoice hook — fire-and-forget, idempotent.
+  {
+    const autoInvP = createAutoInvoiceForOrder(env, Number(orderId))
+      .catch((e) => console.warn('[auto-invoice] hook error:', e?.message))
+    if (ctx?.waitUntil) ctx.waitUntil(autoInvP)
+  }
+}
+
 async function _generateReportForOrderInner(
-  orderId: number | string, env: Bindings, startTime: number, ctx?: ExecutionContext
+  orderId: number | string, env: Bindings, startTime: number, ctx?: ExecutionContext,
+  opts?: { skipCustomerDelivery?: boolean }
 ): Promise<{ success: boolean; report?: RoofReport; error?: string; version?: string; provider?: string; hasEnhanceKey?: boolean }> {
   try {
     const order = await repo.getOrderById(env.DB, orderId)
@@ -4245,12 +4357,18 @@ async function _generateReportForOrderInner(
     const hasEnhanceKey = !!env.GEMINI_ENHANCE_API_KEY
 
     await repo.saveCompletedReport(env.DB, orderId, finalReportData, html, baseVersion)
-    await repo.markOrderStatus(env.DB, orderId, 'completed')
+    // markOrderStatus stamps orders.delivered_at and is a customer-visible
+    // signal — defer it to finalizeReportDelivery so the admin-review flow
+    // can render HTML without flipping the order to delivered.
+    if (!opts?.skipCustomerDelivery) {
+      await repo.markOrderStatus(env.DB, orderId, 'completed')
+    }
     console.log(`[Generate] Order ${orderId}: ✅ Report saved as COMPLETED (v${baseVersion}, provider=${finalReportData.metadata?.provider || 'unknown'})`)
 
     // Inline error scan — sanity-checks the just-generated report against the
     // same gates the SVG renderer uses and flags duplicates / broken diagrams
     // into the Super Admin Loop Tracker. Fire-and-forget; never blocks delivery.
+    // Runs in draft mode too — admin benefits from the diagnostics.
     {
       const { scanReportInline } = await import('../services/loop-scanner')
       const inlineP = scanReportInline(env, orderId)
@@ -4258,23 +4376,14 @@ async function _generateReportForOrderInner(
       if (ctx?.waitUntil) ctx.waitUntil(inlineP)
     }
 
-    // Push to any external CRM connections the customer has configured
-    // (AccuLynx, JobNimbus, custom webhook, etc.). Fire-and-forget via
-    // waitUntil — failures land in customer_api_deliveries and never
-    // affect the report flow.
-    if (order?.customer_id) {
-      const { dispatchReportToExternalCRMs } = await import('../services/external-crm-dispatch')
-      const crmP = dispatchReportToExternalCRMs(env, orderId, order.customer_id, ctx)
-        .catch(e => console.warn(`[CRM-Dispatch] Order ${orderId} hook error:`, e?.message))
-      if (ctx?.waitUntil) ctx.waitUntil(crmP)
-    }
-
     // ── CUSTOMER REPORT (no measurements) ──
     // A second artifact built from the same data: aerial + 2D diagram, no
     // numbers anywhere. Stored on reports.customer_report_html so the
     // homeowner can see what was measured without being able to hand the
     // measurements themselves to a competing roofer. Failures here are
-    // non-fatal — the regular report has already been saved.
+    // non-fatal — the regular report has already been saved. Safe in draft
+    // mode: the customer can't reach the row until admin_review_status flips
+    // to 'approved' (gated in customer-auth queries).
     let customerHtml: string | null = null
     try {
       customerHtml = generateCustomerReportHTML(finalReportData)
@@ -4285,49 +4394,13 @@ async function _generateReportForOrderInner(
       customerHtml = null
     }
 
-    // Auto-send report to the order's email. Falls back through
-    // send_report_to_email → requester_email → homeowner_email so every
-    // completed report ships automatically. Fire-and-forget via waitUntil.
-    const autoRecipient = (
-      order.send_report_to_email
-      || order.requester_email
-      || order.homeowner_email
-      || ''
-    ).toString().trim()
-    if (autoRecipient) {
-      const autoSendP = (async () => {
-        try {
-          const recipient = autoRecipient
-          const reportNum = `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`
-          const emailHtml = buildReportLinkEmail('https://www.roofmanager.ca', orderId, order.property_address || 'Property', reportNum, recipient, !!customerHtml)
-          const ci = (env as any).GMAIL_CLIENT_ID
-          let cs = (env as any).GMAIL_CLIENT_SECRET
-          let rt = (env as any).GMAIL_REFRESH_TOKEN
-          if (!cs) { try { cs = (await repo.getSettingValue(env.DB, 'gmail_client_secret')) || '' } catch {} }
-          if (!rt) { try { rt = (await repo.getSettingValue(env.DB, 'gmail_refresh_token')) || '' } catch {} }
-          if (ci && cs && rt) {
-            await sendGmailOAuth2(ci, cs, rt, recipient, `Roof Report - ${order.property_address || 'Property'}`, emailHtml, (env as any).GMAIL_SENDER_EMAIL)
-            console.log(`[AutoSendEmail] Order ${orderId}: report auto-sent to ${recipient}`)
-          } else if ((env as any).RESEND_API_KEY) {
-            await sendViaResend((env as any).RESEND_API_KEY, recipient, `Roof Report - ${order.property_address || 'Property'}`, emailHtml, (env as any).GMAIL_SENDER_EMAIL || null)
-            console.log(`[AutoSendEmail] Order ${orderId}: report auto-sent via Resend to ${recipient}`)
-          } else {
-            console.warn(`[AutoSendEmail] Order ${orderId}: no email provider configured — auto-send skipped`)
-          }
-        } catch (e: any) {
-          console.warn(`[AutoSendEmail] Order ${orderId}: send failed — ${e?.message || e}`)
-        }
-      })()
-      if (ctx?.waitUntil) ctx.waitUntil(autoSendP)
-    }
-
-    // Auto-invoice hook — fire-and-forget, idempotent. Must be wrapped in
-    // waitUntil so Cloudflare doesn't kill the worker before Gmail send
-    // completes. ctx is threaded in from the HTTP handler's c.executionCtx.
-    {
-      const autoInvP = createAutoInvoiceForOrder(env, Number(orderId))
-        .catch((e) => console.warn('[auto-invoice] hook error:', e?.message))
-      if (ctx?.waitUntil) ctx.waitUntil(autoInvP)
+    // Customer-facing side effects (CRM dispatch, auto-email, auto-invoice).
+    // These fire only on the immediate-delivery path. The admin-review path
+    // skips them and lets POST /superadmin/orders/:id/approve-and-deliver
+    // call finalizeReportDelivery() once the operator clicks "Submit to
+    // Customer".
+    if (!opts?.skipCustomerDelivery) {
+      await finalizeReportDelivery(orderId, env, ctx, { order, customerHtmlExists: !!customerHtml })
     }
 
     // ── AUTO-EMBED for semantic search (non-blocking) ──

@@ -556,6 +556,21 @@ async function loadView(view) {
         else if (ordersRes) console.error('Failed to load orders:', ordersRes.status);
         if (needsTraceRes && needsTraceRes.ok) SA.data.needsTrace = await needsTraceRes.json();
         break;
+      case 'preview':
+        // Admin-review preview page. Fetches the order's report row +
+        // imagery payload so the curate panel can render. Bails (back to
+        // orders view) if no orderId was set — happens if someone hits
+        // #preview directly without going through saSubmitTrace first.
+        if (!SA.previewOrderId) { SA.view = 'orders'; SA.loading = true; await loadView('orders'); return; }
+        try {
+          const previewRes = await saFetch('/api/admin/superadmin/orders/' + SA.previewOrderId + '/preview-data');
+          if (previewRes && previewRes.ok) {
+            SA.data.preview = await previewRes.json();
+          } else {
+            SA.data.preview = { error: 'Failed to load preview data' };
+          }
+        } catch (e) { SA.data.preview = { error: e.message }; }
+        break;
       case 'signups':
         const signupsRes = await saFetch(`/api/admin/superadmin/signups?period=${SA.signupsPeriod}`);
         if (signupsRes && signupsRes.ok) SA.data.signups = await signupsRes.json();
@@ -905,6 +920,7 @@ function renderContent() {
     case 'sales': root.innerHTML = tabBar + renderSalesView(); break;
     case 'report-requests': root.innerHTML = tabBar + renderReportRequestsView(); break;
     case 'orders': root.innerHTML = tabBar + renderOrdersView(); break;
+    case 'preview': root.innerHTML = tabBar + renderPreviewView(); saPreviewWireUp(); break;
     case 'order-alerts': root.innerHTML = tabBar + renderOrderAlertsView(); loadOrderAlerts(); break;
     case 'signups': root.innerHTML = tabBar + renderSignupsView(); break;
     case 'marketing': root.innerHTML = tabBar + renderMarketingView(); break;
@@ -1887,7 +1903,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
             '<i class="fas fa-check-double mr-1.5"></i>Accept Auto-Trace As-Is' +
           '</button>' +
           '<button onclick="saSubmitTrace(' + orderId + ')" id="sa-submit-trace-btn" style="padding:9px 22px;background:#f59e0b;color:#111;font-size:13px;font-weight:700;border:none;border-radius:10px;cursor:pointer">' +
-            '<i class="fas fa-paper-plane mr-1.5"></i>Submit Report to Customer' +
+            '<i class="fas fa-paper-plane mr-1.5"></i>Generate Report Preview' +
           '</button>' +
         '</div>' +
       '</div>' +
@@ -5035,7 +5051,12 @@ window.saSubmitTrace = async function(orderId, force) {
         accepted_run_ids: window._saAutoTraceRuns,
       };
     }
-    var res = await fetch('/api/admin/superadmin/orders/' + orderId + '/submit-trace', {
+    // ADMIN-REVIEW FLOW: hit /generate-draft (renders HTML, no customer
+    // side-effects), then redirect the operator to the preview page where
+    // they curate imagery and click Submit-to-Customer or Re-Trace.
+    // Legacy /submit-trace endpoint is preserved server-side for any
+    // external callers; the SA UI no longer uses it.
+    var res = await fetch('/api/admin/superadmin/orders/' + orderId + '/generate-draft', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -5083,8 +5104,13 @@ window.saSubmitTrace = async function(orderId, force) {
       } catch (_) { /* never block the success path on aerial capture */ }
 
       document.getElementById('sa-trace-modal')?.remove();
-      alert('✅ Report generated and delivered to customer!');
-      loadView('orders');
+      // Hand off to the preview view so the operator can review the
+      // rendered report + curate imagery before clicking Submit-to-Customer.
+      // No alert — the preview UI itself is the confirmation that generation
+      // succeeded, and the side-effects (email, CRM, delivered_at) only fire
+      // on /approve-and-deliver from the preview footer button.
+      SA.previewOrderId = orderId;
+      loadView('preview');
     } else {
       var errs = Array.isArray(data.validation_errors) ? data.validation_errors : [];
       var warns = Array.isArray(data.validation_warnings) ? data.validation_warnings : [];
@@ -5093,11 +5119,11 @@ window.saSubmitTrace = async function(orderId, force) {
       } else {
         alert('Error: ' + (data.error || 'Failed to generate report'));
       }
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1.5"></i>Submit Report to Customer'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1.5"></i>Generate Report Preview'; }
     }
   } catch(e) {
     alert('Network error: ' + e.message);
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1.5"></i>Submit Report to Customer'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1.5"></i>Generate Report Preview'; }
   }
 };
 
@@ -5130,6 +5156,256 @@ function saShowValidationOverride(orderId, errors, warnings) {
     '</div>';
   document.body.insertAdjacentHTML('beforeend', html);
 }
+
+// ============================================================================
+// ADMIN-REVIEW PREVIEW PAGE
+//
+// Two-column layout: left iframe shows the rendered report (served by the
+// admin-only /preview-html endpoint, which bypasses the public route's
+// awaiting_review 404 gate); right side panel curates imagery (cover source,
+// aerial-block toggle, 3D-cover toggle, extras list with up/down/delete).
+// Sticky footer holds the green Submit-to-Customer + red Re-Trace buttons.
+//
+// All imagery edits POST /preview-update-imagery then force-reload the
+// iframe (the server nulls professional_report_html on edit so the next
+// fetch regenerates HTML from the updated api_response_raw.imagery).
+// ============================================================================
+function renderPreviewView() {
+  const p = SA.data.preview || {};
+  const orderId = SA.previewOrderId;
+  if (p.error || !p.success) {
+    return '<div style="padding:48px 24px;text-align:center;color:#fca5a5;font-size:14px">' +
+      '<div style="font-size:18px;font-weight:700;margin-bottom:8px">Preview unavailable</div>' +
+      '<div>' + (p.error || 'Unknown error') + '</div>' +
+      '<button onclick="loadView(\'orders\')" style="margin-top:16px;padding:8px 16px;background:#1f2937;color:#cbd5e1;border:1px solid #374151;border-radius:6px;cursor:pointer">Back to orders</button>' +
+      '</div>';
+  }
+  const order = p.order || {};
+  const report = p.report || {};
+  const img = p.imagery || {};
+  const extras = Array.isArray(img.extra_captures) ? img.extra_captures : [];
+  const coverSource = img.cover_image_source || 'oblique_3d';
+  const aerialApproved = img.aerial_views_approved === true;
+  const obliqueApproved = img.oblique_3d_approved === true;
+  const esc = function(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); };
+
+  // Cover source options — only show options for which the imagery URL exists
+  const coverOpts = [
+    { id: 'oblique_3d', label: '3D oblique', exists: !!img.oblique_3d_url },
+    { id: 'satellite', label: 'Satellite (nadir)', exists: !!(img.satellite_overhead_url || img.satellite_url) },
+    { id: 'aerial_NE', label: 'Aerial NE', exists: !!(img.aerial_NE_url || img.aerial_ne_url) },
+    { id: 'aerial_NW', label: 'Aerial NW', exists: !!(img.aerial_NW_url || img.aerial_nw_url) },
+    { id: 'aerial_SE', label: 'Aerial SE', exists: !!(img.aerial_SE_url || img.aerial_se_url) },
+    { id: 'aerial_SW', label: 'Aerial SW', exists: !!(img.aerial_SW_url || img.aerial_sw_url) },
+  ];
+
+  return `
+    <div style="display:flex;flex-direction:column;height:calc(100vh - 120px);gap:0;background:#0b1220;border-radius:12px;overflow:hidden;border:1px solid #1e293b">
+      <!-- Header strip -->
+      <div style="padding:12px 20px;background:#0f172a;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;font-weight:700">Admin Review &mdash; Awaiting Approval</div>
+          <div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-top:2px">${esc(order.order_number)} &middot; ${esc(order.property_address || '')}</div>
+        </div>
+        <button onclick="loadView('orders')" style="padding:6px 12px;background:transparent;color:#94a3b8;border:1px solid #334155;border-radius:6px;cursor:pointer;font-size:12px"><i class="fas fa-arrow-left mr-1"></i>Back to orders</button>
+      </div>
+
+      <!-- Two-column body -->
+      <div style="display:flex;flex:1;overflow:hidden">
+        <!-- Left: live HTML iframe -->
+        <div style="flex:1;background:#fff;border-right:1px solid #1e293b;overflow:hidden">
+          <iframe id="sa-preview-iframe" src="/api/admin/superadmin/orders/${orderId}/preview-html" style="width:100%;height:100%;border:0;display:block"></iframe>
+        </div>
+
+        <!-- Right: curate panel -->
+        <div style="width:340px;background:#0f172a;overflow-y:auto;padding:14px 16px">
+          <div style="font-size:11px;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Cover image</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:18px">
+            ${coverOpts.map(function(o) {
+              return '<label style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:' + (coverSource === o.id ? '#1e293b' : '#0b1220') + ';border:1px solid ' + (coverSource === o.id ? '#fbbf24' : '#1e293b') + ';border-radius:6px;cursor:' + (o.exists ? 'pointer' : 'not-allowed') + ';opacity:' + (o.exists ? '1' : '0.4') + '">' +
+                '<input type="radio" name="sa-preview-cover" value="' + o.id + '" ' + (coverSource === o.id ? 'checked' : '') + (o.exists ? '' : ' disabled') + ' data-sa-preview-cover />' +
+                '<span style="color:#e2e8f0;font-size:12px;font-weight:600">' + o.label + '</span>' +
+                (o.exists ? '' : '<span style="color:#64748b;font-size:10px;margin-left:auto">not available</span>') +
+              '</label>';
+            }).join('')}
+          </div>
+
+          <div style="font-size:11px;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Sections</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:18px">
+            <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#1e293b;border-radius:6px;cursor:pointer">
+              <input type="checkbox" ${obliqueApproved ? 'checked' : ''} data-sa-preview-toggle="oblique_3d_approved" />
+              <span style="color:#e2e8f0;font-size:12px;font-weight:600">Show 3D oblique cover</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#1e293b;border-radius:6px;cursor:pointer">
+              <input type="checkbox" ${aerialApproved ? 'checked' : ''} data-sa-preview-toggle="aerial_views_approved" />
+              <span style="color:#e2e8f0;font-size:12px;font-weight:600">Show 4-corner aerials block</span>
+            </label>
+          </div>
+
+          <div style="font-size:11px;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Extra captures (${extras.length}/4)</div>
+          <div style="font-size:10px;color:#64748b;margin-bottom:10px">Reorder with &uarr; &darr;. &times; removes a capture from the report.</div>
+          <div id="sa-preview-extras" style="display:flex;flex-direction:column;gap:6px;margin-bottom:24px">
+            ${extras.length === 0 ? '<div style="color:#64748b;font-size:11px;font-style:italic">No extra captures attached.</div>' : extras.map(function(cap, i) {
+              return '<div style="display:flex;align-items:center;gap:6px;padding:6px;background:#1e293b;border-radius:6px" data-sa-extra-idx="' + i + '">' +
+                '<img src="' + (cap && cap.data_url ? esc(cap.data_url) : '') + '" alt="Capture ' + (i+1) + '" style="width:48px;height:32px;object-fit:cover;border-radius:3px;background:#000" />' +
+                '<div style="flex:1;font-size:11px;color:#cbd5e1">Capture ' + (i+1) + '</div>' +
+                '<button data-sa-extra-up="' + i + '" ' + (i === 0 ? 'disabled' : '') + ' style="padding:3px 6px;background:#334155;color:#cbd5e1;border:none;border-radius:3px;cursor:pointer;font-size:11px;opacity:' + (i === 0 ? '0.4' : '1') + '">&uarr;</button>' +
+                '<button data-sa-extra-down="' + i + '" ' + (i === extras.length - 1 ? 'disabled' : '') + ' style="padding:3px 6px;background:#334155;color:#cbd5e1;border:none;border-radius:3px;cursor:pointer;font-size:11px;opacity:' + (i === extras.length - 1 ? '0.4' : '1') + '">&darr;</button>' +
+                '<button data-sa-extra-remove="' + i + '" style="padding:3px 6px;background:#7f1d1d;color:#fca5a5;border:none;border-radius:3px;cursor:pointer;font-size:11px">&times;</button>' +
+              '</div>';
+            }).join('')}
+          </div>
+
+          <div style="border-top:1px solid #1e293b;padding-top:12px;font-size:11px;color:#94a3b8;line-height:1.5">
+            <div><strong style="color:#cbd5e1">Total roof area:</strong> ${report.roof_area_sqft || 0} sqft</div>
+            <div><strong style="color:#cbd5e1">Material cost (est):</strong> $${report.total_material_cost_cad || 0} CAD</div>
+            <div style="margin-top:6px;font-size:10px;color:#64748b">Customer can see this report only after you click <em>Submit to Customer</em> below.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sticky footer -->
+      <div style="padding:14px 20px;background:#0f172a;border-top:1px solid #1e293b;display:flex;gap:12px;justify-content:flex-end;align-items:center">
+        <span id="sa-preview-status" style="margin-right:auto;font-size:11px;color:#64748b"></span>
+        <button onclick="saPreviewCancelRetrace(${orderId})" style="padding:10px 18px;background:#dc2626;color:#fff;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer"><i class="fas fa-rotate-left mr-1.5"></i>Re-Trace</button>
+        <button onclick="saPreviewApprove(${orderId})" style="padding:10px 22px;background:#16a34a;color:#fff;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer"><i class="fas fa-paper-plane mr-1.5"></i>Submit to Customer</button>
+      </div>
+    </div>
+  `;
+}
+
+// Wire up the preview side-panel controls. Called from the renderContent
+// switch right after innerHTML is set so the freshly-mounted DOM nodes
+// have their listeners attached. Each interaction POSTs to
+// /preview-update-imagery then force-reloads the iframe so the operator
+// sees the change reflected in the rendered report.
+function saPreviewWireUp() {
+  var orderId = SA.previewOrderId;
+  if (!orderId) return;
+  var iframe = document.getElementById('sa-preview-iframe');
+
+  function postUpdate(body, statusMsg) {
+    var status = document.getElementById('sa-preview-status');
+    if (status) status.textContent = statusMsg || 'Saving...';
+    var token = localStorage.getItem('rc_token') || '';
+    return fetch('/api/admin/superadmin/orders/' + orderId + '/preview-update-imagery', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data && data.success) {
+        if (status) { status.textContent = 'Saved'; setTimeout(function() { if (status) status.textContent = ''; }, 1500); }
+        // Force iframe reload so the regenerated HTML (from the now-NULL
+        // cache) reflects the imagery change.
+        if (iframe) iframe.src = iframe.src;
+        // Re-fetch preview-data so the side panel reflects the new state on next render.
+        loadView('preview');
+      } else {
+        if (status) status.textContent = 'Error: ' + (data && data.error || 'unknown');
+      }
+    }).catch(function(e) {
+      if (status) status.textContent = 'Network error: ' + e.message;
+    });
+  }
+
+  // Cover-source radio
+  document.querySelectorAll('[data-sa-preview-cover]').forEach(function(el) {
+    el.addEventListener('change', function(e) {
+      if (!e.target.checked) return;
+      postUpdate({ cover_image_source: e.target.value }, 'Updating cover...');
+    });
+  });
+
+  // Section toggles
+  document.querySelectorAll('[data-sa-preview-toggle]').forEach(function(el) {
+    el.addEventListener('change', function(e) {
+      var key = e.target.getAttribute('data-sa-preview-toggle');
+      var body = {}; body[key] = !!e.target.checked;
+      postUpdate(body, 'Toggling section...');
+    });
+  });
+
+  // Extras: up/down/remove
+  document.querySelectorAll('[data-sa-extra-up]').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      var idx = parseInt(e.target.getAttribute('data-sa-extra-up'), 10);
+      if (idx <= 0) return;
+      var extras = ((SA.data.preview || {}).imagery || {}).extra_captures || [];
+      var order = extras.map(function(_, i) { return i; });
+      var tmp = order[idx - 1]; order[idx - 1] = order[idx]; order[idx] = tmp;
+      postUpdate({ extra_captures_order: order }, 'Reordering...');
+    });
+  });
+  document.querySelectorAll('[data-sa-extra-down]').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      var idx = parseInt(e.target.getAttribute('data-sa-extra-down'), 10);
+      var extras = ((SA.data.preview || {}).imagery || {}).extra_captures || [];
+      if (idx >= extras.length - 1) return;
+      var order = extras.map(function(_, i) { return i; });
+      var tmp = order[idx + 1]; order[idx + 1] = order[idx]; order[idx] = tmp;
+      postUpdate({ extra_captures_order: order }, 'Reordering...');
+    });
+  });
+  document.querySelectorAll('[data-sa-extra-remove]').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      var idx = parseInt(e.target.getAttribute('data-sa-extra-remove'), 10);
+      if (!confirm('Remove this capture from the report?')) return;
+      postUpdate({ extra_captures_remove: [idx] }, 'Removing...');
+    });
+  });
+}
+
+// Submit-to-Customer button on the preview page footer. Hits the
+// /approve-and-deliver endpoint which fires email + CRM + auto-invoice
+// + recordAndNotify. On success, returns the operator to the orders list.
+window.saPreviewApprove = async function(orderId) {
+  if (!confirm('Submit this report to the customer?\n\nThis will:\n  • Email the report link to the customer\n  • Push to any external CRM connections\n  • Stamp the order as delivered\n\nClick OK to proceed.')) return;
+  var token = localStorage.getItem('rc_token') || '';
+  var status = document.getElementById('sa-preview-status');
+  if (status) status.textContent = 'Submitting...';
+  try {
+    var res = await fetch('/api/admin/superadmin/orders/' + orderId + '/approve-and-deliver', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    var data = await res.json();
+    if (data && data.success) {
+      alert('✅ Report delivered to customer.');
+      SA.previewOrderId = null;
+      loadView('orders');
+    } else {
+      alert('Error: ' + (data && data.error || 'Failed to deliver'));
+      if (status) status.textContent = '';
+    }
+  } catch (e) {
+    alert('Network error: ' + e.message);
+    if (status) status.textContent = '';
+  }
+};
+
+// Re-Trace button. Same wipe semantics as cancel-and-retrace; the order
+// reappears in the Pending Manual Traces queue.
+window.saPreviewCancelRetrace = async function(orderId) {
+  if (!confirm('Discard this draft and re-queue the order for re-tracing?\n\nThe report HTML will be wiped. Customer is not notified.\n\nClick OK to proceed.')) return;
+  var token = localStorage.getItem('rc_token') || '';
+  try {
+    var res = await fetch('/api/admin/superadmin/orders/' + orderId + '/preview-cancel-retrace', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    var data = await res.json();
+    if (data && data.success) {
+      SA.previewOrderId = null;
+      loadView('orders');
+    } else {
+      alert('Error: ' + (data && data.error || 'Failed to cancel'));
+    }
+  } catch (e) {
+    alert('Network error: ' + e.message);
+  }
+};
 
 function renderOrdersView() {
   const d = SA.data.orders || {};

@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { validateAdminSession, requireSuperadmin } from './auth'
-import { generateReportForOrder } from './reports'
+import { generateReportForOrder, finalizeReportDelivery } from './reports'
 import { createAutoInvoiceForOrder } from '../services/auto-invoice'
 import { validateTraceUi } from '../utils/trace-validation'
 import { RoofMeasurementEngine, traceUiToEnginePayload } from '../services/roof-measurement-engine'
@@ -6026,6 +6026,10 @@ adminRoutes.post('/superadmin/orders/:id/cancel-and-retrace', async (c) => {
         review_detail = NULL,
         enhancement_status = NULL,
         enhancement_error = NULL,
+        admin_review_status = NULL,
+        admin_review_started_at = NULL,
+        admin_review_completed_at = NULL,
+        admin_review_admin_id = NULL,
         updated_at = datetime('now')
       WHERE order_id = ?
     `).bind(orderId).run()
@@ -6076,6 +6080,485 @@ adminRoutes.post('/superadmin/orders/:id/cancel-and-retrace', async (c) => {
     })
   } catch (err: any) {
     return c.json({ error: 'Failed to cancel and re-trace: ' + err.message }, 500)
+  }
+})
+
+// ============================================================================
+// ADMIN-REVIEW TRACE FLOW (D245+)
+//
+// Inserts a "draft → admin reviews → approved" step between manual trace
+// submission and customer delivery. Today's submit-trace path is preserved
+// verbatim for backward compatibility; new traces from the super-admin UI
+// flow through these endpoints instead:
+//
+//   POST /superadmin/orders/:id/generate-draft        — render HTML, no
+//                                                       customer side-effects
+//   GET  /superadmin/orders/:id/preview-html          — admin-only iframe src
+//   POST /superadmin/orders/:id/preview-update-imagery — curate cover/extras
+//   POST /superadmin/orders/:id/approve-and-deliver   — fire all delivery hooks
+//   POST /superadmin/orders/:id/preview-cancel-retrace — wipe draft + re-queue
+//
+// All five gates on validateAdminSession + requireSuperadmin. The customer-
+// visibility leak is closed in customer-auth.ts (LEFT JOIN drops reports
+// where admin_review_status='awaiting_review') and the public iframe URL
+// (GET /api/reports/:id/html) returns 404 in the same state.
+// ============================================================================
+
+// POST /superadmin/orders/:id/generate-draft
+// Mirrors submit-trace's persistence + validation but skips every customer-
+// facing side effect (no email, no CRM dispatch, no auto-invoice, no
+// recordAndNotify, no markOrderStatus(completed)). Sets admin_review_status
+// so customer-visibility queries hide the result until /approve-and-deliver.
+adminRoutes.post('/superadmin/orders/:id/generate-draft', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const orderId = parseInt(c.req.param('id'))
+  if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
+  try {
+    const { roof_trace_json, force, extra_captures, trace_telemetry } = await c.req.json()
+    if (!roof_trace_json) return c.json({ error: 'roof_trace_json is required' }, 400)
+
+    let traceObj: any
+    try {
+      traceObj = typeof roof_trace_json === 'string' ? JSON.parse(roof_trace_json) : roof_trace_json
+    } catch (e: any) {
+      return c.json({ error: 'roof_trace_json is not valid JSON', details: e.message }, 400)
+    }
+
+    // Same extra_captures validation as submit-trace (≤4, ≤~3MB each).
+    const cleanedCaptures: Array<{ data_url: string; captured_at: string }> = []
+    if (extra_captures != null) {
+      if (!Array.isArray(extra_captures)) return c.json({ error: 'extra_captures must be an array' }, 400)
+      if (extra_captures.length > 4) return c.json({ error: 'extra_captures: max 4 captures' }, 400)
+      const nowIso = new Date().toISOString()
+      for (const cap of extra_captures) {
+        const dataUrl = String(cap?.data_url || '')
+        if (!dataUrl.startsWith('data:image/')) return c.json({ error: 'each extra_captures entry needs a data:image/* data_url' }, 400)
+        if (dataUrl.length > 4_400_000) return c.json({ error: 'extra_captures: each image max ~3MB' }, 413)
+        const capturedAt = typeof cap?.captured_at === 'string' && cap.captured_at ? cap.captured_at : nowIso
+        cleanedCaptures.push({ data_url: dataUrl, captured_at: capturedAt })
+      }
+    }
+
+    const validation = validateTraceUi(traceObj)
+    if (!validation.valid && !force) {
+      return c.json({
+        error: 'Trace validation failed. Re-submit with force=true to override.',
+        validation_errors: validation.errors,
+        validation_warnings: validation.warnings,
+      }, 400)
+    }
+
+    // Audit row — same shape as submit-trace's so existing diagnostics still
+    // work. Distinguished by action='admin_generate_draft' so we can tell
+    // draft-vs-direct-submit apart in the activity log.
+    try {
+      const prev = await c.env.DB.prepare('SELECT roof_trace_json FROM orders WHERE id = ?').bind(orderId).first<any>()
+      const prevJson = prev?.roof_trace_json || null
+      const sectionsRaw = Array.isArray(traceObj?.eaves_sections) ? traceObj.eaves_sections : []
+      const kindsRaw = Array.isArray(traceObj?.eaves_section_kinds) ? traceObj.eaves_section_kinds : []
+      const sectionsSummary = sectionsRaw.map((s: any, i: number) => ({
+        i, pts: Array.isArray(s) ? s.length : 0, kind: kindsRaw[i] || null,
+      }))
+      await c.env.DB.prepare(
+        "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'admin_generate_draft', ?)"
+      ).bind(JSON.stringify({
+        order_id: orderId,
+        admin_id: admin.id,
+        validation_warnings: validation.warnings.length,
+        validation_errors: validation.errors.length,
+        forced: !!force,
+        previous_trace_existed: !!prevJson,
+        sections: sectionsSummary,
+        ridges: Array.isArray(traceObj?.ridges) ? traceObj.ridges.length : 0,
+        hips: Array.isArray(traceObj?.hips) ? traceObj.hips.length : 0,
+        valleys: Array.isArray(traceObj?.valleys) ? traceObj.valleys.length : 0,
+      })).run()
+    } catch (e) { /* non-fatal audit */ }
+
+    const traceStr = JSON.stringify(traceObj)
+    await c.env.DB.prepare(
+      "UPDATE orders SET roof_trace_json = ?, needs_admin_trace = 0, trace_source = 'admin', updated_at = datetime('now') WHERE id = ?"
+    ).bind(traceStr, orderId).run()
+
+    // Auto-trace learning hook (admin-side learning, not customer-facing —
+    // safe to run in draft mode).
+    const ctxLog = (c as any).executionCtx
+    const telemetry = trace_telemetry && typeof trace_telemetry === 'object' ? {
+      acceptedUnchanged: trace_telemetry.accepted_unchanged === true,
+      editDurationMs: Number(trace_telemetry.edit_duration_ms) || undefined,
+      vertexMoves: Number(trace_telemetry.vertex_moves) || undefined,
+      vertexAdds: Number(trace_telemetry.vertex_adds) || undefined,
+      vertexDeletes: Number(trace_telemetry.vertex_deletes) || undefined,
+      complexityBucket: typeof trace_telemetry.complexity_bucket === 'string' ? trace_telemetry.complexity_bucket : undefined,
+      acceptedRunIds: trace_telemetry.accepted_run_ids && typeof trace_telemetry.accepted_run_ids === 'object'
+        ? {
+            eaves: typeof trace_telemetry.accepted_run_ids.eaves === 'string' ? trace_telemetry.accepted_run_ids.eaves : undefined,
+            hips: typeof trace_telemetry.accepted_run_ids.hips === 'string' ? trace_telemetry.accepted_run_ids.hips : undefined,
+            ridges: typeof trace_telemetry.accepted_run_ids.ridges === 'string' ? trace_telemetry.accepted_run_ids.ridges : undefined,
+            valleys: typeof trace_telemetry.accepted_run_ids.valleys === 'string' ? trace_telemetry.accepted_run_ids.valleys : undefined,
+          }
+        : undefined,
+    } : undefined
+    const logP = logAutoTraceCorrections(c.env, orderId, traceObj, telemetry)
+      .catch((e: any) => console.warn('[auto-trace-learning] log failed:', e?.message))
+    if (ctxLog?.waitUntil) ctxLog.waitUntil(logP)
+
+    // Generate the report WITH skipCustomerDelivery — engine renders HTML +
+    // saves customer_report_html + runs inline scanner, but skips
+    // markOrderStatus + CRM dispatch + auto-email + auto-invoice.
+    const result = await generateReportForOrder(orderId, c.env, ctxLog, { skipCustomerDelivery: true })
+
+    if (!result?.success) {
+      return c.json({ error: 'Report generation failed: ' + (result?.error || 'unknown') }, 500)
+    }
+
+    // Merge admin-captured 3D screenshots into imagery.extra_captures (same
+    // pattern as submit-trace).
+    if (cleanedCaptures.length > 0) {
+      try {
+        const row = await c.env.DB.prepare('SELECT api_response_raw FROM reports WHERE order_id = ?').bind(orderId).first<{ api_response_raw: string | null }>()
+        if (row) {
+          let parsed: any = {}
+          try { parsed = row.api_response_raw ? JSON.parse(row.api_response_raw) : {} } catch { parsed = {} }
+          parsed.imagery = parsed.imagery || {}
+          parsed.imagery.extra_captures = cleanedCaptures
+          parsed.imagery.extra_captures_captured_at = new Date().toISOString()
+          await c.env.DB.prepare('UPDATE reports SET api_response_raw = ? WHERE order_id = ?').bind(JSON.stringify(parsed), orderId).run()
+        }
+      } catch (e: any) {
+        console.warn('[generate-draft] extra_captures merge failed:', e?.message || e)
+      }
+    }
+
+    // Flip into review state. Use a single UPDATE to keep it atomic.
+    await c.env.DB.prepare(`
+      UPDATE reports SET
+        admin_review_status = 'awaiting_review',
+        admin_review_started_at = datetime('now'),
+        admin_review_completed_at = NULL,
+        admin_review_admin_id = ?,
+        updated_at = datetime('now')
+      WHERE order_id = ?
+    `).bind(admin.id, orderId).run()
+
+    return c.json({
+      success: true,
+      order_id: orderId,
+      preview_url: `/super-admin/orders/${orderId}/preview`,
+    })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to generate draft: ' + err.message }, 500)
+  }
+})
+
+// GET /superadmin/orders/:id/preview-data
+// Lightweight JSON payload that powers the preview page's side panel:
+// order context, current admin_review_status, and the imagery sub-object
+// (cover source, aerial approval, extra_captures with base64 thumbnails).
+// The HTML itself is served by /preview-html so this can stay JSON-only.
+adminRoutes.get('/superadmin/orders/:id/preview-data', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const orderId = parseInt(c.req.param('id'))
+  if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
+  try {
+    const order = await c.env.DB.prepare(
+      'SELECT id, order_number, property_address, homeowner_name, customer_id, status, delivered_at FROM orders WHERE id = ?'
+    ).bind(orderId).first<any>()
+    if (!order) return c.json({ error: 'Order not found' }, 404)
+    const report = await c.env.DB.prepare(
+      'SELECT admin_review_status, admin_review_started_at, status as report_status, api_response_raw, roof_area_sqft, total_material_cost_cad FROM reports WHERE order_id = ?'
+    ).bind(orderId).first<any>()
+    let imagery: any = {}
+    if (report?.api_response_raw) {
+      try { imagery = (JSON.parse(report.api_response_raw)?.imagery) || {} } catch { imagery = {} }
+    }
+    return c.json({
+      success: true,
+      order,
+      report: report ? {
+        admin_review_status: report.admin_review_status,
+        admin_review_started_at: report.admin_review_started_at,
+        status: report.report_status,
+        roof_area_sqft: report.roof_area_sqft,
+        total_material_cost_cad: report.total_material_cost_cad,
+      } : null,
+      imagery,
+    })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to load preview data: ' + err.message }, 500)
+  }
+})
+
+// GET /superadmin/orders/:id/preview-html
+// Admin-only iframe src for the preview page. Bypasses the
+// admin_review_status='awaiting_review' gate that the public route enforces.
+// Returns the same HTML the customer would eventually see, with the same
+// resolveHtml() write-through cache pattern.
+adminRoutes.get('/superadmin/orders/:id/preview-html', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const orderId = c.req.param('id')
+  const row = await reportsRepo.getReportHtml(c.env.DB, orderId)
+  if (!row) return c.json({ error: 'Report not found' }, 404)
+  const stored = row.professional_report_html || null
+  const raw = row.api_response_raw || null
+  // Re-render from raw if cache is missing/stale. Mirrors the public
+  // /:orderId/html branch — keeps the admin preview byte-identical to what
+  // ships on approval.
+  let html: string | null = stored
+  if (!stored && raw) {
+    try {
+      const data = JSON.parse(raw)
+      const { generateProfessionalReportHTML } = await import('../templates/report-html')
+      html = generateProfessionalReportHTML(data)
+      // Write-through so the next view (admin or customer) hits cache.
+      try {
+        await c.env.DB.prepare('UPDATE reports SET professional_report_html = ? WHERE order_id = ?')
+          .bind(html, orderId).run()
+      } catch {}
+    } catch (e: any) {
+      console.warn(`[preview-html] order ${orderId} regen failed: ${e?.message || e}`)
+    }
+  }
+  if (!html) return c.json({ error: 'Report HTML unavailable' }, 404)
+  return c.html(html)
+})
+
+// POST /superadmin/orders/:id/preview-update-imagery
+// Curate the rendered report's imagery (cover source / aerials toggle /
+// extras reorder + remove). Mutates api_response_raw.imagery in place and
+// nulls the cached HTML so the next iframe view picks up the changes.
+adminRoutes.post('/superadmin/orders/:id/preview-update-imagery', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const orderId = parseInt(c.req.param('id'))
+  if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
+  try {
+    const body = await c.req.json().catch(() => ({})) as any
+    const row = await c.env.DB.prepare('SELECT api_response_raw FROM reports WHERE order_id = ?').bind(orderId).first<{ api_response_raw: string | null }>()
+    if (!row) return c.json({ error: 'Report not found' }, 404)
+    let parsed: any = {}
+    try { parsed = row.api_response_raw ? JSON.parse(row.api_response_raw) : {} } catch { parsed = {} }
+    parsed.imagery = parsed.imagery || {}
+    const img = parsed.imagery
+    let mutated = false
+
+    // Reorder + remove operate on extras together so the indices don't shift
+    // mid-flight. Compute the final list once, then validate it.
+    if (Array.isArray(body.extra_captures_order) || Array.isArray(body.extra_captures_remove)) {
+      const current: any[] = Array.isArray(img.extra_captures) ? img.extra_captures : []
+      const removeSet = new Set<number>(
+        Array.isArray(body.extra_captures_remove)
+          ? body.extra_captures_remove.filter((n: any) => Number.isInteger(n) && n >= 0 && n < current.length)
+          : []
+      )
+      let next: any[] = current
+      if (Array.isArray(body.extra_captures_order)) {
+        const order: number[] = body.extra_captures_order.filter((n: any) => Number.isInteger(n) && n >= 0 && n < current.length)
+        // De-dupe; missing indices fall through unchanged.
+        const seen = new Set<number>()
+        const reordered: any[] = []
+        for (const idx of order) { if (!seen.has(idx)) { seen.add(idx); reordered.push(current[idx]) } }
+        for (let i = 0; i < current.length; i++) if (!seen.has(i)) reordered.push(current[i])
+        next = reordered
+      }
+      next = next.filter((_, i) => !removeSet.has(i))
+      // Cap at 4 (matches submit-trace's existing limit so the report layout
+      // never has more captures than the renderer expects).
+      if (next.length > 4) next = next.slice(0, 4)
+      img.extra_captures = next
+      mutated = true
+    }
+
+    if (typeof body.aerial_views_approved === 'boolean') {
+      img.aerial_views_approved = body.aerial_views_approved
+      mutated = true
+    }
+    if (typeof body.oblique_3d_approved === 'boolean') {
+      img.oblique_3d_approved = body.oblique_3d_approved
+      mutated = true
+    }
+    if (typeof body.cover_image_source === 'string') {
+      const allowed = ['oblique_3d', 'satellite', 'aerial_NE', 'aerial_NW', 'aerial_SE', 'aerial_SW']
+      if (allowed.indexOf(body.cover_image_source) >= 0) {
+        img.cover_image_source = body.cover_image_source
+        mutated = true
+      }
+    }
+
+    if (!mutated) return c.json({ success: true, no_op: true, imagery: img })
+
+    // Write back, AND null the cached HTML so the next iframe load
+    // regenerates with the new imagery. The renderer reads imagery.* from
+    // api_response_raw on every render, so a null cache → regen → fresh HTML.
+    await c.env.DB.prepare(
+      'UPDATE reports SET api_response_raw = ?, professional_report_html = NULL, updated_at = datetime(\'now\') WHERE order_id = ?'
+    ).bind(JSON.stringify(parsed), orderId).run()
+
+    return c.json({ success: true, imagery: img })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to update imagery: ' + err.message }, 500)
+  }
+})
+
+// POST /superadmin/orders/:id/approve-and-deliver
+// Admin clicks "Submit to Customer". Verifies the report is mid-review,
+// runs the extracted finalizeReportDelivery() helper (which fires email +
+// CRM + auto-invoice + markOrderStatus), records trace_completed for the
+// customer notification feed, flips admin_review_status='approved'.
+adminRoutes.post('/superadmin/orders/:id/approve-and-deliver', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const orderId = parseInt(c.req.param('id'))
+  if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
+  try {
+    const reportRow = await c.env.DB.prepare(
+      'SELECT id, professional_report_html, admin_review_status FROM reports WHERE order_id = ?'
+    ).bind(orderId).first<{ id: number; professional_report_html: string | null; admin_review_status: string | null }>()
+    if (!reportRow) return c.json({ error: 'Report not found' }, 404)
+    if (reportRow.admin_review_status !== 'awaiting_review') {
+      return c.json({
+        error: 'Report is not awaiting admin review',
+        current_status: reportRow.admin_review_status || 'null',
+      }, 409)
+    }
+    if (!reportRow.professional_report_html || reportRow.professional_report_html.length < 1000) {
+      return c.json({ error: 'Report HTML is empty or unrenderable — re-trace before approving' }, 409)
+    }
+
+    const ctx = (c as any).executionCtx
+
+    // Fire all customer-facing side effects (markOrderStatus → delivered_at,
+    // CRM dispatch, auto-email, auto-invoice).
+    await finalizeReportDelivery(orderId, c.env, ctx)
+
+    // Flip to approved + stamp completion. Doing this AFTER finalize so a
+    // delivery failure doesn't leave the row claiming "approved" with no
+    // email actually sent.
+    await c.env.DB.prepare(`
+      UPDATE reports SET
+        admin_review_status = 'approved',
+        admin_review_completed_at = datetime('now'),
+        updated_at = datetime('now')
+      WHERE order_id = ?
+    `).bind(orderId).run()
+
+    // Customer-facing trace_completed notification (was inline in submit-
+    // trace; now fires on approval instead of on draft generation so the
+    // bell + push only ring once the customer can actually open the report).
+    try {
+      const order = await c.env.DB.prepare(
+        'SELECT o.customer_id, o.property_address, o.order_number, o.service_tier, o.price, o.is_trial, c.email AS customer_email, c.name AS customer_name FROM orders o LEFT JOIN customers c ON c.id = o.customer_id WHERE o.id = ?'
+      ).bind(orderId).first<any>()
+      if (order) {
+        const notifyPromise = recordAndNotify(c.env, {
+          kind: 'trace_completed',
+          order: {
+            order_id: orderId,
+            order_number: order.order_number,
+            customer_id: order.customer_id,
+            customer_email: order.customer_email || '',
+            customer_name: order.customer_name || '',
+            property_address: order.property_address || '',
+            service_tier: order.service_tier || '',
+            price: order.price ?? 0,
+            payment_status: 'paid',
+            is_trial: !!order.is_trial,
+            trace_source: 'admin',
+            needs_admin_trace: false,
+            payload: { admin_id: admin.id, via: 'approve_and_deliver' },
+          },
+        }).catch((e) => console.warn('[admin-notif] trace_completed:', e?.message || e))
+        if (ctx?.waitUntil) ctx.waitUntil(notifyPromise)
+      }
+    } catch { /* non-fatal */ }
+
+    // Audit log row.
+    try {
+      await c.env.DB.prepare(
+        "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'admin_approve_and_deliver', ?)"
+      ).bind(JSON.stringify({
+        order_id: orderId,
+        admin_id: admin.id,
+        admin_email: admin.email,
+      })).run()
+    } catch { /* non-fatal */ }
+
+    return c.json({ success: true, order_id: orderId })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to approve and deliver: ' + err.message }, 500)
+  }
+})
+
+// POST /superadmin/orders/:id/preview-cancel-retrace
+// Re-uses cancel-and-retrace's exact wipe semantics. Existing /cancel-and-
+// retrace already nulls admin_review_* in its UPDATE (added in this same
+// migration step), so this is just a thin alias that keeps preview-page
+// audit trails distinct from "outright cancel" actions in the activity log.
+adminRoutes.post('/superadmin/orders/:id/preview-cancel-retrace', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const orderId = parseInt(c.req.param('id'))
+  if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
+  try {
+    const order = await c.env.DB.prepare(
+      'SELECT id, order_number, property_address FROM orders WHERE id = ?'
+    ).bind(orderId).first<any>()
+    if (!order) return c.json({ error: 'Order not found' }, 404)
+
+    // Same wipe as /cancel-and-retrace, including the admin_review_* clear.
+    await c.env.DB.prepare(`
+      UPDATE reports SET
+        professional_report_html = NULL,
+        customer_report_html = NULL,
+        api_response_raw = NULL,
+        status = 'pending',
+        generation_attempts = 0,
+        generation_started_at = NULL,
+        generation_completed_at = NULL,
+        error_message = NULL,
+        needs_review = 0,
+        review_reason = NULL,
+        review_detail = NULL,
+        enhancement_status = NULL,
+        enhancement_error = NULL,
+        admin_review_status = NULL,
+        admin_review_started_at = NULL,
+        admin_review_completed_at = NULL,
+        admin_review_admin_id = NULL,
+        updated_at = datetime('now')
+      WHERE order_id = ?
+    `).bind(orderId).run()
+
+    await c.env.DB.prepare(`
+      UPDATE orders SET
+        roof_trace_json = NULL,
+        trace_measurement_json = NULL,
+        trace_source = NULL,
+        needs_admin_trace = 1,
+        status = 'processing',
+        delivered_at = NULL,
+        updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(orderId).run()
+
+    try {
+      await c.env.DB.prepare(
+        "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'admin_preview_cancel_retrace', ?)"
+      ).bind(JSON.stringify({
+        order_id: orderId,
+        admin_id: admin.id,
+        admin_email: admin.email,
+        order_number: order.order_number,
+        property_address: order.property_address,
+      })).run()
+    } catch { /* non-fatal */ }
+
+    return c.json({ success: true, order_id: orderId, message: 'Draft cancelled; order re-queued for trace.' })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to cancel preview: ' + err.message }, 500)
   }
 })
 
