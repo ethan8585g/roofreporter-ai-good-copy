@@ -927,9 +927,9 @@ async function sendLeadNotification(env: Bindings, lead: { name?: string; email?
   // Fallback: check DB for tokens
   if (!refreshToken || !clientSecret) {
     try {
-      const dbRefresh = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'gmail_refresh_token' AND master_company_id = 1").first()
+      const dbRefresh = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'gmail_refresh_token' AND master_company_id = 1").first<{ setting_value: string | null }>()
       if (dbRefresh?.setting_value) refreshToken = dbRefresh.setting_value
-      const dbSecret = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1").first()
+      const dbSecret = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1").first<{ setting_value: string | null }>()
       if (dbSecret?.setting_value) clientSecret = dbSecret.setting_value
     } catch {}
   }

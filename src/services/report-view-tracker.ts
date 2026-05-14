@@ -5,7 +5,7 @@
 // ============================================================
 
 import type { Context } from 'hono'
-import type { Bindings } from '../types'
+import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession } from '../routes/auth'
 import { getCustomerSessionToken } from '../lib/session-tokens'
 import { logReportView, getReportIdByOrder, type ReportViewType } from '../repositories/reports'
@@ -17,7 +17,7 @@ function detectIsBot(ua: string | null): boolean {
   return BOT_UA_RE.test(ua)
 }
 
-function extractIp(c: Context<{ Bindings: Bindings }>): string | null {
+function extractIp(c: Context<AppEnv>): string | null {
   return (
     c.req.header('CF-Connecting-IP') ||
     c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() ||
@@ -26,7 +26,7 @@ function extractIp(c: Context<{ Bindings: Bindings }>): string | null {
   )
 }
 
-async function resolveCustomerId(c: Context<{ Bindings: Bindings }>): Promise<number | null> {
+async function resolveCustomerId(c: Context<AppEnv>): Promise<number | null> {
   const token = getCustomerSessionToken(c)
   if (!token) return null
   const row = await c.env.DB.prepare(
@@ -45,7 +45,7 @@ async function resolveCustomerId(c: Context<{ Bindings: Bindings }>): Promise<nu
  * customer_id from the session cookie.
  */
 export function trackReportView(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<AppEnv>,
   args: {
     orderId: number | string
     viewType: ReportViewType

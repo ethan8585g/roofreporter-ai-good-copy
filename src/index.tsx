@@ -9117,20 +9117,26 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <span class="relative flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00FF88]"></span></span>
               <span class="text-sm font-semibold text-[#00FF88] tracking-wide">North America&ndash;Wide Roof Measurements <span class="text-[10px] mx-1">&#127464;&#127462;</span><span class="text-[10px]">&#127482;&#127480;</span> &middot; 200+ Contractors</span>
             </div>
-            <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] text-white mb-6 tracking-tight">Affordable Satellite Roof Measurement Reports <span class="neon-text">Roofers Actually Trust</span></h1>
-            <p class="text-lg lg:text-xl text-gray-300 mb-8 max-w-xl leading-relaxed">Insurance-grade satellite reports with area, pitch, edges, and BOM — delivered in 1&ndash;2 hours for $8 per report.</p>
+            <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] text-white mb-6 tracking-tight">Quote any roof in <span class="neon-text">1&ndash;2 hours</span>, without climbing.</h1>
+            <p class="text-lg lg:text-xl text-gray-300 mb-8 max-w-xl leading-relaxed">Satellite measurement reports with area, pitch, edges, and a priced BOM &mdash; $8 per report, first 4 free.</p>
 
-            <!-- Primary CTA (single, dominant — sample report demoted to inline text link; contact form relocated below the fold) -->
-            <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 mb-3">
-              <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_primary'});window.trackAdsConversion&amp;&amp;window.trackAdsConversion('lead',{value:5,currency:'CAD'})}catch(e){}" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px] whitespace-nowrap"><i class="fas fa-gift" aria-hidden="true"></i>Start free — 4 roof reports, no card<i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform" aria-hidden="true"></i></a>
+            <!-- Primary + sample-report CTA pair (parallel, equal-height — Google one-click moved into /register) -->
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-6">
+              <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_primary'});window.trackAdsConversion&amp;&amp;window.trackAdsConversion('lead',{value:5,currency:'CAD'})}catch(e){}" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px] whitespace-nowrap"><i class="fas fa-gift" aria-hidden="true"></i>Start free &mdash; 4 reports, no card<i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform" aria-hidden="true"></i></a>
+              <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_sample_report'})}catch(e){}" class="group inline-flex items-center justify-center gap-3 bg-transparent hover:bg-white/5 text-white font-bold py-4 px-7 rounded-xl text-lg border-2 border-white/20 hover:border-[#00FF88]/40 transition-all duration-300 min-h-[56px] whitespace-nowrap"><i class="fas fa-eye text-[#00FF88]" aria-hidden="true"></i>View a Sample Report</a>
             </div>
-            <!-- Secondary CTA: Google one-click — routes to /register where the live GSI widget lives -->
-            <a href="/register?provider=google" onclick="try{rrTrack('cta_click',{location:'hero_google'})}catch(e){}" class="group inline-flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-900 font-bold py-3.5 px-7 rounded-xl text-base shadow-xl border border-white/10 transition-all duration-300 hover:scale-[1.02] min-h-[52px] mb-2 w-full sm:w-auto">
-              <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-              <span>Continue with Google</span>
-              <span class="text-xs font-medium text-gray-500 ml-1 hidden sm:inline">— 1 click, no password</span>
-            </a>
-            <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_sample_report'})}catch(e){}" class="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white mb-6 mt-2"><i class="fas fa-eye text-[#00FF88] text-xs"></i> See a sample report — no signup, no email <i class="fas fa-arrow-right text-[10px]" aria-hidden="true"></i></a>
+
+            <!-- Above-the-fold proof: Mike D. quote -->
+            <div class="max-w-xl mb-6 bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl p-4 transition-colors">
+              <div class="flex items-start gap-3">
+                <div class="flex-shrink-0 w-11 h-11 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-white font-bold text-sm">MD</div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-1 mb-1"><i class="fas fa-star text-[#00FF88] text-[11px]"></i><i class="fas fa-star text-[#00FF88] text-[11px]"></i><i class="fas fa-star text-[#00FF88] text-[11px]"></i><i class="fas fa-star text-[#00FF88] text-[11px]"></i><i class="fas fa-star text-[#00FF88] text-[11px]"></i></div>
+                  <p class="text-sm text-gray-300 leading-snug mb-1.5">&ldquo;Saves me 2 hours per estimate. I quote jobs from my truck now.&rdquo;</p>
+                  <p class="text-[11px] text-gray-500"><span class="font-semibold text-gray-400">Mike D.</span> &middot; JPG Roofing LTD &middot; Calgary, AB</p>
+                </div>
+              </div>
+            </div>
 
             <!-- Trust bar (single-line on desktop, wraps on mobile) -->
             <p class="text-[13px] text-gray-500 leading-relaxed mb-3">
@@ -9160,13 +9166,10 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <i class="fas fa-external-link-alt text-gray-500 group-hover:text-[#00B67A] text-xs flex-shrink-0" aria-hidden="true"></i>
             </a>
 
-            <!-- Mobile-only primary CTA mirror (sample-report link demoted; lives in the talk-to-us section below) -->
+            <!-- Mobile-only primary CTA mirror (Google one-click lives inside /register now) -->
             <div class="lg:hidden mt-4 flex flex-col gap-3">
-              <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_mobile_primary'});window.trackAdsConversion&amp;&amp;window.trackAdsConversion('lead',{value:5,currency:'CAD'})}catch(e){}" class="flex items-center justify-center gap-3 bg-[#00FF88] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px]"><i class="fas fa-gift" aria-hidden="true"></i>Start free — 4 roof reports, no card<i class="fas fa-arrow-right text-sm" aria-hidden="true"></i></a>
-              <a href="/register?provider=google" onclick="try{rrTrack('cta_click',{location:'hero_mobile_google'})}catch(e){}" class="flex items-center justify-center gap-3 bg-white text-gray-900 font-bold py-3.5 px-7 rounded-xl text-base shadow-xl min-h-[52px]">
-                <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-                <span>Continue with Google</span>
-              </a>
+              <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_mobile_primary'});window.trackAdsConversion&amp;&amp;window.trackAdsConversion('lead',{value:5,currency:'CAD'})}catch(e){}" class="flex items-center justify-center gap-3 bg-[#00FF88] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px]"><i class="fas fa-gift" aria-hidden="true"></i>Start free &mdash; 4 reports, no card<i class="fas fa-arrow-right text-sm" aria-hidden="true"></i></a>
+              <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_mobile_sample'})}catch(e){}" class="flex items-center justify-center gap-3 bg-transparent text-white font-bold py-3.5 px-7 rounded-xl text-base border-2 border-white/20 min-h-[52px]"><i class="fas fa-eye text-[#00FF88]" aria-hidden="true"></i>View a Sample Report</a>
             </div>
           </div>
         </div>
@@ -9257,7 +9260,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       <div class="max-w-6xl mx-auto px-4">
         <div class="bg-[#111111] rounded-2xl border border-white/10 grid grid-cols-2 lg:grid-cols-4 divide-x divide-white/5">
           <div class="p-6 lg:p-8 text-center group transition-colors duration-300 rounded-l-2xl"><div class="w-10 h-10 mx-auto mb-3 rounded-xl bg-[#00FF88]/10 flex items-center justify-center group-hover:bg-[#00FF88]/20 transition-colors"><i class="fas fa-file-alt text-[#00FF88] text-sm"></i></div><div class="text-3xl lg:text-4xl font-black mb-1 stat-value" data-count="10000" data-suffix="+" data-prefix="">0+</div><div class="text-[11px] text-gray-500 font-semibold uppercase tracking-widest">Reports Generated</div></div>
-          <div class="p-6 lg:p-8 text-center group transition-colors duration-300"><div class="w-10 h-10 mx-auto mb-3 rounded-xl bg-[#00FF88]/10 flex items-center justify-center group-hover:bg-[#00FF88]/20 transition-colors"><i class="fas fa-bullseye text-[#00FF88] text-sm"></i></div><div class="text-3xl lg:text-4xl font-black mb-1 stat-value" data-count="98" data-suffix="%" data-prefix="">0%</div><div class="text-[11px] text-gray-500 font-semibold uppercase tracking-widest">Measurement Accuracy</div></div>
+          <div class="p-6 lg:p-8 text-center group transition-colors duration-300"><div class="w-10 h-10 mx-auto mb-3 rounded-xl bg-[#00FF88]/10 flex items-center justify-center group-hover:bg-[#00FF88]/20 transition-colors"><i class="fas fa-bullseye text-[#00FF88] text-sm"></i></div><div class="text-3xl lg:text-4xl font-black mb-1 stat-value" data-count="98" data-suffix="%" data-prefix="" data-static-display="true">98%</div><div class="text-[11px] text-gray-500 font-semibold uppercase tracking-widest">Measurement Accuracy</div></div>
           <div class="p-6 lg:p-8 text-center group transition-colors duration-300"><div class="w-10 h-10 mx-auto mb-3 rounded-xl bg-[#00FF88]/10 flex items-center justify-center group-hover:bg-[#00FF88]/20 transition-colors"><i class="fas fa-bolt text-[#00FF88] text-sm"></i></div><div class="text-3xl lg:text-4xl font-black mb-1 stat-value" data-count="200" data-suffix="+" data-prefix="">0+</div><div class="text-[11px] text-gray-500 font-semibold uppercase tracking-widest">Active Contractors</div></div>
           <div class="p-6 lg:p-8 text-center group transition-colors duration-300 rounded-r-2xl"><div class="w-10 h-10 mx-auto mb-3 rounded-xl bg-[#00FF88]/10 flex items-center justify-center group-hover:bg-[#00FF88]/20 transition-colors"><i class="fas fa-dollar-sign text-[#00FF88] text-sm"></i></div><div class="text-3xl lg:text-4xl font-black mb-1 stat-value" data-count="8" data-suffix="" data-prefix="$">$0</div><div class="text-[11px] text-gray-500 font-semibold uppercase tracking-widest">Per Report (CAD)</div></div>
         </div>
@@ -9419,7 +9422,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
                   <div class="text-right"><div class="text-2xl font-black" style="color:#22d3ee">2h+</div><div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Saved Per Job</div></div>
                 </div>
                 <h3 class="text-xl font-bold text-white mb-3">Save 2+ Hours Per Estimate</h3>
-                <p class="text-gray-400 text-sm leading-relaxed mb-4 flex-1">Stop climbing roofs with a tape measure. Quote from your truck with pitch-adjusted areas and a full material BOM in seconds.</p>
+                <p class="text-gray-400 text-sm leading-relaxed mb-4 flex-1">Stop climbing roofs with a tape measure. Quote from your truck with pitch-adjusted areas and a full material BOM in 1&ndash;2 hours.</p>
                 <!-- Before/After bar -->
                 <div class="space-y-2 mb-4">
                   <div><div class="flex justify-between text-[10px] mb-1"><span class="text-gray-500 uppercase tracking-wider">Manual</span><span class="text-gray-400">2h+</span></div><div class="h-1.5 bg-white/5 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:95%;background:rgba(239,68,68,0.5);"></div></div></div>
@@ -9545,7 +9548,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
                 <div class="inline-flex items-center gap-2 text-[#a78bfa] text-sm font-bold mb-4"><i class="fas fa-file-invoice-dollar"></i> Invoicing &amp; Proposals</div>
                 <h3 class="text-2xl lg:text-3xl font-black text-white mb-4">Get Paid Faster</h3>
                 <ul class="space-y-3 mb-8">
-                  <li class="flex items-start gap-3 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs flex-shrink-0"></i>Professional branded invoices &amp; proposals in seconds</li>
+                  <li class="flex items-start gap-3 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs flex-shrink-0"></i>Professional branded invoices &amp; proposals in minutes</li>
                   <li class="flex items-start gap-3 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs flex-shrink-0"></i>Auto-populate line items from your measurement report</li>
                   <li class="flex items-start gap-3 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs flex-shrink-0"></i>Online payment via Square — customer pays from a link</li>
                   <li class="flex items-start gap-3 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs flex-shrink-0"></i>Proposal acceptance tracking &amp; e-signature</li>
@@ -10072,7 +10075,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <div class="md:col-span-2 p-6 md:p-8">
           <div class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-semibold mb-3 uppercase tracking-widest" style="background:#00FF8818;color:#00FF88"><i class="fas fa-play"></i> Featured Tutorial</div>
           <h3 class="text-xl md:text-2xl font-black text-white mb-2 leading-tight">How to Order a Roof Measurement Report</h3>
-          <p class="text-gray-400 text-sm leading-relaxed mb-4">Watch a full walkthrough — from address entry to branded PDF in under a minute.</p>
+          <p class="text-gray-400 text-sm leading-relaxed mb-4">Watch a full walkthrough — from address entry to branded PDF in 1&ndash;2 hours.</p>
           <a href="/guides/order-measurement-report" class="inline-flex items-center gap-2 text-[#00FF88] text-sm font-semibold hover:underline">Read the step-by-step guide <i class="fas fa-arrow-right"></i></a>
         </div>
       </div>
@@ -11567,7 +11570,7 @@ ${previewId ? `
               style="width:100%;margin-top:12px;padding:14px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:16px;cursor:pointer">
               Continue &#x2192;
             </button>
-            <p style="text-align:center;margin-top:10px;font-size:13px;color:#6b7280">&#x1F512; No credit card &nbsp;&middot;&nbsp; &#x1F1E8;&#x1F1E6; Canadian data &nbsp;&middot;&nbsp; &#x26A1; 60-sec setup</p>
+            <p style="text-align:center;margin-top:10px;font-size:13px;color:#6b7280">&#x1F512; No credit card &nbsp;&middot;&nbsp; &#x1F1E8;&#x1F1E6; Canadian data &nbsp;&middot;&nbsp; &#x26A1; 2-min signup</p>
           </div>
 
           <!-- Step 2: password + name + B2B qualifying fields -->
@@ -13875,11 +13878,11 @@ const guidesConfig: Record<string, GuideConfig> = {
     subtitle: 'Get a surveyor-grade PDF for any roof.',
     readTime: 4,
     icon: 'fa-ruler-combined',
-    tldr: 'To order a roof measurement report on Roof Manager: sign in, click "Order Report", type the address, confirm the satellite trace, and place the order. A branded PDF with total area, eave/ridge/hip/valley lengths, pitch, and material takeoff arrives in about 45 seconds. First 4 reports are free; after that, pricing starts at $7 per report.',
+    tldr: 'To order a roof measurement report on Roof Manager: sign in, click "Order Report", type the address, confirm the satellite trace, and place the order. A branded PDF with total area, eave/ridge/hip/valley lengths, pitch, and material takeoff arrives in 1–2 hours. First 4 reports are free; after that, pricing starts at $7 per report.',
     intro: 'Ordering a measurement report through Roof Manager is the fastest way to put an accurate square-count, edge list, and material BOM in front of your crew or your customer. You never climb, you never guess, and every report is branded with your logo and delivered as a PDF you can forward straight from your phone.',
     videoId: 'u3Xa0FaviGY',
     faqs: [
-      { q: 'How long does it take to get a roof measurement report?', a: 'Reports are delivered in about 45 seconds after you place the order. The PDF appears in your dashboard and is emailed to you simultaneously.' },
+      { q: 'How long does it take to get a roof measurement report?', a: 'Reports are delivered in 1–2 hours after you place the order. The PDF appears in your dashboard and is emailed to you simultaneously.' },
       { q: 'How accurate are Roof Manager measurement reports?', a: 'Reports are surveyor-grade, typically within 1-2% of hand-measured values. We use Google Solar API data cross-checked against our own geodesic measurement engine that traces eaves, ridges, hips, and valleys directly from satellite imagery.' },
       { q: 'How much does a roof measurement report cost?', a: 'Your first 4 reports are free with no credit card required. After that, pay-as-you-go pricing starts at $7 per report — significantly cheaper than EagleView or Hover.' },
       { q: 'Can I use Roof Manager reports for insurance claims?', a: 'Yes. Every report is a branded PDF with total sloped area, projected area, edge-by-edge lengths, pitch, and waste factor — the exact data adjusters expect.' },
@@ -13891,7 +13894,7 @@ const guidesConfig: Record<string, GuideConfig> = {
       { title: 'Pick the report type', body: 'Pitched residential, flat commercial, or multi-building property report. For condos and strata, choose the multi-building option so each structure gets its own measurements broken out in the final PDF.', tip: 'Commercial flat roofs use different pricing and output (drains, parapet walls, membrane type). Choose correctly to avoid a re-order.' },
       { title: 'Confirm the trace', body: 'Our AI traces eaves, ridges, hips, and valleys automatically from the satellite imagery. Review the overlay — if any edge looks wrong, adjust the vertices with your mouse or finger. The engine re-computes area, pitch, and material takeoff instantly.' },
       { title: 'Add your branding', body: 'Upload your company logo once under Settings → Branding; from then on every report cover page, header, and email template uses it automatically. You can also set the default sender name and reply-to email.' },
-      { title: 'Place the order', body: 'Review the summary — total sloped area, eave/ridge/hip/valley lengths, pitch, waste factor. Click "Order". The PDF arrives in the dashboard in ~45 seconds and is emailed to you at the same time.' },
+      { title: 'Place the order', body: 'Review the summary — total sloped area, eave/ridge/hip/valley lengths, pitch, waste factor. Click "Order". The PDF arrives in the dashboard in 1–2 hours and is emailed to you at the same time.' },
       { title: 'Send it to your customer', body: 'Use the "Email Report" button to forward the PDF directly from Roof Manager with a one-click "Request a Quote" link that feeds leads back into your CRM.' },
     ],
     ctaLabel: 'Order Your First Report (Free)',
@@ -14026,7 +14029,7 @@ const guidesConfig: Record<string, GuideConfig> = {
       { q: 'Can I lay panels on multiple roof faces?', a: 'Yes. Each roof face is detected separately. Drag panels onto any face — the tool tracks per-face tilt and azimuth for accurate production math.' },
       { q: 'Does Roof Manager support different panel wattages and brands?', a: 'Yes. Pick from the built-in library (REC, Q Cells, Canadian Solar, Silfab, Tesla, etc.) or add a custom panel with your own wattage and dimensions.' },
     ],
-    intro: 'Selling solar starts with a design the homeowner can actually see. Roof Manager\'s Solar Design builder lets you drop real-world-scale panels onto any roof in seconds, estimate annual production from Google Solar API data, and hand the homeowner a branded proposal before you leave the driveway.',
+    intro: 'Selling solar starts with a design the homeowner can actually see. Roof Manager\'s Solar Design builder lets you drop real-world-scale panels onto any roof in minutes, estimate annual production from Google Solar API data, and hand the homeowner a branded proposal before you leave the driveway.',
     steps: [
       { title: 'Open the Solar Design builder', body: 'From your dashboard, click "Solar Design" (or open an existing measurement report and click "Design Solar"). Enter the address and the satellite view loads with roof faces already detected.' },
       { title: 'Pick your panel', body: 'Choose your panel model from the library — REC, Q Cells, Canadian Solar, Silfab, Tesla, and others are built in. Each panel has real wattage and dimensions baked in, so counts and production estimates stay truthful.', tip: 'Standardise on 1–2 panels you actually stock. It speeds up design and keeps procurement clean.' },
@@ -14272,7 +14275,7 @@ function getHowItWorksPageHTML(): string {
   <section class="max-w-5xl mx-auto px-4 py-14 md:py-20">
     <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold mb-6" style="background:#22d3ee18;color:#22d3ee"><i class="fas fa-route"></i> Simple Process</div>
     <h1 class="text-4xl md:text-6xl font-black text-white leading-tight tracking-tight mb-5">Address to Report in 4 Steps</h1>
-    <p class="text-lg text-gray-400 max-w-2xl mb-6">No ladders. No drones. No tape measures. Just enter an address and get a professional, branded PDF in under a minute.</p>
+    <p class="text-lg text-gray-400 max-w-2xl mb-6">No ladders. No drones. No tape measures. Just enter an address and get a professional, branded PDF in 1&ndash;2 hours.</p>
     <div class="mb-12">
       <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
         <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
@@ -14298,7 +14301,7 @@ function getHowItWorksPageHTML(): string {
     <!-- =============== SECTION A: Inside a Roof Measurement Report =============== -->
     <div class="mt-20 mb-16">
       <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold mb-5" style="background:#00FF8818;color:#00FF88"><i class="fas fa-satellite"></i> Roof Measurements</div>
-      <h2 class="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight mb-4">Surveyor-grade detail, in under a minute</h2>
+      <h2 class="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight mb-4">Surveyor-grade detail, delivered in 1&ndash;2 hours</h2>
       <p class="text-base md:text-lg text-gray-400 max-w-2xl mb-10">Every report is built on Google's Solar API — LiDAR-calibrated 3D models of the roof, the same data Google uses to recommend solar panels. We layer our own pitch, edge, and material logic on top, then ship a branded PDF.</p>
       <div class="grid md:grid-cols-2 gap-6">
         <div class="bg-[#111111] border border-white/10 rounded-2xl p-7">
@@ -14816,7 +14819,7 @@ function getFeatureHubPageHTML(featureSlug: string): string {
     offers: { '@type': 'Offer', price: '8.00', priceCurrency: 'CAD', description: 'Per report after 4 free reports' },
     aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.9', ratingCount: '200', bestRating: '5' },
     review: [
-      { '@type': 'Review', reviewRating: { '@type': 'Rating', ratingValue: '5', bestRating: '5' }, author: { '@type': 'Person', name: 'Derek M.' }, datePublished: '2026-02-11', reviewBody: 'Reports in under a minute, accepted by every Intact and Aviva adjuster we deal with. Cut our measurement cost by ~$1,400/month.' },
+      { '@type': 'Review', reviewRating: { '@type': 'Rating', ratingValue: '5', bestRating: '5' }, author: { '@type': 'Person', name: 'Derek M.' }, datePublished: '2026-02-11', reviewBody: 'Reports in 1–2 hours, accepted by every Intact and Aviva adjuster we deal with. Cut our measurement cost by ~$1,400/month.' },
       { '@type': 'Review', reviewRating: { '@type': 'Rating', ratingValue: '5', bestRating: '5' }, author: { '@type': 'Person', name: 'Priya S.' }, datePublished: '2026-03-03', reviewBody: 'Output lines up cleanly with Xactimate F9 — copy-paste into the estimate and move on. Saved us from a separate measurement vendor.' },
       { '@type': 'Review', reviewRating: { '@type': 'Rating', ratingValue: '5', bestRating: '5' }, author: { '@type': 'Person', name: 'Andrew K.' }, datePublished: '2026-03-22', reviewBody: 'Pipeline, invoicing, calendar, and reports in one screen. No monthly platform fee is the cherry on top.' },
     ],
@@ -14856,7 +14859,7 @@ function getFeatureHubPageHTML(featureSlug: string): string {
     'virtual-try-on': [
       { step: 'Upload the homeowner\'s house photo', text: 'Drag a front-elevation photo into the try-on tool from the customer portal or send a capture link to the homeowner.' },
       { step: 'Pick shingle colors', text: 'Choose 2-3 candidate shingle colors / styles from the Roof Manager library or your own product set.' },
-      { step: 'Render the preview', text: 'AI vision overlays each shingle on the photo in seconds.' },
+      { step: 'Render the preview', text: 'AI vision overlays each shingle on the photo.' },
       { step: 'Share the comparison', text: 'Send the side-by-side preview to the homeowner in a proposal. Virtual try-on lifts close rate substantially on color-sensitive retail jobs.' },
     ],
   }
@@ -17345,7 +17348,7 @@ function getServicesPageHTML() {
         <div class="lg:order-2">
           <div class="inline-flex items-center gap-2 bg-[#a78bfa]/10 text-[#a78bfa] rounded-full px-4 py-1.5 text-xs font-bold mb-4"><i class="fas fa-file-invoice-dollar mr-1"></i>Included Free</div>
           <h2 class="text-3xl font-black text-white mb-4">Invoicing & Proposals</h2>
-          <p class="text-gray-400 leading-relaxed mb-6">Create professional invoices and proposals in seconds. Add line items with quantities, taxes, and discounts. Send payment links via Square — customers pay by credit card, debit, Apple Pay, or Google Pay. Track payment status, send reminders, and convert proposals to invoices with one click.</p>
+          <p class="text-gray-400 leading-relaxed mb-6">Create professional invoices and proposals in minutes. Add line items with quantities, taxes, and discounts. Send payment links via Square — customers pay by credit card, debit, Apple Pay, or Google Pay. Track payment status, send reminders, and convert proposals to invoices with one click.</p>
           <ul class="space-y-2 mb-6">
             <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#a78bfa] text-xs"></i>Professional branded invoices & proposals</li>
             <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#a78bfa] text-xs"></i>Square payment links (credit, debit, Apple Pay)</li>
@@ -17968,7 +17971,7 @@ function getPricingPageHTML() {
     ],
     "aggregateRating": {"@type": "AggregateRating", "ratingValue": "4.9", "ratingCount": "200", "bestRating": "5"},
     "review": [
-      {"@type":"Review","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"author":{"@type":"Person","name":"Derek M."},"datePublished":"2026-02-11","reviewBody":"We switched from EagleView last quarter. $8 per report versus $60-90 freed up roughly $1,400/month and the measurements come back in under a minute. Accepted on every Intact and Aviva claim we've submitted so far."},
+      {"@type":"Review","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"author":{"@type":"Person","name":"Derek M."},"datePublished":"2026-02-11","reviewBody":"We switched from EagleView last quarter. $8 per report versus $60-90 freed up roughly $1,400/month and the measurements come back in 1–2 hours. Accepted on every Intact and Aviva claim we've submitted so far."},
       {"@type":"Review","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"author":{"@type":"Person","name":"Priya S."},"datePublished":"2026-03-03","reviewBody":"Insurance-ready output lines up with Xactimate F9 fields. Saved us from building a separate measurement vendor relationship — the whole pipeline lives in one tool."},
       {"@type":"Review","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"author":{"@type":"Person","name":"Shawn T."},"datePublished":"2026-01-28","reviewBody":"AI Secretary paid for itself the first storm weekend. Caught three insurance leads between 11 PM Friday and 8 AM Sunday that would have gone to voicemail."},
       {"@type":"Review","reviewRating":{"@type":"Rating","ratingValue":"4","bestRating":"5"},"author":{"@type":"Person","name":"Michelle R."},"datePublished":"2026-02-19","reviewBody":"Rural addresses occasionally lose satellite confidence, but the platform flags it and refunds the credit — I'd rather that than a wrong number."},
@@ -18041,7 +18044,7 @@ function getPricingPageHTML() {
         <div class="text-center">
           <div class="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-3"><span class="text-green-700 font-bold text-lg">4</span></div>
           <h3 class="font-semibold mb-1" style="color:var(--text-primary)">Get Your Report</h3>
-          <p class="text-sm" style="color:var(--text-muted)">AI-powered analysis with full measurements in seconds</p>
+          <p class="text-sm" style="color:var(--text-muted)">AI-powered analysis with full measurements in 1&ndash;2 hours</p>
         </div>
       </div>
     </div>
@@ -19090,7 +19093,7 @@ function getLanderFunnelHTML() {
               </div>
               <div>
                 <p class="font-bold text-white text-sm">Roof Measurement Report</p>
-                <p class="text-xs text-gray-400">Generated in 42 seconds</p>
+                <p class="text-xs text-gray-400">Generated in ~2 hours</p>
               </div>
               <span class="ml-auto bg-green-500/20 text-green-300 text-xs px-2.5 py-1 rounded-full font-medium">HIGH Quality</span>
             </div>
@@ -19188,7 +19191,7 @@ function getLanderFunnelHTML() {
         Your Next 4 Reports<br/>Are On Us
       </h2>
       <p class="text-lg text-gray-300 mb-10 max-w-xl mx-auto">
-        Sign up in 30 seconds, get 4 free professional roof measurement reports, and access the full CRM — no credit card required.
+        Sign up in 1 minute, get 4 free professional roof measurement reports, and access the full CRM — no credit card required.
       </p>
       <div class="flex flex-col sm:flex-row sm:flex-wrap gap-3 justify-center">
         <a href="/register" onclick="if(window.gtag)gtag('event','cta_click',{cta:'lander_final_register'});if(window.trackAdsConversion)window.trackAdsConversion('lead',{value:5,currency:'CAD'});" class="group inline-flex items-center justify-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
@@ -23406,7 +23409,7 @@ function getDeductibleEstimatorHTML(isEmbed = false): string {
 <head>
   ${getHeadTags('/tools/insurance-deductible-estimator')}
   <title>Insurance Claim Deductible Estimator for Roofing | Roof Manager</title>
-  <meta name="description" content="Free estimator for roof insurance claim deductibles. Compute your out-of-pocket on a hail, wind, or storm claim in seconds. Supports flat and percentage deductibles.">
+  <meta name="description" content="Free estimator for roof insurance claim deductibles. Compute your out-of-pocket on a hail, wind, or storm claim in minutes. Supports flat and percentage deductibles.">
   <link rel="canonical" href="${canonical}">
   <meta property="og:title" content="Insurance Claim Deductible Estimator | Roof Manager">
   <meta property="og:description" content="Out-of-pocket cost on a roof claim &mdash; instant estimator.">

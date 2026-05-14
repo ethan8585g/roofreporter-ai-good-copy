@@ -358,7 +358,7 @@ export function convertToVisionFindings(
     overall_condition: validateCondition(cloudRunResponse.vision.overall_condition) || deriveCondition(heatScore.total),
     summary: String(cloudRunResponse.vision.summary || `${findings.length} findings via custom AI model`).substring(0, 200),
     duration_ms: cloudRunResponse.inference_time_ms,
-    source_image: sourceType
+    source_image: sourceType as 'satellite_overhead' | 'rgb_geotiff' | 'street_view'
   }
 }
 
@@ -396,7 +396,7 @@ export function convertToAIGeometry(
     obstructions,
     overall_quality_score: cloudRunResponse.geometry.overall_quality_score || 70,
     pixel_scale: cloudRunResponse.geometry.pixel_scale
-  } as AIMeasurementAnalysis
+  } as unknown as AIMeasurementAnalysis
 }
 
 /**

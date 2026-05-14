@@ -245,7 +245,6 @@ export async function fireWebhooks(db: D1Database, ownerId: number, eventType: s
 // HELPER: Create notification + trigger push delivery
 // ============================================================
 import { sendPushToUser } from '../services/push-service'
-import type { Bindings, AppEnv } from '../types'
 
 export async function createNotification(
   db: D1Database,

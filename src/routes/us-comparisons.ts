@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
-import type { Env } from '../types'
+import type { Bindings } from '../types'
 import { comparisonLeadFormHTML } from '../lib/lead-forms'
 
-const app = new Hono<{ Bindings: Env }>()
+const app = new Hono<{ Bindings: Bindings }>()
 
 function head(title: string, desc: string) {
   return `<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">

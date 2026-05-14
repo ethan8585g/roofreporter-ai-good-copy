@@ -49,7 +49,7 @@ widgetRoutes.options('/public/*', async (c) => {
   c.header('Access-Control-Allow-Origin', c.req.header('Origin') || '*')
   c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   c.header('Access-Control-Allow-Headers', 'Content-Type')
-  return c.text('', 204)
+  return c.text('', 204 as any)
 })
 
 // GET /public/config/:public_key — widget branding config

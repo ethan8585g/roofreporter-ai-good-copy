@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import type { Env } from '../types'
+import type { Bindings } from '../types'
 import { US_STATES, ALL_STATE_SLUGS, US_CITIES } from '../data/us-states'
 import { inlineQuoteFormHTML, damageAssessmentFormHTML } from '../lib/lead-forms'
 
@@ -19,7 +19,7 @@ function getRelatedStates(stateSlug: string): string[] {
   return []
 }
 
-const app = new Hono<{ Bindings: Env }>()
+const app = new Hono<{ Bindings: Bindings }>()
 
 function head(title: string, desc: string, stateCode?: string) {
   return `<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">

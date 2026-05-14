@@ -2658,7 +2658,7 @@ export function traceUiToEnginePayload(
     return {
       id,
       pitch,
-      pts: (pts || []).map(p => ({ lat: p.lat, lng: p.lng, elevation: null })),
+      pts: (pts || []).map((p: any) => ({ lat: p.lat, lng: p.lng, elevation: null })),
     }
   }
 

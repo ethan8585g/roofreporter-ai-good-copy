@@ -32,6 +32,10 @@ export interface SolarLatLng {
 export interface SolarBoundingBox {
   sw: SolarLatLng
   ne: SolarLatLng
+  // Legacy snake-case aliases sometimes returned by older Solar API
+  // shapes / cached payloads. Defensive readers fall through to these.
+  southWest?: SolarLatLng
+  northEast?: SolarLatLng
 }
 
 export interface SolarRoofSegmentStats {
@@ -220,8 +224,8 @@ function classifyEdge(
   p1: Point2D, p2: Point2D,
   facetCentroid: Point2D, outerPerimeter: Point2D[],
   allFacets: { polygon: Point2D[]; azimuth: number; pitch: number }[],
-  facetIndex: number
-): 'EAVE' | 'RAKE' | 'HIP' | 'RIDGE' {
+  facetIndex: number,
+): 'EAVE' | 'RAKE' | 'HIP' | 'RIDGE' | 'VALLEY' {
   // Check if this edge is on the outer perimeter
   const isPerimeterEdge = isOnPerimeter(p1, p2, outerPerimeter)
   

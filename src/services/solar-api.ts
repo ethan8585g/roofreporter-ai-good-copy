@@ -919,7 +919,8 @@ export async function callGoogleSolarAPI(
       ...generateEnhancedImagery(lat, lng, imageKey, totalFootprintSqft),
       dsm_url: null,
       mask_url: null,
-    },
+      street_view_url: null,
+    } as any,
     // Solar-derived AI geometry (panel convex hulls + segment boundingBoxes → pixel polygons)
     // Provides real roof geometry from Google's building model WITHOUT needing Gemini Vision.
     // Gemini can override this later with higher-quality vision-based geometry.
@@ -1090,7 +1091,7 @@ export function generateMockRoofReport(order: any, apiKey?: string, gptEstimate?
     max_sunshine_hours: Math.round(edmontonSunHours * 10) / 10,
     num_panels_possible: panelCount,
     yearly_energy_kwh: Math.round(panelCount * 400),
-    imagery: lat && lng && apiKey
+    imagery: (lat && lng && apiKey
       ? {
           ...generateEnhancedImagery(lat, lng, apiKey, Math.round(totalFootprintSqft)),
           dsm_url: null,
@@ -1113,7 +1114,7 @@ export function generateMockRoofReport(order: any, apiKey?: string, gptEstimate?
           closeup_sw_url: null,
           closeup_se_url: null,
           street_view_url: null,
-        },
+        }) as any,
     quality: {
       imagery_quality: gptEstimate ? 'MEDIUM' : 'BASE',
       field_verification_recommended: true,

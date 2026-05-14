@@ -400,7 +400,7 @@ export default {
                 const insights = await fetchBuildingInsightsRaw(Number(row.latitude), Number(row.longitude), env.GOOGLE_SOLAR_API_KEY)
                 let sqft: number | null = null
                 const wholeRoof = insights?.solarPotential?.wholeRoofStats?.areaMeters2
-                if (Number.isFinite(wholeRoof) && wholeRoof > 0) {
+                if (wholeRoof !== undefined && Number.isFinite(wholeRoof) && wholeRoof > 0) {
                   sqft = Math.round(Number(wholeRoof) * 10.7639)
                 } else if (insights?.boundingBox) {
                   const bb = insights.boundingBox

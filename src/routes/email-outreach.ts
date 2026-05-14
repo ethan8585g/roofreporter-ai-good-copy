@@ -879,11 +879,12 @@ emailOutreachRoutes.post('/lists/:id/upload-csv', async (c) => {
     const listId = parseInt(c.req.param('id'))
     const formData = await c.req.formData()
     const file = formData.get('file')
-    if (!file || !(file instanceof File)) {
+    const fileAny = file as any
+    if (!fileAny || typeof fileAny.text !== 'function') {
       return c.json({ error: 'CSV file is required' }, 400)
     }
 
-    const text = await file.text()
+    const text: string = await fileAny.text()
     const lines = text.trim().split('\n').map(l => l.trim()).filter(l => l)
     if (lines.length < 2) return c.json({ error: 'CSV must have header + at least 1 row' }, 400)
 
@@ -932,7 +933,7 @@ emailOutreachRoutes.post('/lists/:id/upload-csv', async (c) => {
 
     await c.env.DB.prepare("UPDATE email_lists SET contact_count = (SELECT COUNT(*) FROM email_contacts WHERE list_id = ?), updated_at = datetime('now') WHERE id = ?").bind(listId, listId).run()
 
-    return c.json({ success: true, imported, skipped, errors, total: lines.length - 1, filename: file.name })
+    return c.json({ success: true, imported, skipped, errors, total: lines.length - 1, filename: fileAny.name })
   } catch (err: any) {
     return c.json({ error: err.message }, 500)
   }
@@ -1112,7 +1113,7 @@ emailOutreachRoutes.get('/lists/:id/export', async (c) => {
     `).bind(listId).all()
 
     const header = 'email,company_name,contact_name,phone,city,province,website,status,sends,opens,clicks,source,created_at'
-    const rows = (contacts.results || []).map((c: Context<AppEnv>) =>
+    const rows = (contacts.results || []).map((c: any) =>
       [c.email, c.company_name, c.contact_name, c.phone, c.city, c.province, c.website, c.status, c.sends_count, c.opens_count, c.clicks_count, c.source, c.created_at]
         .map(v => `"${(v || '').toString().replace(/"/g, '""')}"`)
         .join(',')

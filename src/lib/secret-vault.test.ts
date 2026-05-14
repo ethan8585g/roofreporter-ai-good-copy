@@ -10,7 +10,7 @@ describe('secret-vault', () => {
   it('reports vault presence', () => {
     expect(hasVault(envWith)).toBe(true)
     expect(hasVault(envWithout)).toBe(false)
-    expect(hasVault(null)).toBe(false)
+    expect(hasVault(null as any)).toBe(false)
   })
 
   it('round-trips a secret', async () => {

@@ -98,7 +98,7 @@ async function encryptPayload(
 
   // Ephemeral sender keypair (P-256)
   const senderKP = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])
-  const senderPubRaw = new Uint8Array(await crypto.subtle.exportKey('raw', (senderKP as any).publicKey))
+  const senderPubRaw = new Uint8Array((await crypto.subtle.exportKey('raw' as any, (senderKP as CryptoKeyPair).publicKey)) as ArrayBuffer)
 
   // Import receiver public for ECDH
   const receiverJwk = {
@@ -108,7 +108,7 @@ async function encryptPayload(
     ext: true
   }
   const receiverPubKey = await crypto.subtle.importKey('jwk', receiverJwk as any, { name: 'ECDH', namedCurve: 'P-256' }, false, [])
-  const ecdhSecret = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: receiverPubKey }, (senderKP as any).privateKey, 256))
+  const ecdhSecret = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: receiverPubKey } as any, (senderKP as CryptoKeyPair).privateKey, 256))
 
   // key_info = "WebPush: info\0" || ua_public || as_public
   const keyInfo = concat(new TextEncoder().encode('WebPush: info\0'), receiverPub, senderPubRaw)

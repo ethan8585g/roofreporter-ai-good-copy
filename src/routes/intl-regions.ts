@@ -4,7 +4,7 @@
 // a /:region detail page.
 
 import { Hono } from 'hono'
-import type { Env } from '../types'
+import type { Bindings } from '../types'
 import { UK_REGIONS, ALL_UK_REGION_SLUGS } from '../data/uk-regions'
 import { AU_REGIONS, ALL_AU_REGION_SLUGS } from '../data/au-regions'
 import { inlineQuoteFormHTML } from '../lib/lead-forms'
@@ -62,7 +62,7 @@ function footer(hubLabel: string) {
 
 // -------- UK --------
 
-export const ukApp = new Hono<{ Bindings: Env }>()
+export const ukApp = new Hono<{ Bindings: Bindings }>()
 
 ukApp.get('/', (c) => {
   const base = 'https://www.roofmanager.ca'
@@ -231,7 +231,7 @@ ukApp.get('/:region', (c) => {
 
 // -------- AU --------
 
-export const auApp = new Hono<{ Bindings: Env }>()
+export const auApp = new Hono<{ Bindings: Bindings }>()
 
 auApp.get('/', (c) => {
   const base = 'https://www.roofmanager.ca'

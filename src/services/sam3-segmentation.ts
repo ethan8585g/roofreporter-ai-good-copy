@@ -954,7 +954,7 @@ export function convertToAIMeasurement(
   }
 
   // Convert segments to facets
-  const facets: AIRoofFacet[] = result.segments
+  const facets: AIRoofFacet[] = (result.segments
     .filter(s => ['main_facet', 'dormer', 'flat_section', 'gable_end'].includes(s.type))
     .map((seg, idx) => ({
       id: `F${idx + 1}`,
@@ -967,10 +967,10 @@ export function convertToAIMeasurement(
       pitch_label: seg.estimated_pitch_label || pitchDegToLabel(seg.estimated_pitch_deg),
       azimuth_deg: seg.estimated_azimuth_deg || 0,
       label: String.fromCharCode(65 + idx), // A, B, C, ...
-    }))
+    }))) as unknown as AIRoofFacet[]
 
   // Convert edges to lines
-  const lines: AIRoofLine[] = result.edges.map((e, idx) => {
+  const lines: AIRoofLine[] = (result.edges.map((e, idx) => {
     const startLL = pixelToLatLng(e.start.x, e.start.y)
     const endLL = pixelToLatLng(e.end.x, e.end.y)
     return {
@@ -980,7 +980,7 @@ export function convertToAIMeasurement(
       end: { x: e.end.x, y: e.end.y, lat: endLL.lat, lng: endLL.lng },
       length_ft: e.length_ft || 0,
     }
-  })
+  })) as unknown as AIRoofLine[]
 
   // Build perimeter from roof outline or segment bounding
   const perimeter: MeasurementPoint[] = []
@@ -991,12 +991,12 @@ export function convertToAIMeasurement(
     const sorted = allPoints.sort((a, b) => a.x - b.x || a.y - b.y)
     for (const p of sorted.slice(0, Math.min(sorted.length, 50))) {
       const ll = pixelToLatLng(p.x, p.y)
-      perimeter.push({ x: p.x, y: p.y, lat: ll.lat, lng: ll.lng })
+      perimeter.push({ x: p.x, y: p.y, lat: ll.lat, lng: ll.lng } as any)
     }
   }
 
   // Convert obstructions
-  const obstructionsList: AIObstruction[] = result.obstructions.map((obs, idx) => ({
+  const obstructionsList: AIObstruction[] = (result.obstructions.map((obs, idx) => ({
     id: `O${idx + 1}`,
     type: obs.type as any,
     center: {
@@ -1005,12 +1005,12 @@ export function convertToAIMeasurement(
     },
     area_sqft: obs.area_sqft || 0,
     perimeter_ft: 0,
-  }))
+  }))) as unknown as AIObstruction[]
 
   return {
     facets,
     lines,
-    perimeter,
+    perimeter: perimeter as any,
     obstructions: obstructionsList,
     total_area_sqft: result.summary.total_area_sqft,
     predominant_pitch_deg: result.summary.predominant_pitch_deg,
@@ -1018,7 +1018,7 @@ export function convertToAIMeasurement(
     complexity: result.summary.complexity as any,
     quality_score: 75,
     source: `CV Pipeline (Tiers: ${result.processing_tiers_used.join(', ')})`,
-  }
+  } as any
 }
 
 // ============================================================

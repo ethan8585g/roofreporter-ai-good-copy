@@ -101,7 +101,7 @@ export function buildDataLayersReport(
         material_squares: dlResult.area.materialSquares
       }
     }
-  } as RoofReport
+  } as unknown as RoofReport
 }
 
 /**

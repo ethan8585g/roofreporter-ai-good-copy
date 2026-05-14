@@ -284,7 +284,7 @@ const CUSTOMER_COLS = 'c.id, c.email, c.name, c.phone, c.company_name, c.is_acti
   'c.auto_invoice_enabled, c.square_customer_id, ' +
   'c.subscription_status, c.subscription_plan, c.subscription_start, c.subscription_end'
 
-async function getCustomerFromToken(db: D1Database, token: string | undefined): Promise<any | null> {
+async function getCustomerFromToken(db: D1Database, token: string | null | undefined): Promise<any | null> {
   if (!token) return null
 
   // 1. Try customer session (normal path)

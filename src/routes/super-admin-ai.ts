@@ -10,7 +10,7 @@ import { ALL_TOOLS, runTool } from '../services/ai-assistant-tools'
 import { validateAdminSession, requireSuperadmin } from './auth'
 
 type Env = {
-  DB: any
+  DB: D1Database
   ANTHROPIC_API_KEY: string
   GITHUB_TOKEN?: string
   git_token?: string

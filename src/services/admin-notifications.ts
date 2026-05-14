@@ -128,7 +128,7 @@ export async function recordAndNotify(
           order_number: order.order_number,
           property_address: order.property_address,
           customer_name: order.customer_name || '',
-          order_id: order.order_id,
+          order_id: order.order_id ?? undefined,
           customer_id: order.customer_id ?? null,
         })
         emailStatus = 'sent'

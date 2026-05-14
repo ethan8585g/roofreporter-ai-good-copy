@@ -442,7 +442,7 @@ adminRoutes.get('/material-preferences', async (c) => {
       proposalPricing = parsed.proposal_pricing || null
     } catch {}
   }
-  if (proposalPricing) prefs.proposal_pricing = proposalPricing
+  if (proposalPricing) (prefs as any).proposal_pricing = proposalPricing
   return c.json({ preferences: prefs })
 })
 
@@ -3457,7 +3457,7 @@ adminRoutes.post('/superadmin/secretary-manager/setup-livekit/:customerId', asyn
   }
   try {
     const result = await deployLiveKitForCustomer(c.env, customerId, cfg.assigned_phone_number, { reuse_existing: true })
-    return c.json({ success: true, ...result })
+    return c.json({ ...result, success: true })
   } catch (err: any) {
     return c.json({ error: err?.message || 'LiveKit setup failed' }, 500)
   }
@@ -5146,7 +5146,7 @@ adminRoutes.post('/superadmin/backfill-house-sqft', async (c) => {
         // (more accurate); fall back to boundingBox area.
         let sqft: number | null = null
         const wholeRoof = insights?.solarPotential?.wholeRoofStats?.areaMeters2
-        if (Number.isFinite(wholeRoof) && wholeRoof > 0) {
+        if (wholeRoof !== undefined && Number.isFinite(wholeRoof) && wholeRoof > 0) {
           sqft = Math.round(Number(wholeRoof) * 10.7639)  // m² → ft²
         } else if (insights?.boundingBox) {
           const bb = insights.boundingBox

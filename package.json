@@ -49,6 +49,7 @@
     "@hono/vite-dev-server": "^0.18.2",
     "@tailwindcss/cli": "^4.2.2",
     "@tailwindcss/forms": "^0.5.11",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/proj4": "^2.5.6",
     "marked": "^18.0.2",
     "tailwindcss": "^4.2.2",

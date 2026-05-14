@@ -120,7 +120,7 @@ export async function createJWT(sa: ServiceAccountKey, scopes: string[]): Promis
 // ============================================================
 // Exchange JWT for OAuth2 access token
 // ============================================================
-export async function exchangeJWTForToken(jwt: string): Promise<{ access_token: string; expires_in: number }> {
+export async function exchangeJWTForToken(jwt: string): Promise<{ access_token: string; expires_in: number; token_type?: string }> {
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

@@ -1,9 +1,9 @@
 import { Hono } from 'hono'
-import type { Env } from '../types'
+import type { Bindings } from '../types'
 import { US_STATES, US_CITIES, ALL_STATE_SLUGS } from '../data/us-states'
 import { inlineQuoteFormHTML } from '../lib/lead-forms'
 
-const app = new Hono<{ Bindings: Env }>()
+const app = new Hono<{ Bindings: Bindings }>()
 
 // Storm-risk clusters for cross-linking related state pages (SEO T-17).
 // State slugs follow the lowercase-name convention used in US_STATES.

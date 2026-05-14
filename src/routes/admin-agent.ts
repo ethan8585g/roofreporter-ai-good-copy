@@ -233,9 +233,9 @@ adminAgentRoutes.post('/chat', async (c) => {
     } else if (m.role === 'assistant' && m.tool_calls) {
       const toolCalls = JSON.parse(m.tool_calls)
       const content: Anthropic.ContentBlock[] = []
-      if (m.content) content.push({ type: 'text', text: m.content })
+      if (m.content) content.push({ type: 'text', text: m.content } as Anthropic.ContentBlock)
       for (const tc of toolCalls) {
-        content.push({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.input ?? {} })
+        content.push({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.input ?? {} } as Anthropic.ContentBlock)
       }
       messages.push({ role: 'assistant', content })
     } else {

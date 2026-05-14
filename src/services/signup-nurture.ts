@@ -57,7 +57,7 @@ const STAGE_CONFIG: Record<NurtureStage, {
     body: (firstName) => buildHtmlEmail({
       heading: `Welcome to Roof Manager, ${firstName} \u{1F44B}`,
       lead: `Thanks for signing up. You have <strong>4 free roof measurement reports</strong> waiting in your account — no credit card needed.`,
-      body: `Want to try one right now? Most contractors test with their current property or a recent job address — it takes about 60 seconds:`,
+      body: `Want to try one right now? Most contractors test with their current property or a recent job address — it takes about a minute to place the order:`,
       ctaLabel: `Order Your First Free Report →`,
       ctaUrl: `https://www.roofmanager.ca/customer/dashboard?utm_source=nurture&utm_medium=email&utm_campaign=signup_followup_1h`,
       secondary: `Not ready yet? No problem. <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" style="color:#00CC70;text-decoration:none;font-weight:600;">See a sample report</a> first — no signup required.`,

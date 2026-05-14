@@ -9,7 +9,7 @@ import { getScope } from './invoices'
 // Hono's context is mocked to just { get(key) } since getScope only reads the
 // 'admin' slot.
 
-function ctx(user: any) {
+function ctx(user: any): any {
   return { get: (k: string) => (k === 'admin' ? user : undefined) }
 }
 

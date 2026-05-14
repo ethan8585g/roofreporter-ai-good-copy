@@ -241,7 +241,7 @@ publicApiRoutes.post('/reports', async (c) => {
       order_id: orderResult.meta.last_row_id as number,
       order_number: orderNumber,
       customer_id: null,
-      customer_email: account.email || '',
+      customer_email: account.contact_email || '',
       customer_name: account.company_name || 'API Client',
       property_address: address.trim(),
       service_tier: 'api',

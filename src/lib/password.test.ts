@@ -55,7 +55,7 @@ describe('upgradeHashIfLegacy', () => {
     const hex = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('')
     let saved: string | null = null
     await upgradeHashIfLegacy('pw', hex, async (h) => { saved = h })
-    expect(saved?.startsWith('pbkdf2$sha512$100000$')).toBe(true)
+    expect((saved as string | null)?.startsWith('pbkdf2$sha512$100000$')).toBe(true)
     expect(await verifyPassword('pw', saved!)).toBe(true)
   })
   it('no-ops for new-format hash', async () => {

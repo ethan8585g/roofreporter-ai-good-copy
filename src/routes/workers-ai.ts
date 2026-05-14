@@ -369,7 +369,7 @@ function categorizeForRoofing(classifications: any[]): any {
   const damageIndicators = ['rust', 'crack', 'broken', 'damaged', 'decay', 'moss', 'mold', 'stain']
   const obstructions = ['chimney', 'antenna', 'satellite', 'solar', 'panel', 'vent', 'pipe']
 
-  const topLabels = classifications.slice(0, 10).map((c: Context<AppEnv>) => ({
+  const topLabels = classifications.slice(0, 10).map((c: any) => ({
     label: c.label || c.name || '',
     score: c.score || c.confidence || 0
   }))

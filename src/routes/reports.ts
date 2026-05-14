@@ -1252,7 +1252,7 @@ reportsRoutes.get('/:orderId/vision', async (c) => {
   if (!row?.vision_findings_json) return c.json({ error: 'No vision inspection run yet' }, 404)
   const vf: VisionFindings = JSON.parse(row.vision_findings_json)
   const q = parseBody(visionFilterQuery, c.req.query())
-  const filtered = filterFindings(vf.findings, { minConfidence: q.min_confidence, category: q.category as any, severity: q.severity as any })
+  const filtered = filterFindings(vf.findings, { minConfidence: q.min_confidence, categories: q.category ? [q.category as any] : undefined, severities: q.severity ? [q.severity as any] : undefined })
   return c.json({ ...vf, findings: filtered, finding_count: filtered.length })
 })
 
@@ -1472,16 +1472,22 @@ reportsRoutes.post('/:orderId/trace-insights', async (c) => {
   const areaSqft = Math.round(totalAreaM2 * 10.7639)
   const perimeterM = primarySec.perimeterM
   const perimeterFt = Math.round(perimeterM * 3.28084)
-  const n = rawEaves[0].length
-  const eavePoints = rawEaves[0]
+  const firstEaves = rawEaves[0] || []
+  const n = firstEaves.length
+  const eavePoints = firstEaves
 
   // Count ridge/hip/valley lines and compute their total lengths
   const computeLineLength = (line: { lat: number; lng: number }[]) => {
     if (line.length < 2) return 0
     let len = 0
+    const cLatLine = line.reduce((s, p) => s + p.lat, 0) / line.length
+    const M_PER_DEG_LNG_LINE = 111320 * Math.cos(cLatLine * Math.PI / 180)
     for (let i = 0; i < line.length - 1; i++) {
-      const dx = (line[i + 1].lng - line[i].lng) * M_PER_DEG_LNG
-      const dy = (line[i + 1].lat - line[i].lat) * M_PER_DEG_LAT
+      const a = line[i]
+      const b = line[i + 1]
+      if (!a || !b) continue
+      const dx = (b.lng - a.lng) * M_PER_DEG_LNG_LINE
+      const dy = (b.lat - a.lat) * M_PER_DEG_LAT
       len += Math.sqrt(dx * dx + dy * dy)
     }
     return len
@@ -1593,9 +1599,9 @@ reportsRoutes.post('/:orderId/trace-remeasure', async (c) => {
       property_address: order.property_address || '',
       homeowner_name: order.homeowner_name || '',
       order_number: order.order_number || '',
-      latitude: order.latitude,
-      longitude: order.longitude,
-      price_per_bundle: order.price_per_bundle,
+      latitude: order.latitude ?? undefined,
+      longitude: order.longitude ?? undefined,
+      price_per_bundle: (order.price_per_bundle as number | undefined) ?? undefined,
     },
     defaultPitchRise
   )
@@ -1813,9 +1819,9 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
       `footprint=${report.key_measurements.total_projected_footprint_ft2}sqft, ` +
       `sloped=${report.key_measurements.total_roof_area_sloped_ft2}sqft, ` +
       `eave_pts=${report.key_measurements.num_eave_points}, ` +
-      `ridges=${report.key_measurements.num_ridges} (${report.key_measurements.ridges_total_ft}ft), ` +
-      `hips=${report.key_measurements.num_hips} (${report.key_measurements.hips_total_ft}ft), ` +
-      `valleys=${report.key_measurements.num_valleys} (${report.key_measurements.valleys_total_ft}ft), ` +
+      `ridges=${report.key_measurements.num_ridges} (${(report.key_measurements as any).ridges_total_ft}ft), ` +
+      `hips=${report.key_measurements.num_hips} (${(report.key_measurements as any).hips_total_ft}ft), ` +
+      `valleys=${report.key_measurements.num_valleys} (${(report.key_measurements as any).valleys_total_ft}ft), ` +
       `pitch=${report.key_measurements.dominant_pitch_label}, ` +
       `pitch_source=${pitchSource}`)
 
@@ -2537,7 +2543,7 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
   try {
     await enrichReportWithFlashing(reportData as any, c.env.DB, {
       imageUrl: enhanceImg,
-      customerId: order?.customer_id ?? null,
+      customerId: (order?.customer_id ?? null) as number | null,
       vertexApiKey: c.env.GOOGLE_VERTEX_API_KEY,
       gcpProject: c.env.GOOGLE_CLOUD_PROJECT,
       gcpLocation: c.env.GOOGLE_CLOUD_LOCATION,
@@ -2550,7 +2556,7 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
 
   try {
     await enrichReportWithGutters(reportData as any, c.env.DB, {
-      customerId: order?.customer_id ?? null,
+      customerId: (order?.customer_id ?? null) as number | null,
     })
   } catch (gutterErr: any) {
     console.warn(`[GenerateEnhanced] Order ${orderId}: gutter enrichment skipped: ${gutterErr?.message}`)
@@ -2565,8 +2571,8 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
     provider: reportData.metadata?.provider || 'google_solar',
     accuracy: reportData.metadata?.accuracy_benchmark || 'unknown',
     has_vision: !!reportData.vision_findings,
-    roof_area: reportData.roof_area_sqft || 0,
-    roof_pitch: reportData.roof_pitch_degrees || 0
+    roof_area: (reportData as any).roof_area_sqft || 0,
+    roof_pitch: (reportData as any).roof_pitch_degrees || 0
   }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
   // Always save base report as 'completed' first — customer can see it immediately
@@ -2627,7 +2633,7 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
               const reportSubject = `Roof Report - ${order.property_address}`
               // Tracking BEFORE send — same pixel + click rewrite regardless of
               // which Gmail transport we land on. customerId from the order.
-              const trackingToken = await logEmailSend(c.env as any, { customerId: order.customer_id ?? null, recipient, kind: 'report_delivery', subject: reportSubject })
+              const trackingToken = await logEmailSend(c.env as any, { customerId: (order.customer_id ?? null) as number | null, recipient, kind: 'report_delivery', subject: reportSubject })
               const pixel = buildTrackingPixel(trackingToken)
               const withPixel = baseEmailHtml.includes('</body>') ? baseEmailHtml.replace('</body>', `${pixel}</body>`) : baseEmailHtml + pixel
               const emailHtml = wrapEmailLinks(withPixel, trackingToken)
@@ -2893,7 +2899,7 @@ reportsRoutes.post('/:orderId/cloud-ai-analyze', async (c) => {
     model: crResult.model_version,
     inference_ms: crResult.inference_time_ms,
     vision: visionFindings ? { finding_count: visionFindings.finding_count, heat_score: visionFindings.heat_score, condition: visionFindings.overall_condition } : null,
-    geometry: geometry ? { facets: geometry.facets.length, lines: geometry.lines.length, quality: geometry.overall_quality_score } : null,
+    geometry: geometry ? { facets: geometry.facets.length, lines: geometry.lines.length, quality: (geometry as any).overall_quality_score } : null,
     images_analyzed: imageUrls.length
   })
 })
@@ -3894,8 +3900,8 @@ async function _generateReportForOrderInner(
           traceData,
           {
             property_address: order.property_address,
-            homeowner_name: order.homeowner_name,
-            order_number: order.order_number,
+            homeowner_name: order.homeowner_name ?? undefined,
+            order_number: order.order_number ?? undefined,
           },
           solarPitchRise,
           solarFootprint > 0 ? { source: 'google_solar', footprint_ft2: solarFootprint } : undefined
@@ -4100,7 +4106,7 @@ async function _generateReportForOrderInner(
           accuracy_benchmark: 'GPS coordinate trace + Shoelace area + common-run hip/valley correction',
           cost_per_query: solarPitch ? '$0.075 CAD (Solar API for pitch+imagery only)' : '$0.00 (trace-only)',
         },
-      } as RoofReport
+      } as unknown as RoofReport
 
       // Enrich trace materials with line_items + waste_table for Material Calculator
       reportData.materials = computeMaterialEstimate(
@@ -4157,8 +4163,8 @@ async function _generateReportForOrderInner(
             if (solarGeo) {
               const autoPayload = solarGeometryToTracePayload(rawSolar, solarGeo, {
                 property_address: order.property_address,
-                homeowner_name:   order.homeowner_name,
-                order_number:     order.order_number,
+                homeowner_name:   order.homeowner_name ?? undefined,
+                order_number:     order.order_number ?? undefined,
               })
               if (autoPayload && autoPayload.eaves_outline.length >= 3) {
                 const engine = new RoofMeasurementEngine(autoPayload)
@@ -4202,9 +4208,9 @@ async function _generateReportForOrderInner(
               area_meters2:        Math.round(totalSlopedFt2 / 10.7639 * 10) / 10,
             }]
 
-        const autoEdges = generateEdgesFromSegments(segments, Math.round(km.total_projected_footprint_ft2))
+        const autoEdges = generateEdgesFromSegments(segments as any, Math.round(km.total_projected_footprint_ft2))
         const autoEdgeSummary = computeEdgeSummary(autoEdges)
-        const autoMaterials = computeMaterialEstimate(Math.round(totalSlopedFt2), autoEdges, segments)
+        const autoMaterials = computeMaterialEstimate(Math.round(totalSlopedFt2), autoEdges, segments as any)
 
         reportData = {
           property: {
@@ -4217,15 +4223,15 @@ async function _generateReportForOrderInner(
           total_footprint_sqft:  Math.round(km.total_projected_footprint_ft2),
           total_true_area_sqft:  Math.round(totalSlopedFt2),
           total_squares:         km.total_squares_gross_w_waste,
-          waste_factor_pct:      Math.round((km.waste_factor - 1) * 100),
+          waste_factor_pct:      Math.round(((km as any).waste_factor - 1) * 100),
           roof_pitch_degrees:    km.dominant_pitch_angle_deg,
           roof_pitch_ratio:      km.dominant_pitch_label,
           segments,
           edges: autoEdges,
           edge_summary: autoEdgeSummary,
           materials: autoMaterials,
-          satellite_image_url: solarPitch?.satellite_image_url || '',
-          map_image_url:       solarPitch?.satellite_image_url || '',
+          satellite_image_url: (solarPitch as any)?.satellite_image_url || '',
+          map_image_url:       (solarPitch as any)?.satellite_image_url || '',
           metadata: {
             generated_at:   new Date().toISOString(),
             api_duration_ms: Date.now() - startTime,
@@ -4238,7 +4244,7 @@ async function _generateReportForOrderInner(
             notes: ['⚠️ Measurements auto-generated from satellite data — no roof trace drawn. Accuracy ~80%. For maximum accuracy, submit a traced order.'],
             data_sources: ['google_solar_api', 'trace_engine_v4'],
           },
-        } as RoofReport
+        } as unknown as RoofReport
 
       } else {
         // ── ATTEMPT 2: Legacy Solar API full report (unchanged fallback) ──
@@ -4274,14 +4280,14 @@ async function _generateReportForOrderInner(
     // which is already accurate and fast (~5-10s total).
 
     // ── CUSTOMER PRICING ──
-    if (order.price_per_bundle && order.price_per_bundle > 0) {
-      const trueArea = reportData.total_true_area_sqft || 0
+    if (order.price_per_bundle && (order.price_per_bundle as number) > 0) {
+      const trueArea = (reportData as any).total_true_area_sqft || 0
       const wasteMultiplier = 1.20  // +5% safety margin per Reuse Canada standard
       const grossSquares = Math.ceil((trueArea * wasteMultiplier) / 100 * 10) / 10
-      reportData.customer_price_per_bundle = parseFloat(order.price_per_bundle)
-      reportData.customer_gross_squares = grossSquares
-      reportData.customer_total_cost_estimate = Math.round(grossSquares * parseFloat(order.price_per_bundle) * 100) / 100
-      console.log(`[Generate] Order ${orderId}: Customer pricing — $${order.price_per_bundle}/sq × ${grossSquares} squares = $${reportData.customer_total_cost_estimate} CAD`)
+      ;(reportData as any).customer_price_per_bundle = parseFloat(String(order.price_per_bundle))
+      ;(reportData as any).customer_gross_squares = grossSquares
+      ;(reportData as any).customer_total_cost_estimate = Math.round(grossSquares * parseFloat(String(order.price_per_bundle)) * 100) / 100
+      console.log(`[Generate] Order ${orderId}: Customer pricing — $${order.price_per_bundle}/sq × ${grossSquares} squares = $${(reportData as any).customer_total_cost_estimate} CAD`)
     }
 
     // ── PRO-TIER: confidence breakdown, version diff ──
@@ -4326,7 +4332,7 @@ async function _generateReportForOrderInner(
           : null)
       await enrichReportWithFlashing(reportData as any, env.DB, {
         imageUrl: flashingImg,
-        customerId: order?.customer_id ?? null,
+        customerId: (order?.customer_id ?? null) as number | null,
         vertexApiKey: env.GOOGLE_VERTEX_API_KEY,
         gcpProject: env.GOOGLE_CLOUD_PROJECT,
         gcpLocation: env.GOOGLE_CLOUD_LOCATION,
@@ -4341,7 +4347,7 @@ async function _generateReportForOrderInner(
     //   priced BOM line. Sync, no vision needed; never blocks the report.
     try {
       await enrichReportWithGutters(reportData as any, env.DB, {
-        customerId: order?.customer_id ?? null,
+        customerId: (order?.customer_id ?? null) as number | null,
       })
     } catch (gutterErr: any) {
       console.warn(`[Generate] Order ${orderId}: gutter enrichment skipped: ${gutterErr?.message}`)

@@ -265,7 +265,7 @@ async function createVAPIDAuthHeader(endpoint: string, vapidKeys: VAPIDKeys): Pr
   const pkcs8Key = concatUint8Arrays(pkcs8Prefix, privateKeyBytes, pkcs8Suffix, publicKeyBytes)
 
   const signingKey = await crypto.subtle.importKey(
-    'pkcs8', pkcs8Key.buffer,
+    'pkcs8', pkcs8Key.buffer as ArrayBuffer,
     { name: 'ECDSA', namedCurve: 'P-256' },
     false, ['sign']
   )
@@ -338,8 +338,9 @@ export async function sendWebPush(
     )
 
     // Export ephemeral public key (uncompressed, 65 bytes)
+    const ephemeralPair = ephemeralKey as CryptoKeyPair
     const ephemeralPublicKeyRaw = new Uint8Array(
-      await crypto.subtle.exportKey('raw', ephemeralKey.publicKey)
+      (await crypto.subtle.exportKey('raw' as any, ephemeralPair.publicKey)) as ArrayBuffer
     )
 
     // Import client public key
@@ -352,8 +353,8 @@ export async function sendWebPush(
     // ECDH shared secret
     const sharedSecret = new Uint8Array(
       await crypto.subtle.deriveBits(
-        { name: 'ECDH', public: clientKey },
-        ephemeralKey.privateKey,
+        { name: 'ECDH', public: clientKey } as any,
+        ephemeralPair.privateKey,
         256
       )
     )

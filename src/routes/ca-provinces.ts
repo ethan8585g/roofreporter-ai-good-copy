@@ -1,9 +1,9 @@
 import { Hono } from 'hono'
-import type { Env } from '../types'
+import type { Bindings } from '../types'
 import { CA_PROVINCES, ALL_PROVINCE_SLUGS } from '../data/ca-provinces'
 import { inlineQuoteFormHTML } from '../lib/lead-forms'
 
-const app = new Hono<{ Bindings: Env }>()
+const app = new Hono<{ Bindings: Bindings }>()
 
 // Mirrors the minimal head-tag pattern used by us-states.ts so CA pages
 // render with the same tooling without going through the heavier

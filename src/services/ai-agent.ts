@@ -226,8 +226,7 @@ export async function autoProcessOrder(
 
     // ── Step 8: Track in GA4 ──
     try {
-      await trackReportGenerated(env, {
-        order_id: String(orderId),
+      await trackReportGenerated(env, String(orderId), {
         order_number: order.order_number,
         property_address: order.property_address,
         service_tier: order.service_tier,

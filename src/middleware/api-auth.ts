@@ -4,7 +4,7 @@
 // ============================================================
 
 import type { Context, Next } from 'hono'
-import type { Bindings, ApiAccount, ApiKey } from '../types'
+import type { Bindings, AppEnv, ApiAccount, ApiKey } from '../types'
 
 const RATE_LIMIT_MINUTE = 60    // max requests per minute per key
 const RATE_LIMIT_HOUR   = 1000  // max requests per hour per key
@@ -133,7 +133,7 @@ export async function logApiRequest(
 // ── Main middleware factory ──────────────────────────────────────────────────
 
 export function apiAuthMiddleware() {
-  return async (c: Context<{ Bindings: Bindings }>, next: Next) => {
+  return async (c: Context<AppEnv>, next: Next) => {
     try {
     const startMs = Date.now()
     const db = c.env.DB

@@ -21,7 +21,7 @@ export const activityRoutes = new Hono<AppEnv>()
 activityRoutes.post('/heartbeat', async (c) => {
   let path: string = '/'
   try {
-    const body = await c.req.json<{ path?: string }>().catch(() => ({}))
+    const body = await c.req.json<{ path?: string }>().catch(() => ({} as { path?: string }))
     path = (body?.path || '/').toString().slice(0, 512)
   } catch {}
 

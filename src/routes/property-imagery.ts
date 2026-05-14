@@ -25,7 +25,7 @@ async function getDevCustomer(db: D1Database, token: string | undefined, env?: a
 // ============================================================
 propertyImageryRoutes.post('/generate', async (c) => {
   const token = getCustomerSessionToken(c)
-  const customer = await getDevCustomer(c.env.DB, token, c.env)
+  const customer = await getDevCustomer(c.env.DB, token ?? undefined, c.env)
   if (!customer) {
     return c.json({ error: 'Unauthorized. This feature is only available for dev/test accounts.' }, 403)
   }
@@ -106,7 +106,7 @@ propertyImageryRoutes.post('/generate', async (c) => {
 // ============================================================
 propertyImageryRoutes.get('/check', async (c) => {
   const token = getCustomerSessionToken(c)
-  const customer = await getDevCustomer(c.env.DB, token, c.env)
+  const customer = await getDevCustomer(c.env.DB, token ?? undefined, c.env)
   if (!customer) {
     return c.json({ access: false })
   }

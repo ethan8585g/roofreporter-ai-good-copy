@@ -534,7 +534,7 @@ geminiRoutes.post('/command', async (c) => {
       c.env.DB.prepare(`SELECT COUNT(*) as c FROM secretary_subscriptions WHERE status = 'active'`).first<any>().catch(() => ({})),
     ])
 
-    const custList = (recentCustomers?.results || []).map((c: Context<AppEnv>) => 
+    const custList = (recentCustomers?.results || []).map((c: any) => 
       `  - ${c.company_name || c.name || c.email} (ID:${c.id}, email:${c.email}, joined:${c.created_at})`
     ).join('\n')
 

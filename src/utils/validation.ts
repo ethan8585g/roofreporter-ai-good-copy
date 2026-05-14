@@ -18,7 +18,7 @@ export const toggleSegmentsBody = z.object({
 /** POST /:orderId/vision-inspect */
 export const visionInspectBody = z.object({
   force: z.boolean().optional().default(false)
-}).optional().default({})
+}).optional().default({ force: false })
 
 /** GET /:orderId/vision — query filters */
 export const visionFilterQuery = z.object({

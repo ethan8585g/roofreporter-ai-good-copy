@@ -19,7 +19,6 @@ import type { Bindings, AppEnv } from '../types'
 import { validateAdminSession, requireSuperadmin } from './auth'
 import { runDripCampaigns, setDripDryRun } from '../services/drip-campaigns'
 
-type Bindings = { DB: D1Database; [key: string]: any }
 const superAdminBi = new Hono<AppEnv>()
 
 // Auth middleware — superadmin only
@@ -148,7 +147,7 @@ superAdminBi.get('/customer-health', async (c) => {
     for (const r of (callsRow.results || [])) callMap.set(r.customer_id, r.calls_30d)
 
     const now = Date.now()
-    const customers = (customersRow.results || []).map((c: Context<AppEnv>) => {
+    const customers = (customersRow.results || []).map((c: any) => {
       const lastLoginMs = c.last_login ? new Date(c.last_login).getTime() : null
       const daysSinceLogin = lastLoginMs ? Math.floor((now - lastLoginMs) / 86400000) : null
 
@@ -191,7 +190,7 @@ superAdminBi.get('/customer-health', async (c) => {
       }
     })
 
-    const at_risk_count = customers.filter((c: Context<AppEnv>) => c.at_risk).length
+    const at_risk_count = customers.filter((c: any) => c.at_risk).length
 
     return c.json({ customers, at_risk_count, total: customers.length })
   } catch (e: any) {

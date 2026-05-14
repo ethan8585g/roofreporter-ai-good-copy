@@ -24,7 +24,7 @@ const INVITE_EXPIRY_DAYS = 7
 // ============================================================
 // AUTH HELPER — Get current customer from session token
 // ============================================================
-async function getCustomer(db: D1Database, token: string | undefined): Promise<any | null> {
+async function getCustomer(db: D1Database, token: string | null | undefined): Promise<any | null> {
   if (!token) return null
   const row = await db.prepare(`
     SELECT cs.customer_id, c.* FROM customer_sessions cs

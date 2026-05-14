@@ -44,7 +44,7 @@ export async function enhanceReportViaGemini(
     // Build a focused summary of the report for the prompt
     const segments = report.segments || []
     const segSummary = segments.map((s, i) => 
-      `  Segment ${i + 1} "${s.name}": ${s.footprint_area_sqft} sqft footprint, ${s.true_area_sqft} sqft true area, pitch ${s.pitch_degrees}° (${s.pitch_ratio}), facing ${s.cardinal_direction || 'unknown'}`
+      `  Segment ${i + 1} "${s.name}": ${s.footprint_area_sqft} sqft footprint, ${s.true_area_sqft} sqft true area, pitch ${s.pitch_degrees}° (${s.pitch_ratio}), facing ${(s as any).cardinal_direction || 'unknown'}`
     ).join('\n')
 
     const es = report.edge_summary || {} as any

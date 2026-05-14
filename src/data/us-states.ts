@@ -101,7 +101,7 @@ export const US_STATES: Record<string, USStateData> = {
     population: 22610726,
     metros: ['Miami', 'Tampa', 'Orlando', 'Jacksonville', 'Fort Lauderdale', 'West Palm Beach', 'Sarasota', 'Fort Myers'],
     stormProfile: { hailDaysPerYear: 6, hurricaneRisk: 'high', tornadoRisk: 'moderate', avgClaimsPerYear: '1,500,000+', primaryPeril: 'Hurricanes — highest hurricane exposure of any US state' },
-    buildingCode: { adoptedFBC: 'Florida Building Code 8th Edition 2023', notes: 'Most stringent wind load requirements in US outside of Hawaii; hip roofs required in high-wind zones; permits required for any re-roofing' },
+    buildingCode: { adoptedIRC: 'Florida Building Code 8th Edition 2023', notes: 'Most stringent wind load requirements in US outside of Hawaii; hip roofs required in high-wind zones; permits required for any re-roofing' },
     roofingNotes: 'Florida accounts for more insurance claims than any other US state. Hurricane Ian (2022) generated $110B+ in losses. The Florida Building Code requires permits for re-roofing, and satellite measurement reports are accepted as documentation by adjusters and insurers. Tile and metal roofing have grown significantly post-Ian.',
     topInsurers: ['Citizens Property Insurance', 'Universal Property', 'Slide Insurance', 'State Farm', 'Allstate']
   },
