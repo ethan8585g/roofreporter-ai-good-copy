@@ -5148,6 +5148,15 @@ window.saSubmitTrace = async function(orderId, force) {
       var warns = Array.isArray(data.validation_warnings) ? data.validation_warnings : [];
       if ((errs.length || warns.length) && !force) {
         saShowValidationOverride(orderId, errs, warns);
+      } else if (data.error_code) {
+        // Engine threw — surface the short error code in a copy-pasteable
+        // modal so the operator can quote it back when reporting the bug.
+        saShowEngineErrorModal({
+          title: 'Report generation failed',
+          message: data.error || 'Unknown engine error',
+          errorCode: data.error_code,
+          orderId: orderId,
+        });
       } else {
         alert('Error: ' + (data.error || 'Failed to generate report'));
       }
@@ -5156,6 +5165,70 @@ window.saSubmitTrace = async function(orderId, force) {
   } catch(e) {
     alert('Network error: ' + e.message);
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1.5"></i>Generate Report Preview'; }
+  }
+};
+
+// ============================================================================
+// ENGINE ERROR MODAL
+// Renders a dialog with the engine's short error code (RME-...) and a one-
+// click copy button so the operator can paste it into a bug report. Used by
+// /generate-draft failures and by the preview view's error banner.
+// ============================================================================
+window.saShowEngineErrorModal = function(opts) {
+  opts = opts || {};
+  document.getElementById('sa-engine-error-modal')?.remove();
+  var esc = function(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); };
+  var title = esc(opts.title || 'Engine error');
+  var message = esc(opts.message || 'Unknown error');
+  var code = esc(opts.errorCode || '');
+  var html =
+    '<div id="sa-engine-error-modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.78);display:flex;align-items:center;justify-content:center;z-index:10001;padding:20px">' +
+      '<div style="background:#1a1a1a;border:1px solid #dc2626;border-radius:14px;max-width:560px;width:100%;padding:24px;color:#e5e7eb">' +
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
+          '<div style="width:32px;height:32px;background:rgba(220,38,38,0.18);border-radius:8px;display:flex;align-items:center;justify-content:center"><i class="fas fa-circle-exclamation" style="color:#fca5a5"></i></div>' +
+          '<div style="font-size:17px;font-weight:800">' + title + '</div>' +
+        '</div>' +
+        '<div style="font-size:13px;color:#fca5a5;background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.25);border-radius:8px;padding:10px 12px;margin-bottom:14px;line-height:1.45">' + message + '</div>' +
+        (code ? (
+        '<div style="margin-bottom:14px">' +
+          '<div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;margin-bottom:6px">Error code (copy when reporting)</div>' +
+          '<div style="display:flex;gap:8px;align-items:center">' +
+            '<code id="sa-engine-error-code" style="flex:1;padding:9px 12px;background:#0b1220;border:1px solid #1e293b;border-radius:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:#fbbf24;font-weight:700;letter-spacing:0.04em">' + code + '</code>' +
+            '<button id="sa-engine-error-copy" style="padding:9px 14px;background:#fbbf24;color:#111;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer"><i class="fas fa-copy mr-1"></i>Copy</button>' +
+          '</div>' +
+        '</div>'
+        ) : '') +
+        '<div style="font-size:11px;color:#64748b;margin-bottom:16px;line-height:1.5">' +
+          'Quote this code when reporting the failure. The engine logs the full stack trace alongside it server-side.' +
+        '</div>' +
+        '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+          '<button onclick="document.getElementById(\'sa-engine-error-modal\').remove()" style="padding:9px 18px;background:#1f2937;color:#cbd5e1;font-size:13px;font-weight:600;border:1px solid #374151;border-radius:8px;cursor:pointer">Close</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+  if (code) {
+    var copyBtn = document.getElementById('sa-engine-error-copy');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', function() {
+        var done = function() {
+          copyBtn.innerHTML = '<i class="fas fa-check mr-1"></i>Copied';
+          copyBtn.style.background = '#16a34a';
+          copyBtn.style.color = '#fff';
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(opts.errorCode).then(done).catch(function() {
+            try {
+              var ta = document.createElement('textarea'); ta.value = opts.errorCode; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); done();
+            } catch(_) {}
+          });
+        } else {
+          try {
+            var ta2 = document.createElement('textarea'); ta2.value = opts.errorCode; document.body.appendChild(ta2); ta2.select(); document.execCommand('copy'); ta2.remove(); done();
+          } catch(_) {}
+        }
+      });
+    }
   }
 };
 
@@ -5215,6 +5288,11 @@ function renderPreviewView() {
   const order = p.order || {};
   const report = p.report || {};
   const img = p.imagery || {};
+  // Engine-error banner — when the most-recent generation flagged the report
+  // for review, surface the short code + a Copy button so the operator can
+  // quote it back when reporting the bug. Only shows when report.engine_error
+  // is populated (no spam when generation succeeded).
+  const engineErr = report.engine_error || null;
   const extras = Array.isArray(img.extra_captures) ? img.extra_captures : [];
   const coverSource = img.cover_image_source || 'oblique_3d';
   const aerialApproved = img.aerial_views_approved === true;
@@ -5241,6 +5319,21 @@ function renderPreviewView() {
         </div>
         <button onclick="loadView('orders')" style="padding:6px 12px;background:transparent;color:#94a3b8;border:1px solid #334155;border-radius:6px;cursor:pointer;font-size:12px"><i class="fas fa-arrow-left mr-1"></i>Back to orders</button>
       </div>
+
+      ${engineErr && (engineErr.code || engineErr.message) ? `
+      <!-- Engine error banner -->
+      <div style="padding:10px 20px;background:rgba(220,38,38,0.10);border-bottom:1px solid rgba(220,38,38,0.35);display:flex;align-items:center;gap:12px">
+        <i class="fas fa-circle-exclamation" style="color:#fca5a5;font-size:14px"></i>
+        <div style="flex:1;color:#fecaca;font-size:12px;line-height:1.4">
+          <strong style="color:#fca5a5">Engine error from last generation:</strong>
+          ${esc(engineErr.reason || 'gen_exception')} &mdash; ${esc(engineErr.message || 'see server logs')}
+        </div>
+        ${engineErr.code ? `
+        <code style="padding:5px 9px;background:#0b1220;border:1px solid rgba(220,38,38,0.4);border-radius:6px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:#fbbf24;font-weight:700;letter-spacing:0.04em">${esc(engineErr.code)}</code>
+        <button onclick="saShowEngineErrorModal({title:'Engine error',message:${JSON.stringify(engineErr.message || '')},errorCode:${JSON.stringify(engineErr.code)},orderId:${orderId}})" style="padding:5px 10px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer"><i class="fas fa-copy mr-1"></i>Copy code</button>
+        ` : ''}
+      </div>
+      ` : ''}
 
       <!-- Two-column body -->
       <div style="display:flex;flex:1;overflow:hidden">

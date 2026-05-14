@@ -6237,7 +6237,10 @@ adminRoutes.post('/superadmin/orders/:id/generate-draft', async (c) => {
     const result = await generateReportForOrder(orderId, c.env, ctxLog, { skipCustomerDelivery: true })
 
     if (!result?.success) {
-      return c.json({ error: 'Report generation failed: ' + (result?.error || 'unknown') }, 500)
+      return c.json({
+        error: 'Report generation failed: ' + (result?.error || 'unknown'),
+        error_code: (result as any)?.error_code || null,
+      }, 500)
     }
 
     // Merge admin-captured 3D screenshots into imagery.extra_captures (same
@@ -6295,11 +6298,24 @@ adminRoutes.get('/superadmin/orders/:id/preview-data', async (c) => {
     ).bind(orderId).first<any>()
     if (!order) return c.json({ error: 'Order not found' }, 404)
     const report = await c.env.DB.prepare(
-      'SELECT admin_review_status, admin_review_started_at, status as report_status, api_response_raw, roof_area_sqft, total_material_cost_cad FROM reports WHERE order_id = ?'
+      'SELECT admin_review_status, admin_review_started_at, status as report_status, api_response_raw, roof_area_sqft, total_material_cost_cad, needs_review, review_reason, review_detail FROM reports WHERE order_id = ?'
     ).bind(orderId).first<any>()
     let imagery: any = {}
     if (report?.api_response_raw) {
       try { imagery = (JSON.parse(report.api_response_raw)?.imagery) || {} } catch { imagery = {} }
+    }
+    // Surface the most-recent engine error code (if any) so the preview UI
+    // can display a copy-pasteable identifier in its status bar. The code
+    // lives inside review_detail JSON keyed as error_code.
+    let engineError: { code: string | null; reason: string | null; message: string | null } | null = null
+    if (report?.needs_review || report?.review_reason) {
+      let detail: any = null
+      try { detail = report.review_detail ? JSON.parse(report.review_detail) : null } catch { detail = null }
+      engineError = {
+        code: detail?.error_code || null,
+        reason: report.review_reason || null,
+        message: typeof detail?.error === 'string' ? detail.error : null,
+      }
     }
     return c.json({
       success: true,
@@ -6310,6 +6326,7 @@ adminRoutes.get('/superadmin/orders/:id/preview-data', async (c) => {
         status: report.report_status,
         roof_area_sqft: report.roof_area_sqft,
         total_material_cost_cad: report.total_material_cost_cad,
+        engine_error: engineError,
       } : null,
       imagery,
     })

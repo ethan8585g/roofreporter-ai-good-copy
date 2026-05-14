@@ -3630,10 +3630,19 @@ export async function generateAIImageryForReport(
 // Google Solar buildingInsights is NEVER used for area, footprint,
 // segments, or edge calculations. Only pitch (slope) and imagery.
 // ============================================================
+// Short, copy-pasteable engine-error code. Format: RME-<base36 timestamp>-<4 hex>.
+// Persisted into reports.review_detail and surfaced to the SA preview UI so the
+// operator can quote it back when reporting a failure.
+function makeEngineErrorCode(): string {
+  const t = Date.now().toString(36).toUpperCase()
+  const r = Math.floor(Math.random() * 0xFFFF).toString(16).toUpperCase().padStart(4, '0')
+  return `RME-${t}-${r}`
+}
+
 export async function generateReportForOrder(
   orderId: number | string, env: Bindings, ctx?: ExecutionContext,
   opts?: { skipCustomerDelivery?: boolean }
-): Promise<{ success: boolean; report?: RoofReport; error?: string; version?: string; provider?: string; hasEnhanceKey?: boolean }> {
+): Promise<{ success: boolean; report?: RoofReport; error?: string; error_code?: string; version?: string; provider?: string; hasEnhanceKey?: boolean }> {
   // ── GLOBAL 25-SECOND TIMEOUT ──
   // Cloudflare Workers have a 30s CPU budget. We cap at 25s to ensure
   // we always have time to mark the report as failed/completed and
@@ -3653,8 +3662,12 @@ export async function generateReportForOrder(
   // the customer's order as 'failed'. Customer never sees a rejection —
   // user (super-admin) decides whether to manually trace, retry, or refund.
   if (!result.success && result.error?.includes('timed out')) {
+    const timeoutCode = makeEngineErrorCode()
+    console.error(`[Generate] Order ${orderId}: ENGINE_ERROR ${timeoutCode} — ${result.error}`)
+    ;(result as any).error_code = timeoutCode
     try {
       await repo.flagForReview(env.DB, orderId, 'gen_timeout', {
+        error_code: timeoutCode,
         error: result.error,
         elapsed_ms: Date.now() - generationStart,
         timeout_ms: GENERATION_TIMEOUT_MS,
@@ -4439,8 +4452,19 @@ async function _generateReportForOrderInner(
     }
   } catch (err: any) {
     // Never reject the customer — route the failure to super-admin trace queue.
-    try { await repo.flagForReview(env.DB, orderId, 'gen_exception', { error: err.message?.substring(0, 500) }) } catch {}
-    return { success: false, error: err.message }
+    // Generate a short error code, log it with the full stack, and persist it
+    // into review_detail so the SA preview UI can surface a copy-pasteable
+    // identifier the operator can quote in a bug report.
+    const errorCode = makeEngineErrorCode()
+    console.error(`[Generate] Order ${orderId}: ENGINE_ERROR ${errorCode} —`, err?.message, err?.stack)
+    try {
+      await repo.flagForReview(env.DB, orderId, 'gen_exception', {
+        error_code: errorCode,
+        error: err.message?.substring(0, 500),
+        stack: typeof err?.stack === 'string' ? err.stack.substring(0, 800) : undefined,
+      })
+    } catch {}
+    return { success: false, error: err.message, error_code: errorCode } as any
   }
 }
 
