@@ -6794,14 +6794,30 @@ adminRoutes.post('/superadmin/orders/:id/deny-report', async (c) => {
     if (order.denied_at) return c.json({ error: 'Order is already denied.', denied_at: order.denied_at }, 409)
 
     const deniedAt = new Date().toISOString().replace('T', ' ').slice(0, 19)
+    // Drop the order out of the trace queue + flip status='cancelled' so it
+    // also leaves any customer-facing 'in progress' view. Without these the
+    // denied order kept showing in Pending Manual Traces forever and the
+    // customer dashboard kept treating it as still processing.
     await c.env.DB.prepare(`
       UPDATE orders SET
         denied_at = ?,
         denied_reason = ?,
         denied_by_admin_id = ?,
+        needs_admin_trace = 0,
+        status = 'cancelled',
         updated_at = datetime('now')
       WHERE id = ?
     `).bind(deniedAt, reason, admin.id, orderId).run()
+    // Also clear any in-progress report row so admin_review queues don't
+    // surface the denied order. Safe no-op if no report exists yet.
+    try {
+      await c.env.DB.prepare(`
+        UPDATE reports SET
+          admin_review_status = NULL,
+          updated_at = datetime('now')
+        WHERE order_id = ?
+      `).bind(orderId).run()
+    } catch { /* non-fatal */ }
 
     // Credit refund — mirrors the _refundDeduct pattern in square.ts use-credit.
     // Trial orders refund free_trial_used; paid orders refund credits_used.
