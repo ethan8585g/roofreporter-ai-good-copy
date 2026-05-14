@@ -19,7 +19,17 @@ vi.mock('./email', () => ({
     sendCalls.push({ to, subject })
     if (sendShouldFail) throw new Error(sendFailMessage)
     return { id: 'mock-msg-id' }
-  })
+  }),
+  // Mirror the real loadGmailCreds behaviour when no settings table is
+  // present: read straight off env, leave each field empty if unset. The
+  // test schema has no `settings` table, so this is the correct stub.
+  loadGmailCreds: vi.fn(async (env: any) => ({
+    clientId: env?.GMAIL_CLIENT_ID || '',
+    clientSecret: env?.GMAIL_CLIENT_SECRET || '',
+    refreshToken: env?.GMAIL_REFRESH_TOKEN || '',
+    senderEmail: env?.GMAIL_SENDER_EMAIL || '',
+    source: { clientSecret: 'env', refreshToken: 'env', senderEmail: 'env' },
+  })),
 }))
 
 import { createAutoInvoiceForOrder } from './auto-invoice'
