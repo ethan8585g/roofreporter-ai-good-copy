@@ -3,9 +3,37 @@
 // Supports: Gmail Service Account, Gmail OAuth2, Resend API
 // ============================================================
 
+// Mint-or-reuse a share_token for an order. The `/report/share/:token`
+// route is public (no auth gate), unlike `/api/reports/:id/html` which is
+// IDOR-protected and 401s for email recipients without a session.
+// Centralizes the pattern duplicated in notifyTraceCompletedToCustomer
+// and POST /:orderId/share.
+export async function getOrCreateShareToken(
+  env: any,
+  orderId: number | string
+): Promise<string | null> {
+  if (!env?.DB || orderId == null) return null
+  try {
+    const row = await env.DB.prepare(
+      'SELECT share_token FROM reports WHERE order_id = ? ORDER BY id DESC LIMIT 1'
+    ).bind(orderId).first<{ share_token: string | null }>()
+    if (row?.share_token) return row.share_token
+    const token = crypto.randomUUID().replace(/-/g, '').substring(0, 20)
+    await env.DB.prepare(
+      "UPDATE reports SET share_token = ?, share_sent_at = datetime('now'), updated_at = datetime('now') WHERE order_id = ?"
+    ).bind(token, orderId).run()
+    return token
+  } catch {
+    return null
+  }
+}
+
 // Short link-style email for completed reports — two buttons that open
 // the full professional report and the customer-facing copy in a browser.
-// Replaces the older inline-HTML wrapper for customer report deliveries.
+// Uses the public /report/share/<token> route so links work without a
+// logged-in session. Falls back to /api/reports paths only when no token
+// can be minted (e.g. the report row hasn't been created yet) — those
+// will 401 for the recipient, but at least the email body is intact.
 export function buildReportLinkEmail(
   baseUrl: string,
   orderId: number | string,
@@ -13,10 +41,15 @@ export function buildReportLinkEmail(
   reportNum: string,
   recipient: string,
   hasCustomerCopy: boolean = true,
+  shareToken: string | null = null,
 ): string {
   const root = (baseUrl || 'https://www.roofmanager.ca').replace(/\/$/, '')
-  const fullUrl = `${root}/api/reports/${orderId}/html`
-  const customerUrl = `${root}/api/reports/${orderId}/customer-html`
+  const fullUrl = shareToken
+    ? `${root}/report/share/${shareToken}`
+    : `${root}/api/reports/${orderId}/html`
+  const customerUrl = shareToken
+    ? `${root}/report/share/${shareToken}?v=c`
+    : `${root}/api/reports/${orderId}/customer-html`
   const customerButton = hasCustomerCopy
     ? `<a href="${customerUrl}" style="display:inline-block;background:#fff;color:#1E3A5F;font-weight:700;font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none;border:2px solid #1E3A5F;margin:6px">View Customer Report</a>`
     : ''

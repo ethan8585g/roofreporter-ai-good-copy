@@ -4730,11 +4730,16 @@ app.get('/report/share/:token', async (c) => {
     const escAddr = String(addr).replace(/[&<>"'`=\/]/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#x60;','=':'&#x3D;','/':'&#x2F;'}[ch] || ''))
     const escToken = String(token).replace(/[^A-Za-z0-9_\-]/g, '')
 
-    // Resolve report HTML (use stored HTML only — avoids bundling template at edge)
+    // Resolve report HTML (use stored HTML only — avoids bundling template at edge).
+    // Cached HTML is sometimes prefixed by a `<!-- RENDER-PATH: ... -->` marker
+    // comment from the multi-structure renderer, so the prefix check must
+    // tolerate leading whitespace/comments and look for <!DOCTYPE or <html
+    // anywhere in the head (case-insensitive).
     const h = (audience === 'customer'
       ? (row.customer_report_html || row.professional_report_html)
       : row.professional_report_html) || ''
-    const reportHtml = (h.trimStart().startsWith('<!DOCTYPE') || h.trimStart().startsWith('<html')) ? h : ''
+    const head = h.slice(0, 600).toLowerCase()
+    const reportHtml = (head.includes('<!doctype') || head.includes('<html')) ? h : ''
 
     if (!reportHtml) {
       return c.html(`<!DOCTYPE html><html><head><title>Report Unavailable</title><link rel="stylesheet" href="/static/tailwind.css"><style>:root{--bg-page:#0A0A0A;--text-primary:#fff;--text-muted:#9ca3af}body.light-theme,.light-theme{--bg-page:#f3f4f6;--text-primary:#111827;--text-muted:#6b7280}.light-theme [style*="background:#0A0A0A"]{background:var(--bg-page) !important}</style><script>!function(){var t=localStorage.getItem('rc_dashboard_theme');if(t==='light'||(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches)){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script></head>
