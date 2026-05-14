@@ -4481,6 +4481,31 @@ app.post('/api/demo/lead', async (c) => {
 
 // Customer Order & Pay page
 app.get('/customer/order', async (c) => {
+  // Server-side auth gate — anonymous visitors otherwise see the order form
+  // but hit a confusing 401 toast when they try to submit. Redirect them
+  // to /customer/login with a next= param so they land back here.
+  const cookieHeader = c.req.header('Cookie') || ''
+  let sessionToken: string | null = null
+  for (const part of cookieHeader.split(/;\s*/)) {
+    if (part.startsWith('rm_customer_session=')) {
+      sessionToken = decodeURIComponent(part.slice(20))
+      break
+    }
+  }
+  let hasSession = false
+  if (sessionToken) {
+    try {
+      const sess = await (c.env as any).DB.prepare(
+        "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now') LIMIT 1"
+      ).bind(sessionToken).first()
+      if ((sess as any)?.customer_id) hasSession = true
+    } catch { /* fall through to redirect */ }
+  }
+  if (!hasSession) {
+    const qs = new URL(c.req.url).search
+    return c.redirect(`/customer/login?next=${encodeURIComponent('/customer/order' + qs)}`, 302)
+  }
+
   const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
   // Best-effort: pre-flight a Nearmap coverage check when the page is opened
   // with explicit coordinates. If covered, inject a tile template the
