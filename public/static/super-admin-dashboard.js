@@ -1881,9 +1881,9 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           // one per edge type. Each fires only on click (no background runs)
           // and previews the result on the map; admin reviews + submits.
           '<button onclick="saToggleHintRegion()" id="sa-hint-region-btn" title="Optional: draw a rough circle around the target building before Auto-Trace. ~2 sec; dramatically improves accuracy on tree-occluded, multi-building, or townhouse lots. Click to arm, then click on the map at the building centre and drag to set radius." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(236,72,153,0.15);color:#f9a8d4;border:1px solid rgba(236,72,153,0.4)"><i class="fas fa-bullseye mr-1"></i>Mark Region</button>' +
-          '<button onclick="saAutoTrace(\'eaves\')" id="sa-tool-auto-eaves" title="Auto-trace the eave outline using Claude vision + Solar API + past traces. Preview only — review and tweak before Submit." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(34,197,94,0.15);color:#86efac;border:1px solid rgba(34,197,94,0.4)"><i class="fas fa-robot mr-1"></i>Auto-Trace Eaves</button>' +
-          '<button onclick="saAutoTrace(\'hips\')" id="sa-tool-auto-hips" title="Auto-trace the hip lines using Claude vision + Solar API + past traces. Preview only — review and tweak before Submit." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(245,158,11,0.15);color:#fbbf24;border:1px solid rgba(245,158,11,0.4)"><i class="fas fa-robot mr-1"></i>Auto-Trace Hips</button>' +
-          '<button onclick="saAutoTrace(\'ridges\')" id="sa-tool-auto-ridges" title="Auto-trace the ridge lines using Claude vision + Solar API + past traces. Preview only — review and tweak before Submit." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(59,130,246,0.15);color:#93c5fd;border:1px solid rgba(59,130,246,0.4)"><i class="fas fa-robot mr-1"></i>Auto-Trace Ridges</button>' +
+          '<button onclick="saAutoTrace(\'eaves\', event)" id="sa-tool-auto-eaves" title="Auto-trace the eave outline using Claude vision + Solar API + past traces. Preview only — review and tweak before Submit. Shift-click for debug view (opens images Claude saw)." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(34,197,94,0.15);color:#86efac;border:1px solid rgba(34,197,94,0.4)"><i class="fas fa-robot mr-1"></i>Auto-Trace Eaves</button>' +
+          '<button onclick="saAutoTrace(\'hips\', event)" id="sa-tool-auto-hips" title="Auto-trace the hip lines using Claude vision + Solar API + past traces. Preview only — review and tweak before Submit. Shift-click for debug view." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(245,158,11,0.15);color:#fbbf24;border:1px solid rgba(245,158,11,0.4)"><i class="fas fa-robot mr-1"></i>Auto-Trace Hips</button>' +
+          '<button onclick="saAutoTrace(\'ridges\', event)" id="sa-tool-auto-ridges" title="Auto-trace the ridge lines using Claude vision + Solar API + past traces. Preview only — review and tweak before Submit. Shift-click for debug view." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(59,130,246,0.15);color:#93c5fd;border:1px solid rgba(59,130,246,0.4)"><i class="fas fa-robot mr-1"></i>Auto-Trace Ridges</button>' +
           '<button onclick="saAddStructure()" id="sa-tool-add-structure" title="Trace another structure such as a detached garage" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.4)"><i class="fas fa-plus mr-1"></i>Add another building</button>' +
           '<button onclick="saAddLowerEave()" id="sa-tool-add-lower-eave" title="Add a visible lower-eave lip beneath an upper-story roof. Use the 3D Reference and Street View to gauge the lip\'s extent — click points on the satellite to outline only the visible lip below the upper-story face." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(37,99,235,0.15);color:#93c5fd;border:1px solid rgba(37,99,235,0.4)"><i class="fas fa-arrow-down-short-wide mr-1"></i>Add Lower Eave</button>' +
           '<button onclick="saTraceUndo()" title="Undo last action (Ctrl+Z)" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151"><i class="fas fa-rotate-left mr-1"></i>Undo</button>' +
@@ -4555,11 +4555,12 @@ function saClearHintRegion() {
   window._saHintArmed = false;
 }
 
-window.saAutoTrace = async function(edge) {
+window.saAutoTrace = async function(edge, evt) {
   var s = window._saTraceState;
   if (!s || !s.map) { alert('Trace map not ready.'); return; }
   if (!s.orderId) { alert('No order loaded.'); return; }
   if (edge !== 'eaves' && edge !== 'hips' && edge !== 'ridges') return;
+  var debugMode = !!(evt && evt.shiftKey);
 
   var btnId = edge === 'eaves' ? 'sa-tool-auto-eaves' : edge === 'hips' ? 'sa-tool-auto-hips' : 'sa-tool-auto-ridges';
   var btn = document.getElementById(btnId);
@@ -4591,7 +4592,8 @@ window.saAutoTrace = async function(edge) {
     // marked one before pressing Auto-Trace, it dramatically improves
     // wrong-building disambiguation. Cleared on map reset / new order.
     var hintRegionPayload = window._saHintRegion || null;
-    var resp = await saFetch('/api/admin/superadmin/orders/' + s.orderId + '/auto-trace/' + edge, {
+    var url = '/api/admin/superadmin/orders/' + s.orderId + '/auto-trace/' + edge + (debugMode ? '?debug=1' : '');
+    var resp = await saFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4617,7 +4619,30 @@ window.saAutoTrace = async function(edge) {
     }
 
     var confidence = typeof data.confidence === 'number' ? data.confidence : 0;
-    console.log('[auto-trace ' + edge + '] confidence=' + confidence + ' segments=' + data.segments.length + ' run_id=' + (data.run_id || 'none'), data.diagnostics);
+    console.group('[auto-trace ' + edge + '] ' + confidence + '% confidence · ' + data.segments.length + ' segment(s)');
+    console.log('run_id:', data.run_id || 'none');
+    if (data.reasoning) console.log('reasoning:', data.reasoning);
+    console.log('diagnostics:', data.diagnostics);
+    console.log('segments:', data.segments);
+    console.groupEnd();
+    if (debugMode && data.debug_images && typeof window !== 'undefined') {
+      try {
+        var imgs = data.debug_images;
+        Object.keys(imgs).forEach(function(key) {
+          var entry = imgs[key];
+          if (!entry || typeof entry !== 'object' || typeof entry.b64 !== 'string') return;
+          var mt = entry.mediaType || 'image/png';
+          var src = 'data:' + mt + ';base64,' + entry.b64;
+          var w2 = window.open('', '_blank');
+          if (w2 && w2.document) {
+            w2.document.title = 'auto-trace debug: ' + key;
+            w2.document.body.style.margin = '0';
+            w2.document.body.style.background = '#111';
+            w2.document.body.innerHTML = '<div style="color:#fff;font-family:monospace;padding:8px">' + key + ' (' + mt + ')</div><img src="' + src + '" style="max-width:100%;display:block"/>';
+          }
+        });
+      } catch (e) { console.warn('[auto-trace] debug-image open failed', e); }
+    }
 
     // Record the run_id + start-of-edit timestamp so submit-trace can
     // ship deterministic learning telemetry back to the server. The
