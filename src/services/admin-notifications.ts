@@ -42,6 +42,11 @@ export interface RecordAndNotifyArgs {
   kind: NotificationKind
   order: OrderContext
   severity?: NotificationSeverity
+  // When true, suppress any customer-facing email this kind would normally
+  // send. Used by the admin-review draft flow: the trace_completed row still
+  // surfaces in the SA notification feed so the admin can find the draft,
+  // but the customer doesn't get pinged until /approve-and-deliver runs.
+  skipCustomerEmail?: boolean
 }
 
 function defaultSeverity(kind: NotificationKind): NotificationSeverity {
@@ -110,7 +115,13 @@ export async function recordAndNotify(
     } else if (kind === 'trace_completed') {
       // Customer-facing email + admin-side record. Admin already saw
       // this order at creation time, so no notifyNewReportRequest here.
-      if (order.customer_email) {
+      // skipCustomerEmail is set by the admin-review draft flow so the
+      // SA notification row still surfaces in the feed without the
+      // customer being pinged prematurely.
+      if (args.skipCustomerEmail) {
+        emailStatus = 'skipped'
+        emailDetail = 'draft awaiting admin review — customer not emailed yet'
+      } else if (order.customer_email) {
         await notifyTraceCompletedToCustomer(env, {
           to: order.customer_email,
           order_number: order.order_number,

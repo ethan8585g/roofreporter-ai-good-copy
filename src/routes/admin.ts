@@ -5581,14 +5581,16 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
       .catch((e: any) => console.warn('[auto-trace-learning] log failed:', e?.message))
     if (ctxLog?.waitUntil) ctxLog.waitUntil(logP)
 
-    // Generate the report (this is admin submitting so we call synchronously within worker timeout)
-    const result = await generateReportForOrder(orderId, c.env, (c as any).executionCtx)
+    // Generate the report in DRAFT mode so the admin previews it before the
+    // customer is emailed. The SA dashboard's saSubmitTrace already targets
+    // /generate-draft; this legacy /submit-trace endpoint is preserved for
+    // any external/old client paths and now mirrors the same gate.
+    const result = await generateReportForOrder(
+      orderId, c.env, (c as any).executionCtx, { skipCustomerDelivery: true }
+    )
 
     // Merge any admin-captured 3D map screenshots into the report's imagery
     // payload. Mirrors the /3d-aerials handler pattern at reports.ts:801-848.
-    // Done after report generation so the reports row is guaranteed to exist
-    // (generateReportForOrder upserts it). No-op if cleanedCaptures is empty,
-    // so reports render unchanged when the admin doesn't capture anything.
     if (cleanedCaptures.length > 0 && result?.success) {
       try {
         const row = await c.env.DB.prepare(
@@ -5609,19 +5611,25 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
       }
     }
 
-    // Auto-invoice: admin-traced orders previously only got a draft proposal
-    // when the 10-minute cron sweep ran. Hook it inline so the roofer sees
-    // the proposal within seconds of the trace being submitted.
+    // Flip the reports row into awaiting_review so the preview page surfaces
+    // it. Same UPDATE as /generate-draft. Auto-invoice is intentionally NOT
+    // hooked here — it fires from /approve-and-deliver once the admin ships
+    // the draft to the customer.
     if (result?.success) {
-      const ctx = (c as any).executionCtx
-      const autoInvP = createAutoInvoiceForOrder(c.env, Number(orderId))
-        .catch((e) => console.warn('[auto-invoice] admin-trace hook error:', e?.message))
-      if (ctx?.waitUntil) ctx.waitUntil(autoInvP)
+      await c.env.DB.prepare(`
+        UPDATE reports SET
+          admin_review_status = 'awaiting_review',
+          admin_review_started_at = datetime('now'),
+          admin_review_completed_at = NULL,
+          admin_review_admin_id = ?,
+          updated_at = datetime('now')
+        WHERE order_id = ?
+      `).bind(admin.id, orderId).run()
     }
 
-    // Notify the customer via email + push (best-effort) and record a
-    // 'trace_completed' row in super_admin_notifications so the feed shows
-    // the trace lifecycle end-to-end.
+    // Record the trace_completed row in the SA feed without emailing the
+    // customer (skipCustomerEmail). Customer is notified from
+    // /approve-and-deliver after the admin reviews the draft.
     try {
       const order = await c.env.DB.prepare(
         'SELECT o.customer_id, o.property_address, o.order_number, o.service_tier, o.price, o.is_trial, c.email AS customer_email, c.name AS customer_name FROM orders o LEFT JOIN customers c ON c.id = o.customer_id WHERE o.id = ?'
@@ -5629,6 +5637,7 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
       if (order) {
         const notifyPromise = recordAndNotify(c.env, {
           kind: 'trace_completed',
+          skipCustomerEmail: true,
           order: {
             order_id: orderId,
             order_number: order.order_number,
@@ -5642,14 +5651,14 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
             is_trial: !!order.is_trial,
             trace_source: 'admin',
             needs_admin_trace: false,
-            payload: { admin_id: admin.id },
+            payload: { admin_id: admin.id, admin_review: 'awaiting_review' },
           },
         }).catch((e) => console.warn('[admin-notif] trace_completed:', e?.message || e))
         const ctx = (c as any).executionCtx
         if (ctx?.waitUntil) ctx.waitUntil(notifyPromise)
         await c.env.DB.prepare(
           "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'manual_trace_completed', ?)"
-        ).bind(`Admin traced order ${order.order_number} — ${order.property_address}`).run()
+        ).bind(`Admin traced order ${order.order_number} — ${order.property_address} (awaiting review)`).run()
       }
     } catch(e) { /* non-fatal */ }
 
@@ -5705,7 +5714,24 @@ adminRoutes.post('/superadmin/orders/:id/regenerate-report', async (c) => {
       WHERE order_id = ?
     `).bind(orderId).run()
 
-    const result = await generateReportForOrder(orderId, c.env, (c as any).executionCtx)
+    // Regenerate in DRAFT mode so the admin previews the rebuilt report
+    // before any customer-facing re-send fires. Without this gate, a regen
+    // would re-email the customer the moment the HTML lands.
+    const result = await generateReportForOrder(
+      orderId, c.env, (c as any).executionCtx, { skipCustomerDelivery: true }
+    )
+
+    if (result?.success) {
+      await c.env.DB.prepare(`
+        UPDATE reports SET
+          admin_review_status = 'awaiting_review',
+          admin_review_started_at = datetime('now'),
+          admin_review_completed_at = NULL,
+          admin_review_admin_id = ?,
+          updated_at = datetime('now')
+        WHERE order_id = ?
+      `).bind(admin.id, orderId).run()
+    }
 
     try {
       await c.env.DB.prepare(
