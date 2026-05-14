@@ -1463,15 +1463,6 @@ app.get('/3d-verify', async (c) => {
   <button class="btn ghost tilt-btn" onclick="tilt(-15)">Tilt ⬆</button>
   ${orderId ? `<button class="btn capture" id="captureBtn" onclick="captureForCover()">📸 Save as Cover</button>` : ''}
 </div>
-<div class="capturebar" id="captureBar" style="display:none">
-  <button class="btn mode active" id="modePan"    onclick="setCaptureMode('pan')">✋ Pan</button>
-  <button class="btn mode eave"   id="modeEave"   onclick="setCaptureMode('eave')">▢ Eave</button>
-  <button class="btn mode ridge"  id="modeRidge"  onclick="setCaptureMode('ridge')">— Ridge</button>
-  <button class="btn mode hip"    id="modeHip"    onclick="setCaptureMode('hip')">⟋ Hip</button>
-  <button class="btn mode valley" id="modeValley" onclick="setCaptureMode('valley')">⟍ Valley</button>
-  <button class="btn ghost" id="undoPickBtn" onclick="undoLastPick()">Undo last point</button>
-  <span class="capture-hint" id="captureHint">Tool selected in the toolbar drives 3D clicks too. Eaves: tap each corner; first vertex closes.</span>
-</div>
 <div class="legend">
   Left-drag to rotate · Right-drag to tilt · Scroll to zoom
 </div>
