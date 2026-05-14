@@ -17656,7 +17656,10 @@ window.saTraceV2 = (function() {
   var s = function() { return window._saTraceState; };
   var map = function() { var st = s(); return st && st.map; };
   var STORAGE_PREFIX = 'sa_trace_draft_v2:';
-  var SNAP_PX = 12;
+  // 8px snap radius (was 12 — too aggressive: ridge endpoints regularly got
+  // pulled onto nearby dormer corners or distant eaves, rotating the line
+  // away from where the user traced it).
+  var SNAP_PX = 8;
   var state = {
     orderId: null,
     lat: null, lng: null,
@@ -17862,12 +17865,22 @@ window.saTraceV2 = (function() {
     if (tool === 'eave')   activeDraft = st._eaveLatLngs;
     else if (tool === 'dormer') activeDraft = st._dormerLatLngs;
     else if (tool === 'cutout') activeDraft = st._cutoutLatLngs;
+    // Scope the candidate pool by tool. Ridge/hip/valley tools historically
+    // dumped EVERY existing vertex (eaves + dormers + cutouts + line ends)
+    // into the pool — and clicks at the second endpoint of a ridge would
+    // get yanked onto a nearby dormer corner, rotating the line off the
+    // angle the user drew. For those tools, restrict the pool to eave
+    // corners + other ridge/hip/valley endpoints so the snap only fires
+    // at meaningful geometric junctions, not coincidental near-misses.
+    var isLineTool = (tool === 'ridge' || tool === 'hip' || tool === 'valley');
     (st.eaveSections || []).forEach(function(sec) { (sec.points || []).forEach(consider); });
     (activeDraft === st._eaveLatLngs ? sansLast(st._eaveLatLngs) : (st._eaveLatLngs || [])).forEach(consider);
-    (st.dormers || []).forEach(function(d) { (d.points || []).forEach(consider); });
-    (activeDraft === st._dormerLatLngs ? sansLast(st._dormerLatLngs) : (st._dormerLatLngs || [])).forEach(consider);
-    (st.cutouts || []).forEach(function(c) { (c.points || []).forEach(consider); });
-    (activeDraft === st._cutoutLatLngs ? sansLast(st._cutoutLatLngs) : (st._cutoutLatLngs || [])).forEach(consider);
+    if (!isLineTool) {
+      (st.dormers || []).forEach(function(d) { (d.points || []).forEach(consider); });
+      (activeDraft === st._dormerLatLngs ? sansLast(st._dormerLatLngs) : (st._dormerLatLngs || [])).forEach(consider);
+      (st.cutouts || []).forEach(function(c) { (c.points || []).forEach(consider); });
+      (activeDraft === st._cutoutLatLngs ? sansLast(st._cutoutLatLngs) : (st._cutoutLatLngs || [])).forEach(consider);
+    }
     // Ridge/hip/valley endpoints — so a hip can terminate exactly on a
     // ridge endpoint or eave corner, not a few pixels off.
     [st._ridgeData || [], st._hipData || [], st._valleyData || []].forEach(function(arr) {
