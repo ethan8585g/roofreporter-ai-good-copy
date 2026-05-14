@@ -30,7 +30,7 @@ import { renderGridOverlay } from './grid-overlay'
 import { fetchFootprintPriors, type FootprintPrior } from './footprint-priors'
 import { decodePNG, encodePNG, lanczosResize, applyVARITint } from './image-preprocess'
 
-const CLAUDE_VISION_MODEL = 'claude-opus-4-7'
+const CLAUDE_VISION_MODEL = 'claude-opus-4-6'
 
 export type AutoTraceEdge = 'eaves' | 'hips' | 'ridges' | 'valleys'
 
