@@ -97,6 +97,40 @@ const MODULES: Array<{ prefix: string; module: string }> = [
   { prefix: '/super-admin', module: 'admin_tools' },
   { prefix: '/admin', module: 'admin_tools' },
 
+  // Customer portal sub-pages — must come before the generic /customer match.
+  // Without these every customer page collapses into 'customer_portal' and
+  // the super-admin Module Analytics leaderboard only ever has one bucket.
+  // Order: longer / more-specific prefixes first (matcher uses startsWith).
+  { prefix: '/customer/buy-reports', module: 'reports' },
+  { prefix: '/customer/buy-credits', module: 'reports' },
+  { prefix: '/customer/new-order', module: 'reports' },
+  { prefix: '/customer/order', module: 'reports' },
+  { prefix: '/customer/reports', module: 'reports' },
+  { prefix: '/customer/invoice/', module: 'reports' },
+
+  { prefix: '/customer/widget-leads', module: 'crm' },
+  { prefix: '/customer/widget', module: 'marketing' },
+  { prefix: '/customer/google-business', module: 'marketing' },
+  { prefix: '/customer/google-ads', module: 'marketing' },
+  { prefix: '/customer/email-outreach', module: 'marketing' },
+  { prefix: '/customer/website-builder', module: 'marketing' },
+
+  { prefix: '/customer/customers', module: 'crm' },
+  { prefix: '/customer/jobs', module: 'crm' },
+  { prefix: '/customer/pipeline', module: 'crm' },
+  { prefix: '/customer/leads', module: 'crm' },
+  { prefix: '/customer/crew', module: 'crm' },
+  { prefix: '/customer/prospects', module: 'crm' },
+  { prefix: '/customer/call-logs', module: 'crm' },
+  { prefix: '/customer/d2d', module: 'crm' },
+
+  { prefix: '/customer/invoices', module: 'invoicing' },
+  { prefix: '/customer/proposals', module: 'invoicing' },
+  { prefix: '/customer/commissions', module: 'invoicing' },
+
+  { prefix: '/customer/property-imagery', module: 'measurement' },
+  { prefix: '/customer/material-calculator', module: 'measurement' },
+
   // Customer portal.
   { prefix: '/api/customer-auth', module: 'customer_portal' },
   { prefix: '/api/customer', module: 'customer_portal' },
