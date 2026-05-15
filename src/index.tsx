@@ -9196,8 +9196,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       <div class="absolute top-1/3 left-1/4 w-[800px] h-[800px] rounded-full opacity-10" style="background: radial-gradient(circle, #00FF88 0%, transparent 70%);"></div>
       <div class="absolute bottom-0 right-0 w-[600px] h-[600px] rounded-full opacity-5" style="background: radial-gradient(circle, #22d3ee 0%, transparent 70%);"></div>
       <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-32 pb-24 lg:pt-40 lg:pb-32">
-        <div class="grid gap-16 items-center">
-          <div>
+        <div class="grid lg:grid-cols-12 gap-12 lg:gap-16 items-center">
+          <div class="lg:col-span-7">
             <!-- conv-v5: hero rewritten — one primary CTA, demoted preview/contact to inline text links, trust bar replaces chip soup -->
             <div class="inline-flex items-center gap-2.5 bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-full px-5 py-2.5 mb-8 backdrop-blur-sm">
               <span class="relative flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00FF88]"></span></span>
@@ -9256,6 +9256,56 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             <div class="lg:hidden mt-4 flex flex-col gap-3">
               <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_mobile_primary'});window.trackAdsConversion&amp;&amp;window.trackAdsConversion('lead',{value:5,currency:'CAD'})}catch(e){}" class="flex items-center justify-center gap-3 bg-[#00FF88] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px]"><i class="fas fa-gift" aria-hidden="true"></i>Start free &mdash; 4 reports, no card<i class="fas fa-arrow-right text-sm" aria-hidden="true"></i></a>
               <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_mobile_sample'})}catch(e){}" class="flex items-center justify-center gap-3 bg-transparent text-white font-bold py-3.5 px-7 rounded-xl text-base border-2 border-white/20 min-h-[52px]"><i class="fas fa-eye text-[#00FF88]" aria-hidden="true"></i>View a Sample Report</a>
+            </div>
+          </div>
+
+          <!-- Hero right-side visual: real aerial-roof photo with measurement-chip overlays -->
+          <div class="hidden lg:block lg:col-span-5 relative">
+            <div class="absolute -top-10 -right-10 w-56 h-56 rounded-full opacity-30 pointer-events-none" style="background: radial-gradient(circle, #00FF88 0%, transparent 70%);"></div>
+            <div class="absolute -bottom-8 -left-8 w-48 h-48 rounded-full opacity-20 pointer-events-none" style="background: radial-gradient(circle, #22d3ee 0%, transparent 70%);"></div>
+
+            <!-- Stacked composition: main aerial + floating contractor card -->
+            <div class="relative">
+              <!-- Primary: top-down aerial roof photo -->
+              <div class="relative rounded-3xl overflow-hidden border border-white/10 shadow-2xl shadow-black/60" style="aspect-ratio:4/5;background:#111">
+                <img src="https://images.unsplash.com/photo-1496782850948-d8e6bbe11a9f?auto=format&amp;fit=crop&amp;w=900&amp;q=80"
+                     alt="Top-down satellite view of residential rooftops"
+                     loading="eager"
+                     decoding="async"
+                     class="absolute inset-0 w-full h-full object-cover" />
+                <!-- Gradient overlay for legibility -->
+                <div class="absolute inset-0" style="background:linear-gradient(180deg, rgba(10,10,10,0.20) 0%, rgba(10,10,10,0.10) 45%, rgba(10,10,10,0.85) 100%);"></div>
+                <!-- Top-left status chip -->
+                <div class="absolute top-5 left-5 inline-flex items-center gap-2 bg-black/70 backdrop-blur-md border border-[#00FF88]/40 rounded-full px-3 py-1.5">
+                  <span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-[#00FF88]"></span></span>
+                  <span class="text-[10px] font-bold text-white uppercase tracking-widest">Live Satellite</span>
+                </div>
+                <!-- Top-right measurement chips -->
+                <div class="absolute top-5 right-5 flex flex-col gap-1.5 items-end">
+                  <span class="inline-flex items-center gap-1 bg-[#00FF88] text-[#0A0A0A] rounded-md px-2.5 py-1 text-[11px] font-extrabold shadow-lg">1,847 sqft</span>
+                  <span class="inline-flex items-center gap-1 bg-black/75 backdrop-blur-sm border border-[#00FF88]/40 text-[#00FF88] rounded-md px-2.5 py-1 text-[11px] font-bold">Pitch 6/12</span>
+                </div>
+                <!-- Bottom caption -->
+                <div class="absolute bottom-0 left-0 right-0 p-5">
+                  <div class="text-white font-extrabold text-lg leading-tight mb-1">Measured from orbit</div>
+                  <div class="text-gray-300 text-xs leading-snug">Every shingle, ridge, and valley &mdash; without a ladder.</div>
+                </div>
+              </div>
+
+              <!-- Floating accent card: contractor in truck (mirrors Mike D. testimonial) -->
+              <div class="absolute -bottom-6 -left-6 sm:-left-10 w-44 rounded-2xl overflow-hidden border border-white/10 shadow-2xl shadow-black/60 bg-[#111] hidden xl:block" style="aspect-ratio:4/5;transform:rotate(-3deg)">
+                <img src="https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?auto=format&amp;fit=crop&amp;w=400&amp;q=70"
+                     alt="Contractor at job site"
+                     loading="lazy"
+                     decoding="async"
+                     class="absolute inset-0 w-full h-full object-cover" />
+                <div class="absolute inset-0" style="background:linear-gradient(180deg, rgba(10,10,10,0.10) 0%, rgba(10,10,10,0.85) 100%);"></div>
+                <div class="absolute bottom-0 left-0 right-0 p-3">
+                  <div class="flex items-center gap-1 mb-1"><i class="fas fa-star text-[#00FF88] text-[9px]"></i><i class="fas fa-star text-[#00FF88] text-[9px]"></i><i class="fas fa-star text-[#00FF88] text-[9px]"></i><i class="fas fa-star text-[#00FF88] text-[9px]"></i><i class="fas fa-star text-[#00FF88] text-[9px]"></i></div>
+                  <div class="text-white font-bold text-[11px] leading-tight">&ldquo;Quote from my truck.&rdquo;</div>
+                  <div class="text-gray-400 text-[9px] mt-0.5">Mike D. &middot; Calgary</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
