@@ -28,6 +28,7 @@ export type ReportFindingCategory =
   | 'stuck_generating'
   | 'failed_no_queue'
   | 'json_parse_error'
+  | 'implausible_low_pitch'
 
 export type ReportFinding = {
   severity: 'error' | 'warn'
@@ -48,6 +49,9 @@ type ReportRow = {
   needs_admin_trace: number | null
   order_number: string | null
   property_address: string | null
+  roof_pitch_degrees: number | null
+  roof_pitch_ratio: string | null
+  admin_review_status: string | null
 }
 
 const ADMIN_LINK = (orderId: number) =>
@@ -62,7 +66,9 @@ export async function scanReportForErrors(
     `SELECT r.order_id, r.status, r.generation_started_at,
             r.professional_report_html, r.api_response_raw,
             r.needs_review, o.needs_admin_trace,
-            o.order_number, o.property_address
+            o.order_number, o.property_address,
+            r.roof_pitch_degrees, r.roof_pitch_ratio,
+            r.admin_review_status
      FROM reports r JOIN orders o ON o.id = r.order_id
      WHERE r.order_id = ?`,
   ).bind(orderId).first<ReportRow>()
@@ -93,7 +99,9 @@ export async function fetchReportsForSweep(
     `SELECT r.order_id, r.status, r.generation_started_at,
             r.professional_report_html, r.api_response_raw,
             r.needs_review, o.needs_admin_trace,
-            o.order_number, o.property_address
+            o.order_number, o.property_address,
+            r.roof_pitch_degrees, r.roof_pitch_ratio,
+            r.admin_review_status
      FROM reports r JOIN orders o ON o.id = r.order_id
      WHERE r.created_at > datetime('now', ?)
         OR r.updated_at > datetime('now', ?)
@@ -150,6 +158,33 @@ function checkReportRow(row: ReportRow): ReportFinding[] {
         details: { html_length: html.length },
       })
     }
+  }
+
+  // 3b) implausible_low_pitch — completed reports with pitch < 2:12 (~9.5°)
+  // are almost always a trace-input footgun (e.g. the pre-revert Section
+  // Pitches popover let an empty arrow-press snap to 0.5:12). Real flat
+  // commercial roofs are rare in our customer mix, so we'd rather false-
+  // positive a handful than ship another 0.5:12 to a homeowner with a
+  // 7:12 roof. Warn-severity; admin sees in the loop tracker and can
+  // either re-trace or override via re-send-as-is.
+  if (
+    row.status === 'completed' &&
+    typeof row.roof_pitch_degrees === 'number' &&
+    row.roof_pitch_degrees > 0 &&
+    row.roof_pitch_degrees < 9.5
+  ) {
+    findings.push({
+      severity: 'warn',
+      category: 'implausible_low_pitch',
+      order_id: orderId,
+      url: ADMIN_LINK(orderId),
+      message: `Pitch ${row.roof_pitch_ratio || `${row.roof_pitch_degrees}°`} on a completed report — almost certainly a trace-input error. ${tag}`,
+      details: {
+        roof_pitch_degrees: row.roof_pitch_degrees,
+        roof_pitch_ratio: row.roof_pitch_ratio,
+        admin_review_status: row.admin_review_status,
+      },
+    })
   }
 
   // The remaining checks require a parseable api_response_raw
