@@ -4196,7 +4196,7 @@ app.get('/roof-replacement-cost/:city', (c) => {
   <script type="application/ld+json">${articleSchema}</script>
   <script type="application/ld+json">${faqSchema}</script>
   <script type="application/ld+json">${breadcrumbSchema}</script>
-  <link rel="stylesheet" href="/static/tailwind.css">
+  <link rel="stylesheet" href="/static/tailwind.css?v=20260515c">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     :root{--bg-page:#0A0A0A;--bg-card:#111111;--accent:#00FF88;}
@@ -4759,7 +4759,7 @@ app.get('/report/share/:token', async (c) => {
     `).bind(token).first<any>()
 
     if (!row) {
-      return c.html(`<!DOCTYPE html><html><head><title>Report Not Found</title><link rel="stylesheet" href="/static/tailwind.css"><style>:root{--bg-page:#0A0A0A;--text-primary:#fff;--text-muted:#9ca3af}body.light-theme,.light-theme{--bg-page:#f3f4f6;--text-primary:#111827;--text-muted:#6b7280}.light-theme [style*="background:#0A0A0A"]{background:var(--bg-page) !important}</style><script>!function(){var t=localStorage.getItem('rc_dashboard_theme');if(t==='light'||(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches)){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script></head>
+      return c.html(`<!DOCTYPE html><html><head><title>Report Not Found</title><link rel="stylesheet" href="/static/tailwind.css?v=20260515c"><style>:root{--bg-page:#0A0A0A;--text-primary:#fff;--text-muted:#9ca3af}body.light-theme,.light-theme{--bg-page:#f3f4f6;--text-primary:#111827;--text-muted:#6b7280}.light-theme [style*="background:#0A0A0A"]{background:var(--bg-page) !important}</style><script>!function(){var t=localStorage.getItem('rc_dashboard_theme');if(t==='light'||(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches)){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script></head>
 <body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A">
 <div class="text-center max-w-md mx-auto px-4">
   <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -4797,7 +4797,7 @@ app.get('/report/share/:token', async (c) => {
     const reportHtml = (head.includes('<!doctype') || head.includes('<html')) ? h : ''
 
     if (!reportHtml) {
-      return c.html(`<!DOCTYPE html><html><head><title>Report Unavailable</title><link rel="stylesheet" href="/static/tailwind.css"><style>:root{--bg-page:#0A0A0A;--text-primary:#fff;--text-muted:#9ca3af}body.light-theme,.light-theme{--bg-page:#f3f4f6;--text-primary:#111827;--text-muted:#6b7280}.light-theme [style*="background:#0A0A0A"]{background:var(--bg-page) !important}</style><script>!function(){var t=localStorage.getItem('rc_dashboard_theme');if(t==='light'||(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches)){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script></head>
+      return c.html(`<!DOCTYPE html><html><head><title>Report Unavailable</title><link rel="stylesheet" href="/static/tailwind.css?v=20260515c"><style>:root{--bg-page:#0A0A0A;--text-primary:#fff;--text-muted:#9ca3af}body.light-theme,.light-theme{--bg-page:#f3f4f6;--text-primary:#111827;--text-muted:#6b7280}.light-theme [style*="background:#0A0A0A"]{background:var(--bg-page) !important}</style><script>!function(){var t=localStorage.getItem('rc_dashboard_theme');if(t==='light'||(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches)){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script></head>
 <body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A">
 <div class="text-center"><h1 class="text-xl font-bold mb-2" style="color:var(--text-primary)">Report Not Available</h1><p style="color:var(--text-muted)">This report has not been generated yet.</p></div>
 </body></html>`, 404)
@@ -4833,7 +4833,7 @@ app.get('/report/share/:token', async (c) => {
     console.error('[ShareReport]', err?.message || err)
     // Return a styled error page on transient failures so we never leak
     // template-fragment HTML to homeowners opening a shared link.
-    return c.html(`<!DOCTYPE html><html><head><title>Report Temporarily Unavailable</title><link rel="stylesheet" href="/static/tailwind.css"></head>
+    return c.html(`<!DOCTYPE html><html><head><title>Report Temporarily Unavailable</title><link rel="stylesheet" href="/static/tailwind.css?v=20260515c"></head>
 <body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A">
 <div class="text-center max-w-md mx-auto px-4">
   <div class="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -5369,7 +5369,7 @@ app.get('/proposal/view/:token', async (c) => {
       .catch(function() { alert('Network error. Please check your connection and try again.'); btn.disabled = false; btn.innerHTML = action === 'accept' ? '<i class="fas fa-check-circle mr-2"></i>Accept ${docLabel}' : 'Decline'; });
     }` : ''
 
-        return c.html(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${docLabel} ${invProposal.invoice_number} — Roof Manager</title><meta property="og:title" content="${docLabel} ${invProposal.invoice_number} — $${Number(invProposal.total_amount || 0).toFixed(2)}"><meta property="og:description" content="Professional roofing ${docLabel.toLowerCase()} for ${invProposal.customer_name || 'valued customer'}. ${invProposal.property_address ? 'Property: ' + invProposal.property_address : ''}"><meta property="og:type" content="article"><meta property="og:site_name" content="Roof Manager"><meta name="twitter:card" content="summary"><link rel="stylesheet" href="/static/tailwind.css"><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"><style>@media print { .no-print { display: none !important; } }</style></head>
+        return c.html(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${docLabel} ${invProposal.invoice_number} — Roof Manager</title><meta property="og:title" content="${docLabel} ${invProposal.invoice_number} — $${Number(invProposal.total_amount || 0).toFixed(2)}"><meta property="og:description" content="Professional roofing ${docLabel.toLowerCase()} for ${invProposal.customer_name || 'valued customer'}. ${invProposal.property_address ? 'Property: ' + invProposal.property_address : ''}"><meta property="og:type" content="article"><meta property="og:site_name" content="Roof Manager"><meta name="twitter:card" content="summary"><link rel="stylesheet" href="/static/tailwind.css?v=20260515c"><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"><style>@media print { .no-print { display: none !important; } }</style></head>
 <body class="bg-gray-100 min-h-screen py-8 px-4">
 <div class="max-w-3xl mx-auto">
   <div class="bg-white rounded-2xl shadow-xl overflow-hidden print:shadow-none">
@@ -5413,7 +5413,7 @@ if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function()
 </body></html>`)
       }
 
-      return c.html(`<!DOCTYPE html><html><head><title>Proposal Not Found</title><link rel="stylesheet" href="/static/tailwind.css"></head><body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A"><div class="text-center"><div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><svg class="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg></div><h1 class="text-2xl font-bold text-gray-800 mb-2">Proposal Not Found</h1><p class="text-gray-500">This proposal link is invalid or has expired.</p></div></body></html>`, 404)
+      return c.html(`<!DOCTYPE html><html><head><title>Proposal Not Found</title><link rel="stylesheet" href="/static/tailwind.css?v=20260515c"></head><body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A"><div class="text-center"><div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><svg class="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg></div><h1 class="text-2xl font-bold text-gray-800 mb-2">Proposal Not Found</h1><p class="text-gray-500">This proposal link is invalid or has expired.</p></div></body></html>`, 404)
     }
 
     // Increment view count & log the view
@@ -5536,7 +5536,7 @@ if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function()
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="${businessName}">
   <meta name="twitter:card" content="summary">
-  <link rel="stylesheet" href="/static/tailwind.css">
+  <link rel="stylesheet" href="/static/tailwind.css?v=20260515c">
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   <style>
     @media print { .no-print { display: none !important; } body { background: white; } }
@@ -5909,7 +5909,7 @@ if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function()
 </html>`)
   } catch (err: any) {
     console.error('[Proposal View] Error:', err.message)
-    return c.html(`<!DOCTYPE html><html><head><title>Error</title><link rel="stylesheet" href="/static/tailwind.css"></head><body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A"><div class="text-center"><h1 class="text-xl font-bold text-red-600">Error Loading Proposal</h1><p class="text-gray-500 mt-2">Please try refreshing the page.</p></div></body></html>`, 500)
+    return c.html(`<!DOCTYPE html><html><head><title>Error</title><link rel="stylesheet" href="/static/tailwind.css?v=20260515c"></head><body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A"><div class="text-center"><h1 class="text-xl font-bold text-red-600">Error Loading Proposal</h1><p class="text-gray-500 mt-2">Please try refreshing the page.</p></div></body></html>`, 500)
   }
 })
 
@@ -6435,8 +6435,8 @@ function getHeadTags(canonicalPath?: string) {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Roof Manager">
   <meta name="mobile-web-app-capable" content="yes">
-  <link rel="preload" href="/static/tailwind.css" as="style" fetchpriority="high">
-  <link rel="stylesheet" href="/static/tailwind.css">
+  <link rel="preload" href="/static/tailwind.css?v=20260515c" as="style" fetchpriority="high">
+  <link rel="stylesheet" href="/static/tailwind.css?v=20260515c">
   <!-- Font Awesome — preload + onload swap, with a 1.5s timeout fallback for iOS Safari
        where onload occasionally fails to fire (RC#6 follow-up). The link is also tagged
        with id="fa-preload" so the fallback script can find it. -->
@@ -8589,7 +8589,7 @@ function getReferralLandingHTML(code: string, referrerName: string): string {
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>You've been invited — Roof Manager</title>
   <link rel="icon" href="/static/favicon.ico?v=20260504">
-  <link rel="stylesheet" href="/static/tailwind.css">
+  <link rel="stylesheet" href="/static/tailwind.css?v=20260515c">
   <style>body { background:#0A0A0A; color:#fff; font-family:'Inter',sans-serif; }</style>
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center px-4">
@@ -8634,7 +8634,7 @@ function getOnboardingPageHTML(sessionToken = ''): string {
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Welcome to Roof Manager — Get Started</title>
   <link rel="icon" href="/static/favicon.ico?v=20260504">
-  <link rel="stylesheet" href="/static/tailwind.css">
+  <link rel="stylesheet" href="/static/tailwind.css?v=20260515c">
   <style>
     html, body { min-height: 100dvh; }
     body {
@@ -20956,7 +20956,7 @@ function getGemma3ModelCardHTML() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gemma 3 Model Card - Google DeepMind</title>
   <meta name="description" content="Gemma 3 — lightweight, open, multimodal models by Google DeepMind. Text + image understanding, 128K context, 140+ languages.">
-  <link rel="stylesheet" href="/static/tailwind.css">
+  <link rel="stylesheet" href="/static/tailwind.css?v=20260515c">
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -23756,7 +23756,7 @@ function getToolsHubHTML(): string {
   <link rel="canonical" href="https://www.roofmanager.ca/tools">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"CollectionPage","name":"Free Roofing Tools","description":"Free roofing calculators and tools for contractors and homeowners","url":"https://www.roofmanager.ca/tools","publisher":{"@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca"}}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Free Tools","item":"https://www.roofmanager.ca/tools"}]}</script>
-  <link rel="stylesheet" href="/static/tailwind.css">
+  <link rel="stylesheet" href="/static/tailwind.css?v=20260515c">
   <style>
     body { background:#0a0f1a; color:#e2e8f0; font-family: system-ui, sans-serif; }
     .tool-card { background:#111827; border:1px solid #1e293b; border-radius:16px; padding:28px; transition:border-color .2s,box-shadow .2s; }
@@ -23912,7 +23912,7 @@ function getPitchCalculatorHTML(): string {
   <link rel="canonical" href="https://www.roofmanager.ca/tools/pitch-calculator">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Roof Pitch Calculator","description":"Free roof pitch calculator — convert rise:12 pitch to degrees and calculate pitch multiplier for sloped area","url":"https://www.roofmanager.ca/tools/pitch-calculator","applicationCategory":"UtilitiesApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"CAD"},"publisher":{"@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca"}}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How do I convert roof pitch to degrees?","acceptedAnswer":{"@type":"Answer","text":"Use the formula degrees = arctan(rise ÷ 12). For a 6:12 pitch: arctan(0.5) = 26.57°. This calculator does it instantly for any pitch from 1:12 to 24:12."}},{"@type":"Question","name":"What is a pitch multiplier?","acceptedAnswer":{"@type":"Answer","text":"The pitch multiplier is √(rise² + 144) ÷ 12. Multiply your roof footprint area by this number to get the true sloped surface area — what you actually need to order material for."}},{"@type":"Question","name":"What is the most common roof pitch?","acceptedAnswer":{"@type":"Answer","text":"The most common residential roof pitch is 6:12 (26.57°), followed by 4:12 and 5:12. Pitches between 4:12 and 8:12 are considered conventional slope."}}]}</script>
-  <link rel="stylesheet" href="/static/tailwind.css">
+  <link rel="stylesheet" href="/static/tailwind.css?v=20260515c">
   <style>
     body { background:#0a0f1a; color:#e2e8f0; font-family: system-ui, sans-serif; }
     input[type=range] { -webkit-appearance:none; width:100%; height:6px; border-radius:3px; background:#1e293b; outline:none; }
@@ -24187,7 +24187,7 @@ function i18nHead(locale: I18NLocale, title: string, desc: string, canonicalPath
   return `<meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#00FF88">
-  <link rel="stylesheet" href="/static/tailwind.css">
+  <link rel="stylesheet" href="/static/tailwind.css?v=20260515c">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&display=fallback" rel="stylesheet">
@@ -25049,7 +25049,7 @@ function getPressPageHTML(): string {
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://www.roofmanager.ca/press">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://www.roofmanager.ca/static/logo.png?v=20260504","description":"Canadian AI-powered roofing measurement and CRM platform for residential and commercial roofing contractors","foundingDate":"2024","areaServed":["Canada","United States"],"contactPoint":[{"@type":"ContactPoint","contactType":"Press","email":"hello@roofmanager.ca","availableLanguage":"English"}]}</script>
-  <link rel="stylesheet" href="/static/tailwind.css">
+  <link rel="stylesheet" href="/static/tailwind.css?v=20260515c">
   <style>body{background:#0a0f1a;color:#e2e8f0;font-family:system-ui,sans-serif;} .stat-card{background:#111827;border:1px solid #1e293b;border-radius:14px;padding:24px;text-align:center;}</style>
 </head>
 <body>
@@ -25208,7 +25208,7 @@ function getMaterialEstimatorHTML(): string {
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://www.roofmanager.ca/tools/material-estimator">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Roofing Material Estimator","description":"Free roofing material estimator","url":"https://www.roofmanager.ca/tools/material-estimator","applicationCategory":"UtilitiesApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"CAD"},"publisher":{"@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca"}}</script>
-  <link rel="stylesheet" href="/static/tailwind.css">
+  <link rel="stylesheet" href="/static/tailwind.css?v=20260515c">
   <style>
     body{background:#0a0f1a;color:#e2e8f0;font-family:system-ui,sans-serif;}
     input[type=range]{-webkit-appearance:none;width:100%;height:6px;border-radius:3px;background:#1e293b;outline:none;}
