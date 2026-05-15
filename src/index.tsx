@@ -8052,8 +8052,9 @@ function getLoginPageHTML() {
   ${getHeadTags()}
   <title>Admin Login - Roof Manager</title>
 </head>
-<body class="bg-gradient-to-br from-sky-100 via-blue-50 to-white" style="margin:0;min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:32px 16px;box-sizing:border-box">
-  <div style="width:100%;max-width:440px;margin:0 auto;display:flex;flex-direction:column;align-items:stretch">
+<body class="bg-gradient-to-br from-sky-100 via-blue-50 to-white" style="margin:0;min-height:100vh;min-height:100dvh;box-sizing:border-box">
+  <div style="min-height:100vh;min-height:100dvh;width:100%;display:flex;align-items:center;justify-content:center;padding:32px 16px;box-sizing:border-box">
+  <div style="width:100%;max-width:440px;margin:0 auto">
     <!-- Logo -->
     <div style="text-align:center;margin-bottom:28px">
       <a href="/" style="display:inline-flex;align-items:center;gap:12px;text-decoration:none">
@@ -8134,6 +8135,7 @@ function getLoginPageHTML() {
     <div class="text-center mt-6">
       <a href="/" class="text-gray-400 hover:text-white text-sm transition-colors"><i class="fas fa-arrow-left mr-1"></i>Back to homepage</a>
     </div>
+  </div>
   </div>
 
   <script>
@@ -12532,9 +12534,10 @@ function getCustomerLoginHTML(googleClientId = '') {
   <title>Customer Login - Roof Manager</title>
   ${googleClientId ? '<script src="https://accounts.google.com/gsi/client" async defer><\/script>' : ''}
 </head>
-<body class="bg-gradient-to-br from-sky-100 via-blue-50 to-white" style="margin:0;min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:32px 16px;box-sizing:border-box">
+<body class="bg-gradient-to-br from-sky-100 via-blue-50 to-white" style="margin:0;min-height:100vh;min-height:100dvh;box-sizing:border-box">
   <script>var _rp=new URLSearchParams(location.search).get('ref');if(_rp)localStorage.setItem('_ref_code',_rp);</script>
-  <div style="width:100%;max-width:440px;margin:0 auto;display:flex;flex-direction:column;align-items:stretch">
+  <div style="min-height:100vh;min-height:100dvh;width:100%;display:flex;align-items:center;justify-content:center;padding:32px 16px;box-sizing:border-box">
+  <div style="width:100%;max-width:440px;margin:0 auto">
     <!-- Logo -->
     <div style="text-align:center;margin-bottom:28px">
       <a href="/" style="display:inline-flex;align-items:center;gap:12px;text-decoration:none">
@@ -12721,6 +12724,7 @@ function getCustomerLoginHTML(googleClientId = '') {
     <div class="text-center mt-4">
       <a href="/login" class="text-gray-500 hover:text-gray-400 text-[10px] transition-colors tracking-wide uppercase">Staff sign-in</a>
     </div>
+  </div>
   </div>
 
   <script>

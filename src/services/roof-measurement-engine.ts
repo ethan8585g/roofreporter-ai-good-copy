@@ -1134,7 +1134,7 @@ export class RoofMeasurementEngine {
     this.address    = payload.address || 'Unknown Address'
     this.homeowner  = payload.homeowner || 'Unknown'
     this.orderId    = payload.order_id || ''
-    this.defPitch   = payload.default_pitch || 5.0
+    this.defPitch   = (typeof payload.default_pitch === 'number' && isFinite(payload.default_pitch) && payload.default_pitch >= 2.0) ? payload.default_pitch : 5.0
     this.complexity = payload.complexity || 'medium'
     this.incWaste   = payload.include_waste !== false
     this.timestamp  = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
@@ -2639,7 +2639,14 @@ export function traceUiToEnginePayload(
   // sectionPitchByRef. Auto-split sections (no user kind tag) default to 'main'.
   const sectionKindByRef = new Map<{ lat: number; lng: number }[], 'main' | 'lower_tier'>()
   const validatePitchRise = (p: unknown): number | null => {
-    if (typeof p !== 'number' || !isFinite(p) || p <= 0 || p > 30) return null
+    if (typeof p !== 'number' || !isFinite(p) || p > 30) return null
+    // Hard floor at 2:12 — residential roofs below this are exceedingly rare
+    // and almost always indicate a data error (see order-322 incident).
+    // Returning null falls through to the section's default pitch.
+    if (p < 2.0) {
+      if (p > 0) console.warn(`[Engine] Per-section pitch ${p}:12 below 2:12 floor — clamping to default`)
+      return null
+    }
     return p
   }
   const validateKind = (k: unknown): 'main' | 'lower_tier' =>
