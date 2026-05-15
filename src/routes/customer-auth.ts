@@ -871,12 +871,21 @@ customerAuthRoutes.post('/register', async (c) => {
     const utmContent = cleanUtm(utm_content)
     const utmTerm = cleanUtm(utm_term)
 
-    if (!email || !password || !name) {
-      return c.json({ error: 'Email, password, and name are required' }, 400)
+    // conv-v6: name now optional — derived from email local-part when missing
+    // so the welcome email + dashboard "Hi <name>" copy still has something
+    // human-readable. The user fills in their real name during /onboarding.
+    if (!email || !password) {
+      return c.json({ error: 'Email and password are required' }, 400)
     }
     if (password.length < 8) {
       return c.json({ error: 'Password must be at least 8 characters' }, 400)
     }
+    const derivedName = (() => {
+      if (name && String(name).trim()) return String(name).trim()
+      const local = String(email).split('@')[0] || ''
+      const friendly = local.replace(/[._-]+/g, ' ').trim()
+      return friendly ? friendly.charAt(0).toUpperCase() + friendly.slice(1) : 'there'
+    })()
     // honeypot — silently accept-and-drop obvious bot signups
     if (website && String(website).trim().length > 0) {
       return c.json({ error: 'Registration failed. Please try again.' }, 400)
@@ -907,20 +916,20 @@ customerAuthRoutes.post('/register', async (c) => {
       await c.env.DB.prepare("INSERT INTO register_attempts (ip, email) VALUES (?, ?)").bind(clientIp, cleanEmail).run()
     } catch (e: any) { console.warn('[register] log insert failed:', e?.message || e) }
 
-    // Phase 1 #1: email verification is REQUIRED. Reject when token is missing
-    // so the API cannot be hit directly to bypass the verification flow.
-    if (!verification_token) {
-      return c.json({ error: 'Email verification is required. Please verify your email before completing registration.' }, 400)
-    }
-    // Window starts at verify time, not send time — gives the user 60 minutes to fill in
-    // the registration form after verifying. Previously the clock ran from /send-verification,
-    // so a user who took >10 minutes total got bounced back to step 1.
-    const verified = await c.env.DB.prepare(
-      "SELECT * FROM email_verification_codes WHERE email = ? AND verification_token = ? AND verified_at IS NOT NULL AND verified_at > datetime('now', '-60 minutes')"
-    ).bind(cleanEmail, verification_token).first<any>()
-
-    if (!verified) {
-      return c.json({ error: 'Email verification expired or invalid. Please verify your email again.' }, 400)
+    // conv-v6: email verification is now OPTIONAL at signup. When a token is
+    // present we still honor it (account starts email_verified=1); when it's
+    // missing we create the account anyway with email_verified=0 and queue
+    // the verification email post-signup. Mitigates the 10-25% drop-off the
+    // hard verification wall was causing. Honeypot + IP rate-limits still
+    // gate bots; downstream paid actions can require verification later.
+    let isVerifiedAtSignup = false
+    if (verification_token) {
+      const verified = await c.env.DB.prepare(
+        "SELECT * FROM email_verification_codes WHERE email = ? AND verification_token = ? AND verified_at IS NOT NULL AND verified_at > datetime('now', '-60 minutes')"
+      ).bind(cleanEmail, verification_token).first<any>()
+      if (verified) isVerifiedAtSignup = true
+      // If the token is stale/invalid, fall through and create the account
+      // unverified rather than bouncing the user — they can re-verify later.
     }
 
     const existing = await c.env.DB.prepare(
@@ -947,14 +956,16 @@ customerAuthRoutes.post('/register', async (c) => {
       referredBy = referrer.id
     }
 
-    // Insert with the standard free-trial grant (NOT paid credits) — email_verified = 1 since we verified
-    // conv-v5: persist phone, company_size, primary_use for sales-qualification
+    // Insert with the standard free-trial grant (NOT paid credits).
+    // conv-v6: email_verified is 1 only when a valid verification_token was
+    // submitted; otherwise 0 and we send the verification email post-signup.
+    // conv-v5: persist phone, company_size, primary_use for sales-qualification.
     // gclid stays on customers (legacy column); full UTM set goes to analytics_attribution below.
     const effectiveLeadSource = utmSource || (cleanGclid ? 'google' : null)
     const result = await c.env.DB.prepare(`
       INSERT INTO customers (email, name, phone, company_name, company_size, primary_use, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by, auto_invoice_enabled, company_type, last_login, gclid, lead_utm_source, lead_source)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 0, 0, ?, 0, ?, ?, 0, 'roofing', datetime('now'), ?, ?, ?)
-    `).bind(cleanEmail, name, cleanPhone, cleanCompanyName, cleanCompanySize, cleanPrimaryUse, storedHash, FREE_TRIAL_REPORTS, refCode, referredBy, cleanGclid, utmSource, effectiveLeadSource).run()
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, ?, 0, ?, ?, 0, 'roofing', datetime('now'), ?, ?, ?)
+    `).bind(cleanEmail, derivedName, cleanPhone, cleanCompanyName, cleanCompanySize, cleanPrimaryUse, storedHash, isVerifiedAtSignup ? 1 : 0, FREE_TRIAL_REPORTS, refCode, referredBy, cleanGclid, utmSource, effectiveLeadSource).run()
 
     if (!result.meta.last_row_id) {
       return c.json({ error: 'Failed to create account. Please try again.' }, 500)
@@ -996,7 +1007,7 @@ customerAuthRoutes.post('/register', async (c) => {
     await c.env.DB.prepare(`
       INSERT INTO user_activity_log (company_id, action, details)
       VALUES (1, 'customer_registered', ?)
-    `).bind(`New customer: ${name} (${cleanEmail}) — ${FREE_TRIAL_REPORTS} free trial reports granted — email verified`).run()
+    `).bind(`New customer: ${derivedName} (${cleanEmail}) — ${FREE_TRIAL_REPORTS} free trial reports granted — email_verified=${isVerifiedAtSignup ? 1 : 0}`).run()
 
     // Seed default material catalog so new account has context on the section (non-blocking)
     seedDefaultMaterials(c.env.DB, result.meta.last_row_id as number).catch((e) => console.warn('[customer-auth] seedDefaultMaterials failed (email):', e?.message || e))
@@ -1021,7 +1032,7 @@ customerAuthRoutes.post('/register', async (c) => {
         signup_method: 'email',
         customer_id: result.meta.last_row_id,
         email: cleanEmail,
-        name,
+        name: derivedName,
         phone: cleanPhone,
         company_name: cleanCompanyName,
         company_size: cleanCompanySize,
@@ -1032,7 +1043,7 @@ customerAuthRoutes.post('/register', async (c) => {
 
     // Send "Welcome to Roof Manager" email to the new user (non-blocking)
     try {
-      c.executionCtx.waitUntil(sendWelcomeEmail(c.env as any, { email: cleanEmail, name, customerId: (result?.meta?.last_row_id as number) || null })
+      c.executionCtx.waitUntil(sendWelcomeEmail(c.env as any, { email: cleanEmail, name: derivedName, customerId: (result?.meta?.last_row_id as number) || null })
         .catch((e) => console.warn('[customer-auth] sendWelcomeEmail (email) failed:', e?.message || e)))
     } catch (e: any) { console.warn('[customer-auth] sendWelcomeEmail (email) skip:', e?.message) }
 
@@ -1042,12 +1053,13 @@ customerAuthRoutes.post('/register', async (c) => {
       customer: {
         id: result.meta.last_row_id,
         email: cleanEmail,
-        name,
+        name: derivedName,
         company_name: cleanCompanyName,
         phone: cleanPhone,
         company_size: cleanCompanySize,
         primary_use: cleanPrimaryUse,
         role: 'customer',
+        email_verified: isVerifiedAtSignup,
         credits_remaining: FREE_TRIAL_REPORTS,
         free_trial_remaining: FREE_TRIAL_REPORTS,
         free_trial_total: FREE_TRIAL_REPORTS,

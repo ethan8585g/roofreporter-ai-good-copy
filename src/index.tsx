@@ -9368,19 +9368,32 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         </div>
 
         <div class="flex flex-col gap-4">
-          <a href="/pricing" onclick="try{rrTrack('cta_click',{location:'hero_pricing_poster'})}catch(e){}"
-             class="group flex items-center gap-4 max-w-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-[#00FF88]/30 rounded-2xl px-4 py-3 sm:px-5 sm:py-4 transition-all"
-             aria-label="See volume pricing — roof measurement reports from $5.95 CAD each">
-            <div class="flex-shrink-0 inline-flex flex-col items-center justify-center w-14 h-14 rounded-xl bg-[#00FF88]/10 border border-[#00FF88]/25">
-              <span class="text-[9px] font-bold text-[#00FF88] tracking-widest uppercase leading-none">From</span>
-              <span class="text-[#00FF88] font-black text-base leading-tight mt-0.5">$5.95</span>
+          <!-- conv-v6: pricing breakdown moved out from behind the /pricing click. Cost is the #1 question contractors ask, so it lives on the landing page. -->
+          <div class="max-w-xl">
+            <div class="text-[11px] uppercase tracking-wider text-[#00FF88] font-bold mb-2">Transparent pricing &middot; CAD</div>
+            <div class="grid grid-cols-3 gap-2">
+              <a href="/pricing" onclick="try{rrTrack('cta_click',{location:'hero_pricing_tier_payg'})}catch(e){}"
+                 class="group block bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-[#00FF88]/30 rounded-xl p-3 transition-all">
+                <div class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Pay as you go</div>
+                <div class="text-white font-black text-2xl leading-none">$10</div>
+                <div class="text-[11px] text-gray-400 mt-1">per report</div>
+              </a>
+              <a href="/pricing" onclick="try{rrTrack('cta_click',{location:'hero_pricing_tier_10'})}catch(e){}"
+                 class="group block bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-[#00FF88]/30 rounded-xl p-3 transition-all">
+                <div class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">10-pack</div>
+                <div class="text-white font-black text-2xl leading-none">$8</div>
+                <div class="text-[11px] text-gray-400 mt-1">per report</div>
+              </a>
+              <a href="/pricing" onclick="try{rrTrack('cta_click',{location:'hero_pricing_tier_100'})}catch(e){}"
+                 class="group block bg-[#00FF88]/10 hover:bg-[#00FF88]/15 border border-[#00FF88]/40 hover:border-[#00FF88]/60 rounded-xl p-3 transition-all relative">
+                <div class="absolute -top-2 right-2 bg-[#00FF88] text-[#0A0A0A] text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">Best</div>
+                <div class="text-[10px] font-bold uppercase tracking-widest text-[#00FF88] mb-1">100-pack</div>
+                <div class="text-[#00FF88] font-black text-2xl leading-none">$5.95</div>
+                <div class="text-[11px] text-gray-400 mt-1">per report</div>
+              </a>
             </div>
-            <div class="flex-1 min-w-0">
-              <div class="text-white font-bold text-sm leading-snug">Roof measurement reports start at just $5.95 per report</div>
-              <div class="text-gray-500 text-[11px] mt-1">100-credit pack &middot; CAD &middot; volume pricing</div>
-            </div>
-            <i class="fas fa-arrow-right text-gray-500 group-hover:text-[#00FF88] group-hover:translate-x-0.5 transition-all text-xs flex-shrink-0" aria-hidden="true"></i>
-          </a>
+            <div class="text-[11px] text-gray-500 mt-3">Credits never expire &middot; first 4 reports free &middot; <a href="/pricing" class="text-[#00FF88] hover:underline" onclick="try{rrTrack('cta_click',{location:'hero_pricing_see_all'})}catch(e){}">See all packs &rarr;</a></div>
+          </div>
 
           <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_mobile_sample_report'})}catch(e){}" class="text-sm text-gray-400 hover:text-white inline-flex items-center gap-2 max-w-xl"><i class="fas fa-eye text-[#00FF88] text-xs"></i> View a sample report (no signup, no email) <i class="fas fa-arrow-right text-[10px]" aria-hidden="true"></i></a>
 
@@ -11698,6 +11711,13 @@ ${previewId ? `
   &#x2705; Your roof preview is saved — complete signup to download the full report.
 </div>
 ` : ''}
+        <!-- Mobile-visible sample-report nudge — sidebar is hidden on phones, this gives mobile users product proof before they fill the form. -->
+        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'register_inline_sample'})}catch(e){}"
+           style="display:flex;align-items:center;gap:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 14px;margin-bottom:16px;text-decoration:none;color:#15803d;font-size:13px;font-weight:600">
+          <i class="fas fa-eye" style="color:#00CC70"></i>
+          <span style="flex:1">See a real sample report — no signup needed</span>
+          <i class="fas fa-arrow-right" style="font-size:11px;color:#00CC70"></i>
+        </a>
         <!-- Progress indicator -->
         <div style="display:flex;gap:8px;margin-bottom:20px" id="reg-progress">
           <div id="prog1" style="flex:1;height:4px;background:#00FF88;border-radius:2px"></div>
@@ -11757,46 +11777,18 @@ ${previewId ? `
               <i class="fas fa-check-circle" style="margin-right:6px"></i>Email verified &mdash; complete the form below.
             </div>
 
-            <label for="reg-name" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Full Name</label>
-            <input id="reg-name" type="text" name="name" autocomplete="name" required
-              placeholder="Jane Smith"
-              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px"
-              onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
-
-            <label for="reg-password" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Password</label>
+            <!-- conv-v6: collapsed to email + password only. Name/phone/company/primary_use moved to /onboarding to cut signup friction (per CRO audit, this lifts CVR ~15-20%). -->
+            <label for="reg-password" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Choose a password</label>
             <input id="reg-password" type="password" name="password" autocomplete="new-password" required minlength="8"
               data-clarity-mask="true"
               placeholder="Min. 8 characters"
               style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:6px"
               onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'"
               oninput="updateStrengthMeter(this.value)">
-            <div id="strength-meter" style="height:4px;background:#e5e7eb;border-radius:2px;margin-bottom:12px;overflow:hidden">
+            <div id="strength-meter" style="height:4px;background:#e5e7eb;border-radius:2px;margin-bottom:8px;overflow:hidden">
               <div id="strength-bar" style="height:100%;width:0%;transition:width 0.3s,background 0.3s;border-radius:2px"></div>
             </div>
-
-            <label for="reg-phone" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Phone Number <span style="font-weight:400;color:#9ca3af">(optional &mdash; you can add this later)</span></label>
-            <input id="reg-phone" type="tel" name="phone" autocomplete="tel" inputmode="tel"
-              placeholder="(403) 555-0100"
-              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px"
-              onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
-
-            <label for="reg-company" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Company Name <span style="font-weight:400;color:#9ca3af">(optional &mdash; you can add this later)</span></label>
-            <input id="reg-company" type="text" name="company_name" autocomplete="organization"
-              placeholder="Acme Roofing"
-              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px"
-              onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
-
-            <label for="reg-primary-use" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">What do you mostly do? <span style="font-weight:400;color:#9ca3af">(optional)</span></label>
-            <select id="reg-primary-use" name="primary_use"
-              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:16px;background:#fff;color:#111"
-              onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
-              <option value="">Select focus...</option>
-              <option value="storm">Storm / insurance work</option>
-              <option value="retail">Retail / residential</option>
-              <option value="commercial">Commercial</option>
-              <option value="solar">Solar</option>
-              <option value="other">Other</option>
-            </select>
+            <p style="font-size:12px;color:#6b7280;margin:0 0 16px">We'll grab your name and company on the next screen — keeps signup fast.</p>
 
             <!-- Sticky submit on mobile (<=640px) via class; inline styles cover desktop -->
             <style>
@@ -11961,12 +11953,12 @@ ${previewId ? `
       var d = document.getElementById('step2-email-display');
       if (d) d.textContent = '\uD83D\uDCE7 ' + (email || document.getElementById('reg-email').value);
       if (!silent) rrTrack('signup_field_complete', {field: 'email'});
-
-      // Fire the verification email + reveal the code-entry block. Without
-      // this, the backend rejects the final submit with "Email verification
-      // is required" — users hit Continue, fill out the form, click Create
-      // Account, and get a 400. (Bug found 2026-05-02 with 54 ad clicks / 0
-      // signups in flight.)
+      // conv-v6: verification deferred to /onboarding. Submit is enabled
+      // immediately; the backend creates the account with email_verified=0
+      // and queues the verification code via the welcome-email path.
+      setSubmitEnabled(true);
+      return;
+      // --- legacy verify-on-signup path (kept inert in case we revert) ---
       if (!silent && email) {
         var vb = document.getElementById('reg-verify-block');
         if (vb) vb.style.display = 'block';
@@ -12050,12 +12042,10 @@ ${previewId ? `
       bar.style.width = pct + '%';
       bar.style.background = colors[score];
     }
-    // On page load: rehydrate draft (email only; user clicks Continue to receive a new verification code)
-    // and DISABLE the submit button until the user verifies their email code.
-    // The backend requires verification_token; before this guard the button
-    // was clickable on first paint and every email signup hit a 400.
+    // On page load: rehydrate draft (email only). conv-v6: submit stays
+    // enabled because the backend no longer gates /register on verification.
     (function() {
-      try { setSubmitEnabled(false); } catch(_) {}
+      try { setSubmitEnabled(true); } catch(_) {}
       var draft = {};
       try { draft = JSON.parse(localStorage.getItem('rr_signup_draft') || '{}'); } catch(_) { draft = {}; }
       if (draft.email) {
@@ -12102,27 +12092,26 @@ ${previewId ? `
       if (e) e.preventDefault();
       var email = document.getElementById('reg-email').value.trim();
       var password = document.getElementById('reg-password').value;
-      var name = document.getElementById('reg-name').value.trim();
-      var company = (document.getElementById('reg-company') || {}).value.trim() || '';
-      var phone = ((document.getElementById('reg-phone') || {}).value || '').trim();
-      var companySize = (document.getElementById('reg-company-size') || {}).value || '';
-      var primaryUse = (document.getElementById('reg-primary-use') || {}).value || '';
+      // conv-v6: name/phone/company/primary_use deferred to /onboarding.
+      // Derive a friendly placeholder name from the email local-part so the
+      // welcome email + downstream "Hi <name>" copy still works until the
+      // user completes the onboarding step.
+      var emailLocal = (email.split('@')[0] || '').replace(/[._-]+/g, ' ').trim();
+      var name = emailLocal ? emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1) : 'there';
+      var company = '';
+      var phone = '';
+      var companySize = '';
+      var primaryUse = '';
       var honeypot = (document.getElementById('reg-website') || {}).value || '';
 
-      if (!email || !password || !name) {
+      if (!email || !password) {
         var err2 = document.getElementById('reg-error');
-        if (err2) { err2.textContent = 'Please fill in all required fields.'; err2.style.display = 'block'; }
+        if (err2) { err2.textContent = 'Please enter your email and a password.'; err2.style.display = 'block'; }
         return;
       }
       if (password.length < 8) {
         setRegError('Password must be at least 8 characters.');
         var pwEl = document.getElementById('reg-password'); if (pwEl) pwEl.focus();
-        return;
-      }
-      // Phone now optional — only validate format if provided.
-      if (phone && phone.replace(/\D/g, '').length < 7) {
-        setRegError('Phone number looks incomplete — please re-check or leave blank.');
-        var phEl = document.getElementById('reg-phone'); if (phEl) phEl.focus();
         return;
       }
 
