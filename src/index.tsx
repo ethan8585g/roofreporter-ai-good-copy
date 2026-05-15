@@ -9593,6 +9593,37 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       <div class="absolute bottom-8 left-1/2 -translate-x-1/2 z-10"><div class="w-6 h-10 border-2 border-white/10 rounded-full flex justify-center pt-2"><div class="w-1 h-3 bg-[#00FF88]/40 rounded-full animate-bounce"></div></div></div>
     </section>
 
+    <!-- WHO WE ARE — long-form positioning paragraph (added 2026-05-15) -->
+    <section id="who-we-are" class="relative z-20 py-20 lg:py-28 border-t border-white/5" style="background:#0A0A0A">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6">
+        <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-[11px] font-semibold mb-5 uppercase tracking-widest" style="background:#00FF8818;color:#00FF88">
+          <i class="fas fa-satellite-dish"></i> Who we are
+        </div>
+        <h2 class="text-3xl md:text-4xl lg:text-5xl font-black text-white mb-6 tracking-tight leading-[1.1]">
+          A roof measurement &amp; solar design technology company &mdash; plus the CRM that runs your whole business.
+        </h2>
+        <div class="space-y-5 text-gray-300 text-base md:text-lg leading-relaxed max-w-4xl">
+          <p>
+            Roof Manager is a North American technology company built for roofing and solar contractors who want to stop wasting weekends on ladders, drone flights, and pen-and-paper takeoffs. At our core we are a <span class="text-white font-semibold">roof measurement engine</span>: we combine high-resolution satellite imagery, solar-mapping data, our own measurement engine, and AI vision to produce contractor-grade reports with eaves, ridges, hips, valleys, pitch, projected and sloped area, edge lengths, and a fully priced bill of materials &mdash; for any address in all 50 U.S. states and every Canadian province, in about 1&ndash;2 hours.
+          </p>
+          <p>
+            We are also a <span class="text-white font-semibold">solar design technology platform</span>. The same geometry that prices a re-roof drives our solar workflow: per-plane azimuth and tilt, shading-aware production estimates, panel layouts, string design, and homeowner-ready solar proposals. Roofing contractors who add solar, and solar contractors who finally want accurate roof geometry instead of guessed-at planes, run the entire estimate-to-proposal cycle in one place instead of stitching together three or four different tools and a spreadsheet.
+          </p>
+          <p>
+            And we are a <span class="text-white font-semibold">full CRM platform for roofers and solar companies</span>. Every Roof Manager account ships with a pipeline and deal tracker, a customer and job database, branded invoices and proposals, integrated payment collection, an email outreach engine, an AI voice receptionist that answers your business line 24/7, storm alerts that surface fresh leads in your service area, a door-to-door canvassing app, call-center tooling, customer portals, white-label reporting, team permissions, and a built-in marketing site builder. It is the operating system small and mid-sized contractors use to replace four or five separate subscriptions with a single login &mdash; starting at $5.95 per report and scaling all the way up to enterprise plans for crews running thousands of jobs a year.
+          </p>
+        </div>
+        <div class="mt-10 flex flex-col sm:flex-row gap-3">
+          <a href="/register" class="inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-7 rounded-xl text-base shadow-xl shadow-[#00FF88]/20 transition-all hover:scale-[1.02]">
+            <i class="fas fa-gift" aria-hidden="true"></i> Start free &mdash; 4 reports, no card
+          </a>
+          <a href="/pricing" class="inline-flex items-center justify-center gap-3 bg-transparent hover:bg-white/5 text-white font-bold py-3.5 px-7 rounded-xl text-base border-2 border-white/15 hover:border-[#00FF88]/40 transition-all">
+            <i class="fas fa-list-ul text-[#00FF88]" aria-hidden="true"></i> See pricing &amp; CRM features
+          </a>
+        </div>
+      </div>
+    </section>
+
     <!-- TALK-TO-US / VOLUME PRICING — relocated out of the hero so the primary CTA dominates above the fold -->
     <section class="relative z-20 py-12 lg:py-16" style="background:#0A0A0A">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 grid lg:grid-cols-2 gap-8 items-start">
