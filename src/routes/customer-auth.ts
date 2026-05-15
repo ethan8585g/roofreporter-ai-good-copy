@@ -5,6 +5,7 @@ import { trackUserSignup, trackUserLogin, trackEmailVerified, trackOnboardingSte
 import { identifySession } from '../services/attribution'
 import { linkCustomerToLead, markCustomerActive } from '../services/customer-activity'
 import { resolveTeamOwner } from './team'
+import { validateAdminSession } from './auth'
 import { hashPassword, verifyPassword, isLegacyHash, dummyVerify } from '../lib/password'
 import { getCustomerSessionToken } from '../lib/session-tokens'
 import { notifyNewUserSignup, sendWelcomeEmail, loadGmailCreds, sendGmailOAuth2 } from '../services/email'
@@ -1762,6 +1763,63 @@ customerAuthRoutes.post('/logout', async (c) => {
   // P0-05: clear cookie.
   clearCustomerSessionCookie(c)
   return c.json({ success: true })
+})
+
+// ============================================================
+// PUSH NOTIFICATION TOKEN REGISTRATION
+// Called by the iOS / Android Capacitor shell once after the user grants
+// permission. Tokens are upserted by (token, platform) — if the same device
+// re-registers we just bump last_seen_at. Tokens are scoped to whoever is
+// currently signed in: a customer row, an admin row, or both (the admin
+// app may piggyback on the same APNs token).
+// ============================================================
+customerAuthRoutes.post('/push-token', async (c) => {
+  let customerId: number | null = null
+  let adminUserId: number | null = null
+
+  // Try customer session first; fall back to admin so the same endpoint
+  // works for super-admins who hit /api/customer/push-token via the shell.
+  const sessionToken = getCustomerSessionToken(c)
+  if (sessionToken) {
+    const session = await c.env.DB.prepare(
+      'SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime("now")'
+    ).bind(sessionToken).first<any>()
+    if (session) customerId = session.customer_id
+  }
+  if (!customerId) {
+    // Admin path: uses rm_admin_session cookie (or Authorization: Bearer for
+    // legacy clients). validateAdminSession handles both.
+    const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'), c.req.header('Cookie'))
+    if (admin && admin.id) adminUserId = Number(admin.id)
+  }
+  if (!customerId && !adminUserId) return c.json({ error: 'Not authenticated' }, 401)
+
+  let body: any
+  try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON body' }, 400) }
+  const token = String(body.token || '').trim()
+  const platform = String(body.platform || '').toLowerCase()
+  if (!token) return c.json({ error: 'token is required' }, 400)
+  if (!['ios', 'android', 'web'].includes(platform)) return c.json({ error: 'platform must be ios|android|web' }, 400)
+  const appVersion = body.app_version ? String(body.app_version).slice(0, 64) : null
+  const deviceModel = body.device_model ? String(body.device_model).slice(0, 128) : null
+
+  try {
+    await c.env.DB.prepare(`
+      INSERT INTO push_tokens (customer_id, admin_user_id, token, platform, app_version, device_model)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(token, platform) DO UPDATE SET
+        customer_id   = COALESCE(excluded.customer_id, push_tokens.customer_id),
+        admin_user_id = COALESCE(excluded.admin_user_id, push_tokens.admin_user_id),
+        app_version   = COALESCE(excluded.app_version, push_tokens.app_version),
+        device_model  = COALESCE(excluded.device_model, push_tokens.device_model),
+        last_seen_at  = CURRENT_TIMESTAMP,
+        revoked_at    = NULL
+    `).bind(customerId, adminUserId, token, platform, appVersion, deviceModel).run()
+    return c.json({ success: true })
+  } catch (e: any) {
+    console.warn('[push-token] insert failed:', e?.message)
+    return c.json({ error: 'Could not register push token' }, 500)
+  }
 })
 
 // ============================================================

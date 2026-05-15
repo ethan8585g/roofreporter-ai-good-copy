@@ -6,8 +6,26 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ionic-team/capacitor-swift-pm.git",
       "state" : {
-        "revision" : "6a2a3feb25fda8df2a284d0818bc9c83e57a7d56",
-        "version" : "8.3.0"
+        "revision" : "3fe94bbbe43e63ada75aa6788fc10e3764622a97",
+        "version" : "6.2.1"
+      }
+    },
+    {
+      "identity" : "swift-package-manager-google-mobile-ads",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/googleads/swift-package-manager-google-mobile-ads.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "e2b1c31cdf11cb4b57b4e70ae4c313d4e48c444a"
+      }
+    },
+    {
+      "identity" : "swift-package-manager-google-user-messaging-platform",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/googleads/swift-package-manager-google-user-messaging-platform.git",
+      "state" : {
+        "revision" : "13b248eaa73b7826f0efb1bcf455e251d65ecb1b",
+        "version" : "3.1.0"
       }
     }
   ],

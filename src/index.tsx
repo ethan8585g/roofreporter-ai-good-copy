@@ -153,6 +153,24 @@ app.use('*', async (c, next) => {
   }
 })
 
+// Detect the Capacitor iOS / Android shell so SSR pages can render an
+// app-optimized chrome (hide site nav, suppress PWA install prompt, etc).
+// We accept the UA fingerprint *or* an explicit header that the shell can
+// set as a more reliable signal. Cookie variant lets pages "remember"
+// they were opened inside the app on follow-up navigations.
+app.use('*', async (c, next) => {
+  const ua = c.req.header('user-agent') || ''
+  const headerFlag = c.req.header('x-roof-manager-app') === '1'
+  const isCapacitor = /Capacitor(WebView)?\b|com\.roofmanager|RoofManagerApp/i.test(ua) || headerFlag
+  c.set('isNativeApp' as any, isCapacitor)
+  if (isCapacitor) {
+    // Surfaces in /super-admin module-analytics and is convenient for the
+    // PWA install banner to suppress itself.
+    c.res.headers.set('X-RoofManager-Surface', 'native-ios-app')
+  }
+  await next()
+})
+
 // CORS for API routes
 app.use('/api/*', cors({
   origin: ['https://www.roofmanager.ca', 'https://roofmanager.ca', 'http://localhost:3000', 'http://0.0.0.0:3000'],
