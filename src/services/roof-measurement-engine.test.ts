@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { RoofMeasurementEngine, type TracePayload } from './roof-measurement-engine'
+import { RoofMeasurementEngine, traceUiToEnginePayload, type TracePayload } from './roof-measurement-engine'
 
 // Build a 10m × 10m square eaves outline centered at (0, 0). At lat 0,
 // 1m ≈ 9.0e-6° lat and 9.0e-6° lng — close enough for 4-vertex tests.
@@ -155,3 +155,102 @@ describe('plane_segments_lat_lng — per-facet pitch override', () => {
     expect(r.face_details[0].pitch_rise).toBeCloseTo(6, 1)
   })
 })
+
+// ────────────────────────────────────────────────────────────────────
+// Wall-height unification: opposing walls on the same building must
+// share one height. traceUiToEnginePayload MAX-collapses per-wall
+// heightFt and rewrites every wall to the unified value so the area
+// math + downstream renderers see one consistent number.
+// ────────────────────────────────────────────────────────────────────
+describe('wall height unification', () => {
+  it('MAX-unifies mismatched per-wall heightFt', () => {
+    const eaves = squareEavesAt(45.45997, -73.86285, 12)
+    const trace: any = {
+      eaves_sections: [eaves],
+      walls: [
+        // Two walls at MISMATCHED heights — should both end up at 4 (MAX).
+        { pts: [{ lat: 45.459915, lng: -73.862733 }, { lat: 45.459855, lng: -73.862861 }], kind: 'step', heightFt: 3 },
+        { pts: [{ lat: 45.459991, lng: -73.862794 }, { lat: 45.459926, lng: -73.862936 }], kind: 'step', heightFt: 4 },
+      ],
+    }
+    const payload = traceUiToEnginePayload(trace, { property_address: 'Test' }, 6, undefined)
+    // Every wall on the payload now reports the same unified heightFt
+    const heights = (payload.walls || []).map((w: any) => w.heightFt)
+    expect(heights.length).toBe(2)
+    expect(heights[0]).toBe(4)
+    expect(heights[1]).toBe(4)
+    // wall_area_ft2.net should reflect length × 4, not length × 3 or × 4 individually
+    const w0Len = (payload.walls![0] as any).pts && computeLenFt(payload.walls![0].pts)
+    const w1Len = (payload.walls![1] as any).pts && computeLenFt(payload.walls![1].pts)
+    const expectedGross = (w0Len + w1Len) * 4
+    expect(payload.wall_area_ft2?.gross_ft2).toBeCloseTo(expectedGross, 0)
+  })
+
+  it('defaults unified height to 8 when no wall has heightFt set', () => {
+    const eaves = squareEavesAt(45.45997, -73.86285, 12)
+    const trace: any = {
+      eaves_sections: [eaves],
+      walls: [
+        // Bare array — legacy shape, no heightFt
+        [{ lat: 45.459915, lng: -73.862733 }, { lat: 45.459855, lng: -73.862861 }],
+      ],
+    }
+    const payload = traceUiToEnginePayload(trace, { property_address: 'Test' }, 6, undefined)
+    const h = (payload.walls?.[0] as any).heightFt
+    expect(h).toBe(8)
+  })
+
+  it('engine totalSloped includes unified wall area in shingle count', () => {
+    const eaves = squareEavesAt(45.45997, -73.86285, 12)
+    const trace: any = {
+      eaves_sections: [eaves],
+      walls: [
+        { pts: [{ lat: 45.459915, lng: -73.862733 }, { lat: 45.459855, lng: -73.862861 }], kind: 'step', heightFt: 8 },
+      ],
+    }
+    const payloadWithWalls   = traceUiToEnginePayload(trace, { property_address: 'Test' }, 6, undefined)
+    const payloadWithoutWalls = traceUiToEnginePayload({ ...trace, walls: [] }, { property_address: 'Test' }, 6, undefined)
+    const r1 = new RoofMeasurementEngine(payloadWithWalls).run()
+    const r2 = new RoofMeasurementEngine(payloadWithoutWalls).run()
+    // Wall net area is added to total sloped area, so squares with walls > squares without.
+    expect(r1.key_measurements.total_roof_area_sloped_ft2).toBeGreaterThan(r2.key_measurements.total_roof_area_sloped_ft2)
+    // Wall key_measurements fields are emitted
+    expect(r1.key_measurements.wall_area_net_ft2).toBeGreaterThan(0)
+    expect(r1.key_measurements.wall_area_gross_ft2).toBeGreaterThan(0)
+    // No walls → no wall area fields populated (or 0)
+    expect(r2.key_measurements.wall_area_net_ft2 || 0).toBe(0)
+  })
+
+  it('windows on walls deduct from net wall area', () => {
+    const eaves = squareEavesAt(45.45997, -73.86285, 12)
+    const trace: any = {
+      eaves_sections: [eaves],
+      walls: [
+        { pts: [{ lat: 45.459915, lng: -73.862733 }, { lat: 45.459855, lng: -73.862861 }], kind: 'step', heightFt: 8 },
+      ],
+      windows: [
+        { lat: 45.459885, lng: -73.862797, width_ft: 3, height_ft: 4, wall_idx: 0 },
+        { lat: 45.459890, lng: -73.862810, width_ft: 3, height_ft: 4, wall_idx: 0 },
+      ],
+    }
+    const payload = traceUiToEnginePayload(trace, { property_address: 'Test' }, 6, undefined)
+    // 2 windows × 12 sf = 24 sf deduction
+    expect(payload.wall_area_ft2?.window_count).toBe(2)
+    expect(payload.wall_area_ft2?.window_deduction_ft2).toBeCloseTo(24, 1)
+    expect((payload.wall_area_ft2?.gross_ft2 || 0) - (payload.wall_area_ft2?.net_ft2 || 0)).toBeCloseTo(24, 1)
+  })
+})
+
+// Haversine helper for length-in-feet between two lat/lng points.
+function computeLenFt(pts: Array<{ lat: number; lng: number }>): number {
+  let total = 0
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i]
+    const dLat = (b.lat - a.lat) * Math.PI / 180
+    const dLng = (b.lng - a.lng) * Math.PI / 180
+    const lat1 = a.lat * Math.PI / 180, lat2 = b.lat * Math.PI / 180
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2
+    total += 2 * 6_371_000 * Math.asin(Math.min(1, Math.sqrt(h))) * 3.28084
+  }
+  return total
+}
