@@ -30,14 +30,22 @@ import { runAbandonedCheckoutRecovery } from './services/abandoned-checkout-reco
 import { loadGmailCreds, sendGmailOAuth2WithAttachment, sendSignupRecoveryEmail } from './services/email'
 
 // ── Abandoned signup recovery ─────────────────────────────────────────────────
+// 2-stage sequence:
+//   stage '1h'  → signup_attempts older than 1h, never nudged
+//   stage '24h' → signup_attempts that got the 1h nudge >24h ago and haven't
+//                 finished signup since
 // Delegates to the shared sendSignupRecoveryEmail helper so the send goes
 // through logAndSendEmail (open/click tracking in email_sends) and the same
 // code path is exercised by both the cron loop and the super-admin manual
-// "Send recovery nudge" button.
+// "Send recovery nudge" button. The optout table check kills both stages
+// for one click.
 async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number; skipped: number }> {
   const db = env.DB
+  let sent = 0
+  let skipped = 0
 
-  let rows: any[] = []
+  // Stage 1: +1h nudge
+  let stage1: any[] = []
   try {
     const result = await db.prepare(`
       SELECT sa.id, sa.email, sa.preview_id
@@ -53,25 +61,72 @@ async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number
         )
       LIMIT 50
     `).all<any>()
-    rows = result.results || []
+    stage1 = result.results || []
   } catch (err: any) {
-    console.warn('[recovery] query failed (tables may not exist):', err?.message)
-    return { sent: 0, skipped: 0 }
+    console.warn('[recovery] stage1 query failed (tables may not exist):', err?.message)
   }
 
-  let sent = 0
-  let skipped = 0
-  for (const row of rows) {
+  for (const row of stage1) {
     try {
-      const r = await sendSignupRecoveryEmail(env, row.email, { previewId: row.preview_id })
+      const r = await sendSignupRecoveryEmail(env, row.email, { previewId: row.preview_id, stage: '1h' })
       if (r.ok) sent++
       else skipped++
     } catch (err: any) {
-      console.error('[recovery] email send error:', err?.message)
+      console.error('[recovery] stage1 email send error:', err?.message)
       skipped++
     }
   }
+
+  // Stage 2: +24h nudge
+  let stage2: any[] = []
+  try {
+    const result = await db.prepare(`
+      SELECT sa.id, sa.email, sa.preview_id
+      FROM signup_attempts sa
+      WHERE sa.completed = 0
+        AND sa.recovery_sent = 1
+        AND sa.recovery_sent_24h = 0
+        AND sa.recovery_sent_at < datetime('now', '-24 hours')
+        AND NOT EXISTS (
+          SELECT 1 FROM signup_recovery_optouts sro WHERE sro.email = sa.email
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM customers c WHERE c.email = sa.email
+        )
+      LIMIT 50
+    `).all<any>()
+    stage2 = result.results || []
+  } catch (err: any) {
+    console.warn('[recovery] stage2 query failed (column may not exist yet):', err?.message)
+  }
+
+  for (const row of stage2) {
+    try {
+      const r = await sendSignupRecoveryEmail(env, row.email, { previewId: row.preview_id, stage: '24h' })
+      if (r.ok) sent++
+      else skipped++
+    } catch (err: any) {
+      console.error('[recovery] stage2 email send error:', err?.message)
+      skipped++
+    }
+  }
+
   return { sent, skipped }
+}
+
+// ── agent_configs.enabled gate ─────────────────────────────────────────────────
+// Cheap per-tick lookup. Used to pause customer-facing email sequences
+// without touching the code. Returns false if the row is missing OR
+// enabled=0, true only when enabled=1.
+async function isAgentEnabled(env: Bindings, agentType: string): Promise<boolean> {
+  try {
+    const row = await env.DB.prepare(
+      `SELECT enabled FROM agent_configs WHERE agent_type = ?`
+    ).bind(agentType).first<{ enabled: number }>()
+    return !!row && Number(row.enabled) === 1
+  } catch {
+    return false
+  }
 }
 
 // ── Rover chat session idle/ended sweep ───────────────────────────────────────
@@ -631,7 +686,10 @@ export default {
     // customer gets each touch exactly once. Different from
     // runAbandonedSignupRecovery above which targets users who NEVER
     // completed signup.
+    // GATED on agent_configs.signup_nurture.enabled — disabled by default
+    // (2026-05-14 email-sequence consolidation). Toggle from /super-admin.
     ctx.waitUntil((async () => {
+      if (!(await isAgentEnabled(env, 'signup_nurture'))) return
       const t0 = Date.now()
       try {
         const results = await runSignupNurture(env)
@@ -662,7 +720,11 @@ export default {
     //   +2h   — "Your roof report is one click away"
     //   +24h  — "Still want that roof report?"
     // Sender = support@roofmanager.ca (customer voice rule).
+    // GATED on agent_configs.cart_recovery.enabled — disabled by default
+    // (2026-05-14 email-sequence consolidation; abandoned-cart will fold
+    // into the upcoming weekly marketing sequence). Toggle from /super-admin.
     ctx.waitUntil((async () => {
+      if (!(await isAgentEnabled(env, 'cart_recovery'))) return
       const t0 = Date.now()
       try {
         const results = await runAbandonedCheckoutRecovery(env)
@@ -717,8 +779,11 @@ export default {
     // and either dry-runs or sends real emails depending on
     // agent_configs.drips.config_json.dry_run. Per-customer cooldown
     // (90 days) enforced via drip_campaign_state.
+    // GATED on agent_configs.drips.enabled — disabled by default
+    // (2026-05-14 email-sequence consolidation). Toggle from /super-admin.
     if (hour === 14 && minute < 10) {
       ctx.waitUntil((async () => {
+        if (!(await isAgentEnabled(env, 'drips'))) return
         const t0 = Date.now()
         try {
           const r = await runDripCampaigns(env, {})

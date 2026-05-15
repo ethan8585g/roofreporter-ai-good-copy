@@ -1647,18 +1647,22 @@ export async function notifyCustomerRetraceRequest(
 // matching signup_attempts row (or inserts a synthetic one when
 // the user reached the verification step without /signup-started
 // firing, e.g. anonymous traffic that came in via /register).
+// 2-stage sequence:
+//   stage '1h'  → kind='signup_recovery_nudge'    → recovery_sent / recovery_sent_at
+//   stage '24h' → kind='signup_recovery_nudge_24h' → recovery_sent_24h / recovery_sent_24h_at
 // Used by:
-//   - cron-worker runAbandonedSignupRecovery (bulk loop)
-//   - super-admin Abandoned Signups dashboard (manual button)
+//   - cron-worker runAbandonedSignupRecovery (bulk loop, both stages)
+//   - super-admin Abandoned Signups dashboard (manual button, stage='1h')
 // Caller is responsible for the opt-out check.
 // ============================================================
 export async function sendSignupRecoveryEmail(
   env: Bindings,
   email: string,
-  opts: { previewId?: string | null; force?: boolean } = {}
+  opts: { previewId?: string | null; force?: boolean; stage?: '1h' | '24h' } = {}
 ): Promise<{ ok: boolean; status: string; error?: string; emailSendId: number | null }> {
   if (!email) return { ok: false, status: 'failed', error: 'no email', emailSendId: null }
   const db = env.DB
+  const stage = opts.stage || '1h'
 
   try {
     const optout = await db.prepare(
@@ -1678,15 +1682,20 @@ export async function sendSignupRecoveryEmail(
   let signupAttemptId: number | null = null
   try {
     const sa = await db.prepare(
-      `SELECT id, preview_id, recovery_sent
+      `SELECT id, preview_id, recovery_sent, recovery_sent_24h
        FROM signup_attempts WHERE email = ?
        ORDER BY created_at DESC LIMIT 1`
     ).bind(email).first<any>()
     if (sa) {
       signupAttemptId = Number(sa.id)
       if (!previewId && sa.preview_id) previewId = sa.preview_id
-      if (sa.recovery_sent === 1 && !opts.force) {
-        return { ok: false, status: 'deduped', error: 'recovery already sent', emailSendId: null }
+      if (!opts.force) {
+        if (stage === '1h' && sa.recovery_sent === 1) {
+          return { ok: false, status: 'deduped', error: 'recovery 1h already sent', emailSendId: null }
+        }
+        if (stage === '24h' && sa.recovery_sent_24h === 1) {
+          return { ok: false, status: 'deduped', error: 'recovery 24h already sent', emailSendId: null }
+        }
       }
     }
   } catch (e: any) {
@@ -1695,18 +1704,30 @@ export async function sendSignupRecoveryEmail(
 
   const optoutUrl = `https://www.roofmanager.ca/api/customer/signup-optout?email=${encodeURIComponent(email)}`
   const registerUrl = `https://www.roofmanager.ca/register?email=${encodeURIComponent(email)}${previewId ? `&preview_id=${encodeURIComponent(previewId)}` : ''}`
-  const subject = "You left before finishing — your roof preview is waiting"
+
+  const subject = stage === '24h'
+    ? "Still want that free roof preview?"
+    : "You left before finishing — your roof preview is waiting"
+
+  const headline = stage === '24h'
+    ? "One more nudge — your roof preview is still here"
+    : "You left before finishing — here's your roof report"
+
+  const body = stage === '24h'
+    ? `Yesterday we held a spot open for the free roof preview you started. It's still
+       saved and ready — finishing takes about a minute and unlocks your free trial reports.
+       This is the last reminder we'll send.`
+    : `We noticed you started setting up your Roof Manager account but didn't finish.
+       Your free roof preview is waiting — pick up where you left off and we'll add
+       your free trial reports to the account.`
+
   const html = `
     <div style="font-family:Inter,Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;padding:32px;color:#0A0A0A">
       <div style="text-align:center;background:#000;padding:20px;border-radius:12px 12px 0 0;margin:-32px -32px 24px">
         <img src="https://www.roofmanager.ca/static/logo.png?v=20260504" alt="Roof Manager" width="160" style="max-width:160px;height:auto;display:block;margin:0 auto"/>
       </div>
-      <h2 style="color:#0A0A0A;margin:0 0 12px;font-size:22px">You left before finishing — here's your roof report</h2>
-      <p style="color:#374151;line-height:1.6;margin:0 0 24px">
-        We noticed you started setting up your Roof Manager account but didn't finish.
-        Your free roof preview is waiting — pick up where you left off and we'll add
-        your free trial reports to the account.
-      </p>
+      <h2 style="color:#0A0A0A;margin:0 0 12px;font-size:22px">${headline}</h2>
+      <p style="color:#374151;line-height:1.6;margin:0 0 24px">${body}</p>
       <div style="text-align:center;margin:28px 0">
         <a href="${registerUrl}" style="display:inline-block;background:#00FF88;color:#0A0A0A;font-weight:700;padding:14px 28px;border-radius:10px;text-decoration:none;font-size:16px">
           Complete My Registration →
@@ -1724,7 +1745,7 @@ export async function sendSignupRecoveryEmail(
     to: email,
     subject,
     html,
-    kind: 'signup_recovery_nudge',
+    kind: stage === '24h' ? 'signup_recovery_nudge_24h' : 'signup_recovery_nudge',
     category: 'cart',
     from: 'sales@roofmanager.ca',
     track: true,
@@ -1733,20 +1754,24 @@ export async function sendSignupRecoveryEmail(
   // Stamp the signup_attempts row (or insert one) so dedup works next time.
   if (r.ok || r.status === 'sent') {
     try {
+      const stampCol = stage === '24h' ? 'recovery_sent_24h' : 'recovery_sent'
+      const stampAtCol = stage === '24h' ? 'recovery_sent_24h_at' : 'recovery_sent_at'
       if (signupAttemptId != null) {
         await db.prepare(
           `UPDATE signup_attempts
-           SET recovery_sent = 1, recovery_sent_at = datetime('now')
+           SET ${stampCol} = 1, ${stampAtCol} = datetime('now')
            WHERE id = ?`
         ).bind(signupAttemptId).run()
-      } else {
+      } else if (stage === '1h') {
+        // Only the 1h path inserts a synthetic row — by the time the
+        // 24h sweep fires, the 1h row must already exist.
         await db.prepare(
           `INSERT INTO signup_attempts (email, preview_id, completed, recovery_sent, recovery_sent_at, created_at)
            VALUES (?, ?, 0, 1, datetime('now'), datetime('now'))`
         ).bind(email, previewId).run()
       }
     } catch (e: any) {
-      console.warn('[sendSignupRecoveryEmail] stamp recovery_sent failed:', e?.message)
+      console.warn('[sendSignupRecoveryEmail] stamp recovery flag failed:', e?.message)
     }
   }
 

@@ -3702,9 +3702,16 @@ export async function generateReportForOrder(
 //      visibility gate — both this AND admin_review_status='approved' are
 //      required before the customer dashboard surfaces the report)
 //   2. dispatchReportToExternalCRMs (AccuLynx / JobNimbus / webhook)
-//   3. Auto-email the report link to send_report_to_email →
-//      requester_email → homeowner_email (Gmail OAuth2 → Resend fallback)
-//   4. createAutoInvoiceForOrder (idempotent)
+//   3. createAutoInvoiceForOrder (idempotent)
+//
+// NOTE: This helper does NOT send the report-ready email. That single
+// canonical send goes to the customer account email via
+// notifyTraceCompletedToCustomer (called from /approve-and-deliver and
+// /bulk-approve-pending) and is dedup'd on report_ready:{order_id}.
+// Previously this helper also fired an auto-email to send_report_to_email
+// → requester_email → homeowner_email which produced 2 messages to the
+// same person whenever those addresses matched the customer account
+// email. Killed 2026-05-14 per the "1 email per delivered report" rule.
 //
 // All fire-and-forget hooks use ctx.waitUntil so Cloudflare doesn't kill
 // the worker before they complete. The function itself awaits only the
@@ -3744,44 +3751,6 @@ export async function finalizeReportDelivery(
     const crmP = dispatchReportToExternalCRMs(env, orderId, order.customer_id, ctx)
       .catch(e => console.warn(`[CRM-Dispatch] Order ${orderId} hook error:`, e?.message))
     if (ctx?.waitUntil) ctx.waitUntil(crmP)
-  }
-
-  // Auto-send report to the order's email. Falls back through
-  // send_report_to_email → requester_email → homeowner_email so every
-  // completed report ships automatically. Fire-and-forget via waitUntil.
-  const autoRecipient = (
-    order.send_report_to_email
-    || order.requester_email
-    || order.homeowner_email
-    || ''
-  ).toString().trim()
-  if (autoRecipient) {
-    const customerHtmlExists = !!extras?.customerHtmlExists
-    const autoSendP = (async () => {
-      try {
-        const recipient = autoRecipient
-        const reportNum = `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`
-        const shareToken = await getOrCreateShareToken(env, orderId)
-        const emailHtml = buildReportLinkEmail('https://www.roofmanager.ca', orderId, order.property_address || 'Property', reportNum, recipient, customerHtmlExists, shareToken)
-        const ci = (env as any).GMAIL_CLIENT_ID
-        let cs = (env as any).GMAIL_CLIENT_SECRET
-        let rt = (env as any).GMAIL_REFRESH_TOKEN
-        if (!cs) { try { cs = (await repo.getSettingValue(env.DB, 'gmail_client_secret')) || '' } catch {} }
-        if (!rt) { try { rt = (await repo.getSettingValue(env.DB, 'gmail_refresh_token')) || '' } catch {} }
-        if (ci && cs && rt) {
-          await sendGmailOAuth2(ci, cs, rt, recipient, `Roof Report - ${order.property_address || 'Property'}`, emailHtml, (env as any).GMAIL_SENDER_EMAIL)
-          console.log(`[AutoSendEmail] Order ${orderId}: report auto-sent to ${recipient}`)
-        } else if ((env as any).RESEND_API_KEY) {
-          await sendViaResend((env as any).RESEND_API_KEY, recipient, `Roof Report - ${order.property_address || 'Property'}`, emailHtml, (env as any).GMAIL_SENDER_EMAIL || null)
-          console.log(`[AutoSendEmail] Order ${orderId}: report auto-sent via Resend to ${recipient}`)
-        } else {
-          console.warn(`[AutoSendEmail] Order ${orderId}: no email provider configured — auto-send skipped`)
-        }
-      } catch (e: any) {
-        console.warn(`[AutoSendEmail] Order ${orderId}: send failed — ${e?.message || e}`)
-      }
-    })()
-    if (ctx?.waitUntil) ctx.waitUntil(autoSendP)
   }
 
   // Auto-invoice hook — fire-and-forget, idempotent.
