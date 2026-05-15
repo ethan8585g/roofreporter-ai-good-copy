@@ -518,10 +518,20 @@ function renderOrderPage() {
 // ============================================================
 function renderPinStep(root, progressBar) {
   const b = orderState.billing || {};
+  // billingLoaded distinguishes "fetch failed/in-flight" from "billing fetched
+  // but trial actually exhausted". Without this, a brand-new signup hitting
+  // this page during the billing race (or behind a 401 hiccup) saw the giant
+  // "Your 4 Free Reports Are Used Up! Buy Reports" CTA — instant bounce.
+  const billingLoaded = orderState.billing != null;
   const freeTrialRemaining = b.free_trial_remaining || 0;
+  const freeTrialTotal = b.free_trial_total || 0;
+  const freeTrialUsed = b.free_trial_used || 0;
   const paidCredits = b.paid_credits_remaining || 0;
   const isTrialAvailable = freeTrialRemaining > 0;
   const credits = b.credits_remaining || 0;
+  // Only flip to the "buy" CTA when we KNOW billing loaded and the trial is
+  // provably spent. Otherwise default to a friendly "trial available" state.
+  const trialExhausted = billingLoaded && freeTrialTotal > 0 && freeTrialUsed >= freeTrialTotal && paidCredits === 0;
 
   root.innerHTML = `
     <div class="max-w-3xl mx-auto">
@@ -553,17 +563,29 @@ function renderPinStep(root, progressBar) {
             <span class="bg-green-600 text-white px-3 py-1.5 rounded-full text-lg font-bold">${paidCredits}</span>
           </div>
         </div>
-      ` : `
+      ` : trialExhausted ? `
         <div class="bg-gradient-to-r from-brand-800 to-brand-900 rounded-xl p-5 mb-6 shadow-lg">
           <div class="flex items-center justify-between gap-4">
             <div class="flex items-center gap-4">
-              <div class="w-12 h-12 bg-blue-500/15/100 rounded-xl flex items-center justify-center shadow"><i class="fas fa-coins text-white text-xl"></i></div>
+              <div class="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center shadow"><i class="fas fa-coins text-white text-xl"></i></div>
               <div>
-                <p class="font-bold text-white text-base">Your 4 Free Reports Are Used Up!</p>
+                <p class="font-bold text-white text-base">Your ${freeTrialTotal} Free Reports Are Used Up!</p>
                 <p class="text-sm text-brand-200 mt-0.5">Buy a <strong class="text-emerald-300">report pack</strong> to keep ordering reports.</p>
               </div>
             </div>
             <a href="/customer/buy-reports" class="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg border-0 cursor-pointer no-underline"><i class="fas fa-tag mr-1.5"></i>Buy Reports</a>
+          </div>
+        </div>
+      ` : `
+        <div class="bg-blue-500/10 border border-blue-200 rounded-xl p-4 mb-6">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center"><i class="fas fa-gift text-blue-400"></i></div>
+              <div>
+                <p class="font-semibold text-blue-800"><i class="fas fa-star text-gray-400 mr-1"></i>Free Trial Active &mdash; No credit card needed</p>
+                <p class="text-sm text-blue-400">Loading your credit balance&hellip;</p>
+              </div>
+            </div>
           </div>
         </div>
       `}
@@ -592,63 +614,75 @@ function renderPinStep(root, progressBar) {
           <div id="coordDisplay" class="hidden bg-[#0A0A0A] border border-white/10 rounded-xl px-4 py-3"></div>
           <div id="resolvedAddress" class="hidden bg-blue-500/10 border border-blue-100 rounded-xl px-4 py-2.5"></div>
 
-          <!-- Optional Customer Details for Proposal Automation -->
-          <div style="background:linear-gradient(135deg,#1e3a5f,#1e40af);border-radius:16px;border:1px solid rgba(59,130,246,0.3);padding:20px;overflow:hidden">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:6px">
-              <h4 style="font-size:14px;font-weight:700;color:#e0e7ff;margin:0;display:flex;align-items:center;gap:8px">
-                <i class="fas fa-file-signature" style="color:#60a5fa"></i>Homeowner Details for Auto-Proposal
-              </h4>
-              <span style="font-size:10px;background:rgba(96,165,250,0.2);color:#93c5fd;padding:3px 10px;border-radius:6px;font-weight:600">OPTIONAL</span>
-            </div>
-            ${orderState.invoicingAutoEnabled
-              ? `<div style="margin:8px 0 10px;padding:8px 12px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);border-radius:8px;font-size:11px;color:#6ee7b7;font-weight:600"><i class="fas fa-check-circle" style="margin-right:6px"></i>Proposal Automation ENABLED — proposal will be drafted AND emailed to the homeowner the moment the report completes.</div>`
-              : `<div style="margin:8px 0 10px;padding:8px 12px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:8px;font-size:11px;color:#fcd34d;font-weight:600"><i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>Proposal Automation OFF — proposals will be drafted but NOT emailed. Turn it on from your automation settings to auto-email.</div>`}
-            <p style="font-size:11px;color:#93c5fd;margin:0 0 14px;line-height:1.5">When the report completes, we draft and email this proposal to the homeowner automatically using your Gmail. You can still edit or revoke it from the Proposal Dashboard before they open it.</p>
-            <div style="display:flex;flex-direction:column;gap:10px">
-              <div>
-                <label style="font-size:11px;font-weight:600;color:#93c5fd;display:block;margin-bottom:4px">Homeowner Full Name</label>
-                <input type="text" id="invoiceCustName" autocomplete="name" enterkeyhint="next" placeholder="e.g. John Smith"
-                  value="${orderState.invoiceCustomerName}"
-                  oninput="orderState.invoiceCustomerName=this.value"
-                  style="width:100%;padding:10px 14px;border:1px solid rgba(59,130,246,0.3);border-radius:10px;font-size:13px;background:rgba(255,255,255,0.08);color:white;outline:none"
-                  onfocus="this.style.borderColor='#60a5fa'" onblur="this.style.borderColor='rgba(59,130,246,0.3)'">
-              </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-                <div>
-                  <label style="font-size:11px;font-weight:600;color:#93c5fd;display:block;margin-bottom:4px">Phone Number</label>
-                  <input type="tel" id="invoiceCustPhone" inputmode="tel" autocomplete="tel" enterkeyhint="next" placeholder="e.g. (555) 123-4567"
-                    value="${orderState.invoiceCustomerPhone}"
-                    oninput="orderState.invoiceCustomerPhone=this.value"
-                    style="width:100%;padding:10px 14px;border:1px solid rgba(59,130,246,0.3);border-radius:10px;font-size:13px;background:rgba(255,255,255,0.08);color:white;outline:none"
-                    onfocus="this.style.borderColor='#60a5fa'" onblur="this.style.borderColor='rgba(59,130,246,0.3)'">
+          <!-- Advanced options (collapsed by default) — keeps the heavy
+               Homeowner-Auto-Proposal + Special-Notes fields one click away
+               so first-time visitors aren't intimidated by them. The fields
+               themselves are unchanged; only the wrapper is collapsible. -->
+          <details id="orderAdvancedDetails" style="background:#0A0A0A;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:14px 16px">
+            <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;font-weight:700;color:#e5e7eb">
+              <span style="display:flex;align-items:center;gap:8px"><i class="fas fa-sliders-h" style="color:#60a5fa"></i>Advanced options <span style="font-size:10px;font-weight:500;color:#9ca3af">(homeowner auto-proposal &middot; trace notes)</span></span>
+              <i class="fas fa-chevron-down" style="color:#9ca3af;font-size:11px;transition:transform 0.2s"></i>
+            </summary>
+            <div style="margin-top:14px;display:flex;flex-direction:column;gap:14px">
+              <!-- Optional Customer Details for Proposal Automation -->
+              <div style="background:linear-gradient(135deg,#1e3a5f,#1e40af);border-radius:16px;border:1px solid rgba(59,130,246,0.3);padding:20px;overflow:hidden">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:6px">
+                  <h4 style="font-size:14px;font-weight:700;color:#e0e7ff;margin:0;display:flex;align-items:center;gap:8px">
+                    <i class="fas fa-file-signature" style="color:#60a5fa"></i>Homeowner Details for Auto-Proposal
+                  </h4>
+                  <span style="font-size:10px;background:rgba(96,165,250,0.2);color:#93c5fd;padding:3px 10px;border-radius:6px;font-weight:600">OPTIONAL</span>
                 </div>
-                <div>
-                  <label style="font-size:11px;font-weight:600;color:#93c5fd;display:block;margin-bottom:4px">Email Address</label>
-                  <input type="email" id="invoiceCustEmail" autocomplete="email" inputmode="email" enterkeyhint="done" placeholder="e.g. john@email.com"
-                    value="${orderState.invoiceCustomerEmail}"
-                    oninput="orderState.invoiceCustomerEmail=this.value"
-                    style="width:100%;padding:10px 14px;border:1px solid rgba(59,130,246,0.3);border-radius:10px;font-size:13px;background:rgba(255,255,255,0.08);color:white;outline:none"
-                    onfocus="this.style.borderColor='#60a5fa'" onblur="this.style.borderColor='rgba(59,130,246,0.3)'">
+                ${orderState.invoicingAutoEnabled
+                  ? `<div style="margin:8px 0 10px;padding:8px 12px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);border-radius:8px;font-size:11px;color:#6ee7b7;font-weight:600"><i class="fas fa-check-circle" style="margin-right:6px"></i>Proposal Automation ENABLED — proposal will be drafted AND emailed to the homeowner the moment the report completes.</div>`
+                  : `<div style="margin:8px 0 10px;padding:8px 12px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:8px;font-size:11px;color:#fcd34d;font-weight:600"><i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>Proposal Automation OFF — proposals will be drafted but NOT emailed. Turn it on from your automation settings to auto-email.</div>`}
+                <p style="font-size:11px;color:#93c5fd;margin:0 0 14px;line-height:1.5">When the report completes, we draft and email this proposal to the homeowner automatically using your Gmail. You can still edit or revoke it from the Proposal Dashboard before they open it.</p>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                  <div>
+                    <label style="font-size:11px;font-weight:600;color:#93c5fd;display:block;margin-bottom:4px">Homeowner Full Name</label>
+                    <input type="text" id="invoiceCustName" autocomplete="name" enterkeyhint="next" placeholder="e.g. John Smith"
+                      value="${orderState.invoiceCustomerName}"
+                      oninput="orderState.invoiceCustomerName=this.value"
+                      style="width:100%;padding:10px 14px;border:1px solid rgba(59,130,246,0.3);border-radius:10px;font-size:13px;background:rgba(255,255,255,0.08);color:white;outline:none"
+                      onfocus="this.style.borderColor='#60a5fa'" onblur="this.style.borderColor='rgba(59,130,246,0.3)'">
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                    <div>
+                      <label style="font-size:11px;font-weight:600;color:#93c5fd;display:block;margin-bottom:4px">Phone Number</label>
+                      <input type="tel" id="invoiceCustPhone" inputmode="tel" autocomplete="tel" enterkeyhint="next" placeholder="e.g. (555) 123-4567"
+                        value="${orderState.invoiceCustomerPhone}"
+                        oninput="orderState.invoiceCustomerPhone=this.value"
+                        style="width:100%;padding:10px 14px;border:1px solid rgba(59,130,246,0.3);border-radius:10px;font-size:13px;background:rgba(255,255,255,0.08);color:white;outline:none"
+                        onfocus="this.style.borderColor='#60a5fa'" onblur="this.style.borderColor='rgba(59,130,246,0.3)'">
+                    </div>
+                    <div>
+                      <label style="font-size:11px;font-weight:600;color:#93c5fd;display:block;margin-bottom:4px">Email Address</label>
+                      <input type="email" id="invoiceCustEmail" autocomplete="email" inputmode="email" enterkeyhint="done" placeholder="e.g. john@email.com"
+                        value="${orderState.invoiceCustomerEmail}"
+                        oninput="orderState.invoiceCustomerEmail=this.value"
+                        style="width:100%;padding:10px 14px;border:1px solid rgba(59,130,246,0.3);border-radius:10px;font-size:13px;background:rgba(255,255,255,0.08);color:white;outline:none"
+                        onfocus="this.style.borderColor='#60a5fa'" onblur="this.style.borderColor='rgba(59,130,246,0.3)'">
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          <!-- Special Notes / Requests for the trace team -->
-          <div style="background:#0A0A0A;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:16px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px">
-              <label for="orderCustomerNotes" style="font-size:13px;font-weight:700;color:#e5e7eb;display:flex;align-items:center;gap:8px;margin:0">
-                <i class="fas fa-comment-dots" style="color:#60a5fa"></i>Special Notes / Requests
-              </label>
-              <span style="font-size:10px;background:rgba(96,165,250,0.15);color:#93c5fd;padding:3px 10px;border-radius:6px;font-weight:600">OPTIONAL</span>
+              <!-- Special Notes / Requests for the trace team -->
+              <div style="background:#0A0A0A;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:16px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+                  <label for="orderCustomerNotes" style="font-size:13px;font-weight:700;color:#e5e7eb;display:flex;align-items:center;gap:8px;margin:0">
+                    <i class="fas fa-comment-dots" style="color:#60a5fa"></i>Special Notes / Requests
+                  </label>
+                  <span style="font-size:10px;background:rgba(96,165,250,0.15);color:#93c5fd;padding:3px 10px;border-radius:6px;font-weight:600">OPTIONAL</span>
+                </div>
+                <p style="font-size:11px;color:#9ca3af;margin:0 0 10px;line-height:1.5">Anything the trace team should know — e.g. <em>include the detached garage</em>, <em>include the shed</em>, <em>note the flat roof section in the back</em>.</p>
+                <textarea id="orderCustomerNotes" rows="3" maxlength="1000"
+                  placeholder="Include detached garage. Note the flat roof on the back addition."
+                  oninput="orderState.customerNotes=this.value"
+                  style="width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,0.15);border-radius:10px;font-size:13px;background:rgba(255,255,255,0.04);color:white;outline:none;resize:vertical;min-height:72px;font-family:inherit"
+                  onfocus="this.style.borderColor='#60a5fa'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'">${orderState.customerNotes || ''}</textarea>
+              </div>
             </div>
-            <p style="font-size:11px;color:#9ca3af;margin:0 0 10px;line-height:1.5">Anything the trace team should know — e.g. <em>include the detached garage</em>, <em>include the shed</em>, <em>note the flat roof section in the back</em>.</p>
-            <textarea id="orderCustomerNotes" rows="3" maxlength="1000"
-              placeholder="Include detached garage. Note the flat roof on the back addition."
-              oninput="orderState.customerNotes=this.value"
-              style="width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,0.15);border-radius:10px;font-size:13px;background:rgba(255,255,255,0.04);color:white;outline:none;resize:vertical;min-height:72px;font-family:inherit"
-              onfocus="this.style.borderColor='#60a5fa'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'">${orderState.customerNotes || ''}</textarea>
-          </div>
+          </details>
 
           <div id="orderMsg" class="hidden p-4 rounded-xl text-sm"></div>
 

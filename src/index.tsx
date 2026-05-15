@@ -8665,7 +8665,12 @@ function getOnboardingPageHTML(sessionToken = ''): string {
       <img src="/static/logo.svg?v=20260504" alt="Roof Manager" class="h-8 w-8" onerror="this.style.display='none'">
       Roof Manager
     </a>
-    <a href="/customer/dashboard" class="text-sm text-gray-400 hover:text-white">Skip setup &rarr;</a>
+    <!-- Skip link is hidden by default and only revealed by loadResumeState
+         when the customer already has a phone on file. Google-OAuth signups
+         start with phone=null, so they must complete step 2 before bailing —
+         otherwise we end up with uncallable, unemail-able dead-end signups
+         (the #75 leak from 2026-05-15). -->
+    <a id="onboarding-skip-link" href="/customer/dashboard" class="text-sm text-gray-400 hover:text-white" style="display:none">Skip setup &rarr;</a>
   </header>
 
   <main class="flex-1 flex flex-col items-center justify-center px-4 py-12">
@@ -8767,6 +8772,14 @@ function getOnboardingPageHTML(sessionToken = ''): string {
       if (c.onboarding_completed) { window.location.replace('/customer/dashboard'); return; }
       var resumeStep = Math.max(1, Math.min(3, (c.onboarding_step || 0) + 1));
       if (resumeStep > 1) jumpToStep(resumeStep);
+      // Reveal the Skip link only when the customer already has a phone on
+      // file (i.e. email/password signups). Google signups have no phone
+      // yet — must complete step 2 to give us a callback path.
+      var phoneRaw = (c.phone || '').replace(/\D/g, '');
+      if (phoneRaw.length >= 7) {
+        var skipEl = document.getElementById('onboarding-skip-link');
+        if (skipEl) skipEl.style.display = 'inline';
+      }
     } catch (_) { /* network glitch — start at step 1 */ }
   }
 
