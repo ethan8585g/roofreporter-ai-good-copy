@@ -2757,16 +2757,34 @@ export function traceUiToEnginePayload(
     return 2 * R_M * Math.asin(Math.min(1, Math.sqrt(h))) * 3.28084
   }
   let stepFt = 0, headwallFt = 0
-  // Per-wall length × heightFt → gross vertical wall surface area. Summed
-  // across every wall regardless of kind; the roofer is shingling the
-  // visible wall surface, not the flashing class.
+  // Unified building wall height: opposing walls on the same building share
+  // one height in real residential framing — the trace's per-wall heightFt
+  // (from the drag handle) gets collapsed to a single value before area math
+  // so a 3' top wall + 4' bottom wall don't ship inconsistent gross sf. Use
+  // MAX so an explicit drag to a taller 2-story value dominates; default 8'
+  // (typical residential first-floor wall) when no walls are tagged.
+  let unifiedHeightFt = 0
+  for (const w of walls) {
+    const h = (w as any).heightFt
+    if (typeof h === 'number' && isFinite(h) && h > 0 && h > unifiedHeightFt) {
+      unifiedHeightFt = h
+    }
+  }
+  if (unifiedHeightFt <= 0) unifiedHeightFt = 8
+  // Rewrite each wall's heightFt to the unified value so downstream renderers
+  // (diagram pills, legend) read one consistent number too.
+  for (const w of walls) (w as any).heightFt = unifiedHeightFt
+
+  // Per-wall length → wall surface area at the unified height. Summed across
+  // every wall regardless of kind; the roofer is shingling the visible wall
+  // surface, not the flashing class.
   let wallAreaGrossFt2 = 0
   for (const w of walls) {
     let len = 0
     for (let i = 1; i < w.pts.length; i++) len += haversineFt(w.pts[i - 1], w.pts[i])
     if (w.kind === 'headwall') headwallFt += len
     else stepFt += len
-    wallAreaGrossFt2 += len * (w.heightFt || 8)
+    wallAreaGrossFt2 += len * unifiedHeightFt
   }
 
   // Windows on shingled walls — subtract Σ(width × height). Defaults to a

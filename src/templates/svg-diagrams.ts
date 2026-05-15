@@ -3446,6 +3446,20 @@ export function generateTraceBasedDiagramSVG(
   // perpendicular so the wall band sits OUTSIDE the building outline.
   const eavesCx = eavesXY.length ? eavesXY.reduce((s, p) => s + p.x, 0) / eavesXY.length : 0
   const eavesCy = eavesXY.length ? eavesXY.reduce((s, p) => s + p.y, 0) / eavesXY.length : 0
+  // Unified building wall height — mirrors the engine: walls on the same
+  // building share ONE height (opposing residential walls always do). Use
+  // MAX of all wall heightFts so a tall 2-story drag dominates; default to
+  // 8' typical residential when no walls are tagged. Per-wall heightFt
+  // from the trace is intentionally ignored for area math + pill display.
+  let unifiedWallHeightFt = 0
+  ;(roofTrace.walls || []).forEach((line: any) => {
+    if (Array.isArray(line)) return
+    const h = (line && typeof line === 'object') ? line.heightFt : null
+    if (typeof h === 'number' && isFinite(h) && h > 0 && h > unifiedWallHeightFt) {
+      unifiedWallHeightFt = h
+    }
+  })
+  if (unifiedWallHeightFt <= 0) unifiedWallHeightFt = 8
   // Pre-bucket windows by wall_idx so each wall renders its own openings.
   type WinSlot = { count: number; sf: number; windows: Array<{ lat: number; lng: number; w: number; h: number }> }
   const windowsByWall: Record<number, WinSlot> = {}
@@ -3467,7 +3481,11 @@ export function generateTraceBasedDiagramSVG(
     const pts = Array.isArray(line) ? line : (line as any).pts
     const kind: 'step' | 'headwall' = (!Array.isArray(line) && (line as any).kind === 'headwall') ? 'headwall' : 'step'
     if (!pts || pts.length < 2) return
-    const heightFt = (!Array.isArray(line) && typeof (line as any).heightFt === 'number') ? (line as any).heightFt : null
+    // Per-wall heightFt is no longer used — every wall on the same building
+    // renders at the unified height. The check below is now just "is this
+    // a manual wall (object form, 2 pts)?" vs a legacy bare-array line.
+    const isManualWall = !Array.isArray(line) && pts.length === 2
+    const heightFt = isManualWall ? unifiedWallHeightFt : null
     const xy = pts.map(toXY)
     // Legacy / no-height walls → fall back to the old dashed flashing line.
     if (!heightFt || pts.length !== 2) {

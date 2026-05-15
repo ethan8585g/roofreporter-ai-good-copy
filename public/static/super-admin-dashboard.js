@@ -3128,8 +3128,11 @@ function saInitTraceMap(lat, lng, address) {
           var midLng = (p1.lng + p2.lng) / 2;
           var midLL = new google.maps.LatLng(midLat, midLng);
 
-          // Default handle: 8 ft perpendicular from the line midpoint
-          var defaultHeightFt = 8;
+          // Default handle: building-wide wall height (inherited from prior
+          // walls on the same building). Real residential framing puts all
+          // walls at the same height, so each new wall picks up the current
+          // building setting instead of always starting at 8'.
+          var defaultHeightFt = (s.buildingWallHeightFt && s.buildingWallHeightFt > 0) ? s.buildingWallHeightFt : 8;
           var defaultHeightMeters = defaultHeightFt / 3.28084;
           var lineHeading = 0;
           try { lineHeading = google.maps.geometry.spherical.computeHeading(p1LL, p2LL); } catch (_) {}
@@ -3202,9 +3205,13 @@ function saInitTraceMap(lat, lng, address) {
             cursor: 'move'
           });
 
-          var wallRecord = { pts: [p1, p2], kind: 'step', heightFt: defaultHeightFt, lf: lf, sf: sf };
+          // Stash midLL + perpHeading on the record so the building-wide
+          // height handler can recompute this wall's handle position when
+          // a sibling wall is dragged.
+          var wallRecord = { pts: [p1, p2], kind: 'step', heightFt: defaultHeightFt, lf: lf, sf: sf,
+            _midLat: midLat, _midLng: midLng, _perpHeading: perpHeading };
           s._wallData.push(wallRecord);
-          s.walls.push({ line: wLine, label: labelMk, polygon: wallPoly, handle: handleMk });
+          s.walls.push({ line: wLine, label: labelMk, polygon: wallPoly, handle: handleMk, _makeLabelSvg: makeWallLabelSvg });
 
           // Snap any dragged handle position to the perpendicular axis of the
           // wall line. This keeps the area a true RECTANGLE (not a parallelogram)
@@ -3240,6 +3247,12 @@ function saInitTraceMap(lat, lng, address) {
               scaledSize: new google.maps.Size(118, 20),
               anchor: new google.maps.Point(59, 10)
             });
+            // Building-wide propagation: opposing walls on the same residential
+            // structure share one height. Update every OTHER wall to match so
+            // the engine + diagram see one consistent value.
+            if (typeof saSetBuildingWallHeight === 'function') {
+              saSetBuildingWallHeight(newH, wallRecord);
+            }
           });
           handleMk.addListener('dragend', function() {
             var rawPos = handleMk.getPosition();
@@ -3641,6 +3654,61 @@ window.saCompleteCutout = function saCompleteCutout() {
   saCloseCutoutPolygon();
   saUpdateCutoutCompleteBtn();
 };
+
+// Building-wide wall height propagation. Real residential framing puts all
+// walls on the same building at the same height — opposing front/back walls
+// don't differ by inches. When the user drags any wall's height handle, this
+// helper updates EVERY wall on the building (visual band, label pill, and
+// stored heightFt) so the engine + diagram see one consistent value. The
+// dragged wall is skipped (it was already updated locally by its own drag
+// handler) to avoid double-updates.
+function saSetBuildingWallHeight(newHeightFt, draggedRecord) {
+  var s = window._saTraceState; if (!s) return;
+  if (typeof newHeightFt !== 'number' || !isFinite(newHeightFt) || newHeightFt <= 0) return;
+  s.buildingWallHeightFt = newHeightFt;
+  var walls = s._wallData || [];
+  var visuals = s.walls || [];
+  for (var i = 0; i < walls.length; i++) {
+    var rec = walls[i];
+    var vis = visuals[i];
+    if (!rec || !vis) continue;
+    if (rec === draggedRecord) continue;  // already updated by drag handler
+    if (typeof rec._midLat !== 'number' || typeof rec._midLng !== 'number' || typeof rec._perpHeading !== 'number') continue;
+    rec.heightFt = newHeightFt;
+    rec.sf = (rec.lf || 0) * newHeightFt;
+    try {
+      var midLL = new google.maps.LatLng(rec._midLat, rec._midLng);
+      // Preserve the side the handle was previously on so the band doesn't
+      // flip across the wall just because a sibling moved.
+      var curHandle = vis.handle && vis.handle.getPosition ? vis.handle.getPosition() : null;
+      var direction = rec._perpHeading;
+      if (curHandle) {
+        var curHeading = google.maps.geometry.spherical.computeHeading(midLL, curHandle);
+        var diff = Math.abs(((curHeading - rec._perpHeading + 540) % 360) - 180);
+        if (diff > 90) direction = (rec._perpHeading + 180) % 360;
+      }
+      var meters = newHeightFt / 3.28084;
+      var newHandle = google.maps.geometry.spherical.computeOffset(midLL, meters, direction);
+      vis.handle.setPosition(newHandle);
+      var offLat = newHandle.lat() - rec._midLat;
+      var offLng = newHandle.lng() - rec._midLng;
+      var p1 = rec.pts[0], p2 = rec.pts[1];
+      vis.polygon.setPaths([
+        { lat: p1.lat, lng: p1.lng },
+        { lat: p2.lat, lng: p2.lng },
+        { lat: p2.lat + offLat, lng: p2.lng + offLng },
+        { lat: p1.lat + offLat, lng: p1.lng + offLng }
+      ]);
+      if (typeof vis._makeLabelSvg === 'function' && vis.label && vis.label.setIcon) {
+        vis.label.setIcon({
+          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(vis._makeLabelSvg(rec.lf || 0, rec.sf || 0)),
+          scaledSize: new google.maps.Size(118, 20),
+          anchor: new google.maps.Point(59, 10)
+        });
+      }
+    } catch (_) { /* leave this wall as-is on geometry math failure */ }
+  }
+}
 
 function saUpdateCutoutCompleteBtn() {
   var btn = document.getElementById('sa-tool-cutout-complete');
