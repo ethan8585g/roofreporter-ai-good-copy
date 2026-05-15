@@ -2634,6 +2634,19 @@ function saInitTraceMap(lat, lng, address) {
   // when they restore the map — otherwise the custom crosshair gets replaced with the
   // system arrow/pointer when hovering polygons, and a scroll is needed to "reset" it.
   s._traceCursor = TRACE_CURSOR;
+  // HARD-CODE the crosshair via CSS !important — Google Maps' internal
+  // setOptions/basemap-swap churn keeps wiping draggableCursor/clickableCursor
+  // (and even while panning it would flip to the grab hand). Injecting CSS
+  // pinned to #sa-trace-map descendants beats every JS-level reset.
+  if (!document.getElementById('sa-trace-cursor-style')) {
+    var styleEl = document.createElement('style');
+    styleEl.id = 'sa-trace-cursor-style';
+    styleEl.textContent =
+      '#sa-trace-map, #sa-trace-map *, #sa-trace-map div, #sa-trace-map canvas, #sa-trace-map img {' +
+      '  cursor: ' + TRACE_CURSOR + ' !important;' +
+      '}';
+    document.head.appendChild(styleEl);
+  }
   var map = new google.maps.Map(mapEl, {
     center: center, zoom: 20,
     mapTypeId: 'satellite', tilt: 0, rotateControl: false,
@@ -2677,10 +2690,15 @@ function saInitTraceMap(lat, lng, address) {
     // to this parent, which then appends to the same _ridgeData/_hipData/etc
     // arrays the 2D map writes to. postmsg=1 keeps the screenshot capture
     // path working alongside it.
+    // irange/ipitch = the camera-to-roof framing applied AFTER photorealistic
+    // tiles stream in and roofGroundHeight is sampled. Without these, the 3D
+    // panel defaults to INTERACTIVE_RANGE=150m which feels zoomed-out on a
+    // single-family lot. range/pitch/heading are the pre-tile fallback (used
+    // for the first ~1s while tiles arrive).
     var src3d = '/3d-verify?capture=1&postmsg=1'
       + '&lat=' + encodeURIComponent(center.lat)
       + '&lng=' + encodeURIComponent(center.lng)
-      + '&heading=25&pitch=-22&range=180';
+      + '&heading=25&pitch=-45&range=180&irange=85&ipitch=-50';
     map3dIframe.src = src3d;
     // 3D iframe loads in its own default 'pan' mode. We do NOT push the 2D
     // toolbar's tool — clicking on the 3D map should only commit trace points
