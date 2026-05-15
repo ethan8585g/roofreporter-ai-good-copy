@@ -3120,10 +3120,32 @@ function saInitTraceMap(lat, lng, address) {
           s._wallData.push(wallRecord);
           s.walls.push({ line: wLine, label: labelMk, polygon: wallPoly, handle: handleMk });
 
+          // Snap any dragged handle position to the perpendicular axis of the
+          // wall line. This keeps the area a true RECTANGLE (not a parallelogram)
+          // that always extends straight out from the line — same way a real
+          // wall stands perpendicular to its base. User can drag past midpoint
+          // to flip the rectangle to the other side.
+          function snapHandleToPerpAxis(rawPos) {
+            try {
+              var distMid = google.maps.geometry.spherical.computeDistanceBetween(midLL, rawPos);
+              if (distMid < 0.15) {
+                return google.maps.geometry.spherical.computeOffset(midLL, 0.15, perpHeading);
+              }
+              var headingToHandle = google.maps.geometry.spherical.computeHeading(midLL, rawPos);
+              var angleDiff = (headingToHandle - perpHeading) * Math.PI / 180;
+              var perpDist = distMid * Math.cos(angleDiff);
+              var snappedHeading = perpDist >= 0 ? perpHeading : (perpHeading + 180) % 360;
+              var snappedDist = Math.max(0.15, Math.abs(perpDist));
+              return google.maps.geometry.spherical.computeOffset(midLL, snappedDist, snappedHeading);
+            } catch (_) { return rawPos; }
+          }
           handleMk.addListener('drag', function() {
-            var pos = handleMk.getPosition();
-            wallPoly.setPaths(wallPolygonCorners(pos));
-            var newH = wallHeightFtFromHandle(pos);
+            var rawPos = handleMk.getPosition();
+            var snapped = snapHandleToPerpAxis(rawPos) || rawPos;
+            // Glue the marker to the perpendicular axis as the user drags.
+            handleMk.setPosition(snapped);
+            wallPoly.setPaths(wallPolygonCorners(snapped));
+            var newH = wallHeightFtFromHandle(snapped);
             var newSf = lf * newH;
             wallRecord.heightFt = newH;
             wallRecord.sf = newSf;
@@ -3132,6 +3154,11 @@ function saInitTraceMap(lat, lng, address) {
               scaledSize: new google.maps.Size(118, 20),
               anchor: new google.maps.Point(59, 10)
             });
+          });
+          handleMk.addListener('dragend', function() {
+            var rawPos = handleMk.getPosition();
+            var snapped = snapHandleToPerpAxis(rawPos);
+            if (snapped) handleMk.setPosition(snapped);
           });
         } else {
           var color = tool === 'ridge' ? '#dc2626' : tool === 'hip' ? '#ea580c' : '#2563eb';
