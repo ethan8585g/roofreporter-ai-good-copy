@@ -2429,6 +2429,8 @@ window.saTraceClear = function() {
   (s.walls || []).forEach(function(o) {
     if (o && o.line) o.line.setMap(null);
     if (o && o.label) o.label.setMap(null);
+    if (o && o.polygon) o.polygon.setMap(null);
+    if (o && o.handle) o.handle.setMap(null);
   });
   s.walls = []; s._wallData = [];
   (s._ventMarkers || []).forEach(function(m) { m.setMap(null); }); s._ventMarkers = [];
@@ -2553,6 +2555,8 @@ window.saTraceUndo = function() {
       if (wallObj) {
         if (wallObj.line) wallObj.line.setMap(null);
         if (wallObj.label) wallObj.label.setMap(null);
+        if (wallObj.polygon) wallObj.polygon.setMap(null);
+        if (wallObj.handle) wallObj.handle.setMap(null);
       }
       (s._wallData || []).pop();
       return true;
@@ -3004,9 +3008,13 @@ function saInitTraceMap(lat, lng, address) {
         });
       } else {
         if (tool === 'wall') {
-          // Manual wall segment — amber, dashed, with LF + sf @ 8 ft label
-          // at midpoint. Stored as {pts:[{lat,lng},{lat,lng}], kind:'step',
-          // heightFt:8} to match svg-diagrams.ts walls schema.
+          // Manual wall segment — amber dashed line marking the LF dimension,
+          // plus a draggable amber circle handle perpendicular to the line.
+          // The handle controls the wall's height (in ft); a translucent amber
+          // parallelogram fills the area so the operator can visually match
+          // it to the shingled section visible in the imagery. Stored as
+          // {pts:[{lat,lng},{lat,lng}], kind:'step', heightFt} to match the
+          // svg-diagrams.ts walls schema.
           var wLine = new google.maps.Polyline({
             path: [s._segStart, e.latLng],
             strokeColor: '#f59e0b',
@@ -3014,39 +3022,117 @@ function saInitTraceMap(lat, lng, address) {
             strokeWeight: 3,
             map: map,
             zIndex: 5,
+            clickable: false,
             icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, strokeColor: '#f59e0b', scale: 3 }, offset: '0', repeat: '8px' }]
           });
           var p1 = { lat: s._segStart.lat(), lng: s._segStart.lng() };
           var p2 = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+          var p1LL = s._segStart;
+          var p2LL = e.latLng;
           var distMeters = 0;
           try {
-            distMeters = google.maps.geometry.spherical.computeDistanceBetween(s._segStart, e.latLng);
+            distMeters = google.maps.geometry.spherical.computeDistanceBetween(p1LL, p2LL);
           } catch (_) {
-            var dLat = (p2.lat - p1.lat) * 111320;
-            var dLng = (p2.lng - p1.lng) * 111320 * Math.cos(p1.lat * Math.PI / 180);
-            distMeters = Math.sqrt(dLat * dLat + dLng * dLng);
+            var dLat0 = (p2.lat - p1.lat) * 111320;
+            var dLng0 = (p2.lng - p1.lng) * 111320 * Math.cos(p1.lat * Math.PI / 180);
+            distMeters = Math.sqrt(dLat0 * dLat0 + dLng0 * dLng0);
           }
           var lf = Math.round(distMeters * 3.28084);
-          var sf = Math.round(lf * 8);
           var midLat = (p1.lat + p2.lat) / 2;
           var midLng = (p1.lng + p2.lng) / 2;
-          var labelSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="78" height="20" viewBox="0 0 78 20">' +
-            '<rect x="0.5" y="0.5" width="77" height="19" rx="3" fill="#fff" stroke="#f59e0b" stroke-width="1"/>' +
-            '<text x="39" y="13" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-size="9" font-weight="800" fill="#92400e">' +
-            'WALL ' + lf + ' LF</text></svg>';
+          var midLL = new google.maps.LatLng(midLat, midLng);
+
+          // Default handle: 8 ft perpendicular from the line midpoint
+          var defaultHeightFt = 8;
+          var defaultHeightMeters = defaultHeightFt / 3.28084;
+          var lineHeading = 0;
+          try { lineHeading = google.maps.geometry.spherical.computeHeading(p1LL, p2LL); } catch (_) {}
+          var perpHeading = (lineHeading + 90) % 360;
+          var handleLL;
+          try {
+            handleLL = google.maps.geometry.spherical.computeOffset(midLL, defaultHeightMeters, perpHeading);
+          } catch (_) {
+            var dLatW = p2.lat - p1.lat;
+            var dLngW = p2.lng - p1.lng;
+            var segLen = Math.sqrt(dLatW * dLatW + dLngW * dLngW) || 1e-9;
+            var perpDLat = (-dLngW / segLen) * (defaultHeightMeters / 111320);
+            var perpDLng = (dLatW / segLen) * (defaultHeightMeters / (111320 * Math.cos(midLat * Math.PI / 180)));
+            handleLL = new google.maps.LatLng(midLat + perpDLat, midLng + perpDLng);
+          }
+
+          function wallPolygonCorners(handle) {
+            var offLat = handle.lat() - midLat;
+            var offLng = handle.lng() - midLng;
+            return [
+              { lat: p1.lat, lng: p1.lng },
+              { lat: p2.lat, lng: p2.lng },
+              { lat: p2.lat + offLat, lng: p2.lng + offLng },
+              { lat: p1.lat + offLat, lng: p1.lng + offLng }
+            ];
+          }
+          function wallHeightFtFromHandle(handle) {
+            try {
+              var d = google.maps.geometry.spherical.computeDistanceBetween(midLL, handle);
+              return Math.max(1, Math.round(d * 3.28084));
+            } catch (_) { return defaultHeightFt; }
+          }
+          function makeWallLabelSvg(lfV, sfV) {
+            return '<svg xmlns="http://www.w3.org/2000/svg" width="118" height="20" viewBox="0 0 118 20">' +
+              '<rect x="0.5" y="0.5" width="117" height="19" rx="3" fill="#fff" stroke="#f59e0b" stroke-width="1"/>' +
+              '<text x="59" y="13" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-size="9" font-weight="800" fill="#92400e">' +
+              'WALL ' + lfV + ' LF · ' + sfV + ' sf</text></svg>';
+          }
+
+          var sf = lf * defaultHeightFt;
+          var wallPoly = new google.maps.Polygon({
+            paths: wallPolygonCorners(handleLL),
+            strokeColor: '#f59e0b',
+            strokeOpacity: 0.7,
+            strokeWeight: 1.2,
+            fillColor: '#f59e0b',
+            fillOpacity: 0.18,
+            map: map,
+            clickable: false,
+            zIndex: 4
+          });
           var labelMk = new google.maps.Marker({
             position: { lat: midLat, lng: midLng },
             map: map,
             clickable: false,
             icon: {
-              url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(labelSvg),
-              scaledSize: new google.maps.Size(78, 20),
-              anchor: new google.maps.Point(39, 10)
+              url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(makeWallLabelSvg(lf, sf)),
+              scaledSize: new google.maps.Size(118, 20),
+              anchor: new google.maps.Point(59, 10)
             },
             zIndex: 6
           });
-          s.walls.push({ line: wLine, label: labelMk });
-          s._wallData.push({ pts: [p1, p2], kind: 'step', heightFt: 8, lf: lf, sf: sf });
+          var handleMk = new google.maps.Marker({
+            position: handleLL,
+            map: map,
+            draggable: true,
+            zIndex: 7,
+            icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: '#f59e0b', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 },
+            title: 'Drag to size the wall area (height)',
+            cursor: 'move'
+          });
+
+          var wallRecord = { pts: [p1, p2], kind: 'step', heightFt: defaultHeightFt, lf: lf, sf: sf };
+          s._wallData.push(wallRecord);
+          s.walls.push({ line: wLine, label: labelMk, polygon: wallPoly, handle: handleMk });
+
+          handleMk.addListener('drag', function() {
+            var pos = handleMk.getPosition();
+            wallPoly.setPaths(wallPolygonCorners(pos));
+            var newH = wallHeightFtFromHandle(pos);
+            var newSf = lf * newH;
+            wallRecord.heightFt = newH;
+            wallRecord.sf = newSf;
+            labelMk.setIcon({
+              url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(makeWallLabelSvg(lf, newSf)),
+              scaledSize: new google.maps.Size(118, 20),
+              anchor: new google.maps.Point(59, 10)
+            });
+          });
         } else {
           var color = tool === 'ridge' ? '#dc2626' : tool === 'hip' ? '#ea580c' : '#2563eb';
           var line = new google.maps.Polyline({ path: [s._segStart, e.latLng], strokeColor: color, strokeWeight: 2, map: map });
