@@ -1813,8 +1813,8 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
         '</span>' +
       '</div>' +
       '<div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:0 8px">' +
-        '<div style="flex:1.5;min-height:0;display:flex;gap:8px">' +
-          '<div style="flex:1;min-height:0;display:flex;flex-direction:column;position:relative">' +
+        '<div id="sa-trace-maps-row" style="flex:1.5;min-height:0;display:flex;gap:8px">' +
+          '<div id="sa-trace-map-col" style="flex:1;min-height:0;display:flex;flex-direction:column;position:relative">' +
             '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Trace</div>' +
             '<div id="sa-trace-map" style="flex:1;min-height:0;border-radius:8px;overflow:hidden"></div>' +
             // Footprint-first workflow step instructions. Hidden unless the
@@ -1851,9 +1851,14 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<div id="sa-trace-3d-col" style="flex:1;min-height:0;display:flex;flex-direction:column">' +
             '<div style="color:#9ca3af;font-size:11px;padding:4px 6px 2px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:8px">' +
               '<span>3D Reference</span>' +
-              '<button onclick="saCaptureView()" id="sa-capture-view-btn" title="Take a screenshot of whatever the 3D map is currently showing. Up to 4 captures get embedded in the customer report; if you skip this, the report renders as-is." style="padding:4px 9px;background:rgba(245,158,11,0.18);color:#fbbf24;border:1px solid rgba(245,158,11,0.45);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none;letter-spacing:0">' +
-                '<i class="fas fa-camera mr-1"></i><span id="sa-capture-view-label">Capture View</span>' +
-              '</button>' +
+              '<div style="display:flex;gap:6px;align-items:center">' +
+                '<button onclick="saToggle3DFullscreen()" id="sa-3d-fullscreen-btn" title="Expand the 3D reference panel to fill the modal so you can inspect setbacks, walls, and roof faces at a larger size. Click again to restore split view." style="padding:4px 9px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.45);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none;letter-spacing:0">' +
+                  '<i id="sa-3d-fullscreen-icon" class="fas fa-expand mr-1"></i><span id="sa-3d-fullscreen-label">Enlarge</span>' +
+                '</button>' +
+                '<button onclick="saCaptureView()" id="sa-capture-view-btn" title="Take a screenshot of whatever the 3D map is currently showing. Up to 4 captures get embedded in the customer report; if you skip this, the report renders as-is." style="padding:4px 9px;background:rgba(245,158,11,0.18);color:#fbbf24;border:1px solid rgba(245,158,11,0.45);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none;letter-spacing:0">' +
+                  '<i class="fas fa-camera mr-1"></i><span id="sa-capture-view-label">Capture View</span>' +
+                '</button>' +
+              '</div>' +
             '</div>' +
             // Cesium-backed 3D viewer in an iframe. The Google <gmp-map-3d>
             // web component encapsulates its WebGL canvas behind a closed
@@ -1934,6 +1939,12 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
         '#sa-trace-modal[data-fullscreen="1"] #sa-trace-legend,' +
         '#sa-trace-modal[data-fullscreen="1"] #sa-trace-3d-col,' +
         '#sa-trace-modal[data-fullscreen="1"] #sa-trace-streetview-row{display:none !important}' +
+        // 3D-only fullscreen: hides the 2D trace column + street view so the
+        // 3D Reference iframe fills the modal body. Header + legend stay so
+        // the operator can read the property address and close the modal.
+        // Triggered by [data-3d-fullscreen="1"] set by saToggle3DFullscreen.
+        '#sa-trace-modal[data-3d-fullscreen="1"] #sa-trace-map-col,' +
+        '#sa-trace-modal[data-3d-fullscreen="1"] #sa-trace-streetview-row{display:none !important}' +
       '</style>' +
     '</div>';
   document.body.appendChild(overlay);
@@ -2001,6 +2012,36 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
         }
       } catch (e) {}
     }, 50);
+  };
+
+  // 3D-only fullscreen toggle. Expands the right-side 3D Reference iframe to
+  // fill the modal body by hiding the 2D trace column + street view (CSS rule
+  // keyed off [data-3d-fullscreen="1"]). Useful for inspecting setbacks,
+  // walls, and roof faces at full size before pressing Capture View. The 2D
+  // map and street view stay alive in the DOM (just hidden), so toggling back
+  // restores them instantly. The Cesium iframe is flex-sized so it resizes
+  // naturally — no postMessage resize needed.
+  window.saToggle3DFullscreen = function() {
+    var overlay = document.getElementById('sa-trace-modal');
+    if (!overlay) return;
+    var icon = document.getElementById('sa-3d-fullscreen-icon');
+    var label = document.getElementById('sa-3d-fullscreen-label');
+    var isFull = overlay.getAttribute('data-3d-fullscreen') === '1';
+    if (isFull) {
+      overlay.setAttribute('data-3d-fullscreen', '0');
+      if (icon) { icon.className = 'fas fa-expand mr-1'; }
+      if (label) { label.textContent = 'Enlarge'; }
+    } else {
+      // Mutually exclusive with the modal's full-viewport fullscreen so the
+      // two toggles don't fight each other — if the 2D fullscreen is active,
+      // restore it before expanding 3D.
+      if (overlay.getAttribute('data-fullscreen') === '1') {
+        try { window.saToggleTraceFullscreen(); } catch (_) {}
+      }
+      overlay.setAttribute('data-3d-fullscreen', '1');
+      if (icon) { icon.className = 'fas fa-compress mr-1'; }
+      if (label) { label.textContent = 'Restore'; }
+    }
   };
 
   // Initialize the trace map

@@ -5646,7 +5646,10 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
     )
 
     // Merge any admin-captured 3D map screenshots into the report's imagery
-    // payload. Mirrors the /3d-aerials handler pattern at reports.ts:801-848.
+    // payload. NULL the cached HTML in the same UPDATE so the next view
+    // re-renders from api_response_raw and picks up the captures (the report
+    // template reads imagery.extra_captures at render time — without the
+    // cache-bust the captureless HTML keeps serving forever).
     if (cleanedCaptures.length > 0 && result?.success) {
       try {
         const row = await c.env.DB.prepare(
@@ -5659,7 +5662,7 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
           parsed.imagery.extra_captures = cleanedCaptures
           parsed.imagery.extra_captures_captured_at = new Date().toISOString()
           await c.env.DB.prepare(
-            'UPDATE reports SET api_response_raw = ? WHERE order_id = ?'
+            'UPDATE reports SET api_response_raw = ?, professional_report_html = NULL WHERE order_id = ?'
           ).bind(JSON.stringify(parsed), orderId).run()
         }
       } catch (e: any) {
@@ -6299,7 +6302,10 @@ adminRoutes.post('/superadmin/orders/:id/generate-draft', async (c) => {
     }
 
     // Merge admin-captured 3D screenshots into imagery.extra_captures (same
-    // pattern as submit-trace).
+    // pattern as submit-trace). NULL the cached HTML in the same UPDATE so
+    // the next preview/customer view re-renders from api_response_raw — the
+    // report template reads imagery.extra_captures at render time, and if the
+    // cache isn't busted the captureless HTML keeps serving forever.
     if (cleanedCaptures.length > 0) {
       try {
         const row = await c.env.DB.prepare('SELECT api_response_raw FROM reports WHERE order_id = ?').bind(orderId).first<{ api_response_raw: string | null }>()
@@ -6309,7 +6315,7 @@ adminRoutes.post('/superadmin/orders/:id/generate-draft', async (c) => {
           parsed.imagery = parsed.imagery || {}
           parsed.imagery.extra_captures = cleanedCaptures
           parsed.imagery.extra_captures_captured_at = new Date().toISOString()
-          await c.env.DB.prepare('UPDATE reports SET api_response_raw = ? WHERE order_id = ?').bind(JSON.stringify(parsed), orderId).run()
+          await c.env.DB.prepare('UPDATE reports SET api_response_raw = ?, professional_report_html = NULL WHERE order_id = ?').bind(JSON.stringify(parsed), orderId).run()
         }
       } catch (e: any) {
         console.warn('[generate-draft] extra_captures merge failed:', e?.message || e)
