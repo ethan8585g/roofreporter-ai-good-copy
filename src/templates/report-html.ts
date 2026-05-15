@@ -50,7 +50,17 @@ export function computeStructuresBreakdown(report: RoofReport): StructureBreakdo
   const rt: any = (report as any).roof_trace
   const out: StructureBreakdownRow[] = []
   if (!rt || !Array.isArray(rt.eaves_sections) || rt.eaves_sections.length < 1) return out
-  const allSections: { lat: number; lng: number }[][] = rt.eaves_sections.filter((s: any) => Array.isArray(s) && s.length >= 3)
+  // Filter out lower_tier lips — they wrap a main structure and are rendered
+  // as overlays on its diagram, not as separate breakdown rows. Engine math
+  // already includes their area in the parent's total. Index alignment with
+  // eaves_section_kinds matters; do the filter in lockstep.
+  const kinds: Array<string | null | undefined> = Array.isArray(rt.eaves_section_kinds)
+    ? rt.eaves_section_kinds
+    : []
+  const allSections: { lat: number; lng: number }[][] = rt.eaves_sections
+    .map((s: any, i: number) => ({ s, kind: kinds[i] }))
+    .filter(({ s, kind }: any) => Array.isArray(s) && s.length >= 3 && kind !== 'lower_tier')
+    .map(({ s }: any) => s)
   if (allSections.length < 2) return out
 
   const meanLat = allSections[0].reduce((s, p) => s + p.lat, 0) / allSections[0].length
@@ -236,9 +246,17 @@ function runEngineForPartition(
   orderInfo: { property_address?: string; homeowner_name?: string; order_number?: string },
 ): TraceReport | null {
   try {
+    // Build a per-structure trace. Lower-tier lips that wrap this partition
+    // are included as extra eaves_sections tagged 'lower_tier', so the engine
+    // adds their footprint to this structure's total (matching the behavior
+    // of the full-trace engine run that already ran on the combined report).
+    const lowerSecs = partition.lower_tier_sections || []
+    const eavesSections = [partition.eaves, ...lowerSecs]
+    const sectionKinds: Array<'main' | 'lower_tier'> = ['main', ...lowerSecs.map(() => 'lower_tier' as const)]
     const perStructTrace = {
       eaves: partition.eaves,
-      eaves_sections: [partition.eaves],
+      eaves_sections: eavesSections,
+      eaves_section_kinds: sectionKinds,
       ridges: partition.ridges,
       hips: partition.hips,
       valleys: partition.valleys,
@@ -293,10 +311,17 @@ function buildPerStructureSynthReport(
   }
 
   const origRt: any = (report as any).roof_trace || {}
+  // Carry lower-tier lips that wrap this partition so the 2D diagram's
+  // existing overlay logic (svg-diagrams.ts hasLowerTier branch) fires and
+  // the customer sees the lower-eave outlined in blue on the same diagram.
+  const lowerSecs = partition.lower_tier_sections || []
+  const eavesSections = [partition.eaves, ...lowerSecs]
+  const sectionKinds: Array<'main' | 'lower_tier'> = ['main', ...lowerSecs.map(() => 'lower_tier' as const)]
   synth.roof_trace = {
     ...origRt,
     eaves: partition.eaves,
-    eaves_sections: [partition.eaves],
+    eaves_sections: eavesSections,
+    eaves_section_kinds: sectionKinds,
     ridges: partition.ridges,
     hips: partition.hips,
     valleys: partition.valleys,
@@ -384,16 +409,24 @@ function buildPerStructureSynthReport(
   // Mirrors the per-structure 2D plan generation on Page 2.
   const wastePctForSvg = (report.materials as any)?.waste_pct || 5
   try {
+    const _lowerSecsCover = partition.lower_tier_sections || []
     synth.trace_diagram_svg = generateTraceBasedDiagramSVG(
       {
         eaves: partition.eaves,
-        eaves_sections: [partition.eaves],
+        eaves_sections: [partition.eaves, ..._lowerSecsCover],
+        eaves_section_kinds: ['main', ..._lowerSecsCover.map(() => 'lower_tier' as const)],
         ridges: partition.ridges,
         hips: partition.hips,
         valleys: partition.valleys,
         dormers: dormersForPartition((report as any).roof_trace?.dormers, partition.eaves),
         cutouts: (report as any).roof_trace?.cutouts,
         annotations: (report as any).roof_trace?.annotations,
+        // Walls + windows live at the building level, not the partition level;
+        // pass them through so the cover diagram shows the same wall/window
+        // story as the page-2 flat plan. Safe for multi-structure since the
+        // wall_idx pre-bucketing already keeps each wall's windows together.
+        walls:   (report as any).roof_trace?.walls,
+        windows: (report as any).roof_trace?.windows,
       },
       {
         total_ridge_ft: partition.ridge_lf,
@@ -1065,16 +1098,22 @@ ${aerialTiles.length === 4 ? `
       // 2D top-down drawing for this structure only — same renderer as the
       // legacy diagram, fed only this structure's eaves + traced lines so
       // the per-edge dimension callouts are visible.
+      const _multiLowerSecs = partition.lower_tier_sections || []
       const flat2dSvg = generateTraceBasedDiagramSVG(
         {
           eaves: partition.eaves,
-          eaves_sections: [partition.eaves],
+          eaves_sections: [partition.eaves, ..._multiLowerSecs],
+          eaves_section_kinds: ['main', ..._multiLowerSecs.map(() => 'lower_tier' as const)],
           ridges: partition.ridges,
           hips: partition.hips,
           valleys: partition.valleys,
           dormers: dormersForPartition((report as any).roof_trace?.dormers, partition.eaves),
           cutouts: (report as any).roof_trace?.cutouts,
           annotations: (report as any).roof_trace?.annotations,
+          // Walls + windows are property-level; pass them through so each
+          // structure card's 2D plan shows its share of wall callouts.
+          walls:   (report as any).roof_trace?.walls,
+          windows: (report as any).roof_trace?.windows,
         },
         {
           total_ridge_ft: partition.ridge_lf,
@@ -1139,10 +1178,12 @@ ${aerialTiles.length === 4 ? `
     ${structureDiagrams.length === 1 ? (() => {
       const p = structureDiagrams[0].partition
       const axoSvg = structureDiagrams[0].svg
+      const _singleLowerSecs = p.lower_tier_sections || []
       const flat = generateTraceBasedDiagramSVG(
         {
           eaves: p.eaves,
-          eaves_sections: [p.eaves],
+          eaves_sections: [p.eaves, ..._singleLowerSecs],
+          eaves_section_kinds: ['main', ..._singleLowerSecs.map(() => 'lower_tier' as const)],
           ridges: p.ridges,
           hips: p.hips,
           valleys: p.valleys,

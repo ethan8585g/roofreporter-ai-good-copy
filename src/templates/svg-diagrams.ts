@@ -3428,85 +3428,170 @@ export function generateTraceBasedDiagramSVG(
     svg += `<line x1="${tx(l.start.x).toFixed(1)}" y1="${ty(l.start.y).toFixed(1)}" x2="${tx(l.end.x).toFixed(1)}" y2="${ty(l.end.y).toFixed(1)}" stroke="${EDGE_COLOR['VALLEY']}" stroke-width="1.8" stroke-dasharray="6,3" stroke-linecap="round"/>`
   })
 
-  // ── WALL FLASHING LINES (amber=step, orange=headwall, hash pattern) ──
-  // Renders the lines themselves PLUS — for each segment with a heightFt
-  // tag (manual walls marked with the "+ Wall" tool) — a midpoint pill
-  // showing `WALL · {LF} LF · {sf gross} - {sf windows} = {sf net}`.
-  // Walls with no heightFt are plain flashing lines (older traces).
+  // ── SHINGLED WALLS + WINDOWS ──
+  // Each wall with a heightFt tag is rendered as an OFFSET BAND extending
+  // outward from the polygon — visually "unrolls" the vertical wall surface
+  // onto the 2D plan so the customer can see it. Windows snapped to a wall
+  // are drawn as proportional white rectangles INSIDE the band (so they
+  // read as openings in the wall surface). A pill outside the band shows
+  // gross sf, window deduction, and net sf, with a thin leader line linking
+  // the pill back to the band. Legacy walls without heightFt fall back to
+  // the original dashed amber flashing line.
   let manualWallSf = 0       // GROSS wall area before window deductions
   let manualWallLf = 0
   let manualWallCount = 0
   let manualWindowSf = 0     // total window deduction across all walls
   let manualWindowCount = 0
-  // Pre-bucket windows by wall_idx so each wall's pill knows its deduction.
-  const windowsByWall: Record<number, { count: number; sf: number }> = {}
+  // Polygon centroid (in world metres) — used to choose the "outward"
+  // perpendicular so the wall band sits OUTSIDE the building outline.
+  const eavesCx = eavesXY.length ? eavesXY.reduce((s, p) => s + p.x, 0) / eavesXY.length : 0
+  const eavesCy = eavesXY.length ? eavesXY.reduce((s, p) => s + p.y, 0) / eavesXY.length : 0
+  // Pre-bucket windows by wall_idx so each wall renders its own openings.
+  type WinSlot = { count: number; sf: number; windows: Array<{ lat: number; lng: number; w: number; h: number }> }
+  const windowsByWall: Record<number, WinSlot> = {}
   ;(roofTrace.windows || []).forEach((win) => {
     if (!win || typeof win.lat !== 'number' || typeof win.lng !== 'number') return
     const w = (typeof win.width_ft  === 'number' && win.width_ft  > 0) ? win.width_ft  : 3
     const h = (typeof win.height_ft === 'number' && win.height_ft > 0) ? win.height_ft : 4
     const sf = w * h
     const idx = (typeof win.wall_idx === 'number') ? win.wall_idx : -1
-    const slot = windowsByWall[idx] || (windowsByWall[idx] = { count: 0, sf: 0 })
+    const slot = windowsByWall[idx] || (windowsByWall[idx] = { count: 0, sf: 0, windows: [] })
     slot.count += 1
     slot.sf += sf
+    slot.windows.push({ lat: win.lat, lng: win.lng, w, h })
     manualWindowSf += sf
     manualWindowCount += 1
   })
+  const M_TO_FT_LOCAL = 3.28084
   if (L.walls) (roofTrace.walls || []).forEach((line, wallIdx) => {
     const pts = Array.isArray(line) ? line : (line as any).pts
     const kind: 'step' | 'headwall' = (!Array.isArray(line) && (line as any).kind === 'headwall') ? 'headwall' : 'step'
     if (!pts || pts.length < 2) return
-    const color = kind === 'headwall' ? '#F97316' : '#F59E0B'
-    const xy = pts.map(toXY)
-    for (let i = 1; i < xy.length; i++) {
-      svg += `<line x1="${tx(xy[i-1].x).toFixed(1)}" y1="${ty(xy[i-1].y).toFixed(1)}" x2="${tx(xy[i].x).toFixed(1)}" y2="${ty(xy[i].y).toFixed(1)}" stroke="${color}" stroke-width="2.4" stroke-dasharray="5,3" stroke-linecap="round"/>`
-    }
-    // Per-segment LF + sf callout pill — only for manual walls (heightFt tag)
     const heightFt = (!Array.isArray(line) && typeof (line as any).heightFt === 'number') ? (line as any).heightFt : null
-    if (heightFt && pts.length === 2) {
-      const lf = Math.round(haversineFt(pts[0], pts[1]))
-      if (lf >= 2) {
-        const grossSf = Math.round(lf * heightFt)
-        const winSlot = windowsByWall[wallIdx] || { count: 0, sf: 0 }
-        const netSf = Math.max(0, grossSf - Math.round(winSlot.sf))
-        manualWallLf += lf
-        manualWallSf += grossSf
-        manualWallCount += 1
-        const mx = (tx(xy[0].x) + tx(xy[1].x)) / 2
-        const my = (ty(xy[0].y) + ty(xy[1].y)) / 2
-        // Taller pill when windows are present so the deduction row fits.
-        const hasWindows = winSlot.count > 0
-        const pillW = hasWindows ? 120 : 92
-        const pillH = hasWindows ? 26 : 18
-        const pillX = mx - pillW / 2
-        const pillY = my - pillH / 2
-        svg += `<g>`
-        svg += `<rect x="${pillX.toFixed(1)}" y="${pillY.toFixed(1)}" width="${pillW}" height="${pillH}" rx="3" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1"/>`
-        svg += `<text x="${mx.toFixed(1)}" y="${(pillY + 7).toFixed(1)}" text-anchor="middle" font-size="6" font-weight="800" fill="#92400E" letter-spacing="0.8" ${FONT}>WALL</text>`
-        if (hasWindows) {
-          svg += `<text x="${mx.toFixed(1)}" y="${(pillY + 14).toFixed(1)}" text-anchor="middle" font-size="7" font-weight="700" fill="#78350F" ${FONT}>${lf} LF · ${grossSf} sf</text>`
-          svg += `<text x="${mx.toFixed(1)}" y="${(pillY + 22).toFixed(1)}" text-anchor="middle" font-size="6.5" font-weight="700" fill="#1d4ed8" ${FONT}>− ${winSlot.count} win (${Math.round(winSlot.sf)} sf) = ${netSf} sf</text>`
-        } else {
-          svg += `<text x="${mx.toFixed(1)}" y="${(pillY + 14).toFixed(1)}" text-anchor="middle" font-size="7" font-weight="700" fill="#78350F" ${FONT}>${lf} LF · ${grossSf} sf</text>`
-        }
-        svg += `</g>`
+    const xy = pts.map(toXY)
+    // Legacy / no-height walls → fall back to the old dashed flashing line.
+    if (!heightFt || pts.length !== 2) {
+      const fallbackColor = kind === 'headwall' ? '#F97316' : '#F59E0B'
+      for (let i = 1; i < xy.length; i++) {
+        svg += `<line x1="${tx(xy[i-1].x).toFixed(1)}" y1="${ty(xy[i-1].y).toFixed(1)}" x2="${tx(xy[i].x).toFixed(1)}" y2="${ty(xy[i].y).toFixed(1)}" stroke="${fallbackColor}" stroke-width="2.4" stroke-dasharray="5,3" stroke-linecap="round"/>`
       }
+      return
     }
-  })
+    // Modern wall with heightFt → render offset band.
+    const a = xy[0], b = xy[1]
+    const dxw = b.x - a.x, dyw = b.y - a.y
+    const wallLenM = Math.sqrt(dxw * dxw + dyw * dyw)
+    if (wallLenM < 0.05) return  // too short to render
+    const ux = dxw / wallLenM, uy = dyw / wallLenM
+    // Perpendicular (rotated 90° CCW)
+    const perpX = -uy, perpY = ux
+    // Outward = AWAY from polygon centroid
+    const midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2
+    const toCentX = eavesCx - midX, toCentY = eavesCy - midY
+    const dotPerp = toCentX * perpX + toCentY * perpY
+    const outX = dotPerp > 0 ? -perpX : perpX
+    const outY = dotPerp > 0 ? -perpY : perpY
 
-  // ── WINDOWS (small blue panes, drawn ON TOP of walls) ──
-  // Each window marker shows where the operator dropped it. The size
-  // shown on the pill is the deduction; the icon is intentionally small
-  // (10 px) so it doesn't dominate the wall it sits on.
-  if (L.walls) (roofTrace.windows || []).forEach((win) => {
-    if (!win || typeof win.lat !== 'number' || typeof win.lng !== 'number') return
-    const xy = toXY({ lat: win.lat, lng: win.lng })
-    const px = tx(xy.x), py = ty(xy.y)
+    const heightM = heightFt / M_TO_FT_LOCAL
+    // Band corners (world metres): c1=a-eave, c2=b-eave, c3=b-outer, c4=a-outer
+    const c1 = { x: a.x, y: a.y }
+    const c2 = { x: b.x, y: b.y }
+    const c3 = { x: b.x + outX * heightM, y: b.y + outY * heightM }
+    const c4 = { x: a.x + outX * heightM, y: a.y + outY * heightM }
+    const c1s = { x: tx(c1.x), y: ty(c1.y) }
+    const c2s = { x: tx(c2.x), y: ty(c2.y) }
+    const c3s = { x: tx(c3.x), y: ty(c3.y) }
+    const c4s = { x: tx(c4.x), y: ty(c4.y) }
+
+    const isHeadwall = kind === 'headwall'
+    const strokeColor = isHeadwall ? '#F97316' : '#F59E0B'
+    const fillColor   = isHeadwall ? '#FFEDD5' : '#FEF3C7'
+    const deepColor   = isHeadwall ? '#9A3412' : '#92400E'
+
+    // Wall band (parallelogram extending outward from the eave).
+    const polyPts = [c1s, c2s, c3s, c4s].map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+    svg += `<polygon points="${polyPts}" fill="${fillColor}" fill-opacity="0.85" stroke="${strokeColor}" stroke-width="1.4" stroke-linejoin="round"/>`
+
+    // Diagonal hatch pattern across the band — gives the wall a "vertical
+    // surface" texture so it doesn't read as just a colored zone. Density
+    // scales with band length so short walls don't look over-hatched.
+    const lf = haversineFt(pts[0], pts[1])
+    const hashSpacingFt = 3   // one diagonal every 3 ft
+    const hashCount = Math.max(2, Math.floor(lf / hashSpacingFt))
+    for (let h = 1; h < hashCount; h++) {
+      const t = h / hashCount
+      // Start point on eave side, end point shifted along the band by 1/3 wallLen
+      const startW = { x: a.x + ux * t * wallLenM, y: a.y + uy * t * wallLenM }
+      const endW   = { x: startW.x + outX * heightM, y: startW.y + outY * heightM }
+      svg += `<line x1="${tx(startW.x).toFixed(1)}" y1="${ty(startW.y).toFixed(1)}" x2="${tx(endW.x).toFixed(1)}" y2="${ty(endW.y).toFixed(1)}" stroke="${strokeColor}" stroke-width="0.4" opacity="0.35"/>`
+    }
+
+    // Windows embedded in the band — proportional rectangles positioned
+    // along the wall using each window's projected lat/lng.
+    const slot = windowsByWall[wallIdx] || { count: 0, sf: 0, windows: [] as Array<{ lat: number; lng: number; w: number; h: number }> }
+    slot.windows.forEach((w) => {
+      const wMeters = w.w / M_TO_FT_LOCAL
+      const hMeters = w.h / M_TO_FT_LOCAL
+      const winWorld = toXY({ lat: w.lat, lng: w.lng })
+      const relX = winWorld.x - a.x, relY = winWorld.y - a.y
+      const tAlongM = relX * ux + relY * uy  // metres along wall from start
+      // Clamp so the window sits fully within the band
+      const tStart = Math.max(0, Math.min(wallLenM - wMeters, tAlongM - wMeters / 2))
+      // Vertically center the window within the band height
+      const insideOffset = Math.max(0, (heightM - hMeters) / 2)
+      const w1 = { x: a.x + ux * tStart + outX * insideOffset, y: a.y + uy * tStart + outY * insideOffset }
+      const w2 = { x: w1.x + ux * wMeters, y: w1.y + uy * wMeters }
+      const w3 = { x: w2.x + outX * hMeters, y: w2.y + outY * hMeters }
+      const w4 = { x: w1.x + outX * hMeters, y: w1.y + outY * hMeters }
+      const wp = [w1, w2, w3, w4].map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
+      svg += `<polygon points="${wp}" fill="#fff" stroke="#1d4ed8" stroke-width="0.9"/>`
+      // Window-pane cross (mullion + transom)
+      const mid1 = { x: (w1.x + w4.x) / 2, y: (w1.y + w4.y) / 2 }
+      const mid2 = { x: (w2.x + w3.x) / 2, y: (w2.y + w3.y) / 2 }
+      const mid3 = { x: (w1.x + w2.x) / 2, y: (w1.y + w2.y) / 2 }
+      const mid4 = { x: (w4.x + w3.x) / 2, y: (w4.y + w3.y) / 2 }
+      svg += `<line x1="${tx(mid3.x).toFixed(1)}" y1="${ty(mid3.y).toFixed(1)}" x2="${tx(mid4.x).toFixed(1)}" y2="${ty(mid4.y).toFixed(1)}" stroke="#1d4ed8" stroke-width="0.5" opacity="0.7"/>`
+      svg += `<line x1="${tx(mid1.x).toFixed(1)}" y1="${ty(mid1.y).toFixed(1)}" x2="${tx(mid2.x).toFixed(1)}" y2="${ty(mid2.y).toFixed(1)}" stroke="#1d4ed8" stroke-width="0.5" opacity="0.7"/>`
+    })
+
+    const grossSf = Math.round(lf * heightFt)
+    const winSf   = Math.round(slot.sf)
+    const netSf   = Math.max(0, grossSf - winSf)
+    manualWallLf += Math.round(lf)
+    manualWallSf += grossSf
+    manualWallCount += 1
+
+    // Callout pill OUTSIDE the band with a thin leader line. Pill anchors
+    // at the midpoint of the band's outer edge, then floats outward by a
+    // fixed pixel offset (independent of world scale) so it reads cleanly.
+    const bandOuterMidX = (c3s.x + c4s.x) / 2
+    const bandOuterMidY = (c3s.y + c4s.y) / 2
+    // Compute outward unit vector in SCREEN space (for the leader-line
+    // direction — handles the y-axis flip in tx/ty correctly).
+    const outScreenX = bandOuterMidX - (c1s.x + c2s.x) / 2
+    const outScreenY = bandOuterMidY - (c1s.y + c2s.y) / 2
+    const outScreenLen = Math.max(0.01, Math.sqrt(outScreenX * outScreenX + outScreenY * outScreenY))
+    const outScreenUX = outScreenX / outScreenLen, outScreenUY = outScreenY / outScreenLen
+    const leaderPx = 14
+    const hasWindows = slot.count > 0
+    const pillW = hasWindows ? 132 : 110
+    const pillH = hasWindows ? 30 : 22
+    const pillCx = bandOuterMidX + outScreenUX * (leaderPx + pillH / 2)
+    const pillCy = bandOuterMidY + outScreenUY * (leaderPx + pillH / 2)
+    const pillX  = pillCx - pillW / 2
+    const pillY  = pillCy - pillH / 2
+    // Leader line (band outer edge → pill near edge)
+    const leaderEndX = pillCx - outScreenUX * (pillH / 2)
+    const leaderEndY = pillCy - outScreenUY * (pillH / 2)
+    svg += `<line x1="${bandOuterMidX.toFixed(1)}" y1="${bandOuterMidY.toFixed(1)}" x2="${leaderEndX.toFixed(1)}" y2="${leaderEndY.toFixed(1)}" stroke="${strokeColor}" stroke-width="0.7" stroke-dasharray="2,1.5" opacity="0.8"/>`
+    // Pill
     svg += `<g>`
-    svg += `<rect x="${(px-5).toFixed(1)}" y="${(py-5).toFixed(1)}" width="10" height="10" rx="1.2" fill="#3b82f6" stroke="#fff" stroke-width="1.2"/>`
-    // Window-pane cross
-    svg += `<line x1="${px.toFixed(1)}" y1="${(py-4).toFixed(1)}" x2="${px.toFixed(1)}" y2="${(py+4).toFixed(1)}" stroke="#fff" stroke-width="0.8"/>`
-    svg += `<line x1="${(px-4).toFixed(1)}" y1="${py.toFixed(1)}" x2="${(px+4).toFixed(1)}" y2="${py.toFixed(1)}" stroke="#fff" stroke-width="0.8"/>`
+    svg += `<rect x="${pillX.toFixed(1)}" y="${pillY.toFixed(1)}" width="${pillW}" height="${pillH}" rx="3.5" fill="#fff" stroke="${strokeColor}" stroke-width="1.2"/>`
+    svg += `<text x="${pillCx.toFixed(1)}" y="${(pillY + 8).toFixed(1)}" text-anchor="middle" font-size="6" font-weight="800" fill="${deepColor}" letter-spacing="0.6" ${FONT}>SHINGLED WALL ${wallIdx + 1}${isHeadwall ? ' · HEADWALL' : ''}</text>`
+    svg += `<text x="${pillCx.toFixed(1)}" y="${(pillY + 16).toFixed(1)}" text-anchor="middle" font-size="7" font-weight="700" fill="${deepColor}" ${FONT}>${Math.round(lf)} LF × ${heightFt}′ = ${grossSf} sf gross</text>`
+    if (hasWindows) {
+      svg += `<text x="${pillCx.toFixed(1)}" y="${(pillY + 24).toFixed(1)}" text-anchor="middle" font-size="6.5" font-weight="700" fill="#1d4ed8" ${FONT}>− ${slot.count} window${slot.count === 1 ? '' : 's'} (${winSf} sf) = ${netSf} sf net</text>`
+    }
     svg += `</g>`
   })
 
@@ -3912,18 +3997,20 @@ export function generateTraceBasedDiagramSVG(
   if (headwallFt > 0) {
     legendItems.push({ plural: 'Headwall', color: '#F97316', dash: true, totalFt: headwallFt, count: 0 })
   }
-  // Manual walls (from the "+ Wall" tracer tool) — only render when at least
-  // one segment was tagged with heightFt. Distinct from the generic step-
-  // flashing row so the operator sees the LF + sf separately from flashing.
+  // Shingled walls (from "+ Wall" tracer tool, heightFt-tagged) — surfaces
+  // total wall surface area (gross) and segment count. The pill on each
+  // wall in the diagram shows per-wall gross/net; this is the rollup.
   if (manualWallCount > 0) {
-    legendItems.push({ plural: `Walls (${manualWallSf} sf)`, color: '#F59E0B', dash: true, totalFt: manualWallLf, count: manualWallCount })
+    const netWallSf = Math.max(0, manualWallSf - manualWindowSf)
+    const wallLabel = manualWindowCount > 0
+      ? `Shingled Wall ${manualWallSf} sf gross / ${netWallSf} sf net`
+      : `Shingled Wall ${manualWallSf} sf`
+    legendItems.push({ plural: wallLabel, color: '#F59E0B', dash: true, totalFt: manualWallLf, count: manualWallCount })
   }
-  // Window deductions — only render when the operator placed at least one
-  // window. Total ft column is repurposed to show square-foot deduction
-  // since linear feet is meaningless here; the right-aligned value already
-  // reads "X ft" so we surface "(N sf)" inline in the label instead.
+  // Windows on shingled walls — count + sf deduction. Right-column ft is
+  // omitted (renderer skips when totalFt === 0) since LF is meaningless.
   if (manualWindowCount > 0) {
-    legendItems.push({ plural: `Windows (−${manualWindowSf} sf)`, color: '#3b82f6', totalFt: 0, count: manualWindowCount })
+    legendItems.push({ plural: `Windows −${manualWindowSf} sf deducted`, color: '#3b82f6', totalFt: 0, count: manualWindowCount })
   }
 
   const totalLinFtLegend = legendItems.reduce((s, it) => s + it.totalFt, 0)

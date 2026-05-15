@@ -54,6 +54,12 @@ export interface StructurePartition {
     pitch_rise: number
     label?: string
   }>
+  /** Lower-tier eave lips that visually wrap THIS structure (assigned to the
+   *  main partition whose centroid is closest). Not separate structures —
+   *  the 2D/3D renderers overlay them on this partition's diagram with
+   *  blue-dashed "Lower Eave N" styling. Materials math is engine-side and
+   *  already includes their area in the total. */
+  lower_tier_sections?: LatLng[][]
 }
 
 // ───────────────────────── CONSTANTS ─────────────────────────
@@ -255,7 +261,7 @@ export function splitStructures(report: RoofReport): StructurePartition[] {
   const sectionKinds: Array<'main' | 'lower_tier'> = Array.isArray(rt.eaves_section_kinds)
     ? rt.eaves_section_kinds.map((k: any) => k === 'lower_tier' ? 'lower_tier' : 'main')
     : []
-  const cands: Cand[] = sections.map((eaves, i) => {
+  const allCands: Cand[] = sections.map((eaves, i) => {
     const xy = projectLatLngToMeters(eaves, cosLat, refLat, refLng)
     return {
       eaves,
@@ -265,6 +271,32 @@ export function splitStructures(report: RoofReport): StructurePartition[] {
       kind: sectionKinds[i] || 'main',
     }
   }).sort((a, b) => b.footprint_sqft - a.footprint_sqft)
+  // Split into main partitions (which become structure cards) vs lower-tier
+  // lips (which get attached to whichever main partition's centroid is
+  // closest — they wrap the same building, not a separate one).
+  // Edge case: if there's no main partition (all sections tagged lower_tier),
+  // promote the largest lower-tier to main so the diagram has something
+  // to render. Rare but defensive.
+  let cands: Cand[] = allCands.filter(c => c.kind === 'main')
+  const lowerCands: Cand[] = allCands.filter(c => c.kind === 'lower_tier')
+  if (cands.length === 0 && lowerCands.length > 0) {
+    cands = [{ ...lowerCands.shift()!, kind: 'main' }]
+  }
+  // Assign each lower-tier to nearest main by centroid distance (squared,
+  // good enough at residential scale).
+  const lowerTierByMain: LatLng[][][] = cands.map(() => [])
+  for (const lt of lowerCands) {
+    const ltCx = lt.eavesXY.reduce((s, p) => s + p.x, 0) / lt.eavesXY.length
+    const ltCy = lt.eavesXY.reduce((s, p) => s + p.y, 0) / lt.eavesXY.length
+    let bestIdx = 0, bestD = Infinity
+    for (let i = 0; i < cands.length; i++) {
+      const cx = cands[i].eavesXY.reduce((s, p) => s + p.x, 0) / cands[i].eavesXY.length
+      const cy = cands[i].eavesXY.reduce((s, p) => s + p.y, 0) / cands[i].eavesXY.length
+      const d = (cx - ltCx) ** 2 + (cy - ltCy) ** 2
+      if (d < bestD) { bestD = d; bestIdx = i }
+    }
+    lowerTierByMain[bestIdx].push(lt.eaves)
+  }
 
   // Assign each internal line to the structure containing its midpoint.
   const ridges: LatLng[][][] = cands.map(() => [])
@@ -331,16 +363,11 @@ export function splitStructures(report: RoofReport): StructurePartition[] {
     return total
   }
 
-  // Independent counters so lower-tier lips read "Lower Eave 1, 2…" while
-  // main extras follow the legacy "Main House / Detached Garage / …" track.
-  let lowerEaveN = 0
-  let mainN = 0
+  // Lower-tier sections no longer return as separate partitions, so labels
+  // simply follow the legacy "Main House / Detached Garage / …" track.
   return cands.map((c, i) => {
     const trueArea = c.footprint_sqft * slopeMult
-    const partitionLabel = c.kind === 'lower_tier'
-      ? `Lower Eave ${++lowerEaveN}`
-      : (labels[mainN] || `Structure ${mainN + 1}`)
-    if (c.kind !== 'lower_tier') mainN++
+    const partitionLabel = labels[i] || `Structure ${i + 1}`
     return {
       index: i + 1,
       label: partitionLabel,
@@ -362,6 +389,7 @@ export function splitStructures(report: RoofReport): StructurePartition[] {
       valley_lf: Math.round(polylineLF(valleys[i]) * 10) / 10,
       rake_lf: Math.round(polylineLF(rakes[i]) * 10) / 10,
       dormers: dormersPerStruct[i].length ? dormersPerStruct[i] : undefined,
+      lower_tier_sections: lowerTierByMain[i].length ? lowerTierByMain[i] : undefined,
     }
   })
 }
