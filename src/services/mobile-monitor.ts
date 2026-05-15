@@ -97,14 +97,39 @@ export async function runMobileMonitor(env: Bindings): Promise<MobileResult> {
   }
 
   // Public pages — no auth.
+  // First probe gates the rest: if Browser Rendering is unscoped (401/403),
+  // every subsequent renderMobile would throw identically. Detect once and
+  // fall back to plain HTTP probes for the remainder of the run — degraded
+  // coverage (no console errors, no JS execution) but still catches HTTP
+  // status + missing viewport meta + missing h1, which is most of the value.
+  let renderingUnscoped = false
   let publicFailed = 0
   let publicConsoleErrors = 0
   for (const path of PUBLIC_PAGES) {
-    const out = await renderMobile(acct, token, `${PROD_BASE}${path}`, {})
+    let out: ProbeOutcome
+    if (renderingUnscoped) {
+      out = await httpProbeMobile(`${PROD_BASE}${path}`, {})
+    } else {
+      out = await renderMobile(acct, token, `${PROD_BASE}${path}`, {})
+      if (out.renderThrew && /\b40[13]\b.*Browser Rendering|token not scoped for Browser Rendering/i.test(out.renderThrew)) {
+        renderingUnscoped = true
+        out = await httpProbeMobile(`${PROD_BASE}${path}`, {})
+      }
+    }
     const pageFindings = classify('public', path, out, false)
     findings.push(...pageFindings)
     if (pageFindings.some(f => f.severity === 'error')) publicFailed++
     publicConsoleErrors += out.consoleErrors.length
+  }
+  if (renderingUnscoped) {
+    findings.push({
+      section: 'public',
+      category: 'browser_rendering_skipped',
+      severity: 'warn',
+      path: '*',
+      status: null,
+      message: 'CF Browser Rendering token unscoped (401) — using HTTP fallback. Console errors + JS execution checks are skipped. Fix: re-issue CLOUDFLARE_API_TOKEN with Browser Rendering:Edit scope.',
+    })
   }
 
   // Customer module — mint synthetic session, pass cookie via extra headers.
@@ -123,7 +148,16 @@ export async function runMobileMonitor(env: Bindings): Promise<MobileResult> {
     const cookie = `rm_customer_session=${probe.token}; rm_csrf=${csrfToken}`
 
     for (const path of CUSTOMER_PAGES) {
-      const out = await renderMobile(acct, token, `${PROD_BASE}${path}`, { Cookie: cookie })
+      let out: ProbeOutcome
+      if (renderingUnscoped) {
+        out = await httpProbeMobile(`${PROD_BASE}${path}`, { Cookie: cookie })
+      } else {
+        out = await renderMobile(acct, token, `${PROD_BASE}${path}`, { Cookie: cookie })
+        if (out.renderThrew && /\b40[13]\b.*Browser Rendering|token not scoped for Browser Rendering/i.test(out.renderThrew)) {
+          renderingUnscoped = true
+          out = await httpProbeMobile(`${PROD_BASE}${path}`, { Cookie: cookie })
+        }
+      }
       const pageFindings = classify('customer', path, out, true)
       findings.push(...pageFindings)
       if (pageFindings.some(f => f.severity === 'error')) customerFailed++
@@ -269,5 +303,36 @@ async function renderMobile(
     }
   } catch (e: any) {
     return { status: null, finalUrl: null, hasViewportMeta: false, h1Count: 0, consoleErrors: [], renderThrew: e?.message || String(e) }
+  }
+}
+
+// Degraded-mode probe: plain HTTP fetch with mobile UA. No JS execution, no
+// console errors, but catches HTTP status, viewport meta, h1, and auth-drop
+// redirects — which is most of what mobile-monitor watches for.
+async function httpProbeMobile(url: string, extraHeaders: Record<string, string>): Promise<ProbeOutcome> {
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      redirect: 'follow',
+      headers: { 'User-Agent': MOBILE_UA, ...extraHeaders },
+    })
+    const finalUrl = res.url || null
+    const ct = res.headers.get('content-type') || ''
+    let html = ''
+    if (ct.includes('text/html') || ct === '') {
+      html = await res.text().catch(() => '')
+    }
+    const hasViewportMeta = /<meta[^>]+name=["']viewport["']/i.test(html)
+    const h1Count = (html.match(/<h1[\s>]/gi) || []).length
+    return {
+      status: res.status,
+      finalUrl,
+      hasViewportMeta,
+      h1Count,
+      consoleErrors: [],
+      renderThrew: null,
+    }
+  } catch (e: any) {
+    return { status: null, finalUrl: null, hasViewportMeta: false, h1Count: 0, consoleErrors: [], renderThrew: `HTTP fallback failed: ${e?.message || e}` }
   }
 }
