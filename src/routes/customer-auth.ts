@@ -876,47 +876,68 @@ customerAuthRoutes.post('/apple', async (c) => {
     const utmContent = typeof body.utm_content === 'string' ? body.utm_content.slice(0, 200) : null
     const utmTerm = typeof body.utm_term === 'string' ? body.utm_term.slice(0, 200) : null
 
-    // Look up by apple_sub first (stable), then fall back to email.
+    // Look up by apple_sub (sidecar) first — that's the stable identifier.
+    // Fall back to a customer row matching the email Apple gave us so we can
+    // link existing customers who later add Apple as a second sign-in method.
     let customer = await c.env.DB.prepare(
-      'SELECT * FROM customers WHERE apple_sub = ? OR (email = ? AND ? != "")'
-    ).bind(appleSub, rawEmail, rawEmail).first<any>()
+      `SELECT c.*
+       FROM customer_apple_auth a
+       JOIN customers c ON c.id = a.customer_id
+       WHERE a.apple_sub = ?`
+    ).bind(appleSub).first<any>()
+    if (!customer && rawEmail) {
+      customer = await c.env.DB.prepare(
+        'SELECT * FROM customers WHERE email = ?'
+      ).bind(rawEmail).first<any>()
+    }
 
     if (customer) {
       if (customer.is_active !== 1 && customer.is_active !== true) {
         return c.json({ error: 'Account is disabled' }, 403)
       }
+      // Upsert the sidecar so repeat sign-ins refresh the relay flag.
+      await c.env.DB.prepare(`
+        INSERT INTO customer_apple_auth (customer_id, apple_sub, apple_email_relay)
+        VALUES (?, ?, ?)
+        ON CONFLICT(apple_sub) DO UPDATE SET
+          customer_id       = excluded.customer_id,
+          apple_email_relay = excluded.apple_email_relay
+      `).bind(customer.id, appleSub, isRelay ? 1 : 0).run()
       await c.env.DB.prepare(`
         UPDATE customers SET
-          apple_sub = ?,
-          apple_email_relay = ?,
           email = COALESCE(NULLIF(email,''), ?),
           name = COALESCE(NULLIF(name,''), ?),
           email_verified = 1,
           last_login = datetime('now'),
           updated_at = datetime('now')
         WHERE id = ?
-      `).bind(appleSub, isRelay ? 1 : 0, rawEmail || null, incomingName, customer.id).run()
+      `).bind(rawEmail || null, incomingName, customer.id).run()
       markCustomerActive(c.env.DB, customer.id).catch(() => {})
     } else {
       // New signup — grant free trial just like /google.
       const result = await c.env.DB.prepare(`
-        INSERT INTO customers (email, name, apple_sub, apple_email_relay, email_verified, is_active,
+        INSERT INTO customers (email, name, email_verified, is_active,
           report_credits, credits_used, free_trial_total, free_trial_used, auto_invoice_enabled,
           company_type, last_login, gclid)
-        VALUES (?, ?, ?, ?, 1, 1, 0, 0, ?, 0, 0, 'roofing', datetime('now'), ?)
-      `).bind(rawEmail || `apple_${appleSub}@privaterelay.appleid.com`, incomingName, appleSub, isRelay ? 1 : 0, FREE_TRIAL_REPORTS, gclid).run()
+        VALUES (?, ?, 1, 1, 0, 0, ?, 0, 0, 'roofing', datetime('now'), ?)
+      `).bind(rawEmail || `apple_${appleSub}@privaterelay.appleid.com`, incomingName, FREE_TRIAL_REPORTS, gclid).run()
 
       customer = {
         id: result.meta.last_row_id,
         email: rawEmail,
         name: incomingName,
-        apple_sub: appleSub,
         report_credits: 0,
         credits_used: 0,
         free_trial_total: FREE_TRIAL_REPORTS,
         free_trial_used: 0,
         is_new_signup: true,
       }
+
+      // Link the sidecar.
+      await c.env.DB.prepare(`
+        INSERT INTO customer_apple_auth (customer_id, apple_sub, apple_email_relay)
+        VALUES (?, ?, ?)
+      `).bind(customer.id, appleSub, isRelay ? 1 : 0).run()
 
       markCustomerActive(c.env.DB, customer.id as number).catch(() => {})
       if (rawEmail) linkCustomerToLead(c.env.DB, customer.id as number, rawEmail).catch(() => {})

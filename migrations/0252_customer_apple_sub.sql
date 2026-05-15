@@ -1,18 +1,25 @@
 -- 0252_customer_apple_sub.sql
--- Sign in with Apple support — required for iOS App Store submission
--- (Apple App Review rule 4.8) since the site already offers Google OAuth.
+-- Sign in with Apple support — required for iOS App Store rule 4.8 since the
+-- site already offers Google OAuth.
 --
--- apple_sub  is the stable, anonymous user ID Apple returns in the JWT
--- `sub` claim. It is the join key for repeat logins; the email Apple
--- gives us can be a per-app relay (@privaterelay.appleid.com) and can
--- change if the user toggles "Hide my email", so we cannot rely on email.
+-- We use a sidecar table instead of adding columns to `customers` because
+-- that table has hit SQLite's effective per-table column limit on D1 after
+-- 250+ migrations. A 1:1 sidecar keeps auth-specific data cleanly separated
+-- and is trivial to JOIN in the /api/customer-auth/apple route.
 --
--- apple_email_relay flags users who chose the privacy-relay option, so
--- the marketing email pipeline knows not to send unsolicited mail through
--- the relay (Apple bounces excess volume) and we can prompt them later
--- to share their real address.
+-- apple_sub        — Apple's stable opaque user ID from JWT `sub` claim.
+--                    PRIMARY KEY because Apple guarantees per-app uniqueness.
+-- apple_email_relay — 1 if user picked "Hide my email" (apple's private relay).
+--                    Pipeline uses this to avoid bulk-mailing through the
+--                    relay (Apple bounces excess volume) and to prompt the
+--                    user later for their real address.
+-- linked_at        — when we first associated this Apple ID with the customer.
 
-ALTER TABLE customers ADD COLUMN apple_sub TEXT;
-ALTER TABLE customers ADD COLUMN apple_email_relay INTEGER DEFAULT 0;
+CREATE TABLE IF NOT EXISTS customer_apple_auth (
+  customer_id        INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  apple_sub          TEXT NOT NULL PRIMARY KEY,
+  apple_email_relay  INTEGER NOT NULL DEFAULT 0,
+  linked_at          DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_apple_sub ON customers(apple_sub) WHERE apple_sub IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_customer_apple_auth_customer ON customer_apple_auth(customer_id);
