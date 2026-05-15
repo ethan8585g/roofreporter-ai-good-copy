@@ -10,7 +10,7 @@ import { limitByIp, limitByKey } from './lib/rate-limit'
 import { ordersRoutes } from './routes/orders'
 import { companiesRoutes } from './routes/companies'
 import { settingsRoutes } from './routes/settings'
-import { reportsRoutes } from './routes/reports'
+import { reportsRoutes, resolveHtml } from './routes/reports'
 import { measureRoutes } from './routes/measure'
 import { insuranceRoutes } from './routes/insurance'
 import { adminRoutes } from './routes/admin'
@@ -4785,14 +4785,22 @@ app.get('/report/share/:token', async (c) => {
     const escAddr = String(addr).replace(/[&<>"'`=\/]/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#x60;','=':'&#x3D;','/':'&#x2F;'}[ch] || ''))
     const escToken = String(token).replace(/[^A-Za-z0-9_\-]/g, '')
 
-    // Resolve report HTML (use stored HTML only — avoids bundling template at edge).
-    // Cached HTML is sometimes prefixed by a `<!-- RENDER-PATH: ... -->` marker
-    // comment from the multi-structure renderer, so the prefix check must
-    // tolerate leading whitespace/comments and look for <!DOCTYPE or <html
-    // anywhere in the head (case-insensitive).
+    // Resolve report HTML via the same marker-aware helper the admin path
+    // uses (resolveHtml in routes/reports.ts). When the cached blob predates
+    // the current TEMPLATE_VERSION, this regenerates from api_response_raw
+    // so share-link visitors always see the latest template. Without this
+    // the share route silently served pre-fix v6.1 diagrams forever — that
+    // is exactly how the sitewide sample (#325, token 0e9b56dd…) ended up
+    // showing a broken multi-structure 2D plan view after commit 0220109.
+    const proHtml = resolveHtml(row.professional_report_html || null, row.api_response_raw || null) || ''
+    // Customer audience: stored customer copy is the homeowner-friendly
+    // template (no measurements). It has no template marker today, so we
+    // serve it as-is when present and fall back to the (now-fresh) pro copy
+    // otherwise — matching the prior behavior, just with the pro path now
+    // regenerating when stale.
     const h = (audience === 'customer'
-      ? (row.customer_report_html || row.professional_report_html)
-      : row.professional_report_html) || ''
+      ? (row.customer_report_html || proHtml)
+      : proHtml) || ''
     const head = h.slice(0, 600).toLowerCase()
     const reportHtml = (head.includes('<!doctype') || head.includes('<html')) ? h : ''
 

@@ -207,7 +207,7 @@ function isCachedHtmlFresh(stored: string | null): boolean {
   return true
 }
 
-function resolveHtml(stored: string | null, raw: string | null): string | null {
+export function resolveHtml(stored: string | null, raw: string | null): string | null {
   // Prefer fresh cached HTML — multi-structure renders are CPU-heavy and
   // Cloudflare Workers' per-request budget can silently push them into the
   // catch-fallback. Caching the first successful render and serving that
