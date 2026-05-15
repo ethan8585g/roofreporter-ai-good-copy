@@ -9365,119 +9365,196 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             <div class="relative">
               <!-- Primary: SVG measurement-trace mockup (replaces stock photo) -->
               <div class="relative rounded-3xl overflow-hidden border border-white/10 shadow-2xl shadow-black/60" style="aspect-ratio:4/5;background:#0a120e">
-                <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid slice" class="absolute inset-0 w-full h-full" role="img" aria-label="Live satellite trace of a residential roof showing eaves, ridges, valley, pitch, and measurement labels">
+                <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid slice" class="absolute inset-0 w-full h-full" role="img" aria-label="Isometric 3D mockup of a residential hip roof being measured live by satellite — eaves, ridge, hips, pitch, and edge lengths called out in neon green and cyan over four lit roof planes">
                   <defs>
-                    <pattern id="hSatGrass" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#0d1a13"/><circle cx="1.5" cy="2" r="0.5" fill="#1a2a1f"/><circle cx="4" cy="4.5" r="0.4" fill="#162018"/></pattern>
-                    <pattern id="hShingle" width="14" height="6" patternUnits="userSpaceOnUse"><rect width="14" height="6" fill="#2a2520"/><line x1="0" y1="0" x2="14" y2="0" stroke="#15110e" stroke-width="0.7"/><line x1="7" y1="3" x2="14" y2="3" stroke="#15110e" stroke-width="0.4" opacity="0.55"/></pattern>
-                    <pattern id="hShingle2" width="14" height="6" patternUnits="userSpaceOnUse"><rect width="14" height="6" fill="#352e27"/><line x1="0" y1="0" x2="14" y2="0" stroke="#1a1612" stroke-width="0.7"/><line x1="7" y1="3" x2="14" y2="3" stroke="#1a1612" stroke-width="0.4" opacity="0.55"/></pattern>
-                    <pattern id="hGrid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#00FF88" stroke-width="0.4" opacity="0.09"/></pattern>
-                    <radialGradient id="hVignette" cx="50%" cy="45%" r="78%"><stop offset="55%" stop-color="#000" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity="0.7"/></radialGradient>
-                    <filter id="hGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-                    <linearGradient id="hSweep" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#00FF88" stop-opacity="0"/><stop offset="100%" stop-color="#00FF88" stop-opacity="0.16"/></linearGradient>
+                    <radialGradient id="hg-ground" cx="50%" cy="50%" r="85%">
+                      <stop offset="0" stop-color="#1d2620"/>
+                      <stop offset="0.55" stop-color="#0d1a13"/>
+                      <stop offset="1" stop-color="#06100c"/>
+                    </radialGradient>
+                    <pattern id="hg-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#00FF88" stroke-width="0.4" opacity="0.08"/>
+                    </pattern>
+                    <linearGradient id="hg-south" x1="0" y1="0" x2="0.3" y2="1">
+                      <stop offset="0" stop-color="#7a6755"/>
+                      <stop offset="0.5" stop-color="#5a4a3d"/>
+                      <stop offset="1" stop-color="#3a2e25"/>
+                    </linearGradient>
+                    <linearGradient id="hg-east" x1="0" y1="0" x2="1" y2="0.7">
+                      <stop offset="0" stop-color="#6a5648"/>
+                      <stop offset="1" stop-color="#42352b"/>
+                    </linearGradient>
+                    <linearGradient id="hg-north" x1="0" y1="0" x2="0.2" y2="1">
+                      <stop offset="0" stop-color="#352c25"/>
+                      <stop offset="1" stop-color="#1c1612"/>
+                    </linearGradient>
+                    <linearGradient id="hg-west" x1="1" y1="0" x2="0" y2="0.7">
+                      <stop offset="0" stop-color="#332a22"/>
+                      <stop offset="1" stop-color="#1a1410"/>
+                    </linearGradient>
+                    <linearGradient id="hg-scan" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stop-color="#00FF88" stop-opacity="0"/>
+                      <stop offset="0.5" stop-color="#00FF88" stop-opacity="0.55"/>
+                      <stop offset="1" stop-color="#00FF88" stop-opacity="0"/>
+                    </linearGradient>
+                    <radialGradient id="hg-vignette" cx="50%" cy="50%" r="80%">
+                      <stop offset="55%" stop-color="#000" stop-opacity="0"/>
+                      <stop offset="100%" stop-color="#000" stop-opacity="0.65"/>
+                    </radialGradient>
+                    <radialGradient id="hg-spotlight" cx="50%" cy="40%" r="55%">
+                      <stop offset="0" stop-color="#00FF88" stop-opacity="0.18"/>
+                      <stop offset="1" stop-color="#00FF88" stop-opacity="0"/>
+                    </radialGradient>
+                    <filter id="hg-glow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feGaussianBlur stdDeviation="1.8" result="blur"/>
+                      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                    </filter>
+                    <filter id="hg-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feGaussianBlur stdDeviation="9"/>
+                    </filter>
                   </defs>
 
-                  <!-- Ground / yard -->
-                  <rect width="400" height="500" fill="url(#hSatGrass)"/>
-                  <!-- Driveway -->
-                  <polygon points="208,410 296,410 312,500 192,500" fill="#3a342d"/>
-                  <line x1="252" y1="410" x2="252" y2="500" stroke="#1f1c18" stroke-dasharray="6 6" stroke-width="1" opacity="0.5"/>
-                  <!-- Trees -->
-                  <g><circle cx="34" cy="98" r="22" fill="#1f3a1a"/><circle cx="42" cy="92" r="16" fill="#2e4d28"/><circle cx="46" cy="88" r="9" fill="#3d6033"/></g>
-                  <g><circle cx="372" cy="380" r="26" fill="#1f3a1a"/><circle cx="380" cy="372" r="20" fill="#2e4d28"/><circle cx="384" cy="368" r="11" fill="#3d6033"/></g>
-                  <g><circle cx="58" cy="440" r="14" fill="#1f3a1a"/><circle cx="63" cy="435" r="10" fill="#2e4d28"/></g>
-                  <g><circle cx="350" cy="100" r="14" fill="#1f3a1a"/><circle cx="355" cy="95" r="10" fill="#2e4d28"/></g>
+                  <!-- GROUND + ATMOSPHERE -->
+                  <rect width="400" height="500" fill="url(#hg-ground)"/>
+                  <rect width="400" height="500" fill="url(#hg-grid)"/>
+                  <rect width="400" height="500" fill="url(#hg-spotlight)"/>
 
-                  <!-- Grid overlay -->
-                  <rect width="400" height="500" fill="url(#hGrid)"/>
+                  <!-- Driveway angling toward house -->
+                  <polygon points="180,360 240,365 285,500 130,500" fill="#3a342d"/>
+                  <line x1="200" y1="380" x2="200" y2="500" stroke="#1f1c18" stroke-dasharray="6 8" stroke-width="1.2" opacity="0.55"/>
 
-                  <!-- Roof shadow -->
-                  <polygon points="74,124 326,124 326,334 366,334 366,406 196,406 196,334 74,334" fill="#000" opacity="0.5"/>
-
-                  <!-- Main roof planes (split by ridge at y=222) -->
-                  <polygon points="78,120 322,120 322,222 78,222" fill="url(#hShingle)"/>
-                  <polygon points="78,222 322,222 322,330 78,330" fill="url(#hShingle2)"/>
-                  <!-- Garage wing planes (split by ridge at y=368) -->
-                  <polygon points="200,330 362,330 362,368 200,368" fill="url(#hShingle)"/>
-                  <polygon points="200,368 362,368 362,402 200,402" fill="url(#hShingle2)"/>
-                  <!-- Front dormer -->
-                  <polygon points="160,150 200,150 200,196 160,196" fill="url(#hShingle)"/>
-                  <line x1="180" y1="150" x2="180" y2="196" stroke="#15110e" stroke-width="0.8"/>
-
-                  <!-- Subtle shingle row darkening -->
-                  <g opacity="0.18" stroke="#0a0806" stroke-width="0.5">
-                    <line x1="78" y1="140" x2="322" y2="140"/><line x1="78" y1="160" x2="322" y2="160"/><line x1="78" y1="180" x2="322" y2="180"/><line x1="78" y1="200" x2="322" y2="200"/>
-                    <line x1="78" y1="244" x2="322" y2="244"/><line x1="78" y1="266" x2="322" y2="266"/><line x1="78" y1="288" x2="322" y2="288"/><line x1="78" y1="310" x2="322" y2="310"/>
+                  <!-- Trees / yard texture -->
+                  <g opacity="0.85">
+                    <circle cx="36" cy="115" r="22" fill="#1f3a1a"/><circle cx="44" cy="108" r="15" fill="#2e4d28"/><circle cx="48" cy="104" r="8" fill="#3d6033"/>
+                    <circle cx="362" cy="115" r="18" fill="#1f3a1a"/><circle cx="370" cy="108" r="13" fill="#2e4d28"/>
+                    <circle cx="380" cy="400" r="24" fill="#1f3a1a"/><circle cx="386" cy="392" r="17" fill="#2e4d28"/><circle cx="390" cy="388" r="9" fill="#3d6033"/>
+                    <circle cx="42" cy="420" r="14" fill="#1f3a1a"/><circle cx="48" cy="414" r="10" fill="#2e4d28"/>
+                    <circle cx="20" cy="290" r="9" fill="#1f3a1a"/>
+                    <circle cx="380" cy="280" r="9" fill="#1f3a1a"/>
                   </g>
 
-                  <!-- Radar sweep -->
-                  <g opacity="0.55" style="mix-blend-mode:screen"><polygon points="200,250 360,90 360,250" fill="url(#hSweep)"/></g>
+                  <!-- BUILDING CAST SHADOW (soft ellipse under iso roof) -->
+                  <ellipse cx="208" cy="345" rx="155" ry="28" fill="#000" opacity="0.65" filter="url(#hg-shadow)"/>
 
-                  <!-- ====== TRACE OVERLAY ====== -->
-                  <g filter="url(#hGlow)">
-                    <!-- Eave perimeter (green dashed) -->
-                    <path d="M 78 120 L 322 120 L 322 330 L 362 330 L 362 402 L 200 402 L 200 330 L 78 330 Z" fill="none" stroke="#00FF88" stroke-width="2.6" stroke-dasharray="9 4" stroke-linejoin="round"/>
-                    <!-- Ridge lines (solid cyan) -->
-                    <line x1="78" y1="222" x2="322" y2="222" stroke="#22d3ee" stroke-width="2.6"/>
-                    <line x1="200" y1="368" x2="362" y2="368" stroke="#22d3ee" stroke-width="2.6"/>
-                    <!-- Valley (red dashed) where garage meets house -->
-                    <line x1="200" y1="330" x2="200" y2="368" stroke="#ff5566" stroke-width="2.6" stroke-dasharray="6 3"/>
-                    <!-- Dormer trace -->
-                    <path d="M 160 150 L 200 150 L 200 196 L 160 196 Z" fill="none" stroke="#00FF88" stroke-width="1.6" stroke-dasharray="5 3"/>
+                  <!-- ============== ROOF (4-plane hip, drawn back-to-front) ============== -->
+                  <!-- North plane (back, dim) -->
+                  <polygon points="62,230 235,330 252,240 148,180" fill="url(#hg-north)"/>
+                  <!-- West triangle (left hip, dim) -->
+                  <polygon points="165,170 62,230 148,180" fill="url(#hg-west)"/>
+                  <!-- East triangle (right hip, lit) -->
+                  <polygon points="339,270 235,330 252,240" fill="url(#hg-east)"/>
+                  <!-- South plane (front, brightest — sun-facing) -->
+                  <polygon points="165,170 339,270 252,240 148,180" fill="url(#hg-south)"/>
+
+                  <!-- Shingle-row hint stripes parallel to ridge on south plane -->
+                  <g opacity="0.22" stroke="#000" stroke-width="0.6">
+                    <line x1="159" y1="183" x2="333" y2="283"/>
+                    <line x1="153" y1="196" x2="327" y2="296"/>
+                    <line x1="148" y1="208" x2="321" y2="308"/>
+                    <line x1="173" y1="172" x2="345" y2="271"/>
+                  </g>
+                  <!-- Shingle-row hint on north plane -->
+                  <g opacity="0.18" stroke="#000" stroke-width="0.5">
+                    <line x1="80" y1="240" x2="248" y2="332"/>
+                    <line x1="98" y1="250" x2="246" y2="335"/>
+                    <line x1="115" y1="260" x2="244" y2="338"/>
                   </g>
 
-                  <!-- Vertex dots -->
-                  <g>
-                    <circle cx="78" cy="120" r="3.5" fill="#00FF88" stroke="#0A0A0A" stroke-width="1"/>
-                    <circle cx="322" cy="120" r="3.5" fill="#00FF88" stroke="#0A0A0A" stroke-width="1"/>
-                    <circle cx="322" cy="330" r="3.5" fill="#00FF88" stroke="#0A0A0A" stroke-width="1"/>
-                    <circle cx="362" cy="330" r="3.5" fill="#00FF88" stroke="#0A0A0A" stroke-width="1"/>
-                    <circle cx="362" cy="402" r="3.5" fill="#00FF88" stroke="#0A0A0A" stroke-width="1"/>
-                    <circle cx="200" cy="402" r="3.5" fill="#00FF88" stroke="#0A0A0A" stroke-width="1"/>
-                    <circle cx="200" cy="330" r="3.5" fill="#00FF88" stroke="#0A0A0A" stroke-width="1"/>
-                    <circle cx="78" cy="330" r="3.5" fill="#00FF88" stroke="#0A0A0A" stroke-width="1"/>
-                    <!-- Live-pulse vertex -->
-                    <circle cx="322" cy="120" r="9" fill="none" stroke="#00FF88" stroke-width="1.4" opacity="0.9"><animate attributeName="r" values="4;14;4" dur="2.2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.9;0;0.9" dur="2.2s" repeatCount="indefinite"/></circle>
-                    <!-- Ridge endpoints -->
-                    <circle cx="78" cy="222" r="3" fill="#22d3ee" stroke="#0A0A0A" stroke-width="0.8"/>
-                    <circle cx="322" cy="222" r="3" fill="#22d3ee" stroke="#0A0A0A" stroke-width="0.8"/>
-                    <circle cx="200" cy="368" r="3" fill="#22d3ee" stroke="#0A0A0A" stroke-width="0.8"/>
-                    <circle cx="362" cy="368" r="3" fill="#22d3ee" stroke="#0A0A0A" stroke-width="0.8"/>
+                  <!-- Subtle hip-line darkening (where roof planes meet physically) -->
+                  <g stroke="#000" stroke-width="0.9" opacity="0.4">
+                    <line x1="148" y1="180" x2="165" y2="170"/>
+                    <line x1="148" y1="180" x2="62" y2="230"/>
+                    <line x1="252" y1="240" x2="339" y2="270"/>
+                    <line x1="252" y1="240" x2="235" y2="330"/>
+                  </g>
+                  <!-- Ridge highlight (specular line) -->
+                  <line x1="148" y1="180" x2="252" y2="240" stroke="#fff" stroke-width="0.7" opacity="0.42"/>
+
+                  <!-- ============== TRACE OVERLAY (neon glow) ============== -->
+                  <g filter="url(#hg-glow)">
+                    <!-- Full eave perimeter (green dashed) -->
+                    <path d="M 165 170 L 339 270 L 235 330 L 62 230 Z" fill="none" stroke="#00FF88" stroke-width="3" stroke-dasharray="10 5" stroke-linejoin="round"/>
+                    <!-- Ridge (solid cyan) -->
+                    <line x1="148" y1="180" x2="252" y2="240" stroke="#22d3ee" stroke-width="3"/>
+                    <!-- Hip lines (cyan dashed) -->
+                    <g stroke="#22d3ee" stroke-width="2" stroke-dasharray="6 3">
+                      <line x1="148" y1="180" x2="165" y2="170"/>
+                      <line x1="148" y1="180" x2="62" y2="230"/>
+                      <line x1="252" y1="240" x2="339" y2="270"/>
+                      <line x1="252" y1="240" x2="235" y2="330"/>
+                    </g>
                   </g>
 
-                  <!-- Measurement labels -->
+                  <!-- Vertex dots (eave corners) -->
+                  <g stroke="#0A0A0A" stroke-width="1">
+                    <circle cx="165" cy="170" r="4.5" fill="#00FF88"/>
+                    <circle cx="339" cy="270" r="4.5" fill="#00FF88"/>
+                    <circle cx="235" cy="330" r="4.5" fill="#00FF88"/>
+                    <circle cx="62" cy="230" r="4.5" fill="#00FF88"/>
+                  </g>
+                  <!-- Live pulse ring on top-left eave vertex -->
+                  <circle cx="165" cy="170" r="9" fill="none" stroke="#00FF88" stroke-width="1.6">
+                    <animate attributeName="r" values="5;20;5" dur="2.2s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="1;0;1" dur="2.2s" repeatCount="indefinite"/>
+                  </circle>
+                  <!-- Ridge endpoint dots (cyan) -->
+                  <g stroke="#0A0A0A" stroke-width="0.8">
+                    <circle cx="148" cy="180" r="3.8" fill="#22d3ee"/>
+                    <circle cx="252" cy="240" r="3.8" fill="#22d3ee"/>
+                  </g>
+
+                  <!-- ============== MEASUREMENT LABELS WITH LEADER LINES ============== -->
+                  <!-- Eave label: leader to SW eave midpoint (113, 200) -->
+                  <line x1="106" y1="86" x2="113" y2="200" stroke="#00FF88" stroke-width="0.9" stroke-dasharray="2 3" opacity="0.7"/>
                   <g font-family="Inter,sans-serif" font-weight="800">
-                    <!-- Top eave length -->
-                    <rect x="166" y="96" width="68" height="16" rx="4" fill="#0A0A0A" opacity="0.92" stroke="#00FF88" stroke-width="0.7"/>
-                    <text x="200" y="107" font-size="9" fill="#00FF88" text-anchor="middle">48' · eave</text>
-                    <!-- Right eave length -->
-                    <rect x="332" y="216" width="60" height="16" rx="4" fill="#0A0A0A" opacity="0.92" stroke="#00FF88" stroke-width="0.7"/>
-                    <text x="362" y="227" font-size="9" fill="#00FF88" text-anchor="middle">42' · eave</text>
-                    <!-- Ridge label -->
-                    <rect x="172" y="227" width="56" height="14" rx="3" fill="#0A0A0A" opacity="0.92" stroke="#22d3ee" stroke-width="0.7"/>
-                    <text x="200" y="238" font-size="8.5" fill="#22d3ee" text-anchor="middle">48' ridge</text>
-                    <!-- Valley label -->
-                    <rect x="207" y="342" width="58" height="14" rx="3" fill="#0A0A0A" opacity="0.92" stroke="#ff5566" stroke-width="0.7"/>
-                    <text x="236" y="353" font-size="8.5" fill="#ff5566" text-anchor="middle">12' valley</text>
-                    <!-- Pitch badge in middle of plane -->
-                    <rect x="100" y="166" width="42" height="18" rx="4" fill="#00FF88"/>
-                    <text x="121" y="179" font-size="11" font-weight="900" fill="#0A0A0A" text-anchor="middle">6 / 12</text>
+                    <rect x="38" y="68" width="92" height="20" rx="5" fill="#0A0A0A" stroke="#00FF88" stroke-width="0.9"/>
+                    <text x="84" y="82" font-size="10.5" fill="#00FF88" text-anchor="middle">44' EAVE</text>
                   </g>
 
-                  <!-- Crosshair at active vertex -->
-                  <g stroke="#00FF88" stroke-width="0.8" opacity="0.6"><line x1="322" y1="106" x2="322" y2="134"/><line x1="308" y1="120" x2="336" y2="120"/></g>
+                  <!-- Ridge label: leader to ridge midpoint (200, 210) -->
+                  <line x1="318" y1="86" x2="200" y2="210" stroke="#22d3ee" stroke-width="0.9" stroke-dasharray="2 3" opacity="0.7"/>
+                  <g font-family="Inter,sans-serif" font-weight="800">
+                    <rect x="266" y="68" width="98" height="20" rx="5" fill="#0A0A0A" stroke="#22d3ee" stroke-width="0.9"/>
+                    <text x="315" y="82" font-size="10.5" fill="#22d3ee" text-anchor="middle">28' RIDGE</text>
+                  </g>
 
-                  <!-- North compass -->
-                  <g transform="translate(362, 462)">
-                    <circle r="14" fill="#0A0A0A" opacity="0.75" stroke="#00FF88" stroke-width="0.7"/>
-                    <polygon points="0,-9 3,0 0,8 -3,0" fill="#00FF88"/>
-                    <text y="-2" font-family="Inter,sans-serif" font-size="6" font-weight="900" fill="#0A0A0A" text-anchor="middle">N</text>
+                  <!-- Hip label, lower-right -->
+                  <line x1="306" y1="380" x2="296" y2="300" stroke="#22d3ee" stroke-width="0.9" stroke-dasharray="2 3" opacity="0.7"/>
+                  <g font-family="Inter,sans-serif" font-weight="800">
+                    <rect x="266" y="380" width="80" height="18" rx="4" fill="#0A0A0A" stroke="#22d3ee" stroke-width="0.8"/>
+                    <text x="306" y="393" font-size="9.5" fill="#22d3ee" text-anchor="middle">22' HIP</text>
+                  </g>
+
+                  <!-- Pitch badge ON the south plane (brightest face) -->
+                  <g filter="url(#hg-glow)">
+                    <rect x="196" y="200" width="60" height="22" rx="5" fill="#00FF88"/>
+                  </g>
+                  <text x="226" y="216" font-family="Inter,sans-serif" font-size="12" font-weight="900" fill="#0A0A0A" text-anchor="middle">6 / 12</text>
+
+                  <!-- ============== HUD: scanning beam + coordinate readout ============== -->
+                  <rect x="0" y="0" width="400" height="36" fill="url(#hg-scan)" opacity="0.55">
+                    <animateTransform attributeName="transform" type="translate" values="0 60; 0 410; 0 60" dur="4.5s" repeatCount="indefinite"/>
+                  </rect>
+
+                  <!-- Coordinate readout, bottom-left (technical flavor) -->
+                  <g font-family="ui-monospace,SFMono-Regular,Menlo,monospace" fill="#00FF88" opacity="0.62">
+                    <text x="18" y="404" font-size="8.5" font-weight="700">51.0447&deg;N</text>
+                    <text x="18" y="416" font-size="8.5" font-weight="700">114.0719&deg;W</text>
+                    <text x="18" y="428" font-size="7" fill="#22d3ee">SOLAR API &middot; LiDAR-CAL</text>
+                  </g>
+
+                  <!-- North compass, bottom-right -->
+                  <g transform="translate(366, 415)">
+                    <circle r="16" fill="#0A0A0A" opacity="0.78" stroke="#00FF88" stroke-width="0.9"/>
+                    <polygon points="0,-11 4,0 0,9 -4,0" fill="#00FF88"/>
+                    <text y="-2.5" font-family="Inter,sans-serif" font-size="7" font-weight="900" fill="#0A0A0A" text-anchor="middle">N</text>
                   </g>
 
                   <!-- Vignette for legibility -->
-                  <rect width="400" height="500" fill="url(#hVignette)"/>
+                  <rect width="400" height="500" fill="url(#hg-vignette)"/>
                 </svg>
-                <!-- Gradient overlay for legibility -->
-                <div class="absolute inset-0" style="background:linear-gradient(180deg, rgba(10,10,10,0.20) 0%, rgba(10,10,10,0.10) 45%, rgba(10,10,10,0.85) 100%);"></div>
+                <!-- Gradient overlay — kicks in only at the very bottom so it doesn't crush the roof -->
+                <div class="absolute inset-0 pointer-events-none" style="background:linear-gradient(180deg, rgba(10,10,10,0) 0%, rgba(10,10,10,0) 72%, rgba(10,10,10,0.85) 100%);"></div>
                 <!-- Top-left status chip -->
                 <div class="absolute top-5 left-5 inline-flex items-center gap-2 bg-black/70 backdrop-blur-md border border-[#00FF88]/40 rounded-full px-3 py-1.5">
                   <span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-[#00FF88]"></span></span>
