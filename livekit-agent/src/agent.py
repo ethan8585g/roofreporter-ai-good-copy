@@ -467,3 +467,11 @@ async def run_secretary_session(ctx: JobContext, vad):
                         room_id=ctx.room.name,
                     )
                 )
+
+            # End the agent immediately so LiveKit doesn't keep the room alive
+            # for empty_timeout (~5 min default) and bill us for it.
+            try:
+                asyncio.create_task(ctx.room.disconnect())
+                ctx.shutdown(reason="caller_hangup")
+            except Exception as e:
+                logger.warning(f"Failed to shut down on hangup: {e}")

@@ -215,6 +215,13 @@ async def run_outbound_session(ctx: JobContext, vad):
             else:
                 logger.info(f"[Outbound] SIP participant disconnected after {elapsed:.1f}s: room={ctx.room.name}")
             asyncio.create_task(post_call_results(agent, ctx.room.name))
+            # End the agent immediately so LiveKit doesn't keep the room alive
+            # for empty_timeout (~5 min default) and bill us for it.
+            try:
+                asyncio.create_task(ctx.room.disconnect())
+                ctx.shutdown(reason="callee_hangup")
+            except Exception as e:
+                logger.warning(f"[Outbound] Failed to shut down on hangup: {e}")
 
 
 if __name__ == "__main__":
