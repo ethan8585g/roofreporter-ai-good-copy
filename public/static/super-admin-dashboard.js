@@ -1741,7 +1741,7 @@ window.saSubmitCreateOrder = async function(e) {
   };
 
   try {
-    var res = await saFetch('/api/orders/', {
+    var res = await saFetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
