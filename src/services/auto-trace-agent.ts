@@ -31,12 +31,22 @@ import { fetchFootprintPriors, type FootprintPrior } from './footprint-priors'
 import { decodePNG, encodePNG, lanczosResize, applyVARITint } from './image-preprocess'
 import { segmentWithGemini } from './sam3-segmentation'
 
-// Gemini pre-segmentation reference passed to Claude. Lat/lng (not pixels)
-// so Claude doesn't conflate Gemini's frame with the augmented image it
-// actually sees. Best-effort: stays null on any Gemini failure.
+// Gemini pre-segmentation reference passed to Claude. Both lat/lng (for the
+// prompt + safety-net point-in-polygon check) and pixel coords in the raw
+// 1280×1280 Static Maps frame (so we can paint the outline ON the satellite
+// image Claude actually sees — visual signal beats text instruction every
+// time). Best-effort: stays null on any Gemini failure.
 type GeminiTraceHint = {
   edge_specific_polylines: { lat: number; lng: number }[][]
   roof_outline_latlng: { lat: number; lng: number }[]
+  /** Raw pixel coords in the 1280×1280 Static Maps frame (pre-upscale).
+   *  Used for in-image polygon painting; must be rescaled to actualImageDim
+   *  before drawing. */
+  roof_outline_pixels_1280: { x: number; y: number }[]
+  /** Approximate area in sqft computed from the lat/lng outline. Used by
+   *  the safety-net swap to reject Gemini outlines that are degenerate
+   *  (tiny) or have merged neighbours (huge). */
+  roof_outline_area_sqft: number
   segments_count: number
   obstructions_count: number
   overall_complexity?: string
@@ -328,6 +338,23 @@ export interface AutoTraceResult {
     /** Gemini's qualitative complexity tag — 'simple' | 'medium' | 'complex'.
      *  Independent of our complexity_bucket which is derived from Solar. */
     gemini_complexity?: string
+    /** True when Gemini's outline polygon was successfully PAINTED on the
+     *  satellite tile (bright green stroke) — the visual signal Claude
+     *  uses to identify the target building. False when the paint pass
+     *  failed (degenerate outline, encode error) and Claude only got the
+     *  text-only hint. */
+    gemini_outline_painted?: boolean
+    /** Area in sqft of Gemini's roof outline polygon — used by the
+     *  safety-net swap's sanity check (300-15000 sqft window). */
+    gemini_outline_area_sqft?: number
+    /** True when the safety-net swap fired: Claude's draft polygon did
+     *  not contain the user's click point but Gemini's outline did, so
+     *  we replaced Claude's output with Gemini's polygon + a 0.45m
+     *  outward eave buffer. Eaves only — never fires for other edges. */
+    gemini_rescue_applied?: boolean
+    /** Reason the rescue did or did not fire when it would have been
+     *  eligible. Helps QA understand which guard tripped. */
+    gemini_rescue_reason?: string
   }
 }
 
@@ -470,12 +497,29 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       const FRAME = safeW * 2
       const toLatLng = (px: number, py: number) =>
         pxToLatLng(px, py, framing.lat, framing.lng, framing.zoom, FRAME, FRAME)
-      const roofOutlineLatLng = Array.isArray(seg.roof_outline)
+      const roofOutlinePixels1280 = Array.isArray(seg.roof_outline)
         ? seg.roof_outline
             .filter((p: any) => Number.isFinite(p?.x) && Number.isFinite(p?.y))
             .slice(0, 24)
-            .map((p: any) => toLatLng(p.x, p.y))
+            .map((p: any) => ({ x: Math.round(p.x), y: Math.round(p.y) }))
         : []
+      const roofOutlineLatLng = roofOutlinePixels1280.map(p => toLatLng(p.x, p.y))
+      // Shoelace-formula area in m² → sqft. Lat treated as flat at residential
+      // scale; longitude scaled by cos(centroidLat). Rough but adequate for
+      // sanity-checking that the outline isn't degenerate or a merged double-lot.
+      let areaSqft = 0
+      if (roofOutlineLatLng.length >= 3) {
+        const cLat = roofOutlineLatLng.reduce((s, p) => s + p.lat, 0) / roofOutlineLatLng.length
+        const M_LAT = 111_320
+        const M_LNG = 111_320 * Math.cos(cLat * Math.PI / 180)
+        let sm2 = 0
+        for (let i = 0; i < roofOutlineLatLng.length; i++) {
+          const a = roofOutlineLatLng[i]
+          const b = roofOutlineLatLng[(i + 1) % roofOutlineLatLng.length]
+          sm2 += (a.lng * M_LNG) * (b.lat * M_LAT) - (b.lng * M_LNG) * (a.lat * M_LAT)
+        }
+        areaSqft = Math.abs(sm2) / 2 * 10.7639
+      }
       const edgeTypeFor: Record<AutoTraceEdge, string[]> = {
         eaves: ['eave'],
         ridges: ['ridge'],
@@ -495,6 +539,8 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       return {
         edge_specific_polylines: edgePolylines,
         roof_outline_latlng: roofOutlineLatLng,
+        roof_outline_pixels_1280: roofOutlinePixels1280,
+        roof_outline_area_sqft: Math.round(areaSqft),
         segments_count: Array.isArray(seg.segments) ? seg.segments.length : 0,
         obstructions_count: Array.isArray(seg.obstructions) ? seg.obstructions.length : 0,
         overall_complexity: seg.overall_complexity,
@@ -697,6 +743,51 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     }
   }
 
+  // ── Gemini outline paint pass — standalone PNG round-trip ──
+  // Paint Gemini's roof-outline polygon as a BRIGHT GREEN stroke onto
+  // the satellite tile that goes to Claude. This is the strongest signal
+  // we can give: Claude sees "this exact building, outlined in green,
+  // is the target". Visual signal in the image beats any prose hint in
+  // the prompt. Runs AFTER the merged preprocessing pass so we layer on
+  // top of the magenta target pin + Solar overlay + everything else.
+  // Best-effort: any decode/encode failure leaves the merged image
+  // untouched.
+  const geminiHintEarly: GeminiTraceHint = await geminiP
+  let geminiOutlinePainted = false
+  if (
+    geminiHintEarly &&
+    geminiHintEarly.roof_outline_pixels_1280.length >= 3 &&
+    imageMediaType === 'image/png'
+  ) {
+    const gpStart = Date.now()
+    try {
+      const pngBytes = Uint8Array.from(atob(imageB64), c => c.charCodeAt(0))
+      const img = await decodePNG(pngBytes)
+      // Gemini saw the raw 1280×1280 frame. The current image may have been
+      // upscaled to 1568 by the merged pipeline. Scale Gemini's pixels to
+      // the current frame so the outline lands on the right pixels.
+      const FRAME_GEMINI = safeW * 2 // 1280
+      const scaleToCurrent = img.width / FRAME_GEMINI
+      const polyScaled = geminiHintEarly.roof_outline_pixels_1280.map(p => ({
+        x: Math.round(p.x * scaleToCurrent),
+        y: Math.round(p.y * scaleToCurrent),
+      }))
+      drawGeminiOutline(img.rgba, img.width, img.height, polyScaled)
+      const reencoded = await encodePNG(img)
+      let bin = ''
+      const chunk = 0x8000
+      for (let i = 0; i < reencoded.length; i += chunk) {
+        bin += String.fromCharCode(...reencoded.subarray(i, Math.min(i + chunk, reencoded.length)))
+      }
+      imageB64 = btoa(bin)
+      geminiOutlinePainted = true
+      preprocessElapsedMs += Date.now() - gpStart
+    } catch (e: any) {
+      console.warn('[auto-trace] Gemini outline paint failed (image unchanged):', e?.message)
+      preprocessElapsedMs += Date.now() - gpStart
+    }
+  }
+
   // ── Wide-context pin pass — standalone PNG round-trip ──
   // The merged pipeline above only mutates the PRIMARY tile. Wide-context
   // is a separate fetch at framing.zoom-1 and isn't in that buffer. When
@@ -858,12 +949,10 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     widePinApplied,
     widePinCenterPx,
   })
-  // Gemini pre-segmentation has been running in parallel since the image
-  // URL was built. By the time we get here the satellite + DSM fetches
-  // and the training-examples Promise.all have both resolved, so Gemini
-  // is usually already done. Await it here so it can be folded into the
-  // prompt. Stays null on any failure — Claude runs unchanged.
-  const geminiHint = await geminiP
+  // Gemini was awaited earlier (right before the outline paint pass) so
+  // we can paint its outline on the image AND fold its lat/lng polygon
+  // into the prompt text + use it for the safety-net swap below.
+  const geminiHint = geminiHintEarly
 
   const userPrompt = buildUserPrompt({
     edge: input.edge,
@@ -883,6 +972,7 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     targetBboxPx,
     footprintPriors: footprintPriorsResult.priors,
     geminiHint,
+    geminiOutlinePainted,
   })
 
   // Build the multimodal content array. Order MUST match the system-
@@ -1045,7 +1135,40 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   // Project Claude's pixel coords back to GPS using the SAME centre + zoom
   // that produced the satellite image (which may be Solar-recentred, not
   // the user's original pin).
-  const segments = finalSegmentsPx.map(seg => seg.map(p => pxToLatLng(p.x, p.y, framing.lat, framing.lng, framing.zoom, pixelImgW, pixelImgH)))
+  let segments = finalSegmentsPx.map(seg => seg.map(p => pxToLatLng(p.x, p.y, framing.lat, framing.lng, framing.zoom, pixelImgW, pixelImgH)))
+
+  // ── Gemini safety-net swap (eaves only) ─────────────────────────
+  // When Claude's final polygon does NOT contain the user's click point
+  // but Gemini's outline DOES, Claude has clearly traced the wrong
+  // building. Swap Claude's output for Gemini's outline + 0.45m eave
+  // buffer (same pattern as the OSM/Edmonton prior promotion gate at
+  // the top of runAutoTrace). Conservative: only fires when Claude
+  // definitively wandered AND Gemini agrees with the pin AND Gemini's
+  // area is in a sane residential window (300-15000 sqft).
+  let geminiRescueApplied = false
+  let geminiRescueReason: string | undefined
+  if (input.edge === 'eaves' && geminiHint && geminiHint.roof_outline_latlng.length >= 4) {
+    const clickInClaude = segments.some(seg => seg.length >= 3 && pointInRingLL(seg, input.lat, input.lng))
+    if (clickInClaude) {
+      geminiRescueReason = 'claude_polygon_contains_click_point'
+    } else {
+      const clickInGemini = pointInRingLL(geminiHint.roof_outline_latlng, input.lat, input.lng)
+      const areaOk = geminiHint.roof_outline_area_sqft >= 300 && geminiHint.roof_outline_area_sqft <= 15_000
+      if (!clickInGemini) {
+        geminiRescueReason = 'gemini_outline_also_missed_click_point'
+      } else if (!areaOk) {
+        geminiRescueReason = `gemini_outline_area_out_of_range_${geminiHint.roof_outline_area_sqft}sqft`
+      } else {
+        const buffered = bufferRingOutwardMeters(geminiHint.roof_outline_latlng, 0.45)
+        segments = [buffered]
+        finalKinds = undefined
+        finalConfidence = Math.max(60, Math.min(85, finalConfidence))
+        finalReasoning = `[GEMINI RESCUE] Claude's draft polygon did not contain the user's click point but Gemini's outline did. Swapped to Gemini's ${geminiHint.roof_outline_latlng.length}-vertex outline (area ~${geminiHint.roof_outline_area_sqft} sqft) with 0.45m outward eave buffer. Original Claude reasoning kept in diagnostics. ${finalReasoning}`
+        geminiRescueApplied = true
+        geminiRescueReason = 'rescued_to_gemini_outline'
+      }
+    }
+  }
 
   // Verify-Planes sanity gate (eaves + trusted Solar bbox only). Compares
   // agent output against the two Solar signals we already have (segment
@@ -1150,6 +1273,10 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       gemini_edge_polylines_count: geminiHint?.edge_specific_polylines.length,
       gemini_elapsed_ms: geminiHint?.elapsed_ms,
       gemini_complexity: geminiHint?.overall_complexity,
+      gemini_outline_painted: geminiOutlinePainted || undefined,
+      gemini_outline_area_sqft: geminiHint?.roof_outline_area_sqft,
+      gemini_rescue_applied: geminiRescueApplied || undefined,
+      gemini_rescue_reason: geminiRescueReason,
       model: CLAUDE_VISION_MODEL,
       elapsed_ms: Date.now() - started,
     },
@@ -1488,6 +1615,7 @@ function buildUserPrompt(args: {
   targetBboxPx: { x1: number; y1: number; x2: number; y2: number } | null
   footprintPriors: FootprintPrior[]
   geminiHint?: GeminiTraceHint
+  geminiOutlinePainted?: boolean
 }): string {
   const lines: string[] = []
   let img = 1
@@ -1556,16 +1684,24 @@ function buildUserPrompt(args: {
   // Gemini pre-segmentation hint — fast, lower-precision second-opinion
   // from Gemini 2.0 Flash on the raw satellite tile. Most useful for
   // disambiguating WHICH building to trace (Gemini almost never picks
-  // the wrong house) and for sanity-checking segment count. Always
-  // lat/lng (not pixels) so Claude can't conflate Gemini's image frame
-  // with the augmented image it actually sees.
+  // the wrong house). When the outline was successfully PAINTED on the
+  // image as a bright green polygon, the prose framing is dramatically
+  // stronger: Claude sees the target building outlined visually, no
+  // longer just described.
   if (args.geminiHint) {
     const g = args.geminiHint
-    lines.push('Gemini pre-segmentation reference (independent second-opinion from Gemini 2.0 Flash on the raw satellite tile):')
-    lines.push(`- Detected ${g.segments_count} roof facet(s), ${g.obstructions_count} obstruction(s)${g.overall_complexity ? `, overall complexity: ${g.overall_complexity}` : ''}.`)
-    if (g.roof_outline_latlng.length >= 3) {
-      lines.push(`- Roof outline polygon (${g.roof_outline_latlng.length} vertices, lat/lng — DO NOT copy these numbers as your output; emit pixel coords of Image 1 only):`)
-      lines.push(`  ${JSON.stringify(g.roof_outline_latlng.map(p => [Number(p.lat.toFixed(6)), Number(p.lng.toFixed(6))]))}`)
+    if (args.geminiOutlinePainted) {
+      lines.push('🟢 BRIGHT GREEN POLYGON OUTLINE — AUTHORITATIVE BUILDING IDENTIFICATION:')
+      lines.push(`A bright neon-green (#00ff66) stroked polygon outline has been painted directly onto Image 1 along the roof outline detected by Gemini 2.0 Flash. The building INSIDE the green outline is your TRACE TARGET. Do NOT trace any neighbouring building, even if it looks similar in shape, size, or material. The green outline supersedes Solar's bbox when they disagree. If your draft polygon would cross the green outline by more than a few feet, you are tracing the wrong building — reset and trace the building INSIDE the green outline.`)
+      lines.push(`Gemini detected: ${g.segments_count} roof facet(s), ${g.obstructions_count} obstruction(s)${g.overall_complexity ? `, complexity: ${g.overall_complexity}` : ''}, outline area ~${g.roof_outline_area_sqft} sqft.`)
+    } else {
+      lines.push('Gemini pre-segmentation reference (independent second-opinion from Gemini 2.0 Flash on the raw satellite tile, NOT painted on image — text-only):')
+      lines.push(`- Detected ${g.segments_count} roof facet(s), ${g.obstructions_count} obstruction(s)${g.overall_complexity ? `, overall complexity: ${g.overall_complexity}` : ''}, area ~${g.roof_outline_area_sqft} sqft.`)
+      if (g.roof_outline_latlng.length >= 3) {
+        lines.push(`- Roof outline polygon (${g.roof_outline_latlng.length} vertices, lat/lng — DO NOT copy these numbers as your output; emit pixel coords of Image 1 only):`)
+        lines.push(`  ${JSON.stringify(g.roof_outline_latlng.map(p => [Number(p.lat.toFixed(6)), Number(p.lng.toFixed(6))]))}`)
+      }
+      lines.push(`HOW TO USE: Treat Gemini's outline as a STARTING REFERENCE — especially for identifying which building. If Gemini's outline disagrees strongly with the Solar bbox AND the target pin, trust the pin + bbox over Gemini.`)
     }
     if (g.edge_specific_polylines.length > 0) {
       lines.push(`- ${args.edge}-specific polylines from Gemini (${g.edge_specific_polylines.length} segment(s), lat/lng):`)
@@ -1573,7 +1709,6 @@ function buildUserPrompt(args: {
         lines.push(`  ${i + 1}: ${JSON.stringify(poly.map(p => [Number(p.lat.toFixed(6)), Number(p.lng.toFixed(6))]))}`)
       })
     }
-    lines.push(`HOW TO USE: Treat Gemini's outline as a STARTING REFERENCE — especially for identifying which building. Gemini is faster but lower-precision than you on vertex placement, edge counts, and detached structures. Verify against the satellite image and CORRECT any errors. If Gemini's outline disagrees strongly with the Solar bbox AND the target pin, trust the pin + bbox over Gemini.`)
     lines.push('')
   }
 
@@ -2265,6 +2400,67 @@ function drawTargetPin(
         }
       }
     }
+  }
+}
+
+/** Paint a thick bright-GREEN polyline stroke (with white halo) along the
+ *  Gemini-detected roof outline. Strongest signal we can give Claude for
+ *  "this is the building you must trace" — visual instructions
+ *  beat text instructions every time. Stroke only (not filled) so
+ *  underlying texture stays visible for vertex-precision work. */
+function drawGeminiOutline(
+  rgba: Uint8ClampedArray,
+  w: number,
+  h: number,
+  polygonPx: { x: number; y: number }[],
+): void {
+  if (!polygonPx || polygonPx.length < 3) return
+  const STROKE = 3
+  const HALO = STROKE + 2
+  const setPx = (x: number, y: number, r: number, g: number, b: number) => {
+    if (x < 0 || x >= w || y < 0 || y >= h) return
+    const idx = (y * w + x) * 4
+    rgba[idx] = r
+    rgba[idx + 1] = g
+    rgba[idx + 2] = b
+    rgba[idx + 3] = 255
+  }
+  // Bresenham-style thick line with halo: for each segment (a→b), paint
+  // every pixel within HALO of the line in white, every pixel within
+  // STROKE in bright green.
+  const drawSeg = (ax: number, ay: number, bx: number, by: number) => {
+    const dx = bx - ax, dy = by - ay
+    const len = Math.max(1, Math.hypot(dx, dy))
+    const steps = Math.ceil(len)
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps
+      const x = ax + t * dx
+      const y = ay + t * dy
+      // Paint a square brush centred at (x, y) with radius HALO.
+      const minX = Math.floor(x - HALO)
+      const maxX = Math.ceil(x + HALO)
+      const minY = Math.floor(y - HALO)
+      const maxY = Math.ceil(y + HALO)
+      for (let py = minY; py <= maxY; py++) {
+        for (let px = minX; px <= maxX; px++) {
+          const d = Math.hypot(px - x, py - y)
+          if (d <= STROKE) {
+            // Bright neon-green core (#00ff66) — high contrast against
+            // shingle browns/greys, doesn't collide with magenta target
+            // pin or red hint circle.
+            setPx(px, py, 0, 255, 102)
+          } else if (d <= HALO) {
+            // White halo so the green pops even on light roofs / sun glare.
+            setPx(px, py, 255, 255, 255)
+          }
+        }
+      }
+    }
+  }
+  for (let i = 0; i < polygonPx.length; i++) {
+    const a = polygonPx[i]
+    const b = polygonPx[(i + 1) % polygonPx.length]
+    drawSeg(a.x, a.y, b.x, b.y)
   }
 }
 
