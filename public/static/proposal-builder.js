@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
       customAttachment: ''
     },
     gmailStatus: null,
+    squareStatus: null,
     autoSendCertificate: false,
     certLicenseNumber: '',
     certAccentColor: '#1a5c38',
@@ -351,19 +352,21 @@ document.addEventListener('DOMContentLoaded', () => {
     state.loading = true;
     render();
     try {
-      const [propRes, custRes, libRes, repRes, gmailRes, certAutoRes, profileRes] = await Promise.all([
+      const [propRes, custRes, libRes, repRes, gmailRes, certAutoRes, profileRes, sqRes] = await Promise.all([
         fetch('/api/invoices?document_type=proposal', { headers: headers() }),
         fetch('/api/invoices/customers/list', { headers: headers() }),
         fetch('/api/customer/item-library', { headers: headers() }).catch(() => ({ ok: false })),
         fetch('/api/customer/reports-list', { headers: headers() }).catch(() => ({ ok: false })),
         fetch('/api/auth/gmail/status', { headers: headers() }).catch(() => ({ ok: false })),
         fetch('/api/crm/proposals/automation/settings', { headers: headers() }).catch(() => ({ ok: false })),
-        fetch('/api/customer/profile', { headers: headers() }).catch(() => ({ ok: false }))
+        fetch('/api/customer/profile', { headers: headers() }).catch(() => ({ ok: false })),
+        fetch('/api/square/oauth/status', { headers: headers() }).catch(() => ({ ok: false }))
       ]);
       if (propRes.ok) { const d = await propRes.json(); state.proposals = d.invoices || []; }
       if (custRes.ok) { const d = await custRes.json(); state.customers = d.customers || []; }
       if (libRes.ok) { const d = await libRes.json(); state.itemLibrary = d.items || []; }
       if (gmailRes.ok) { const d = await gmailRes.json(); state.gmailStatus = d.gmail_oauth2 || null; }
+      if (sqRes.ok) { state.squareStatus = await sqRes.json(); }
       if (certAutoRes.ok) { const d = await certAutoRes.json(); state.autoSendCertificate = !!d.auto_send_certificate; }
       if (profileRes.ok) {
         const d = await profileRes.json();
@@ -970,6 +973,36 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>`;
   }
 
+  function renderSquareConnectBanner() {
+    const sq = state.squareStatus;
+    if (!sq) return '';
+    if (!sq.app_configured) return '';
+    if (sq.connected) {
+      return `<div class="rounded-xl border border-emerald-200 p-3 mb-5 flex items-center justify-between bg-white">
+        <div class="flex items-center gap-2">
+          <i class="fas fa-check-circle text-emerald-500"></i>
+          <span class="text-emerald-600 text-sm font-medium">Square Connected${sq.merchant_name ? ' — ' + sq.merchant_name : (sq.merchant_id ? ' — ' + sq.merchant_id : '')}</span>
+          <span class="text-xs text-gray-400">— Payment links on proposals route to your Square account</span>
+        </div>
+        <button onclick="window._pb.disconnectSquare()" class="text-xs text-gray-500 hover:text-red-500 font-medium px-3 py-1.5 rounded-lg transition-colors">
+          <i class="fas fa-unlink mr-1"></i>Disconnect
+        </button>
+      </div>`;
+    }
+    return `<div class="rounded-xl border border-blue-200 p-4 mb-5 flex items-center justify-between bg-white">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center"><i class="fas fa-credit-card text-blue-500 text-lg"></i></div>
+        <div>
+          <div class="font-semibold text-sm text-gray-800">Connect Square for Online Payments</div>
+          <div class="text-xs text-gray-500">Accept credit card, debit, Apple Pay & Google Pay on signed proposals</div>
+        </div>
+      </div>
+      <button onclick="window._pb.connectSquare()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors">
+        <i class="fas fa-plug mr-1.5"></i>Connect Square
+      </button>
+    </div>`;
+  }
+
   function renderList() {
     const allProposals = state.proposals;
     const filter = state.filter || 'all';
@@ -1009,6 +1042,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     <!-- Gmail Connect Banner -->
     ${renderGmailConnectBanner()}
+
+    <!-- Square Merchant Connect Banner -->
+    ${renderSquareConnectBanner()}
 
     <!-- Certificate Automation — Quick Toggle + Link to Full Page -->
     <div class="bg-white rounded-xl border border-gray-200 mb-5 overflow-hidden">
@@ -2276,6 +2312,32 @@ document.addEventListener('DOMContentLoaded', () => {
   // PUBLIC API
   // ============================================================
   window._pb = {
+    connectSquare() {
+      const popup = window.open('/api/square/oauth/start?token=' + encodeURIComponent(token), 'square_oauth', 'width=700,height=700,scrollbars=yes');
+      const handler = async (e) => {
+        if (e.data && e.data.type === 'square_oauth_success') {
+          window.removeEventListener('message', handler);
+          if (popup) try { popup.close(); } catch(_) {}
+          try {
+            const r = await fetch('/api/square/oauth/status', { headers: headers() });
+            if (r.ok) state.squareStatus = await r.json();
+          } catch(_) {}
+          render();
+        } else if (e.data && e.data.type === 'square_oauth_error') {
+          window.removeEventListener('message', handler);
+          alert('Square connection failed: ' + (e.data.error || 'Unknown error'));
+        }
+      };
+      window.addEventListener('message', handler);
+    },
+    async disconnectSquare() {
+      if (!confirm('Disconnect your Square merchant account? Future proposal payment links will not work until you reconnect.')) return;
+      try {
+        await fetch('/api/square/oauth/disconnect', { method: 'POST', headers: headers() });
+        state.squareStatus = Object.assign({}, state.squareStatus, { connected: false, merchant_id: null, merchant_name: null });
+      } catch(_) {}
+      render();
+    },
     async create() {
       pbClearDraft(); state.mode = 'create'; state.editId = null; state.form = resetForm();
       state.createStep = 1;  // Start at report selection
