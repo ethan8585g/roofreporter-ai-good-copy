@@ -9638,7 +9638,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           <a href="/register" class="inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-7 rounded-xl text-base shadow-xl shadow-[#00FF88]/20 transition-all hover:scale-[1.02]">
             <i class="fas fa-gift" aria-hidden="true"></i> Start free &mdash; 4 reports, no card
           </a>
-          <a href="/pricing" class="inline-flex items-center justify-center gap-3 bg-transparent hover:bg-white/5 text-white font-bold py-3.5 px-7 rounded-xl text-base border-2 border-white/15 hover:border-[#00FF88]/40 transition-all">
+          <a href="/pricing#crm-features" class="inline-flex items-center justify-center gap-3 bg-transparent hover:bg-white/5 text-white font-bold py-3.5 px-7 rounded-xl text-base border-2 border-white/15 hover:border-[#00FF88]/40 transition-all">
             <i class="fas fa-list-ul text-[#00FF88]" aria-hidden="true"></i> See pricing &amp; CRM features
           </a>
         </div>
@@ -18656,6 +18656,87 @@ function getPricingPageHTML() {
         </ul>
         <a href="/register" class="inline-block py-3 px-8 font-bold rounded-xl bg-brand-600 hover:bg-brand-700 text-white transition-all hover:scale-[1.02] shadow-lg">
           Get Started Free
+        </a>
+      </div>
+    </div>
+
+    <!-- CRM & Business Tools — included free with every account -->
+    <div id="crm-features" class="max-w-6xl mx-auto mb-16">
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-[11px] font-bold mb-3 uppercase tracking-widest" style="background:#22d3ee18;color:#0891b2">
+          <i class="fas fa-users"></i> CRM &amp; Business Tools
+        </div>
+        <h2 class="text-2xl md:text-3xl font-bold mb-2" style="color:var(--text-primary)">Full CRM Included &mdash; Free With Every Account</h2>
+        <p class="text-base max-w-2xl mx-auto" style="color:var(--text-muted)">No subscription, no per-seat fees. Every Roof Manager account ships with the operating system for running a roofing or solar business.</p>
+      </div>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="rounded-xl border p-5" style="background:var(--bg-card);border-color:var(--border-color)">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style="background:#22d3ee18"><i class="fas fa-columns text-lg" style="color:#0891b2"></i></div>
+          <h3 class="font-bold mb-1" style="color:var(--text-primary)">Visual pipeline</h3>
+          <p class="text-sm" style="color:var(--text-muted)">Drag deals through New &rarr; Quoted &rarr; Approved &rarr; Scheduled &rarr; Complete. Separate stages for insurance claims.</p>
+        </div>
+        <div class="rounded-xl border p-5" style="background:var(--bg-card);border-color:var(--border-color)">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style="background:#22d3ee18"><i class="fas fa-address-book text-lg" style="color:#0891b2"></i></div>
+          <h3 class="font-bold mb-1" style="color:var(--text-primary)">Customer &amp; job database</h3>
+          <p class="text-sm" style="color:var(--text-muted)">Every property, contact, report, invoice, and note searchable in one place. Full history on every customer.</p>
+        </div>
+        <div class="rounded-xl border p-5" style="background:var(--bg-card);border-color:var(--border-color)">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style="background:#22d3ee18"><i class="fas fa-file-invoice-dollar text-lg" style="color:#0891b2"></i></div>
+          <h3 class="font-bold mb-1" style="color:var(--text-primary)">Branded invoicing</h3>
+          <p class="text-sm" style="color:var(--text-muted)">Accept Stripe or Square card payments and e-transfer. Deposit, progress, and final invoices on the same job card. No platform fee.</p>
+        </div>
+        <div class="rounded-xl border p-5" style="background:var(--bg-card);border-color:var(--border-color)">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style="background:#22d3ee18"><i class="fas fa-file-signature text-lg" style="color:#0891b2"></i></div>
+          <h3 class="font-bold mb-1" style="color:var(--text-primary)">Proposals &amp; e-signature</h3>
+          <p class="text-sm" style="color:var(--text-muted)">Proposal builder auto-fills from the measurement BOM. Good-better-best tiers, photo attachments, sign from any phone.</p>
+        </div>
+        <div class="rounded-xl border p-5" style="background:var(--bg-card);border-color:var(--border-color)">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style="background:#22d3ee18"><i class="fas fa-envelope-open-text text-lg" style="color:#0891b2"></i></div>
+          <h3 class="font-bold mb-1" style="color:var(--text-primary)">Email outreach engine</h3>
+          <p class="text-sm" style="color:var(--text-muted)">Automated follow-ups at day 3, 7, and 14 on every quoted lead. Drip campaigns, abandoned-checkout recovery, and weekly broadcasts.</p>
+        </div>
+        <div class="rounded-xl border p-5" style="background:var(--bg-card);border-color:var(--border-color)">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style="background:#22d3ee18"><i class="fas fa-map-marked-alt text-lg" style="color:#0891b2"></i></div>
+          <h3 class="font-bold mb-1" style="color:var(--text-primary)">Door-to-door canvassing</h3>
+          <p class="text-sm" style="color:var(--text-muted)">Draw territories, assign reps, log every door with one tap, and measure roofs on the porch. Real-time team dashboard.</p>
+        </div>
+        <div class="rounded-xl border p-5" style="background:var(--bg-card);border-color:var(--border-color)">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style="background:#22d3ee18"><i class="fas fa-bolt text-lg" style="color:#0891b2"></i></div>
+          <h3 class="font-bold mb-1" style="color:var(--text-primary)">Storm Scout lead alerts</h3>
+          <p class="text-sm" style="color:var(--text-muted)">Hail and wind swaths overlaid on your service area. Knock the streets that actually got hit, not the ones that didn't.</p>
+        </div>
+        <div class="rounded-xl border p-5" style="background:var(--bg-card);border-color:var(--border-color)">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style="background:#22d3ee18"><i class="fas fa-user-circle text-lg" style="color:#0891b2"></i></div>
+          <h3 class="font-bold mb-1" style="color:var(--text-primary)">Customer portals</h3>
+          <p class="text-sm" style="color:var(--text-muted)">One link per homeowner to review their report, proposal, invoice, and payment history. Branded with your logo.</p>
+        </div>
+        <div class="rounded-xl border p-5" style="background:var(--bg-card);border-color:var(--border-color)">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style="background:#22d3ee18"><i class="fas fa-calendar-check text-lg" style="color:#0891b2"></i></div>
+          <h3 class="font-bold mb-1" style="color:var(--text-primary)">Calendar &amp; job scheduling</h3>
+          <p class="text-sm" style="color:var(--text-muted)">Two-way Google Calendar sync. Schedule inspections, installs, and crews with buffer time built in.</p>
+        </div>
+        <div class="rounded-xl border p-5" style="background:var(--bg-card);border-color:var(--border-color)">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style="background:#22d3ee18"><i class="fas fa-users text-lg" style="color:#0891b2"></i></div>
+          <h3 class="font-bold mb-1" style="color:var(--text-primary)">Unlimited team members</h3>
+          <p class="text-sm" style="color:var(--text-muted)">Add every sales rep, estimator, and crew member free. Role-based permissions for admins, managers, and field reps.</p>
+        </div>
+        <div class="rounded-xl border p-5" style="background:var(--bg-card);border-color:var(--border-color)">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style="background:#22d3ee18"><i class="fas fa-tag text-lg" style="color:#0891b2"></i></div>
+          <h3 class="font-bold mb-1" style="color:var(--text-primary)">White-label reporting</h3>
+          <p class="text-sm" style="color:var(--text-muted)">Your logo on every report cover, header, and email. Set your sender name and reply-to once &mdash; it sticks.</p>
+        </div>
+        <div class="rounded-xl border p-5" style="background:var(--bg-card);border-color:var(--border-color)">
+          <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style="background:#22d3ee18"><i class="fas fa-globe text-lg" style="color:#0891b2"></i></div>
+          <h3 class="font-bold mb-1" style="color:var(--text-primary)">Marketing site builder</h3>
+          <p class="text-sm" style="color:var(--text-muted)">Built-in microsite per company. Capture leads from your own URL straight into the pipeline &mdash; no separate website required.</p>
+        </div>
+      </div>
+      <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-center items-center">
+        <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_crm_features_register'})" class="inline-flex items-center justify-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 px-7 rounded-xl text-sm transition-all hover:scale-[1.02] shadow-lg">
+          <i class="fas fa-gift"></i> Start free &mdash; CRM included
+        </a>
+        <a href="/features/crm" class="inline-flex items-center justify-center gap-2 font-bold py-3 px-7 rounded-xl text-sm border-2 transition-all" style="color:var(--text-primary);border-color:var(--border-color)">
+          Explore full CRM features <i class="fas fa-arrow-right text-xs"></i>
         </a>
       </div>
     </div>
