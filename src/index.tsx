@@ -1350,7 +1350,7 @@ app.get('/signup', (c) => {
 // Public sample report — redirects to a real shared report so visitors see
 // the live product output, not a static mock-up.
 app.get('/sample-report', (c) => {
-  return c.redirect('https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb', 302)
+  return c.redirect('https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2', 302)
 })
 
 // 3D Verify — Photorealistic 3D Tiles viewer for visual roof inspection
@@ -3783,7 +3783,7 @@ app.get('/roof-measurement/:city', (c) => {
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
         <a href="/register" class="px-8 py-3.5 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold rounded-xl text-lg shadow-xl shadow-[#00FF88]/20">Get 4 Free Reports <i class="fas fa-arrow-right ml-2"></i></a>
         <a href="/pricing" class="px-8 py-3.5 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-xl text-lg border border-white/10">View Pricing</a>
-        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-xl text-lg border border-white/10"><i class="fas fa-eye text-[#00FF88]"></i>View Sample Report</a>
+        <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-xl text-lg border border-white/10"><i class="fas fa-eye text-[#00FF88]"></i>View Sample Report</a>
       </div>
       <p class="text-sm text-gray-500 mt-4">No credit card required. Works on any address with Google satellite coverage.</p>
     </div>
@@ -3929,7 +3929,7 @@ app.get('/roof-measurement/:city', (c) => {
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
         <a href="/register" class="px-8 py-3.5 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg shadow-xl">Get 4 Free Reports <i class="fas fa-arrow-right ml-2"></i></a>
         <a href="/pricing" class="px-8 py-3.5 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-lg border border-white/20">View Pricing</a>
-        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-lg border border-white/20"><i class="fas fa-eye text-sky-400"></i>View Sample Report</a>
+        <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-lg border border-white/20"><i class="fas fa-eye text-sky-400"></i>View Sample Report</a>
       </div>
       <p class="text-sm text-blue-300 mt-4">No credit card required. Instant setup.</p>
     </div>
@@ -4244,7 +4244,7 @@ app.get('/roof-replacement-cost/:city', (c) => {
         <p style="font-weight:700;color:#00FF88;margin:0 0 0.5rem;font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;">TL;DR</p>
         <p style="margin:0;color:#d1d5db;line-height:1.7;">Asphalt shingle roof replacement in ${city.name}, ${city.province} costs <strong style="color:white;">${cost.low}–${cost.high} ${currency}</strong> in 2026 for a typical 1,500–2,500 sq ft home. The average is <strong style="color:white;">${cost.avg} ${currency}</strong>. Costs vary by pitch complexity, current condition, materials, and permit requirements under the ${buildingCode}. Get a free satellite measurement before calling contractors.</p>
       </div>
-      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,0.05);color:#fff;font-weight:700;padding:11px 22px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);font-size:14px;text-decoration:none"><i class="fas fa-eye" style="color:#00FF88"></i>View Sample Measurement Report</a>
+      <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,0.05);color:#fff;font-weight:700;padding:11px 22px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);font-size:14px;text-decoration:none"><i class="fas fa-eye" style="color:#00FF88"></i>View Sample Measurement Report</a>
     </div>
 
     <!-- Cost cards -->
@@ -9196,7 +9196,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       <!-- Desktop nav -->
       <div class="hidden lg:flex items-center gap-7">
         <a href="/how-it-works" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">How It Works</a>
-        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'nav_sample_report'})}catch(e){}" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Sample Report</a>
+        <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'nav_sample_report'})}catch(e){}" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Sample Report</a>
         <a href="/compare" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Compare</a>
         <a href="/about" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">About</a>
         <!-- Features dropdown -->
@@ -9239,7 +9239,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     <div id="mobile-menu" class="hidden lg:hidden bg-[#0A0A0A]/98 backdrop-blur-2xl border-t border-white/5">
       <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-1">
         <a href="/how-it-works" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">How It Works</a>
-        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-eye text-[#00FF88] mr-2 text-xs"></i>Sample Report</a>
+        <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-eye text-[#00FF88] mr-2 text-xs"></i>Sample Report</a>
         <a href="/compare" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-scale-balanced text-[#a78bfa] mr-2 text-xs"></i>Compare</a>
         <a href="/about" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-info-circle text-[#22d3ee] mr-2 text-xs"></i>About</a>
         <a href="/guides" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Tutorials</a>
@@ -9284,7 +9284,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             <!-- Primary + sample-report CTA pair -->
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-3">
               <a href="/register" onclick="try{rrTrack('cta_click',{location:'hero_primary'});window.trackAdsConversion&amp;&amp;window.trackAdsConversion('lead',{value:5,currency:'CAD'})}catch(e){}" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px] whitespace-nowrap"><i class="fas fa-gift" aria-hidden="true"></i>Start free &mdash; 4 reports, no card<i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform" aria-hidden="true"></i></a>
-              <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_sample_report'})}catch(e){}" class="group inline-flex items-center justify-center gap-3 bg-transparent hover:bg-white/5 text-white font-bold py-4 px-7 rounded-xl text-lg border-2 border-white/20 hover:border-[#00FF88]/40 transition-all duration-300 min-h-[56px] whitespace-nowrap"><i class="fas fa-eye text-[#00FF88]" aria-hidden="true"></i>View a Sample Report</a>
+              <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_sample_report'})}catch(e){}" class="group inline-flex items-center justify-center gap-3 bg-transparent hover:bg-white/5 text-white font-bold py-4 px-7 rounded-xl text-lg border-2 border-white/20 hover:border-[#00FF88]/40 transition-all duration-300 min-h-[56px] whitespace-nowrap"><i class="fas fa-eye text-[#00FF88]" aria-hidden="true"></i>View a Sample Report</a>
             </div>
             <!-- ============================================================ -->
             <!-- DO NOT REMOVE — HERO "CONTINUE WITH GOOGLE" CTA               -->
@@ -9352,7 +9352,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
                 <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
                 <span>Continue with Google</span>
               </a>
-              <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_mobile_sample'})}catch(e){}" class="flex items-center justify-center gap-3 bg-transparent text-white font-bold py-3.5 px-7 rounded-xl text-base border-2 border-white/20 min-h-[52px]"><i class="fas fa-eye text-[#00FF88]" aria-hidden="true"></i>View a Sample Report</a>
+              <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_mobile_sample'})}catch(e){}" class="flex items-center justify-center gap-3 bg-transparent text-white font-bold py-3.5 px-7 rounded-xl text-base border-2 border-white/20 min-h-[52px]"><i class="fas fa-eye text-[#00FF88]" aria-hidden="true"></i>View a Sample Report</a>
             </div>
           </div>
 
@@ -9692,7 +9692,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             <div class="text-[11px] text-gray-500 mt-3">Credits never expire &middot; first 4 reports free &middot; <a href="/pricing" class="text-[#00FF88] hover:underline" onclick="try{rrTrack('cta_click',{location:'hero_pricing_see_all'})}catch(e){}">See all packs &rarr;</a></div>
           </div>
 
-          <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_mobile_sample_report'})}catch(e){}" class="text-sm text-gray-400 hover:text-white inline-flex items-center gap-2 max-w-xl"><i class="fas fa-eye text-[#00FF88] text-xs"></i> View a sample report (no signup, no email) <i class="fas fa-arrow-right text-[10px]" aria-hidden="true"></i></a>
+          <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'hero_mobile_sample_report'})}catch(e){}" class="text-sm text-gray-400 hover:text-white inline-flex items-center gap-2 max-w-xl"><i class="fas fa-eye text-[#00FF88] text-xs"></i> View a sample report (no signup, no email) <i class="fas fa-arrow-right text-[10px]" aria-hidden="true"></i></a>
 
           <a href="/contact" onclick="try{rrTrack('cta_click',{location:'hero_tertiary_contact'})}catch(e){}" class="text-sm text-gray-400 hover:text-white inline-flex items-center gap-1.5 max-w-xl">Or open the full contact form <i class="fas fa-arrow-right text-[10px]" aria-hidden="true"></i></a>
         </div>
@@ -10718,7 +10718,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             <li><a href="/accuracy" class="hover:text-[#00FF88] transition-colors">How Accurate Is It?</a></li>
             <li><a href="/case-studies/jpg-roofing" class="hover:text-[#00FF88] transition-colors">Case Studies</a></li>
             <li><a href="/compare" class="hover:text-[#00FF88] transition-colors">Compare to EagleView, Roofr, RoofSnap</a></li>
-            <li><a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="hover:text-[#00FF88] transition-colors"><i class="fas fa-eye text-gray-500 mr-1 text-xs"></i>View Sample Report</a></li>
+            <li><a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="hover:text-[#00FF88] transition-colors"><i class="fas fa-eye text-gray-500 mr-1 text-xs"></i>View Sample Report</a></li>
             <li><a href="/pricing#money-back" class="hover:text-[#00FF88] transition-colors"><i class="fas fa-undo text-gray-500 mr-1 text-xs"></i>30-Day Money-Back Guarantee</a></li>
             <li><a href="/status" class="hover:text-[#00FF88] transition-colors"><span class="inline-block w-1.5 h-1.5 rounded-full bg-[#00FF88] mr-1.5 align-middle"></span>System Status &middot; Live</a></li>
             <li><a href="https://www.trustpilot.com/review/roofmanager.ca" target="_blank" rel="noopener" class="hover:text-[#00B67A] transition-colors"><i class="fas fa-star text-[#00B67A] mr-1 text-xs"></i>Trustpilot Reviews</a></li>
@@ -11198,7 +11198,7 @@ function getContactPageHTML() {
       </div>
       <h1 style="font-size:clamp(28px,5vw,44px);font-weight:900;color:#fff;margin:0 0 14px;line-height:1.1">Talk to a roofing software specialist</h1>
       <p style="color:#9ca3af;font-size:17px;max-width:520px;margin:0 auto 24px;line-height:1.6">Real humans, usually reply within 2 business hours. We'll match you to the right plan — no pushy sales.</p>
-      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,0.05);color:#fff;font-weight:700;padding:12px 22px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);font-size:14px;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'"><i class="fas fa-eye" style="color:#00FF88"></i>View Sample Measurement Report</a>
+      <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,0.05);color:#fff;font-weight:700;padding:12px 22px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);font-size:14px;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'"><i class="fas fa-eye" style="color:#00FF88"></i>View Sample Measurement Report</a>
     </section>
 
     <!-- Two-column form + sidebar -->
@@ -12009,7 +12009,7 @@ ${previewId ? `
 </div>
 ` : ''}
         <!-- Mobile-visible sample-report nudge — sidebar is hidden on phones, this gives mobile users product proof before they fill the form. -->
-        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'register_inline_sample'})}catch(e){}"
+        <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" onclick="try{rrTrack('cta_click',{location:'register_inline_sample'})}catch(e){}"
            style="display:flex;align-items:center;gap:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 14px;margin-bottom:16px;text-decoration:none;color:#15803d;font-size:13px;font-weight:600">
           <i class="fas fa-eye" style="color:#00CC70"></i>
           <span style="flex:1">See a real sample report — no signup needed</span>
@@ -13346,7 +13346,7 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
             +   '<span><i class="fas fa-check-circle" style="color:#00FF88;margin-right:5px"></i>2&ndash;5% accuracy</span>'
             +   '<span><i class="fas fa-check-circle" style="color:#00FF88;margin-right:5px"></i>Full materials BOM</span>'
             +   '<span><i class="fas fa-check-circle" style="color:#00FF88;margin-right:5px"></i>PDF + dashboard delivery</span>'
-            +   '<a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" style="color:#22d3ee;text-decoration:none;font-weight:600;margin-left:auto"><i class="fas fa-eye"></i> See sample first</a>'
+            +   '<a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" style="color:#22d3ee;text-decoration:none;font-weight:600;margin-left:auto"><i class="fas fa-eye"></i> See sample first</a>'
             + '</div>'
             + '</div>';
         }
@@ -13972,7 +13972,7 @@ function getComparisonPageHTML(slug: string): string {
       <div class="flex flex-col sm:flex-row gap-4 justify-center mb-4">
         <a href="/register" onclick="rrTrack('cta_click',{location:'comparison_${slug}_hero'})" class="inline-flex items-center justify-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.03]"><i class="fas fa-rocket"></i> Start Free — 4 Reports On Us</a>
         <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-calendar-check text-[#00FF88]"></i> Book a Demo</a>
-        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Report</a>
+        <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Report</a>
       </div>
       <p class="text-xs text-gray-600"><i class="fas fa-lock mr-1 text-[#00FF88]"></i>No credit card required &middot; No USD conversion &middot; Native CAD pricing</p>
     </div>
@@ -14728,7 +14728,7 @@ function getHowItWorksPageHTML(): string {
     <h1 class="text-4xl md:text-6xl font-black text-white leading-tight tracking-tight mb-5">Address to Report in 4 Steps</h1>
     <p class="text-lg text-gray-400 max-w-2xl mb-6">No ladders. No drones. No tape measures. Just enter an address and get a professional, branded PDF in 1&ndash;2 hours.</p>
     <div class="mb-12">
-      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+      <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
         <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
       </a>
     </div>
@@ -14777,7 +14777,7 @@ function getHowItWorksPageHTML(): string {
               <div class="flex items-start gap-3"><i class="fas fa-bolt mt-1" style="color:#00FF88"></i><span><strong class="text-white">Delivered to your dashboard and email</strong> — no waiting on a human draughtsman.</span></div>
             </div>
           </div>
-          <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="mt-6 inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-6 rounded-xl text-sm border border-white/10 hover:border-[#00FF88]/40 transition-all">
+          <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="mt-6 inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-6 rounded-xl text-sm border border-white/10 hover:border-[#00FF88]/40 transition-all">
             <i class="fas fa-eye" style="color:#00FF88"></i> View a real sample report
           </a>
         </div>
@@ -15118,7 +15118,7 @@ function getFAQPageHTML(): string {
     <h1 class="text-4xl md:text-5xl font-black text-white leading-tight tracking-tight mb-5">Frequently Asked Questions</h1>
     <p class="text-lg text-gray-400 max-w-2xl mb-6">Can't find what you're looking for? <a href="mailto:sales@roofmanager.ca" class="text-[#00FF88] hover:underline">Email us</a> and we'll get back to you fast.</p>
     <div class="mb-10">
-      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+      <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
         <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
       </a>
     </div>
@@ -15217,7 +15217,7 @@ function getGuidesIndexHTML(): string {
     <h1 class="text-4xl md:text-5xl font-black text-white leading-tight tracking-tight mb-4">How-To Guides</h1>
     <p class="text-lg text-gray-400 max-w-2xl mb-6">Everything you need to run your roofing company on Roof Manager — from ordering your first report to deploying a 24/7 AI receptionist.</p>
     <div class="mb-12">
-      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+      <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
         <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
       </a>
     </div>
@@ -15398,7 +15398,7 @@ function getFeatureHubPageHTML(featureSlug: string): string {
             <a href="/register" onclick="rrTrack('cta_click',{location:'feature_hub_${f.slug}_hero'})" class="inline-flex items-center justify-center gap-2 font-extrabold py-3.5 px-8 rounded-xl text-base shadow-2xl transition-all hover:scale-[1.03]" style="background:${f.accentColor};color:#0A0A0A"><i class="fas fa-rocket"></i> Start Free — 4 Reports On Us</a>
             `}
             <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-3.5 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-calendar-check" style="color:${f.accentColor}"></i> Book a Demo</a>
-            <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-3.5 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye" style="color:${f.accentColor}"></i> View Sample Report</a>
+            <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-3.5 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye" style="color:${f.accentColor}"></i> View Sample Report</a>
           </div>
           <p class="text-xs text-gray-600"><i class="fas fa-lock mr-1" style="color:${f.accentColor}"></i>${f.slug === 'ai-secretary' ? '1-month free trial &middot; card required &middot; $199/mo after &middot; cancel anytime' : 'No credit card required &middot; 4 free reports included'}</p>
         </div>
@@ -16955,7 +16955,7 @@ function getBestContractorsHubHTML(): string {
       <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-6">Contractor Directory</span>
       <h1 class="text-4xl md:text-5xl font-black text-white mb-6">Best Roofing Contractors &mdash; US &amp; Canada</h1>
       <p class="text-lg text-gray-400 mb-6">A city-by-city directory ranked against verifiable criteria: licensure, insurance-claim experience, measurement accuracy, online reviews, and storm-response availability. Browse by city to find qualified local roofers.</p>
-      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+      <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
         <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
       </a>
     </div>
@@ -17165,7 +17165,7 @@ function getXactimateAlternativeHTML(): string {
       <div class="flex flex-col sm:flex-row gap-3 justify-center">
         <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg">Start Free &mdash; 3 Reports on Us</a>
         <a href="#compare" class="bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl border border-white/10">Compare side-by-side</a>
-        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl border border-white/10"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Report</a>
+        <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl border border-white/10"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Report</a>
       </div>
       <p class="text-xs text-gray-500 mt-4">No credit card &middot; Accepted by every major US carrier</p>
     </div>
@@ -17300,7 +17300,7 @@ function getRoofingSoftwareComparisonHubHTML(): string {
     <div class="max-w-4xl mx-auto px-4">
       <h1 class="text-4xl md:text-5xl font-black text-white mb-6">Roofing Software Comparisons</h1>
       <p class="text-lg text-gray-400 max-w-2xl mx-auto mb-6">Pick a competitor to see how Roof Manager compares side-by-side on pricing, turnaround, accuracy, and workflow. All comparisons are fact-based and sourced from public pricing as of 2026.</p>
-      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+      <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
         <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
       </a>
     </div>
@@ -17684,7 +17684,7 @@ function getServicesPageHTML() {
       </h1>
       <p class="text-lg text-gray-400 max-w-3xl mx-auto leading-relaxed mb-6">13+ integrated tools — from satellite roof measurements to CRM, AI secretary, website builder, API access, and more. One platform, zero climbing.</p>
       <div class="flex justify-center mb-8">
-        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+        <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
           <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
         </a>
       </div>
@@ -18254,7 +18254,7 @@ function getCoveragePageHTML() {
       </h1>
       <p class="text-lg text-gray-400 max-w-3xl mx-auto leading-relaxed mb-6">Satellite-powered roof measurement reports wherever Google Solar API coverage exists. From North America to Europe, Asia-Pacific, and South America — measure any roof from anywhere in the world.</p>
       <div class="mb-8 flex justify-center">
-        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+        <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
           <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
         </a>
       </div>
@@ -18462,7 +18462,7 @@ function getPricingPageHTML() {
           <i class="fas fa-user-plus"></i>
           Sign Up Free
         </a>
-        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-bold py-3 px-8 rounded-xl text-lg border border-white/30 transition-all">
+        <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-bold py-3 px-8 rounded-xl text-lg border border-white/30 transition-all">
           <i class="fas fa-eye"></i>
           View Sample Report
         </a>
@@ -18770,7 +18770,7 @@ function getSocialLandingHTML() {
       <div style="text-align:center"><i class="fas fa-users" style="color:#00FF88;font-size:14px;display:block;margin-bottom:4px"></i><span style="color:#6b7280;font-size:11px">5,000+ contractors</span></div>
     </div>
 
-    <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;margin-top:20px;color:#9ca3af;font-size:13px;text-decoration:none;padding:10px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px"><i class="fas fa-eye" style="color:#00FF88"></i>View a Sample Measurement Report</a>
+    <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;margin-top:20px;color:#9ca3af;font-size:13px;text-decoration:none;padding:10px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px"><i class="fas fa-eye" style="color:#00FF88"></i>View a Sample Measurement Report</a>
 
     <p style="color:#4b5563;font-size:11px;margin-top:24px"><a href="/" style="color:#6b7280;text-decoration:none">Powered by <strong style="color:#9ca3af">Roof Manager</strong></a></p>
   </div>
@@ -18849,7 +18849,7 @@ function getBlogListingHTML(posts: any[] = []) {
       </div>
       <h1 class="text-4xl md:text-5xl font-black mb-4 tracking-tight">The Roof Manager Blog</h1>
       <p class="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed mb-6">Roofing industry insights, AI measurement technology, contractor business tips, and everything you need to grow your roofing business.</p>
-      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+      <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
         <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
       </a>
       <div class="mt-8 flex flex-wrap justify-center gap-3" id="blog-categories-hero"></div>
@@ -19530,7 +19530,7 @@ function getLanderFunnelHTML() {
               <i class="fas fa-calendar-check"></i>
               Book a Demo
             </a>
-            <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="group inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all">
+            <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="group inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all">
               <i class="fas fa-eye text-green-400"></i>
               View Sample Report
             </a>
@@ -19543,42 +19543,217 @@ function getLanderFunnelHTML() {
           </div>
         </div>
 
-        <!-- Floating report preview -->
-        <div class="hidden lg:block">
-          <div class="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 float-anim">
-            <div class="flex items-center gap-3 mb-4">
-              <div class="w-10 h-10 bg-cyan-500/20 rounded-lg flex items-center justify-center">
-                <i class="fas fa-file-alt text-cyan-400"></i>
-              </div>
-              <div>
-                <p class="font-bold text-white text-sm">Roof Measurement Report</p>
-                <p class="text-xs text-gray-400">Generated in ~2 hours</p>
-              </div>
-              <span class="ml-auto bg-green-500/20 text-green-300 text-xs px-2.5 py-1 rounded-full font-medium">HIGH Quality</span>
+        <!-- Hero right visual: iso-3D hip-roof SVG mockup with live measurement trace + floating stats overlay -->
+        <div class="hidden lg:block relative">
+          <div class="absolute -top-8 -right-8 w-48 h-48 rounded-full opacity-30 pointer-events-none" style="background: radial-gradient(circle, #22d3ee 0%, transparent 70%);"></div>
+          <div class="absolute -bottom-6 -left-6 w-40 h-40 rounded-full opacity-20 pointer-events-none" style="background: radial-gradient(circle, #00FF88 0%, transparent 70%);"></div>
+
+          <div class="relative rounded-3xl overflow-hidden border border-white/10 shadow-2xl shadow-black/60" style="aspect-ratio:4/5;background:#0a120e">
+            <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid slice" class="absolute inset-0 w-full h-full" role="img" aria-label="Isometric 3D mockup of a residential hip roof being measured live by satellite — eaves, ridge, hips, pitch, and edge lengths called out in neon green and cyan over four lit roof planes">
+              <defs>
+                <radialGradient id="lhg-ground" cx="50%" cy="50%" r="85%">
+                  <stop offset="0" stop-color="#1d2620"/>
+                  <stop offset="0.55" stop-color="#0d1a13"/>
+                  <stop offset="1" stop-color="#06100c"/>
+                </radialGradient>
+                <pattern id="lhg-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#00FF88" stroke-width="0.4" opacity="0.08"/>
+                </pattern>
+                <linearGradient id="lhg-south" x1="0" y1="0" x2="0.3" y2="1">
+                  <stop offset="0" stop-color="#7a6755"/>
+                  <stop offset="0.5" stop-color="#5a4a3d"/>
+                  <stop offset="1" stop-color="#3a2e25"/>
+                </linearGradient>
+                <linearGradient id="lhg-east" x1="0" y1="0" x2="1" y2="0.7">
+                  <stop offset="0" stop-color="#6a5648"/>
+                  <stop offset="1" stop-color="#42352b"/>
+                </linearGradient>
+                <linearGradient id="lhg-north" x1="0" y1="0" x2="0.2" y2="1">
+                  <stop offset="0" stop-color="#352c25"/>
+                  <stop offset="1" stop-color="#1c1612"/>
+                </linearGradient>
+                <linearGradient id="lhg-west" x1="1" y1="0" x2="0" y2="0.7">
+                  <stop offset="0" stop-color="#332a22"/>
+                  <stop offset="1" stop-color="#1a1410"/>
+                </linearGradient>
+                <linearGradient id="lhg-scan" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#00FF88" stop-opacity="0"/>
+                  <stop offset="0.5" stop-color="#00FF88" stop-opacity="0.55"/>
+                  <stop offset="1" stop-color="#00FF88" stop-opacity="0"/>
+                </linearGradient>
+                <radialGradient id="lhg-vignette" cx="50%" cy="50%" r="80%">
+                  <stop offset="55%" stop-color="#000" stop-opacity="0"/>
+                  <stop offset="100%" stop-color="#000" stop-opacity="0.65"/>
+                </radialGradient>
+                <radialGradient id="lhg-spotlight" cx="50%" cy="40%" r="55%">
+                  <stop offset="0" stop-color="#00FF88" stop-opacity="0.18"/>
+                  <stop offset="1" stop-color="#00FF88" stop-opacity="0"/>
+                </radialGradient>
+                <filter id="lhg-glow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="1.8" result="blur"/>
+                  <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="lhg-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="9"/>
+                </filter>
+              </defs>
+
+              <rect width="400" height="500" fill="url(#lhg-ground)"/>
+              <rect width="400" height="500" fill="url(#lhg-grid)"/>
+              <rect width="400" height="500" fill="url(#lhg-spotlight)"/>
+
+              <polygon points="180,360 240,365 285,500 130,500" fill="#3a342d"/>
+              <line x1="200" y1="380" x2="200" y2="500" stroke="#1f1c18" stroke-dasharray="6 8" stroke-width="1.2" opacity="0.55"/>
+
+              <g opacity="0.85">
+                <circle cx="36" cy="115" r="22" fill="#1f3a1a"/><circle cx="44" cy="108" r="15" fill="#2e4d28"/><circle cx="48" cy="104" r="8" fill="#3d6033"/>
+                <circle cx="362" cy="115" r="18" fill="#1f3a1a"/><circle cx="370" cy="108" r="13" fill="#2e4d28"/>
+                <circle cx="380" cy="400" r="24" fill="#1f3a1a"/><circle cx="386" cy="392" r="17" fill="#2e4d28"/><circle cx="390" cy="388" r="9" fill="#3d6033"/>
+                <circle cx="42" cy="420" r="14" fill="#1f3a1a"/><circle cx="48" cy="414" r="10" fill="#2e4d28"/>
+              </g>
+
+              <ellipse cx="208" cy="345" rx="155" ry="28" fill="#000" opacity="0.65" filter="url(#lhg-shadow)"/>
+
+              <polygon points="62,230 235,330 252,240 148,180" fill="url(#lhg-north)"/>
+              <polygon points="165,170 62,230 148,180" fill="url(#lhg-west)"/>
+              <polygon points="339,270 235,330 252,240" fill="url(#lhg-east)"/>
+              <polygon points="165,170 339,270 252,240 148,180" fill="url(#lhg-south)"/>
+
+              <g opacity="0.22" stroke="#000" stroke-width="0.6">
+                <line x1="159" y1="183" x2="333" y2="283"/>
+                <line x1="153" y1="196" x2="327" y2="296"/>
+                <line x1="148" y1="208" x2="321" y2="308"/>
+                <line x1="173" y1="172" x2="345" y2="271"/>
+              </g>
+              <g opacity="0.18" stroke="#000" stroke-width="0.5">
+                <line x1="80" y1="240" x2="248" y2="332"/>
+                <line x1="98" y1="250" x2="246" y2="335"/>
+                <line x1="115" y1="260" x2="244" y2="338"/>
+              </g>
+
+              <g stroke="#000" stroke-width="0.9" opacity="0.4">
+                <line x1="148" y1="180" x2="165" y2="170"/>
+                <line x1="148" y1="180" x2="62" y2="230"/>
+                <line x1="252" y1="240" x2="339" y2="270"/>
+                <line x1="252" y1="240" x2="235" y2="330"/>
+              </g>
+              <line x1="148" y1="180" x2="252" y2="240" stroke="#fff" stroke-width="0.7" opacity="0.42"/>
+
+              <g filter="url(#lhg-glow)">
+                <path d="M 165 170 L 339 270 L 235 330 L 62 230 Z" fill="none" stroke="#00FF88" stroke-width="3" stroke-dasharray="10 5" stroke-linejoin="round"/>
+                <line x1="148" y1="180" x2="252" y2="240" stroke="#22d3ee" stroke-width="3"/>
+                <g stroke="#22d3ee" stroke-width="2" stroke-dasharray="6 3">
+                  <line x1="148" y1="180" x2="165" y2="170"/>
+                  <line x1="148" y1="180" x2="62" y2="230"/>
+                  <line x1="252" y1="240" x2="339" y2="270"/>
+                  <line x1="252" y1="240" x2="235" y2="330"/>
+                </g>
+              </g>
+
+              <g stroke="#0A0A0A" stroke-width="1">
+                <circle cx="165" cy="170" r="4.5" fill="#00FF88"/>
+                <circle cx="339" cy="270" r="4.5" fill="#00FF88"/>
+                <circle cx="235" cy="330" r="4.5" fill="#00FF88"/>
+                <circle cx="62" cy="230" r="4.5" fill="#00FF88"/>
+              </g>
+              <circle cx="165" cy="170" r="9" fill="none" stroke="#00FF88" stroke-width="1.6">
+                <animate attributeName="r" values="5;20;5" dur="2.2s" repeatCount="indefinite"/>
+                <animate attributeName="opacity" values="1;0;1" dur="2.2s" repeatCount="indefinite"/>
+              </circle>
+              <g stroke="#0A0A0A" stroke-width="0.8">
+                <circle cx="148" cy="180" r="3.8" fill="#22d3ee"/>
+                <circle cx="252" cy="240" r="3.8" fill="#22d3ee"/>
+              </g>
+
+              <line x1="106" y1="86" x2="113" y2="200" stroke="#00FF88" stroke-width="0.9" stroke-dasharray="2 3" opacity="0.7"/>
+              <g font-family="Inter,sans-serif" font-weight="800">
+                <rect x="38" y="68" width="92" height="20" rx="5" fill="#0A0A0A" stroke="#00FF88" stroke-width="0.9"/>
+                <text x="84" y="82" font-size="10.5" fill="#00FF88" text-anchor="middle">44' EAVE</text>
+              </g>
+
+              <line x1="318" y1="86" x2="200" y2="210" stroke="#22d3ee" stroke-width="0.9" stroke-dasharray="2 3" opacity="0.7"/>
+              <g font-family="Inter,sans-serif" font-weight="800">
+                <rect x="266" y="68" width="98" height="20" rx="5" fill="#0A0A0A" stroke="#22d3ee" stroke-width="0.9"/>
+                <text x="315" y="82" font-size="10.5" fill="#22d3ee" text-anchor="middle">28' RIDGE</text>
+              </g>
+
+              <line x1="306" y1="380" x2="296" y2="300" stroke="#22d3ee" stroke-width="0.9" stroke-dasharray="2 3" opacity="0.7"/>
+              <g font-family="Inter,sans-serif" font-weight="800">
+                <rect x="266" y="380" width="80" height="18" rx="4" fill="#0A0A0A" stroke="#22d3ee" stroke-width="0.8"/>
+                <text x="306" y="393" font-size="9.5" fill="#22d3ee" text-anchor="middle">22' HIP</text>
+              </g>
+
+              <g filter="url(#lhg-glow)">
+                <rect x="196" y="200" width="60" height="22" rx="5" fill="#00FF88"/>
+              </g>
+              <text x="226" y="216" font-family="Inter,sans-serif" font-size="12" font-weight="900" fill="#0A0A0A" text-anchor="middle">6 / 12</text>
+
+              <rect x="0" y="0" width="400" height="36" fill="url(#lhg-scan)" opacity="0.55">
+                <animateTransform attributeName="transform" type="translate" values="0 60; 0 410; 0 60" dur="4.5s" repeatCount="indefinite"/>
+              </rect>
+
+              <g font-family="ui-monospace,SFMono-Regular,Menlo,monospace" fill="#00FF88" opacity="0.62">
+                <text x="18" y="404" font-size="8.5" font-weight="700">53.5461&deg;N</text>
+                <text x="18" y="416" font-size="8.5" font-weight="700">113.4938&deg;W</text>
+                <text x="18" y="428" font-size="7" fill="#22d3ee">SOLAR API &middot; LiDAR-CAL</text>
+              </g>
+
+              <g transform="translate(366, 415)">
+                <circle r="16" fill="#0A0A0A" opacity="0.78" stroke="#00FF88" stroke-width="0.9"/>
+                <polygon points="0,-11 4,0 0,9 -4,0" fill="#00FF88"/>
+                <text y="-2.5" font-family="Inter,sans-serif" font-size="7" font-weight="900" fill="#0A0A0A" text-anchor="middle">N</text>
+              </g>
+
+              <rect width="400" height="500" fill="url(#lhg-vignette)"/>
+            </svg>
+
+            <div class="absolute inset-0 pointer-events-none" style="background:linear-gradient(180deg, rgba(10,10,10,0) 0%, rgba(10,10,10,0) 72%, rgba(10,10,10,0.92) 100%);"></div>
+
+            <div class="absolute top-5 left-5 inline-flex items-center gap-2 bg-black/70 backdrop-blur-md border border-[#00FF88]/40 rounded-full px-3 py-1.5">
+              <span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-[#00FF88]"></span></span>
+              <span class="text-[10px] font-bold text-white uppercase tracking-widest">Live Satellite</span>
             </div>
-            <div class="grid grid-cols-3 gap-3 mb-4">
-              <div class="bg-white/5 rounded-lg p-3 text-center">
-                <p class="text-xl font-bold text-cyan-300">3,826</p>
-                <p class="text-[10px] text-gray-500 uppercase">Area (ft²)</p>
+
+            <div class="absolute top-5 right-5 flex flex-col gap-1.5 items-end">
+              <span class="inline-flex items-center gap-1 bg-[#00FF88] text-[#0A0A0A] rounded-md px-2.5 py-1 text-[11px] font-extrabold shadow-lg">3,301 sqft</span>
+              <span class="inline-flex items-center gap-1 bg-black/75 backdrop-blur-sm border border-[#00FF88]/40 text-[#00FF88] rounded-md px-2.5 py-1 text-[11px] font-bold">36.5 squares</span>
+            </div>
+
+            <div class="absolute bottom-0 left-0 right-0 p-5">
+              <div class="text-white font-extrabold text-lg leading-tight mb-1">Measured from orbit</div>
+              <div class="text-gray-300 text-xs leading-snug">Every shingle, ridge, hip &amp; valley &mdash; without a ladder.</div>
+            </div>
+          </div>
+
+          <!-- Floating stats card overlay (kept from old hero for numeric proof) -->
+          <div class="absolute -bottom-6 -right-6 w-56 bg-slate-900/95 backdrop-blur-md border border-white/15 rounded-2xl p-4 shadow-2xl shadow-black/60 float-anim">
+            <div class="flex items-center gap-2 mb-3">
+              <div class="w-7 h-7 bg-cyan-500/20 rounded-md flex items-center justify-center">
+                <i class="fas fa-file-alt text-cyan-400 text-xs"></i>
               </div>
-              <div class="bg-white/5 rounded-lg p-3 text-center">
-                <p class="text-xl font-bold text-blue-300">12</p>
-                <p class="text-[10px] text-gray-500 uppercase">Segments</p>
+              <div class="flex-1 min-w-0">
+                <p class="font-bold text-white text-[11px] leading-tight">Report #RM-0325</p>
+                <p class="text-[9px] text-gray-400">Delivered in ~2 hours</p>
               </div>
-              <div class="bg-white/5 rounded-lg p-3 text-center">
-                <p class="text-xl font-bold text-amber-300">21.6°</p>
-                <p class="text-[10px] text-gray-500 uppercase">Avg Pitch</p>
+              <span class="bg-green-500/20 text-green-300 text-[9px] px-1.5 py-0.5 rounded-full font-bold">HIGH</span>
+            </div>
+            <div class="grid grid-cols-3 gap-1.5 mb-2">
+              <div class="bg-white/5 rounded p-1.5 text-center">
+                <p class="text-sm font-bold text-cyan-300 leading-none">3,301</p>
+                <p class="text-[8px] text-gray-500 uppercase mt-0.5">ft&sup2;</p>
+              </div>
+              <div class="bg-white/5 rounded p-1.5 text-center">
+                <p class="text-sm font-bold text-blue-300 leading-none">110</p>
+                <p class="text-[8px] text-gray-500 uppercase mt-0.5">Bundles</p>
+              </div>
+              <div class="bg-white/5 rounded p-1.5 text-center">
+                <p class="text-sm font-bold text-amber-300 leading-none">6/12</p>
+                <p class="text-[8px] text-gray-500 uppercase mt-0.5">Pitch</p>
               </div>
             </div>
-            <div class="bg-white/5 rounded-lg p-3">
-              <div class="flex justify-between text-sm">
-                <span class="text-gray-400">Material Estimate</span>
-                <span class="font-bold text-white">$8,427 CAD</span>
-              </div>
-              <div class="flex justify-between text-xs text-gray-500 mt-1">
-                <span>132 bundles | 44 squares | 15% waste</span>
-                <span class="text-amber-400">Very Complex</span>
-              </div>
+            <div class="bg-white/5 rounded p-1.5 flex justify-between items-center">
+              <span class="text-[9px] text-gray-400">Material BOM</span>
+              <span class="text-[11px] font-bold text-white">$9,706.50 CAD</span>
             </div>
           </div>
         </div>
@@ -19586,7 +19761,7 @@ function getLanderFunnelHTML() {
     </div>
   </section>
 
-  <!-- WHAT YOU GET — Quick feature list -->
+  <!-- WHAT YOU GET — Quick feature list with mini-SVG thumbnails -->
   <section class="py-16 bg-gray-50">
     <div class="max-w-6xl mx-auto px-4">
       <div class="text-center mb-12 scroll-animate">
@@ -19595,13 +19770,222 @@ function getLanderFunnelHTML() {
       </div>
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         ${[
-          { icon: 'fas fa-ruler-combined', title: 'True 3D Area', desc: 'Pitch-adjusted surface area, not footprint' },
-          { icon: 'fas fa-draw-polygon', title: 'Edge Breakdown', desc: 'Ridge, hip, valley, eave — plan & 3D' },
-          { icon: 'fas fa-boxes-stacked', title: 'Full Material BOM', desc: 'Shingles, underlayment, flashing, nails' },
-          { icon: 'fas fa-layer-group', title: 'Segment Analysis', desc: 'Pitch, azimuth, direction per plane' },
-          { icon: 'fas fa-solar-panel', title: 'Solar Potential', desc: 'Panel count & yearly energy — free' },
-          { icon: 'fas fa-chart-pie', title: 'Complexity Rating', desc: 'Waste factor & difficulty score' },
-        ].map(f => '<div class="scroll-animate bg-white rounded-xl p-5 border border-gray-200 hover:border-cyan-200 hover:shadow-lg transition-all"><div class="flex items-start gap-4"><div class="w-10 h-10 bg-cyan-50 rounded-lg flex items-center justify-center flex-shrink-0"><i class="' + f.icon + ' text-cyan-600"></i></div><div><h3 class="font-bold text-gray-900 text-sm mb-1">' + f.title + '</h3><p class="text-xs text-gray-500">' + f.desc + '</p></div></div></div>').join('')}
+          {
+            title: 'True 3D Area',
+            desc: 'Pitch-adjusted surface area, not footprint',
+            svg: '<svg viewBox="0 0 80 60" class="w-full h-full"><defs><linearGradient id="fc-3d-s" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#7a6755"/><stop offset="1" stop-color="#3a2e25"/></linearGradient><linearGradient id="fc-3d-n" x1="0" y1="0" x2="0.2" y2="1"><stop offset="0" stop-color="#352c25"/><stop offset="1" stop-color="#1c1612"/></linearGradient></defs><rect width="80" height="60" fill="#0a120e"/><polygon points="12,36 48,52 56,38 28,30" fill="url(#fc-3d-n)"/><polygon points="28,30 68,42 56,38 48,30" fill="url(#fc-3d-s)"/><line x1="28" y1="30" x2="56" y2="38" stroke="#fff" stroke-width="0.5" opacity="0.4"/><rect x="34" y="36" width="20" height="9" rx="2" fill="#00FF88"/><text x="44" y="43" font-family="Inter,sans-serif" font-size="6" font-weight="900" fill="#0A0A0A" text-anchor="middle">3,301</text></svg>'
+          },
+          {
+            title: 'Edge Breakdown',
+            desc: 'Ridge, hip, valley, eave — plan &amp; 3D',
+            svg: '<svg viewBox="0 0 80 60" class="w-full h-full"><rect width="80" height="60" fill="#0a120e"/><g fill="none" stroke-linecap="round"><path d="M 12 18 L 68 18 L 68 46 L 12 46 Z" stroke="#00FF88" stroke-width="1.4" stroke-dasharray="3 2"/><line x1="12" y1="32" x2="68" y2="32" stroke="#22d3ee" stroke-width="1.6"/><line x1="40" y1="18" x2="40" y2="46" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="2 1.5"/></g><g fill="#00FF88" stroke="#0A0A0A" stroke-width="0.5"><circle cx="12" cy="18" r="1.6"/><circle cx="68" cy="18" r="1.6"/><circle cx="68" cy="46" r="1.6"/><circle cx="12" cy="46" r="1.6"/><circle cx="40" cy="18" r="1.6"/><circle cx="40" cy="46" r="1.6"/></g><circle cx="40" cy="32" r="2.2" fill="#22d3ee"/></svg>'
+          },
+          {
+            title: 'Full Material BOM',
+            desc: 'Shingles, underlayment, flashing, nails',
+            svg: '<svg viewBox="0 0 80 60" class="w-full h-full"><rect width="80" height="60" fill="#f5f0e6"/><rect width="80" height="14" fill="#0A0A0A"/><text x="6" y="10" font-family="Inter,sans-serif" font-size="6" font-weight="900" fill="#00FF88">BOM</text><text x="74" y="10" font-family="Inter,sans-serif" font-size="6" font-weight="800" fill="#fff" text-anchor="end">#325</text><g font-family="Inter,sans-serif" font-size="5.2" fill="#333"><text x="6" y="24">Shingles</text><text x="74" y="24" font-weight="800" fill="#0A0A0A" text-anchor="end">110</text><text x="6" y="33">Underlayment</text><text x="74" y="33" font-weight="800" fill="#0A0A0A" text-anchor="end">8</text><text x="6" y="42">Ridge cap</text><text x="74" y="42" font-weight="800" fill="#0A0A0A" text-anchor="end">2</text><text x="6" y="51">Ice &amp; water</text><text x="74" y="51" font-weight="800" fill="#0A0A0A" text-anchor="end">3</text></g></svg>'
+          },
+          {
+            title: 'Segment Analysis',
+            desc: 'Pitch, azimuth, direction per plane',
+            svg: '<svg viewBox="0 0 80 60" class="w-full h-full"><rect width="80" height="60" fill="#0a120e"/><polygon points="14,40 40,28 40,46 14,52" fill="#5a4a3d" stroke="#00FF88" stroke-width="0.6"/><polygon points="40,28 66,40 66,52 40,46" fill="#3a2e25" stroke="#22d3ee" stroke-width="0.6"/><text x="27" y="44" font-family="Inter,sans-serif" font-size="5" font-weight="800" fill="#00FF88" text-anchor="middle">6/12</text><text x="53" y="44" font-family="Inter,sans-serif" font-size="5" font-weight="800" fill="#22d3ee" text-anchor="middle">8/12</text><g transform="translate(40 14)"><circle r="6" fill="#0A0A0A" stroke="#00FF88" stroke-width="0.5"/><polygon points="0,-4 1.6,0 0,3.2 -1.6,0" fill="#00FF88"/><text y="-1" font-family="Inter,sans-serif" font-size="3" font-weight="900" fill="#0A0A0A" text-anchor="middle">N</text></g></svg>'
+          },
+          {
+            title: 'Solar Potential',
+            desc: 'Panel count &amp; yearly energy — free',
+            svg: '<svg viewBox="0 0 80 60" class="w-full h-full"><rect width="80" height="60" fill="#0a120e"/><polygon points="12,42 68,42 60,22 20,22" fill="#5a4a3d"/><g fill="#1a3a5a" stroke="#22d3ee" stroke-width="0.4"><rect x="22" y="25" width="7" height="5"/><rect x="30" y="25" width="7" height="5"/><rect x="38" y="25" width="7" height="5"/><rect x="46" y="25" width="7" height="5"/><rect x="54" y="25" width="7" height="5"/><rect x="22" y="31" width="7" height="5"/><rect x="30" y="31" width="7" height="5"/><rect x="38" y="31" width="7" height="5"/><rect x="46" y="31" width="7" height="5"/><rect x="54" y="31" width="7" height="5"/></g><g fill="#fbbf24"><circle cx="64" cy="12" r="3.5"/><line x1="64" y1="5" x2="64" y2="3" stroke="#fbbf24" stroke-width="1"/><line x1="64" y1="19" x2="64" y2="21" stroke="#fbbf24" stroke-width="1"/><line x1="57" y1="12" x2="55" y2="12" stroke="#fbbf24" stroke-width="1"/><line x1="71" y1="12" x2="73" y2="12" stroke="#fbbf24" stroke-width="1"/></g><text x="40" y="54" font-family="Inter,sans-serif" font-size="5" font-weight="900" fill="#00FF88" text-anchor="middle">+12,400 kWh/yr</text></svg>'
+          },
+          {
+            title: 'Complexity Rating',
+            desc: 'Waste factor &amp; difficulty score',
+            svg: '<svg viewBox="0 0 80 60" class="w-full h-full"><rect width="80" height="60" fill="#0a120e"/><g transform="translate(40 32)"><circle r="18" fill="none" stroke="#1f2937" stroke-width="4"/><path d="M 0 -18 A 18 18 0 0 1 15.6 9 L 0 0 Z" fill="#00FF88"/><path d="M 15.6 9 A 18 18 0 0 1 -10.4 14.7 L 0 0 Z" fill="#22d3ee"/><path d="M -10.4 14.7 A 18 18 0 0 1 -18 0 L 0 0 Z" fill="#fbbf24"/><circle r="9" fill="#0a120e"/><text y="3" font-family="Inter,sans-serif" font-size="7" font-weight="900" fill="#fff" text-anchor="middle">HIGH</text></g></svg>'
+          },
+        ].map(f => '<div class="scroll-animate bg-white rounded-xl border border-gray-200 hover:border-cyan-300 hover:shadow-lg transition-all overflow-hidden"><div class="aspect-[4/3] bg-[#0a120e] relative">' + f.svg + '</div><div class="p-4"><h3 class="font-bold text-gray-900 text-sm mb-1">' + f.title + '</h3><p class="text-xs text-gray-500">' + f.desc + '</p></div></div>').join('')}
+      </div>
+    </div>
+  </section>
+
+  <!-- SEE YOUR REPORT — Real PDF mockup preview using sample report #325 numbers -->
+  <section class="py-16 bg-gradient-to-b from-gray-50 to-white">
+    <div class="max-w-6xl mx-auto px-4">
+      <div class="grid lg:grid-cols-12 gap-10 items-center">
+        <div class="lg:col-span-5 scroll-animate">
+          <span class="inline-flex items-center gap-2 bg-cyan-50 text-cyan-700 text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full mb-4 border border-cyan-100"><i class="fas fa-file-pdf"></i>Real report preview</span>
+          <h2 class="text-3xl lg:text-4xl font-black text-gray-900 mb-4 tracking-tight leading-tight">This is what arrives in your inbox.</h2>
+          <p class="text-gray-600 mb-6 leading-relaxed">A printable PDF and a shareable link. Pitched 3D diagrams, plan-view trace, edge breakdown, segment-by-segment pitches, and a priced material BOM you can hand to your supplier. No watermarks. Yours forever.</p>
+          <ul class="space-y-2.5 mb-7 text-sm text-gray-700">
+            <li class="flex items-start gap-2.5"><i class="fas fa-check-circle text-cyan-600 mt-0.5"></i><span><strong>3D + 2D diagrams</strong> on full pages (each diagram ~2.4&times; the old size)</span></li>
+            <li class="flex items-start gap-2.5"><i class="fas fa-check-circle text-cyan-600 mt-0.5"></i><span><strong>Edge totals</strong> — ridge, hip, valley, eave, rake (in feet)</span></li>
+            <li class="flex items-start gap-2.5"><i class="fas fa-check-circle text-cyan-600 mt-0.5"></i><span><strong>Material BOM</strong> with squares, bundles, underlayment, ice &amp; water</span></li>
+            <li class="flex items-start gap-2.5"><i class="fas fa-check-circle text-cyan-600 mt-0.5"></i><span><strong>Roof anatomy appendix</strong> — homeowner-friendly glossary</span></li>
+          </ul>
+          <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" onclick="if(window.gtag)gtag('event','cta_click',{cta:'lander_view_sample_report'});" class="inline-flex items-center gap-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 px-7 rounded-xl text-sm shadow-lg transition-all hover:scale-[1.02]">
+            <i class="fas fa-eye text-cyan-400"></i>
+            Open the full sample report
+            <i class="fas fa-arrow-right text-xs"></i>
+          </a>
+        </div>
+
+        <div class="lg:col-span-7 scroll-animate">
+          <div class="relative rounded-3xl overflow-hidden shadow-2xl shadow-slate-900/20 border border-gray-200" style="aspect-ratio:4/5;max-height:640px;margin:0 auto">
+            <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid slice" class="absolute inset-0 w-full h-full" role="img" aria-label="Mockup of a Roof Manager measurement report — sample #RM-0325 for an Edmonton, AB property with 3D and 2D diagrams, segment analysis, edge totals, and a priced material BOM">
+              <defs>
+                <linearGradient id="rp-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1a1a"/><stop offset="1" stop-color="#0a0a0a"/></linearGradient>
+                <linearGradient id="rp-s" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#7a6755"/><stop offset="0.5" stop-color="#5a4a3d"/><stop offset="1" stop-color="#3a2e25"/></linearGradient>
+                <linearGradient id="rp-n" x1="0" y1="0" x2="0.2" y2="1"><stop offset="0" stop-color="#352c25"/><stop offset="1" stop-color="#1c1612"/></linearGradient>
+                <linearGradient id="rp-e" x1="0" y1="0" x2="1" y2="0.7"><stop offset="0" stop-color="#6a5648"/><stop offset="1" stop-color="#42352b"/></linearGradient>
+                <linearGradient id="rp-w" x1="1" y1="0" x2="0" y2="0.7"><stop offset="0" stop-color="#332a22"/><stop offset="1" stop-color="#1a1410"/></linearGradient>
+                <filter id="rp-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.4"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              </defs>
+
+              <rect width="400" height="500" fill="url(#rp-bg)"/>
+
+              <!-- Paper sheet -->
+              <rect x="32" y="28" width="336" height="444" rx="6" fill="#f5f0e6"/>
+
+              <!-- Header bar -->
+              <rect x="32" y="28" width="336" height="48" rx="6" fill="#0A0A0A"/>
+              <rect x="32" y="62" width="336" height="14" fill="#0A0A0A"/>
+              <circle cx="58" cy="52" r="9" fill="#00FF88"/>
+              <path d="M 54 52 L 57 55 L 62 48" stroke="#0A0A0A" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              <text x="76" y="51" font-family="Inter,sans-serif" font-weight="900" font-size="12" fill="#fff" letter-spacing="0.5">ROOF MANAGER</text>
+              <text x="76" y="63" font-family="Inter,sans-serif" font-weight="700" font-size="7" fill="#00FF88" letter-spacing="1.2">PROFESSIONAL MEASUREMENT REPORT</text>
+              <text x="352" y="51" font-family="Inter,sans-serif" font-weight="800" font-size="9" fill="#fff" text-anchor="end">#RM-0325</text>
+              <text x="352" y="63" font-family="Inter,sans-serif" font-weight="600" font-size="6.5" fill="#aaa" text-anchor="end">2026-05-14 &middot; HIGH</text>
+
+              <!-- Property line -->
+              <text x="50" y="98" font-family="Inter,sans-serif" font-weight="800" font-size="11" fill="#0A0A0A">11320 125 St NW</text>
+              <text x="50" y="110" font-family="Inter,sans-serif" font-size="7.5" fill="#777">Edmonton, AB T5M 0M7 &middot; Verified satellite trace &middot; 95% confidence</text>
+
+              <!-- ============ 3D diagram (left) ============ -->
+              <g transform="translate(50 122)">
+                <rect width="148" height="118" rx="4" fill="#0a120e"/>
+                <text x="6" y="11" font-family="Inter,sans-serif" font-size="6.5" font-weight="900" fill="#00FF88" letter-spacing="0.8">3D PERSPECTIVE</text>
+
+                <!-- iso roof -->
+                <polygon points="22,90 78,108 92,80 50,68" fill="url(#rp-n)"/>
+                <polygon points="58,62 22,90 50,68" fill="url(#rp-w)"/>
+                <polygon points="124,76 78,108 92,80" fill="url(#rp-e)"/>
+                <polygon points="58,62 124,76 92,80 50,68" fill="url(#rp-s)"/>
+
+                <line x1="50" y1="68" x2="92" y2="80" stroke="#fff" stroke-width="0.4" opacity="0.4"/>
+
+                <!-- trace overlay -->
+                <g filter="url(#rp-glow)">
+                  <path d="M 58 62 L 124 76 L 78 108 L 22 90 Z" fill="none" stroke="#00FF88" stroke-width="1.5" stroke-dasharray="5 2.5" stroke-linejoin="round"/>
+                  <line x1="50" y1="68" x2="92" y2="80" stroke="#22d3ee" stroke-width="1.5"/>
+                </g>
+                <g stroke="#0A0A0A" stroke-width="0.5">
+                  <circle cx="58" cy="62" r="2.2" fill="#00FF88"/>
+                  <circle cx="124" cy="76" r="2.2" fill="#00FF88"/>
+                  <circle cx="78" cy="108" r="2.2" fill="#00FF88"/>
+                  <circle cx="22" cy="90" r="2.2" fill="#00FF88"/>
+                </g>
+                <rect x="62" y="78" width="22" height="9" rx="2" fill="#00FF88"/>
+                <text x="73" y="85" font-family="Inter,sans-serif" font-size="6" font-weight="900" fill="#0A0A0A" text-anchor="middle">6/12</text>
+              </g>
+
+              <!-- ============ 2D plan diagram (right) ============ -->
+              <g transform="translate(206 122)">
+                <rect width="144" height="118" rx="4" fill="#0a120e"/>
+                <text x="6" y="11" font-family="Inter,sans-serif" font-size="6.5" font-weight="900" fill="#22d3ee" letter-spacing="0.8">PLAN-VIEW TRACE</text>
+
+                <g opacity="0.25" stroke="#fff" stroke-width="0.3">
+                  <line x1="12" y1="22" x2="12" y2="110"/><line x1="28" y1="22" x2="28" y2="110"/><line x1="44" y1="22" x2="44" y2="110"/><line x1="60" y1="22" x2="60" y2="110"/><line x1="76" y1="22" x2="76" y2="110"/><line x1="92" y1="22" x2="92" y2="110"/><line x1="108" y1="22" x2="108" y2="110"/><line x1="124" y1="22" x2="124" y2="110"/>
+                </g>
+                <g fill="none" stroke="#00FF88" stroke-width="1.2" stroke-linejoin="round">
+                  <path d="M 22 30 L 122 30 L 122 100 L 22 100 Z"/>
+                  <line x1="22" y1="65" x2="122" y2="65"/>
+                </g>
+                <line x1="72" y1="30" x2="72" y2="100" stroke="#22d3ee" stroke-width="1" stroke-dasharray="3 2"/>
+                <g fill="#00FF88">
+                  <circle cx="22" cy="30" r="1.6"/><circle cx="122" cy="30" r="1.6"/><circle cx="22" cy="100" r="1.6"/><circle cx="122" cy="100" r="1.6"/><circle cx="22" cy="65" r="1.6"/><circle cx="122" cy="65" r="1.6"/>
+                </g>
+                <circle cx="72" cy="65" r="2.2" fill="#22d3ee"/>
+                <text x="72" y="58" font-family="Inter,sans-serif" font-size="6" font-weight="800" fill="#00FF88" text-anchor="middle">3,301 sqft</text>
+                <text x="72" y="113" font-family="Inter,sans-serif" font-size="5" fill="#888" text-anchor="middle">36.5 sq &middot; 110 bundles &middot; &plusmn;2%</text>
+              </g>
+
+              <!-- ============ Stat strip ============ -->
+              <g font-family="Inter,sans-serif" transform="translate(50 252)">
+                <rect width="72" height="36" rx="3" fill="#fff" stroke="#e2dccd"/>
+                <text x="36" y="11" font-size="6" font-weight="800" fill="#888" text-anchor="middle" letter-spacing="0.6">3D AREA</text>
+                <text x="36" y="26" font-size="11" font-weight="900" fill="#0A0A0A" text-anchor="middle">3,301</text>
+                <text x="36" y="33" font-size="5" fill="#888" text-anchor="middle">sqft</text>
+
+                <rect x="78" width="72" height="36" rx="3" fill="#fff" stroke="#e2dccd"/>
+                <text x="114" y="11" font-size="6" font-weight="800" fill="#888" text-anchor="middle" letter-spacing="0.6">SQUARES</text>
+                <text x="114" y="26" font-size="11" font-weight="900" fill="#0A0A0A" text-anchor="middle">36.5</text>
+                <text x="114" y="33" font-size="5" fill="#888" text-anchor="middle">100 ft&sup2; / sq</text>
+
+                <rect x="156" width="72" height="36" rx="3" fill="#fff" stroke="#e2dccd"/>
+                <text x="192" y="11" font-size="6" font-weight="800" fill="#888" text-anchor="middle" letter-spacing="0.6">BUNDLES</text>
+                <text x="192" y="26" font-size="11" font-weight="900" fill="#0A0A0A" text-anchor="middle">110</text>
+                <text x="192" y="33" font-size="5" fill="#888" text-anchor="middle">@ 3 / sq</text>
+
+                <rect x="234" width="72" height="36" rx="3" fill="#fff" stroke="#e2dccd"/>
+                <text x="270" y="11" font-size="6" font-weight="800" fill="#888" text-anchor="middle" letter-spacing="0.6">PITCH</text>
+                <text x="270" y="26" font-size="11" font-weight="900" fill="#0A0A0A" text-anchor="middle">6/12</text>
+                <text x="270" y="33" font-size="5" fill="#888" text-anchor="middle">avg</text>
+              </g>
+
+              <!-- ============ Edge breakdown ============ -->
+              <g font-family="Inter,sans-serif" transform="translate(50 300)">
+                <text y="0" font-size="7" font-weight="900" fill="#0A0A0A" letter-spacing="0.4">EDGE BREAKDOWN</text>
+                <line x1="0" y1="4" x2="300" y2="4" stroke="#ddd"/>
+                <g font-size="6.5">
+                  <rect x="0" y="10" width="70" height="22" rx="3" fill="#f0fdf4" stroke="#bbf7d0"/>
+                  <text x="35" y="18" font-size="5.5" font-weight="800" fill="#047857" text-anchor="middle">RIDGE</text>
+                  <text x="35" y="28" font-size="9" font-weight="900" fill="#065f46" text-anchor="middle">34'</text>
+
+                  <rect x="76" y="10" width="70" height="22" rx="3" fill="#ecfeff" stroke="#a5f3fc"/>
+                  <text x="111" y="18" font-size="5.5" font-weight="800" fill="#0e7490" text-anchor="middle">HIPS</text>
+                  <text x="111" y="28" font-size="9" font-weight="900" fill="#155e75" text-anchor="middle">227'</text>
+
+                  <rect x="152" y="10" width="70" height="22" rx="3" fill="#fef3c7" stroke="#fde68a"/>
+                  <text x="187" y="18" font-size="5.5" font-weight="800" fill="#92400e" text-anchor="middle">VALLEYS</text>
+                  <text x="187" y="28" font-size="9" font-weight="900" fill="#78350f" text-anchor="middle">21'</text>
+
+                  <rect x="228" y="10" width="72" height="22" rx="3" fill="#fce7f3" stroke="#fbcfe8"/>
+                  <text x="264" y="18" font-size="5.5" font-weight="800" fill="#9d174d" text-anchor="middle">EAVES</text>
+                  <text x="264" y="28" font-size="9" font-weight="900" fill="#831843" text-anchor="middle">334'</text>
+                </g>
+              </g>
+
+              <!-- ============ Material BOM ============ -->
+              <g font-family="Inter,sans-serif" transform="translate(50 350)">
+                <text y="0" font-size="7" font-weight="900" fill="#0A0A0A" letter-spacing="0.4">MATERIAL BOM</text>
+                <line x1="0" y1="4" x2="300" y2="4" stroke="#ddd"/>
+                <g font-size="6.5">
+                  <text x="0" y="14" fill="#333">Asphalt shingle bundles</text>
+                  <text x="300" y="14" font-weight="800" fill="#0A0A0A" text-anchor="end">110</text>
+                  <text x="0" y="24" fill="#333">Underlayment rolls</text>
+                  <text x="300" y="24" font-weight="800" fill="#0A0A0A" text-anchor="end">8</text>
+                  <text x="0" y="34" fill="#333">Ridge cap bundles</text>
+                  <text x="300" y="34" font-weight="800" fill="#0A0A0A" text-anchor="end">2</text>
+                  <text x="0" y="44" fill="#333">Ice &amp; water shield</text>
+                  <text x="300" y="44" font-weight="800" fill="#0A0A0A" text-anchor="end">3</text>
+                  <text x="0" y="54" fill="#333">Drip edge (ft)</text>
+                  <text x="300" y="54" font-weight="800" fill="#0A0A0A" text-anchor="end">334</text>
+                </g>
+                <line x1="0" y1="60" x2="300" y2="60" stroke="#ddd"/>
+                <text x="0" y="72" font-size="7" font-weight="800" fill="#0A0A0A">TOTAL MATERIAL</text>
+                <text x="300" y="72" font-size="9" font-weight="900" fill="#0A0A0A" text-anchor="end">$9,706.50 CAD</text>
+              </g>
+
+              <!-- Footer -->
+              <text x="50" y="446" font-family="Inter,sans-serif" font-size="6" fill="#888">Generated by Roof Manager &middot; roofmanager.ca &middot; HIGH imagery quality</text>
+              <rect x="312" y="436" width="40" height="14" fill="#00FF88" rx="2"/>
+              <text x="332" y="446" font-family="Inter,sans-serif" font-size="6" font-weight="900" fill="#0A0A0A" text-anchor="middle" letter-spacing="0.5">VERIFIED</text>
+            </svg>
+
+            <!-- Floating badge: "open the real one" hint -->
+            <div class="absolute top-4 right-4 inline-flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full border border-white/15 shadow-lg">
+              <span class="relative flex h-1.5 w-1.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span><span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400"></span></span>
+              Live sample
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -19662,7 +20046,7 @@ function getLanderFunnelHTML() {
           <i class="fas fa-calendar-check"></i>
           Book a Demo
         </a>
-        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="group inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all">
+        <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="group inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all">
           <i class="fas fa-eye text-green-400"></i>
           View Sample Report
         </a>
@@ -19818,7 +20202,7 @@ function getDemoLandingPageHTML() {
       <h1 style="font-size:clamp(28px,5vw,48px);font-weight:900;color:#fff;margin:0 0 16px;line-height:1.1">See Roof Manager live — in 20 minutes</h1>
       <p style="color:#9ca3af;font-size:17px;max-width:540px;margin:0 auto 20px;line-height:1.6">Walk through measurements, CRM, invoicing, and the AI secretary on a real roof you pick. No slides.</p>
       <div style="display:flex;justify-content:center;margin-bottom:28px">
-        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,0.05);color:#fff;font-weight:700;padding:13px 24px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);font-size:14px;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'"><i class="fas fa-eye" style="color:#00FF88"></i>View Sample Measurement Report</a>
+        <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,0.05);color:#fff;font-weight:700;padding:13px 24px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);font-size:14px;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'"><i class="fas fa-eye" style="color:#00FF88"></i>View Sample Measurement Report</a>
       </div>
       <!-- Social proof avatars -->
       <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin-bottom:16px">
@@ -23541,7 +23925,7 @@ function getHomeownerEstimatePageHTML(): string {
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="flex items-center gap-3">
-        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="text-gray-400 hover:text-white text-sm font-medium hidden sm:inline transition-colors">See Sample Report</a>
+        <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="text-gray-400 hover:text-white text-sm font-medium hidden sm:inline transition-colors">See Sample Report</a>
         <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-5 rounded-xl text-sm min-h-[44px] inline-flex items-center transition-colors">Start Free</a>
       </div>
     </div>
@@ -23566,7 +23950,7 @@ function getHomeownerEstimatePageHTML(): string {
           <a href="/register" class="flex items-center justify-center gap-2.5 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px] transition-all hover:scale-[1.02]">
             <i class="fas fa-satellite-dish"></i> Get My Free Roof Report <i class="fas fa-arrow-right text-sm"></i>
           </a>
-          <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-7 rounded-xl text-base border border-white/10 hover:border-white/20 min-h-[56px] transition-all">
+          <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-7 rounded-xl text-base border border-white/10 hover:border-white/20 min-h-[56px] transition-all">
             <i class="fas fa-eye text-[#00FF88]"></i> See a Sample Report
           </a>
         </div>
@@ -23759,7 +24143,7 @@ function getHomeownerEstimatePageHTML(): string {
       </div>
       <div class="flex items-center gap-5 text-sm text-gray-500">
         <a href="/" class="hover:text-[#00FF88] transition-colors">Home</a>
-        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="hover:text-[#00FF88] transition-colors">Sample Report</a>
+        <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="hover:text-[#00FF88] transition-colors">Sample Report</a>
         <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a>
         <a href="/faq" class="hover:text-[#00FF88] transition-colors">FAQ</a>
         <a href="/contact" class="hover:text-[#00FF88] transition-colors">Contact</a>
@@ -23849,7 +24233,7 @@ function getShingleCalculatorHTML(isEmbed = false): string {
 </head>
 <body style="background:#0A0A0A;color:#fff">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)"><div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"><a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a><a href="/tools" class="text-gray-400 hover:text-white text-sm">&larr; All Tools</a></div></nav>
-  <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Shingle Calculator</h1><p class="text-gray-400 mb-5">Bundles, squares, and underlayment rolls from roof area and waste factor.</p><a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-2.5 px-6 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report</a></div></section>
+  <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Shingle Calculator</h1><p class="text-gray-400 mb-5">Bundles, squares, and underlayment rolls from roof area and waste factor.</p><a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-2.5 px-6 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report</a></div></section>
   <section class="py-10" style="background:#0A0A0A"><div class="max-w-3xl mx-auto px-4">${calc}</div></section>
   ${embedSnippetBlock('shingle-calculator', 'Shingle Calculator')}
   <section class="py-12 text-center" style="background:#0A0A0A"><a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 px-8 rounded-xl"><i class="fas fa-rocket"></i>Get 4 Free Measurement Reports</a></section>
@@ -23906,7 +24290,7 @@ function getDeductibleEstimatorHTML(isEmbed = false): string {
 </head>
 <body style="background:#0A0A0A;color:#fff">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)"><div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"><a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a><a href="/tools" class="text-gray-400 hover:text-white text-sm">&larr; All Tools</a></div></nav>
-  <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Insurance Deductible Estimator</h1><p class="text-gray-400 mb-5">See your out-of-pocket cost on a roofing insurance claim before you file.</p><a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-2.5 px-6 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report</a></div></section>
+  <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Insurance Deductible Estimator</h1><p class="text-gray-400 mb-5">See your out-of-pocket cost on a roofing insurance claim before you file.</p><a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-2.5 px-6 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report</a></div></section>
   <section class="py-10" style="background:#0A0A0A"><div class="max-w-3xl mx-auto px-4">${calc}</div></section>
   ${embedSnippetBlock('insurance-deductible-estimator', 'Deductible Estimator')}
   <section class="py-12 text-center" style="background:#0A0A0A"><a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 px-8 rounded-xl"><i class="fas fa-rocket"></i>Get 4 Free Measurement Reports</a></section>
@@ -23963,7 +24347,7 @@ function getSolarProductionEstimatorHTML(isEmbed = false): string {
 </head>
 <body style="background:#0A0A0A;color:#fff">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)"><div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"><a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a><a href="/tools" class="text-gray-400 hover:text-white text-sm">&larr; All Tools</a></div></nav>
-  <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Solar Production Estimator</h1><p class="text-gray-400 mb-5">Annual kWh output from system size, sun hours, and derate factor.</p><a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-2.5 px-6 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report</a></div></section>
+  <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Solar Production Estimator</h1><p class="text-gray-400 mb-5">Annual kWh output from system size, sun hours, and derate factor.</p><a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-2.5 px-6 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report</a></div></section>
   <section class="py-10" style="background:#0A0A0A"><div class="max-w-3xl mx-auto px-4">${calc}</div></section>
   ${embedSnippetBlock('solar-production-estimator', 'Solar Production Estimator')}
   <section class="py-12 text-center" style="background:#0A0A0A"><a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 px-8 rounded-xl"><i class="fas fa-rocket"></i>Get 4 Free Measurement Reports</a></section>
@@ -24074,7 +24458,7 @@ function getToolsHubHTML(): string {
         </div>
       </a>
 
-      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" style="text-decoration:none;">
+      <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" style="text-decoration:none;">
         <div class="tool-card">
           <div style="font-size:36px;margin-bottom:16px;">📄</div>
           <h2 style="font-size:20px;font-weight:700;color:#f1f5f9;margin-bottom:8px;">Sample Measurement Report</h2>
@@ -24178,7 +24562,7 @@ function getPitchCalculatorHTML(): string {
       <span style="background:#f59e0b22;color:#f59e0b;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:6px 14px;border-radius:20px;">Free Tool</span>
       <h1 style="font-size:36px;font-weight:800;margin:20px 0 12px;">Roof Pitch Calculator</h1>
       <p style="color:#94a3b8;font-size:16px;margin-bottom:18px;">Convert any roof pitch to degrees, calculate the pitch multiplier, and estimate true sloped area from your footprint.</p>
-      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:#111827;color:#e2e8f0;font-weight:700;padding:10px 20px;border-radius:8px;border:1px solid #1e293b;font-size:13px;text-decoration:none">📄 View Sample Measurement Report</a>
+      <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:#111827;color:#e2e8f0;font-weight:700;padding:10px 20px;border-radius:8px;border:1px solid #1e293b;font-size:13px;text-decoration:none">📄 View Sample Measurement Report</a>
     </div>
 
     <!-- Calculator -->
@@ -24643,7 +25027,7 @@ function getAccuracyPageHTML(): string {
       <p class="text-gray-300 max-w-2xl mx-auto mb-6">If a measurement on a delivered report doesn&apos;t match your tape-measure, email us with the report ID. We re-run the engine, audit the imagery, and either issue a corrected report or refund the credit &mdash; same business day.</p>
       <a href="mailto:support@roofmanager.ca?subject=Accuracy%20challenge%20%E2%80%94%20report%20ID" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 px-7 rounded-xl text-sm transition-all"><i class="fas fa-envelope"></i> Email an accuracy challenge</a>
     </section>
-    <section class="text-center"><a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-9 rounded-xl text-base shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.02]"><i class="fas fa-gift"></i>Try it free &mdash; 4 reports, no card</a><p class="text-xs text-gray-500 mt-3">Or <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="text-[#00FF88] hover:underline">view a sample report</a> first &mdash; no signup needed.</p></section>
+    <section class="text-center"><a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-9 rounded-xl text-base shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.02]"><i class="fas fa-gift"></i>Try it free &mdash; 4 reports, no card</a><p class="text-xs text-gray-500 mt-3">Or <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="text-[#00FF88] hover:underline">view a sample report</a> first &mdash; no signup needed.</p></section>
   </main>
   <footer class="text-gray-500 py-8 text-center text-sm border-t border-white/5" style="background:#0A0A0A">
     <div class="max-w-5xl mx-auto px-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
@@ -24789,7 +25173,7 @@ function getJpgRoofingCaseStudyHTML(): string {
       <h2 class="text-2xl md:text-3xl font-black text-white mb-3">Run your own pilot &mdash; 4 free reports, no card</h2>
       <p class="text-gray-400 mb-6 max-w-xl mx-auto">JPG&apos;s pilot ran inside the free 4-report trial. Pull a measurement on your last 4 estimates and compare against your tape-measure number before you spend a dollar.</p>
       <a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-9 rounded-xl text-base shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.02]"><i class="fas fa-gift"></i>Start the pilot &mdash; 4 free reports</a>
-      <p class="text-xs text-gray-500 mt-3">Or <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="text-[#00FF88] hover:underline">view a sample report</a> first.</p>
+      <p class="text-xs text-gray-500 mt-3">Or <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="text-[#00FF88] hover:underline">view a sample report</a> first.</p>
     </section>
   </main>
   <footer class="text-gray-500 py-8 text-center text-sm border-t border-white/5" style="background:#0A0A0A">
@@ -24913,7 +25297,7 @@ function getResourcesHubHTML(posts: any[] = []): string {
           <p class="text-gray-400 text-sm leading-relaxed flex-1">Side-by-side feature matrix &mdash; price, turnaround, BOM, CRM, contracts &mdash; against the three most-asked-about competitors.</p>
           <span class="text-[#a78bfa] text-xs font-semibold mt-3 inline-flex items-center gap-1">See the matrix <i class="fas fa-arrow-right text-[10px] group-hover:translate-x-1 transition-transform"></i></span>
         </a>
-        <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="group bg-[#111] border border-white/10 hover:border-[#00FF88]/40 rounded-2xl p-6 transition-all flex flex-col">
+        <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="group bg-[#111] border border-white/10 hover:border-[#00FF88]/40 rounded-2xl p-6 transition-all flex flex-col">
           <div class="w-10 h-10 rounded-lg bg-[#00FF88]/10 border border-[#00FF88]/20 flex items-center justify-center mb-3"><i class="fas fa-eye text-[#00FF88]"></i></div>
           <h3 class="text-white font-bold text-base mb-1.5 group-hover:text-[#00FF88] transition-colors">View a sample report <span class="text-[10px] text-[#00FF88] font-bold ml-1 bg-[#00FF88]/10 border border-[#00FF88]/20 px-1.5 py-0.5 rounded-full align-middle">No email</span></h3>
           <p class="text-gray-400 text-sm leading-relaxed flex-1">A real, fully-rendered roof measurement report &mdash; opens in your browser, no signup, no card, no gate.</p>
@@ -25023,7 +25407,7 @@ function getResourcesHubHTML(posts: any[] = []): string {
       <h2 class="text-3xl md:text-4xl font-black text-white mb-4">Done your homework? <span class="neon-text">Try it free.</span></h2>
       <p class="text-gray-400 max-w-2xl mx-auto mb-7">4 measurement reports, full CRM, full dashboard &mdash; no credit card, no commitment. Cancel any time. 30-day money-back guarantee on anything you do pay for.</p>
       <a href="/register" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-base shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.02]"><i class="fas fa-gift"></i>Start free &mdash; 4 reports, no card</a>
-      <p class="text-xs text-gray-500 mt-4">Or <a href="/contact" class="text-[#00FF88] hover:underline">talk to sales</a> &middot; <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="text-[#00FF88] hover:underline">view a sample report</a></p>
+      <p class="text-xs text-gray-500 mt-4">Or <a href="/contact" class="text-[#00FF88] hover:underline">talk to sales</a> &middot; <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="text-[#00FF88] hover:underline">view a sample report</a></p>
     </section>
   </main>
 
@@ -25143,7 +25527,7 @@ function getAboutPageHTML(): string {
       <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-6">About Roof Manager</span>
       <h1 class="text-4xl md:text-6xl font-black text-white mb-6 leading-tight">The roof measurement platform<br/><span class="text-[#00FF88]">built for contractors, by engineers.</span></h1>
       <p class="text-lg md:text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed mb-6">Roof Manager is a satellite roof measurement report and complete CRM &mdash; proposals, invoicing, AI voice receptionist &mdash; engineered for residential and commercial roofing contractors across the United States and Canada. We build the tools we wish existed when we were sourcing measurement reports ourselves.</p>
-      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
+      <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" class="inline-flex items-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-3 px-7 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all">
         <i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report
       </a>
     </section>
@@ -25303,7 +25687,7 @@ function getPressPageHTML(): string {
       <span style="background:#f59e0b22;color:#f59e0b;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:6px 14px;border-radius:20px;">Press & Media</span>
       <h1 style="font-size:40px;font-weight:800;margin:20px 0 16px;">Roof Manager Media Kit</h1>
       <p style="color:#94a3b8;font-size:17px;max-width:600px;margin:0 auto 22px;">Resources for journalists, bloggers, and analysts covering roofing technology, construction AI, and Canadian proptech.</p>
-      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:10px;background:#111827;color:#e2e8f0;font-weight:700;padding:11px 22px;border-radius:10px;border:1px solid #1e293b;font-size:14px;text-decoration:none">📄 View Sample Measurement Report</a>
+      <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:10px;background:#111827;color:#e2e8f0;font-weight:700;padding:11px 22px;border-radius:10px;border:1px solid #1e293b;font-size:14px;text-decoration:none">📄 View Sample Measurement Report</a>
     </div>
 
     <!-- Quick stats -->
@@ -25471,7 +25855,7 @@ function getMaterialEstimatorHTML(): string {
       <span style="background:#38bdf822;color:#38bdf8;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:6px 14px;border-radius:20px;">Free Tool</span>
       <h1 style="font-size:36px;font-weight:800;margin:20px 0 12px;">Roofing Material Estimator</h1>
       <p style="color:#94a3b8;font-size:16px;max-width:600px;margin:0 auto 18px;">Enter your roof footprint and pitch to calculate shingles, bundles, squares, underlayment, and ridge cap — waste factor included.</p>
-      <a href="https://www.roofmanager.ca/report/share/14d5fcef4db44d09bddb" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:#111827;color:#e2e8f0;font-weight:700;padding:10px 20px;border-radius:8px;border:1px solid #1e293b;font-size:13px;text-decoration:none">📄 View Sample Measurement Report</a>
+      <a href="https://www.roofmanager.ca/report/share/0e9b56ddb72e4e5391a2" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;background:#111827;color:#e2e8f0;font-weight:700;padding:10px 20px;border-radius:8px;border:1px solid #1e293b;font-size:13px;text-decoration:none">📄 View Sample Measurement Report</a>
     </div>
     <div style="background:#111827;border:1px solid #1e293b;border-radius:20px;padding:36px;margin-bottom:40px;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px;">
