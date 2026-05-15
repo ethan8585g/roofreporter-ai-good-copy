@@ -6811,13 +6811,19 @@ adminRoutes.post('/superadmin/orders/:id/deny-report', async (c) => {
     `).bind(deniedAt, reason, admin.id, orderId).run()
     // Also clear any in-progress report row so admin_review queues don't
     // surface the denied order. Safe no-op if no report exists yet.
+    // status='failed' is the only terminal state reports.status allows that
+    // also gets the row out of 'pending' (CHECK constraint allows only
+    // pending|generating|completed|failed|enhancing). error_message records
+    // the reason so audit logs stay coherent.
     try {
       await c.env.DB.prepare(`
         UPDATE reports SET
+          status = 'failed',
           admin_review_status = NULL,
+          error_message = COALESCE(error_message, 'Order denied: ' || ?),
           updated_at = datetime('now')
-        WHERE order_id = ?
-      `).bind(orderId).run()
+        WHERE order_id = ? AND status = 'pending'
+      `).bind(reason, orderId).run()
     } catch { /* non-fatal */ }
 
     // Credit refund — mirrors the _refundDeduct pattern in square.ts use-credit.
