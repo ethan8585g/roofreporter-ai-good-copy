@@ -7,6 +7,47 @@ var custState = { loading: true, orders: [], billing: null, customer: null, crmS
 
 var _chartInstances = { jobs: null, revenue: null, crew: null };
 
+// Personalized dashboard greeting — time-of-day prefix, first-name highlight,
+// emoji that matches the time. Fired from loadCustomerData once the profile
+// arrives. Falls back gracefully if any element is missing.
+function renderDashGreeting(customer) {
+  var wrap = document.getElementById('rm-dash-greeting');
+  var prefixEl = document.getElementById('rm-dash-greeting-prefix');
+  var nameEl = document.getElementById('rm-dash-greeting-name');
+  var emojiEl = document.getElementById('rm-dash-greeting-emoji');
+  var subEl = document.getElementById('rm-dash-greeting-sub');
+  if (!wrap || !prefixEl || !nameEl || !emojiEl) return;
+  var h = new Date().getHours();
+  var prefix, emoji;
+  if (h < 5)       { prefix = 'Hello'; emoji = '🌙'; }
+  else if (h < 12) { prefix = 'Good morning'; emoji = '☀️'; }
+  else if (h < 17) { prefix = 'Good afternoon'; emoji = '👋'; }
+  else if (h < 22) { prefix = 'Good evening'; emoji = '🌆'; }
+  else             { prefix = 'Good evening'; emoji = '🌙'; }
+  var name = (customer && (customer.name || '').trim()) || (customer && customer.email && customer.email.split('@')[0]) || 'there';
+  // First name only, capitalized.
+  var first = name.split(/\s+/)[0];
+  if (first && first.length) first = first[0].toUpperCase() + first.slice(1);
+  prefixEl.textContent = prefix;
+  nameEl.textContent = first || 'there';
+  emojiEl.textContent = emoji;
+  // Optional contextual subline based on day of week.
+  if (subEl) {
+    var dow = new Date().getDay();
+    var subs = [
+      "Take it easy — we'll keep an eye on the inbox.",          // Sun
+      "Fresh week. Let's get those reports rolling.",            // Mon
+      "Steady week ahead — keep stacking those quotes.",         // Tue
+      "Mid-week momentum. Here's where you stand.",              // Wed
+      "Almost there. Close out the week strong.",                // Thu
+      "Friday energy — quote 'em while they're hot.",            // Fri
+      "Weekend hustle is the best hustle."                        // Sat
+    ];
+    subEl.textContent = subs[dow] || "Here's what's happening with your business today.";
+  }
+  wrap.style.display = 'block';
+}
+
 // Apply visual state to a custom-styled toggle (track color + knob position).
 // Also syncs the hidden checkbox's .checked property.
 function applyToggleVisual(id, checked) {
@@ -72,6 +113,7 @@ async function loadDashData() {
       custState.customer = pd.customer;
       custState.showAds = pd.show_ads === true;
       localStorage.setItem('rc_customer', JSON.stringify(pd.customer));
+      try { renderDashGreeting(pd.customer); } catch (_) {}
     } else {
       localStorage.removeItem('rc_customer'); localStorage.removeItem('rc_customer_token'); localStorage.removeItem('rc_token');
       window.location.href = '/customer/login'; return;

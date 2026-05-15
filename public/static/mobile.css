@@ -48,6 +48,251 @@
   .rm-skel { animation: none; }
 }
 
+/* ─── Aesthetic primitives (loaded on every viewport) ───────────────── */
+
+/* Success pulse — used by the email-verify confirmation card to acknowledge
+   the moment of verification before the user proceeds. */
+@keyframes rm-pulse-success {
+  0%   { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(0,255,136,0.45); }
+  60%  { transform: scale(1.02); box-shadow: 0 0 0 14px rgba(0,255,136,0.0); }
+  100% { transform: scale(1.0);  box-shadow: 0 0 0 0  rgba(0,255,136,0.0); }
+}
+
+/* Button microinteractions — opt-in via `.rm-btn`. Adds hover-lift, click
+   ripple (CSS-only via radial gradient + ::after), and a built-in spinner
+   state via `.rm-btn.is-loading`. Designed to layer on top of existing
+   color classes (e.g. bg-[#00FF88]) without overriding them. */
+.rm-btn {
+  position: relative;
+  overflow: hidden;
+  transform: translateY(0);
+  transition: transform 0.18s cubic-bezier(0.4,0,0.2,1),
+              box-shadow 0.18s cubic-bezier(0.4,0,0.2,1),
+              filter 0.18s ease;
+  will-change: transform;
+}
+.rm-btn:hover:not(:disabled):not(.is-loading) {
+  transform: translateY(-1.5px);
+  filter: brightness(1.06);
+}
+.rm-btn:active:not(:disabled):not(.is-loading) {
+  transform: translateY(0);
+}
+.rm-btn::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(circle at center, rgba(255,255,255,0.35) 0%, transparent 60%);
+  opacity: 0;
+  transform: scale(0.4);
+  pointer-events: none;
+  transition: transform 0.5s ease, opacity 0.5s ease;
+}
+.rm-btn:active::after {
+  opacity: 1;
+  transform: scale(1.2);
+  transition: 0s;
+}
+.rm-btn.is-loading {
+  pointer-events: none;
+  color: transparent !important;
+}
+.rm-btn.is-loading::before {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 18px; height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 2.5px solid rgba(255,255,255,0.35);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: rm-spin 0.7s linear infinite;
+  color: inherit;
+}
+@keyframes rm-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .rm-btn { transition: none; }
+  .rm-btn:hover { transform: none; }
+  .rm-btn::after { display: none; }
+}
+
+/* Card hover-lift utility — pair with .rm-btn-lift on any clickable card. */
+.rm-card-lift {
+  transition: transform 0.22s cubic-bezier(0.4,0,0.2,1), box-shadow 0.22s ease;
+}
+.rm-card-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 24px 40px -12px rgba(0,255,136,0.18), 0 8px 24px rgba(0,0,0,0.4);
+}
+
+/* "Most Popular" pulse badge — for the recommended pricing tier. */
+@keyframes rm-pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(0,255,136,0.55); }
+  100% { box-shadow: 0 0 0 12px rgba(0,255,136,0.0); }
+}
+.rm-popular-pulse {
+  animation: rm-pulse-ring 1.8s ease-out infinite;
+  border-radius: 9999px;
+}
+
+/* Soft fade-in for any content that needs gentle reveal (testimonial slider,
+   activity feed items, etc.) */
+@keyframes rm-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rm-fade-in { animation: rm-fade-in 0.4s ease-out; }
+
+/* Section divider — drop one of these between landing sections to soften the
+   hard transition. SVG-based, no extra HTTP. */
+.rm-section-divider {
+  position: relative;
+  height: 80px;
+  margin-top: -1px;
+  background: linear-gradient(180deg, transparent 0%, rgba(0,255,136,0.04) 50%, transparent 100%);
+}
+.rm-section-divider::after {
+  content: '';
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 60%; max-width: 720px;
+  height: 1px;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(90deg, transparent 0%, rgba(0,255,136,0.35) 50%, transparent 100%);
+}
+
+/* ─── Dashboard polish ─────────────────────────────────────────────────
+   Quick-action cards: subtle lift + brand-tinted ring on hover. Targets the
+   anchor children of the existing `.p-4.space-y-2.5` quick-actions panel
+   without rewriting the markup. */
+main .p-4.space-y-2\.5 > a {
+  transition: transform 0.18s cubic-bezier(0.4,0,0.2,1),
+              box-shadow 0.18s ease,
+              background 0.18s ease;
+}
+main .p-4.space-y-2\.5 > a:hover {
+  transform: translateY(-1.5px);
+  box-shadow: 0 12px 28px -10px rgba(0,255,136,0.18), 0 4px 12px rgba(0,0,0,0.3);
+}
+main .p-4.space-y-2\.5 > a > div.w-9.h-9 {
+  transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
+}
+main .p-4.space-y-2\.5 > a:hover > div.w-9.h-9 {
+  transform: scale(1.08) rotate(-3deg);
+}
+
+/* Sidebar nav active-state ring — give the current page a brand-tinted
+   left border so users always know where they are. Picks up the existing
+   `.bg-emerald` background or hash-link active state. */
+aside nav a:hover {
+  background: rgba(0,255,136,0.06);
+}
+
+/* Dashboard analytics card hover — chart panels gain a subtle lift to feel
+   interactive (even though they're not clickable, the lift signals "alive"). */
+#analytics-section > div {
+  transition: transform 0.25s cubic-bezier(0.4,0,0.2,1),
+              box-shadow 0.25s ease;
+}
+#analytics-section > div:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+}
+
+/* ─── Empty-state polish ──────────────────────────────────────────────
+   Reusable empty-state block. Compose in markup as:
+     <div class="rm-empty">
+       <div class="rm-empty-glyph">🗂</div>
+       <div class="rm-empty-title">No customers yet</div>
+       <div class="rm-empty-body">Add your first client to start managing leads & invoices.</div>
+       <a class="rm-empty-cta" href="...">Add Customer</a>
+     </div>
+*/
+.rm-empty {
+  text-align: center;
+  padding: 56px 24px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.005) 100%);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+}
+.rm-empty-glyph {
+  font-size: 48px;
+  line-height: 1;
+  margin-bottom: 14px;
+  filter: grayscale(0.2);
+  display: inline-block;
+  animation: rm-empty-float 3s ease-in-out infinite;
+}
+@keyframes rm-empty-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+.rm-empty-title {
+  color: var(--text-primary, #fff);
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.rm-empty-body {
+  color: var(--text-muted, #9ca3af);
+  font-size: 13px;
+  max-width: 380px;
+  margin: 0 auto 18px;
+  line-height: 1.5;
+}
+.rm-empty-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #00FF88;
+  color: #0A0A0A;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  text-decoration: none;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+.rm-empty-cta:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  box-shadow: 0 8px 24px rgba(0,255,136,0.25);
+}
+
+/* ─── Mobile dashboard parity ─────────────────────────────────────────
+   On phones, repackage the desktop dashboard so it feels purpose-built —
+   not just shrunk. Layered on top of the existing dashboard markup; no
+   JS changes. */
+@media (max-width: 640px) {
+  /* Greeting header tightens up but keeps the gradient name pop. */
+  #rm-dash-greeting h1 { font-size: 24px !important; }
+  #rm-dash-greeting p  { font-size: 13px !important; }
+
+  /* Calendar + quick-actions stack: extra breathing room between cards. */
+  main > div.grid > div { margin-bottom: 4px; }
+
+  /* Quick-action items get larger touch targets + tighter typography. */
+  main .p-4.space-y-2\.5 { padding: 14px !important; }
+  main .p-4.space-y-2\.5 > a {
+    padding: 14px !important;
+    background: linear-gradient(135deg, rgba(255,255,255,0.025), rgba(255,255,255,0.005)) !important;
+    border: 1px solid rgba(255,255,255,0.07);
+  }
+  main .p-4.space-y-2\.5 > a:active {
+    transform: translateY(0) scale(0.99);
+  }
+
+  /* Sidebar — already hidden on mobile (lg:flex). Make sure the dashboard
+     content fills the gap without awkward leftover padding. */
+  main { padding-top: 16px !important; padding-bottom: 32px !important; }
+
+  /* Analytics chart card titles tighter on mobile. */
+  #analytics-section h3 { font-size: 13px !important; }
+  #analytics-section canvas { max-height: 220px; }
+
+  /* Activation cards (free-trial banner, etc.) get tighter margins. */
+  #rm-activation-cards > * { margin-bottom: 12px; }
+}
+
 @media (max-width: 640px) {
 
   /* ─── Pipeline kanban → snap-scroll one stage at a time ───

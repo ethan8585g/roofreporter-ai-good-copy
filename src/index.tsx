@@ -6447,7 +6447,7 @@ function getHeadTags(canonicalPath?: string) {
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=20260504">
   <link rel="alternate" type="application/rss+xml" title="Roof Manager Blog" href="https://www.roofmanager.ca/feed.xml">
   <link rel="stylesheet" href="/static/style.css">
-  <link rel="stylesheet" href="/static/mobile.css?v=20260514">
+  <link rel="stylesheet" href="/static/mobile.css?v=20260515b">
   <script src="/static/pwa-install.js?v=20260514" defer></script>
   <style>
     /* Mobile baseline fixes — applied site-wide via getHeadTags(). Targets
@@ -8643,9 +8643,14 @@ function getOnboardingPageHTML(sessionToken = ''): string {
     }
     .step { display:none; }
     .step.active { display:block; }
-    .progress-dot { width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,0.2); transition:background 0.3s; }
-    .progress-dot.done { background:#00FF88; }
-    .progress-dot.active { background:#00FF88; box-shadow:0 0 0 4px rgba(0,255,136,0.2); }
+    .progress-dot { width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,0.2); transition: background 0.45s cubic-bezier(0.4,0,0.2,1), box-shadow 0.45s cubic-bezier(0.4,0,0.2,1), transform 0.45s cubic-bezier(0.4,0,0.2,1); }
+    .progress-dot.done { background:#00FF88; box-shadow: 0 0 0 0 rgba(0,255,136,0); }
+    .progress-dot.active { background:#00FF88; box-shadow: 0 0 0 4px rgba(0,255,136,0.2); transform: scale(1.15); }
+    @keyframes rm-onb-dot-pulse {
+      0%, 100% { box-shadow: 0 0 0 4px rgba(0,255,136,0.20); }
+      50% { box-shadow: 0 0 0 8px rgba(0,255,136,0.10); }
+    }
+    .progress-dot.active { animation: rm-onb-dot-pulse 1.8s ease-in-out infinite; }
     /* Keep inputs at 16px on iOS to suppress auto-zoom on focus. */
     @media (max-width: 640px) {
       input, textarea, select { font-size: 16px !important; }
@@ -8804,7 +8809,49 @@ function getOnboardingPageHTML(sessionToken = ''): string {
     // "Welcome back, finish setup" banner doesn't reappear on the dashboard.
     // Server requires step >= 4 to flip onboarding_completed; pass 4 explicitly
     // even though the wizard's UI only has 3 visible steps.
-    if (currentStep === 3) trackStep(4, 'completed');
+    if (currentStep === 3) { trackStep(4, 'completed'); fireConfetti(); }
+  }
+
+  // Lightweight inline confetti — ~60 particles, no library. Plays once when
+  // the user lands on the success step.
+  function fireConfetti() {
+    try {
+      var c = document.createElement('canvas');
+      c.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:9999;width:100vw;height:100vh';
+      c.width = window.innerWidth; c.height = window.innerHeight;
+      document.body.appendChild(c);
+      var ctx = c.getContext('2d');
+      var colors = ['#00FF88','#00CC6A','#ffffff','#fbbf24','#60a5fa'];
+      var parts = [];
+      for (var i = 0; i < 80; i++) {
+        parts.push({
+          x: c.width / 2 + (Math.random() - 0.5) * 200,
+          y: c.height / 3,
+          vx: (Math.random() - 0.5) * 14,
+          vy: Math.random() * -16 - 4,
+          g: 0.5,
+          size: 4 + Math.random() * 6,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          rot: Math.random() * Math.PI * 2,
+          vrot: (Math.random() - 0.5) * 0.3
+        });
+      }
+      var frames = 0;
+      function tick() {
+        frames++;
+        ctx.clearRect(0, 0, c.width, c.height);
+        parts.forEach(function(p) {
+          p.vy += p.g; p.x += p.vx; p.y += p.vy; p.rot += p.vrot;
+          ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+          ctx.restore();
+        });
+        if (frames < 180) { requestAnimationFrame(tick); }
+        else { c.remove(); }
+      }
+      tick();
+    } catch (_) {}
   }
 
   async function saveCompany() {
@@ -9168,10 +9215,10 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           </div>
         </div>
         <a href="/pricing" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Pricing</a>
-        <a href="/customer/login" onclick="rrTrack('cta_click',{location:'nav_login'})" class="border border-white/20 hover:border-white/40 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-all duration-200 hover:bg-white/5 whitespace-nowrap">
-          <i class="fas fa-sign-in-alt mr-1.5 text-gray-400"></i>Log In</a>
-        <a href="/register" onclick="rrTrack('cta_click',{location:'nav_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2.5 px-5 rounded-xl text-sm transition-all duration-200 hover:scale-105 shadow-lg shadow-[#00FF88]/20 whitespace-nowrap">
-          <i class="fas fa-gift mr-1.5"></i>Register Now</a>
+        <a href="/customer/login" onclick="rrTrack('cta_click',{location:'nav_login'})" class="border border-white/20 hover:border-white/40 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-all duration-200 hover:bg-white/5 whitespace-nowrap inline-flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" style="opacity:.7"><path d="M10 17l5-5-5-5v3H3v4h7v3z"/><path d="M14 3h4a2 2 0 012 2v10a2 2 0 01-2 2h-4v-2h4V5h-4V3z"/></svg>Log In</a>
+        <a href="/register" onclick="rrTrack('cta_click',{location:'nav_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2.5 px-5 rounded-xl text-sm transition-all duration-200 hover:scale-105 shadow-lg shadow-[#00FF88]/20 whitespace-nowrap inline-flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M5 8v9h10V8H5zm-2 0V7a2 2 0 012-2h1.5a2.5 2.5 0 014.5-1 2.5 2.5 0 014.5 1H17a2 2 0 012 2v1H3zm6-2h2a.5.5 0 100-1 .5.5 0 00-.5.5V6h-.5a.5.5 0 100 1H9V6z"/></svg>Register Now</a>
       </div>
 
       <!-- Mobile: visible Login + Register + menu button -->
@@ -9179,8 +9226,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <a href="/customer/login" onclick="rrTrack('cta_click',{location:'nav_mobile_login'})" class="border border-white/25 text-white font-bold py-2 px-3 rounded-xl text-sm min-h-[48px] inline-flex items-center whitespace-nowrap">
           Log In
         </a>
-        <a href="/register" onclick="rrTrack('cta_click',{location:'nav_mobile_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2 px-4 rounded-xl text-sm shadow-lg shadow-[#00FF88]/20 min-h-[48px] inline-flex items-center whitespace-nowrap">
-          <i class="fas fa-gift mr-1"></i>Register
+        <a href="/register" onclick="rrTrack('cta_click',{location:'nav_mobile_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2 px-4 rounded-xl text-sm shadow-lg shadow-[#00FF88]/20 min-h-[48px] inline-flex items-center gap-1.5 whitespace-nowrap">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M5 8v9h10V8H5zm-2 0V7a2 2 0 012-2h1.5a2.5 2.5 0 014.5-1 2.5 2.5 0 014.5 1H17a2 2 0 012 2v1H3zm6-2h2a.5.5 0 100-1 .5.5 0 00-.5.5V6h-.5a.5.5 0 100 1H9V6z"/></svg>Register
         </a>
         <button id="mobile-menu-btn" class="text-white text-xl p-3 min-h-[48px] min-w-[48px] flex items-center justify-center" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
           <i class="fas fa-bars"></i>
@@ -9917,7 +9964,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <p class="text-gray-500 text-xs mt-1">Email <a href="mailto:support@roofmanager.ca" class="text-gray-300 hover:text-[#00FF88] underline">support@roofmanager.ca</a> within 30 days &mdash; we refund the same day.</p>
       </div>
     </div>
-<div class="grid lg:grid-cols-3 gap-6 items-start mb-16"><div class="scroll-animate bg-[#111111] rounded-2xl border border-white/10 p-8 hover:shadow-xl transition-shadow"><div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Free Trial</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$0</span></div><p class="text-sm text-gray-400 mb-6">4 free reports + full platform access</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>4 professional PDF reports</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Full CRM &amp; invoicing</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Customer management</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Proposals &amp; job tracking</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Door-to-door manager</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Virtual roof try-on</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Team collaboration</li></ul><a href="/register" onclick="rrTrack('cta_click',{location:'pricing',plan:'free'})" class="block text-center py-3.5 rounded-xl font-bold border-2 border-white/20 text-white hover:bg-white hover:text-[#0A0A0A] transition-all min-h-[48px]">Start Free Trial</a></div><div class="scroll-animate relative" style="transition-delay:100ms"><div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#00FF88] text-[#0A0A0A] text-xs font-extrabold px-5 py-1.5 rounded-full shadow-lg z-10">MOST POPULAR</div><div class="bg-[#111111] rounded-2xl border-2 border-[#00FF88]/50 shadow-xl shadow-[#00FF88]/10 p-8"><div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Per Report</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$10</span><span class="text-xl text-gray-500">CAD</span><span class="text-sm text-gray-500 ml-1">/ report</span></div><div class="flex items-center gap-2 mb-1"><span class="text-sm text-gray-500 line-through">$50&ndash;100 EagleView</span><span class="text-xs font-bold text-[#00FF88] bg-[#00FF88]/10 px-2 py-0.5 rounded-full">Save 85%+</span></div><p class="text-xs text-[#00FF88] font-semibold mb-6"><i class="fas fa-gift mr-1"></i>First 4 reports FREE</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Full 3D area with pitch adjustment</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Complete edge breakdown</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Material BOM with pricing</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Solar potential analysis</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Professional PDF download</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Email + dashboard delivery</li></ul><a href="/register" onclick="rrTrack('cta_click',{location:'pricing',plan:'per_report'})" class="block text-center py-3.5 rounded-xl font-extrabold bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">Get Started Free</a></div></div><div class="scroll-animate relative" style="transition-delay:200ms"><div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white text-xs font-bold px-5 py-1.5 rounded-full shadow-lg z-10">BEST VALUE</div><div class="bg-[#111111] rounded-2xl border-2 border-[#a78bfa]/50 p-8"><div class="text-sm font-bold text-[#a78bfa] uppercase tracking-wider mb-2">Volume Packs</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$5.95</span><span class="text-xl text-gray-500">CAD</span><span class="text-sm text-gray-500 ml-1">/ report</span></div><p class="text-sm text-gray-400 mb-1">Best rate on the 100-Pack — credits never expire</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>10-Pack — $80 ($8.00/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>25-Pack — $187.50 ($7.50/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>50-Pack — $347.50 ($6.95/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>100-Pack — $595 ($5.95/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>Credits never expire</li></ul><a href="/demo" onclick="rrTrack('cta_click',{location:'pricing',plan:'b2b'})" class="block text-center py-3.5 rounded-xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">Book a Volume Demo</a></div></div></div>
+<div class="grid lg:grid-cols-3 gap-6 items-start mb-16"><div class="scroll-animate rm-card-lift bg-[#111111] rounded-2xl border border-white/10 p-8 hover:shadow-xl transition-shadow"><div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Free Trial</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$0</span></div><p class="text-sm text-gray-400 mb-6">4 free reports + full platform access</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>4 professional PDF reports</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Full CRM &amp; invoicing</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Customer management</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Proposals &amp; job tracking</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Door-to-door manager</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Virtual roof try-on</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Team collaboration</li></ul><a href="/register" onclick="rrTrack('cta_click',{location:'pricing',plan:'free'})" class="block text-center py-3.5 rounded-xl font-bold border-2 border-white/20 text-white hover:bg-white hover:text-[#0A0A0A] transition-all min-h-[48px]">Start Free Trial</a></div><div class="scroll-animate relative" style="transition-delay:100ms"><div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#00FF88] text-[#0A0A0A] text-xs font-extrabold px-5 py-1.5 rounded-full shadow-lg z-10 rm-popular-pulse">MOST POPULAR</div><div class="rm-card-lift bg-[#111111] rounded-2xl border-2 border-[#00FF88]/50 shadow-xl shadow-[#00FF88]/10 p-8"><div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Per Report</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$10</span><span class="text-xl text-gray-500">CAD</span><span class="text-sm text-gray-500 ml-1">/ report</span></div><div class="flex items-center gap-2 mb-1"><span class="text-sm text-gray-500 line-through">$50&ndash;100 EagleView</span><span class="text-xs font-bold text-[#00FF88] bg-[#00FF88]/10 px-2 py-0.5 rounded-full">Save 85%+</span></div><p class="text-xs text-[#00FF88] font-semibold mb-6"><i class="fas fa-gift mr-1"></i>First 4 reports FREE</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Full 3D area with pitch adjustment</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Complete edge breakdown</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Material BOM with pricing</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Solar potential analysis</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Professional PDF download</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Email + dashboard delivery</li></ul><a href="/register" onclick="rrTrack('cta_click',{location:'pricing',plan:'per_report'})" class="block text-center py-3.5 rounded-xl font-extrabold bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">Get Started Free</a></div></div><div class="scroll-animate relative" style="transition-delay:200ms"><div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white text-xs font-bold px-5 py-1.5 rounded-full shadow-lg z-10">BEST VALUE</div><div class="rm-card-lift bg-[#111111] rounded-2xl border-2 border-[#a78bfa]/50 p-8"><div class="text-sm font-bold text-[#a78bfa] uppercase tracking-wider mb-2">Volume Packs</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$5.95</span><span class="text-xl text-gray-500">CAD</span><span class="text-sm text-gray-500 ml-1">/ report</span></div><p class="text-sm text-gray-400 mb-1">Best rate on the 100-Pack — credits never expire</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>10-Pack — $80 ($8.00/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>25-Pack — $187.50 ($7.50/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>50-Pack — $347.50 ($6.95/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>100-Pack — $595 ($5.95/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>Credits never expire</li></ul><a href="/demo" onclick="rrTrack('cta_click',{location:'pricing',plan:'b2b'})" class="block text-center py-3.5 rounded-xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">Book a Volume Demo</a></div></div></div>
 
     <!-- Pricing FAQ inline -->
     <div class="max-w-3xl mx-auto mt-4 mb-2">
@@ -11920,7 +11967,13 @@ ${previewId ? `
         }
         verificationToken = j.verification_token;
         var vb = document.getElementById('reg-verify-block'); if (vb) vb.style.display = 'none';
-        var vd = document.getElementById('reg-verified-block'); if (vd) vd.style.display = 'block';
+        var vd = document.getElementById('reg-verified-block');
+        if (vd) {
+          vd.style.display = 'block';
+          // Pop the verified card with a brief pulse so the success registers
+          // emotionally before the user has to keep filling the form.
+          vd.style.animation = 'rm-pulse-success 0.6s cubic-bezier(0.4,0,0.2,1)';
+        }
         setSubmitEnabled(true);
         try { rrTrack('signup_email_verified', {}); } catch(_){}
         var nameEl = document.getElementById('reg-name'); if (nameEl) nameEl.focus();
@@ -12939,6 +12992,15 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
   </header>
   <main class="max-w-7xl mx-auto px-4 py-8">
     <div id="rm-activation-cards"></div>
+    <!-- Personal time-of-day greeting — populated by JS once customer profile is loaded. -->
+    <div id="rm-dash-greeting" class="rm-fade-in mb-6" style="display:none">
+      <h1 class="font-black text-white tracking-tight" style="font-size:clamp(22px, 4vw, 32px); line-height:1.2">
+        <span id="rm-dash-greeting-prefix">Hello</span>,
+        <span id="rm-dash-greeting-name" style="background:linear-gradient(135deg,#00FF88,#34d399);-webkit-background-clip:text;background-clip:text;color:transparent">there</span>
+        <span id="rm-dash-greeting-emoji" style="display:inline-block;margin-left:6px">👋</span>
+      </h1>
+      <p id="rm-dash-greeting-sub" class="text-gray-400 text-sm mt-1.5">Here's what's happening with your business today.</p>
+    </div>
     <div id="customer-root"></div>
   </main>
 
