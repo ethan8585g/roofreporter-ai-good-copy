@@ -194,7 +194,7 @@ function tryRegenHtml(jsonStr: string): string | null {
 // Marker we embed in cached HTML to know it was rendered by the current
 // template version. Has to match the marker in report-html.ts. When the
 // stored HTML's marker doesn't match, we re-render and overwrite the cache.
-const CACHED_HTML_TEMPLATE_MARKER = 'v6.1-multistructure-fix-2026-05-12'
+const CACHED_HTML_TEMPLATE_MARKER = 'v6.3-tripled-diagrams-2026-05-15'
 
 function isCachedHtmlFresh(stored: string | null): boolean {
   if (!stored) return false

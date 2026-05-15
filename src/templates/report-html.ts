@@ -469,7 +469,7 @@ function renderMultiStructureReport(report: RoofReport): string {
 
 // Bump this whenever the template visibly changes so cached HTML in
 // reports.professional_report_html gets re-rendered on next view.
-export const TEMPLATE_VERSION = 'v6.2-perstructure-cover-svg-2026-05-13'
+export const TEMPLATE_VERSION = 'v6.3-tripled-diagrams-2026-05-15'
 
 export function generateProfessionalReportHTML(report: RoofReport): string {
   // ── Multi-structure: render full report per traced building ──
@@ -713,17 +713,22 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 .wf-cell-pct{font-weight:700;color:#333}
 .wf-cell-val{color:#555}
 
-/* ===== Per-structure diagram height caps (Page 2) =====
-   Without these caps, the axo (1200×750 viewBox) renders ~4.7in tall
-   and the 2D plan (700×700) renders ~7.5in tall — combined they push
-   the structure card past the 11in page height. Caps + auto width keep
-   each card to a single 8.5×11 page. */
-.diag-cap-axo{display:flex;justify-content:center;align-items:center;height:3.0in;overflow:hidden}
-.diag-cap-axo svg{max-height:3.0in !important;width:auto !important;height:auto !important;display:block}
-/* 2D plan view is the primary contractor deliverable — render it ~2× so
-   edge dimensions are clearly readable on the printed page. */
-.diag-cap-plan{display:flex;justify-content:center;align-items:center;height:6.2in;overflow:hidden}
-.diag-cap-plan svg{max-height:6.2in !important;width:auto !important;height:auto !important;display:block}
+/* ===== Per-structure diagram size — TRIPLED 2026-05-15 =====
+   Each diagram now consumes a near-full printable page. Width:100% +
+   max-width:7.5in keeps the SVG inside the 7.9in printable area
+   (Letter 8.5in − 0.3in @page margins each side); max-height caps stay
+   below the 10.4in usable height so the diagram NEVER overflows a page.
+   page-break-before:always puts each diagram on its own physical page
+   so the per-structure card chrome above doesn't squeeze a 9-inch axo
+   or a 9.5-inch plan.
+   3D axo viewBox 1200×750 (~1.6:1) → renders 7.5in × 4.7in (vs. 4.8×3 prior, ~2.4× area).
+   2D plan viewBox 700×700 (~1:1)   → renders 7.5in × 7.5in (vs. 6.2×6.2 prior, ~1.5× area).
+   page-break-inside:avoid stops the print engine from splitting a single
+   diagram across two physical pages. */
+.diag-cap-axo{display:flex;justify-content:center;align-items:center;width:100%;page-break-before:always;page-break-inside:avoid}
+.diag-cap-axo svg{width:100% !important;max-width:7.5in !important;max-height:9.0in !important;height:auto !important;display:block}
+.diag-cap-plan{display:flex;justify-content:center;align-items:center;width:100%;page-break-before:always;page-break-inside:avoid}
+.diag-cap-plan svg{width:100% !important;max-width:7.5in !important;max-height:9.5in !important;height:auto !important;display:block}
 </style>
 </head>
 <body>
