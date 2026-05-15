@@ -30,6 +30,56 @@ export interface LogEmailSendParams {
   subject: string
   orderId?: number | null
   dedupKey?: string | null
+  // Optional override. When omitted, derived from `kind` so the
+  // super-admin Email Tracker tabs (Customer-facing / Internal alerts /
+  // Cart recovery / Lead notifications) can group rows correctly.
+  category?: 'customer' | 'alert' | 'cart' | 'lead' | 'manual'
+}
+
+/**
+ * Map an email `kind` to the category column used by the super-admin
+ * Email Tracker tabs. Adding a new kind? Slot it in below or it will
+ * default to 'customer' (customer-facing transactional) — that bucket
+ * is the safe default for outbound emails to a real customer.
+ */
+export function defaultCategoryFromKind(kind: string): 'customer' | 'alert' | 'cart' | 'lead' | 'manual' {
+  const k = (kind || '').toLowerCase()
+
+  // Internal alerts (staff inbox).
+  if (
+    k === 'signup_notification' ||
+    k === 'new_order' ||
+    k === 'gmail_health_alert' ||
+    k === 'funnel_regression' ||
+    k === 'payment_unmatched' ||
+    k === 'marketing_blast_test' ||
+    k.endsWith('_alert') ||
+    k.endsWith('_notification')
+  ) return 'alert'
+
+  // Cart / signup recovery nudges + post-signup nurture sequence.
+  if (
+    k === 'signup_recovery_nudge' ||
+    k === 'account_exists_nudge' ||
+    k.startsWith('abandoned_cart') ||
+    k.startsWith('cart_') ||
+    k.startsWith('nurture_')
+  ) return 'cart'
+
+  // Lead outreach (sent to prospects, not paying customers).
+  if (
+    k === 'lead_outreach' ||
+    k === 'admin_lead_outreach' ||
+    k === 'asset_report_lead' ||
+    k === 'condo_lead_cheatsheet' ||
+    k === 'report_lead_ack' ||
+    k === 'lead_ack'
+  ) return 'lead'
+
+  // Manual composer.
+  if (k === 'manual_compose') return 'manual'
+
+  return 'customer'
 }
 
 /**
@@ -53,9 +103,10 @@ function generateTrackingToken(): string {
 export async function logEmailSend(env: Bindings, p: LogEmailSendParams): Promise<string | null> {
   try {
     const token = generateTrackingToken()
+    const category = p.category || defaultCategoryFromKind(p.kind)
     await env.DB.prepare(
-      `INSERT INTO email_sends (customer_id, recipient, kind, subject, tracking_token, order_id, dedup_key, sent_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+      `INSERT INTO email_sends (customer_id, recipient, kind, subject, tracking_token, order_id, dedup_key, category, sent_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
     ).bind(
       p.customerId,
       p.recipient.slice(0, 320),
@@ -64,6 +115,7 @@ export async function logEmailSend(env: Bindings, p: LogEmailSendParams): Promis
       token,
       p.orderId ?? null,
       (p.dedupKey || '').slice(0, 200) || null,
+      category,
     ).run()
     return token
   } catch (e: any) {
