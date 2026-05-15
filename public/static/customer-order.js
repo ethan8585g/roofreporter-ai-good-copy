@@ -578,7 +578,7 @@ function renderPinStep(root, progressBar) {
         <div class="p-6 space-y-5">
           <div>
             <label class="block text-sm font-semibold text-gray-300 mb-2"><i class="fas fa-search mr-1"></i>Search Address</label>
-            <input type="text" id="mapSearchInput" placeholder="Search an address..."
+            <input type="search" id="mapSearchInput" autocomplete="street-address" enterkeyhint="search" placeholder="Search an address..."
               class="w-full px-4 py-3 border border-white/15 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm" style="color:var(--text-primary)">
             <p id="addressValidationHint" class="text-xs text-gray-400 mt-1.5"><i class="fas fa-circle-info mr-1"></i>Pick from the dropdown for accurate measurement &mdash; freeform addresses may fail to geocode.</p>
           </div>
@@ -607,7 +607,7 @@ function renderPinStep(root, progressBar) {
             <div style="display:flex;flex-direction:column;gap:10px">
               <div>
                 <label style="font-size:11px;font-weight:600;color:#93c5fd;display:block;margin-bottom:4px">Homeowner Full Name</label>
-                <input type="text" id="invoiceCustName" placeholder="e.g. John Smith"
+                <input type="text" id="invoiceCustName" autocomplete="name" enterkeyhint="next" placeholder="e.g. John Smith"
                   value="${orderState.invoiceCustomerName}"
                   oninput="orderState.invoiceCustomerName=this.value"
                   style="width:100%;padding:10px 14px;border:1px solid rgba(59,130,246,0.3);border-radius:10px;font-size:13px;background:rgba(255,255,255,0.08);color:white;outline:none"
@@ -616,7 +616,7 @@ function renderPinStep(root, progressBar) {
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
                 <div>
                   <label style="font-size:11px;font-weight:600;color:#93c5fd;display:block;margin-bottom:4px">Phone Number</label>
-                  <input type="tel" id="invoiceCustPhone" placeholder="e.g. (555) 123-4567"
+                  <input type="tel" id="invoiceCustPhone" inputmode="tel" autocomplete="tel" enterkeyhint="next" placeholder="e.g. (555) 123-4567"
                     value="${orderState.invoiceCustomerPhone}"
                     oninput="orderState.invoiceCustomerPhone=this.value"
                     style="width:100%;padding:10px 14px;border:1px solid rgba(59,130,246,0.3);border-radius:10px;font-size:13px;background:rgba(255,255,255,0.08);color:white;outline:none"
@@ -624,7 +624,7 @@ function renderPinStep(root, progressBar) {
                 </div>
                 <div>
                   <label style="font-size:11px;font-weight:600;color:#93c5fd;display:block;margin-bottom:4px">Email Address</label>
-                  <input type="email" id="invoiceCustEmail" placeholder="e.g. john@email.com"
+                  <input type="email" id="invoiceCustEmail" autocomplete="email" inputmode="email" enterkeyhint="done" placeholder="e.g. john@email.com"
                     value="${orderState.invoiceCustomerEmail}"
                     oninput="orderState.invoiceCustomerEmail=this.value"
                     style="width:100%;padding:10px 14px;border:1px solid rgba(59,130,246,0.3);border-radius:10px;font-size:13px;background:rgba(255,255,255,0.08);color:white;outline:none"
@@ -1131,7 +1131,7 @@ function renderReviewStep(root, progressBar) {
               </div>
             ` : `
               <div class="relative">
-                <input type="text" id="crmCustomerSearch" oninput="searchCrmCustomers(this.value)"
+                <input type="search" id="crmCustomerSearch" enterkeyhint="search" oninput="searchCrmCustomers(this.value)"
                   placeholder="Search by name, email, phone, or address…"
                   class="w-full px-4 py-2.5 bg-[#111111] border border-white/15 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                 <div id="crmCustomerResults" class="hidden absolute z-20 mt-1 w-full bg-[#111111] border border-white/15 rounded-lg shadow-xl max-h-64 overflow-auto"></div>
@@ -1150,7 +1150,7 @@ function renderReviewStep(root, progressBar) {
               <label class="block text-xs font-medium text-gray-400 mb-1">Price Per Square (CAD)</label>
               <div class="relative max-w-xs">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-                <input type="number" step="0.01" min="0" max="9999" id="pricePerBundleInput"
+                <input type="number" step="0.01" min="0" max="9999" inputmode="decimal" enterkeyhint="done" id="pricePerBundleInput"
                   value="${orderState.pricePerBundle || ''}"
                   oninput="orderState.pricePerBundle = parseFloat(this.value) || null;"
                   class="w-full pl-8 pr-4 py-3 border border-white/15 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-white/15 text-sm font-medium"
@@ -1166,7 +1166,7 @@ function renderReviewStep(root, progressBar) {
               <i class="fas fa-paper-plane text-emerald-400 mr-2"></i>Email Report To (Optional)
             </h4>
             <p class="text-xs text-gray-500 mb-3">If filled, the finished roof measurement report will be emailed to this address automatically when it's ready.</p>
-            <input type="email" id="sendReportToEmailInput" placeholder="name@example.com"
+            <input type="email" id="sendReportToEmailInput" autocomplete="email" inputmode="email" enterkeyhint="done" placeholder="name@example.com"
               value="${orderState.sendReportToEmail}"
               oninput="orderState.sendReportToEmail=this.value"
               class="w-full px-4 py-2.5 bg-[#111111] border border-white/15 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" />

@@ -6437,9 +6437,12 @@ function getHeadTags(canonicalPath?: string) {
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="preload" href="/static/tailwind.css" as="style" fetchpriority="high">
   <link rel="stylesheet" href="/static/tailwind.css">
-  <!-- RC#6: Font Awesome preload pattern — reliable in iOS Safari (media=print onload hack is flaky) -->
-  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <!-- Font Awesome — preload + onload swap, with a 1.5s timeout fallback for iOS Safari
+       where onload occasionally fails to fire (RC#6 follow-up). The link is also tagged
+       with id="fa-preload" so the fallback script can find it. -->
+  <link id="fa-preload" rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
+  <script>setTimeout(function(){var fa=document.getElementById('fa-preload');if(fa&&fa.rel==='preload'){fa.rel='stylesheet';}},1500);</script>
   ${getTailwindConfig()}
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=20260504">
   <link rel="alternate" type="application/rss+xml" title="Roof Manager Blog" href="https://www.roofmanager.ca/feed.xml">
@@ -8699,11 +8702,11 @@ function getOnboardingPageHTML(sessionToken = ''): string {
           <h2 class="text-2xl font-black mb-2">What's your company name?</h2>
           <p class="text-gray-400">This will appear on your reports and proposals.</p>
         </div>
-        <input type="text" id="company-name" placeholder="e.g. Smith Roofing Ltd."
+        <input type="text" id="company-name" autocomplete="organization" enterkeyhint="next" placeholder="e.g. Smith Roofing Ltd."
           style="width:100%;padding:16px 18px;background:#111111;border:1.5px solid rgba(255,255,255,0.15);border-radius:12px;color:#fff;font-size:16px;margin-bottom:16px;box-sizing:border-box;outline:none"
           onfocus="this.style.borderColor='#00FF88'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
         <label for="company-phone" style="display:block;font-size:13px;color:#9ca3af;margin-bottom:6px">Phone number <span style="color:#00FF88">*</span></label>
-        <input type="tel" id="company-phone" required inputmode="tel" autocomplete="tel" placeholder="(403) 555-0100"
+        <input type="tel" id="company-phone" required inputmode="tel" autocomplete="tel" enterkeyhint="go" placeholder="(403) 555-0100"
           style="width:100%;padding:16px 18px;background:#111111;border:1.5px solid rgba(255,255,255,0.15);border-radius:12px;color:#fff;font-size:16px;margin-bottom:8px;box-sizing:border-box;outline:none"
           onfocus="this.style.borderColor='#00FF88'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
         <p id="step-2-error" style="display:none;color:#f87171;font-size:13px;margin:0 0 12px"></p>
@@ -10360,7 +10363,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         ${latestPosts.map(p => `
           <a href="/blog/${p.slug}" class="block group">
             <article class="bg-[#111111] border border-white/10 rounded-xl overflow-hidden hover:border-[#00FF88]/30 transition-all duration-300 hover:-translate-y-1 h-full flex flex-col">
-              ${p.cover_image_url ? `<div class="h-40 overflow-hidden"><img src="${p.cover_image_url}" alt="${(p.title || '').replace(/"/g, '&quot;')}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy"/></div>` : `<div class="h-40 bg-gradient-to-br from-[#111] to-[#1a1a1a] flex items-center justify-center"><i class="fas fa-newspaper text-white/10 text-3xl"></i></div>`}
+              ${p.cover_image_url ? `<div class="h-40 overflow-hidden"><img src="${p.cover_image_url}" alt="${(p.title || '').replace(/"/g, '&quot;')}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" decoding="async"/></div>` : `<div class="h-40 bg-gradient-to-br from-[#111] to-[#1a1a1a] flex items-center justify-center"><i class="fas fa-newspaper text-white/10 text-3xl"></i></div>`}
               <div class="p-4 flex flex-col flex-1">
                 <h3 class="font-bold text-white text-sm mb-2 group-hover:text-[#00FF88] transition-colors leading-snug line-clamp-2">${p.title || ''}</h3>
                 <p class="text-gray-500 text-xs mb-3 leading-relaxed flex-1 line-clamp-2">${(p.excerpt || '').substring(0, 100)}</p>
@@ -11741,7 +11744,7 @@ ${previewId ? `
           <!-- Step 1: email only -->
           <div id="step1">
             <label for="reg-email" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Work Email</label>
-            <input id="reg-email" type="email" name="email" autocomplete="email" required
+            <input id="reg-email" type="email" name="email" autocomplete="email" inputmode="email" enterkeyhint="next" required
               placeholder="you@company.com"
               value="${prefillEmail.replace(/"/g, '&quot;')}"
               style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box"
@@ -11773,7 +11776,7 @@ ${previewId ? `
             <div id="reg-verify-block" style="display:none;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:14px;margin-bottom:16px">
               <div style="font-size:13px;color:#0c4a6e;margin-bottom:8px"><i class="fas fa-envelope-open-text" style="margin-right:6px"></i>We sent a 6-digit code to your email. Enter it below to continue.</div>
               <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                <input id="reg-code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
+                <input id="reg-code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" enterkeyhint="done"
                   placeholder="123456"
                   oninput="this.value=this.value.replace(/[^0-9]/g,'')"
                   style="flex:1;min-width:140px;padding:12px 14px;border:1.5px solid #d1d5db;border-radius:10px;font-size:18px;letter-spacing:6px;text-align:center;font-family:monospace;outline:none;box-sizing:border-box">
@@ -11790,7 +11793,7 @@ ${previewId ? `
 
             <!-- conv-v6: collapsed to email + password only. Name/phone/company/primary_use moved to /onboarding to cut signup friction (per CRO audit, this lifts CVR ~15-20%). -->
             <label for="reg-password" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Choose a password</label>
-            <input id="reg-password" type="password" name="password" autocomplete="new-password" required minlength="8"
+            <input id="reg-password" type="password" name="password" autocomplete="new-password" enterkeyhint="go" required minlength="8"
               data-clarity-mask="true"
               placeholder="Min. 8 characters"
               style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:6px"
@@ -12274,11 +12277,11 @@ function getCustomerLoginHTML(googleClientId = '') {
           <div class="space-y-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input type="email" id="custLoginEmail" name="email" autocomplete="username" placeholder="you@company.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm">
+              <input type="email" id="custLoginEmail" name="email" autocomplete="username" inputmode="email" enterkeyhint="next" placeholder="you@company.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm">
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input type="password" id="custLoginPassword" name="password" autocomplete="current-password" placeholder="Enter your password" data-clarity-mask="true" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm">
+              <input type="password" id="custLoginPassword" name="password" autocomplete="current-password" enterkeyhint="go" placeholder="Enter your password" data-clarity-mask="true" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm">
             </div>
           </div>
           <div id="custLoginError" class="hidden mt-4 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg text-sm font-medium"></div>
@@ -12300,7 +12303,7 @@ function getCustomerLoginHTML(googleClientId = '') {
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-            <input type="email" id="forgotEmail" placeholder="you@company.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm" onkeyup="if(event.key==='Enter')doForgot()">
+            <input type="email" id="forgotEmail" autocomplete="email" inputmode="email" enterkeyhint="send" placeholder="you@company.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm" onkeyup="if(event.key==='Enter')doForgot()">
           </div>
           <div id="forgotError" class="hidden mt-3 p-3 bg-red-50 text-red-700 rounded-lg text-sm"></div>
           <div id="forgotSuccess" class="hidden mt-3 p-3 bg-green-50 text-green-700 rounded-lg text-sm"></div>
@@ -18596,7 +18599,7 @@ function getBlogListingHTML(posts: any[] = []) {
   ${posts.length > 0 ? posts.map(p => `
     <a href="/blog/${p.slug}" class="block group">
       <article class="bg-[#111111] border border-white/10 rounded-xl overflow-hidden hover:border-[#00FF88]/30 transition-all duration-300 hover:-translate-y-1 h-full flex flex-col">
-        ${p.cover_image_url ? `<div class="h-48 overflow-hidden"><img src="${p.cover_image_url}" alt="${(p.title || '').replace(/"/g, '&quot;')}" class="w-full h-full object-cover" loading="lazy"/></div>` : `<div class="h-48 bg-gradient-to-br from-[#111] to-[#1a1a1a] flex items-center justify-center"><i class="fas fa-newspaper text-white/10 text-4xl"></i></div>`}
+        ${p.cover_image_url ? `<div class="h-48 overflow-hidden"><img src="${p.cover_image_url}" alt="${(p.title || '').replace(/"/g, '&quot;')}" class="w-full h-full object-cover" loading="lazy" decoding="async"/></div>` : `<div class="h-48 bg-gradient-to-br from-[#111] to-[#1a1a1a] flex items-center justify-center"><i class="fas fa-newspaper text-white/10 text-4xl"></i></div>`}
         <div class="p-5 flex flex-col flex-1">
           <h3 class="font-bold text-white mb-2 group-hover:text-[#00FF88] transition-colors leading-snug">${p.title || ''}</h3>
           <p class="text-gray-400 text-sm mb-4 leading-relaxed flex-1">${(p.excerpt || '').substring(0, 150)}</p>

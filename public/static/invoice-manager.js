@@ -230,7 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <div class="rounded-xl p-3 mb-4 flex items-center gap-3 flex-wrap" style="background:var(--bg-card);border:1px solid var(--border-color)">
       <div class="relative flex-1 min-w-[200px]">
         <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs" style="color:var(--text-muted)"></i>
-        <input type="text" id="im-search" placeholder="Search invoices..." value="${searchTerm}"
+        <input type="search" id="im-search" enterkeyhint="search" placeholder="Search invoices..." value="${searchTerm}"
           oninput="window._im.setSearch(this.value)"
           class="w-full pl-8 pr-3 py-1.5 rounded-lg text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)">
       </div>
@@ -366,9 +366,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="relative">
           <div class="flex items-center gap-2 rounded-lg px-3 py-2" style="border:1px solid var(--border-color);background:var(--bg-elevated)">
             <i class="fas fa-search text-xs flex-shrink-0" style="color:var(--text-muted)"></i>
-            <input type="text" id="im-customer-search" value="${selectedName.replace(/"/g, '&quot;')}"
+            <input type="search" id="im-customer-search" value="${selectedName.replace(/"/g, '&quot;')}"
               placeholder="Search customers..."
               autocomplete="off"
+              enterkeyhint="search"
               oninput="window._im.filterCustomers(this.value)"
               onfocus="window._im.openCustomerDropdown()"
               onblur="setTimeout(()=>{const d=document.getElementById('im-customer-dropdown');if(d)d.style.display='none';},200)"
@@ -404,11 +405,11 @@ document.addEventListener('DOMContentLoaded', () => {
               const amt = (item.quantity || 0) * (item.unit_price || 0);
               return `<tr style="border-bottom:1px solid var(--border-color)">
                 <td class="px-2 py-1"><input type="text" value="${item.description || ''}" onchange="window._im.updateItem(${i},'description',this.value)" class="w-full rounded px-2 py-1.5 text-sm" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)"></td>
-                <td class="px-2 py-1"><input type="number" value="${item.quantity}" onchange="window._im.updateItem(${i},'quantity',this.value)" class="w-full rounded px-2 py-1.5 text-sm text-center" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)" min="0" step="0.01"></td>
+                <td class="px-2 py-1"><input type="number" value="${item.quantity}" inputmode="decimal" onchange="window._im.updateItem(${i},'quantity',this.value)" class="w-full rounded px-2 py-1.5 text-sm text-center" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)" min="0" step="0.01"></td>
                 <td class="px-2 py-1"><select onchange="window._im.updateItem(${i},'unit',this.value)" class="w-full rounded px-1 py-1.5 text-xs" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)">
                   ${['each','pcs','sq ft','m²','sq','LF','m','bundle','roll','box','hour','day','lot'].map(u => `<option value="${u}" ${item.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
                 </select></td>
-                <td class="px-2 py-1"><input type="number" value="${item.unit_price}" onchange="window._im.updateItem(${i},'unit_price',this.value)" class="w-full rounded px-2 py-1.5 text-sm text-right" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)" min="0" step="0.01"></td>
+                <td class="px-2 py-1"><input type="number" value="${item.unit_price}" inputmode="decimal" onchange="window._im.updateItem(${i},'unit_price',this.value)" class="w-full rounded px-2 py-1.5 text-sm text-right" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)" min="0" step="0.01"></td>
                 <td class="px-2 py-1 text-right font-medium text-sm" style="color:var(--text-primary)">$${amt.toFixed(2)}</td>
                 <td class="px-2 py-1 text-center"><input type="checkbox" ${item.is_taxable ? 'checked' : ''} onchange="window._im.updateItem(${i},'is_taxable',this.checked)"></td>
                 <td class="px-2 py-1"><button onclick="window._im.removeItem(${i})" class="text-red-500 hover:text-red-700 text-xs ${f.items.length <= 1 ? 'invisible' : ''}"><i class="fas fa-times"></i></button></td>
@@ -429,13 +430,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 <option value="fixed" ${f.discount_type === 'fixed' ? 'selected' : ''}>$</option>
                 <option value="percentage" ${f.discount_type === 'percentage' ? 'selected' : ''}>%</option>
               </select>
-              <input type="number" id="im-discount" value="${f.discount_amount}" onchange="window._im.updTotals()" class="rounded px-2 py-0.5 text-xs w-20 text-right" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)" step="0.01">
+              <input type="number" id="im-discount" inputmode="decimal" value="${f.discount_amount}" onchange="window._im.updTotals()" class="rounded px-2 py-0.5 text-xs w-20 text-right" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)" step="0.01">
             </div>
           </div>
           <div class="flex justify-between text-sm items-center gap-2">
             <div class="flex items-center gap-1.5">
               <span class="text-xs font-medium w-8" style="color:var(--text-muted)">GST</span>
-              <input type="number" id="im-gst-rate" value="${f.gst_rate}" step="0.1" min="0" max="30" onchange="window._im.updTotals()" class="w-14 rounded px-1 py-0.5 text-xs text-center" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)">
+              <input type="number" id="im-gst-rate" inputmode="decimal" value="${f.gst_rate}" step="0.1" min="0" max="30" onchange="window._im.updTotals()" class="w-14 rounded px-1 py-0.5 text-xs text-center" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)">
               <span class="text-xs" style="color:var(--text-muted)">%</span>
             </div>
             <span style="color:var(--text-primary)" id="im-gst">$${calcGst().toFixed(2)}</span>
@@ -443,7 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="flex justify-between text-sm items-center gap-2">
             <div class="flex items-center gap-1.5">
               <span class="text-xs font-medium w-8" style="color:var(--text-muted)">PST</span>
-              <input type="number" id="im-pst-rate" value="${f.pst_rate}" step="0.1" min="0" max="30" onchange="window._im.updTotals()" class="w-14 rounded px-1 py-0.5 text-xs text-center" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)">
+              <input type="number" id="im-pst-rate" inputmode="decimal" value="${f.pst_rate}" step="0.1" min="0" max="30" onchange="window._im.updTotals()" class="w-14 rounded px-1 py-0.5 text-xs text-center" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)">
               <span class="text-xs" style="color:var(--text-muted)">%</span>
             </div>
             <span style="color:var(--text-primary)" id="im-pst">$${calcPst().toFixed(2)}</span>

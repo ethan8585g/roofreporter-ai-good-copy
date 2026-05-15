@@ -81,7 +81,9 @@
 
   function render() {
     if (state.loading) {
-      root.innerHTML = '<div class="text-center py-12"><div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-emerald-500 mx-auto mb-3"></div><p class="text-sm" style="color:var(--text-muted)">Loading leads...</p></div>';
+      root.innerHTML = '<div style="margin-top:16px">' +
+        '<div class="rm-skel-card"><div class="rm-skel-row"><div class="rm-skel rm-skel-avatar"></div><div style="flex:1"><div class="rm-skel rm-skel-line medium"></div><div class="rm-skel rm-skel-line short"></div></div></div></div>'.repeat(6) +
+        '</div>';
       return;
     }
 

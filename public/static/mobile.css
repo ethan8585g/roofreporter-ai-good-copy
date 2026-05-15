@@ -1,6 +1,53 @@
 /* Site-wide mobile improvements layered on top of the global @media (max-width:640px)
    block in getHeadTags(). Loaded from every page that calls getHeadTags. */
 
+/* ─── Skeleton-loader primitives (loaded on every viewport) ───
+   Use `<div class="rm-skel rm-skel-line"></div>` for a single line,
+   or `<div class="rm-skel-card">…</div>` to wrap a card placeholder.
+   The shimmer pulse is GPU-friendly. */
+@keyframes rm-skel-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.rm-skel {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.04) 0%,
+    rgba(255,255,255,0.10) 50%,
+    rgba(255,255,255,0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: rm-skel-shimmer 1.4s ease-in-out infinite;
+  border-radius: 8px;
+  display: block;
+}
+.rm-skel-line { height: 14px; margin-bottom: 8px; }
+.rm-skel-line.short { width: 40%; }
+.rm-skel-line.medium { width: 70%; }
+.rm-skel-card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+.rm-skel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.rm-skel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.rm-skel-avatar { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .rm-skel { animation: none; }
+}
+
 @media (max-width: 640px) {
 
   /* ─── Pipeline kanban → snap-scroll one stage at a time ───

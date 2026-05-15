@@ -129,7 +129,9 @@ function renderDashboard() {
   var root = document.getElementById('customer-root');
   if (!root) return;
   if (custState.loading) {
-    root.innerHTML = '<div class="flex items-center justify-center py-20"><div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-500"></div><span class="ml-4 text-gray-500 text-lg">Loading dashboard...</span></div>';
+    root.innerHTML = '<div class="rm-skel-grid" style="margin-top:24px">' +
+      '<div class="rm-skel-card"><div class="rm-skel rm-skel-line short"></div><div class="rm-skel" style="height:36px;width:60%;margin-top:8px"></div></div>'.repeat(4) +
+      '</div><div class="rm-skel-card" style="margin-top:16px"><div class="rm-skel rm-skel-line medium"></div><div class="rm-skel rm-skel-line"></div><div class="rm-skel rm-skel-line"></div><div class="rm-skel rm-skel-line short"></div></div>';
     return;
   }
 
