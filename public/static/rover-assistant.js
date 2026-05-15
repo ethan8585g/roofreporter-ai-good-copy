@@ -415,6 +415,15 @@
       #rover-assistant { width: 100vw; }
       .ra-quick-bar { padding: 8px 12px; }
     }
+
+    /* ── Touch devices: hide the FAB close button.
+       It only fades in on :hover (which doesn't fire on touch), so on phones
+       the invisible 22×22 button at top:-6px/right:-6px catches taps in the
+       FAB's top-right corner — instantly hiding Rover for the whole session
+       and making it look broken. Desktops still get the hover-to-close. */
+    @media (hover: none) {
+      .ra-fab-close { display: none !important; }
+    }
   `;
   document.head.appendChild(style);
 
@@ -464,7 +473,13 @@
   var fab = document.createElement('button');
   fab.id = 'rover-assistant-fab';
   fab.innerHTML = '<button class="ra-fab-close" id="ra-fab-close" title="Hide Rover" aria-label="Hide Rover">×</button><span><img src="/static/logo.png" alt="Roof Manager" style="width:34px;height:34px;object-fit:contain;display:block"></span><div class="ra-fab-label">Ask Rover AI (drag to move)</div>';
-  if (sessionStorage.getItem('rover_fab_hidden') === '1') {
+  // On touch devices the close button is hidden (see @media (hover:none) styles),
+  // so any sessionStorage hidden flag is from the prior bug — clear it so the FAB
+  // comes back without the user having to close the tab.
+  var isTouchDevice = window.matchMedia && window.matchMedia('(hover: none)').matches;
+  if (isTouchDevice) {
+    try { sessionStorage.removeItem('rover_fab_hidden'); } catch (e) {}
+  } else if (sessionStorage.getItem('rover_fab_hidden') === '1') {
     fab.classList.add('hidden');
   }
   document.body.appendChild(fab);
