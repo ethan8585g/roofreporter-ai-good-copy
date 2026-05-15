@@ -962,9 +962,13 @@ customerAuthRoutes.post('/register', async (c) => {
     // conv-v5: persist phone, company_size, primary_use for sales-qualification.
     // gclid stays on customers (legacy column); full UTM set goes to analytics_attribution below.
     const effectiveLeadSource = utmSource || (cleanGclid ? 'google' : null)
+    // last_login stays NULL on signup — it's set only when the user actually
+    // authenticates (email/password login below, or Google sign-in). Seeding
+    // it at signup made the People Directory show signup-time as "Last Login"
+    // for users who never logged in.
     const result = await c.env.DB.prepare(`
-      INSERT INTO customers (email, name, phone, company_name, company_size, primary_use, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by, auto_invoice_enabled, company_type, last_login, gclid, lead_utm_source, lead_source)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, ?, 0, ?, ?, 0, 'roofing', datetime('now'), ?, ?, ?)
+      INSERT INTO customers (email, name, phone, company_name, company_size, primary_use, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by, auto_invoice_enabled, company_type, gclid, lead_utm_source, lead_source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, ?, 0, ?, ?, 0, 'roofing', ?, ?, ?)
     `).bind(cleanEmail, derivedName, cleanPhone, cleanCompanyName, cleanCompanySize, cleanPrimaryUse, storedHash, isVerifiedAtSignup ? 1 : 0, FREE_TRIAL_REPORTS, refCode, referredBy, cleanGclid, utmSource, effectiveLeadSource).run()
 
     if (!result.meta.last_row_id) {
