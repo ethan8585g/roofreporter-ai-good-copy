@@ -531,6 +531,25 @@ export async function notifyTraceCompletedToCustomer(
 ): Promise<void> {
   const { to, order_number, property_address, customer_name, order_id, customer_id, allow_resend } = args
   if (!to) return
+  // Suppression list short-circuit. notifyTraceCompletedToCustomer bypasses
+  // the logAndSendEmail wrapper (it needs PDF attachments + a specific HTML
+  // body), so the wrapper's suppression check never ran. Without this gate,
+  // an email_suppressions row for the recipient was being ignored entirely.
+  // Bgequip@telus.net got 8 report_ready sends pre-suppression — keep them
+  // from getting more.
+  if (env?.DB) {
+    try {
+      const supp = await env.DB.prepare(
+        `SELECT id FROM email_suppressions WHERE LOWER(email) = LOWER(?) AND released_at IS NULL LIMIT 1`
+      ).bind(to).first<{ id: number } | null>()
+      if (supp) {
+        console.log(`[notifyTraceCompletedToCustomer] suppressed: ${to} on suppression list (email_suppressions.id=${supp.id})`)
+        return
+      }
+    } catch (e: any) {
+      console.warn('[notifyTraceCompletedToCustomer] suppression check failed, proceeding:', e?.message || e)
+    }
+  }
   // Idempotency gate — refuse to send the same report_ready twice for the
   // same order. Was firing 2-3x per delivered report (retraces + bulk-
   // approve + approve-and-deliver re-runs) and customers complained about
@@ -1305,6 +1324,20 @@ export async function sendWelcomeEmail(env: Bindings, data: {
   customerId?: number | null
 }): Promise<void> {
   if (!data?.email) return
+  // Suppression list short-circuit — bypasses logAndSendEmail wrapper.
+  if (env?.DB) {
+    try {
+      const supp = await env.DB.prepare(
+        `SELECT id FROM email_suppressions WHERE LOWER(email) = LOWER(?) AND released_at IS NULL LIMIT 1`
+      ).bind(data.email).first<{ id: number } | null>()
+      if (supp) {
+        console.log(`[sendWelcomeEmail] suppressed: ${data.email} (email_suppressions.id=${supp.id})`)
+        return
+      }
+    } catch (e: any) {
+      console.warn('[sendWelcomeEmail] suppression check failed, proceeding:', e?.message || e)
+    }
+  }
   const esc = (v: any) => String(v ?? '').replace(/[&<>"']/g, (m) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' } as any)[m])
   const firstName = (data.name || '').trim().split(/\s+/)[0] || ''
   const greeting = firstName ? `Hi ${esc(firstName)},` : 'Hi there,'
@@ -1433,6 +1466,20 @@ export async function notifyReportDenied(
 ): Promise<void> {
   const { to, order_number, property_address, customer_name, customer_id, denial_reason, credit_refunded } = args
   if (!to) return
+  // Suppression list short-circuit — bypasses logAndSendEmail wrapper.
+  if (env?.DB) {
+    try {
+      const supp = await env.DB.prepare(
+        `SELECT id FROM email_suppressions WHERE LOWER(email) = LOWER(?) AND released_at IS NULL LIMIT 1`
+      ).bind(to).first<{ id: number } | null>()
+      if (supp) {
+        console.log(`[notifyReportDenied] suppressed: ${to} (email_suppressions.id=${supp.id})`)
+        return
+      }
+    } catch (e: any) {
+      console.warn('[notifyReportDenied] suppression check failed, proceeding:', e?.message || e)
+    }
+  }
   const firstName = (customer_name || '').split(' ')[0]
   const greeting = firstName ? `Hi ${htmlEsc(firstName)},` : 'Hi,'
   const subject = `Update on your roof report — ${order_number}`
