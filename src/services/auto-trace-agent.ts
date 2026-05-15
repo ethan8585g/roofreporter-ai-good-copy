@@ -29,6 +29,19 @@ import { fetchDsmHillshade, type DsmHillshadeResult } from './dsm-visualization'
 import { renderGridOverlay } from './grid-overlay'
 import { fetchFootprintPriors, type FootprintPrior } from './footprint-priors'
 import { decodePNG, encodePNG, lanczosResize, applyVARITint } from './image-preprocess'
+import { segmentWithGemini } from './sam3-segmentation'
+
+// Gemini pre-segmentation reference passed to Claude. Lat/lng (not pixels)
+// so Claude doesn't conflate Gemini's frame with the augmented image it
+// actually sees. Best-effort: stays null on any Gemini failure.
+type GeminiTraceHint = {
+  edge_specific_polylines: { lat: number; lng: number }[][]
+  roof_outline_latlng: { lat: number; lng: number }[]
+  segments_count: number
+  obstructions_count: number
+  overall_complexity?: string
+  elapsed_ms: number
+} | null
 
 const CLAUDE_VISION_MODEL = 'claude-opus-4-6'
 
@@ -296,6 +309,25 @@ export interface AutoTraceResult {
     /** ISO timestamp of when the cached result was originally produced
      *  (only populated when cache_hit=true). */
     cache_cached_at?: string
+    /** True when a Gemini pre-segmentation pass ran and produced a usable
+     *  reference for the Claude prompt. False/undefined when Gemini was
+     *  unavailable, errored, or returned a degenerate result. */
+    gemini_hint_used?: boolean
+    /** Gemini's reported segments_count (how many roof facets it identified).
+     *  Useful for cross-checking against Solar's segment count. */
+    gemini_segments_count?: number
+    /** Number of vertices in Gemini's roof_outline polygon. 0 when Gemini
+     *  didn't return a usable outline. */
+    gemini_outline_vertices?: number
+    /** Number of edge-specific polylines (eaves/hips/ridges/valleys) Gemini
+     *  produced for the requested edge type. */
+    gemini_edge_polylines_count?: number
+    /** Wall-clock time Gemini took (ms). Adds to total latency but runs in
+     *  parallel with the satellite/DSM fetches so usually hides under them. */
+    gemini_elapsed_ms?: number
+    /** Gemini's qualitative complexity tag — 'simple' | 'medium' | 'complex'.
+     *  Independent of our complexity_bucket which is derived from Solar. */
+    gemini_complexity?: string
   }
 }
 
@@ -422,6 +454,57 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
   const framing = chooseImageFraming(solarInsights, input.lat, input.lng, zoom)
 
   const imageUrl = buildSatelliteImageUrl(framing.lat, framing.lng, framing.zoom, safeW, safeH, env.GOOGLE_MAPS_API_KEY)
+
+  // Gemini pre-segmentation — runs in parallel with the satellite / DSM
+  // fetches below so it doesn't add to wall-clock. Gemini sees the raw
+  // Static Maps tile (no overlays, no upscaling) at the canonical
+  // 1280×1280 frame produced by scale=2. Best-effort: any failure
+  // leaves geminiHint null and Claude runs the existing pipeline
+  // unchanged — no regression possible.
+  const geminiStarted = Date.now()
+  const geminiP: Promise<GeminiTraceHint> = (async () => {
+    try {
+      const seg = await segmentWithGemini(env as any, imageUrl, safeW * 2, safeH * 2)
+      if (!seg) return null
+      const elapsed = Date.now() - geminiStarted
+      const FRAME = safeW * 2
+      const toLatLng = (px: number, py: number) =>
+        pxToLatLng(px, py, framing.lat, framing.lng, framing.zoom, FRAME, FRAME)
+      const roofOutlineLatLng = Array.isArray(seg.roof_outline)
+        ? seg.roof_outline
+            .filter((p: any) => Number.isFinite(p?.x) && Number.isFinite(p?.y))
+            .slice(0, 24)
+            .map((p: any) => toLatLng(p.x, p.y))
+        : []
+      const edgeTypeFor: Record<AutoTraceEdge, string[]> = {
+        eaves: ['eave'],
+        ridges: ['ridge'],
+        hips: ['hip'],
+        valleys: ['valley'],
+      }
+      const wanted = edgeTypeFor[input.edge] || []
+      const edgePolylines: { lat: number; lng: number }[][] = Array.isArray(seg.edges)
+        ? seg.edges
+            .filter((e: any) => wanted.includes(e?.type))
+            .slice(0, 16)
+            .map((e: any) => [toLatLng(e.start.x, e.start.y), toLatLng(e.end.x, e.end.y)])
+        : []
+      if (roofOutlineLatLng.length < 3 && edgePolylines.length === 0) {
+        return null
+      }
+      return {
+        edge_specific_polylines: edgePolylines,
+        roof_outline_latlng: roofOutlineLatLng,
+        segments_count: Array.isArray(seg.segments) ? seg.segments.length : 0,
+        obstructions_count: Array.isArray(seg.obstructions) ? seg.obstructions.length : 0,
+        overall_complexity: seg.overall_complexity,
+        elapsed_ms: elapsed,
+      }
+    } catch (e: any) {
+      console.warn('[auto-trace] Gemini pre-segmentation failed:', e?.message)
+      return null
+    }
+  })()
 
   // Optional wide-context tile — one zoom level out, same centre. Gives
   // Claude property-boundary awareness without inflating the primary tile.
@@ -775,6 +858,13 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     widePinApplied,
     widePinCenterPx,
   })
+  // Gemini pre-segmentation has been running in parallel since the image
+  // URL was built. By the time we get here the satellite + DSM fetches
+  // and the training-examples Promise.all have both resolved, so Gemini
+  // is usually already done. Await it here so it can be folded into the
+  // prompt. Stays null on any failure — Claude runs unchanged.
+  const geminiHint = await geminiP
+
   const userPrompt = buildUserPrompt({
     edge: input.edge,
     // Tell Claude the dimensions of the image it ACTUALLY sees (may be
@@ -792,6 +882,7 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
     targetCenterPx,
     targetBboxPx,
     footprintPriors: footprintPriorsResult.priors,
+    geminiHint,
   })
 
   // Build the multimodal content array. Order MUST match the system-
@@ -1053,6 +1144,12 @@ export async function runAutoTrace(env: Bindings, input: AutoTraceInput): Promis
       target_pin_px: targetPinCenterPx || undefined,
       wide_context_pin_applied: widePinApplied || undefined,
       wide_context_pin_px: widePinCenterPx || undefined,
+      gemini_hint_used: !!geminiHint || undefined,
+      gemini_segments_count: geminiHint?.segments_count,
+      gemini_outline_vertices: geminiHint?.roof_outline_latlng.length,
+      gemini_edge_polylines_count: geminiHint?.edge_specific_polylines.length,
+      gemini_elapsed_ms: geminiHint?.elapsed_ms,
+      gemini_complexity: geminiHint?.overall_complexity,
       model: CLAUDE_VISION_MODEL,
       elapsed_ms: Date.now() - started,
     },
@@ -1390,6 +1487,7 @@ function buildUserPrompt(args: {
   targetCenterPx: { x: number; y: number }
   targetBboxPx: { x1: number; y1: number; x2: number; y2: number } | null
   footprintPriors: FootprintPrior[]
+  geminiHint?: GeminiTraceHint
 }): string {
   const lines: string[] = []
   let img = 1
@@ -1452,6 +1550,30 @@ function buildUserPrompt(args: {
         lines.push(`  → Sources DISAGREE (max/min ratio ${ratio.toFixed(2)}). Trust the satellite image over either prior; one of the data sources is wrong.`)
       }
     }
+    lines.push('')
+  }
+
+  // Gemini pre-segmentation hint — fast, lower-precision second-opinion
+  // from Gemini 2.0 Flash on the raw satellite tile. Most useful for
+  // disambiguating WHICH building to trace (Gemini almost never picks
+  // the wrong house) and for sanity-checking segment count. Always
+  // lat/lng (not pixels) so Claude can't conflate Gemini's image frame
+  // with the augmented image it actually sees.
+  if (args.geminiHint) {
+    const g = args.geminiHint
+    lines.push('Gemini pre-segmentation reference (independent second-opinion from Gemini 2.0 Flash on the raw satellite tile):')
+    lines.push(`- Detected ${g.segments_count} roof facet(s), ${g.obstructions_count} obstruction(s)${g.overall_complexity ? `, overall complexity: ${g.overall_complexity}` : ''}.`)
+    if (g.roof_outline_latlng.length >= 3) {
+      lines.push(`- Roof outline polygon (${g.roof_outline_latlng.length} vertices, lat/lng — DO NOT copy these numbers as your output; emit pixel coords of Image 1 only):`)
+      lines.push(`  ${JSON.stringify(g.roof_outline_latlng.map(p => [Number(p.lat.toFixed(6)), Number(p.lng.toFixed(6))]))}`)
+    }
+    if (g.edge_specific_polylines.length > 0) {
+      lines.push(`- ${args.edge}-specific polylines from Gemini (${g.edge_specific_polylines.length} segment(s), lat/lng):`)
+      g.edge_specific_polylines.slice(0, 8).forEach((poly, i) => {
+        lines.push(`  ${i + 1}: ${JSON.stringify(poly.map(p => [Number(p.lat.toFixed(6)), Number(p.lng.toFixed(6))]))}`)
+      })
+    }
+    lines.push(`HOW TO USE: Treat Gemini's outline as a STARTING REFERENCE — especially for identifying which building. Gemini is faster but lower-precision than you on vertex placement, edge counts, and detached structures. Verify against the satellite image and CORRECT any errors. If Gemini's outline disagrees strongly with the Solar bbox AND the target pin, trust the pin + bbox over Gemini.`)
     lines.push('')
   }
 
