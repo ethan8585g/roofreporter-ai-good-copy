@@ -2547,6 +2547,18 @@ window.saTraceUndo = function() {
     }
     return false;
   }
+  function popWall() {
+    if (s.walls && s.walls.length > 0) {
+      var wallObj = s.walls.pop();
+      if (wallObj) {
+        if (wallObj.line) wallObj.line.setMap(null);
+        if (wallObj.label) wallObj.label.setMap(null);
+      }
+      (s._wallData || []).pop();
+      return true;
+    }
+    return false;
+  }
   function popClosedDormer() {
     if (s.dormers && s.dormers.length > 0) {
       var lastD = s.dormers.pop();
@@ -2586,11 +2598,13 @@ window.saTraceUndo = function() {
   // Active tool first.
   if (popAnnotation(s.tool)) return;
   if (popLine(s.tool)) return;
+  if (s.tool === 'wall' && popWall()) return;
   // Fall through every other completed collection so repeated clicks keep
   // working until the trace is empty.
   if (popLine('ridge')) return;
   if (popLine('hip')) return;
   if (popLine('valley')) return;
+  if (popWall()) return;
   if (popAnnotation('vent')) return;
   if (popAnnotation('skylight')) return;
   if (popAnnotation('chimney')) return;
