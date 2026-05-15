@@ -1886,6 +1886,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<button onclick="saTraceSetTool(\'ridge\')" id="sa-tool-ridge" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Ridge</button>' +
           '<button onclick="saTraceSetTool(\'hip\')" id="sa-tool-hip" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Hip</button>' +
           '<button onclick="saTraceSetTool(\'valley\')" id="sa-tool-valley" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Valley</button>' +
+          '<button onclick="saTraceSetTool(\'wall\')" id="sa-tool-wall" title="Mark a vertical shingled wall as a 2-click line segment (start + end). Use when the wall is visible in 3D Reference / Street View but obscured by upper-roof overhang in satellite. Wall area is added to the report at 8 ft typ. wall height." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Wall</button>' +
           '<button onclick="saTraceSetTool(\'dormer\')" id="sa-tool-dormer" title="Trace a polygon around a dormer on top of the main roof, then enter its pitch (e.g. 12 for 12:12). Engine adds only the steeper sloped surface — no double-counted footprint." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Dormer</button>' +
           '<button onclick="saCompleteDormer()" id="sa-tool-dormer-complete" title="Finalize the in-progress dormer polygon and enter its pitch" style="display:none;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:#a855f7;color:#fff;border:1px solid #a855f7"><i class="fas fa-check mr-1"></i>Complete Dormer Trace</button>' +
           '<button onclick="saTraceSetTool(\'cutout\')" id="sa-tool-cutout" title="Mark a deck, atrium, or other non-roof void inside the outline — click corners, click first point to close. The area is subtracted from the roof square footage." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151"><i class="fas fa-ban mr-1"></i>+ Non-Roof</button>' +
@@ -2010,6 +2011,12 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
     _sectionLabelMarkers: [],    // S1, S2... centroid label markers (one per closed section)
     ridges: [], hips: [], valleys: [],
     _ridgeData: [], _hipData: [], _valleyData: [],
+    // Manual wall segments — operator-marked vertical shingled walls visible
+    // in 3D Reference / Street View but obscured from satellite. Stored as
+    // [{pts:[{lat,lng}, {lat,lng}], kind:'step', heightFt:8}] to match the
+    // existing svg-diagrams.ts walls schema. Rendered with LF + sf callout
+    // pill in the 2D plan diagram.
+    walls: [], _wallData: [],
     _segStart: null, _segStartMarker: null,
     vents: [], skylights: [], chimneys: [], downspouts: [],
     _ventMarkers: [], _skylightMarkers: [], _chimneyMarkers: [], _downspoutMarkers: [],
@@ -2384,11 +2391,11 @@ window.saTraceSetTool = function(tool) {
     }
   }
   s.tool = tool;
-  ['eave','ridge','hip','valley','dormer','cutout','vent','skylight','chimney','downspout'].forEach(function(t) {
+  ['eave','ridge','hip','valley','wall','dormer','cutout','vent','skylight','chimney','downspout'].forEach(function(t) {
     var btn = document.getElementById('sa-tool-' + t);
     if (btn) {
       var active = t === tool;
-      var colors = { eave: '#22c55e', ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb', dormer: '#a855f7', cutout: '#6b7280', vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626', downspout: '#475569' };
+      var colors = { eave: '#22c55e', ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb', wall: '#f59e0b', dormer: '#a855f7', cutout: '#6b7280', vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626', downspout: '#475569' };
       btn.style.background = active ? (colors[t] || '#0ea5e9') : '#1f2937';
       btn.style.color = active ? '#fff' : '#9ca3af';
       btn.style.borderColor = active ? 'transparent' : '#374151';
@@ -2419,6 +2426,11 @@ window.saTraceClear = function() {
   s.ridges.forEach(function(l) { l.setMap(null); }); s.ridges = [];
   s.hips.forEach(function(l) { l.setMap(null); }); s.hips = [];
   s.valleys.forEach(function(l) { l.setMap(null); }); s.valleys = [];
+  (s.walls || []).forEach(function(o) {
+    if (o && o.line) o.line.setMap(null);
+    if (o && o.label) o.label.setMap(null);
+  });
+  s.walls = []; s._wallData = [];
   (s._ventMarkers || []).forEach(function(m) { m.setMap(null); }); s._ventMarkers = [];
   (s._skylightMarkers || []).forEach(function(m) { m.setMap(null); }); s._skylightMarkers = [];
   (s._chimneyMarkers || []).forEach(function(m) { m.setMap(null); }); s._chimneyMarkers = [];
@@ -2429,6 +2441,7 @@ window.saTraceClear = function() {
   s._lowerEaveIntentAt = null;
   s._lowerEaveIntentCount = 0;
   s._ridgeData = []; s._hipData = []; s._valleyData = [];
+  s._wallData = [];
   s.vents = []; s.skylights = []; s.chimneys = []; s.downspouts = [];
   // Dormers — clear closed polygons + draft + labels
   (s.dormers || []).forEach(function(d) { if (d.polygon) d.polygon.setMap(null); });
@@ -2969,19 +2982,65 @@ function saInitTraceMap(lat, lng, address) {
     } else {
       if (!s._segStart) {
         s._segStart = e.latLng;
-        var colorMap = { ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb' };
+        var colorMap = { ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb', wall: '#f59e0b' };
         s._segStartMarker = new google.maps.Marker({
           position: e.latLng, map: map,
           clickable: false,
           icon: { path: google.maps.SymbolPath.CIRCLE, scale: 4, fillColor: colorMap[tool] || '#fff', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1 }
         });
       } else {
-        var color = tool === 'ridge' ? '#dc2626' : tool === 'hip' ? '#ea580c' : '#2563eb';
-        var line = new google.maps.Polyline({ path: [s._segStart, e.latLng], strokeColor: color, strokeWeight: 2, map: map });
-        var seg = [{ lat: s._segStart.lat(), lng: s._segStart.lng() }, { lat: e.latLng.lat(), lng: e.latLng.lng() }];
-        if (tool === 'ridge') { s.ridges.push(line); s._ridgeData.push(seg); }
-        else if (tool === 'hip') { s.hips.push(line); s._hipData.push(seg); }
-        else { s.valleys.push(line); s._valleyData.push(seg); }
+        if (tool === 'wall') {
+          // Manual wall segment — amber, dashed, with LF + sf @ 8 ft label
+          // at midpoint. Stored as {pts:[{lat,lng},{lat,lng}], kind:'step',
+          // heightFt:8} to match svg-diagrams.ts walls schema.
+          var wLine = new google.maps.Polyline({
+            path: [s._segStart, e.latLng],
+            strokeColor: '#f59e0b',
+            strokeOpacity: 0,
+            strokeWeight: 3,
+            map: map,
+            zIndex: 5,
+            icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, strokeColor: '#f59e0b', scale: 3 }, offset: '0', repeat: '8px' }]
+          });
+          var p1 = { lat: s._segStart.lat(), lng: s._segStart.lng() };
+          var p2 = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+          var distMeters = 0;
+          try {
+            distMeters = google.maps.geometry.spherical.computeDistanceBetween(s._segStart, e.latLng);
+          } catch (_) {
+            var dLat = (p2.lat - p1.lat) * 111320;
+            var dLng = (p2.lng - p1.lng) * 111320 * Math.cos(p1.lat * Math.PI / 180);
+            distMeters = Math.sqrt(dLat * dLat + dLng * dLng);
+          }
+          var lf = Math.round(distMeters * 3.28084);
+          var sf = Math.round(lf * 8);
+          var midLat = (p1.lat + p2.lat) / 2;
+          var midLng = (p1.lng + p2.lng) / 2;
+          var labelSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="78" height="20" viewBox="0 0 78 20">' +
+            '<rect x="0.5" y="0.5" width="77" height="19" rx="3" fill="#fff" stroke="#f59e0b" stroke-width="1"/>' +
+            '<text x="39" y="13" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-size="9" font-weight="800" fill="#92400e">' +
+            'WALL ' + lf + ' LF</text></svg>';
+          var labelMk = new google.maps.Marker({
+            position: { lat: midLat, lng: midLng },
+            map: map,
+            clickable: false,
+            icon: {
+              url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(labelSvg),
+              scaledSize: new google.maps.Size(78, 20),
+              anchor: new google.maps.Point(39, 10)
+            },
+            zIndex: 6
+          });
+          s.walls.push({ line: wLine, label: labelMk });
+          s._wallData.push({ pts: [p1, p2], kind: 'step', heightFt: 8, lf: lf, sf: sf });
+        } else {
+          var color = tool === 'ridge' ? '#dc2626' : tool === 'hip' ? '#ea580c' : '#2563eb';
+          var line = new google.maps.Polyline({ path: [s._segStart, e.latLng], strokeColor: color, strokeWeight: 2, map: map });
+          var seg = [{ lat: s._segStart.lat(), lng: s._segStart.lng() }, { lat: e.latLng.lat(), lng: e.latLng.lng() }];
+          if (tool === 'ridge') { s.ridges.push(line); s._ridgeData.push(seg); }
+          else if (tool === 'hip') { s.hips.push(line); s._hipData.push(seg); }
+          else { s.valleys.push(line); s._valleyData.push(seg); }
+        }
         if (s._segStartMarker) { s._segStartMarker.setMap(null); s._segStartMarker = null; }
         s._segStart = null;
       }
@@ -4066,6 +4125,12 @@ window.saSubmitTrace = async function(orderId, force) {
     ridges: s._ridgeData || [],
     hips: s._hipData || [],
     valleys: s._valleyData || [],
+    // Manual wall segments — operator-marked vertical shingled walls visible
+    // in 3D/Street View but obscured from satellite. Each entry matches the
+    // svg-diagrams.ts walls schema: {pts:[{lat,lng},{lat,lng}], kind, heightFt}.
+    walls: (s._wallData || []).map(function(w) {
+      return { pts: w.pts, kind: w.kind || 'step', heightFt: w.heightFt || 8 };
+    }),
     annotations: {
       vents: s.vents || [],
       skylights: s.skylights || [],

@@ -3418,7 +3418,13 @@ export function generateTraceBasedDiagramSVG(
   })
 
   // ── WALL FLASHING LINES (amber=step, orange=headwall, hash pattern) ──
-  // These render only when the customer drew a wall layer in the tracer.
+  // Renders the lines themselves PLUS — for each segment with a heightFt
+  // tag (manual walls marked with the "+ Wall" tool) — a midpoint pill
+  // showing `WALL · {LF} LF · {sf} sf @ {h} ft`. Walls with no heightFt are
+  // treated as plain flashing lines (older traces) and skip the pill.
+  let manualWallSf = 0
+  let manualWallLf = 0
+  let manualWallCount = 0
   if (L.walls) (roofTrace.walls || []).forEach((line) => {
     const pts = Array.isArray(line) ? line : (line as any).pts
     const kind: 'step' | 'headwall' = (!Array.isArray(line) && (line as any).kind === 'headwall') ? 'headwall' : 'step'
@@ -3426,7 +3432,28 @@ export function generateTraceBasedDiagramSVG(
     const color = kind === 'headwall' ? '#F97316' : '#F59E0B'
     const xy = pts.map(toXY)
     for (let i = 1; i < xy.length; i++) {
-      svg += `<line x1="${tx(xy[i-1].x).toFixed(1)}" y1="${ty(xy[i-1].y).toFixed(1)}" x2="${tx(xy[i].x).toFixed(1)}" y2="${ty(xy[i].y).toFixed(1)}" stroke="${color}" stroke-width="2" stroke-dasharray="4,2" stroke-linecap="round"/>`
+      svg += `<line x1="${tx(xy[i-1].x).toFixed(1)}" y1="${ty(xy[i-1].y).toFixed(1)}" x2="${tx(xy[i].x).toFixed(1)}" y2="${ty(xy[i].y).toFixed(1)}" stroke="${color}" stroke-width="2.4" stroke-dasharray="5,3" stroke-linecap="round"/>`
+    }
+    // Per-segment LF + sf callout pill — only for manual walls (heightFt tag)
+    const heightFt = (!Array.isArray(line) && typeof (line as any).heightFt === 'number') ? (line as any).heightFt : null
+    if (heightFt && pts.length === 2) {
+      const lf = Math.round(haversineFt(pts[0], pts[1]))
+      if (lf >= 2) {
+        const sf = Math.round(lf * heightFt)
+        manualWallLf += lf
+        manualWallSf += sf
+        manualWallCount += 1
+        const mx = (tx(xy[0].x) + tx(xy[1].x)) / 2
+        const my = (ty(xy[0].y) + ty(xy[1].y)) / 2
+        const pillW = 92, pillH = 18
+        const pillX = mx - pillW / 2
+        const pillY = my - pillH / 2
+        svg += `<g>`
+        svg += `<rect x="${pillX.toFixed(1)}" y="${pillY.toFixed(1)}" width="${pillW}" height="${pillH}" rx="3" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1"/>`
+        svg += `<text x="${mx.toFixed(1)}" y="${(pillY + 7).toFixed(1)}" text-anchor="middle" font-size="6" font-weight="800" fill="#92400E" letter-spacing="0.8" ${FONT}>WALL</text>`
+        svg += `<text x="${mx.toFixed(1)}" y="${(pillY + 14).toFixed(1)}" text-anchor="middle" font-size="7" font-weight="700" fill="#78350F" ${FONT}>${lf} LF · ${sf} sf</text>`
+        svg += `</g>`
+      }
     }
   })
 
@@ -3831,6 +3858,12 @@ export function generateTraceBasedDiagramSVG(
   }
   if (headwallFt > 0) {
     legendItems.push({ plural: 'Headwall', color: '#F97316', dash: true, totalFt: headwallFt, count: 0 })
+  }
+  // Manual walls (from the "+ Wall" tracer tool) — only render when at least
+  // one segment was tagged with heightFt. Distinct from the generic step-
+  // flashing row so the operator sees the LF + sf separately from flashing.
+  if (manualWallCount > 0) {
+    legendItems.push({ plural: `Walls (${manualWallSf} sf)`, color: '#F59E0B', dash: true, totalFt: manualWallLf, count: manualWallCount })
   }
 
   const totalLinFtLegend = legendItems.reduce((s, it) => s + it.totalFt, 0)
