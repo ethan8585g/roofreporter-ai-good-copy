@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>RoofReporterAI</string>
+	<string>Roof Manager</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -26,15 +26,29 @@
 	<string>ca-app-pub-3940256099942544~1458002511</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Roof Manager uses the camera to capture roof and property photos for measurement reports, inspections, and door-to-door sales notes.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Roof Manager needs photo library access so you can attach existing roof and property photos to reports, proposals, and invoices.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Roof Manager saves generated reports and shareable diagrams to your photo library when you tap Save.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Roof Manager uses your location to plot door-to-door routes, snap new leads to your current address, and center the satellite measurement view on the property you are standing at.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Roof Manager uses the microphone for the voice receptionist and AI assistant features, so you can dictate notes and take calls inside the app.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Roof Manager can import contacts so you can quickly add homeowners and crew members as customers or team members in your CRM.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Roof Manager uses Face ID to unlock your account on this device so you do not need to retype your password each time.</string>
 	<key>NSUserTrackingUsageDescription</key>
-	<string>This identifier will be used to deliver personalized ads to you.</string>
+	<string>Your data is used to measure the effectiveness of Roof Manager advertising and to show you more relevant ads inside the app. This is optional.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
-		<string>armv7</string>
+		<string>arm64</string>
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
@@ -51,5 +65,20 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>mailto</string>
+		<string>sms</string>
+		<string>https</string>
+		<string>maps</string>
+		<string>comgooglemaps</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

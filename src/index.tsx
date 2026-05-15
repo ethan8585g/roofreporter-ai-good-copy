@@ -2769,7 +2769,7 @@ app.get('/feed.xml', async (c) => {
 <language>en-us</language>
 <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
 <atom:link href="${base}/feed.xml" rel="self" type="application/rss+xml"/>
-<image><url>${base}/static/logo.png?v=20260504</url><title>Roof Manager</title><link>${base}</link></image>
+<image><url>${base}/static/logo.png?v=20260515rebrand</url><title>Roof Manager</title><link>${base}</link></image>
 ${items}
 </channel>
 </rss>`
@@ -2779,7 +2779,7 @@ ${items}
 // SEO: Image sitemap
 app.get('/image-sitemap.xml', async (c) => {
   const base = 'https://www.roofmanager.ca'
-  let urls = `<url><loc>${base}/</loc><image:image><image:loc>${base}/static/logo.png?v=20260504</image:loc><image:title>Roof Manager Logo</image:title></image:image></url>\n`
+  let urls = `<url><loc>${base}/</loc><image:image><image:loc>${base}/static/logo.png?v=20260515rebrand</image:loc><image:title>Roof Manager Logo</image:title></image:image></url>\n`
   try {
     const posts = await c.env.DB.prepare("SELECT slug, title, cover_image_url FROM blog_posts WHERE status = 'published' AND cover_image_url IS NOT NULL AND cover_image_url != '' ORDER BY published_at DESC LIMIT 100").all()
     const xmlText = (s: any) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
@@ -3739,12 +3739,12 @@ app.get('/roof-measurement/:city', (c) => {
   <meta property="og:description" content="AI-powered satellite roof measurements for roofing contractors in ${country.name}. Full CRM, proposals, invoicing included.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/roof-measurement/${slug}">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <meta property="og:image:alt" content="Satellite roof measurement reports in ${country.name}">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Measurements in ${country.name} — Roof Manager">
-  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <meta name="geo.region" content="${country.iso}">
   <script type="application/ld+json">
   {
@@ -3753,7 +3753,7 @@ app.get('/roof-measurement/:city', (c) => {
     "name": "Roof Manager — ${country.name}",
     "description": "AI-powered roof measurement reports and CRM for roofing companies in ${country.name}.",
     "url": "https://www.roofmanager.ca/roof-measurement/${slug}",
-    "image": "https://www.roofmanager.ca/static/logo.png?v=20260504",
+    "image": "https://www.roofmanager.ca/static/logo.png?v=20260515rebrand",
     "areaServed": "${country.name}",
     "priceRange": "$5-$500 CAD"
   }
@@ -3763,7 +3763,7 @@ app.get('/roof-measurement/:city', (c) => {
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.92)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="flex items-center gap-4">
@@ -3871,13 +3871,13 @@ app.get('/roof-measurement/:city', (c) => {
   <meta property="og:description" content="AI-powered satellite roof measurements for ${city.name} roofing contractors. Full CRM, proposals, invoicing included.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/roof-measurement/${citySlug}">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <meta property="og:image:alt" content="Roof measurement report for ${city.name}, ${city.province}">
   <meta property="og:site_name" content="Roof Manager">
   <meta property="og:locale" content="${isUS ? 'en_US' : 'en_CA'}">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Measurements in ${city.name} — Roof Manager">
-  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   ${geoRegion ? `<meta name="geo.region" content="${geoRegion}">` : ''}
   <meta name="geo.placename" content="${city.name}, ${city.province}${countryLabel ? ', ' + countryLabel : ''}">
   <meta name="geo.position" content="${city.lat};${city.lng}">
@@ -3890,7 +3890,7 @@ app.get('/roof-measurement/:city', (c) => {
     "name": "Roof Manager — ${city.name}",
     "description": "AI-powered roof measurement reports and CRM for roofing companies in ${city.name}, ${city.province}.",
     "url": "https://www.roofmanager.ca/roof-measurement/${citySlug}",
-    "image": "https://www.roofmanager.ca/static/logo.png?v=20260504",
+    "image": "https://www.roofmanager.ca/static/logo.png?v=20260515rebrand",
     "address": {"@type": "PostalAddress", "addressLocality": "${city.name}", "addressRegion": "${isUS ? stateCode : city.province}", "addressCountry": "${addrCountry}"},
     "geo": {"@type": "GeoCoordinates", "latitude": "${city.lat}", "longitude": "${city.lng}"},
     "areaServed": [{"@type": "City", "name": "${city.name}"},{"@type": "GeoCircle","geoMidpoint":{"@type":"GeoCoordinates","latitude":"${city.lat}","longitude":"${city.lng}"},"geoRadius":"80000"}],
@@ -3913,7 +3913,7 @@ app.get('/roof-measurement/:city', (c) => {
 <body class="min-h-screen" style="background:var(--bg-page)">
   <nav style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
       <div class="flex items-center gap-4">
         <a href="/pricing" class="text-blue-200 hover:text-white text-sm">Pricing</a>
         <a href="/register" class="bg-white text-blue-700 font-semibold py-2 px-5 rounded-lg text-sm hover:bg-blue-50">Get Started Free</a>
@@ -4159,7 +4159,7 @@ app.get('/roof-replacement-cost/:city', (c) => {
     "datePublished": "2026-01-01",
     "dateModified": "2026-04-16",
     "author": { "@type": "Organization", "name": "Roof Manager" },
-    "publisher": { "@type": "Organization", "name": "Roof Manager", "logo": { "@type": "ImageObject", "url": "https://www.roofmanager.ca/static/logo.png?v=20260504" } },
+    "publisher": { "@type": "Organization", "name": "Roof Manager", "logo": { "@type": "ImageObject", "url": "https://www.roofmanager.ca/static/logo.png?v=20260515rebrand" } },
     "mainEntityOfPage": { "@type": "WebPage", "@id": canonical }
   })
 
@@ -4185,7 +4185,7 @@ app.get('/roof-replacement-cost/:city', (c) => {
   <meta property="og:description" content="${metaDesc}">
   <meta property="og:type" content="article">
   <meta property="og:url" content="${canonical}">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${pageTitle}">
@@ -4211,7 +4211,7 @@ app.get('/roof-replacement-cost/:city', (c) => {
   <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.05);" class="sticky top-0 z-50">
     <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
         <span class="text-white font-bold text-lg">Roof Manager</span>
       </a>
       <div class="hidden md:flex items-center gap-5">
@@ -4646,7 +4646,7 @@ app.get('/customer/3d-viewer', async (c) => {
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-lg">
         <div>
           <h1 class="font-bold text-lg">3D Roof Viewer</h1>
           <p class="text-gray-400 text-xs">${rd.address || 'Interactive 3D Model'}</p>
@@ -6045,7 +6045,7 @@ app.notFound((c) => {
 <body style="background:#0A0A0A;color:#fff">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
       <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm">Start Free</a>
     </div>
   </nav>
@@ -6437,7 +6437,7 @@ function getHeadTags(canonicalPath?: string) {
   <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin>
   <link rel="dns-prefetch" href="//www.google-analytics.com">
   <link rel="dns-prefetch" href="//maps.googleapis.com">
-  <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png?v=20260504">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png?v=20260515rebrand">
   <link rel="manifest" href="/manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -6452,7 +6452,7 @@ function getHeadTags(canonicalPath?: string) {
   <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
   <script>setTimeout(function(){var fa=document.getElementById('fa-preload');if(fa&&fa.rel==='preload'){fa.rel='stylesheet';}},1500);</script>
   ${getTailwindConfig()}
-  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=20260504">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=20260515rebrand">
   <link rel="alternate" type="application/rss+xml" title="Roof Manager Blog" href="https://www.roofmanager.ca/feed.xml">
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/mobile.css?v=20260515b">
@@ -6885,7 +6885,7 @@ function getMainPageHTML(mapsApiKey: string) {
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/" class="flex items-center space-x-3 hover:opacity-90 transition-opacity">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-xl font-bold">Order a Report</h1>
             <p class="text-brand-200 text-xs">Roof Manager</p>
@@ -8026,7 +8026,7 @@ function getOrderConfirmationHTML() {
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Order Confirmation</h1>
           <p class="text-brand-200 text-xs">Powered by Roof Manager</p>
@@ -8058,7 +8058,7 @@ function getLoginPageHTML() {
     <!-- Logo -->
     <div style="text-align:center;margin-bottom:28px">
       <a href="/" style="display:inline-flex;align-items:center;gap:12px;text-decoration:none">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" style="width:48px;height:48px;border-radius:12px;object-fit:cover;box-shadow:0 4px 12px rgba(0,0,0,0.08)">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" style="width:48px;height:48px;border-radius:12px;object-fit:cover;box-shadow:0 4px 12px rgba(0,0,0,0.08)">
         <div style="text-align:left">
           <span style="display:block;color:#0f172a;font-weight:800;font-size:22px;line-height:1.1">Roof Manager</span>
           <span style="display:block;color:#64748b;font-size:12px;margin-top:2px">Admin Access &middot; Authorized Personnel Only</span>
@@ -8238,7 +8238,7 @@ function getAdminResetPasswordHTML() {
   <div class="w-full max-w-md mx-auto px-4">
     <div class="text-center mb-8">
       <a href="/" class="inline-flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-12 h-12 rounded-xl object-cover shadow-lg">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-12 h-12 rounded-xl object-cover shadow-lg">
         <div class="text-left">
           <span class="text-gray-800 font-bold text-2xl block">Roof Manager</span>
           <span class="text-gray-500 text-xs">Admin Access</span>
@@ -8352,7 +8352,7 @@ function getCustomerResetPasswordHTML() {
   <div class="w-full max-w-md mx-auto px-4">
     <div class="text-center mb-8">
       <a href="/" class="inline-flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-12 h-12 rounded-xl object-cover shadow-lg">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-12 h-12 rounded-xl object-cover shadow-lg">
         <div class="text-left">
           <span class="text-gray-800 font-bold text-2xl block">Roof Manager</span>
           <span class="text-sky-600 text-xs">Customer Portal</span>
@@ -8598,7 +8598,7 @@ function getReferralLandingHTML(code: string, referrerName: string): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>You've been invited — Roof Manager</title>
-  <link rel="icon" href="/static/favicon.ico?v=20260504">
+  <link rel="icon" href="/static/favicon.ico?v=20260515rebrand">
   <link rel="stylesheet" href="/static/tailwind.css?v=20260515c">
   <style>body { background:#0A0A0A; color:#fff; font-family:'Inter',sans-serif; }</style>
 </head>
@@ -8643,7 +8643,7 @@ function getOnboardingPageHTML(sessionToken = ''): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Welcome to Roof Manager — Get Started</title>
-  <link rel="icon" href="/static/favicon.ico?v=20260504">
+  <link rel="icon" href="/static/favicon.ico?v=20260515rebrand">
   <link rel="stylesheet" href="/static/tailwind.css?v=20260515c">
   <style>
     html, body { min-height: 100dvh; }
@@ -8672,7 +8672,7 @@ function getOnboardingPageHTML(sessionToken = ''): string {
   <!-- Header -->
   <header class="flex items-center justify-between px-6 py-4 border-b border-white/10">
     <a href="/" class="flex items-center gap-2 text-white font-black text-xl">
-      <img src="/static/logo.svg?v=20260504" alt="Roof Manager" class="h-8 w-8" onerror="this.style.display='none'">
+      <img src="/static/logo.svg?v=20260515rebrand" alt="Roof Manager" class="h-8 w-8" onerror="this.style.display='none'">
       Roof Manager
     </a>
     <!-- Skip link is hidden by default and only revealed by loadResumeState
@@ -8967,7 +8967,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   <meta property="og:description" content="Enterprise / Xactimate / insurance-grade roof measurement reports from satellite imagery. Full CRM, AI condition analysis, PDF delivery.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:site_name" content="Roof Manager">
@@ -8976,7 +8976,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Roof Measurement Report Software — Roof Manager">
   <meta name="twitter:description" content="Satellite roof measurement reports. Full CRM & AI condition analysis. 4 free reports, no credit card.">
-  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <meta name="keywords" content="roof measurement software, roofing CRM, satellite roof reports, roof area calculator, roofing estimate tool, roof pitch analysis, material takeoff, roofing contractor software, AI roof measurement, Canadian roofing software">
   <link rel="canonical" href="https://www.roofmanager.ca/">
   <link rel="alternate" hreflang="en-ca" href="https://www.roofmanager.ca/ca">
@@ -8990,7 +8990,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     "@type": "SoftwareApplication",
     "name": "Roof Manager",
     "url": "https://www.roofmanager.ca",
-    "image": "https://www.roofmanager.ca/static/logo.png?v=20260504",
+    "image": "https://www.roofmanager.ca/static/logo.png?v=20260515rebrand",
     "applicationCategory": "BusinessApplication",
     "applicationSubCategory": "Roofing CRM, Solar Measurement Tool, Roof Report Generator",
     "operatingSystem": "Web",
@@ -9062,10 +9062,10 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   }
   </script>
   <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Organization","@id":"https://www.roofmanager.ca/#organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://www.roofmanager.ca/static/logo.png?v=20260504","description":"AI-powered satellite roof measurement reports for roofing professionals across the US and Canada","address":[{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},{"@type":"PostalAddress","addressCountry":"US","areaServed":"United States"}],"areaServed":["US","CA"],"contactPoint":{"@type":"ContactPoint","email":"sales@roofmanager.ca","contactType":"sales","areaServed":["US","CA"],"availableLanguage":"en"},"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager","https://www.crunchbase.com/organization/roof-manager","https://www.trustpilot.com/review/roofmanager.ca"]}
+{"@context":"https://schema.org","@type":"Organization","@id":"https://www.roofmanager.ca/#organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://www.roofmanager.ca/static/logo.png?v=20260515rebrand","description":"AI-powered satellite roof measurement reports for roofing professionals across the US and Canada","address":[{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},{"@type":"PostalAddress","addressCountry":"US","areaServed":"United States"}],"areaServed":["US","CA"],"contactPoint":{"@type":"ContactPoint","email":"sales@roofmanager.ca","contactType":"sales","areaServed":["US","CA"],"availableLanguage":"en"},"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager","https://www.crunchbase.com/organization/roof-manager","https://www.trustpilot.com/review/roofmanager.ca"]}
   </script>
   <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"ProfessionalService","@id":"https://www.roofmanager.ca/#localbusiness","name":"Roof Manager","url":"https://www.roofmanager.ca","image":"https://www.roofmanager.ca/static/logo.png?v=20260504","logo":"https://www.roofmanager.ca/static/logo.png?v=20260504","description":"AI-powered satellite roof measurement reports and roofing CRM for contractors across the US and Canada. $10 reports (from $5.95 in packs), full CRM, AI phone secretary, and team management.","email":"sales@roofmanager.ca","priceRange":"$$","address":{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},"areaServed":[{"@type":"Country","name":"Canada"},{"@type":"Country","name":"United States"}],"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.trustpilot.com/review/roofmanager.ca","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager"],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.9","ratingCount":"200","bestRating":"5"}}
+{"@context":"https://schema.org","@type":"ProfessionalService","@id":"https://www.roofmanager.ca/#localbusiness","name":"Roof Manager","url":"https://www.roofmanager.ca","image":"https://www.roofmanager.ca/static/logo.png?v=20260515rebrand","logo":"https://www.roofmanager.ca/static/logo.png?v=20260515rebrand","description":"AI-powered satellite roof measurement reports and roofing CRM for contractors across the US and Canada. $10 reports (from $5.95 in packs), full CRM, AI phone secretary, and team management.","email":"sales@roofmanager.ca","priceRange":"$$","address":{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},"areaServed":[{"@type":"Country","name":"Canada"},{"@type":"Country","name":"United States"}],"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.trustpilot.com/review/roofmanager.ca","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager"],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.9","ratingCount":"200","bestRating":"5"}}
   </script>
   <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebSite","name":"Roof Manager","url":"https://www.roofmanager.ca","potentialAction":{"@type":"SearchAction","target":"https://www.roofmanager.ca/blog?q={search_term_string}","query-input":"required name=search_term_string"}}
@@ -9074,7 +9074,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 {"@context":"https://schema.org","@type":"WebPage","name":"Roof Manager","speakable":{"@type":"SpeakableSpecification","xPath":["/html/head/meta[@name='description']/@content"]},"url":"https://www.roofmanager.ca"}
   </script>
   <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"VideoObject","name":"Roof Manager — Product Tutorial","description":"Walkthrough of how Roof Manager generates an enterprise / Xactimate / insurance-grade roof measurement report using satellite imagery and AI.","thumbnailUrl":["https://img.youtube.com/vi/NQW3EgEhldA/maxresdefault.jpg","https://www.roofmanager.ca/static/logo.png?v=20260504"],"uploadDate":"2026-01-15T08:00:00-07:00","contentUrl":"https://www.youtube.com/watch?v=NQW3EgEhldA","embedUrl":"https://www.youtube.com/embed/NQW3EgEhldA","publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://www.roofmanager.ca/static/logo.png?v=20260504"}},"potentialAction":{"@type":"SeekToAction","target":"https://www.youtube.com/watch?v=NQW3EgEhldA&t={seek_to_second_number}","startOffset-input":"required name=seek_to_second_number"}}
+{"@context":"https://schema.org","@type":"VideoObject","name":"Roof Manager — Product Tutorial","description":"Walkthrough of how Roof Manager generates an enterprise / Xactimate / insurance-grade roof measurement report using satellite imagery and AI.","thumbnailUrl":["https://img.youtube.com/vi/NQW3EgEhldA/maxresdefault.jpg","https://www.roofmanager.ca/static/logo.png?v=20260515rebrand"],"uploadDate":"2026-01-15T08:00:00-07:00","contentUrl":"https://www.youtube.com/watch?v=NQW3EgEhldA","embedUrl":"https://www.youtube.com/embed/NQW3EgEhldA","publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://www.roofmanager.ca/static/logo.png?v=20260515rebrand"}},"potentialAction":{"@type":"SeekToAction","target":"https://www.youtube.com/watch?v=NQW3EgEhldA&t={seek_to_second_number}","startOffset-input":"required name=seek_to_second_number"}}
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -9210,7 +9210,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   <nav id="landing-nav" class="landing-nav fixed left-0 right-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between" style="height:72px">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
         <div class="leading-tight">
           <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
         </div>
@@ -10706,7 +10706,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       <div class="grid md:grid-cols-2 lg:grid-cols-5 gap-8">
         <div>
           <div class="flex items-center gap-3 mb-4">
-            <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
+            <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
             <span class="text-white font-bold text-lg tracking-tight">Roof Manager</span>
           </div>
           <p class="text-sm leading-relaxed text-gray-500">Professional AI-powered roof measurement reports, CRM, and business management for roofing companies across the US &amp; Canada.</p>
@@ -11179,7 +11179,7 @@ function getContactPageHTML() {
   <meta name="description" content="Talk to a roofing software specialist at Roof Manager. Real humans, usually reply within 2 business hours.">
   <link rel="canonical" href="https://www.roofmanager.ca/contact">
   <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"ProfessionalService","@id":"https://www.roofmanager.ca/#localbusiness","name":"Roof Manager","url":"https://www.roofmanager.ca","image":"https://www.roofmanager.ca/static/logo.png?v=20260504","logo":"https://www.roofmanager.ca/static/logo.png?v=20260504","description":"AI-powered satellite roof measurement reports and roofing CRM for contractors across the US and Canada. $10 reports (from $5.95 in packs), full CRM, AI phone secretary, and team management.","email":"sales@roofmanager.ca","priceRange":"$$","address":{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},"areaServed":[{"@type":"Country","name":"Canada"},{"@type":"Country","name":"United States"}],"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.trustpilot.com/review/roofmanager.ca","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager"],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.9","ratingCount":"200","bestRating":"5"},"contactPoint":{"@type":"ContactPoint","email":"sales@roofmanager.ca","contactType":"sales","areaServed":["US","CA"],"availableLanguage":"en"}}
+{"@context":"https://schema.org","@type":"ProfessionalService","@id":"https://www.roofmanager.ca/#localbusiness","name":"Roof Manager","url":"https://www.roofmanager.ca","image":"https://www.roofmanager.ca/static/logo.png?v=20260515rebrand","logo":"https://www.roofmanager.ca/static/logo.png?v=20260515rebrand","description":"AI-powered satellite roof measurement reports and roofing CRM for contractors across the US and Canada. $10 reports (from $5.95 in packs), full CRM, AI phone secretary, and team management.","email":"sales@roofmanager.ca","priceRange":"$$","address":{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},"areaServed":[{"@type":"Country","name":"Canada"},{"@type":"Country","name":"United States"}],"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.trustpilot.com/review/roofmanager.ca","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager"],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.9","ratingCount":"200","bestRating":"5"},"contactPoint":{"@type":"ContactPoint","email":"sales@roofmanager.ca","contactType":"sales","areaServed":["US","CA"],"availableLanguage":"en"}}
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11202,7 +11202,7 @@ function getContactPageHTML() {
   <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.06);position:sticky;top:0;z-index:50">
     <div style="max-width:1200px;margin:0 auto;padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between">
       <a href="/" style="display:flex;align-items:center;gap:10px;text-decoration:none">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" style="width:36px;height:36px;border-radius:10px;object-fit:cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" style="width:36px;height:36px;border-radius:10px;object-fit:cover">
         <span style="color:#fff;font-weight:800;font-size:17px">Roof Manager</span>
       </a>
       <div style="display:flex;align-items:center;gap:20px">
@@ -11677,7 +11677,7 @@ function getSettingsPageHTML() {
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Settings</h1>
           <p class="text-brand-200 text-xs">Company Profile, API Keys & Pricing</p>
@@ -11752,7 +11752,7 @@ function getContactThanksPageHTML(prefillEmail = '', prefillName = '', prefillCo
 <body>
   <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.06);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between">
     <a href="/" style="display:flex;align-items:center;gap:10px;text-decoration:none">
-      <img src="/static/logo.png?v=20260504" alt="Roof Manager" style="width:32px;height:32px;border-radius:8px;object-fit:cover">
+      <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" style="width:32px;height:32px;border-radius:8px;object-fit:cover">
       <span style="font-weight:800;font-size:16px;color:#fff">Roof Manager</span>
     </a>
     <a href="/customer/login" style="color:#9ca3af;font-size:13px;text-decoration:none">Sign in</a>
@@ -11976,7 +11976,7 @@ function getCustomerRegisterPageHTML(prefillEmail = '', googleClientId = '', pre
   <!-- Minimal top nav -->
   <nav style="background:#fff;border-bottom:1px solid #e5e7eb;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between">
     <a href="/" style="display:flex;align-items:center;gap:10px;text-decoration:none">
-      <img src="/static/logo.png?v=20260504" alt="Roof Manager" style="width:32px;height:32px;border-radius:8px;object-fit:cover">
+      <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" style="width:32px;height:32px;border-radius:8px;object-fit:cover">
       <span style="font-weight:800;font-size:16px;color:#111">Roof Manager</span>
     </a>
     <span style="color:#6b7280;font-size:13px">Already have an account? <a href="/customer/login" style="color:#00CC70;font-weight:600;text-decoration:none">Sign in</a></span>
@@ -12541,7 +12541,7 @@ function getCustomerLoginHTML(googleClientId = '') {
     <!-- Logo -->
     <div style="text-align:center;margin-bottom:28px">
       <a href="/" style="display:inline-flex;align-items:center;gap:12px;text-decoration:none">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" style="width:48px;height:48px;border-radius:12px;object-fit:cover;box-shadow:0 4px 12px rgba(0,0,0,0.08)">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" style="width:48px;height:48px;border-radius:12px;object-fit:cover;box-shadow:0 4px 12px rgba(0,0,0,0.08)">
         <div style="text-align:left">
           <span style="display:block;color:#0f172a;font-weight:800;font-size:22px;line-height:1.1">Roof Manager</span>
           <span style="display:block;color:#0284c7;font-size:12px;margin-top:2px">Customer Portal &middot; Reports &amp; CRM</span>
@@ -13235,7 +13235,7 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/" class="flex items-center space-x-3 hover:opacity-90 transition-opacity">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-xl font-bold text-white">My Dashboard</h1>
             <p class="text-gray-400 text-xs">Roof Manager - Roof Reports & CRM</p>
@@ -13747,7 +13747,7 @@ function getCustomerInvoiceHTML() {
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-xl font-bold text-white">Invoice</h1>
             <p class="text-gray-400 text-xs">Roof Manager</p>
@@ -13964,7 +13964,7 @@ function getComparisonPageHTML(slug: string): string {
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36" loading="eager">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36" loading="eager">
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="flex items-center gap-5">
@@ -14129,7 +14129,7 @@ function getComparisonPageHTML(slug: string): string {
 
   <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
     <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
-      <div class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" loading="lazy" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
+      <div class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" loading="lazy" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
       <div class="flex flex-wrap items-center gap-4">
         <a href="/roofr-alternative" class="hover:text-[#00FF88] transition-colors">vs Roofr</a>
         <a href="/roofsnap-vs-roofmanager" class="hover:text-[#00FF88] transition-colors">vs RoofSnap</a>
@@ -14565,7 +14565,7 @@ function getGuideHTML(slug: string): string | null {
     uploadDate: today,
     contentUrl: `https://www.youtube.com/watch?v=${g.videoId}`,
     embedUrl: `https://www.youtube.com/embed/${g.videoId}`,
-    publisher: { '@type': 'Organization', name: 'Roof Manager', logo: { '@type': 'ImageObject', url: `${base}/static/logo.png?v=20260504` } },
+    publisher: { '@type': 'Organization', name: 'Roof Manager', logo: { '@type': 'ImageObject', url: `${base}/static/logo.png?v=20260515rebrand` } },
   }) : null
   const related = guidesOrder.filter(s => s !== g.slug).slice(0, 3).map(s => guidesConfig[s])
   const stepsHTML = g.steps.map((s, i) => `
@@ -14611,7 +14611,7 @@ function getGuideHTML(slug: string): string | null {
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="flex items-center gap-5">
@@ -14736,7 +14736,7 @@ function getHowItWorksPageHTML(): string {
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="flex items-center gap-5">
@@ -15126,7 +15126,7 @@ function getFAQPageHTML(): string {
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="flex items-center gap-5">
@@ -15226,7 +15226,7 @@ function getGuidesIndexHTML(): string {
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="flex items-center gap-5">
@@ -15291,7 +15291,7 @@ function getFeatureHubPageHTML(featureSlug: string): string {
     category: 'Roofing Software',
     operatingSystem: 'Web, iOS, Android',
     url: `${base}/features/${f.slug}`,
-    image: `${base}/static/logo.png?v=20260504`,
+    image: `${base}/static/logo.png?v=20260515rebrand`,
     description: f.metaDesc,
     offers: { '@type': 'Offer', price: '8.00', priceCurrency: 'CAD', description: 'Per report after 4 free reports' },
     aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.9', ratingCount: '200', bestRating: '5' },
@@ -15382,7 +15382,7 @@ function getFeatureHubPageHTML(featureSlug: string): string {
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="hidden sm:flex items-center gap-5">
@@ -15621,7 +15621,7 @@ function getFeatureHubPageHTML(featureSlug: string): string {
 
   <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
     <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
-      <div class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" loading="lazy" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
+      <div class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" loading="lazy" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
       <div class="flex flex-wrap items-center gap-4">
         <a href="/features/measurements" class="hover:text-[#00FF88] transition-colors">Measurements</a>
         <a href="/features/crm" class="hover:text-[#00FF88] transition-colors">CRM</a>
@@ -15663,7 +15663,7 @@ function getFeatureCityPageHTML(slug: string, city: { name: string; province: st
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web, iOS, Android',
     url: `${base}/features/measurements/${slug}`,
-    image: `${base}/static/logo.png?v=20260504`,
+    image: `${base}/static/logo.png?v=20260515rebrand`,
     description: desc,
     geo: { '@type': 'GeoCoordinates', latitude: city.lat, longitude: city.lng },
     areaServed: city.name,
@@ -15703,7 +15703,7 @@ function getFeatureCityPageHTML(slug: string, city: { name: string; province: st
   <meta property="og:description" content="${desc}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${base}/features/measurements/${slug}">
-  <meta property="og:image" content="${base}/static/og-image.png?v=20260504">
+  <meta property="og:image" content="${base}/static/og-image.png?v=20260515rebrand">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="geo.region" content="${city.province}">
   <meta name="geo.placename" content="${city.name}, ${city.province}">
@@ -15716,7 +15716,7 @@ function getFeatureCityPageHTML(slug: string, city: { name: string; province: st
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36" loading="eager">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36" loading="eager">
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="flex items-center gap-5">
@@ -15815,7 +15815,7 @@ function getFeatureCityPageHTML(slug: string, city: { name: string; province: st
 
   <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
     <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
-      <div class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" loading="lazy" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
+      <div class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" loading="lazy" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
       <div class="flex flex-wrap items-center gap-4">
         <a href="/features/measurements" class="hover:text-[#00FF88] transition-colors">Measurements</a>
         <a href="/features/crm" class="hover:text-[#00FF88] transition-colors">CRM</a>
@@ -15872,7 +15872,7 @@ function getFeatureCityHubPageHTML(
     applicationCategory: f.schemaCategory,
     operatingSystem: 'Web, iOS, Android',
     url: `${base}/features/${featureSlug}/${slug}`,
-    image: `${base}/static/logo.png?v=20260504`,
+    image: `${base}/static/logo.png?v=20260515rebrand`,
     description: desc,
     geo: { '@type': 'GeoCoordinates', latitude: city.lat, longitude: city.lng },
     areaServed: { '@type': 'City', name: city.name },
@@ -15952,7 +15952,7 @@ function getFeatureCityHubPageHTML(
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36" loading="eager">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36" loading="eager">
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="flex items-center gap-5">
@@ -16029,7 +16029,7 @@ function getFeatureCityHubPageHTML(
 
   <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
     <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
-      <div class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" loading="lazy" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
+      <div class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" loading="lazy" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
       <div class="flex flex-wrap items-center gap-4">
         <a href="/features/measurements" class="hover:text-[#00FF88] transition-colors">Measurements</a>
         <a href="/features/crm" class="hover:text-[#00FF88] transition-colors">CRM</a>
@@ -16087,7 +16087,7 @@ function getFeatureUSCityPageHTML(
     applicationCategory: f.schemaCategory,
     operatingSystem: 'Web, iOS, Android',
     url: `${base}/features/${featureSlug}/${city.slug}`,
-    image: `${base}/static/logo.png?v=20260504`,
+    image: `${base}/static/logo.png?v=20260515rebrand`,
     description: desc,
     geo: { '@type': 'GeoCoordinates', latitude: city.lat, longitude: city.lng },
     areaServed: { '@type': 'City', name: city.name },
@@ -16165,7 +16165,7 @@ function getFeatureUSCityPageHTML(
 <body style="background:#0A0A0A">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10"><span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span></a>
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10"><span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span></a>
       <div class="flex items-center gap-5">
         <a href="/features/measurements" class="${featureSlug === 'measurements' ? `text-[${f.accentColor}]` : 'text-gray-400 hover:text-white'} text-sm font-medium transition-colors">Measurements</a>
         <a href="/features/crm" class="${featureSlug === 'crm' ? `text-[${f.accentColor}]` : 'text-gray-400 hover:text-white'} text-sm font-medium transition-colors">CRM</a>
@@ -16297,7 +16297,7 @@ function getFeatureStateHubPageHTML(
     applicationCategory: f.schemaCategory,
     operatingSystem: 'Web, iOS, Android',
     url: `${base}/features/${featureSlug}/${stateSlug}`,
-    image: `${base}/static/logo.png?v=20260504`,
+    image: `${base}/static/logo.png?v=20260515rebrand`,
     description: desc,
     areaServed: { '@type': 'State', name: state.name },
     address: { '@type': 'PostalAddress', addressRegion: state.code, addressCountry: 'US' },
@@ -16375,7 +16375,7 @@ function getFeatureStateHubPageHTML(
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36" loading="eager">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36" loading="eager">
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="flex items-center gap-5">
@@ -16461,7 +16461,7 @@ function getFeatureStateHubPageHTML(
 
   <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
     <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
-      <div class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" loading="lazy" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
+      <div class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" loading="lazy" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
       <div class="flex flex-wrap items-center gap-4">
         <a href="/features/measurements" class="hover:text-[#00FF88] transition-colors">Measurements</a>
         <a href="/features/crm" class="hover:text-[#00FF88] transition-colors">CRM</a>
@@ -16792,10 +16792,10 @@ function getAuthorPageHTML(slug: string = 'roof-manager-editorial-team'): string
     '@type': 'Person',
     name: a.name,
     url: `${base}/authors/${a.slug}`,
-    image: `${base}/static/logo.png?v=20260504`,
+    image: `${base}/static/logo.png?v=20260515rebrand`,
     jobTitle: a.jobTitle,
     description: a.description,
-    worksFor: { '@type': 'Organization', '@id': `${base}/#organization`, name: 'Roof Manager', url: base, logo: `${base}/static/logo.png?v=20260504` },
+    worksFor: { '@type': 'Organization', '@id': `${base}/#organization`, name: 'Roof Manager', url: base, logo: `${base}/static/logo.png?v=20260515rebrand` },
     knowsAbout: a.knowsAbout,
     sameAs: [
       'https://www.linkedin.com/company/roofmanager',
@@ -16858,14 +16858,14 @@ function getAuthorPageHTML(slug: string = 'roof-manager-editorial-team'): string
   <meta property="og:description" content="${a.jobTitle} at Roof Manager.">
   <meta property="og:type" content="profile">
   <meta property="og:url" content="${base}/authors/${a.slug}">
-  <meta property="og:image" content="${base}/static/og-image.png?v=20260504">
+  <meta property="og:image" content="${base}/static/og-image.png?v=20260515rebrand">
   <script type="application/ld+json">${personSchema}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Authors","item":"${base}/authors/${a.slug}"}]}</script>
 </head>
 <body style="background:#0A0A0A;color:#fff">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
       <a href="/blog" class="text-gray-400 hover:text-white text-sm">Blog</a>
     </div>
   </nav>
@@ -16964,14 +16964,14 @@ function getBestContractorsHubHTML(): string {
   <meta property="og:description" content="City-by-city directory of the best roofing contractors, with selection criteria and verifiable data.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${base}/best-roofing-contractors">
-  <meta property="og:image" content="${base}/static/og-image.png?v=20260504">
+  <meta property="og:image" content="${base}/static/og-image.png?v=20260515rebrand">
   <script type="application/ld+json">${listSchema}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Best Roofing Contractors","item":"${base}/best-roofing-contractors"}]}</script>
 </head>
 <body style="background:#0A0A0A;color:#fff">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
       <a href="/register?intent=contractor-listing" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm">Apply to Be Listed</a>
     </div>
   </nav>
@@ -17055,7 +17055,7 @@ function getBestContractorsCityHTML(opts: { kind: 'us'; city: USCityData } | { k
   <meta property="og:description" content="${desc.replace(/"/g, '&quot;')}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${base}/best-roofing-contractors/${slug}">
-  <meta property="og:image" content="${base}/static/og-image.png?v=20260504">
+  <meta property="og:image" content="${base}/static/og-image.png?v=20260515rebrand">
   ${regionCode ? `<meta name="geo.region" content="US-${regionCode}">` : ''}
   <meta name="geo.placename" content="${cityName}, ${region}">
   <meta name="geo.position" content="${opts.city.lat};${opts.city.lng}">
@@ -17065,7 +17065,7 @@ function getBestContractorsCityHTML(opts: { kind: 'us'; city: USCityData } | { k
 <body style="background:#0A0A0A;color:#fff">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
       <a href="/register?intent=contractor-listing&city=${encodeURIComponent(cityName)}" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm">Apply to Be Listed</a>
     </div>
   </nav>
@@ -17142,7 +17142,7 @@ function getXactimateAlternativeHTML(): string {
     name: 'Roof Manager — Xactimate Alternative for Roofing Contractors',
     description: 'Roof Manager produces pitch-corrected roof measurement reports that align with Xactimate F9 line items — $10 per report versus Xactimate subscriptions.',
     brand: { '@type': 'Brand', name: 'Roof Manager' },
-    image: `${base}/static/logo.png?v=20260504`,
+    image: `${base}/static/logo.png?v=20260515rebrand`,
     url: `${base}/xactimate-alternative`,
     offers: { '@type': 'Offer', price: '8.00', priceCurrency: 'CAD', availability: 'https://schema.org/InStock' },
     aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.9', ratingCount: '200', bestRating: '5' },
@@ -17168,7 +17168,7 @@ function getXactimateAlternativeHTML(): string {
   <meta property="og:description" content="Pitch-corrected measurement reports compatible with Xactimate F9 line items. $10/report vs $155+/month subscription.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${base}/xactimate-alternative">
-  <meta property="og:image" content="${base}/static/og-image.png?v=20260504">
+  <meta property="og:image" content="${base}/static/og-image.png?v=20260515rebrand">
   <meta property="og:locale" content="en_US">
   <script type="application/ld+json">${productSchema}</script>
   <script type="application/ld+json">${faqSchema}</script>
@@ -17177,7 +17177,7 @@ function getXactimateAlternativeHTML(): string {
 <body style="background:#0A0A0A;color:#fff">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
       <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm">Get 4 Free Reports</a>
     </div>
   </nav>
@@ -17310,14 +17310,14 @@ function getRoofingSoftwareComparisonHubHTML(): string {
   <meta property="og:description" content="Side-by-side comparisons against every major roofing software.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${base}/roofing-software-comparison">
-  <meta property="og:image" content="${base}/static/og-image.png?v=20260504">
+  <meta property="og:image" content="${base}/static/og-image.png?v=20260515rebrand">
   <script type="application/ld+json">${itemList}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Roofing Software Comparisons","item":"${base}/roofing-software-comparison"}]}</script>
 </head>
 <body style="background:#0A0A0A;color:#fff">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
       <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm">Start Free</a>
     </div>
   </nav>
@@ -17417,14 +17417,14 @@ function getHelpHubHTML(): string {
   <meta property="og:description" content="How-to articles for every part of the platform.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${base}/help">
-  <meta property="og:image" content="${base}/static/og-image.png?v=20260504">
+  <meta property="og:image" content="${base}/static/og-image.png?v=20260515rebrand">
   <script type="application/ld+json">${faqSchema}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Help","item":"${base}/help"}]}</script>
 </head>
 <body style="background:#0A0A0A;color:#fff">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
       <a href="/contact" class="text-gray-400 hover:text-white text-sm">Contact Support</a>
     </div>
   </nav>
@@ -17546,7 +17546,7 @@ function getHelpArticleHTML(slug: string, article: HelpArticle): string {
     inLanguage: 'en',
     dateModified: new Date().toISOString().substring(0, 10),
     author: { '@type': 'Organization', name: 'Roof Manager', url: base },
-    publisher: { '@type': 'Organization', name: 'Roof Manager', logo: { '@type': 'ImageObject', url: `${base}/static/logo.png?v=20260504` } },
+    publisher: { '@type': 'Organization', name: 'Roof Manager', logo: { '@type': 'ImageObject', url: `${base}/static/logo.png?v=20260515rebrand` } },
   })
   // HowTo schema — only emit when the article is genuinely a how-to AND has
   // discoverable step structure. We never fabricate steps.
@@ -17588,7 +17588,7 @@ function getHelpArticleHTML(slug: string, article: HelpArticle): string {
   <meta property="og:title" content="${article.title} | Roof Manager Help">
   <meta property="og:type" content="article">
   <meta property="og:url" content="${base}/help/${slug}">
-  <meta property="og:image" content="${base}/static/og-image.png?v=20260504">
+  <meta property="og:image" content="${base}/static/og-image.png?v=20260515rebrand">
   <script type="application/ld+json">${schema}</script>
   ${howToSchema}
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"${base}/"},{"@type":"ListItem","position":2,"name":"Help","item":"${base}/help"},{"@type":"ListItem","position":3,"name":"${article.category}","item":"${base}/help"},{"@type":"ListItem","position":4,"name":"${article.title.replace(/"/g, '\\"')}","item":"${base}/help/${slug}"}]}</script>
@@ -17597,7 +17597,7 @@ function getHelpArticleHTML(slug: string, article: HelpArticle): string {
 <body style="background:#0A0A0A;color:#fff">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl"><span class="text-white font-extrabold text-lg">Roof Manager</span></a>
       <a href="/help" class="text-gray-400 hover:text-white text-sm">&larr; All Help Articles</a>
     </div>
   </nav>
@@ -17638,7 +17638,7 @@ function getServicesPageHTML() {
   <meta property="og:description" content="12+ integrated tools for roofing contractors: measurement reports, CRM, AI secretary, website builder, invoicing, D2D sales, and more.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/services">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <link rel="canonical" href="https://www.roofmanager.ca/services">
@@ -17668,7 +17668,7 @@ function getServicesPageHTML() {
   <nav class="fixed top-0 left-0 right-0 z-50" style="background:rgba(10,10,10,0.95);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between" style="height:72px">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
         <div class="leading-tight">
           <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
           <span class="hidden sm:block text-gray-500 text-[10px] -mt-0.5 font-medium">Measurement Reports & Business CRM</span>
@@ -18088,7 +18088,7 @@ Authorization: Bearer rm_live_xxxx
       <div class="grid md:grid-cols-4 gap-8 mb-12">
         <div>
           <div class="flex items-center gap-3 mb-4">
-            <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover">
+            <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover">
             <span class="text-white font-bold text-lg">Roof Manager</span>
           </div>
           <p class="text-sm text-gray-500">AI-powered roof measurement reports and complete business management for roofing contractors worldwide.</p>
@@ -18213,7 +18213,7 @@ function getCoveragePageHTML() {
   <meta property="og:description" content="Satellite-powered roof measurement reports available in the United States, Canada, UK, Australia, Germany, France, Japan, Brazil and 30+ more countries.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/coverage">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Manager — Available in 40+ Countries">
@@ -18239,7 +18239,7 @@ function getCoveragePageHTML() {
   <nav class="fixed top-0 left-0 right-0 z-50" style="background:rgba(10,10,10,0.95);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between" style="height:72px">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
         <div class="leading-tight">
           <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
         </div>
@@ -18354,7 +18354,7 @@ function getCoveragePageHTML() {
       <div class="grid md:grid-cols-4 gap-8 mb-12">
         <div>
           <div class="flex items-center gap-3 mb-4">
-            <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover">
+            <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover">
             <span class="text-white font-bold text-lg">Roof Manager</span>
           </div>
           <p class="text-sm text-gray-500">AI-powered roof measurement reports in 40+ countries worldwide.</p>
@@ -18424,12 +18424,12 @@ function getPricingPageHTML() {
   <meta property="og:description" content="AI-powered roof measurement reports with full CRM. 4 free reports, then save with 10, 25, 50, or 100 report credit packs.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/pricing">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Manager Pricing — From $5.95/Report"> <!-- conv-v5: $5 was a lie -->
   <meta name="twitter:description" content="AI roof measurements with full CRM. 4 free reports included.">
-  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -18437,7 +18437,7 @@ function getPricingPageHTML() {
     "name": "Roof Manager - AI Roof Measurement Reports",
     "description": "Professional satellite-powered roof measurement reports with 3D area, pitch analysis, edge breakdowns, and material BOM.",
     "brand": {"@type": "Brand", "name": "Roof Manager"},
-    "image": "https://www.roofmanager.ca/static/logo.png?v=20260504",
+    "image": "https://www.roofmanager.ca/static/logo.png?v=20260515rebrand",
     "url": "https://www.roofmanager.ca/pricing",
     "offers": [
       {"@type": "Offer", "name": "Free Trial", "price": "0", "priceCurrency": "CAD", "description": "4 free professional roof measurement reports", "availability": "https://schema.org/InStock"},
@@ -18464,7 +18464,7 @@ function getPricingPageHTML() {
   <nav style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
         <span class="text-white font-bold text-lg">Roof Manager</span>
       </a>
       <div class="flex items-center gap-4">
@@ -18852,12 +18852,12 @@ function getSocialLandingHTML() {
   <meta name="robots" content="noindex">
   <meta property="og:title" content="Free Roof Measurement Report — Roof Manager">
   <meta property="og:description" content="Get a professional satellite roof report. Free for Instagram & Facebook followers.">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <link rel="canonical" href="https://www.roofmanager.ca/get-started">
 </head>
 <body style="background:#0A0A0A;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px">
   <div style="max-width:440px;width:100%;text-align:center">
-    <img src="/static/logo.png?v=20260504" alt="Roof Manager" style="width:56px;height:56px;border-radius:12px;margin:0 auto 16px;display:block">
+    <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" style="width:56px;height:56px;border-radius:12px;margin:0 auto 16px;display:block">
     <h1 style="font-size:28px;font-weight:900;margin:0 0 8px;line-height:1.2">Get Your Free<br>Roof Measurement Report</h1>
     <p style="color:#9ca3af;font-size:14px;margin:0 0 24px">Get a professional satellite roof report.</p>
 
@@ -18905,12 +18905,12 @@ function getBlogListingHTML(posts: any[] = []) {
   <meta property="og:title" content="Roof Manager Blog - Roofing Industry Insights">
   <meta property="og:description" content="Expert roofing industry insights, measurement technology tips, contractor business guides, and more.">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Manager Blog — Roofing Industry Insights">
   <meta name="twitter:description" content="Expert roofing industry insights, measurement tips, and contractor business guides.">
-  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <link rel="canonical" href="https://www.roofmanager.ca/blog">
   <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Blog","item":"https://www.roofmanager.ca/blog"}]}
@@ -18921,7 +18921,7 @@ function getBlogListingHTML(posts: any[] = []) {
   <nav style="background:#0A0A0A" class="text-white sticky top-0 z-50 border-b border-white/5">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
         <span class="text-white font-bold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="hidden md:flex items-center gap-4">
@@ -19056,7 +19056,7 @@ function getBlogListingHTML(posts: any[] = []) {
       <div class="grid md:grid-cols-4 gap-8 mb-12">
         <div>
           <div class="flex items-center gap-3 mb-4">
-            <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover">
+            <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover">
             <span class="text-white font-bold text-lg">Roof Manager</span>
           </div>
           <p class="text-sm text-gray-500 leading-relaxed">AI-powered roof measurement reports, CRM, and business management for roofing companies.</p>
@@ -19204,7 +19204,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
   // Prefer the post's actual cover image; fall back to a dynamically-rendered
   // SVG with the post title if none was set (better than a generic logo).
   const image = post?.cover_image_url
-    || (slug ? `https://www.roofmanager.ca/og/${slug}.svg` : 'https://www.roofmanager.ca/static/logo.png?v=20260504')
+    || (slug ? `https://www.roofmanager.ca/og/${slug}.svg` : 'https://www.roofmanager.ca/static/logo.png?v=20260515rebrand')
   const canonical = slug ? `https://www.roofmanager.ca/blog/${slug}` : ''
   const published = post?.published_at || ''
   const updated = post?.updated_at || ''
@@ -19227,7 +19227,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
   const wordCount = post?.content ? String(post.content).replace(/<[^>]+>/g, ' ').trim().split(/\s+/).length : 0
   const keywords = post?.tags || ''
   const blogSchema = post ? `<script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"BlogPosting","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":${authorSchema},"publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://www.roofmanager.ca/static/logo.png?v=20260504"}},"mainEntityOfPage":{"@type":"WebPage","@id":"https://www.roofmanager.ca/blog/${slug || ''}"},"inLanguage":"en","articleSection":"${(post.category || '').replace(/"/g, '\\"')}","keywords":"${keywords.replace(/"/g, '\\"')}","wordCount":${wordCount}}
+  {"@context":"https://schema.org","@type":"BlogPosting","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":${authorSchema},"publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://www.roofmanager.ca/static/logo.png?v=20260515rebrand"}},"mainEntityOfPage":{"@type":"WebPage","@id":"https://www.roofmanager.ca/blog/${slug || ''}"},"inLanguage":"en","articleSection":"${(post.category || '').replace(/"/g, '\\"')}","keywords":"${keywords.replace(/"/g, '\\"')}","wordCount":${wordCount}}
   </script>` : ''
   const breadcrumbSchema = slug ? `<script type="application/ld+json">
 {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Blog","item":"https://www.roofmanager.ca/blog"},{"@type":"ListItem","position":3,"name":"${(post?.title || '').replace(/"/g, '\\"')}","item":"https://www.roofmanager.ca/blog/${slug}"}]}
@@ -19404,7 +19404,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
   <nav style="background:#0A0A0A" class="text-white sticky top-0 z-50 border-b border-white/5">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
         <span class="text-white font-bold text-lg">Roof Manager</span>
       </a>
       <div class="hidden md:flex items-center gap-5">
@@ -19494,7 +19494,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
       <div class="grid md:grid-cols-4 gap-8 mb-12">
         <div>
           <div class="flex items-center gap-3 mb-4">
-            <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover">
+            <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover">
             <span class="text-white font-bold text-lg">Roof Manager</span>
           </div>
           <p class="text-sm text-gray-500 leading-relaxed">AI-powered roof measurement reports, CRM, and business management for roofing companies.</p>
@@ -19569,13 +19569,13 @@ function getLanderFunnelHTML() {
   <meta property="og:description" content="Get accurate roof area, pitch, material BOM, and more. 4 free reports. No credit card.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/lander">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <meta property="og:site_name" content="Roof Manager">
   <link rel="canonical" href="https://www.roofmanager.ca/lander">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Free Roof Measurement Reports — Roof Manager">
   <meta name="twitter:description" content="Get accurate roof area, pitch, material BOM. 4 free reports, no credit card.">
-  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <style>
     html { scroll-behavior: smooth; }
     .scroll-animate { opacity: 1; transform: translateY(16px); transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -19590,7 +19590,7 @@ function getLanderFunnelHTML() {
   <nav class="bg-slate-900 text-white">
     <div class="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
       <a href="/" class="flex items-center gap-2">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-7 h-7 rounded-md object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-7 h-7 rounded-md object-cover">
         <span class="text-white font-bold text-sm">Roof Manager</span>
       </a>
       <a href="/register" class="bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold py-1.5 px-4 rounded-lg hover:opacity-90 transition-opacity">Sign Up Free</a>
@@ -20168,7 +20168,7 @@ function getLanderFunnelHTML() {
   <footer class="bg-slate-900 text-gray-500 py-8 border-t border-gray-800">
     <div class="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div class="flex items-center gap-2">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" loading="lazy" class="w-6 h-6 rounded object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" loading="lazy" class="w-6 h-6 rounded object-cover">
         <span class="text-sm font-semibold text-gray-400">Roof Manager</span>
       </div>
       <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm">
@@ -20262,7 +20262,7 @@ function getDemoLandingPageHTML() {
   <meta property="og:description" content="See Roof Manager live in 20 minutes on a real address you pick.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/demo">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <meta property="og:site_name" content="Roof Manager">
   <link rel="canonical" href="https://www.roofmanager.ca/demo">
   <style>
@@ -20285,7 +20285,7 @@ function getDemoLandingPageHTML() {
   <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.06);position:sticky;top:0;z-index:50">
     <div style="max-width:1100px;margin:0 auto;padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between">
       <a href="/" style="display:flex;align-items:center;gap:10px;text-decoration:none">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" style="width:34px;height:34px;border-radius:9px;object-fit:cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" style="width:34px;height:34px;border-radius:9px;object-fit:cover">
         <span style="color:#fff;font-weight:800;font-size:16px">Roof Manager</span>
       </a>
       <div style="display:flex;align-items:center;gap:16px">
@@ -20520,7 +20520,7 @@ function getCustomerOrderPageHTML(mapsApiKey: string, nearmapTileUrl: string | n
   <header style="background:var(--bg-card);border-bottom:1px solid var(--border-color)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold text-white">Order a Report</h1>
           <p class="text-gray-400 text-xs">Roof Manager</p>
@@ -20569,7 +20569,7 @@ function getCustomerProfilePageHTML() {
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-xl font-bold text-white">Account Settings</h1>
             <p class="text-gray-400 text-xs">Manage your profile, branding &amp; preferences</p>
@@ -20619,7 +20619,7 @@ function getVirtualTryOnPageHTML() {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Roof Visualizer</h1>
             <p class="text-brand-200 text-xs">AI-Powered Material &amp; Color Preview</p>
@@ -20676,7 +20676,7 @@ function getTeamManagementPageHTML() {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Team Management</h1>
             <p class="text-brand-200 text-xs">Manage your sales team</p>
@@ -20732,7 +20732,7 @@ function getTeamDashboardPageHTML() {
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-lg font-bold">Team Activity Dashboard</h1>
           <p class="text-brand-200 text-xs">Manage and track all team member activity</p>
@@ -20789,7 +20789,7 @@ function getJoinTeamPageHTML() {
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/" class="flex items-center space-x-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Team Invitation</h1>
           <p class="text-brand-200 text-xs">Roof Manager</p>
@@ -20906,7 +20906,7 @@ function getSelectTypePageHTML() {
 <body class="min-h-screen flex flex-col" style="background:#0A0A0A">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center">
-      <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover mr-3">
+      <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover mr-3">
       <div>
         <h1 class="text-xl font-bold">Roof Manager</h1>
         <p class="text-brand-200 text-xs">Measurement &amp; Proposal Platform</p>
@@ -20994,7 +20994,7 @@ function getSolarDesignPageHTML() {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Solar Panel Design</h1>
             <p class="text-amber-100 text-xs">Click to place panels on the roof</p>
@@ -21053,7 +21053,7 @@ function getDesignBuilderPageHTML() {
   <header class="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-lg font-bold">Design Builder</h1>
           <p class="text-amber-100 text-xs">Select a report to start your solar design</p>
@@ -21099,7 +21099,7 @@ function getSolarPipelinePageHTML() {
   <header class="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-lg font-bold">Solar Sales Pipeline</h1>
           <p class="text-amber-100 text-xs">Track leads, deals, and commission splits</p>
@@ -21148,7 +21148,7 @@ function getSolarPresentationPageHTML() {
   <header class="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-lg font-bold">Solar Presentation</h1>
           <p class="text-amber-100 text-xs">Build the deck you show at the door</p>
@@ -21194,7 +21194,7 @@ function getSolarDocumentsPageHTML() {
   <header class="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-lg font-bold">Solar Contracts & Paperwork</h1>
           <p class="text-amber-100 text-xs">Attach agreements and install paperwork to any deal</p>
@@ -21240,7 +21240,7 @@ function getSolarPermitsPageHTML() {
   <header class="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-lg font-bold">Solar Permitting</h1>
           <p class="text-amber-100 text-xs">Submissions, reviews, inspections, and fees</p>
@@ -21301,7 +21301,7 @@ function getD2DPageHTML(mapsApiKey: string) {
     <div class="max-w-full mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">D2D Manager</h1>
             <p class="text-brand-200 text-xs">Roof Manager</p>
@@ -21367,7 +21367,7 @@ function getStormScoutPageHTML(mapsApiKey: string) {
     <div class="max-w-full mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Storm Scout</h1>
             <p class="text-brand-200 text-xs">Roof Manager</p>
@@ -21439,7 +21439,7 @@ function getPropertyImageryPageHTML(mapsApiKey: string) {
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90 transition-opacity">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover shadow-lg">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover shadow-lg">
           <div>
             <h1 class="text-xl font-bold">Property Imagery</h1>
             <p class="text-emerald-200 text-xs">Dev Tool — Roof Manager</p>
@@ -21491,7 +21491,7 @@ function getCustomerLeadsPageHTML() {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Leads Inbox</h1>
             <p class="text-brand-200 text-xs">All your leads in one place</p>
@@ -21544,7 +21544,7 @@ function getCrmSubPageHTML(module: string, title: string, icon: string) {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">${title}</h1>
             <p class="text-brand-200 text-xs">Roof Manager</p>
@@ -21629,7 +21629,7 @@ function getSecretaryPageHTML() {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Roofer Secretary</h1>
             <p class="text-brand-200 text-xs">AI Phone Answering Service</p>
@@ -22384,7 +22384,7 @@ function getProposalBuilderPageHTML(mapsApiKey: string) {
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div><h1 class="text-xl font-bold">Proposal Builder</h1><p class="text-brand-200 text-xs">Create professional roofing proposals</p></div>
       </a>
       <a href="/customer/proposals" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-arrow-left mr-1"></i>Back to Proposals</a>
@@ -22424,7 +22424,7 @@ function getInvoiceManagerPageHTML() {
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div><h1 class="text-xl font-bold">Invoice Manager</h1><p class="text-brand-200 text-xs">Create & manage invoices with Square payment</p></div>
       </a>
       <a href="/customer/invoices" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-arrow-left mr-1"></i>Back to Invoices</a>
@@ -22453,7 +22453,7 @@ function getPrivacyPageHTML() {
   <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
     <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
         <span class="font-bold text-lg text-gray-900">Roof Manager</span>
       </a>
       <a href="/" class="text-sm text-gray-500 hover:text-gray-700"><i class="fas fa-arrow-left mr-1"></i>Back to Home</a>
@@ -22579,7 +22579,7 @@ function getPrivacyPageHTML() {
   <footer class="bg-slate-900 text-gray-500 py-8 border-t border-gray-800 mt-12">
     <div class="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div class="flex items-center gap-2">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-6 h-6 rounded object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-6 h-6 rounded object-cover">
         <span class="text-sm font-semibold text-gray-400">Roof Manager</span>
       </div>
       <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm">
@@ -22607,7 +22607,7 @@ function getTermsPageHTML() {
   <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
     <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
         <span class="font-bold text-lg text-gray-900">Roof Manager</span>
       </a>
       <a href="/" class="text-sm text-gray-500 hover:text-gray-700"><i class="fas fa-arrow-left mr-1"></i>Back to Home</a>
@@ -22713,7 +22713,7 @@ function getTermsPageHTML() {
   <footer class="bg-slate-900 text-gray-500 py-8 border-t border-gray-800 mt-12">
     <div class="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div class="flex items-center gap-2">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-6 h-6 rounded object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-6 h-6 rounded object-cover">
         <span class="text-sm font-semibold text-gray-400">Roof Manager</span>
       </div>
       <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm">
@@ -22747,7 +22747,7 @@ function getMaterialCalculatorPageHTML() {
   <header class="bg-gradient-to-r from-sky-600 to-blue-700 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-lg font-bold leading-tight">Material Calculator</h1>
           <p class="text-sky-200 text-xs">Roof Manager</p>
@@ -22803,7 +22803,7 @@ function getWebsiteBuilderPageHTML() {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">AI Website Builder</h1>
             <p class="text-brand-200 text-xs">Roof Manager</p>
@@ -22857,7 +22857,7 @@ function getGoogleAdsPageHTML() {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Google Ads Dashboard</h1>
             <p class="text-brand-200 text-xs">Roof Manager</p>
@@ -22911,7 +22911,7 @@ function getGoogleBusinessPageHTML() {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Google Business Profile</h1>
             <p class="text-brand-200 text-xs">Roof Manager</p>
@@ -23278,7 +23278,7 @@ function getWidgetSettingsPageHTML() {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Instant Estimator Widget</h1>
             <p class="text-gray-400 text-xs">Roof Manager</p>
@@ -23732,7 +23732,7 @@ function getWidgetLeadsPageHTML() {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Widget Leads</h1>
             <p class="text-gray-400 text-xs">Roof Manager</p>
@@ -23964,7 +23964,7 @@ function getCertificateAutomationsPageHTML() {
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Automations</h1>
           <p style="color:#9ca3af" class="text-xs">Certificates & Proposals</p>
@@ -24027,7 +24027,7 @@ function getHomeownerEstimatePageHTML(): string {
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.97)">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between" style="height:64px">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="flex items-center gap-3">
@@ -24244,7 +24244,7 @@ function getHomeownerEstimatePageHTML(): string {
   <footer style="background:#0A0A0A">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 py-10 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
       <div class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-8 h-8 rounded-lg object-cover ring-1 ring-white/10" width="32" height="32">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-8 h-8 rounded-lg object-cover ring-1 ring-white/10" width="32" height="32">
         <span class="text-gray-400 text-sm">&copy; 2026 Roof Manager. All rights reserved.</span>
       </div>
       <div class="flex items-center gap-5 text-sm text-gray-500">
@@ -24334,11 +24334,11 @@ function getShingleCalculatorHTML(isEmbed = false): string {
   <meta property="og:description" content="Bundles, squares, and underlayment rolls — instant calculations.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${canonical}">
-  <meta property="og:image" content="${base}/static/og-image.png?v=20260504">
+  <meta property="og:image" content="${base}/static/og-image.png?v=20260515rebrand">
   <script type="application/ld+json">${schema}</script>
 </head>
 <body style="background:#0A0A0A;color:#fff">
-  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)"><div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"><a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a><a href="/tools" class="text-gray-400 hover:text-white text-sm">&larr; All Tools</a></div></nav>
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)"><div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"><a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a><a href="/tools" class="text-gray-400 hover:text-white text-sm">&larr; All Tools</a></div></nav>
   <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Shingle Calculator</h1><p class="text-gray-400 mb-5">Bundles, squares, and underlayment rolls from roof area and waste factor.</p><a href="https://www.roofmanager.ca/report/share/d6f2df1241194230a9d6" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-2.5 px-6 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report</a></div></section>
   <section class="py-10" style="background:#0A0A0A"><div class="max-w-3xl mx-auto px-4">${calc}</div></section>
   ${embedSnippetBlock('shingle-calculator', 'Shingle Calculator')}
@@ -24391,11 +24391,11 @@ function getDeductibleEstimatorHTML(isEmbed = false): string {
   <meta property="og:description" content="Out-of-pocket cost on a roof claim &mdash; instant estimator.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${canonical}">
-  <meta property="og:image" content="${base}/static/og-image.png?v=20260504">
+  <meta property="og:image" content="${base}/static/og-image.png?v=20260515rebrand">
   <script type="application/ld+json">${schema}</script>
 </head>
 <body style="background:#0A0A0A;color:#fff">
-  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)"><div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"><a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a><a href="/tools" class="text-gray-400 hover:text-white text-sm">&larr; All Tools</a></div></nav>
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)"><div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"><a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a><a href="/tools" class="text-gray-400 hover:text-white text-sm">&larr; All Tools</a></div></nav>
   <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Insurance Deductible Estimator</h1><p class="text-gray-400 mb-5">See your out-of-pocket cost on a roofing insurance claim before you file.</p><a href="https://www.roofmanager.ca/report/share/d6f2df1241194230a9d6" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-2.5 px-6 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report</a></div></section>
   <section class="py-10" style="background:#0A0A0A"><div class="max-w-3xl mx-auto px-4">${calc}</div></section>
   ${embedSnippetBlock('insurance-deductible-estimator', 'Deductible Estimator')}
@@ -24448,11 +24448,11 @@ function getSolarProductionEstimatorHTML(isEmbed = false): string {
   <meta property="og:description" content="Annual kWh + est. savings from system size and sun hours.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${canonical}">
-  <meta property="og:image" content="${base}/static/og-image.png?v=20260504">
+  <meta property="og:image" content="${base}/static/og-image.png?v=20260515rebrand">
   <script type="application/ld+json">${schema}</script>
 </head>
 <body style="background:#0A0A0A;color:#fff">
-  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)"><div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"><a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a><a href="/tools" class="text-gray-400 hover:text-white text-sm">&larr; All Tools</a></div></nav>
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)"><div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"><a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager logo" class="w-9 h-9 rounded-xl" width="36" height="36" loading="eager"><span class="text-white font-extrabold text-lg">Roof Manager</span></a><a href="/tools" class="text-gray-400 hover:text-white text-sm">&larr; All Tools</a></div></nav>
   <section class="py-12 text-center" style="background:linear-gradient(135deg,#0A0A0A,#0f172a)"><div class="max-w-3xl mx-auto px-4"><h1 class="text-3xl md:text-4xl font-black text-white mb-3">Solar Production Estimator</h1><p class="text-gray-400 mb-5">Annual kWh output from system size, sun hours, and derate factor.</p><a href="https://www.roofmanager.ca/report/share/d6f2df1241194230a9d6" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-2.5 px-6 rounded-xl text-sm border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-eye text-[#00FF88]"></i> View Sample Measurement Report</a></div></section>
   <section class="py-10" style="background:#0A0A0A"><div class="max-w-3xl mx-auto px-4">${calc}</div></section>
   ${embedSnippetBlock('solar-production-estimator', 'Solar Production Estimator')}
@@ -24476,7 +24476,7 @@ function getToolsHubHTML(): string {
   <meta property="og:type" content="website">
   <meta property="og:title" content="Free Roofing Tools & Calculators | Roof Manager">
   <meta property="og:description" content="Free roofing tools for contractors, estimators, and homeowners. Pitch calculator, area estimator, and more — no account required.">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <meta property="og:url" content="https://www.roofmanager.ca/tools">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://www.roofmanager.ca/tools">
@@ -24632,7 +24632,7 @@ function getPitchCalculatorHTML(): string {
   <meta property="og:type" content="website">
   <meta property="og:title" content="Free Roof Pitch Calculator | Roof Manager">
   <meta property="og:description" content="Convert any roof pitch to degrees and calculate the pitch multiplier for sloped area. Free, embeddable, no account required.">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <meta property="og:url" content="https://www.roofmanager.ca/tools/pitch-calculator">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://www.roofmanager.ca/tools/pitch-calculator">
@@ -24918,7 +24918,7 @@ function i18nHead(locale: I18NLocale, title: string, desc: string, canonicalPath
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&display=fallback" rel="stylesheet">
   <style>* { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }</style>
-  <link rel="icon" href="/static/logo.png?v=20260504" type="image/png">
+  <link rel="icon" href="/static/logo.png?v=20260515rebrand" type="image/png">
   <title>${title}</title>
   <meta name="description" content="${desc}">
   <link rel="canonical" href="${base}${canonicalPath}">
@@ -24928,14 +24928,14 @@ function i18nHead(locale: I18NLocale, title: string, desc: string, canonicalPath
   <meta property="og:description" content="${desc}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${base}${canonicalPath}">
-  <meta property="og:image" content="${base}/static/og-image.png?v=20260504">`
+  <meta property="og:image" content="${base}/static/og-image.png?v=20260515rebrand">`
 }
 
 function i18nNav(locale: I18NLocale): string {
   const m = getI18nBundle(locale)
   return `<nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.05)" class="sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/${locale}" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover" width="36" height="36" loading="eager"><span class="text-white font-bold text-lg">Roof Manager</span></a>
+      <a href="/${locale}" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover" width="36" height="36" loading="eager"><span class="text-white font-bold text-lg">Roof Manager</span></a>
       <div class="hidden md:flex items-center gap-5 text-sm">
         <a href="/${locale}/pricing" class="text-gray-400 hover:text-white">${m.nav_pricing}</a>
         <a href="/${locale}/about" class="text-gray-400 hover:text-white">${m.nav_about}</a>
@@ -25090,7 +25090,7 @@ function getAccuracyPageHTML(): string {
 <body class="min-h-screen" style="background:#0A0A0A;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
   <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.05)" class="sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
       <div class="hidden md:flex items-center gap-5">
         <a href="/pricing" class="text-gray-400 hover:text-white text-sm">Pricing</a>
         <a href="/about" class="text-gray-400 hover:text-white text-sm">About</a>
@@ -25161,7 +25161,7 @@ function getStatusPageHTML(): string {
 <body class="min-h-screen" style="background:#0A0A0A;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
   <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.05)" class="sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
       <div class="hidden md:flex items-center gap-5"><a href="/pricing" class="text-gray-400 hover:text-white text-sm">Pricing</a><a href="/about" class="text-gray-400 hover:text-white text-sm">About</a><a href="/status" class="text-[#00FF88] font-semibold text-sm border-b-2 border-[#00FF88] pb-0.5">Status</a><a href="/register" class="bg-[#00FF88] text-[#0A0A0A] font-bold py-2 px-5 rounded-lg text-sm">Get 4 Free Reports</a></div>
     </div>
   </nav>
@@ -25207,7 +25207,7 @@ function getJpgRoofingCaseStudyHTML(): string {
     '@type': 'Article',
     headline: 'JPG Roofing case study: 2 hours saved per estimate',
     author: { '@type': 'Organization', name: 'Roof Manager' },
-    publisher: { '@type': 'Organization', name: 'Roof Manager', logo: { '@type': 'ImageObject', url: `${base}/static/logo.png?v=20260504` } },
+    publisher: { '@type': 'Organization', name: 'Roof Manager', logo: { '@type': 'ImageObject', url: `${base}/static/logo.png?v=20260515rebrand` } },
     datePublished: '2026-05-10',
     inLanguage: 'en',
     url: `${base}/case-studies/jpg-roofing`,
@@ -25226,7 +25226,7 @@ function getJpgRoofingCaseStudyHTML(): string {
 <body class="min-h-screen" style="background:#0A0A0A;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
   <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.05)" class="sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
       <div class="hidden md:flex items-center gap-5"><a href="/pricing" class="text-gray-400 hover:text-white text-sm">Pricing</a><a href="/about" class="text-gray-400 hover:text-white text-sm">About</a><a href="/case-studies" class="text-[#00FF88] font-semibold text-sm border-b-2 border-[#00FF88] pb-0.5">Case studies</a><a href="/register" class="bg-[#00FF88] text-[#0A0A0A] font-bold py-2 px-5 rounded-lg text-sm">Get 4 Free Reports</a></div>
     </div>
   </nav>
@@ -25333,13 +25333,13 @@ function getResourcesHubHTML(posts: any[] = []): string {
   <meta property="og:title" content="Trust &amp; Resources — Roof Manager">
   <meta property="og:description" content="Methodology, case studies, status, blog, and free tools — everything a careful buyer wants before signing up.">
   <meta property="og:url" content="${base}/resources">
-  <meta property="og:image" content="${base}/static/og-image.png?v=20260504">
+  <meta property="og:image" content="${base}/static/og-image.png?v=20260515rebrand">
   <script type="application/ld+json">${breadcrumbSchema}</script>
 </head>
 <body class="min-h-screen" style="background:#0A0A0A;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
   <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.05)" class="sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
       <div class="hidden md:flex items-center gap-5">
         <a href="/pricing" class="text-gray-400 hover:text-white text-sm">Pricing</a>
         <a href="/about" class="text-gray-400 hover:text-white text-sm">About</a>
@@ -25552,7 +25552,7 @@ function getAboutPageHTML(): string {
       '@type': 'Organization',
       name: 'Roof Manager',
       url: base,
-      logo: `${base}/static/logo.png?v=20260504`,
+      logo: `${base}/static/logo.png?v=20260515rebrand`,
       foundingDate: '2024',
       description: 'AI-powered satellite roof measurement reports, CRM, proposals, invoicing, and voice receptionist for residential and commercial roofing contractors.',
       areaServed: ['Canada', 'United States'],
@@ -25593,13 +25593,13 @@ function getAboutPageHTML(): string {
   <meta property="og:type" content="website">
   <meta property="og:title" content="About Roof Manager — The Roof Measurement & CRM Platform">
   <meta property="og:description" content="Satellite roof measurement reports, CRM, and AI voice receptionist — built by roofing-domain engineers for contractors across North America.">
-  <meta property="og:image" content="${base}/static/og-image.png?v=20260504">
+  <meta property="og:image" content="${base}/static/og-image.png?v=20260515rebrand">
   <meta property="og:url" content="${base}/about">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="About Roof Manager">
   <meta name="twitter:description" content="The roof measurement & CRM platform trusted by 5,000+ contractors.">
-  <meta name="twitter:image" content="${base}/static/og-image.png?v=20260504">
+  <meta name="twitter:image" content="${base}/static/og-image.png?v=20260515rebrand">
   <script type="application/ld+json">${aboutSchema}</script>
   <script type="application/ld+json">${breadcrumbSchema}</script>
 </head>
@@ -25607,7 +25607,7 @@ function getAboutPageHTML(): string {
   <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.05)" class="sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png?v=20260504" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
+        <img src="/static/logo.png?v=20260515rebrand" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
         <span class="text-white font-bold text-lg">Roof Manager</span>
       </a>
       <div class="hidden md:flex items-center gap-5">
@@ -25770,11 +25770,11 @@ function getPressPageHTML(): string {
   <meta property="og:type" content="website">
   <meta property="og:title" content="Press & Media Kit | Roof Manager">
   <meta property="og:description" content="Company overview, key stats, brand assets, and press contact for Roof Manager — Canada's AI-powered roofing measurement platform.">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <meta property="og:url" content="https://www.roofmanager.ca/press">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://www.roofmanager.ca/press">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://www.roofmanager.ca/static/logo.png?v=20260504","description":"Canadian AI-powered roofing measurement and CRM platform for residential and commercial roofing contractors","foundingDate":"2024","areaServed":["Canada","United States"],"contactPoint":[{"@type":"ContactPoint","contactType":"Press","email":"hello@roofmanager.ca","availableLanguage":"English"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://www.roofmanager.ca/static/logo.png?v=20260515rebrand","description":"Canadian AI-powered roofing measurement and CRM platform for residential and commercial roofing contractors","foundingDate":"2024","areaServed":["Canada","United States"],"contactPoint":[{"@type":"ContactPoint","contactType":"Press","email":"hello@roofmanager.ca","availableLanguage":"English"}]}</script>
   <link rel="stylesheet" href="/static/tailwind.css?v=20260515c">
   <style>body{background:#0a0f1a;color:#e2e8f0;font-family:system-ui,sans-serif;} .stat-card{background:#111827;border:1px solid #1e293b;border-radius:14px;padding:24px;text-align:center;}</style>
 </head>
@@ -25929,7 +25929,7 @@ function getMaterialEstimatorHTML(): string {
   <meta property="og:type" content="website">
   <meta property="og:title" content="Free Roofing Material Estimator | Roof Manager">
   <meta property="og:description" content="Calculate shingles, bundles, squares, underlayment, and ridge cap from roof area and pitch. Free, embeddable, no account required.">
-  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260504">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/og-image.png?v=20260515rebrand">
   <meta property="og:url" content="https://www.roofmanager.ca/tools/material-estimator">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://www.roofmanager.ca/tools/material-estimator">

@@ -16,23 +16,23 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/static/icons/icon-192x192.png",
+      "src": "/static/icons/icon-192x192.png?v=20260515rebrand",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/static/icons/icon-512x512.png",
+      "src": "/static/icons/icon-512x512.png?v=20260515rebrand",
       "sizes": "512x512",
       "type": "image/png"
     },
     {
-      "src": "/static/icons/icon-maskable-192x192.png",
+      "src": "/static/icons/icon-maskable-192x192.png?v=20260515rebrand",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/static/icons/icon-maskable-512x512.png",
+      "src": "/static/icons/icon-maskable-512x512.png?v=20260515rebrand",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -44,28 +44,28 @@
       "short_name": "New Report",
       "description": "Generate a roof measurement report",
       "url": "/customer/order?source=pwa-shortcut",
-      "icons": [{ "src": "/static/icons/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/static/icons/icon-192x192.png?v=20260515rebrand", "sizes": "192x192" }]
     },
     {
       "name": "Leads Inbox",
       "short_name": "Leads",
       "description": "View incoming leads",
       "url": "/customer/leads?source=pwa-shortcut",
-      "icons": [{ "src": "/static/icons/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/static/icons/icon-192x192.png?v=20260515rebrand", "sizes": "192x192" }]
     },
     {
       "name": "Pipeline",
       "short_name": "Pipeline",
       "description": "Sales pipeline",
       "url": "/customer/pipeline?source=pwa-shortcut",
-      "icons": [{ "src": "/static/icons/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/static/icons/icon-192x192.png?v=20260515rebrand", "sizes": "192x192" }]
     },
     {
       "name": "D2D Manager",
       "short_name": "D2D",
       "description": "Door-to-door manager",
       "url": "/customer/d2d?source=pwa-shortcut",
-      "icons": [{ "src": "/static/icons/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/static/icons/icon-192x192.png?v=20260515rebrand", "sizes": "192x192" }]
     }
   ]
 }

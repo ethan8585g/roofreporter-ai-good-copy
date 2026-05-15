@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0A0A0A" />
+  <title>Roof Manager</title>
+  <link rel="stylesheet" href="css/shell.css" />
+</head>
+<body class="shell-body">
+  <main id="screen-splash" class="screen visible">
+    <div class="splash-stack">
+      <img src="assets/logo.png" alt="Roof Manager" class="splash-logo" />
+      <div class="splash-spinner" role="status" aria-label="Loading"></div>
+    </div>
+  </main>
+
+  <main id="screen-auth" class="screen" hidden>
+    <div class="auth-card">
+      <img src="assets/logo.png" alt="Roof Manager" class="auth-logo" />
+      <h1 class="auth-title">Welcome back</h1>
+      <p class="auth-sub">Sign in to your Roof Manager account.</p>
+
+      <form id="auth-form" autocomplete="on" novalidate>
+        <label class="field">
+          <span>Email</span>
+          <input id="auth-email" type="email" name="email" inputmode="email" autocomplete="email" required />
+        </label>
+        <label class="field">
+          <span>Password</span>
+          <input id="auth-password" type="password" name="password" autocomplete="current-password" required />
+        </label>
+        <div id="auth-error" class="auth-error" hidden></div>
+        <button id="auth-submit" type="submit" class="btn btn-primary">Sign in</button>
+      </form>
+
+      <div class="auth-divider"><span>or</span></div>
+
+      <button id="auth-apple" type="button" class="btn btn-apple">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path fill="currentColor" d="M16.365 1.43c.046 1.179-.42 2.376-1.092 3.207-.745.918-1.94 1.652-3.111 1.566-.06-1.158.504-2.351 1.156-3.142.732-.886 1.99-1.575 3.047-1.631zM20.5 17.06c-.524 1.225-.778 1.77-1.456 2.851-.945 1.51-2.28 3.39-3.929 3.408-1.463.016-1.84-.953-3.826-.943-1.985.011-2.4.961-3.863.945-1.65-.018-2.913-1.71-3.858-3.22C1.06 16.156.79 11.34 2.71 8.85c1.367-1.777 3.523-2.819 5.546-2.819 2.06 0 3.355 1.131 5.057 1.131 1.65 0 2.656-1.133 5.036-1.133 1.8 0 3.71.98 5.07 2.677-4.46 2.447-3.734 8.84-2.92 8.354z"/>
+        </svg>
+        Sign in with Apple
+      </button>
+      <button id="auth-google" type="button" class="btn btn-google">
+        <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true">
+          <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.5-5.9 8-11.3 8a12 12 0 1 1 0-24c3 0 5.8 1.1 8 3l5.7-5.7A20 20 0 1 0 24 44a20 20 0 0 0 19.6-16c.4-1.7.4-3.6 0-7.5z"/>
+          <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3 0 5.8 1.1 8 3l5.7-5.7A20 20 0 0 0 6.3 14.7z"/>
+          <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.5-5.2l-6.2-5.3A12 12 0 0 1 12.7 28l-6.5 5A20 20 0 0 0 24 44z"/>
+          <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3a12.2 12.2 0 0 1-4 5.5l6.2 5.3C41 35 44 30 44 24c0-1.2-.1-2.4-.4-3.5z"/>
+        </svg>
+        Continue with Google
+      </button>
+
+      <p class="auth-footer">
+        New to Roof Manager? <a href="#" id="link-register">Create an account</a>
+      </p>
+      <p class="auth-legal">
+        By signing in you agree to our
+        <a href="#" data-external="https://www.roofmanager.ca/terms">Terms</a> and
+        <a href="#" data-external="https://www.roofmanager.ca/privacy">Privacy Policy</a>.
+      </p>
+    </div>
+  </main>
+
+  <main id="screen-launcher" class="screen" hidden>
+    <header class="launcher-header">
+      <img src="assets/logo.png" alt="Roof Manager" class="launcher-logo" />
+      <div class="launcher-user">
+        <span id="launcher-name">Welcome</span>
+        <button id="btn-logout" class="btn-text" type="button">Sign out</button>
+      </div>
+    </header>
+
+    <section class="launcher-grid" id="launcher-tiles">
+      <!-- tiles injected by js/launcher.js based on role -->
+    </section>
+
+    <footer class="launcher-footer">
+      <small>Roof Manager &middot; <span id="app-version">v1.0.0</span></small>
+    </footer>
+  </main>
+
+  <script type="module" src="js/shell.js"></script>
+</body>
+</html>

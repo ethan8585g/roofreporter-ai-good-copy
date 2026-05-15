@@ -10,10 +10,10 @@ const CACHE_NAME = 'roofmanager-v6';
 const PRECACHE_URLS = [
   '/static/tailwind.css',
   '/static/style.css',
-  '/static/logo.png',
-  '/static/favicon.svg',
-  '/static/icons/icon-192x192.png',
-  '/static/icons/icon-512x512.png'
+  '/static/logo.png?v=20260515rebrand',
+  '/static/favicon.svg?v=20260515rebrand',
+  '/static/icons/icon-192x192.png?v=20260515rebrand',
+  '/static/icons/icon-512x512.png?v=20260515rebrand'
 ];
 
 // Install: precache app shell
