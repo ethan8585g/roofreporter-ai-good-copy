@@ -242,7 +242,11 @@ async function checkFunnelRegression(env: Bindings): Promise<Omit<SectionResult,
   const win = 24 * HOUR_MS
 
   const customersRes = await env.DB.prepare(`
-    SELECT created_at FROM customers WHERE created_at >= ?
+    SELECT created_at FROM customers
+    WHERE created_at >= ?
+      AND email NOT LIKE '%@invalid.local'
+      AND email NOT LIKE 'signup-journey-probe@%'
+      AND (notes IS NULL OR notes NOT LIKE '[journey-probe]%')
   `).bind(new Date(now - 8 * win).toISOString().slice(0, 19).replace('T', ' ')).all<{ created_at: string }>()
 
   const ordersRes = await env.DB.prepare(`

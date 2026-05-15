@@ -172,6 +172,9 @@ async function evaluateFunnel(env: Bindings): Promise<TickResult> {
     SELECT created_at, COALESCE(email_verified, 0) AS email_verified
     FROM customers
     WHERE created_at >= ?
+      AND email NOT LIKE '%@invalid.local'
+      AND email NOT LIKE 'signup-journey-probe@%'
+      AND (notes IS NULL OR notes NOT LIKE '[journey-probe]%')
   `).bind(fetchStartIso).all()
 
   // Site-wide pageview check (all paths, not just /register). Catches
