@@ -1249,7 +1249,7 @@ export async function notifySalesNewLead(env: Bindings, data: {
 // Called fire-and-forget from registration handlers; never throws.
 // ============================================================
 export async function notifyNewUserSignup(env: Bindings, data: {
-  signup_method: 'email' | 'google'
+  signup_method: 'email' | 'google' | 'apple'
   customer_id?: number | string | null
   email?: string | null
   name?: string | null

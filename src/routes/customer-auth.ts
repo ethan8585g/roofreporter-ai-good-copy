@@ -6,6 +6,7 @@ import { identifySession } from '../services/attribution'
 import { linkCustomerToLead, markCustomerActive } from '../services/customer-activity'
 import { resolveTeamOwner } from './team'
 import { validateAdminSession } from './auth'
+import { verifyAppleIdentityToken } from '../lib/apple-jwt'
 import { hashPassword, verifyPassword, isLegacyHash, dummyVerify } from '../lib/password'
 import { getCustomerSessionToken } from '../lib/session-tokens'
 import { notifyNewUserSignup, sendWelcomeEmail, loadGmailCreds, sendGmailOAuth2 } from '../services/email'
@@ -822,6 +823,202 @@ customerAuthRoutes.post('/google', async (c) => {
     // Phase 2 #7
     console.error('[customer-auth] /google 500:', err?.message || err)
     return c.json({ error: 'Google sign-in failed.' }, 500)
+  }
+})
+
+// ============================================================
+// SIGN IN WITH APPLE
+// Mirrors the /google flow but verifies an Apple identityToken (RS256 JWT
+// signed by Apple's JWKS). Required for iOS App Store submission since the
+// site already offers Google OAuth (App Store Review rule 4.8).
+//
+// Client (mobile-shell/js/native.js) sends:
+//   { identityToken, authorizationCode?, fullName?, email?, nonce? }
+// fullName + email are only sent by Apple on the FIRST sign-in, so we
+// only persist them when we are creating the customer row.
+//
+// Audience accepts the iOS bundle ID and an optional web Service ID
+// (set via APPLE_WEB_SERVICE_ID env var when the marketing site enables
+// Sign in with Apple for desktop browsers).
+// ============================================================
+customerAuthRoutes.post('/apple', async (c) => {
+  try {
+    const body = (await c.req.json()) as any
+    const { identityToken } = body || {}
+    if (!identityToken) return c.json({ error: 'identityToken is required' }, 400)
+
+    const audiences: string[] = ['ca.roofmanager.app']
+    const webId = (c.env as any).APPLE_WEB_SERVICE_ID
+    if (webId) audiences.push(String(webId))
+
+    let payload
+    try {
+      payload = await verifyAppleIdentityToken(identityToken, audiences, typeof body.nonce === 'string' ? body.nonce : undefined)
+    } catch (e: any) {
+      console.warn('[apple-oauth] verify failed:', e?.message)
+      return c.json({ error: 'Invalid Apple token' }, 401)
+    }
+
+    const appleSub = payload.sub
+    if (!appleSub) return c.json({ error: 'Invalid Apple profile data' }, 400)
+    const rawEmail = (payload.email || body.email || '').toString().toLowerCase().trim()
+    // First-sign-in only: Apple supplies the user's name in the request body.
+    const incomingName = typeof body.fullName === 'string' && body.fullName.trim()
+      ? body.fullName.trim()
+      : rawEmail ? rawEmail.split('@')[0] : 'Apple User'
+    const isRelay = !!payload.is_private_email && payload.is_private_email !== 'false'
+
+    // Same attribution sanitization as /google.
+    const gclid = readGclidWithCookieFallback(body.gclid, c.req.header('Cookie'))
+    const utmSource = typeof body.utm_source === 'string' ? body.utm_source.slice(0, 100) : null
+    const utmMedium = typeof body.utm_medium === 'string' ? body.utm_medium.slice(0, 100) : null
+    const utmCampaign = typeof body.utm_campaign === 'string' ? body.utm_campaign.slice(0, 200) : null
+    const utmContent = typeof body.utm_content === 'string' ? body.utm_content.slice(0, 200) : null
+    const utmTerm = typeof body.utm_term === 'string' ? body.utm_term.slice(0, 200) : null
+
+    // Look up by apple_sub first (stable), then fall back to email.
+    let customer = await c.env.DB.prepare(
+      'SELECT * FROM customers WHERE apple_sub = ? OR (email = ? AND ? != "")'
+    ).bind(appleSub, rawEmail, rawEmail).first<any>()
+
+    if (customer) {
+      if (customer.is_active !== 1 && customer.is_active !== true) {
+        return c.json({ error: 'Account is disabled' }, 403)
+      }
+      await c.env.DB.prepare(`
+        UPDATE customers SET
+          apple_sub = ?,
+          apple_email_relay = ?,
+          email = COALESCE(NULLIF(email,''), ?),
+          name = COALESCE(NULLIF(name,''), ?),
+          email_verified = 1,
+          last_login = datetime('now'),
+          updated_at = datetime('now')
+        WHERE id = ?
+      `).bind(appleSub, isRelay ? 1 : 0, rawEmail || null, incomingName, customer.id).run()
+      markCustomerActive(c.env.DB, customer.id).catch(() => {})
+    } else {
+      // New signup — grant free trial just like /google.
+      const result = await c.env.DB.prepare(`
+        INSERT INTO customers (email, name, apple_sub, apple_email_relay, email_verified, is_active,
+          report_credits, credits_used, free_trial_total, free_trial_used, auto_invoice_enabled,
+          company_type, last_login, gclid)
+        VALUES (?, ?, ?, ?, 1, 1, 0, 0, ?, 0, 0, 'roofing', datetime('now'), ?)
+      `).bind(rawEmail || `apple_${appleSub}@privaterelay.appleid.com`, incomingName, appleSub, isRelay ? 1 : 0, FREE_TRIAL_REPORTS, gclid).run()
+
+      customer = {
+        id: result.meta.last_row_id,
+        email: rawEmail,
+        name: incomingName,
+        apple_sub: appleSub,
+        report_credits: 0,
+        credits_used: 0,
+        free_trial_total: FREE_TRIAL_REPORTS,
+        free_trial_used: 0,
+        is_new_signup: true,
+      }
+
+      markCustomerActive(c.env.DB, customer.id as number).catch(() => {})
+      if (rawEmail) linkCustomerToLead(c.env.DB, customer.id as number, rawEmail).catch(() => {})
+
+      await c.env.DB.prepare(`
+        INSERT INTO user_activity_log (company_id, action, details)
+        VALUES (1, 'free_trial_granted', ?)
+      `).bind(`${FREE_TRIAL_REPORTS} free trial reports granted to ${rawEmail || appleSub} (Apple sign-in)`).run()
+
+      seedDefaultMaterials(c.env.DB, customer.id as number).catch((e) =>
+        console.warn('[customer-auth] seedDefaultMaterials failed (apple):', e?.message || e),
+      )
+
+      if (utmSource || utmMedium || utmCampaign || utmContent || utmTerm) {
+        try {
+          await c.env.DB.prepare(`
+            INSERT INTO analytics_attribution (customer_id, first_touch_utm_source, first_touch_utm_medium, first_touch_utm_campaign, first_touch_at, last_touch_utm_source, last_touch_at, touch_count)
+            VALUES (?, ?, ?, ?, datetime('now'), ?, datetime('now'), 1)
+            ON CONFLICT(customer_id) DO UPDATE SET
+              last_touch_utm_source = COALESCE(excluded.last_touch_utm_source, analytics_attribution.last_touch_utm_source),
+              last_touch_at = excluded.last_touch_at,
+              touch_count = analytics_attribution.touch_count + 1
+          `).bind(customer.id, utmSource, utmMedium, utmCampaign, utmSource).run()
+        } catch (e: any) {
+          console.warn('[apple-oauth] analytics_attribution upsert failed:', e?.message || e)
+        }
+      }
+
+      trackUserSignup(c.env as any, String(customer.id), 'apple', {
+        email_domain: rawEmail ? rawEmail.split('@')[1] || 'unknown' : 'private-relay',
+      }).catch((e) => console.warn('[customer-auth] GA4 trackUserSignup failed (apple):', e?.message || e))
+
+      try {
+        const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || ''
+        c.executionCtx.waitUntil(
+          notifyNewUserSignup(c.env as any, { signup_method: 'apple', customer_id: customer.id, email: rawEmail || `apple_${appleSub}`, name: incomingName, ip })
+            .catch((e) => console.warn('[customer-auth] notifyNewUserSignup (apple) failed:', e?.message || e)),
+        )
+      } catch (e: any) { console.warn('[customer-auth] notifyNewUserSignup (apple) skip:', e?.message) }
+
+      if (rawEmail && !isRelay) {
+        try {
+          c.executionCtx.waitUntil(
+            sendWelcomeEmail(c.env as any, { email: rawEmail, name: incomingName, customerId: customer.id as number })
+              .catch((e) => console.warn('[customer-auth] sendWelcomeEmail (apple) failed:', e?.message || e)),
+          )
+        } catch (e: any) { console.warn('[customer-auth] sendWelcomeEmail (apple) skip:', e?.message) }
+      }
+    }
+
+    try {
+      const ipForLog = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || null
+      await c.env.DB.prepare(
+        "INSERT INTO customer_login_events (customer_id, auth_method, ip_address) VALUES (?, 'apple', ?)"
+      ).bind(customer.id, ipForLog).run()
+    } catch (e: any) { console.warn('[customer-auth] login_event insert (apple) failed:', e?.message) }
+
+    try {
+      const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || ''
+      c.executionCtx.waitUntil(identifySession(c.env.DB, customer.id as number, ip).catch((e) => console.warn('[attribution] identify (apple) failed:', e?.message)))
+    } catch (e: any) { console.warn('[attribution] identify (apple) skip:', e?.message) }
+
+    const token = generateSessionToken()
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    await c.env.DB.prepare(`
+      INSERT INTO customer_sessions (customer_id, session_token, expires_at)
+      VALUES (?, ?, ?)
+    `).bind(customer.id, token, expiresAt).run()
+    setCustomerSessionCookie(c, token, 7 * 24 * 60 * 60)
+
+    await c.env.DB.prepare(`
+      INSERT INTO user_activity_log (company_id, action, details)
+      VALUES (1, 'customer_apple_login', ?)
+    `).bind(`Customer ${rawEmail || appleSub} signed in via Apple`).run()
+
+    const isNew = customer.is_new_signup || false
+    const paidCreditsRemaining = (customer.report_credits || 0) - (customer.credits_used || 0)
+    const freeTrialRemaining = (customer.free_trial_total || FREE_TRIAL_REPORTS) - (customer.free_trial_used || 0)
+    const totalRemaining = Math.max(0, freeTrialRemaining) + Math.max(0, paidCreditsRemaining)
+
+    return c.json({
+      success: true,
+      is_new: isNew,
+      customer: {
+        id: customer.id,
+        email: customer.email || rawEmail,
+        name: customer.name || incomingName,
+        company_name: customer.company_name,
+        phone: customer.phone,
+        role: 'customer',
+        credits_remaining: totalRemaining,
+        free_trial_remaining: Math.max(0, freeTrialRemaining),
+        free_trial_total: customer.free_trial_total || FREE_TRIAL_REPORTS,
+        paid_credits_remaining: Math.max(0, paidCreditsRemaining),
+        apple_email_relay: isRelay,
+      },
+      token,
+      ...(isNew ? { welcome: true, message: `Welcome! You have ${FREE_TRIAL_REPORTS} free trial roof reports to get started.` } : {}),
+    })
+  } catch (err: any) {
+    console.error('[customer-auth] /apple 500:', err?.message || err)
+    return c.json({ error: 'Apple sign-in failed.' }, 500)
   }
 })
 
