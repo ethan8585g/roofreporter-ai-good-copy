@@ -318,6 +318,13 @@ publicApiRoutes.delete('/reports/:jobId', async (c) => {
   if (job.order_id) {
     await db.prepare(`UPDATE orders SET status = 'cancelled' WHERE id = ?`)
       .bind(job.order_id).run()
+    // Also clear the linked report row so it stops sitting in 'pending'
+    // forever (mirrors the /deny-report cleanup).
+    try {
+      await db.prepare(
+        `UPDATE reports SET status = 'failed', admin_review_status = NULL, error_message = COALESCE(error_message, 'API job cancelled by customer'), updated_at = datetime('now') WHERE order_id = ? AND status = 'pending'`
+      ).bind(job.order_id).run()
+    } catch { /* non-fatal */ }
   }
 
   const refund = await refundCredit(db, account.id, jobId)

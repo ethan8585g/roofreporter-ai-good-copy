@@ -1680,6 +1680,13 @@ squareRoutes.post('/webhook', async (c) => {
                 await c.env.DB.prepare(
                   "UPDATE orders SET payment_status = 'refunded', status = 'cancelled', updated_at = datetime('now') WHERE id = ?"
                 ).bind(refundedPayment.order_id).run()
+                // Also clear the linked report row so it stops sitting in
+                // 'pending' forever (mirrors the /deny-report cleanup).
+                try {
+                  await c.env.DB.prepare(
+                    "UPDATE reports SET status = 'failed', admin_review_status = NULL, error_message = COALESCE(error_message, 'Order refunded via Square'), updated_at = datetime('now') WHERE order_id = ? AND status = 'pending'"
+                  ).bind(refundedPayment.order_id).run()
+                } catch { /* non-fatal */ }
               } else if (ptype === 'credit_pack') {
                 // Return the credits to inventory. Parse the same way the
                 // original add did (metadata first, description fallback).
