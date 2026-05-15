@@ -58,16 +58,15 @@ const config: CapacitorConfig = {
       backgroundColor: '#0A0A0A',
       overlaysWebView: false,
     },
-    // AdMob temporarily removed — @capacitor-community/admob v6.2 fails to
-    // compile on Xcode 26 / Swift 6, and v7+ requires Capacitor 7 (the rest
-    // of the plugin set is on Capacitor 6). To re-add after the user
-    // registers a production AdMob app ID:
-    //   1. npm install @capacitor-community/admob@6.2.0 (or upgrade the
-    //      whole Capacitor stack to 7+).
-    //   2. Restore this block with the real appId (NOT the test one).
-    //   3. Add GADApplicationIdentifier with the real value to
-    //      ios/App/App/Info.plist.
-    //   4. npx cap sync ios && rebuild.
+    // TODO(ethan, before App Store submission): swap the test AdMob app ID
+    // below for the production ID once registered at
+    // https://admanager.google.com / https://admob.google.com.
+    // Update GADApplicationIdentifier in ios/App/App/Info.plist at the same
+    // time — Apple/AdMob will reject builds that ship Google's test ID.
+    AdMob: {
+      appId: 'ca-app-pub-3940256099942544~1458002511',
+      isTesting: true,
+    },
   },
 }
 
