@@ -2479,8 +2479,19 @@ export function generateTraceBasedDiagramSVG(
     /** Roof–wall junction lines for step / headwall flashing. */
     walls?: Array<
       | { lat: number; lng: number }[]
-      | { pts: { lat: number; lng: number }[]; kind?: 'step' | 'headwall' }
+      | { pts: { lat: number; lng: number }[]; kind?: 'step' | 'headwall'; heightFt?: number }
     >
+    /** Windows on shingled walls — each marker subtracts width × height from
+     *  its associated wall's shingle material. `wall_idx` is the snap target
+     *  (-1 = floating). Renderer draws a small blue square at the lat/lng
+     *  and shows the per-wall window count + deduction in the wall pill. */
+    windows?: Array<{
+      lat: number
+      lng: number
+      width_ft?: number
+      height_ft?: number
+      wall_idx?: number
+    }>
     annotations?: {
       chimneys?: { lat: number; lng: number }[]
       vents?: { lat: number; lng: number }[]
@@ -3420,12 +3431,28 @@ export function generateTraceBasedDiagramSVG(
   // ── WALL FLASHING LINES (amber=step, orange=headwall, hash pattern) ──
   // Renders the lines themselves PLUS — for each segment with a heightFt
   // tag (manual walls marked with the "+ Wall" tool) — a midpoint pill
-  // showing `WALL · {LF} LF · {sf} sf @ {h} ft`. Walls with no heightFt are
-  // treated as plain flashing lines (older traces) and skip the pill.
-  let manualWallSf = 0
+  // showing `WALL · {LF} LF · {sf gross} - {sf windows} = {sf net}`.
+  // Walls with no heightFt are plain flashing lines (older traces).
+  let manualWallSf = 0       // GROSS wall area before window deductions
   let manualWallLf = 0
   let manualWallCount = 0
-  if (L.walls) (roofTrace.walls || []).forEach((line) => {
+  let manualWindowSf = 0     // total window deduction across all walls
+  let manualWindowCount = 0
+  // Pre-bucket windows by wall_idx so each wall's pill knows its deduction.
+  const windowsByWall: Record<number, { count: number; sf: number }> = {}
+  ;(roofTrace.windows || []).forEach((win) => {
+    if (!win || typeof win.lat !== 'number' || typeof win.lng !== 'number') return
+    const w = (typeof win.width_ft  === 'number' && win.width_ft  > 0) ? win.width_ft  : 3
+    const h = (typeof win.height_ft === 'number' && win.height_ft > 0) ? win.height_ft : 4
+    const sf = w * h
+    const idx = (typeof win.wall_idx === 'number') ? win.wall_idx : -1
+    const slot = windowsByWall[idx] || (windowsByWall[idx] = { count: 0, sf: 0 })
+    slot.count += 1
+    slot.sf += sf
+    manualWindowSf += sf
+    manualWindowCount += 1
+  })
+  if (L.walls) (roofTrace.walls || []).forEach((line, wallIdx) => {
     const pts = Array.isArray(line) ? line : (line as any).pts
     const kind: 'step' | 'headwall' = (!Array.isArray(line) && (line as any).kind === 'headwall') ? 'headwall' : 'step'
     if (!pts || pts.length < 2) return
@@ -3439,22 +3466,48 @@ export function generateTraceBasedDiagramSVG(
     if (heightFt && pts.length === 2) {
       const lf = Math.round(haversineFt(pts[0], pts[1]))
       if (lf >= 2) {
-        const sf = Math.round(lf * heightFt)
+        const grossSf = Math.round(lf * heightFt)
+        const winSlot = windowsByWall[wallIdx] || { count: 0, sf: 0 }
+        const netSf = Math.max(0, grossSf - Math.round(winSlot.sf))
         manualWallLf += lf
-        manualWallSf += sf
+        manualWallSf += grossSf
         manualWallCount += 1
         const mx = (tx(xy[0].x) + tx(xy[1].x)) / 2
         const my = (ty(xy[0].y) + ty(xy[1].y)) / 2
-        const pillW = 92, pillH = 18
+        // Taller pill when windows are present so the deduction row fits.
+        const hasWindows = winSlot.count > 0
+        const pillW = hasWindows ? 120 : 92
+        const pillH = hasWindows ? 26 : 18
         const pillX = mx - pillW / 2
         const pillY = my - pillH / 2
         svg += `<g>`
         svg += `<rect x="${pillX.toFixed(1)}" y="${pillY.toFixed(1)}" width="${pillW}" height="${pillH}" rx="3" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1"/>`
         svg += `<text x="${mx.toFixed(1)}" y="${(pillY + 7).toFixed(1)}" text-anchor="middle" font-size="6" font-weight="800" fill="#92400E" letter-spacing="0.8" ${FONT}>WALL</text>`
-        svg += `<text x="${mx.toFixed(1)}" y="${(pillY + 14).toFixed(1)}" text-anchor="middle" font-size="7" font-weight="700" fill="#78350F" ${FONT}>${lf} LF · ${sf} sf</text>`
+        if (hasWindows) {
+          svg += `<text x="${mx.toFixed(1)}" y="${(pillY + 14).toFixed(1)}" text-anchor="middle" font-size="7" font-weight="700" fill="#78350F" ${FONT}>${lf} LF · ${grossSf} sf</text>`
+          svg += `<text x="${mx.toFixed(1)}" y="${(pillY + 22).toFixed(1)}" text-anchor="middle" font-size="6.5" font-weight="700" fill="#1d4ed8" ${FONT}>− ${winSlot.count} win (${Math.round(winSlot.sf)} sf) = ${netSf} sf</text>`
+        } else {
+          svg += `<text x="${mx.toFixed(1)}" y="${(pillY + 14).toFixed(1)}" text-anchor="middle" font-size="7" font-weight="700" fill="#78350F" ${FONT}>${lf} LF · ${grossSf} sf</text>`
+        }
         svg += `</g>`
       }
     }
+  })
+
+  // ── WINDOWS (small blue panes, drawn ON TOP of walls) ──
+  // Each window marker shows where the operator dropped it. The size
+  // shown on the pill is the deduction; the icon is intentionally small
+  // (10 px) so it doesn't dominate the wall it sits on.
+  if (L.walls) (roofTrace.windows || []).forEach((win) => {
+    if (!win || typeof win.lat !== 'number' || typeof win.lng !== 'number') return
+    const xy = toXY({ lat: win.lat, lng: win.lng })
+    const px = tx(xy.x), py = ty(xy.y)
+    svg += `<g>`
+    svg += `<rect x="${(px-5).toFixed(1)}" y="${(py-5).toFixed(1)}" width="10" height="10" rx="1.2" fill="#3b82f6" stroke="#fff" stroke-width="1.2"/>`
+    // Window-pane cross
+    svg += `<line x1="${px.toFixed(1)}" y1="${(py-4).toFixed(1)}" x2="${px.toFixed(1)}" y2="${(py+4).toFixed(1)}" stroke="#fff" stroke-width="0.8"/>`
+    svg += `<line x1="${(px-4).toFixed(1)}" y1="${py.toFixed(1)}" x2="${(px+4).toFixed(1)}" y2="${py.toFixed(1)}" stroke="#fff" stroke-width="0.8"/>`
+    svg += `</g>`
   })
 
   // ── CHIMNEYS (filled brown squares with "C" label) ──
@@ -3865,6 +3918,13 @@ export function generateTraceBasedDiagramSVG(
   if (manualWallCount > 0) {
     legendItems.push({ plural: `Walls (${manualWallSf} sf)`, color: '#F59E0B', dash: true, totalFt: manualWallLf, count: manualWallCount })
   }
+  // Window deductions — only render when the operator placed at least one
+  // window. Total ft column is repurposed to show square-foot deduction
+  // since linear feet is meaningless here; the right-aligned value already
+  // reads "X ft" so we surface "(N sf)" inline in the label instead.
+  if (manualWindowCount > 0) {
+    legendItems.push({ plural: `Windows (−${manualWindowSf} sf)`, color: '#3b82f6', totalFt: 0, count: manualWindowCount })
+  }
 
   const totalLinFtLegend = legendItems.reduce((s, it) => s + it.totalFt, 0)
   const totalSegCount = eaveSegCount + ridgeSegCount + hipSegCount + valleySegCount
@@ -3889,7 +3949,11 @@ export function generateTraceBasedDiagramSVG(
     svg += `<line x1="${lgX + 8}" y1="${iy}" x2="${lgX + 26}" y2="${iy}" stroke="${item.color}" stroke-width="2.4"${dashAttr} stroke-linecap="round"/>`
     const countStr = item.count > 0 ? ` (${item.count})` : ''
     svg += `<text x="${lgX + 32}" y="${iy + 3.2}" font-size="8" font-weight="600" fill="#333" ${FONT}>${item.plural}${countStr}</text>`
-    svg += `<text x="${lgX + lgW - 8}" y="${iy + 3.2}" text-anchor="end" font-size="7.5" font-weight="700" fill="${item.color}" ${FONT}>${item.totalFt.toLocaleString()} ft</text>`
+    // Right-column "X ft" — omit when totalFt is 0 (used for non-linear rows
+    // like Windows, where the deduction is shown in the label itself).
+    if (item.totalFt > 0) {
+      svg += `<text x="${lgX + lgW - 8}" y="${iy + 3.2}" text-anchor="end" font-size="7.5" font-weight="700" fill="${item.color}" ${FONT}>${item.totalFt.toLocaleString()} ft</text>`
+    }
   })
   // Divider
   const divY = lgY + titleH + 8 + legendItems.length * rowH + 3

@@ -81,6 +81,8 @@ export function generateCustomerReportHTML(report: RoofReport): string {
             valleys: trace.valleys || [],
             dormers: trace.dormers || undefined,
             cutouts: trace.cutouts || undefined,
+            walls: trace.walls || undefined,
+            windows: trace.windows || undefined,
           },
           { total_ridge_ft: 0, total_hip_ft: 0, total_valley_ft: 0, total_eave_ft: 0, total_rake_ft: 0 },
           0, 0, '', 0, 0,

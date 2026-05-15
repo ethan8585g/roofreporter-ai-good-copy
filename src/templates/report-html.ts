@@ -935,6 +935,26 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
               <td colspan="2" style="padding:3px 5px;font-size:6.5px">${cutCount} area${cutCount === 1 ? '' : 's'} subtracted (deck/void inside outline)</td>
             </tr>`
           })()}
+          ${(() => {
+            // Shingled wall sections (Tony's pattern). Length × heightFt summed
+            // across all walls, less window cutouts. Engine already added the
+            // NET to total_true_area_sqft; show breakdown so the customer
+            // (and contractor) can see why the bundle count went up.
+            const km = (report as any).trace_measurement?.key_measurements || {}
+            const grossSF = Math.round(km.wall_area_gross_ft2 || 0)
+            const winSF   = Math.round(km.wall_area_window_deduction_ft2 || 0)
+            const netSF   = Math.round(km.wall_area_net_ft2 || 0)
+            const winN    = km.window_count || 0
+            if (netSF <= 0) return ''
+            const winNote = winN > 0
+              ? ` (${grossSF} SF wall area − ${winSF} SF for ${winN} window${winN === 1 ? '' : 's'})`
+              : ` (${grossSF} SF wall area)`
+            return `<tr style="background:#fffbeb;color:#92400e">
+              <td style="padding:3px 5px">Shingled wall sections</td>
+              <td style="padding:3px 5px;text-align:right">+${netSF.toLocaleString()} SF</td>
+              <td colspan="2" style="padding:3px 5px;font-size:6.5px">Vertical wall surface added to shingle total${winNote}</td>
+            </tr>`
+          })()}
           <tr style="background:${TEAL_LIGHT};font-weight:800">
             <td style="padding:4px 5px;border-top:2px solid ${TEAL_DARK};font-size:8px">Total</td>
             <td style="padding:4px 5px;border-top:2px solid ${TEAL_DARK};text-align:right;font-size:8px">${report.total_true_area_sqft.toLocaleString()} SF</td>
@@ -1129,6 +1149,12 @@ ${aerialTiles.length === 4 ? `
           dormers: dormersForPartition((report as any).roof_trace?.dormers, p.eaves),
           cutouts: (report as any).roof_trace?.cutouts,
           annotations: (report as any).roof_trace?.annotations,
+          // Single-structure houses with shingled wall sections (e.g. Tony's)
+          // get the wall outlines + window markers on the 2D plan. Multi-
+          // structure splits skip walls/windows for now since a wall is tied
+          // to one structure and the per-partition renderer can't infer which.
+          walls:   (report as any).roof_trace?.walls,
+          windows: (report as any).roof_trace?.windows,
         },
         { total_ridge_ft: p.ridge_lf, total_hip_ft: p.hip_lf, total_valley_ft: p.valley_lf, total_eave_ft: p.eave_lf, total_rake_ft: p.rake_lf },
         p.footprint_sqft, p.dominant_pitch_deg, p.dominant_pitch_label,
@@ -1162,6 +1188,8 @@ ${aerialTiles.length === 4 ? `
       ${(((report as any).roof_trace?.annotations?.skylights || []).length > 0) ? `<div style="display:flex;align-items:center;gap:4px"><svg width="10" height="10" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" fill="#EAB308" stroke="#fff" stroke-width="1"/><text x="8" y="11" text-anchor="middle" font-size="9" font-weight="800" fill="#fff">S</text></svg>Skylight</div>` : ''}
       ${(((report as any).roof_trace?.annotations?.chimneys || []).length > 0) ? `<div style="display:flex;align-items:center;gap:4px"><svg width="10" height="10" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" fill="#B45309" stroke="#fff" stroke-width="1"/><text x="8" y="11" text-anchor="middle" font-size="9" font-weight="800" fill="#fff">C</text></svg>Chimney</div>` : ''}
       ${(((report as any).roof_trace?.annotations?.pipe_boots || []).length > 0) ? `<div style="display:flex;align-items:center;gap:4px"><svg width="10" height="10" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="#0891B2" stroke="#fff" stroke-width="1"/><text x="8" y="10.5" text-anchor="middle" font-size="8" font-weight="800" fill="#fff">P</text></svg>Pipe Boot</div>` : ''}
+      ${(((report as any).roof_trace?.walls || []).length > 0) ? `<div style="display:flex;align-items:center;gap:4px"><span style="width:18px;height:3px;background:#F59E0B;display:inline-block;border-radius:1px;border-top:1px dashed #fff"></span>Shingled Wall</div>` : ''}
+      ${(((report as any).roof_trace?.windows || []).length > 0) ? `<div style="display:flex;align-items:center;gap:4px"><svg width="10" height="10" viewBox="0 0 14 14"><rect x="1" y="1" width="12" height="12" rx="1.5" fill="#3b82f6" stroke="#fff" stroke-width="1.5"/><line x1="7" y1="2" x2="7" y2="12" stroke="#fff" stroke-width="1"/><line x1="2" y1="7" x2="12" y2="7" stroke="#fff" stroke-width="1"/></svg>Window (deducted)</div>` : ''}
     </div>
   </div>
 

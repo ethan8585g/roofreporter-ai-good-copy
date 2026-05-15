@@ -161,6 +161,19 @@ export interface TracePayload {
     chimneys?: number
     pipe_boots?: number
   }
+  /** Shingled-wall surface area, pre-computed in traceUiToEnginePayload from
+   *  the trace's walls (length × heightFt) minus windows on those walls
+   *  (Σ width × height). Net area is added to totalSloped so the bundle
+   *  count covers wall shingles too — for properties like Tony's where the
+   *  roofer is shingling vertical wall sections alongside the main roof.
+   *  Only the NET counts toward materials; gross + deduction are emitted
+   *  separately so the report can show the breakdown. */
+  wall_area_ft2?: {
+    gross_ft2?: number
+    window_deduction_ft2?: number
+    net_ft2?: number
+    window_count?: number
+  }
   faces?: TraceFace[]
   // New v4: slope_map and segment-based input
   slope_map?: Record<string, string>
@@ -379,6 +392,13 @@ export interface TraceReport {
     cutout_deduction_ft2: number
     cutout_deduction_projected_ft2: number
     num_cutouts: number
+    /** Shingled-wall surface area added to the sloped total (length × heightFt,
+     *  summed across walls). Only the *net* (post window-deduction) is
+     *  included in total_roof_area_sloped_ft2 / squares / bundles. */
+    wall_area_gross_ft2?: number
+    wall_area_window_deduction_ft2?: number
+    wall_area_net_ft2?: number
+    window_count?: number
   }
   cross_check?: CrossCheck
   needs_review?: boolean
@@ -1103,6 +1123,12 @@ export class RoofMeasurementEngine {
   private headwallFlashingFt = 0
   private chimneyCount = 0
   private pipeBootCount = 0
+  // Shingled-wall surface area (gross / window-deducted / net). Net is added
+  // to totalSloped so the bundle count covers wall shingles. See TracePayload.
+  private wallAreaGrossFt2 = 0
+  private wallAreaWindowDeductFt2 = 0
+  private wallAreaNetFt2 = 0
+  private windowCount = 0
 
   constructor(payload: TracePayload) {
     this.address    = payload.address || 'Unknown Address'
@@ -1148,6 +1174,15 @@ export class RoofMeasurementEngine {
     this.headwallFlashingFt = Number(payload.flashing_lengths_ft?.headwall) || 0
     this.chimneyCount       = Math.max(0, Math.round(Number(payload.flashing_counts?.chimneys) || 0))
     this.pipeBootCount      = Math.max(0, Math.round(Number(payload.flashing_counts?.pipe_boots) || 0))
+
+    // Shingled-wall area passthrough. Pre-computed in traceUiToEnginePayload
+    // because (a) the haversine wall lengths are already there alongside
+    // step/headwall flashing, and (b) the windows array is stored in the
+    // trace JSON, not in the engine's projected-edges pipeline.
+    this.wallAreaGrossFt2        = Math.max(0, Number(payload.wall_area_ft2?.gross_ft2)            || 0)
+    this.wallAreaWindowDeductFt2 = Math.max(0, Number(payload.wall_area_ft2?.window_deduction_ft2) || 0)
+    this.wallAreaNetFt2          = Math.max(0, Number(payload.wall_area_ft2?.net_ft2)              || 0)
+    this.windowCount             = Math.max(0, Math.round(Number(payload.wall_area_ft2?.window_count) || 0))
 
     // Normalise default slope (rise:12 → radians)
     this.defThetaRad = pitchAngleRad(this.defPitch)
@@ -2121,6 +2156,17 @@ export class RoofMeasurementEngine {
     totalProj   = Math.max(0, totalProj   - cutoutDeductProjFt2)
     totalSloped = Math.max(0, totalSloped - cutoutDeductSlopedFt2)
 
+    // ── SHINGLED-WALL ADDITION ──
+    // For houses with vertical wall sections that the roofer is shingling
+    // (cedar-shake siding, accent shingled gables, etc.), the net wall
+    // area joins the sloped total so the bundle count covers them.
+    // Window cutouts on those walls are already netted out upstream.
+    // Projected footprint is NOT changed — walls are vertical, they don't
+    // add to the building's footprint shadow.
+    if (this.wallAreaNetFt2 > 0) {
+      totalSloped += this.wallAreaNetFt2
+    }
+
     const netSquares  = totalSloped / SQFT_PER_SQUARE
 
     const wasteBd = wasteBreakdown(
@@ -2392,6 +2438,10 @@ export class RoofMeasurementEngine {
         cutout_deduction_ft2:          round(cutoutDeductSlopedFt2, 1),
         cutout_deduction_projected_ft2: round(cutoutDeductProjFt2, 1),
         num_cutouts:                   cutoutDetails.length,
+        wall_area_gross_ft2:           round(this.wallAreaGrossFt2, 1),
+        wall_area_window_deduction_ft2: round(this.wallAreaWindowDeductFt2, 1),
+        wall_area_net_ft2:             round(this.wallAreaNetFt2, 1),
+        window_count:                  this.windowCount,
       },
       linear_measurements: {
         eaves_total_ft:             round(totalEaveFt, 1),
@@ -2502,8 +2552,20 @@ export function traceUiToEnginePayload(
     valleys?: UiTraceLine[]
     walls?: Array<
       | { lat: number; lng: number }[]
-      | { pts: { lat: number; lng: number }[]; kind?: 'step' | 'headwall'; id?: string }
+      | { pts: { lat: number; lng: number }[]; kind?: 'step' | 'headwall'; id?: string; heightFt?: number }
     >
+    /** Shingled-wall windows — each marker subtracts width×height from the
+     *  wall it sits on (or floats free if not snap-associated). Used when
+     *  the roofer is shingling a vertical wall section and the windows on
+     *  it don't need shingles. `wall_idx` is optional metadata for the
+     *  diagram; the engine only sums total deduction. */
+    windows?: Array<{
+      lat: number
+      lng: number
+      width_ft?: number
+      height_ft?: number
+      wall_idx?: number
+    }>
     slope_map?: Record<string, string>
     annotations?: {
       vents?: { lat: number; lng: number }[]
@@ -2669,13 +2731,18 @@ export function traceUiToEnginePayload(
   // Wall junction lines — each carries a `kind` ('step' | 'headwall').
   // Defaults to 'step' when the line is a bare point array (legacy) or
   // when `kind` is missing or unrecognized.
-  const walls: Array<TraceLine & { kind?: 'step' | 'headwall' }> =
+  const walls: Array<TraceLine & { kind?: 'step' | 'headwall'; heightFt?: number }> =
     (traceJson.walls || []).map((l, i) => {
       const base = normalizeLine(l as any, 'wall', i)
       const isObj = !Array.isArray(l) && l && typeof l === 'object'
       const rawKind = isObj ? (l as any).kind : null
       const kind: 'step' | 'headwall' = rawKind === 'headwall' ? 'headwall' : 'step'
-      return { ...base, kind }
+      // Capture per-wall height so we can compute the vertical wall surface
+      // area for shingled-wall properties. Default 8 ft matches the trace UI
+      // default and legacy walls that pre-date the resizable handle.
+      const rawHeight = isObj ? Number((l as any).heightFt) : NaN
+      const heightFt = isFinite(rawHeight) && rawHeight > 0 ? rawHeight : 8
+      return { ...base, kind, heightFt }
     })
 
   // Aggregate wall flashing length (linear feet) by kind, using haversine.
@@ -2690,12 +2757,33 @@ export function traceUiToEnginePayload(
     return 2 * R_M * Math.asin(Math.min(1, Math.sqrt(h))) * 3.28084
   }
   let stepFt = 0, headwallFt = 0
+  // Per-wall length × heightFt → gross vertical wall surface area. Summed
+  // across every wall regardless of kind; the roofer is shingling the
+  // visible wall surface, not the flashing class.
+  let wallAreaGrossFt2 = 0
   for (const w of walls) {
     let len = 0
     for (let i = 1; i < w.pts.length; i++) len += haversineFt(w.pts[i - 1], w.pts[i])
     if (w.kind === 'headwall') headwallFt += len
     else stepFt += len
+    wallAreaGrossFt2 += len * (w.heightFt || 8)
   }
+
+  // Windows on shingled walls — subtract Σ(width × height). Defaults to a
+  // standard 3'×4' residential window (12 sf) when size is unspecified.
+  // We don't require a wall snap — the deduction is global, the wall_idx
+  // is purely for the 2D-diagram renderer's snap-to-wall visual.
+  let windowAreaDeductFt2 = 0
+  let windowCount = 0
+  for (const win of (traceJson.windows || [])) {
+    if (!win || typeof win.lat !== 'number' || typeof win.lng !== 'number') continue
+    const w = isFinite(Number(win.width_ft))  && Number(win.width_ft)  > 0 ? Number(win.width_ft)  : 3
+    const h = isFinite(Number(win.height_ft)) && Number(win.height_ft) > 0 ? Number(win.height_ft) : 4
+    windowAreaDeductFt2 += w * h
+    windowCount++
+  }
+  // Don't let windows produce a negative wall area (admin error guard).
+  const wallAreaNetFt2 = Math.max(0, wallAreaGrossFt2 - windowAreaDeductFt2)
 
   // Convert point annotations (vents/skylights/chimneys) to obstruction polygons.
   // Each marker becomes a small rectangle centered on the clicked lat/lng.
@@ -2765,6 +2853,12 @@ export function traceUiToEnginePayload(
       chimneys:   (ann.chimneys   || []).length,
       pipe_boots: (ann.pipe_boots || []).length,
     },
+    wall_area_ft2: walls.length > 0 ? {
+      gross_ft2:             wallAreaGrossFt2,
+      window_deduction_ft2:  windowAreaDeductFt2,
+      net_ft2:               wallAreaNetFt2,
+      window_count:          windowCount,
+    } : undefined,
     rakes:          [],
     // Verified faces (user-confirmed plane polygons + pitches) take priority
     // over the engine's auto-splitter. Each entry validated: polygon ≥ 3 pts,

@@ -1887,6 +1887,7 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
           '<button onclick="saTraceSetTool(\'hip\')" id="sa-tool-hip" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Hip</button>' +
           '<button onclick="saTraceSetTool(\'valley\')" id="sa-tool-valley" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Valley</button>' +
           '<button onclick="saTraceSetTool(\'wall\')" id="sa-tool-wall" title="Mark a vertical shingled wall as a 2-click line segment (start + end). Use when the wall is visible in 3D Reference / Street View but obscured by upper-roof overhang in satellite. Wall area is added to the report at 8 ft typ. wall height." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Wall</button>' +
+          '<button onclick="saTraceSetTool(\'window\')" id="sa-tool-window" title="Mark a window on a shingled wall. Each click drops a window marker (snaps to nearest wall within 10 ft). Default 3\'×4\' = 12 sf — adjust per-window via the popover. Window area is deducted from wall shingle material." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Window</button>' +
           '<button onclick="saTraceSetTool(\'dormer\')" id="sa-tool-dormer" title="Trace a polygon around a dormer on top of the main roof, then enter its pitch (e.g. 12 for 12:12). Engine adds only the steeper sloped surface — no double-counted footprint." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Dormer</button>' +
           '<button onclick="saCompleteDormer()" id="sa-tool-dormer-complete" title="Finalize the in-progress dormer polygon and enter its pitch" style="display:none;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:#a855f7;color:#fff;border:1px solid #a855f7"><i class="fas fa-check mr-1"></i>Complete Dormer Trace</button>' +
           '<button onclick="saTraceSetTool(\'cutout\')" id="sa-tool-cutout" title="Mark a deck, atrium, or other non-roof void inside the outline — click corners, click first point to close. The area is subtracted from the roof square footage." style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151"><i class="fas fa-ban mr-1"></i>+ Non-Roof</button>' +
@@ -2017,6 +2018,12 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
     // existing svg-diagrams.ts walls schema. Rendered with LF + sf callout
     // pill in the 2D plan diagram.
     walls: [], _wallData: [],
+    // Windows on shingled walls — each entry deducts width×height from the
+    // wall material count. Stored as {lat,lng,width_ft,height_ft,wall_idx},
+    // snapped to the nearest wall within 10ft (else floats free).
+    windows: [],
+    _windowMarkers: [],          // google.maps.Marker[] parallel to windows[]
+    _windowLabels: [],           // optional dimension pill markers (parallel)
     _segStart: null, _segStartMarker: null,
     vents: [], skylights: [], chimneys: [], downspouts: [],
     _ventMarkers: [], _skylightMarkers: [], _chimneyMarkers: [], _downspoutMarkers: [],
@@ -2391,11 +2398,35 @@ window.saTraceSetTool = function(tool) {
     }
   }
   s.tool = tool;
-  ['eave','ridge','hip','valley','wall','dormer','cutout','vent','skylight','chimney','downspout'].forEach(function(t) {
+  // Editable polygons (eaves/dormers/cutouts) render vertex + midpoint drag
+  // handles that are ALWAYS clickable, even when the polygon itself has
+  // clickable:false. Those handles absorb clicks meant for the line tools —
+  // so you can't start/end a hip, ridge, valley, or wall exactly on an eave
+  // corner or along an eave segment. Scope edit handles to the matching tool
+  // (eave handles only on while Eaves is active, etc.) so non-matching tools
+  // get a clean map for clicks.
+  try {
+    (s.eaveSections || []).forEach(function(sec) {
+      if (sec && sec.polygon && typeof sec.polygon.setEditable === 'function') {
+        sec.polygon.setEditable(tool === 'eave');
+      }
+    });
+    (s.dormers || []).forEach(function(d) {
+      if (d && d.polygon && typeof d.polygon.setEditable === 'function') {
+        d.polygon.setEditable(tool === 'dormer');
+      }
+    });
+    (s.cutouts || []).forEach(function(c) {
+      if (c && c.polygon && typeof c.polygon.setEditable === 'function') {
+        c.polygon.setEditable(tool === 'cutout');
+      }
+    });
+  } catch (_) {}
+  ['eave','ridge','hip','valley','wall','window','dormer','cutout','vent','skylight','chimney','downspout'].forEach(function(t) {
     var btn = document.getElementById('sa-tool-' + t);
     if (btn) {
       var active = t === tool;
-      var colors = { eave: '#22c55e', ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb', wall: '#f59e0b', dormer: '#a855f7', cutout: '#6b7280', vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626', downspout: '#475569' };
+      var colors = { eave: '#22c55e', ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb', wall: '#f59e0b', window: '#3b82f6', dormer: '#a855f7', cutout: '#6b7280', vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626', downspout: '#475569' };
       btn.style.background = active ? (colors[t] || '#0ea5e9') : '#1f2937';
       btn.style.color = active ? '#fff' : '#9ca3af';
       btn.style.borderColor = active ? 'transparent' : '#374151';
@@ -2433,6 +2464,9 @@ window.saTraceClear = function() {
     if (o && o.handle) o.handle.setMap(null);
   });
   s.walls = []; s._wallData = [];
+  (s._windowMarkers || []).forEach(function(m) { m.setMap(null); }); s._windowMarkers = [];
+  (s._windowLabels  || []).forEach(function(m) { m.setMap(null); }); s._windowLabels  = [];
+  s.windows = [];
   (s._ventMarkers || []).forEach(function(m) { m.setMap(null); }); s._ventMarkers = [];
   (s._skylightMarkers || []).forEach(function(m) { m.setMap(null); }); s._skylightMarkers = [];
   (s._chimneyMarkers || []).forEach(function(m) { m.setMap(null); }); s._chimneyMarkers = [];
@@ -2563,6 +2597,15 @@ window.saTraceUndo = function() {
     }
     return false;
   }
+  function popWindow() {
+    if (s.windows && s.windows.length > 0) {
+      s.windows.pop();
+      var mk = (s._windowMarkers || []).pop(); if (mk) mk.setMap(null);
+      var lb = (s._windowLabels  || []).pop(); if (lb) lb.setMap(null);
+      return true;
+    }
+    return false;
+  }
   function popClosedDormer() {
     if (s.dormers && s.dormers.length > 0) {
       var lastD = s.dormers.pop();
@@ -2603,11 +2646,13 @@ window.saTraceUndo = function() {
   if (popAnnotation(s.tool)) return;
   if (popLine(s.tool)) return;
   if (s.tool === 'wall' && popWall()) return;
+  if (s.tool === 'window' && popWindow()) return;
   // Fall through every other completed collection so repeated clicks keep
   // working until the trace is empty.
   if (popLine('ridge')) return;
   if (popLine('hip')) return;
   if (popLine('valley')) return;
+  if (popWindow()) return;
   if (popWall()) return;
   if (popAnnotation('vent')) return;
   if (popAnnotation('skylight')) return;
@@ -2990,6 +3035,29 @@ function saInitTraceMap(lat, lng, address) {
         icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '10px' }],
       });
       saUpdateCutoutCompleteBtn();
+    } else if (tool === 'window') {
+      // Window-on-wall marker. Click anywhere — we snap to the nearest wall
+      // line within 10 ft so the icon visually clings to the wall it's on.
+      // Beyond that, the marker plants free (admin can drag it post-hoc).
+      // Default size: 3'×4' = 12 sf (standard residential). Each window
+      // deducts width×height from the wall material count at submit.
+      var clickLL = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+      var snapInfo = saWindowSnapToWall(clickLL, s._wallData || []);
+      var pos = snapInfo.snapped || clickLL;
+      var windowRec = {
+        lat: pos.lat,
+        lng: pos.lng,
+        width_ft: 3,
+        height_ft: 4,
+        wall_idx: snapInfo.wall_idx,   // -1 = free-floating
+      };
+      var mk = saCreateWindowMarker(windowRec, map);
+      s.windows.push(windowRec);
+      s._windowMarkers.push(mk);
+      s._windowLabels.push(null);  // label is opt-in via right-click
+      // Show the size popover immediately so the admin can switch from
+      // default 3×4 to small/large/custom without an extra step.
+      saShowWindowSizePopover(s.windows.length - 1);
     } else if (tool === 'vent' || tool === 'skylight' || tool === 'chimney' || tool === 'downspout') {
       var colors = { vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626', downspout: '#475569' };
       var iconCfg;
@@ -3180,7 +3248,7 @@ function saInitTraceMap(lat, lng, address) {
           });
         } else {
           var color = tool === 'ridge' ? '#dc2626' : tool === 'hip' ? '#ea580c' : '#2563eb';
-          var line = new google.maps.Polyline({ path: [s._segStart, e.latLng], strokeColor: color, strokeWeight: 2, map: map });
+          var line = new google.maps.Polyline({ path: [s._segStart, e.latLng], strokeColor: color, strokeWeight: 2, map: map, clickable: false });
           var seg = [{ lat: s._segStart.lat(), lng: s._segStart.lng() }, { lat: e.latLng.lat(), lng: e.latLng.lng() }];
           if (tool === 'ridge') { s.ridges.push(line); s._ridgeData.push(seg); }
           else if (tool === 'hip') { s.hips.push(line); s._hipData.push(seg); }
@@ -3253,6 +3321,159 @@ window.saAddLowerEave = function() {
   if (typeof saTraceSetTool === 'function') saTraceSetTool('eave');
   alert('Lower-eave mode: outline ONLY the visible lip beneath the upper-story roof — not the full lower footprint. Use the 3D Reference and Street View as your visual guide; click points on the satellite where the lip extends, then click the first point to close.');
 };
+
+// ─── WINDOW TOOL HELPERS ──────────────────────────────────────────
+// Windows attach to walls so each one deducts its area (width × height)
+// from that wall's shingle material count. The marker's lat/lng snaps
+// to the nearest wall segment within ~10 ft so the icon visually sits
+// on the wall in the diagram; further away, it floats free and gets
+// wall_idx = -1.
+
+// Closest-point-on-segment projection in lat/lng, with a haversine
+// distance for the snap radius check. Returns the snapped lat/lng,
+// the wall index, and the distance in feet (Infinity if no snap).
+function saWindowSnapToWall(clickLL, wallData) {
+  var best = { snapped: null, wall_idx: -1, distFt: Infinity };
+  if (!Array.isArray(wallData) || wallData.length === 0) return best;
+  var SNAP_FT = 10;
+  for (var i = 0; i < wallData.length; i++) {
+    var w = wallData[i];
+    if (!w || !w.pts || w.pts.length < 2) continue;
+    var a = w.pts[0], b = w.pts[1];
+    // Equirectangular projection (centimeter-accurate at single-property scale).
+    var FT_PER_DEG_LAT = 364000;
+    var meanLat = (a.lat + b.lat + clickLL.lat) / 3;
+    var ftPerDegLng = FT_PER_DEG_LAT * Math.cos(meanLat * Math.PI / 180);
+    var ax = (a.lng - clickLL.lng) * ftPerDegLng, ay = (a.lat - clickLL.lat) * FT_PER_DEG_LAT;
+    var bx = (b.lng - clickLL.lng) * ftPerDegLng, by = (b.lat - clickLL.lat) * FT_PER_DEG_LAT;
+    var dx = bx - ax, dy = by - ay;
+    var segLen2 = dx * dx + dy * dy;
+    if (segLen2 < 0.0001) continue;
+    // Projection scalar t ∈ [0,1] gives the closest point on the segment.
+    var t = -(ax * dx + ay * dy) / segLen2;
+    t = Math.max(0, Math.min(1, t));
+    var px = ax + t * dx, py = ay + t * dy;
+    var distFt = Math.sqrt(px * px + py * py);
+    if (distFt < best.distFt) {
+      var snappedLat = clickLL.lat + py / FT_PER_DEG_LAT;
+      var snappedLng = clickLL.lng + px / ftPerDegLng;
+      best = { snapped: { lat: snappedLat, lng: snappedLng }, wall_idx: i, distFt: distFt };
+    }
+  }
+  // Beyond 10 ft, don't snap — let the marker float at the click location.
+  if (best.distFt > SNAP_FT) return { snapped: null, wall_idx: -1, distFt: best.distFt };
+  return best;
+}
+
+// Window marker SVG: small blue square with thin white frame so it reads
+// as a window pane against satellite imagery. Right-click opens the size
+// popover or delete; left-click on the marker opens the size popover too.
+function saWindowMarkerSvg() {
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14">' +
+    '<rect x="1" y="1" width="12" height="12" rx="1.5" fill="#3b82f6" stroke="#fff" stroke-width="1.5"/>' +
+    '<line x1="7" y1="2" x2="7" y2="12" stroke="#fff" stroke-width="1"/>' +
+    '<line x1="2" y1="7" x2="12" y2="7" stroke="#fff" stroke-width="1"/>' +
+    '</svg>';
+}
+
+function saCreateWindowMarker(rec, map) {
+  var mk = new google.maps.Marker({
+    position: { lat: rec.lat, lng: rec.lng },
+    map: map,
+    clickable: true,
+    icon: {
+      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(saWindowMarkerSvg()),
+      scaledSize: new google.maps.Size(14, 14),
+      anchor: new google.maps.Point(7, 7),
+    },
+    title: 'Window ' + (rec.width_ft || 3) + '′×' + (rec.height_ft || 4) + '′ — click to resize, right-click to delete',
+    zIndex: 8,
+  });
+  mk.addListener('click', function() {
+    var s = window._saTraceState; if (!s) return;
+    var idx = (s._windowMarkers || []).indexOf(mk);
+    if (idx >= 0) saShowWindowSizePopover(idx);
+  });
+  mk.addListener('rightclick', function() {
+    var s = window._saTraceState; if (!s) return;
+    var idx = (s._windowMarkers || []).indexOf(mk);
+    if (idx < 0) return;
+    if (!confirm('Delete this window?')) return;
+    s.windows.splice(idx, 1);
+    var m = s._windowMarkers.splice(idx, 1)[0]; if (m) m.setMap(null);
+    var lb = s._windowLabels.splice(idx, 1)[0]; if (lb) lb.setMap(null);
+  });
+  return mk;
+}
+
+// Inline popover anchored to the trace map showing 4 size options.
+// Custom prompts via window.prompt for width × height in feet. Updating
+// a window in place mutates the rec + recreates the marker title.
+function saShowWindowSizePopover(idx) {
+  var s = window._saTraceState; if (!s) return;
+  var rec = s.windows[idx]; if (!rec) return;
+  var prev = document.getElementById('sa-window-size-popover');
+  if (prev) prev.remove();
+  var mapEl = document.getElementById('sa-trace-map');
+  if (!mapEl) return;
+  var pop = document.createElement('div');
+  pop.id = 'sa-window-size-popover';
+  pop.style.cssText = 'position:absolute;z-index:9;left:50%;top:18%;transform:translateX(-50%);' +
+    'background:rgba(15,23,42,0.98);border:1px solid #3b82f6;border-radius:10px;padding:10px 12px;' +
+    'box-shadow:0 8px 24px rgba(0,0,0,0.5);min-width:280px;color:#f9fafb';
+  pop.innerHTML =
+    '<div style="font-size:11px;font-weight:800;color:#60a5fa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">' +
+      '<i class="fas fa-window-maximize mr-1"></i>Window ' + (idx + 1) + ' size' +
+    '</div>' +
+    '<div style="font-size:11px;color:#cbd5e1;margin-bottom:8px;line-height:1.4">' +
+      'Current: ' + rec.width_ft + '′ × ' + rec.height_ft + '′ = ' + (rec.width_ft * rec.height_ft) + ' sf' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px">' +
+      '<button type="button" data-ws="2,3" style="padding:6px;background:#1e293b;color:#cbd5e1;border:1px solid #334155;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Small 2′×3′ (6 sf)</button>' +
+      '<button type="button" data-ws="3,4" style="padding:6px;background:#1e293b;color:#cbd5e1;border:1px solid #334155;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Medium 3′×4′ (12 sf)</button>' +
+      '<button type="button" data-ws="4,5" style="padding:6px;background:#1e293b;color:#cbd5e1;border:1px solid #334155;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Large 4′×5′ (20 sf)</button>' +
+      '<button type="button" data-ws="custom" style="padding:6px;background:#1e293b;color:#fbbf24;border:1px solid #334155;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Custom…</button>' +
+    '</div>' +
+    '<div style="display:flex;gap:6px">' +
+      '<button id="sa-ws-delete" style="flex:1;padding:6px;background:rgba(220,38,38,0.15);color:#fca5a5;border:1px solid rgba(220,38,38,0.5);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer"><i class="fas fa-trash mr-1"></i>Delete</button>' +
+      '<button id="sa-ws-close" style="flex:2;padding:6px;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer">Done</button>' +
+    '</div>';
+  mapEl.style.position = 'relative';
+  mapEl.appendChild(pop);
+  function applySize(w, h) {
+    rec.width_ft = w; rec.height_ft = h;
+    var mk = s._windowMarkers[idx];
+    if (mk) mk.setTitle('Window ' + w + '′×' + h + '′ — click to resize, right-click to delete');
+    pop.remove();
+  }
+  pop.querySelectorAll('[data-ws]').forEach(function(b) {
+    b.addEventListener('click', function() {
+      var v = b.getAttribute('data-ws');
+      if (v === 'custom') {
+        var raw = window.prompt('Window size as "width x height" in feet (e.g. 3x5):', rec.width_ft + 'x' + rec.height_ft);
+        if (raw == null) return;
+        var m = String(raw).toLowerCase().replace(/\s/g, '').match(/^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/);
+        if (!m) { alert('Format: width x height — e.g. 3x5'); return; }
+        var w = parseFloat(m[1]), h = parseFloat(m[2]);
+        if (!isFinite(w) || w <= 0 || w > 20 || !isFinite(h) || h <= 0 || h > 20) {
+          alert('Width and height must each be 0–20 ft.'); return;
+        }
+        applySize(w, h);
+      } else {
+        var parts = v.split(',');
+        applySize(parseFloat(parts[0]), parseFloat(parts[1]));
+      }
+    });
+  });
+  pop.querySelector('#sa-ws-close').addEventListener('click', function() { pop.remove(); });
+  pop.querySelector('#sa-ws-delete').addEventListener('click', function() {
+    if (!confirm('Delete this window?')) return;
+    s.windows.splice(idx, 1);
+    var m = s._windowMarkers.splice(idx, 1)[0]; if (m) m.setMap(null);
+    var lb = s._windowLabels.splice(idx, 1)[0]; if (lb) lb.setMap(null);
+    pop.remove();
+  });
+}
 
 // Close the in-progress dormer polygon, prompt for its pitch, and persist.
 // Each dormer becomes one entry in s.dormers; submitted in the trace payload
@@ -4101,7 +4322,7 @@ function saInjectAutoLines(edge, polylines) {
   polylines.forEach(function(line) {
     if (!Array.isArray(line) || line.length < 2) return;
     var path = line.map(function(p) { return new google.maps.LatLng(p.lat, p.lng); });
-    var poly = new google.maps.Polyline({ path: path, strokeColor: color, strokeWeight: 2, map: s.map });
+    var poly = new google.maps.Polyline({ path: path, strokeColor: color, strokeWeight: 2, map: s.map, clickable: false });
     var seg = line.map(function(p) { return { lat: p.lat, lng: p.lng }; });
     if (kind === 'ridge') { s.ridges.push(poly); s._ridgeData.push(seg); }
     else if (kind === 'hip') { s.hips.push(poly); s._hipData.push(seg); }
@@ -4275,6 +4496,18 @@ window.saSubmitTrace = async function(orderId, force) {
     // svg-diagrams.ts walls schema: {pts:[{lat,lng},{lat,lng}], kind, heightFt}.
     walls: (s._wallData || []).map(function(w) {
       return { pts: w.pts, kind: w.kind || 'step', heightFt: w.heightFt || 8 };
+    }),
+    // Windows on shingled walls — each deducts width×height from the wall
+    // material count in the engine. wall_idx is the snap-associated wall
+    // (or -1 for free-floating); the 2D diagram uses it for visual styling.
+    windows: (s.windows || []).map(function(win) {
+      return {
+        lat: win.lat,
+        lng: win.lng,
+        width_ft:  (typeof win.width_ft  === 'number' && win.width_ft  > 0) ? win.width_ft  : 3,
+        height_ft: (typeof win.height_ft === 'number' && win.height_ft > 0) ? win.height_ft : 4,
+        wall_idx:  (typeof win.wall_idx  === 'number') ? win.wall_idx : -1,
+      };
     }),
     annotations: {
       vents: s.vents || [],
@@ -17293,7 +17526,7 @@ window.saTraceV2 = (function() {
       (srcArr || []).forEach(function(seg) {
         if (!seg || seg.length < 2) return;
         var path = seg.map(function(p) { return new google.maps.LatLng(p.lat, p.lng); });
-        var line = new google.maps.Polyline({ path: path, strokeColor: color, strokeWeight: 2, map: mp });
+        var line = new google.maps.Polyline({ path: path, strokeColor: color, strokeWeight: 2, map: mp, clickable: false });
         st[lineKey].push(line);
         st[dataKey].push(seg.map(function(p) { return { lat: p.lat, lng: p.lng }; }));
       });
