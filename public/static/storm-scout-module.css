@@ -164,9 +164,18 @@
     background:rgba(17,17,17,0.92); color:#fff; font-size:18px;
     box-shadow:0 4px 12px rgba(0,0,0,0.35); cursor:pointer;
   }
-  .ss-sidebar-close { display:block; }
-  .ss-timebar { bottom:10px; padding:6px 10px; font-size:11px; }
+  .ss-sidebar-close { display:block; width:44px; height:44px; font-size:24px; }
+  .ss-timebar { bottom:10px; padding:8px 10px; font-size:12px; }
   .ss-sat-attr { bottom:110px; }
+  /* Bump every interactive control to a tappable size. */
+  .ss-btn { padding:12px 14px; font-size:14px; min-height:44px; }
+  .ss-timebar-btns button,
+  .ss-history-picker button { padding:8px 12px; font-size:13px; min-height:36px; }
+  .ss-date-input, .ss-sat-type, .ss-speed { font-size:16px; padding:8px 8px; }
+  .ss-trace-btn { padding:10px 12px; font-size:14px; min-width:44px; min-height:44px; }
+  .ss-pb-btn { padding:8px 12px; min-width:44px; min-height:36px; }
+  .ss-search-input { font-size:16px; padding:10px 4px; }
+  .ss-ba-btn { padding:10px 12px; font-size:14px; min-height:44px; }
 }
 
 /* ============================================================

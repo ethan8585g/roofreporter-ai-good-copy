@@ -73,6 +73,12 @@
   .d2d-container { flex-direction: column; }
   .d2d-sidebar { width: 100%; min-width: unset; max-height: 45vh; border-right: none; border-bottom: 1px solid #e5e7eb; }
   .d2d-map-area { min-height: 55vh; }
+  /* Bump tap targets so the toolbar + tabs are reachable with a thumb. */
+  .d2d-tool { width: 44px; height: 44px; font-size: 16px; }
+  .d2d-tab { padding: 12px 6px; font-size: 12px; min-height: 44px; }
+  .d2d-tab i { font-size: 18px; }
+  .d2d-input, .d2d-select { font-size: 16px; padding: 10px 12px; }
+  .d2d-btn { font-size: 14px; padding: 10px 16px; }
 }
 
 /* Color picker */

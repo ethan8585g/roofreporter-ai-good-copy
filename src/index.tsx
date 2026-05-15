@@ -6445,6 +6445,20 @@ function getHeadTags(canonicalPath?: string) {
   <link rel="alternate" type="application/rss+xml" title="Roof Manager Blog" href="https://www.roofmanager.ca/feed.xml">
   <link rel="stylesheet" href="/static/style.css">
   <style>
+    /* Mobile baseline fixes — applied site-wide via getHeadTags(). Targets
+       iOS Safari quirks: (1) inputs <16px auto-zoom on focus; (2) wide hero
+       sections cause sideways scroll without overflow-x clamp; (3) sub-44
+       icon-only controls are hard to tap. Scoped to <=640px so desktop
+       layout is untouched. */
+    @media (max-width: 640px) {
+      html, body { overflow-x: hidden; max-width: 100vw; }
+      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+      textarea, select { font-size: 16px !important; }
+      /* Tap-target floor for icon-only buttons and small pill links. Skips
+         interactive elements that already declare their own size, and skips
+         non-interactive utility classes (.btn-sm intentionally compact). */
+      button:not(.btn-sm):not(.d2d-tool):not(.ss-pb-btn), a[role="button"] { min-height: 36px; }
+    }
     /* Google Translate widget — low-profile floating control.
        Design: translucent/small by default so it doesn't compete with
        primary CTAs; brightens on hover/focus. The panel has a clearly-
@@ -19728,7 +19742,7 @@ function getCustomerOrderPageHTML(mapsApiKey: string, nearmapTileUrl: string | n
     </div>
   </header>
   <main class="max-w-4xl mx-auto px-4 py-8">
-    <div id="freeTrialBanner" style="display:none;background:linear-gradient(135deg,#00FF88 0%,#00CC6A 100%);color:#0A0A0A;padding:16px 20px;border-radius:14px;margin-bottom:20px;font-weight:600;align-items:center;gap:14px">
+    <div id="freeTrialBanner" style="display:none;background:linear-gradient(135deg,#00FF88 0%,#00CC6A 100%);color:#0A0A0A;padding:16px 20px;border-radius:14px;margin-bottom:20px;font-weight:600;align-items:center;gap:14px;flex-wrap:wrap">
       <i class="fas fa-gift" style="font-size:24px"></i>
       <div style="flex:1">
         <div style="font-size:16px;font-weight:800">You have <span id="freeTrialBannerCount">0</span> free report credits ready to use</div>
@@ -20754,15 +20768,15 @@ function getCrmSubPageHTML(module: string, title: string, icon: string) {
       </nav>
     </div>
     <!-- Section quick-nav -->
-    <div style="background:#0a0a0a;border-top:1px solid rgba(255,255,255,0.05)" class="overflow-x-auto">
-      <div class="max-w-7xl mx-auto px-4 flex gap-1 py-1.5">
-        <a href="/customer/customers" class="px-3 py-1 rounded text-xs font-medium ${module === 'customers' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-users mr-1"></i>Customers</a>
-        <a href="/customer/pipeline" class="px-3 py-1 rounded text-xs font-medium ${module === 'pipeline' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-funnel-dollar mr-1"></i>Pipeline</a>
-        <a href="/customer/jobs" class="px-3 py-1 rounded text-xs font-medium ${module === 'jobs' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-hard-hat mr-1"></i>Jobs</a>
-        <a href="/customer/invoices" class="px-3 py-1 rounded text-xs font-medium ${module === 'invoices' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-file-invoice-dollar mr-1"></i>Invoices</a>
-        <a href="/customer/proposals" class="px-3 py-1 rounded text-xs font-medium ${module === 'proposals' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-file-signature mr-1"></i>Proposals</a>
-        <a href="/customer/commissions" class="px-3 py-1 rounded text-xs font-medium ${module === 'commissions' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-dollar-sign mr-1"></i>Commissions</a>
-        <a href="/customer/reports" class="px-3 py-1 rounded text-xs font-medium ${module === 'reports' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-file-alt mr-1"></i>Reports</a>
+    <div style="background:#0a0a0a;border-top:1px solid rgba(255,255,255,0.05);-webkit-overflow-scrolling:touch" class="overflow-x-auto">
+      <div class="max-w-7xl mx-auto px-4 flex gap-1 py-2" style="min-height:44px">
+        <a href="/customer/customers" class="px-3 py-2 rounded text-sm font-medium whitespace-nowrap ${module === 'customers' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-users mr-1"></i>Customers</a>
+        <a href="/customer/pipeline" class="px-3 py-2 rounded text-sm font-medium whitespace-nowrap ${module === 'pipeline' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-funnel-dollar mr-1"></i>Pipeline</a>
+        <a href="/customer/jobs" class="px-3 py-2 rounded text-sm font-medium whitespace-nowrap ${module === 'jobs' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-hard-hat mr-1"></i>Jobs</a>
+        <a href="/customer/invoices" class="px-3 py-2 rounded text-sm font-medium whitespace-nowrap ${module === 'invoices' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-file-invoice-dollar mr-1"></i>Invoices</a>
+        <a href="/customer/proposals" class="px-3 py-2 rounded text-sm font-medium whitespace-nowrap ${module === 'proposals' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-file-signature mr-1"></i>Proposals</a>
+        <a href="/customer/commissions" class="px-3 py-2 rounded text-sm font-medium whitespace-nowrap ${module === 'commissions' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-dollar-sign mr-1"></i>Commissions</a>
+        <a href="/customer/reports" class="px-3 py-2 rounded text-sm font-medium whitespace-nowrap ${module === 'reports' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}"><i class="fas fa-file-alt mr-1"></i>Reports</a>
       </div>
     </div>
   </header>
@@ -21558,6 +21572,22 @@ function getProposalBuilderPageHTML(mapsApiKey: string) {
   ${getHeadTags()}
   <title>Proposal Builder - Roof Manager</title>
   ${mapsApiKey ? `<script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places"></script>` : ''}
+  <style>
+    /* Proposal Builder mobile pass — the proposal-builder.js bundle uses
+       inline 2/3/5-column grids that don't collapse. Override at the
+       container level so phones get single-column stacking without
+       rewriting every grid. */
+    @media (max-width: 640px) {
+      #proposal-root [style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+      #proposal-root [style*="position:sticky"][style*="bottom:0"] {
+        padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;
+      }
+      #proposal-root table { font-size: 13px; }
+    }
+    @media (max-width: 640px) {
+      #pb-toast { max-width: calc(100vw - 24px) !important; right: 12px !important; left: 12px !important; }
+    }
+  </style>
 </head>
 <body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
@@ -21589,6 +21619,15 @@ function getInvoiceManagerPageHTML() {
 <head>
   ${getHeadTags()}
   <title>Invoice Manager - Roof Manager</title>
+  <style>
+    /* Invoice Manager mobile pass — collapse inline grids inside #invoice-root
+       and bound the toast/popovers so they don't overflow narrow viewports. */
+    @media (max-width: 640px) {
+      #invoice-root [style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+      #invoice-root table { font-size: 13px; }
+      #invoice-root [style*="max-width:400px"] { max-width: calc(100vw - 24px) !important; }
+    }
+  </style>
 </head>
 <body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
