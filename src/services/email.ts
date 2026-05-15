@@ -526,10 +526,30 @@ export async function notifyTraceCompletedToCustomer(
     customer_name?: string
     order_id?: number | string
     customer_id?: number | null
+    allow_resend?: boolean
   }
 ): Promise<void> {
-  const { to, order_number, property_address, customer_name, order_id, customer_id } = args
+  const { to, order_number, property_address, customer_name, order_id, customer_id, allow_resend } = args
   if (!to) return
+  // Idempotency gate — refuse to send the same report_ready twice for the
+  // same order. Was firing 2-3x per delivered report (retraces + bulk-
+  // approve + approve-and-deliver re-runs) and customers complained about
+  // duplicates. Dedup on (order_id, kind=report_ready). Admin preview /
+  // test sends pass allow_resend=true to bypass intentionally.
+  const dedupKey = order_id != null ? `report_ready:${order_id}` : null
+  if (!allow_resend && dedupKey && env?.DB) {
+    try {
+      const prior = await env.DB.prepare(
+        "SELECT id FROM email_sends WHERE dedup_key = ? AND (status IS NULL OR status = 'sent') LIMIT 1"
+      ).bind(dedupKey).first<{ id: number } | null>()
+      if (prior) {
+        console.log(`[notifyTraceCompletedToCustomer] skip: ${dedupKey} already sent (email_sends.id=${prior.id})`)
+        return
+      }
+    } catch (e: any) {
+      console.warn('[notifyTraceCompletedToCustomer] dedup check failed, proceeding:', e?.message || e)
+    }
+  }
   const firstName = (customer_name || '').split(' ')[0]
   const greeting = firstName ? `Hi ${htmlEsc(firstName)},` : 'Hi,'
   const subject = `Your roof measurement report is ready — ${order_number}`
@@ -540,6 +560,8 @@ export async function notifyTraceCompletedToCustomer(
     recipient: to,
     kind: 'report_ready',
     subject,
+    orderId: order_id != null ? Number(order_id) : null,
+    dedupKey,
   })
   const pixel = buildTrackingPixel(trackingToken)
 
@@ -588,7 +610,7 @@ export async function notifyTraceCompletedToCustomer(
     Our team has finished tracing the roof at <strong>${htmlEsc(property_address)}</strong>.
   </p>
   ${viewOnlineCta}
-  <a href="https://www.roofmanager.ca/customer" style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:4px">Open my dashboard →</a>
+  ${shareUrl ? '' : `<a href="https://www.roofmanager.ca/customer" style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:4px">Open my dashboard →</a>`}
   <p style="color:#888;font-size:12px;margin-top:24px">
     Roof Manager · roofmanager.ca
   </p>
@@ -1568,5 +1590,123 @@ export async function notifyCustomerRetraceRequest(
   if (delivered === 0) {
     const reason = errors.length ? errors.join(' | ') : 'no email provider configured'
     console.warn('[notifyCustomerRetraceRequest] Failed to send notification:', reason)
+  }
+}
+
+// ============================================================
+// Signup-recovery "you left before finishing" nudge.
+// Routes through logAndSendEmail so the send shows up in
+// email_sends with open/click tracking. Stamps the most recent
+// matching signup_attempts row (or inserts a synthetic one when
+// the user reached the verification step without /signup-started
+// firing, e.g. anonymous traffic that came in via /register).
+// Used by:
+//   - cron-worker runAbandonedSignupRecovery (bulk loop)
+//   - super-admin Abandoned Signups dashboard (manual button)
+// Caller is responsible for the opt-out check.
+// ============================================================
+export async function sendSignupRecoveryEmail(
+  env: Bindings,
+  email: string,
+  opts: { previewId?: string | null; force?: boolean } = {}
+): Promise<{ ok: boolean; status: string; error?: string; emailSendId: number | null }> {
+  if (!email) return { ok: false, status: 'failed', error: 'no email', emailSendId: null }
+  const db = env.DB
+
+  try {
+    const optout = await db.prepare(
+      'SELECT 1 FROM signup_recovery_optouts WHERE email = ? LIMIT 1'
+    ).bind(email).first<any>()
+    if (optout) return { ok: false, status: 'suppressed', error: 'opted out', emailSendId: null }
+  } catch (e: any) {
+    // Table may not exist in some dev envs — fall through, the wrapper
+    // will still apply the global suppression list.
+    console.warn('[sendSignupRecoveryEmail] optout check skipped:', e?.message)
+  }
+
+  // Resolve preview_id from the most recent signup_attempts row if the
+  // caller didn't supply one. previewId in the register link is purely
+  // for restoring the user's roof preview — it's optional.
+  let previewId = opts.previewId || null
+  let signupAttemptId: number | null = null
+  try {
+    const sa = await db.prepare(
+      `SELECT id, preview_id, recovery_sent
+       FROM signup_attempts WHERE email = ?
+       ORDER BY created_at DESC LIMIT 1`
+    ).bind(email).first<any>()
+    if (sa) {
+      signupAttemptId = Number(sa.id)
+      if (!previewId && sa.preview_id) previewId = sa.preview_id
+      if (sa.recovery_sent === 1 && !opts.force) {
+        return { ok: false, status: 'deduped', error: 'recovery already sent', emailSendId: null }
+      }
+    }
+  } catch (e: any) {
+    console.warn('[sendSignupRecoveryEmail] signup_attempts lookup skipped:', e?.message)
+  }
+
+  const optoutUrl = `https://www.roofmanager.ca/api/customer/signup-optout?email=${encodeURIComponent(email)}`
+  const registerUrl = `https://www.roofmanager.ca/register?email=${encodeURIComponent(email)}${previewId ? `&preview_id=${encodeURIComponent(previewId)}` : ''}`
+  const subject = "You left before finishing — your roof preview is waiting"
+  const html = `
+    <div style="font-family:Inter,Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;padding:32px;color:#0A0A0A">
+      <div style="text-align:center;background:#000;padding:20px;border-radius:12px 12px 0 0;margin:-32px -32px 24px">
+        <img src="https://www.roofmanager.ca/static/logo.png?v=20260504" alt="Roof Manager" width="160" style="max-width:160px;height:auto;display:block;margin:0 auto"/>
+      </div>
+      <h2 style="color:#0A0A0A;margin:0 0 12px;font-size:22px">You left before finishing — here's your roof report</h2>
+      <p style="color:#374151;line-height:1.6;margin:0 0 24px">
+        We noticed you started setting up your Roof Manager account but didn't finish.
+        Your free roof preview is waiting — pick up where you left off and we'll add
+        your free trial reports to the account.
+      </p>
+      <div style="text-align:center;margin:28px 0">
+        <a href="${registerUrl}" style="display:inline-block;background:#00FF88;color:#0A0A0A;font-weight:700;padding:14px 28px;border-radius:10px;text-decoration:none;font-size:16px">
+          Complete My Registration →
+        </a>
+      </div>
+      <p style="color:#6b7280;font-size:12px;margin:32px 0 0;text-align:center">
+        <a href="${optoutUrl}" style="color:#9ca3af">Unsubscribe</a> · Roof Manager · roofmanager.ca
+      </p>
+    </div>
+  `
+
+  const { logAndSendEmail } = await import('./email-wrapper')
+  const r = await logAndSendEmail({
+    env,
+    to: email,
+    subject,
+    html,
+    kind: 'signup_recovery_nudge',
+    category: 'cart',
+    from: 'sales@roofmanager.ca',
+    track: true,
+  })
+
+  // Stamp the signup_attempts row (or insert one) so dedup works next time.
+  if (r.ok || r.status === 'sent') {
+    try {
+      if (signupAttemptId != null) {
+        await db.prepare(
+          `UPDATE signup_attempts
+           SET recovery_sent = 1, recovery_sent_at = datetime('now')
+           WHERE id = ?`
+        ).bind(signupAttemptId).run()
+      } else {
+        await db.prepare(
+          `INSERT INTO signup_attempts (email, preview_id, completed, recovery_sent, recovery_sent_at, created_at)
+           VALUES (?, ?, 0, 1, datetime('now'), datetime('now'))`
+        ).bind(email, previewId).run()
+      }
+    } catch (e: any) {
+      console.warn('[sendSignupRecoveryEmail] stamp recovery_sent failed:', e?.message)
+    }
+  }
+
+  return {
+    ok: !!r.ok,
+    status: r.status,
+    error: r.error,
+    emailSendId: r.emailSendId,
   }
 }

@@ -27,15 +27,16 @@ import { sendMobileMonitorEmail } from './services/mobile-monitor-email'
 import { runDripCampaigns } from './services/drip-campaigns'
 import { runSignupNurture } from './services/signup-nurture'
 import { runAbandonedCheckoutRecovery } from './services/abandoned-checkout-recovery'
-import { loadGmailCreds, sendGmailOAuth2WithAttachment } from './services/email'
+import { loadGmailCreds, sendGmailOAuth2WithAttachment, sendSignupRecoveryEmail } from './services/email'
 
 // ── Abandoned signup recovery ─────────────────────────────────────────────────
+// Delegates to the shared sendSignupRecoveryEmail helper so the send goes
+// through logAndSendEmail (open/click tracking in email_sends) and the same
+// code path is exercised by both the cron loop and the super-admin manual
+// "Send recovery nudge" button.
 async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number; skipped: number }> {
   const db = env.DB
-  const resendKey = (env as any).RESEND_API_KEY
-  if (!resendKey) return { sent: 0, skipped: 0 }
 
-  // Find attempts ≥1 hour old, not completed, not already recovered, not opted out
   let rows: any[] = []
   try {
     const result = await db.prepare(`
@@ -61,43 +62,10 @@ async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number
   let sent = 0
   let skipped = 0
   for (const row of rows) {
-    const optoutUrl = `https://www.roofmanager.ca/api/customer/signup-optout?email=${encodeURIComponent(row.email)}`
-    const registerUrl = `https://www.roofmanager.ca/register?email=${encodeURIComponent(row.email)}${row.preview_id ? `&preview_id=${row.preview_id}` : ''}`
-    const html = `
-      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
-        <div style="text-align:center;background:#000;padding:20px;border-radius:12px 12px 0 0;margin:-32px -32px 24px">
-          <img src="https://www.roofmanager.ca/static/logo.png?v=20260504" alt="Roof Manager" width="160" style="max-width:160px;height:auto;display:block;margin:0 auto"/>
-        </div>
-        <h2 style="color:#0A0A0A;margin-bottom:8px">You left before finishing — here's your roof report</h2>
-        <p style="color:#374151;margin-bottom:24px">
-          We noticed you started setting up your Roof Manager account but didn't finish.
-          Your free roof preview is waiting — complete your registration to access it.
-        </p>
-        <a href="${registerUrl}" style="display:inline-block;background:#00FF88;color:#0A0A0A;font-weight:700;padding:14px 28px;border-radius:10px;text-decoration:none;font-size:16px;margin-bottom:24px">
-          Complete My Registration →
-        </a>
-        <p style="color:#6b7280;font-size:12px">
-          <a href="${optoutUrl}" style="color:#9ca3af">Unsubscribe</a> · Roof Manager, roofmanager.ca
-        </p>
-      </div>
-    `
     try {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: 'Roof Manager <noreply@roofmanager.ca>',
-          to: [row.email],
-          subject: 'You left before finishing — your roof preview is waiting',
-          html,
-        }),
-      })
-      if (res.ok) {
-        await db.prepare(`UPDATE signup_attempts SET recovery_sent = 1, recovery_sent_at = datetime('now') WHERE id = ?`).bind(row.id).run()
-        sent++
-      } else {
-        skipped++
-      }
+      const r = await sendSignupRecoveryEmail(env, row.email, { previewId: row.preview_id })
+      if (r.ok) sent++
+      else skipped++
     } catch (err: any) {
       console.error('[recovery] email send error:', err?.message)
       skipped++

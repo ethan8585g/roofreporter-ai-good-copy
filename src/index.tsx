@@ -78,6 +78,7 @@ import { superAdminLeads } from './routes/super-admin-leads'
 import { superAdminAttribution } from './routes/super-admin-attribution'
 import { superAdminLoopTracker } from './routes/super-admin-loop-tracker'
 import { superAdminEmailTracker } from './routes/super-admin-email-tracker'
+import { superAdminAbandonedSignups } from './routes/super-admin-abandoned-signups'
 import { superAdminModuleAnalytics } from './routes/super-admin-module-analytics'
 import { superAdminAi } from './routes/super-admin-ai'
 import { ga4GrantRoutes } from './routes/ga4-grant'
@@ -775,6 +776,12 @@ app.route('/', superAdminEmailTracker)
 // HTML at /super-admin/module-analytics, JSON at /api/super-admin/module-analytics/*.
 app.route('/super-admin/module-analytics', superAdminModuleAnalytics)
 app.route('/api/super-admin/module-analytics', superAdminModuleAnalytics)
+
+// Super-admin Abandoned Signups: people who hit the verification step but
+// never finished registration. HTML page + JSON list/summary endpoints,
+// plus a manual "send recovery nudge" button that reuses the same helper
+// the cron worker uses for bulk sends.
+app.route('/', superAdminAbandonedSignups)
 
 // Super-admin AI Assistant: chat UI at /super-admin/ai-assistant + SSE chat at the same prefix
 app.route('/super-admin/ai-assistant', superAdminAi)
@@ -7789,6 +7796,10 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
         <a href="/super-admin/email-tracker" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" style="text-decoration:none">
           <i class="fas fa-envelope-open-text w-5 text-center"></i>
           <span class="label text-sm font-semibold">Email Tracker</span>
+        </a>
+        <a href="/super-admin/abandoned-signups" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" style="text-decoration:none">
+          <i class="fas fa-user-clock w-5 text-center"></i>
+          <span class="label text-sm font-semibold">Abandoned Signups</span>
         </a>
         <a href="/super-admin/module-analytics" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" style="text-decoration:none">
           <i class="fas fa-chart-line w-5 text-center"></i>
