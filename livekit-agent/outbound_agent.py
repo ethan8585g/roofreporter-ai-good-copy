@@ -336,6 +336,18 @@ async def entrypoint(ctx: RunContext):
     # never said anything before the room ended).
     ctx.room.on("participant_connected", agent._on_participant_connected)
 
+    # End the agent immediately when the callee hangs up, so LiveKit doesn't
+    # keep the room alive for empty_timeout (~5 min) and bill us for it.
+    def _on_callee_disconnect(participant):
+        if participant.identity.startswith("sip-"):
+            logger.info(f"Callee {participant.identity} hung up — shutting down room")
+            try:
+                import asyncio
+                asyncio.create_task(ctx.room.disconnect())
+            except Exception as e:
+                logger.warning(f"Failed to disconnect room on hangup: {e}")
+    ctx.room.on("participant_disconnected", _on_callee_disconnect)
+
     # Live transcript: stream each user/agent utterance back to the worker
     # so the super-admin Live Call panel can render it in real time.
     try:

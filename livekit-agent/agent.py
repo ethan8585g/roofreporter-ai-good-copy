@@ -531,6 +531,15 @@ async def entrypoint(ctx: JobContext):
                 except Exception as e:
                     logger.warning(f"Failed to post call completion: {e}")
 
+            # End the agent job immediately so LiveKit doesn't keep the room
+            # alive for empty_timeout (~5min default) and bill us for it.
+            try:
+                import asyncio
+                asyncio.create_task(ctx.room.disconnect())
+                ctx.shutdown(reason="caller_hangup")
+            except Exception as e:
+                logger.warning(f"Failed to shut down agent on caller hangup: {e}")
+
 
 if __name__ == "__main__":
     cli.run_app(server)
