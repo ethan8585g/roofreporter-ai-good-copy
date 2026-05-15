@@ -1,13 +1,19 @@
 {
+  "id": "/?source=pwa",
   "name": "Roof Manager",
   "short_name": "RoofManager",
-  "description": "Roofing measurement and CRM platform",
-  "start_url": "/",
+  "description": "Roof measurement reports + CRM, jobs, invoicing, and proposals for roofing contractors.",
+  "start_url": "/customer/dashboard?source=pwa",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "background_color": "#0A0A0A",
   "theme_color": "#00FF88",
   "orientation": "any",
   "categories": ["business", "productivity"],
+  "lang": "en-CA",
+  "dir": "ltr",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/static/icons/icon-192x192.png",
@@ -30,6 +36,36 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Order a Report",
+      "short_name": "New Report",
+      "description": "Generate a roof measurement report",
+      "url": "/customer/order?source=pwa-shortcut",
+      "icons": [{ "src": "/static/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Leads Inbox",
+      "short_name": "Leads",
+      "description": "View incoming leads",
+      "url": "/customer/leads?source=pwa-shortcut",
+      "icons": [{ "src": "/static/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Pipeline",
+      "short_name": "Pipeline",
+      "description": "Sales pipeline",
+      "url": "/customer/pipeline?source=pwa-shortcut",
+      "icons": [{ "src": "/static/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "D2D Manager",
+      "short_name": "D2D",
+      "description": "Door-to-door manager",
+      "url": "/customer/d2d?source=pwa-shortcut",
+      "icons": [{ "src": "/static/icons/icon-192x192.png", "sizes": "192x192" }]
     }
   ]
 }

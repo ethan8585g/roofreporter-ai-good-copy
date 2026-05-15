@@ -1,0 +1,109 @@
+/* Site-wide mobile improvements layered on top of the global @media (max-width:640px)
+   block in getHeadTags(). Loaded from every page that calls getHeadTags. */
+
+@media (max-width: 640px) {
+
+  /* ─── Pipeline kanban → snap-scroll one stage at a time ───
+     The kanban container already has overflow-x:auto + 1060px min-width. On
+     phones we widen each column to ~viewport so a single swipe moves between
+     stages, and add scroll-snap for paginated feel. */
+  #crm-root [style*="repeat(5,minmax(210px,1fr))"] {
+    grid-template-columns: repeat(5, calc(100vw - 32px)) !important;
+    min-width: calc(5 * (100vw - 32px) + 4 * 12px) !important;
+  }
+  #crm-root [style*="overflow-x:auto"][style*="-webkit-overflow-scrolling:touch"] {
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: 4px;
+  }
+  #crm-root [style*="repeat(5,minmax(210px,1fr))"] > .flex.flex-col {
+    scroll-snap-align: start;
+  }
+
+  /* ─── Dashboard calendar → hide month grid, keep header + upcoming list ───
+     The 7-col month grid is unreadable at phone widths. The "Upcoming events"
+     list that already renders below the grid is the useful agenda view. */
+  #dashboard-calendar .grid.grid-cols-7 { display: none; }
+
+  /* ─── CRM tables → card view ───
+     Stack each row as a card. Affects customers, leads, jobs, invoices, etc.
+     Tailwind `hidden md:table-cell` cells stay hidden — only the columns
+     normally visible on mobile stack into the card. */
+  #crm-root table,
+  #crm-root thead,
+  #crm-root tbody,
+  #crm-root tr,
+  #crm-root th,
+  #crm-root td,
+  #leads-root table,
+  #leads-root thead,
+  #leads-root tbody,
+  #leads-root tr,
+  #leads-root th,
+  #leads-root td {
+    display: block;
+    width: auto;
+  }
+  #crm-root thead,
+  #leads-root thead { display: none; }
+  #crm-root tbody tr,
+  #leads-root tbody tr {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+  #crm-root tbody tr td,
+  #leads-root tbody tr td {
+    padding: 4px 0 !important;
+    border: none !important;
+    text-align: left !important;
+  }
+  /* keep already-hidden columns hidden in card view */
+  #crm-root tbody tr td.hidden,
+  #leads-root tbody tr td.hidden { display: none !important; }
+
+  /* ─── Customer top-nav cluster: wrap + tighten ───
+     `<nav class="flex items-center space-x-3|4">` overflows on phones when
+     the greeting + Leads-badge + Logout all fit on one line. Force wrap. */
+  header nav.flex.items-center { flex-wrap: wrap; row-gap: 6px; }
+  /* Hide the user-greeting span on phones — the menu icons are enough. */
+  header nav.flex.items-center #custGreeting { display: none !important; }
+
+  /* ─── Modal max-height enforcement ───
+     Centered modal cards inside `position:fixed;inset:0` containers need
+     `max-height:90vh + overflow-y:auto` so tall content doesn't get cut. */
+  div[style*="position:fixed"][style*="inset:0"] > div,
+  div[style*="position:fixed"][style*="inset: 0"] > div {
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  /* Fullscreen panels that take the entire viewport — make scrollable. */
+  div[style*="position:fixed"][style*="inset:0"][style*="overflow"] {
+    overflow-y: auto !important;
+  }
+
+  /* ─── Rover Assistant FAB: lift above iOS bottom safe-area + downsize ───
+     Default 60×60 at bottom:24/right:24 sits under the home indicator on
+     phones with no notch. */
+  #rover-assistant-fab {
+    bottom: max(24px, env(safe-area-inset-bottom)) !important;
+    right: 16px !important;
+    width: 52px !important;
+    height: 52px !important;
+  }
+
+  /* ─── Body uses dvh where possible so iOS Safari URL-bar collapse doesn't
+     leave a horizontal blank stripe at the bottom of full-height sections. */
+  body.min-h-screen { min-height: 100dvh; }
+}
+
+/* ─── Tablet / small-laptop adjustments (641–900px) ───
+   Pipeline kanban gets slightly narrower columns so it doesn't horizontally
+   scroll on landscape phone or 1024-wide tablet. */
+@media (min-width: 641px) and (max-width: 900px) {
+  #crm-root [style*="repeat(5,minmax(210px,1fr))"] {
+    grid-template-columns: repeat(5, minmax(180px, 1fr)) !important;
+    min-width: 920px !important;
+  }
+}

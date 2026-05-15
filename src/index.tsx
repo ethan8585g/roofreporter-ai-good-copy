@@ -6444,6 +6444,8 @@ function getHeadTags(canonicalPath?: string) {
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=20260504">
   <link rel="alternate" type="application/rss+xml" title="Roof Manager Blog" href="https://www.roofmanager.ca/feed.xml">
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/mobile.css?v=20260514">
+  <script src="/static/pwa-install.js?v=20260514" defer></script>
   <style>
     /* Mobile baseline fixes — applied site-wide via getHeadTags(). Targets
        iOS Safari quirks: (1) inputs <16px auto-zoom on focus; (2) wide hero
@@ -8626,20 +8628,29 @@ function getOnboardingPageHTML(sessionToken = ''): string {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Welcome to Roof Manager — Get Started</title>
   <link rel="icon" href="/static/favicon.ico?v=20260504">
   <link rel="stylesheet" href="/static/tailwind.css">
   <style>
-    body { background:#0A0A0A; color:#fff; font-family:'Inter',sans-serif; }
+    html, body { min-height: 100dvh; }
+    body {
+      background:#0A0A0A; color:#fff; font-family:'Inter',sans-serif;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
     .step { display:none; }
     .step.active { display:block; }
     .progress-dot { width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,0.2); transition:background 0.3s; }
     .progress-dot.done { background:#00FF88; }
     .progress-dot.active { background:#00FF88; box-shadow:0 0 0 4px rgba(0,255,136,0.2); }
+    /* Keep inputs at 16px on iOS to suppress auto-zoom on focus. */
+    @media (max-width: 640px) {
+      input, textarea, select { font-size: 16px !important; }
+      main { padding-top: 24px !important; padding-bottom: 32px !important; }
+    }
   </style>
 </head>
-<body class="min-h-screen flex flex-col">
+<body class="min-h-screen flex flex-col" style="min-height:100dvh">
   <!-- Header -->
   <header class="flex items-center justify-between px-6 py-4 border-b border-white/10">
     <a href="/" class="flex items-center gap-2 text-white font-black text-xl">
