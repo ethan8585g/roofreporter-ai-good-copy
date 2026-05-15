@@ -28,6 +28,8 @@ export interface LogEmailSendParams {
   recipient: string
   kind: string
   subject: string
+  orderId?: number | null
+  dedupKey?: string | null
 }
 
 /**
@@ -52,14 +54,16 @@ export async function logEmailSend(env: Bindings, p: LogEmailSendParams): Promis
   try {
     const token = generateTrackingToken()
     await env.DB.prepare(
-      `INSERT INTO email_sends (customer_id, recipient, kind, subject, tracking_token, sent_at)
-       VALUES (?, ?, ?, ?, ?, datetime('now'))`
+      `INSERT INTO email_sends (customer_id, recipient, kind, subject, tracking_token, order_id, dedup_key, sent_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`
     ).bind(
       p.customerId,
       p.recipient.slice(0, 320),
       p.kind.slice(0, 100),
       (p.subject || '').slice(0, 500),
       token,
+      p.orderId ?? null,
+      (p.dedupKey || '').slice(0, 200) || null,
     ).run()
     return token
   } catch (e: any) {

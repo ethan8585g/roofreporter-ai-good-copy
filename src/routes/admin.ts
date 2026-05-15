@@ -155,6 +155,7 @@ adminRoutes.get('/superadmin/orders/:id/preview-trace-email', async (c) => {
       customer_name: order.homeowner_name || '',
       order_id: order.id,
       customer_id: order.customer_id ?? null,
+      allow_resend: true, // admin preview endpoint must bypass the dedup gate
     })
     return c.json({
       success: true,
