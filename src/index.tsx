@@ -13984,7 +13984,7 @@ const guidesConfig: Record<string, GuideConfig> = {
       { title: 'Send it to your customer', body: 'Use the "Email Report" button to forward the PDF directly from Roof Manager with a one-click "Request a Quote" link that feeds leads back into your CRM.' },
     ],
     ctaLabel: 'Order Your First Report (Free)',
-    ctaHref: '/customer/login',
+    ctaHref: '/register',
     closing: 'Your first 4 reports are on us. After that, pay-as-you-go pricing starts at $7/report — cheaper than EagleView, faster than climbing a ladder.',
   },
   'door-to-door-with-manager': {
@@ -14012,7 +14012,7 @@ const guidesConfig: Record<string, GuideConfig> = {
       { title: 'Coach from the data', body: 'Manager dashboard shows per-rep knocks, contacts, appointments, and close rate in real time. Use it in your morning huddle — the reps who measure on the porch, book on the porch, and log every door win. The data proves it so you don\'t have to.' },
     ],
     ctaLabel: 'Open the D2D Dashboard',
-    ctaHref: '/customer/login',
+    ctaHref: '/register',
     closing: 'Growing a roofing company isn\'t about working more doors — it\'s about working the right doors with the right tools. Roof Manager gives your reps the edge on every porch.',
   },
   'create-a-proposal': {
@@ -14041,7 +14041,7 @@ const guidesConfig: Record<string, GuideConfig> = {
       { title: 'Signed → Job', body: 'When they sign, Roof Manager creates the job card in your pipeline, schedules the deposit invoice, and notifies your ops manager. You\'re done selling; you\'re now just building roofs.' },
     ],
     ctaLabel: 'Build a Proposal',
-    ctaHref: '/customer/login',
+    ctaHref: '/register',
     closing: 'A great proposal isn\'t about length — it\'s about clarity, branding, and making it effortless to say yes. Roof Manager handles the rest.',
   },
   'create-an-invoice': {
@@ -14068,7 +14068,7 @@ const guidesConfig: Record<string, GuideConfig> = {
       { title: 'Track payment', body: 'The invoice card shows "Sent → Viewed → Paid". You get a notification the moment payment lands, and the job card updates automatically so your books stay in sync. Overdue invoices trigger polite reminder emails on day 7, 14, and 30 unless you turn them off.' },
     ],
     ctaLabel: 'Send an Invoice',
-    ctaHref: '/customer/login',
+    ctaHref: '/register',
     closing: 'Faster invoicing = faster cash flow. Cash flow is the oxygen of a growing roofing company — don\'t let paper-thin margins suffocate because of slow paperwork.',
   },
   'setup-ai-secretary': {
@@ -14126,7 +14126,7 @@ const guidesConfig: Record<string, GuideConfig> = {
       { title: 'Send the proposal', body: 'Click "Create Proposal" from the saved design. Production, panel count, system size, financing tiers, and warranty language flow in automatically. Send for e-signature from your phone.' },
     ],
     ctaLabel: 'Open Solar Design',
-    ctaHref: '/customer/login',
+    ctaHref: '/register',
     closing: 'Homeowners buy solar when they can see the panels on their own roof. Real-scale design + honest production numbers = more signatures, fewer tire-kickers.',
   },
 }
