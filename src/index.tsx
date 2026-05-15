@@ -79,6 +79,7 @@ import { superAdminAttribution } from './routes/super-admin-attribution'
 import { superAdminLoopTracker } from './routes/super-admin-loop-tracker'
 import { superAdminEmailTracker } from './routes/super-admin-email-tracker'
 import { superAdminAbandonedSignups } from './routes/super-admin-abandoned-signups'
+import { superAdminEmailSequences } from './routes/super-admin-email-sequences'
 import { superAdminModuleAnalytics } from './routes/super-admin-module-analytics'
 import { superAdminAi } from './routes/super-admin-ai'
 import { ga4GrantRoutes } from './routes/ga4-grant'
@@ -782,6 +783,12 @@ app.route('/api/super-admin/module-analytics', superAdminModuleAnalytics)
 // plus a manual "send recovery nudge" button that reuses the same helper
 // the cron worker uses for bulk sends.
 app.route('/', superAdminAbandonedSignups)
+
+// Super-admin Email Sequences: live tracking dashboard for the sequence
+// engine. Per-step funnel + recent-fires feed + custom-sequence editor.
+// Reuses /api/super-admin/email-tracker/* endpoints for all writes so
+// there's a single source of truth for sequence CRUD.
+app.route('/', superAdminEmailSequences)
 
 // Super-admin AI Assistant: chat UI at /super-admin/ai-assistant + SSE chat at the same prefix
 app.route('/super-admin/ai-assistant', superAdminAi)
@@ -7800,6 +7807,10 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
         <a href="/super-admin/abandoned-signups" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" style="text-decoration:none">
           <i class="fas fa-user-clock w-5 text-center"></i>
           <span class="label text-sm font-semibold">Abandoned Signups</span>
+        </a>
+        <a href="/super-admin/email-sequences" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" style="text-decoration:none">
+          <i class="fas fa-stream w-5 text-center"></i>
+          <span class="label text-sm font-semibold">Email Sequences</span>
         </a>
         <a href="/super-admin/module-analytics" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" style="text-decoration:none">
           <i class="fas fa-chart-line w-5 text-center"></i>
