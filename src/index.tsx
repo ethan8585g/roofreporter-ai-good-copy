@@ -12739,8 +12739,8 @@ function getCustomerLoginHTML(googleClientId = '') {
     <!-- Staff entrance — kept tiny + grey on purpose: customers should never
          confuse this with the primary CTA (advisor flagged it as a conversion
          leak), but admins still need a discoverable path to /login. -->
-    <div class="text-center mt-4">
-      <a href="/login" class="text-gray-500 hover:text-gray-400 text-[10px] transition-colors tracking-wide uppercase">Staff sign-in</a>
+    <div style="text-align:center;margin-top:16px">
+      <a href="/login" style="color:#94a3b8;font-size:12px;text-decoration:none;letter-spacing:0.06em;text-transform:uppercase;font-weight:500">Staff sign-in</a>
     </div>
   </div>
   </div>
